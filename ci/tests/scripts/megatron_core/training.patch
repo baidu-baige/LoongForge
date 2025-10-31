@@ -1,0 +1,31 @@
+--- /workspace/Megatron-LM/megatron/training/training.py	2024-08-09 12:15:44.356718980 +0800
++++ /workspace/Megatron-LM/training_new.py	2024-08-09 12:06:56.451818076 +0800
+@@ -698,6 +698,7 @@
+     writer = get_tensorboard_writer()
+     wandb_writer = get_wandb_writer()
+     one_logger = get_one_logger()
++    total_inputs = loss_dict.pop('total_inputs', None)
+
+     # Advanced, skipped, and Nan iterations.
+     advanced_iters_key = 'advanced iterations'
+@@ -852,6 +853,12 @@
+         elapsed_time = timers('interval-time').elapsed(barrier=True)
+         elapsed_time_per_iteration = elapsed_time / total_iterations
+
++        if total_inputs is None:
++            token_per_sec = int(args.seq_length) * int(args.global_batch_size) / elapsed_time_per_iteration
++        else:
++            token_per_sec = total_inputs / elapsed_time_per_iteration
++        token_throughput = token_per_sec / args.world_size
++
+         throughput = num_floating_point_operations(args, batch_size) / (
+             elapsed_time_per_iteration * 10**12 * args.world_size)
+
+@@ -874,6 +881,7 @@
+                 args.skipped_train_samples)
+         log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
+             elapsed_time_per_iteration * 1000.0)
++        log_string += f' throughput (token/sec/GPU): {token_throughput:.1f} |'
+         if args.log_throughput:
+             log_string += f' throughput per GPU (TFLOP/s/GPU): {throughput:.1f} |'
+             if args.log_timers_to_tensorboard:

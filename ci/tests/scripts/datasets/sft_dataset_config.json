@@ -1,0 +1,10 @@
+{
+    "default": {
+        "format": "alpaca",
+        "columns": {
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    }
+}

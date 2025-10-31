@@ -1,0 +1,3 @@
+{
+    "vision_model.patch_embed.proj.weight": "visual.patch_embed.proj.weight"
+}

@@ -1,0 +1,120 @@
+model_name: mixtral-8x7b
+description: $model_name模型自动化
+huggingface_path: https://huggingface.co/Mixtral/Mixtral-8x7B-v0.1
+bos_path: bos:/cce-ai-datasets/huggingface.co/Mixtral/Mixtral-8x7B-v0.1
+TOTAL_K8S_NODES: 2
+
+# 模型参数
+MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
+
+# aiak-training-llm 训练的参数
+HF_CKPT_PATH: $pfs_path/huggingface.co/Mixtral/Mixtral-8x7B-v0.1
+DATA_PATH: $pfs_path/aiak-training-llm/mixtral/pile_test/pile-mixtral_text_document
+TOKENIZER_PATH: $pfs_path/huggingface.co/Mixtral/Mixtral-8x7B-v0.1
+CHECKPOINT_PATH: $step1_output_path
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+
+# 训练参数
+TENSOR_MODEL_PARALLER_SIZE: 1
+PIPELINE_MODEL_PARALLER_SIZE: 2
+EXPERT_MODEL_PARALLER_SIZE: 8
+log_interval: 1
+initial_loss_scale: 1024
+global_batch_size: 64
+seq_length: 1024
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --common_config_path=${convert_checkpoint_path}/config/mixtral-8x7b.json
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --num_experts=${EXPERT_MODEL_PARALLER_SIZE}
+            --expert_parallel_size=${EXPERT_MODEL_PARALLER_SIZE}
+            --megatron_path=${megatron_path}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --no_load_optim
+            --no_save_optim
+            --safetensors'
+        Step2:
+          MODEL_ARGS: '
+            --model-name mixtral-8x7b'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $DATA_PATH
+            --split 99990,8,2'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --seq-length ${seq_length}
+            --max-position-embeddings 32768
+            --init-method-std 0.01
+            --no-masked-softmax-fusion
+            --micro-batch-size 1
+            --global-batch-size ${global_batch_size}
+            --lr 1e-4
+            --train-iters ${train_iters}
+            --lr-decay-iters 320000
+            --lr-decay-style cosine
+            --min-lr 1.0e-5
+            --weight-decay 0.1
+            --lr-warmup-iters 500
+            --clip-grad 1.0
+            --bf16
+            --load $CHECKPOINT_PATH
+            --save-interval 10000
+            --eval-interval 1000
+            --eval-iters 0
+            --no-load-optim
+            --no-load-rng'
+            # --save ${step1_output_path}
+          MOE_ARGS: '
+            --moe-router-load-balancing-type aux_loss
+            --moe-router-topk 2
+            --moe-token-dispatcher-type alltoall
+            --moe-aux-loss-coeff 1e-2'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --expert-model-parallel-size ${EXPERT_MODEL_PARALLER_SIZE}
+            --sequence-parallel
+            --use-distributed-optimizer'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+          loss_in_value: '[
+              1.562964E+00
+              1.677764E+00
+              1.552535E+00
+              1.772192E+00
+              1.633458E+00
+              1.729928E+00
+              1.672433E+00
+              1.722434E+00
+              1.676164E+00
+              1.558424E+00
+            ]'
+  - perf:
+      pretrain:
+        Step1:
+          TENSOR_MODEL_PARALLER_SIZE: 1
+          PIPELINE_MODEL_PARALLER_SIZE: 2
+        Step2:
+          # 性能场景不需要重新生成ckpt，指定ckpt训练
+          CHECKPOINT_PATH: $load_hf_ckpt_path_pre/Mixtral/Mixtral_8x7B_tp1pp2
+          TOTAL_K8S_NODES: 4
+          TENSOR_MODEL_PARALLER_SIZE: 1
+          PIPELINE_MODEL_PARALLER_SIZE: 2
+          global_batch_size: 2048
+          seq_length: 2048
+          initial_loss_scale: 65536
+
+tasks:
+  check_correctness_task: True
+  check_perfness_task: True

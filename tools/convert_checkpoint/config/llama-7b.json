@@ -1,0 +1,86 @@
+{
+  "args": {
+    "common": {
+        "num_layers": 32,
+        "hidden_size": 4096,
+        "ffn_hidden_size": 11008,
+        "layernorm_epsilon": 1e-05,
+        "max_sequence_length": 2048,
+        "num_attention_heads": 32,
+        "max_position_embeddings": 2048,
+        "vocab_size": 32000
+    },
+    "huggingface": {
+      "architectures": ["LLaMAForCausalLM"],
+      "bos_token_id": 0,
+      "eos_token_id": 1,
+      "hidden_act": "silu",
+      "intermediate_size": 11008,
+      "initializer_range": 0.02,
+      "model_type": "llama",
+      "num_hidden_layers": 32,
+      "pad_token_id": -1,
+      "rms_norm_eps": 1e-06,
+      "use_cache": true
+    },
+    "megatron": {
+      "untie_embeddings_and_output_weights": true,
+      "num_layers_per_virtual_pipeline_stage": null,
+      "virtual_pipeline_model_parallel_size": null,
+      "tensor_model_parallel_size": 1,
+      "pipeline_model_parallel_size": 1,
+      "data_parallel_size": 1,
+      "use_rotary_position_embeddings": true,
+      "add_embedding_padding": true,
+      "make_vocab_size_divisible_by": 128,
+      "transpose_mlp_dense": true,
+      "transpose_query_key_value": true
+    }
+  },
+  "name_map": {
+      "huggingface": {
+          "word_embeddings": "model.embed_tokens",
+          "transformer": "model",
+          "layer_prefix": "layers",
+          "input_layernorm": "input_layernorm",
+          "attention.rotary_emb.inv_freq": "self_attn.rotary_emb.inv_freq",
+          "attention.query_key_value": ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"],
+          "attention.dense": "self_attn.o_proj",
+          "post_attention_layernorm": "post_attention_layernorm",
+          "mlp.dense_h_to_4h": ["mlp.gate_proj", "mlp.up_proj"],
+          "mlp.dense_4h_to_h": "mlp.down_proj",
+          "final_layernorm": "model.norm",
+          "word_embeddings_for_head": "lm_head"
+      },
+      "megatron": {
+          "word_embeddings": "model.language_model.embedding.word_embeddings",
+          "word_position_embeddings": "model.language_model.embedding.position_embeddings",
+          "transformer": "model.language_model.encoder",
+          "layer_prefix": "layers",
+          "input_layernorm": "input_layernorm",
+          "attention.query_key_value": "self_attention.query_key_value",
+          "attention.dense": "self_attention.dense",
+          "post_attention_layernorm": "post_attention_layernorm",
+          "mlp.dense_h_to_4h": "mlp.dense_h_to_4h",
+          "mlp.dense_4h_to_h": "mlp.dense_4h_to_h",
+          "final_layernorm": "final_layernorm",
+          "word_embeddings_for_head": "model.language_model.output_layer",
+          "word_embeddings_tpl": "model%d.language_model.embedding.word_embeddings",
+          "word_position_embeddings_tpl": "model%d.language_model.embedding.position_embeddings",
+          "transformer_tpl": "model%d.language_model.encoder",
+          "word_embeddings_for_head_tpl": "model%d.language_model.output_layer"
+      }
+  },
+  "tensor_parallel_dim": {
+      "word_embeddings.weight": 0,
+      "attention.query_key_value.weight": 0,
+      "attention.query_key_value.bias": 0,
+      "attention.dense.weight" : 1,
+      "mlp.dense_h_to_4h.weight": 0,
+      "mlp.dense_h_to_4h.bias": 0,
+      "mlp.dense_4h_to_h.weight": 1,
+	    "word_embeddings_for_head.weight": 0
+  },
+  "torch_dtype": "float16",
+  "transformers_version": "4.23.1"
+}

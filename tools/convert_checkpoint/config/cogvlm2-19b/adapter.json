@@ -1,0 +1,14 @@
+{
+    "adapter.conv.weight": "model.vision.conv.weight",
+    "adapter.conv.bias": "model.vision.conv.bias",
+    "adapter.linear_proj.weight": "model.vision.linear_proj.linear_proj.weight",
+    "adapter.layernorm.weight": "model.vision.linear_proj.norm1.weight",
+    "adapter.layernorm.bias": "model.vision.linear_proj.norm1.bias",
+    "adapter.mlp.linear_fc1.weight": [
+        "model.vision.linear_proj.gate_proj.weight",
+        "model.vision.linear_proj.dense_h_to_4h.weight"
+    ],
+    "adapter.mlp.linear_fc2.weight": "model.vision.linear_proj.dense_4h_to_h.weight",
+    "adapter.eoi": "model.vision.eoi",
+    "adapter.boi": "model.vision.boi"
+}

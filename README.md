@@ -1,6 +1,6 @@
 AIAK Training Omni
 ===
-面向开源社区，围绕Omni等更多模型架构，构造模型训练库。与AIAK-Training-LLM，保持独立维护。
+面向开源社区，围绕Omni等更多模型架构，构造模型训练库。与AIAK-Training-Omni，保持独立维护。
 
 快速开始
 ---

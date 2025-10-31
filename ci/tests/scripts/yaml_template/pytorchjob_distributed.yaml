@@ -1,0 +1,118 @@
+apiVersion: kubeflow.org/v1
+kind: PyTorchJob
+metadata:
+  name: ${PYTORCHJOB_NAME}
+  namespace: ${NAMESPACE}
+spec:
+  runPolicy:
+    cleanPodPolicy: None
+    schedulingPolicy:
+      priorityClass: high
+      queue: aiak-dev
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: Never
+      template:
+        spec:
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          terminationGracePeriodSeconds: 10
+          containers:
+          - command:
+            - /bin/bash
+            - -c
+            - |-
+              ${PYTORCHJOB_COMMAND}
+            image: ${IMAGE}
+            imagePullPolicy: Always
+            name: pytorch
+            env:
+            - name: TRAIN_DATA_DIR
+              value: ${TRAIN_DATA_DIR}
+            - name: timeout
+              value: "${TIMEOUT}"
+            - name: CUDA_DEVICE_MAX_CONNECTIONS
+              value: "1"
+            - name: NCCL_DEBUG
+              value: INFO
+            - name: NCCL_IB_DISABLE
+              value: "0"
+            - name: BOS_SYNC_MEGATRON_SCRIPTS_ADDR
+              value: "${BOS_SYNC_MEGATRON_SCRIPTS_ADDR}"
+            securityContext:
+                capabilities:
+                  add: [ "IPC_LOCK" ]
+            resources:
+              limits:
+                ${GPU_RESOURCE}: ${GPU_COUNT}
+                rdma/hca: 1
+            volumeMounts:
+              - mountPath: /mnt/pfs
+                name: pfs
+              - mountPath: /dev/shm
+                name: cache-volume
+          volumes:
+            # - hostPath:
+            #     path: /mnt/pfs
+            #   name: pfs
+            - name: pfs
+              persistentVolumeClaim:
+                claimName: pvc-pfs
+            - emptyDir:
+                medium: Memory
+              name: cache-volume
+          schedulerName: volcano
+    Worker:
+      replicas: ${WORKER_REPLICAS}
+      restartPolicy: Never
+      template:
+        spec:
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          terminationGracePeriodSeconds: 10
+          containers:
+          - command:
+            - /bin/bash
+            - -c
+            - |-
+              ${PYTORCHJOB_COMMAND}
+            image: ${IMAGE}
+            imagePullPolicy: Always
+            name: pytorch
+            env:
+            - name: TRAIN_DATA_DIR
+              value: ${TRAIN_DATA_DIR}
+            - name: timeout
+              value: "${TIMEOUT}"
+            - name: CUDA_DEVICE_MAX_CONNECTIONS
+              value: "1"
+            - name: NCCL_DEBUG
+              value: INFO
+            - name: NCCL_IB_DISABLE
+              value: "0"
+            - name: BOS_SYNC_MEGATRON_SCRIPTS_ADDR
+              value: "${BOS_SYNC_MEGATRON_SCRIPTS_ADDR}"
+            securityContext:
+                capabilities:
+                  add: [ "IPC_LOCK" ]
+            resources:
+              limits:
+                ${GPU_RESOURCE}: ${GPU_COUNT}
+                rdma/hca: 1
+            volumeMounts:
+              - mountPath: /mnt/pfs
+                name: pfs
+              - mountPath: /dev/shm
+                name: cache-volume
+          volumes:
+            # - hostPath:
+            #     path: /mnt/pfs
+            #   name: pfs
+            - name: pfs
+              persistentVolumeClaim:
+                claimName: pvc-pfs
+            - emptyDir:
+                medium: Memory
+              name: cache-volume
+          schedulerName: volcano

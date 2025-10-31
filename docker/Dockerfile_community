@@ -1,0 +1,32 @@
+ARG BASE_IMAGE=registry.baidubce.com/cce-ai-native/nvidia/pytorch:23.12-py3
+FROM ${BASE_IMAGE}
+
+# 支持根据卡类型获取算子包
+ARG COMPILE_ENV=none
+
+# 默认: false, 设置true 则替换编译算子二进制
+ARG BINARY_REPLACE="false"
+
+# 默认: false, 设置true 是否需要针对代码进行加密
+ARG ENCRYPT_FLAG="false"
+
+# 默认: false, 设置true 是否安装bccl
+ARG INSTALL_BCCL_FLAG="false"
+
+# bccl 下载地址
+ARG INSTALL_BCCL_ADDR=""
+
+# 默认: false, 设置true 是否安装 TransformerEngine
+ARG INSTALL_TransformerEngine_FLAG="false"
+
+# 默认: false, 设置true 是否安装 AIAK-ACCELERATOR
+ARG INSTALL_AIAK_ACCELERATOR_FLAG="false"
+
+# 安装 megatron 的类别: aiak/community
+ARG MEGATRON_TYPE="community"
+
+RUN rm -rf /workspace/
+RUN mkdir -p /workspace
+COPY AIAK-Training-Omni /workspace/AIAK-Training-Omni
+RUN bash /workspace/AIAK-Training-Omni/docker/install.sh ${COMPILE_ENV} ${BINARY_REPLACE} ${ENCRYPT_FLAG} ${INSTALL_BCCL_FLAG} "${INSTALL_BCCL_ADDR}" ${INSTALL_TransformerEngine_FLAG} ${INSTALL_AIAK_ACCELERATOR_FLAG} ${MEGATRON_TYPE}
+RUN rm -rf /workspace/AIAK-Training-Omni

@@ -1,0 +1,175 @@
+model_name: cogvlm2-19b
+description: $model_name模型自动化
+huggingface_path: https://huggingface.co/THUDM/cogvlm2-llama3-chinese-chat-19B
+bos_path: bos:/cce-ai-models/huggingface.co/THUDM/cogvlm2-llama3-chinese-chat-19B
+TOTAL_K8S_NODES: 1
+
+# 模型参数
+MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
+
+# aiak-training-llm 训练的参数
+HF_CKPT_PATH: $pfs_path/huggingface.co/THUDM/cogvlm2-llama3-chinese-chat-19B
+DATA_PATH: $pfs_path/aiak-training-llm/cogvlm2/CogVLM-SFT-311K/llava_details-minigpt4_3500_formate
+TOKENIZER_PATH: $pfs_path/huggingface.co/THUDM/cogvlm2-llama3-chinese-chat-19B
+CHECKPOINT_PATH: $step1_output_path
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+
+# 训练参数
+TENSOR_MODEL_PARALLER_SIZE: 4
+PIPELINE_MODEL_PARALLER_SIZE: 1
+log_interval: 1
+initial_loss_scale: 1024
+micro_batch_size: 1
+global_batch_size: 2
+seq_length: 4096
+LANGUAGE_EXPERT_PATH: $step1_output_path/language-expert-mcore
+VISION_EXPERT_PATH: $step1_output_path/vision-expert-mcore
+VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
+ADAPTER_PATH: $step1_output_path/adapter-mcore
+PATCH_PATH: $step1_output_path/patch-mcore
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          LANGUAGE_EXPERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --common_config_path=${convert_checkpoint_path}/config/cogvlm2-19b/language-expert.json
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${LANGUAGE_EXPERT_PATH}
+            --no-te
+            --no_load_optim
+            --no_save_optim
+            --safetensors'
+          VISION_EXPERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --common_config_path=${convert_checkpoint_path}/config/cogvlm2-19b/vision-expert.json
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${VISION_EXPERT_PATH}
+            --no-te
+            --no_load_optim
+            --no_save_optim
+            --safetensors'
+          VISION_MODEL_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --common_config_path=${convert_checkpoint_path}/config/cogvlm2-19b/vision-model.json
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${VISION_MODEL_PATH}
+            --no-te
+            --no_load_optim
+            --no_save_optim
+            --safetensors'
+          ADAPTER_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --common_config_path=${convert_checkpoint_path}/config/cogvlm2-19b/adapter.json
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${ADAPTER_PATH}'
+          PATCH_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --common_config_path=${convert_checkpoint_path}/config/cogvlm2-19b/vision-patch.json
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${PATCH_PATH}'
+          MERGE_ARGS: '
+            --megatron_path ${megatron_path}
+            --language_expert_path ${LANGUAGE_EXPERT_PATH}/release
+            --vision_expert_path ${VISION_EXPERT_PATH}/release
+            --vision_model_path ${VISION_MODEL_PATH}/release
+            --vision_patch ${ADAPTER_PATH}/release
+            --adapter_path ${PATCH_PATH}/release
+            --save_ckpt_path ${CHECKPOINT_PATH}/release'
+        Step2:
+          MODEL_ARGS: '
+            --model-name cogvlm2-llama3-chinese-chat-19b
+            --rotary-base 500000'
+          IMG_ARGS: '
+            --img-h 1344
+            --img-w 1344
+            --patch-dim 14'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $DATA_PATH
+            --split 949,50,1'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --trainable-modules vision_expert_linear adapter
+            --seq-length ${seq_length}
+            --max-position-embeddings 4096
+            --init-method-std 0.02
+            --micro-batch-size ${micro_batch_size}
+            --global-batch-size ${global_batch_size}
+            --lr 0.0002
+            --min-lr 1.0e-5
+            --clip-grad 1.0
+            --weight-decay 0.01
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-05
+            --norm-epsilon 1e-05
+            --train-iters ${train_iters}
+            --lr-decay-iters 50000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale ${initial_loss_scale}
+            --bf16
+            --no-rope-in-fp32
+            --load $CHECKPOINT_PATH
+            --save-interval 5000
+            --eval-interval 1000
+            --eval-iters 10
+            --no-load-optim
+            --no-load-rng'
+            # --save ${step1_output_path}
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --use-distributed-optimizer
+            --overlap-grad-reduce
+            --overlap-param-gather
+            --distributed-backend nccl'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+          loss_in_value: '[
+            1.491854E+00
+            1.330474E+00
+            1.120819E+00
+            1.258725E+00
+            1.250978E+00
+            1.043661E+00
+            1.531062E+00
+            1.445931E+00
+            1.161258E+00
+            1.358749E+00
+            ]'
+  - perf:
+      pretrain:
+        Step1:
+          TENSOR_MODEL_PARALLER_SIZE: 1
+          PIPELINE_MODEL_PARALLER_SIZE: 1
+        Step2:
+          # 性能场景不需要重新生成ckpt，指定ckpt训练
+          CHECKPOINT_PATH: no_need_ckpt_path
+          TOTAL_K8S_NODES: 4
+          TENSOR_MODEL_PARALLER_SIZE: 1
+          PIPELINE_MODEL_PARALLER_SIZE: 4
+          micro_batch_size: 1
+          global_batch_size: 2
+          seq_length: 4096
+          initial_loss_scale: 65536
+
+tasks:
+  check_correctness_task: True
+  check_perfness_task: True

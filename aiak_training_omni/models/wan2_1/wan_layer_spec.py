@@ -1,0 +1,103 @@
+"""Wan layer spec."""
+
+# from .fused_bias_dropout import get_bias_dropout_add
+
+from megatron.core.extensions.transformer_engine import (
+    TEColumnParallelLinear,
+    TERowParallelLinear,
+    TEDotProductAttention,
+    TELayerNormColumnParallelLinear,
+    TENorm,
+)
+
+from megatron.core.transformer.attention import (
+    SelfAttention,
+    SelfAttentionSubmodules,
+    CrossAttention,
+    CrossAttentionSubmodules,
+)
+
+from megatron.core.models.common.embeddings.rotary_pos_embedding import (
+    apply_rotary_pos_emb,
+)
+from megatron.core.transformer.enums import AttnMaskType
+from megatron.core.transformer.mlp import MLP, MLPSubmodules
+from megatron.core.transformer.spec_utils import ModuleSpec
+from megatron.core.transformer.identity_op import IdentityOp
+from megatron.core.utils import get_te_version, is_te_min_version
+
+from .wan_layer import (
+    WanLayer,
+    WanLayerSubmodules,
+    WanCrossAttentionSubmodules,
+)
+from .wan_attention import WanSelfAttention, WanCrossAttention
+from .wan_utils import wan_rope_apply
+
+from aiak_training_omni.models.custom.common.local_norm import LocalNorm
+
+# qk_norm = TENorm if is_te_min_version("1.9.0") else LocalNorm
+qk_norm = LocalNorm
+
+
+# TODO: add multi acc support
+def get_wan_layer_with_te_spec() -> ModuleSpec:
+    """
+    Use this spec to use lower level Transformer Engine modules (required for fp8 training)
+    """
+    mlp = ModuleSpec(
+        module=MLP,
+        submodules=MLPSubmodules(
+            linear_fc1=TEColumnParallelLinear,
+            linear_fc2=TERowParallelLinear,
+        ),
+    )
+
+    return ModuleSpec(
+        module=WanLayer,
+        submodules=WanLayerSubmodules(
+            self_attention=ModuleSpec(
+                module=SelfAttention,
+                params={"attn_mask_type": AttnMaskType.no_mask},
+                submodules=SelfAttentionSubmodules(
+                    linear_qkv=TEColumnParallelLinear,
+                    core_attention=TEDotProductAttention,
+                    linear_proj=TERowParallelLinear,
+                ),
+            ),
+            wan_self_attention=ModuleSpec(
+                module=WanSelfAttention,
+                params={"attn_mask_type": AttnMaskType.no_mask},
+                submodules=SelfAttentionSubmodules(
+                    linear_qkv=TEColumnParallelLinear,
+                    core_attention=TEDotProductAttention,
+                    linear_proj=TERowParallelLinear,
+                    apply_rotary_fn=wan_rope_apply,
+                    q_layernorm=qk_norm,
+                    k_layernorm=qk_norm,
+                ),
+            ),
+            cross_attention=ModuleSpec(
+                module=CrossAttention,
+                params={"attn_mask_type": AttnMaskType.no_mask},
+                submodules=CrossAttentionSubmodules(
+                    linear_q=TEColumnParallelLinear,
+                    linear_kv=TEColumnParallelLinear,
+                    core_attention=TEDotProductAttention,
+                    linear_proj=TERowParallelLinear,
+                ),
+            ),
+            wan_cross_attention=ModuleSpec(
+                module=WanCrossAttention,
+                params={"attn_mask_type": AttnMaskType.no_mask},
+                submodules=WanCrossAttentionSubmodules(
+                    linear_q=TEColumnParallelLinear,
+                    linear_kv=TEColumnParallelLinear,
+                    core_attention=TEDotProductAttention,
+                    linear_proj=TERowParallelLinear,
+                    q_layernorm=qk_norm,
+                    k_layernorm=qk_norm,
+                ),
+            ),
+        ),
+    )

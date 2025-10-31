@@ -1,0 +1,108 @@
+model_name: stdit_xl_2
+description: $model_name模型自动化
+# huggingface_path: https://huggingface.co/hpcai-tech/OpenSora-STDiT-v1-16x256x256
+TOTAL_K8S_NODES: 1
+
+# 模型参数
+MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
+
+# aiak-training-llm 训练的参数
+# HF_CKPT_PATH: $load_hf_ckpt_path_pre/huggingface.co/Qwen/Qwen-7B
+DATA_PATH: $pfs_path/aiak-training-llm/dataset/t2v/MSR-VTT/msr-vtt.csv
+TOKENIZER_PATH: none
+CHECKPOINT_PATH: $pfs_path/aiak-training-llm/stdit/mcore_stdit_tp1_pp1
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+
+# 训练参数
+TENSOR_MODEL_PARALLER_SIZE: 1
+PIPELINE_MODEL_PARALLER_SIZE: 1
+log_interval: 1
+initial_loss_scale: 1024
+global_batch_size: 64
+micro_batch_size: 1
+num_latent_frames: 80
+max_latent_height: 32
+max_latent_width: 32
+seq_length: 20480
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          RUNNABLE_FLAG: "false"
+          # CONVERT_ARGS: ''
+        Step2:
+          RUNNABLE_FLAG: "true"
+          MODEL_ARGS: '
+            --model-name stdit-xl/2'
+          DATA_ARGS: '
+            --tokenizer-type NullTokenizer
+            --vocab-size 0
+            --data-path $DATA_PATH
+            --split 949,50,1'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --enable-ema
+            --num-latent-frames ${num_latent_frames}
+            --latent-frame-interval 3
+            --max-latent-height ${max_latent_height}
+            --max-latent-width ${max_latent_width}
+            --seq-length ${seq_length}
+            --max-position-embeddings ${seq_length}
+            --max-text-length 120
+            --init-method-std 0.01
+            --micro-batch-size ${micro_batch_size}
+            --global-batch-size ${global_batch_size}
+            --lr 0.00002
+            --min-lr 1.0e-5
+            --clip-grad 1.0
+            --weight-decay 0
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.999
+            --adam-eps 1e-08
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 6513
+            --lr-decay-style constant
+            --lr-warmup-fraction 0
+            --initial-loss-scale 65536
+            --bf16
+            --load $CHECKPOINT_PATH
+            --save-interval 10000
+            --eval-interval 10000
+            --eval-iters 1000
+            --use-dist-ckpt
+            --no-load-optim
+            --no-load-rng
+            --no-save-optim
+            --no-save-rng'
+            #--ckpt-step 0
+            # --save $CHECKPOINT_PATH
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --context-parallel-size 8
+            --context-parallel-ulysses-degree 8
+            --use-distributed-optimizer
+            --distributed-backend nccl'
+            #--sequence-parallel
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+          loss_in_value: '[
+              1.021592E-01
+              1.388564E-01
+              1.095726E-01
+              8.952650E-02
+              9.312305E-02
+              1.563515E-01
+              1.228351E-01 
+              7.919940E-02
+              7.778417E-02
+            ]'
+
+tasks:
+  check_correctness_task: True
+  check_perfness_task: False

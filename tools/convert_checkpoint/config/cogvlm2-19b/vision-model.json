@@ -1,0 +1,69 @@
+{
+    "args": {
+        "common": {
+            "num_layers": 63,
+            "hidden_size": 1792,
+            "ffn_hidden_size": 15360,
+            "num_attention_heads": 16,
+            "num_key_value_heads": 16
+        },
+        "huggingface": {
+            "dropout_prob": 0.0,
+            "hidden_act": "gelu",
+            "in_channels": 3,
+            "num_hidden_layers": 63,
+            "hidden_size": 1792,
+            "patch_size": 14,
+            "num_heads": 16,
+            "intermediate_size": 15360,
+            "layer_norm_eps": 1e-06,
+            "num_positions": 9217,
+            "image_size": 1344
+        },
+        "mcore": {
+            "num_layers_per_virtual_pipeline_stage": null,
+            "virtual_pipeline_model_parallel_size": null,
+            "tensor_model_parallel_size": 1,
+            "pipeline_model_parallel_size": 1,
+            "data_parallel_size": 1,
+            "use_rotary_position_embeddings": true,
+            "use_distributed_optimizer": false,
+            "transpose_mlp_dense": false,
+            "transpose_query_key_value": true
+        }
+    },
+    "name_map": {
+        "huggingface": {
+            "transformer": "model",
+            "layer_prefix": "vision.transformer.layers",
+            "attention.query_key_value": "attention.query_key_value",
+            "attention.dense": "attention.dense",
+            "post_attention_layernorm": "input_layernorm",
+            "mlp.dense_h_to_4h": "mlp.fc1",
+            "mlp.dense_4h_to_h": "mlp.fc2",
+            "post_mlp_layernorm": "post_attention_layernorm"
+        },
+        "mcore": {
+            "transformer": "model",
+            "layer_prefix": "vision_model.decoder.layers",
+            "input_layernorm": "input_layernorm",
+            "attention.query_key_value": "self_attention.linear_qkv",
+            "attention.dense": "self_attention.linear_proj",
+            "post_attention_layernorm": "post_self_attn_layernorm",
+            "mlp.dense_h_to_4h": "mlp.linear_fc1",
+            "mlp.dense_4h_to_h": "mlp.linear_fc2",
+            "post_mlp_layernorm": "post_mlp_layernorm",
+            "transformer_tpl": "model%d"
+        }
+    },
+    "tensor_parallel_dim": {
+        "attention.query_key_value.weight": 0,
+        "attention.query_key_value.bias": 0,
+        "attention.dense.weight": 1,
+        "mlp.dense_h_to_4h.weight": 0,
+        "mlp.dense_h_to_4h.bias": 0,
+        "mlp.dense_4h_to_h.weight": 1
+    },
+    "torch_dtype": "bfloat16",
+    "transformers_version": "4.23.1"
+}

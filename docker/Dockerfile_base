@@ -1,0 +1,8 @@
+ARG BASE_IMAGE="registry.baidubce.com/cce-ai-native/nvidia/pytorch:23.12-py3"
+FROM ${BASE_IMAGE}
+
+COPY apex /tmp/apex
+
+RUN cd /tmp/apex && \
+    pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./
+
