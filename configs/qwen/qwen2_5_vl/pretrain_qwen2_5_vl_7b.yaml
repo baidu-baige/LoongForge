@@ -1,0 +1,25 @@
+defaults:
+  - ../../models/encoder/image_encoder@model.image_encoder: qwen_vit
+  - ../../models/encoder/image_projector@model.image_projector: adapter
+  - ../../models/foundation/qwen@model.foundation: qwen2
+  - ../../data/@data: vlm_data
+  - ../../trainer@train: base
+  - _self_
+
+model:
+  #_target_: aiak_training_omni.models.common.BaseModelConfig
+
+  image_encoder:
+    _target_: aiak_training_omni.models.encoder.QwenVisionConfig
+
+  image_projector:
+    _target_: aiak_training_omni.models.encoder.MLPAdapterConfig
+
+  foundation:
+    _target_: aiak_training_omni.models.foundation.QwenConfig
+
+data:
+  _target_: aiak_training_omni.data.base_dataset_config.DataConfig
+
+train:
+  _target_: aiak_training_omni.train.base_train_config.TrainConfig

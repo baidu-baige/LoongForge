@@ -1,0 +1,13 @@
+defaults:
+  #- ../image_projector@: base
+  - _self_
+
+#image_projector:
+normalization: "LayerNorm"
+
+add_bias_linear: True
+
+activation_func:
+
+
+layernorm_epsilon: 1e-06

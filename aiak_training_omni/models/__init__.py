@@ -1,4 +1,4 @@
 """models"""
-from foundation_models import qwen 
+from foundation import qwen 
 
 __all__ = []

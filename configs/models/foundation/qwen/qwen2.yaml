@@ -1,0 +1,49 @@
+# qwen2 model configuration
+defaults:
+  #- ../../foundation@: base
+  - _self_
+
+#foundation:
+model_name: qwen2
+
+num_layers: 28
+
+hidden_size: 3584
+
+ffn_hidden_size: 18944
+
+num_attention_heads: 28
+
+group_query_attention: true
+
+num_query_groups: 4
+
+vocab_size_in_config_file: 152064
+
+make_vocab_size_divisible_by: 128
+
+position_embedding_type: "rope"  # str
+
+add_position_embedding: false  # bool
+
+rotary_interleaved: false  # bool
+
+normalization: "RMSNorm"  # str
+
+swiglu: true  # bool
+
+attention_dropout: 0.0  # float
+
+hidden_dropout: 0.0  # float
+
+add_bias_linear: false  # bool
+
+add_qkv_bias: true  # bool
+
+qk_layernorm: false  # bool
+
+untie_embeddings_and_output_weights: true  # bool
+
+norm_epsilon: 1e-06  # float
+
+rotary_base: 1000000  # int

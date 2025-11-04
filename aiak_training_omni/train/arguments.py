@@ -1,11 +1,13 @@
 """AIAK arguments"""
 
 import os
+import hydra
 import argparse
 import importlib
 from dataclasses import fields
 
 from megatron.core.transformer.enums import AttnBackend
+from megatron.training.arguments import add_megatron_arguments
 
 from aiak_training_omni.models import (
     get_support_model_family_and_archs,
@@ -18,6 +20,70 @@ from aiak_training_omni.data import get_support_templates
 
 from aiak_training_omni.utils import constants, parse_arguments, print_rank_0
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
+
+
+def parse_args_from_cfg(cfg):
+    """parse args from cfg"""
+    # instantiate cfg to get full args
+    cfg_model = hydra.utils.instantiate(cfg.model)
+    cfg_dataset = hydra.utils.instantiate(cfg.data)
+    cfg_train = hydra.utils.instantiate(cfg.train)
+
+    # flatten args from different cfg
+    args_model = cfg_model.flatten_with_priority()
+    args_dataset = cfg_dataset.flatten_with_priority()
+    args_trainer = cfg_train.flatten_with_priority()
+
+    args = {**args_model, **args_dataset, **args_trainer}
+
+    cli_args = dict_to_cli_args(args)
+
+    megatron_args, omni_args = megatron_parse_args(cli_args, ignore_unknown_args=True)
+
+    return megatron_args
+    
+
+
+def megatron_parse_args(argv, extra_args_provider=None, ignore_unknown_args=False):
+    """Parse all arguments."""
+    parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
+                                     allow_abbrev=False)
+
+    parser = add_megatron_arguments(parser)
+
+    # Custom arguments.
+    if extra_args_provider is not None:
+        parser = extra_args_provider(parser)
+
+    # Parse.
+    if ignore_unknown_args:
+        args, args_omni = parser.parse_known_args(argv)
+
+        return args, args_omni
+    else:
+        args = parser.parse_args(argv)
+
+    return args
+
+
+def dict_to_cli_args(args_dict):
+    """
+    Converts {'lr': 1e-4, 'batch_size': 32, 'use_fp16': True} 
+    to ['--lr', '1e-4', '--batch-size', '32', '--use-fp16']
+    """
+    cli_args = []
+    for k, v in args_dict.items():
+        # Key transformation: underscore -> hyphen
+        flag = f"--{k.replace('_', '-')}"
+        if isinstance(v, bool):
+            if v:
+                cli_args.append(flag)
+        elif isinstance(v, list):
+            cli_args.append(flag)
+            cli_args.extend(map(str, v))
+        else:
+            cli_args.extend([flag, str(v)])
+    return cli_args
 
 
 def parse_train_args(args_defaults={}):
