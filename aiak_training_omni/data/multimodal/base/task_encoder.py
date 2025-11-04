@@ -15,8 +15,14 @@ from torchvision.transforms import ToPILImage
 import numpy as np
 import torch
 
-from aiak_training_omni.data.multimodal import MultiVidQASample, MultiMixQASample
-from aiak_training_omni.data.multimodal import PackedCaptioningSample, PackedVQASample
+from aiak_training_omni.data.multimodal import (
+    PackedCaptioningSample,
+    PackedVQASample,
+    PackedMultiMixQASample,
+    MultiVidQASample,
+    MultiMixQASample,
+)
+
 from megatron.energon import (
     Batch,
     CaptioningSample,
@@ -251,8 +257,6 @@ def cooker_feature_qa(sample: dict):
 
 def cooker_packed_vqa(sample: dict):
     """ Convert raw sample dict into a PackedCaptioningSample. """
-    # print("*" * 20)
-    # print("cooker_packed_vqa")
     data = sample['json']
     images = [sample.get(f'img{i}.jpg') for i in range(len(data['images']))]
     captions = data['captions']
@@ -265,6 +269,105 @@ def cooker_packed_vqa(sample: dict):
         answers=captions,
         contexts=prompts,
         images=images,
+    )
+
+
+def cooker_packed_multi_mix_qa(sample: dict):
+    """
+    Convert packed multi-mix qa json into a PackedMultiMixQASample.
+
+    Expected json layout (example):
+    {
+      "texts": {
+        "captions": [...],   # len = N
+        "prompts":  [...]    # len = N
+      },
+      "media_files": [      # length = N
+        ["imgA.jpg", "imgB.jpg", ...],  
+        ["imgC.jpg", ...],  
+        ...
+      ],
+      "media_type": "image" | "video"
+    }
+    """
+    data = sample["json"]
+
+    texts = data.get("texts", {})
+    prompts = texts.get("prompts", []) or []
+    captions = texts.get("captions", []) or []
+    
+    if len(captions) != len(prompts):
+        raise ValueError(
+            f"[cooker_packed_multi_mix_qa] captions/prompts length mismatch for key={sample["__key__"]}: "
+            f"{len(captions)} vs {len(prompts)}"
+        )
+
+    # answers: List[List[str]]
+    answers = [
+        [c] if isinstance(c, str)
+        else (list(c) if isinstance(c, (list, tuple)) else [])
+        for c in captions
+    ]
+
+    media_files = data.get("media_files", []) or []
+    media_type = (data.get("media_type") or "").lower()
+
+    images = None
+    videos = None
+
+
+    if media_type == "image":
+        images = []
+        for group in media_files:
+            image_group = []
+            if isinstance(group, (list, tuple)):
+                for name in group:
+                    img = sample.get(name)
+                    if img is not None:
+                        image_group.append(img)
+            elif isinstance(group, str):
+                img = sample.get(group)
+                if img is not None:
+                    image_group.append(img)
+            images.append(image_group)
+        if all(len(g) == 0 for g in images):
+            images = None
+        videos = None
+    elif media_type == "video":
+        videos = []
+        for group in media_files:
+            video_group = []
+            if isinstance(group, (list, tuple)):
+                for name in group:
+                    vid = sample.get(name)
+                    if vid is not None:
+                        video_group.append(vid)
+            elif isinstance(group, str):
+                vid = sample.get(group)
+                if vid is not None:
+                    video_group.append(vid)
+            videos.append(video_group)
+        
+        if all(len(g) == 0 for g in videos):
+            videos = None
+        images = None
+        
+    else:
+        raise ValueError(
+            f"[cooker_packed_multi_mix_qa] unknown media_type='{media_type}'. "
+            f"Expect 'image' or 'video'."
+        )
+    
+    return PackedMultiMixQASample(
+        __key__=sample["__key__"],
+        __restore_key__=sample["__restore_key__"],
+        __subflavor__=None,
+        __subflavors__=sample.get('__subflavors__', {}),
+        images=images,
+        videos=videos,
+        contexts=prompts,
+        answers=answers,
+        answer_weights=None,
     )
 
 
@@ -287,7 +390,7 @@ def cooker_packed_caption(sample: dict):
 def cooker_default(sample: dict):
     """ Fallback cooker when no subflavor matches, selected by user-defined sample_type."""
     args = get_args()
-    if args.sample_type == "multi_mix_vqa":
+    if args.sample_type == "multi_mix_qa":
         return cooker_multi_mix_qa(sample)
     elif args.sample_type == "feature_vqa":
         return cooker_feature_qa(sample)
@@ -295,17 +398,20 @@ def cooker_default(sample: dict):
         return cooker_packed_caption(sample)
     elif args.sample_type == "packed_vqa":
         return cooker_packed_vqa(sample)
+    elif args.sample_type == "packed_multi_mix_qa":
+        return cooker_packed_multi_mix_qa(sample)
     else:
         raise NotImplementedError("Sample format not supported", sample)
 
 class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, BaseTaskBatchPacked, dict]):
     """A simple task encoder for VLMs."""
     cookers = [
-        Cooker(cooker_multi_mix_qa, has_subflavors={"sample_type": "multi_mix_vqa"}),
+        Cooker(cooker_multi_mix_qa, has_subflavors={"sample_type": "multi_mix_qa"}),
         Cooker(cooker_multi_vid_vqa, has_subflavors={"sample_type": "multi_vid_vqa"}),
         Cooker(cooker_feature_qa, has_subflavors={"sample_type": "feature_vqa"}),
         Cooker(cooker_packed_caption, has_subflavors={"sample_type": "packed_captioning"}),
         Cooker(cooker_packed_vqa, has_subflavors={"sample_type": "packed_vqa"}),
+        Cooker(cooker_packed_multi_mix_qa, has_subflavors={"sample_type": "packed_multi_mix_qa"}),
         Cooker(cooker_default,)
     ]
     
@@ -332,6 +438,8 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             yield self.encode_packed_captioning(sample)
         elif isinstance(sample, PackedVQASample):
             yield self.encode_packed_vqa(sample)
+        elif isinstance(sample, PackedMultiMixQASample):
+            yield self.encode_packed_multi_mix_qa(sample)
         else:
             raise NotImplementedError("Sample format not supported", sample)
 
@@ -363,6 +471,11 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
     @abstractmethod
     def encode_packed_vqa(self, sample: PackedVQASample) -> BaseTaskSample:
         """ Generates an encoded multimodal packed vqa sample from a raw sample. """
+        pass
+
+    @abstractmethod
+    def encode_packed_multi_mix_qa(self, sample: PackedMultiMixQASample) -> BaseTaskSample:
+        """ Generates an encoded multimodal packed multimix sample from a raw sample. """
         pass
 
     def process_images(self, samples: List[Union[BaseTaskSample, BaseTaskSamplePacked]]) -> torch.Tensor:

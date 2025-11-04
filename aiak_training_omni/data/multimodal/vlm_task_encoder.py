@@ -16,8 +16,12 @@ from qwen_vl_utils.vision_process import smart_nframes, smart_resize
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from .base.task_encoder import BaseTaskEncoder, BaseTaskSample, BaseTaskSamplePacked, BaseTaskBatchPacked
-from aiak_training_omni.data.multimodal import MultiMixQASample, PackedCaptioningSample, PackedVQASample
-
+from aiak_training_omni.data.multimodal import (
+    MultiMixQASample,
+    PackedCaptioningSample,
+    PackedVQASample,
+    PackedMultiMixQASample
+)
 
 IGNORE_INDEX = -100  # ID for labels that should be ignored.
 IMAGE_TOKEN = "<|image_pad|>"
@@ -414,9 +418,116 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )                    
             l_VLMTaskSample.append(self.encode_vqa4packing(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
-        print(l_sample_packed)
         return l_sample_packed
 
+    def encode_packed_multi_mix_qa(self, sample: PackedMultiMixQASample) -> BaseTaskSample:
+        """Generates an encoded multimodal packed multi mix qa sample from a raw sample. """
+        n_orig_sample = len(sample.contexts)
+        l_VLMTaskSample = []
+        images = sample.images if sample.images is not None else []
+        videos = sample.videos if sample.videos is not None else []
+
+        has_images = len(images) > 0
+        has_videos = len(videos) > 0
+        if has_images and has_videos:
+            raise ValueError(
+                f"encode_packed_multi_mix_qa: cannot mix images and videos in same sample for key={sample.__key__}"
+            )
+        media_list = images if has_images else videos
+        media_type = "image" if has_images else "video"
+        
+        if len(media_list) != n_orig_sample:
+            raise ValueError(
+                f"encode_packed_multi_mix_qa: media count ({len(media_list)}) "
+                f"!= context count ({n_orig_sample}) for key={sample.__key__}"
+            )
+        for idx in range(n_orig_sample):
+            context = sample.contexts[idx]  # str
+            media_group = media_list[idx]   # List[Tensor] 或 List[VideoData]
+            answer_group = sample.answers[idx] if sample.answers else []  # List[str]
+
+            if isinstance(answer_group, list):
+                answer = "\n\n".join(answer_group) if answer_group else ""
+            else:
+                answer = answer_group or ""
+
+            messages = [
+                {
+                    'role': 'user',
+                    'content': context
+                },
+                {
+                    'role': 'assistant',
+                    'content': answer
+                }
+            ]
+            if has_images:
+                cur_sample = MultiMixQASample(
+                    __key__=f"{sample.__key__}.q{idx:03d}",
+                    __restore_key__=sample.__restore_key__,
+                    __subflavor__=None,
+                    __subflavors__=sample.__subflavors__,
+                    messages=messages,
+                    image=media_group,
+                    video=None,
+                    system=None,
+                )
+            else:  # has_videos
+                cur_sample = MultiMixQASample(
+                    __key__=f"{sample.__key__}.q{idx:03d}",
+                    __restore_key__=sample.__restore_key__,
+                    __subflavor__=None,
+                    __subflavors__=sample.__subflavors__,
+                    messages=messages,
+                    image=None,
+                    video=media_group,  # List[VideoData]
+                    system=None,
+                )
+            l_VLMTaskSample.append(self.encode_multi_mix_qa4packing(cur_sample))
+        l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
+        return l_sample_packed
+
+    def encode_multi_mix_qa4packing(self, sample: MultiMixQASample) -> BaseTaskSample:
+        """Encode MultiMixQASample in Qwen2VL style."""
+        
+        if self.args.training_phase == constants.TrainingPhase.SFT:
+            input_ids, target, attn_mask, imgs, image_grid_thw, pixel_values_videos, video_grid_thw = \
+                self.process_sft_qa(sample.messages, sample.system, sample.video, sample.image)
+            
+            num_tiles = []
+            if sample.video is not None:
+                num_tiles = [len(video_grid_thw)]
+            elif sample.image is not None:
+                num_tiles = [len(image_grid_thw)]
+        else:
+            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+        
+        if self.args.enable_discard_sample:
+            assert len(input_ids) <= self.args.seq_length, \
+                f"{sample.__key__} input length {len(input_ids)}"
+        elif sample.video is not None:
+            assert video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
+                f"{sample.__key__} grid_thw: {video_grid_thw}"
+        elif sample.image is not None:
+            assert image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
+                f"{sample.__key__} grid_thw: {image_grid_thw}"
+
+        return VLMTaskSample(
+            __key__=sample.__key__,
+            __restore_key__=sample.__restore_key__,
+            __subflavor__=None,
+            __subflavors__=sample.__subflavors__,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=pixel_values_videos,
+            video_grid_thw=video_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
+    
     def encode_vqa4packing(self, sample: VQASample) -> BaseTaskSample:
         """Encode VQASample in Qwen2VL style."""
         

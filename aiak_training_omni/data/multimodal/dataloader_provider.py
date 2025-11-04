@@ -10,7 +10,7 @@ from megatron.core import parallel_state
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.training import get_args
 from megatron.training.checkpointing import get_checkpoint_name
-from .task_encoder import print_error_handler
+from .base.task_encoder import print_error_handler
 
 
 def get_train_dataset(task_encoder):
