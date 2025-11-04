@@ -8,3 +8,4 @@ from .utils import (
 
 from .initialize import parse_arguments, initialize_aiak_megatron
 from .global_vars import get_tokenizer, get_args, get_chat_template
+from .config_augments import ConfigAugments

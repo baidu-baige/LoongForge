@@ -11,8 +11,8 @@ from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.transformer.moe.experts import SequentialMLP, TEGroupedMLP
 
-from aiak_training_omni.utils import is_te_min_version
-from aiak_training_omni.models.dispatch import multiacc_modules
+from aiak_training_llm.utils import is_te_min_version
+from aiak_training_llm.models.dispatch import multiacc_modules
 
 
 def _get_mlp_module_spec(
