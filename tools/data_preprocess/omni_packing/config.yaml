@@ -1,0 +1,41 @@
+
+# 数据路径配置
+data:
+  # webdataset数据样本目录
+  wds_dir: "/mnt/cluster/yxc/test_4/"
+  # 文本字段名
+  template_text_key: "messages"
+  packed_json_dir: "/mnt/cluster/yxc/test_5/"
+model:
+  model_type: "qwenvl"
+  processor_kwargs:
+    pretrained_model_name_or_path: "/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
+    min_pixels: 3136   # 4*28*28
+    max_pixels: 4014080 # 5120*28*28(4014080,8192)
+    trust_remote_code: True
+    use_fast: False
+
+# 媒体文件预处理配置，可选的的预处理函数在media_preprocess_utils.py中定义
+media_preprocess:
+  image: custom_image_preprocess
+
+sample:
+  # 训练数据的最大长度
+  max_token_len: 8192
+  # 决定解析方式
+  task_type: vqa
+
+# 并行处理参数
+process:
+  # 每个进程处理的样本块大小
+  chunk_size: 5000
+  # 归并参数（排序)的batch_size
+  merge_batch_size: 20
+  # 超时设置（根据数据量定，1M数据按 45分钟(2700s)估算）
+  time_out: 2000
+
+# 日志与临时文件
+log:
+  # 日志级别（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+  level: "INFO"
+  # 日志文件路径
