@@ -1,6 +1,4 @@
-defaults:
-  #- ../data@: base
-  - _self_ 
+_target_: aiak_training_omni.data.base_dataset_config.DataConfig
 
 #data:
 tokenizer_type: 

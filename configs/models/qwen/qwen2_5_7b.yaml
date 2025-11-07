@@ -1,9 +1,7 @@
 # qwen2 model configuration
-defaults:
-  #- ../../base_model
-  - _self_
 
-#foundation:
+_target_: aiak_training_omni.models.foundation.QwenConfig
+
 model_name: qwen2
 
 num_layers: 10

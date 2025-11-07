@@ -20,6 +20,10 @@ MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
 
+# To specify the model config file
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2_5_vl
+MODEL_CONFIG_NAME=qwen2_5_vl_7b
+
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE
     --nnodes $NNODES
@@ -28,53 +32,75 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
-CONFIG_PATH=../configs/qwen/qwen2_5_vl
-CONFIG_NAME=pretrain_qwen2_5_vl_7b
+DATA_ARGS=(
+    --tokenizer-type HFTokenizer
+    --hf-tokenizer-path $TOKENIZER_PATH
+    --data-path $DATA_PATH
+    --dataloader-type external
+    --split 100,0,0
+    --add-question-in-pretrain
+    --enable-discard-sample
+    --num-workers 16
+)
+
+TRAINING_ARGS=(
+    --norm-epsilon 1e-6
+    --training-phase pretrain
+    --seq-length 1024
+    --max-position-embeddings 4096
+    --init-method-std 0.02
+    --micro-batch-size 1
+    --global-batch-size 512
+    --lr 0.0002
+    --min-lr 1.0e-5
+    --clip-grad 1.0
+    --weight-decay 0.01
+    --optimizer adam
+    --adam-beta1 0.9
+    --adam-beta2 0.95
+    --adam-eps 1e-05
+    --train-iters 50000
+    --lr-decay-iters 50000
+    --lr-decay-style cosine
+    --lr-warmup-fraction 0.002
+    --initial-loss-scale 65536
+    --bf16
+    --load $CHECKPOINT_PATH
+    --save $CHECKPOINT_PATH
+    --save-interval 10000000
+    --ckpt-format torch
+    --dataloader-save ${CHECKPOINT_PATH}/dataloader
+)
+
+MODEL_PARALLEL_ARGS=(
+    --attention-backend flash
+    --pipeline-model-parallel-size 1
+    --tensor-model-parallel-size 1
+    --use-distributed-optimizer
+    --overlap-grad-reduce
+    --overlap-param-gather
+    --distributed-backend nccl
+)
+
+LOGGING_ARGS=(
+    --log-interval 1
+    --tensorboard-dir ${TENSORBOARD_PATH}
+    --log-timers-to-tensorboard
+)
+
+if [ -n "${WANDB_API_KEY}" ]; then
+    LOGGING_ARGS+=(
+        --wandb-project ${WANDB_PROJECT}
+        --wandb-exp-name ${WANDB_NAME}
+    )
+fi
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
     $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
-    --config-path=$CONFIG_PATH \
-    --config-name=$CONFIG_NAME \
-    data.hf_tokenizer_path=$TOKENIZER_PATH \
-    data.data_path=$DATA_PATH \
-    data.tokenizer_type=HuggingFaceTokenizer \
-    data.dataloader_type=external \
-    data.split=[100,0,0] \
-    data.add_question_in_pretrain=True \
-    data.enable_discard_sample=True \
-    data.num_workers=16 \
-    train.dataloader_save=${CHECKPOINT_PATH}/dataloader \
-    train.tensorboard_dir=$TENSORBOARD_PATH \
-    train.norm_epsilon=1.0e-6 \
-    train.training_phase=pretrain \
-    data.seq_length=1024 \
-    train.max_position_embeddings=4096 \
-    train.init_method_std=0.02 \
-    train.micro_batch_size=1 \
-    train.global_batch_size=512 \
-    train.lr=0.0002 \
-    train.min_lr=1.0e-5 \
-    train.clip_grad=1.0 \
-    train.weight_decay=0.01 \
-    train.optimizer=adam \
-    train.adam_beta1=0.9 \
-    train.adam_beta2=0.95 \
-    train.adam_eps=1.0e-5 \
-    train.train_iters=50000 \
-    train.lr_decay_iters=50000 \
-    train.lr_decay_style=cosine \
-    train.lr_warmup_fraction=0.002 \
-    train.initial_loss_scale=65536 \
-    train.bf16=true \
-    train.save_interval=10000000 \
-    train.ckpt_format=torch \
-    train.attention_backend=flash \
-    train.pipeline_model_parallel_size=1 \
-    train.tensor_model_parallel_size=1 \
-    train.use_distributed_optimizer=true \
-    train.overlap_grad_reduce=true \
-    train.overlap_param_gather=true \
-    train.distributed_backend=nccl \
-    train.log_interval=1 \
-    train.log_timers_to_tensorboard=true \
+    --config-path=$MODEL_CONFIG_PATH \
+    --config-name=$MODEL_CONFIG_NAME \
+    ${DATA_ARGS[@]} \
+    ${TRAINING_ARGS[@]} \
+    ${MODEL_PARALLEL_ARGS[@]} \
+    ${LOGGING_ARGS[@]}

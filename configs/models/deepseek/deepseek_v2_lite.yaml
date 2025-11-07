@@ -1,0 +1,36 @@
+
+_target_: aiak_training_omni.models.foundation.deepseek.deepseek_config.DeepseekConfig
+
+model:
+
+  num_layers: 27
+
+  hidden_size: 2048
+
+  ffn_hidden_size: 10944
+
+  num_attention_heads: 16
+
+  num_query_groups: 16
+
+  num_experts: 64
+
+  moe_ffn_hidden_size: 1408
+
+  moe_shared_expert_intermediate_size: 2816
+
+  q_lora_rank: null
+
+  kv_lora_rank: 512
+
+  qk_head_dim: 128
+
+  qk_pos_emb_head_dim: 64
+
+  v_head_dim: 128
+
+  moe_layer_freq: "[0]*1+[1]*26"
+
+  qk_layernorm: true
+
+  vocab_size_in_config_file: 102400

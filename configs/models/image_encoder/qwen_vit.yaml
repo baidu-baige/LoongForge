@@ -1,10 +1,6 @@
-defaults:
-  # <folder_name>@<field_name>.<field_name>: <yaml_file_name>
-  #- ../image_encoder@: base
-  #- ../../base_model
-  - _self_
 
-# image_encoder:
+_target_: aiak_training_omni.models.encoder.QwenVisionRMSNormConfig
+
 model_name: qwen_vit
 
 num_layers: 10

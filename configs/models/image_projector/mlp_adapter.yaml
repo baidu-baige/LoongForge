@@ -1,15 +1,11 @@
-defaults:
-  #- ../image_projector@: base
-  # - ../../base_model
-  - _self_
 
-#image_projector:
+_target_: aiak_training_omni.models.encoder.MLPAdapterConfig
+
 normalization: "LayerNorm"
 
 add_bias_linear: True
 
 activation_func:
-
 
 layernorm_epsilon: 1e-06
 

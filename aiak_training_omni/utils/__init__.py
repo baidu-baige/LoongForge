@@ -16,5 +16,4 @@ from .global_vars import (
     get_chat_template,
     get_model_config,
     get_data_config,
-    get_trainer_config,
 )
