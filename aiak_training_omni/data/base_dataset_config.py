@@ -1,11 +1,13 @@
 """base dataset config"""
-from aiak_training_omni.models.common.base_config import BaseModelConfig
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass, fields, field
 from typing import List, Optional, Literal
 
 
-class DataConfig(BaseModelConfig):
+@dataclass
+class DataConfig:
     """config for common dataset"""
+
     tokenizer_type: Literal["NullTokenizer", "HFTokenizer"] = "HFTokenizer"
     hf_tokenizer_path: Optional[str] = None
     data_path: str = None
@@ -14,5 +16,20 @@ class DataConfig(BaseModelConfig):
     add_question_in_pretrain: bool = True
     enable_discard_sample: bool = True
     num_workers: int = None
+    additional_special_tokens = None
+    use_fast_tokenizer = None
+    padding_side = "right"
+    seq_length = 512
+    split_special_tokens = True
+    is_tokenized_data = True
+
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        # 1. 只保留类里声明过的字段
+        names = {f.name for f in fields(self)}
+        for k, v in kwargs.items():
+            if k in names:
+                setattr(self, k, v)
+        if self.additional_special_tokens is not None:
+            self.additional_special_tokens = [
+                token.strip() for token in self.additional_special_tokens.split(",")
+            ]

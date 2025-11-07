@@ -29,7 +29,10 @@ from aiak_training_omni.models.stdit.gaussian_diffusion import (
     get_named_beta_schedule,
 )
 
-from aiak_training_omni.models.stdit.diffusion_utils import broadcast_on_tp_group, broadcast_on_cp_group
+from aiak_training_omni.models.stdit.diffusion_utils import (
+    broadcast_on_tp_group,
+    broadcast_on_cp_group,
+)
 
 
 SUPPORTED_MODELS = [
@@ -53,7 +56,7 @@ def model_provider(pre_process=True, post_process=True):
     args = get_args()
     model_family = get_model_family(args.model_name)
     model_provider = get_model_provider(model_family)
-    assert model_provider is not None, f'model provider for {args.model_name} not found'
+    assert model_provider is not None, f"model provider for {args.model_name} not found"
 
     return model_provider(pre_process, post_process)
 
@@ -65,7 +68,10 @@ def get_batch(data_iterator):
         return None, None, None, None, None
 
     # get batches on TP0 and CP0 only
-    if mpu.get_context_parallel_rank() == 0 and mpu.get_tensor_model_parallel_rank() == 0:
+    if (
+        mpu.get_context_parallel_rank() == 0
+        and mpu.get_tensor_model_parallel_rank() == 0
+    ):
         assert data_iterator is not None
         batch = next(data_iterator)
         for key, val in batch.items():
@@ -79,14 +85,14 @@ def get_batch(data_iterator):
 
     batch = broadcast_on_cp_group(batch)
 
-    video = batch['video'] # B in T H W
-    video_noised = batch['video_noised'] # B in T H W
-    video_mask = batch['video_mask']
-    text_enc = batch['text_enc'] # B 1 S H
-    text_mask = batch['text_mask']
-    labels = batch['labels']
-    timestep = batch['timestep'] # B
-    
+    video = batch["video"]  # B in T H W
+    video_noised = batch["video_noised"]  # B in T H W
+    video_mask = batch["video_mask"]
+    text_enc = batch["text_enc"]  # B 1 S H
+    text_mask = batch["text_mask"]
+    labels = batch["labels"]
+    timestep = batch["timestep"]  # B
+
     return video, video_noised, video_mask, text_enc, text_mask, timestep, labels
 
 
@@ -96,11 +102,18 @@ def gaussian_diffusion():
     model_mean_type = ModelMeanType.EPSILON
     model_var_type = ModelVarType.LEARNED_RANGE
     loss_type = LossType.MSE
-    return GaussianDiffusion(betas=betas, model_mean_type=model_mean_type,
-                    model_var_type=model_var_type, loss_type=loss_type, device="cpu")
+    return GaussianDiffusion(
+        betas=betas,
+        model_mean_type=model_mean_type,
+        model_var_type=model_var_type,
+        loss_type=loss_type,
+        device="cpu",
+    )
 
 
-def loss_func(diffusion, loss_mask, target, video, video_noised, timestep, model_output):
+def loss_func(
+    diffusion, loss_mask, target, video, video_noised, timestep, model_output
+):
     """Computes the vision model loss (Cross entropy across vocabulary)
 
     Args:
@@ -124,8 +137,10 @@ def loss_func(diffusion, loss_mask, target, video, video_noised, timestep, model
     )["output"]
 
     _dim = list(range(1, len(target.shape)))
-        
-    mse = torch.sum(((target - model_output) * loss_mask) ** 2, dim=_dim) / loss_mask.sum(dim=_dim)
+
+    mse = torch.sum(
+        ((target - model_output) * loss_mask) ** 2, dim=_dim
+    ) / loss_mask.sum(dim=_dim)
     loss = (vb + mse).mean()
     averaged_loss = average_losses_across_data_parallel_group([loss])
     return loss, {"lm loss": averaged_loss[0]}
@@ -141,22 +156,27 @@ def forward_step(diffusion, data_iterator, model):
     timers = get_timers()
 
     # Get the batch.
-    timers('batch-generator', log_level=2).start()
+    timers("batch-generator", log_level=2).start()
 
     global stimer
     with stimer(bdata=True):
-       video, video_noised, video_mask, text_enc, text_mask, timestep, labels = get_batch(data_iterator)
-        
-    timers('batch-generator').stop()
+        video, video_noised, video_mask, text_enc, text_mask, timestep, labels = (
+            get_batch(data_iterator)
+        )
+
+    timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(video_noised, video_mask, text_enc, text_mask, timestep, labels=labels)
-    return output_tensor, partial(loss_func, diffusion, video_mask, labels, video, video_noised, timestep)
+        output_tensor = model(
+            video_noised, video_mask, text_enc, text_mask, timestep, labels=labels
+        )
+    return output_tensor, partial(
+        loss_func, diffusion, video_mask, labels, video, video_noised, timestep
+    )
 
 
 def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples):
-    """Build the train test and validation datasets.
-    """
+    """Build the train test and validation datasets."""
     args = get_args()
 
     train_ds = LatentDatasetFromCSV(
@@ -174,16 +194,20 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples):
     return train_ds, None, None
 
 
-@register_model_trainer(model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN)
+@register_model_trainer(
+    model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN
+)
 def default_pretrain_trainer(train_args):
     """build trainer"""
     diffusion = gaussian_diffusion()
     trainer = MegatronTrainer(
         train_args=train_args,
-        train_valid_test_dataset_provider=partial(train_valid_test_datasets_provider, diffusion),
+        train_valid_test_dataset_provider=partial(
+            train_valid_test_datasets_provider, diffusion
+        ),
         model_provider=model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=partial(forward_step, diffusion),
     )
-    
+
     return trainer

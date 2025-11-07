@@ -235,7 +235,7 @@ class VariableLatentDataset(torch.utils.data.Dataset):
 
 class TensorDataset(torch.utils.data.Dataset):
     """Dataset for loading pre-computed video/text tensors from metadata files."""
-    
+
     def __init__(self, metadata_path, steps_per_epoch=0):
 
         self.metadata = []

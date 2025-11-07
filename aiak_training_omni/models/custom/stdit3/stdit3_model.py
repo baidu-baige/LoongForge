@@ -28,10 +28,18 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.utils import make_tp_sharded_tensor_for_checkpoint, log_single_rank
 from megatron.core.tensor_parallel.mappings import gather_from_sequence_parallel_region
-from megatron.core.parallel_state import get_context_parallel_group, get_context_parallel_rank
+from megatron.core.parallel_state import (
+    get_context_parallel_group,
+    get_context_parallel_rank,
+)
 
-from aiak_training_omni.models.stdit3.communications import split_forward_gather_backward, gather_forward_split_backward
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import StditTransformerConfig
+from aiak_training_omni.models.stdit3.communications import (
+    split_forward_gather_backward,
+    gather_forward_split_backward,
+)
+from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
+    StditTransformerConfig,
+)
 
 
 def _load_state_dict_hook_ignore_extra_state(
@@ -67,16 +75,16 @@ class STDiT3Model(VisionModule):
         pre_process (bool, optional): Include embedding layer (used with pipeline parallelism). Defaults to True.
         post_process (bool, optional): Include an output layer (used with pipeline parallelism). Defaults to True.
         fp16_lm_cross_entropy (bool, optional): Defaults to True.
-        parallel_output (bool, optional): Do not gather the outputs, keep them split across tensor parallel ranks. 
+        parallel_output (bool, optional): Do not gather the outputs, keep them split across tensor parallel ranks.
             Defaults to True.
-        share_embeddings_and_output_weights (bool, optional): When True, input embeddings and output logit weights 
+        share_embeddings_and_output_weights (bool, optional): When True, input embeddings and output logit weights
             are shared. Defaults to False.
         position_embedding_type (Literal[learned_absolute,rope], optional): Position embedding type, Defaults to 'rope'.
-        rotary_percent (float, optional): Percent of rotary dimension to use for rotary position embeddings. 
+        rotary_percent (float, optional): Percent of rotary dimension to use for rotary position embeddings.
             Ignored unless position_embedding_type is 'rope'. Defaults to 1.0.
-        rotary_base (int, optional): Base period for rotary position embeddings. Ignored unless position_embedding_type 
+        rotary_base (int, optional): Base period for rotary position embeddings. Ignored unless position_embedding_type
             is 'rope'. Defaults to 10000.
-        seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer 
+        seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer
             sequences. The value must be a float larger than 1.0. Defaults to None.
     """
 
@@ -91,7 +99,7 @@ class STDiT3Model(VisionModule):
         fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
         share_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal['learned_absolute', 'rope'] = 'rope',
+        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         seq_len_interpolation_factor: Optional[float] = None,
@@ -122,21 +130,15 @@ class STDiT3Model(VisionModule):
 
         if self.pre_process:
             self.x_embedder = PatchEmbed3D(
-                patch_size=config.latent_patch_size, 
-                in_chans=config.latent_in_channels, 
-                embed_dim=config.hidden_size
+                patch_size=config.latent_patch_size,
+                in_chans=config.latent_in_channels,
+                embed_dim=config.hidden_size,
             )
-            self.t_embedder = TimestepEmbedder(
-                config.hidden_size
-            )
-            self.fps_embedder = SizeEmbedder(
-                config.hidden_size
-            )
+            self.t_embedder = TimestepEmbedder(config.hidden_size)
+            self.fps_embedder = SizeEmbedder(config.hidden_size)
             self.t_block = nn.Sequential(
-                nn.SiLU(), 
-                nn.Linear(config.hidden_size, 
-                6 * config.hidden_size, 
-                bias=True)
+                nn.SiLU(),
+                nn.Linear(config.hidden_size, 6 * config.hidden_size, bias=True),
             )
             self.y_embedder = CaptionEmbedder(
                 in_channels=config.caption_channels,
@@ -181,11 +183,11 @@ class STDiT3Model(VisionModule):
             else:
                 self.embedding_activation_buffer = None
                 self.grad_output_buffer = None
-            
+
             self.output_layer = T2IFinalLayer(
                 config.hidden_size,
                 np.prod(config.latent_patch_size),
-                config.latent_out_channels
+                config.latent_out_channels,
             )
 
         self.decoder.register_load_state_dict_post_hook(
@@ -205,11 +207,11 @@ class STDiT3Model(VisionModule):
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
 
-        assert len(input_tensor) == 1, 'input_tensor should only be length 1'
+        assert len(input_tensor) == 1, "input_tensor should only be length 1"
         self.decoder.set_input_tensor(input_tensor[0])
-    
+
     def get_dynamic_size(self, x):
-        """ Get dynamic size of the input tensor """
+        """Get dynamic size of the input tensor"""
         _, _, T, H, W = x.size()
         if T % self.patch_size[0] != 0:
             T += self.patch_size[0] - T % self.patch_size[0]
@@ -244,7 +246,7 @@ class STDiT3Model(VisionModule):
         """
         # If decoder_input is provided (not None), then video and position_ids are ignored.
         # Otherwise, apply embedding layer on video and position_ids to get decoder_input.
-        
+
         # TODO: support PP
         assert decoder_input is None and self.pre_process and self.post_process
         assert videos_mask is not None, "TODO"
@@ -258,7 +260,7 @@ class STDiT3Model(VisionModule):
             H,
             W,
             scale=self.config.latent_space_scale,
-            base_size=round((H * W) ** 0.5)
+            base_size=round((H * W) ** 0.5),
         )
         decoder_input = rearrange(decoder_input, "B T S C -> (T S) B C")
         t = self.t_embedder(timestep, dtype=videos.dtype)  # [B, C]
@@ -273,17 +275,21 @@ class STDiT3Model(VisionModule):
         H_indice = np.linspace(0, _h, H + 1, dtype=int)[:-1]
         W_indice = np.linspace(0, _w, W + 1, dtype=int)[:-1]
 
-        t_padding = videos_mask[:, 0, T_indice, 0, 0] # B T
-        t_attn_mask = t_padding.repeat(H * W, 1) # B T -> (BS) T
+        t_padding = videos_mask[:, 0, T_indice, 0, 0]  # B T
+        t_attn_mask = t_padding.repeat(H * W, 1)  # B T -> (BS) T
 
-        s_padding = videos_mask[:, 0, 0, H_indice, :][:, :, W_indice].flatten(1) # B S
-        s_attn_mask = s_padding[:, None, :] * t_padding[:, :, None] # B 1 S * B T 1->  B T S
-        s_attn_mask = s_attn_mask.flatten(0, 1) # B T S -> (BT) S
+        s_padding = videos_mask[:, 0, 0, H_indice, :][:, :, W_indice].flatten(1)  # B S
+        s_attn_mask = (
+            s_padding[:, None, :] * t_padding[:, :, None]
+        )  # B 1 S * B T 1->  B T S
+        s_attn_mask = s_attn_mask.flatten(0, 1)  # B T S -> (BT) S
 
         # B C T H W -> B 1 1 THW
-        videos_mask = videos_mask[:, 0, T_indice, ...][..., H_indice, :][..., W_indice].view(B, 1, 1, -1)
-        text_mask = text_mask[:, None, ...] # B 1 1 N_token
-        
+        videos_mask = videos_mask[:, 0, T_indice, ...][..., H_indice, :][
+            ..., W_indice
+        ].view(B, 1, 1, -1)
+        text_mask = text_mask[:, None, ...]  # B 1 1 N_token
+
         extra_block_kwargs["s_attn_mask"] = s_attn_mask[:, None, None, :].logical_not()
         extra_block_kwargs["t_attn_mask"] = t_attn_mask[:, None, None, :].logical_not()
         extra_block_kwargs["timestep"] = self.t_block(t)  # [B, C]
@@ -291,15 +297,20 @@ class STDiT3Model(VisionModule):
         # Run decoder.
 
         if self.rotary_pos_emb is not None:
-            pos_emb = self.rotary_pos_emb(T, packed_seq=True) # trick to pass chunk in rope
+            pos_emb = self.rotary_pos_emb(
+                T, packed_seq=True
+            )  # trick to pass chunk in rope
             cp_size = self.config.context_parallel_size
             cp_rank = get_context_parallel_rank()
-            extra_block_kwargs["rotary_pos_emb"] = pos_emb.chunk(cp_size, dim=0)[cp_rank]
-
+            extra_block_kwargs["rotary_pos_emb"] = pos_emb.chunk(cp_size, dim=0)[
+                cp_rank
+            ]
 
         # TODO: Fuse in embeddings
         if self.config.sequence_parallel:
-            decoder_input = tensor_parallel.scatter_to_sequence_parallel_region(decoder_input)
+            decoder_input = tensor_parallel.scatter_to_sequence_parallel_region(
+                decoder_input
+            )
             text = tensor_parallel.scatter_to_sequence_parallel_region(text)
             if self.config.clone_scatter_output_in_embedding:
                 decoder_input = decoder_input.clone()
@@ -308,12 +319,11 @@ class STDiT3Model(VisionModule):
 
         if self.config.context_parallel_size > 1:
             decoder_input = split_forward_gather_backward(
-                decoder_input,
-                get_context_parallel_group(),
-                dim=0,
-                grad_scale="down"
+                decoder_input, get_context_parallel_group(), dim=0, grad_scale="down"
             )
-            text = split_forward_gather_backward(text, get_context_parallel_group(), dim=0, grad_scale="down")
+            text = split_forward_gather_backward(
+                text, get_context_parallel_group(), dim=0, grad_scale="down"
+            )
             T = T // self.config.context_parallel_size
 
         extra_block_kwargs["T"] = T
@@ -336,10 +346,7 @@ class STDiT3Model(VisionModule):
 
         if self.config.context_parallel_size > 1:
             hidden_states = gather_forward_split_backward(
-                hidden_states, 
-                get_context_parallel_group(),
-                dim=0, 
-                grad_scale="up"
+                hidden_states, get_context_parallel_group(), dim=0, grad_scale="up"
             )
             T = T * self.config.context_parallel_size
 
@@ -348,11 +355,10 @@ class STDiT3Model(VisionModule):
             hidden_states = gather_from_sequence_parallel_region(hidden_states)
             T = T * self.config.sequence_parallel_size
 
-
-        # logits and loss # 
+        # logits and loss #
         hidden_states = hidden_states.transpose(0, 1).contiguous()
-        logits = self.output_layer(hidden_states, t) # B（t s）C -> B (t s) p*C_out
-        logits = self.unpatchify(logits, T, H, W) # [B, C_out, T, H, W]
+        logits = self.output_layer(hidden_states, t)  # B（t s）C -> B (t s) p*C_out
+        logits = self.unpatchify(logits, T, H, W)  # [B, C_out, T, H, W]
 
         return logits
 
@@ -381,9 +387,12 @@ class STDiT3Model(VisionModule):
         return x
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[Dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[Dict] = None,
     ) -> ShardedStateDict:
-        """ Sharded state dict implementation for GPTModel backward-compatibility (removing extra state).
+        """Sharded state dict implementation for GPTModel backward-compatibility (removing extra state).
 
         Args:
             prefix (str): Module name prefix.
@@ -393,15 +402,17 @@ class STDiT3Model(VisionModule):
         Returns:
             ShardedStateDict: sharded state dict for the GPTModel
         """
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
-        output_layer_extra_state_key = f'{prefix}output_layer._extra_state'
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
+        output_layer_extra_state_key = f"{prefix}output_layer._extra_state"
 
         # Old GPT checkpoints only stored the output layer weight key. So we remove the _extra_state key
         # but check that it doesn't contain any data anyway
         output_extra_state = sharded_state_dict.pop(output_layer_extra_state_key, None)
         assert not (
             output_extra_state and output_extra_state.data
-        ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
+        ), f"Expected output layer extra state to be empty, got: {output_extra_state}"
 
         return sharded_state_dict
 
@@ -437,7 +448,9 @@ class STDiT3Model(VisionModule):
         """
         if not self.post_process:
             # No output layer
-            assert output_layer_weight_key not in sharded_state_dict, sharded_state_dict.keys()
+            assert (
+                output_layer_weight_key not in sharded_state_dict
+            ), sharded_state_dict.keys()
             return
 
         if self.pre_process:
@@ -453,9 +466,11 @@ class STDiT3Model(VisionModule):
             parallel_state.get_data_parallel_rank(with_context_parallel=True),
         )
 
-        sharded_state_dict[output_layer_weight_key] = make_tp_sharded_tensor_for_checkpoint(
-            tensor=tensor,
-            key=first_stage_word_emb_key,
-            replica_id=last_stage_word_emb_replica_id,
-            allow_shape_mismatch=True,
+        sharded_state_dict[output_layer_weight_key] = (
+            make_tp_sharded_tensor_for_checkpoint(
+                tensor=tensor,
+                key=first_stage_word_emb_key,
+                replica_id=last_stage_word_emb_replica_id,
+                allow_shape_mismatch=True,
+            )
         )

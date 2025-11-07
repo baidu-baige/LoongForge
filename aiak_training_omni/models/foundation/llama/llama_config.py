@@ -9,9 +9,10 @@ from aiak_training_omni.models.factory import register_model_config
 @dataclass
 class LlamaConfig:
     """configuration for llama model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -75,7 +76,9 @@ def llama_65b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA2, model_arch="llama2-7b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA2, model_arch="llama2-7b"
+)
 def llama2_7b():
     """llama2 7b"""
     return LlamaConfig(
@@ -86,7 +89,9 @@ def llama2_7b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA2, model_arch="llama2-13b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA2, model_arch="llama2-13b"
+)
 def llama2_13b():
     """llama2 13b"""
     return LlamaConfig(
@@ -97,7 +102,9 @@ def llama2_13b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA2, model_arch="llama2-70b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA2, model_arch="llama2-70b"
+)
 def llama2_70b():
     """llama2 70b"""
     return LlamaConfig(
@@ -110,7 +117,9 @@ def llama2_70b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA3, model_arch="llama3-8b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA3, model_arch="llama3-8b"
+)
 def llama3_8b():
     """llama3 8b"""
     return LlamaConfig(
@@ -123,7 +132,9 @@ def llama3_8b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA3, model_arch="llama3-70b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA3, model_arch="llama3-70b"
+)
 def llama3_70b():
     """llama3 70b"""
     return LlamaConfig(
@@ -132,11 +143,13 @@ def llama3_70b():
         ffn_hidden_size=28672,
         num_attention_heads=64,
         group_query_attention=True,
-        num_query_groups=8,    
+        num_query_groups=8,
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA3_1, model_arch="llama3.1-8b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA3_1, model_arch="llama3.1-8b"
+)
 def llama3_1_8b():
     """llama3.1 8b"""
     return LlamaConfig(
@@ -149,7 +162,9 @@ def llama3_1_8b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA3_1, model_arch="llama3.1-70b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA3_1, model_arch="llama3.1-70b"
+)
 def llama3_1_70b():
     """llama3.1 70b"""
     return LlamaConfig(
@@ -162,7 +177,9 @@ def llama3_1_70b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.LLAMA3_1, model_arch="llama3.1-405b")
+@register_model_config(
+    model_family=LanguageModelFamilies.LLAMA3_1, model_arch="llama3.1-405b"
+)
 def llama3_1_405b():
     """llama3.1 405b"""
     return LlamaConfig(

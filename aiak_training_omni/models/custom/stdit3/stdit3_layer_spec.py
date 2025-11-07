@@ -14,7 +14,9 @@ from megatron.core.transformer.attention import (
     SelfAttentionSubmodules,
 )
 
-from megatron.core.models.common.embeddings.rotary_pos_embedding import apply_rotary_pos_emb
+from megatron.core.models.common.embeddings.rotary_pos_embedding import (
+    apply_rotary_pos_emb,
+)
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.spec_utils import ModuleSpec
@@ -25,7 +27,10 @@ from .stdit3_layer import (
     STDiT3BlockSubmodules,
     STDiT3LayerSubmodules,
 )
-from aiak_training_omni.models.stdit.stdit_attention import UlyssesSelfAttention, UlyssesCrossAttention
+from aiak_training_omni.models.stdit.stdit_attention import (
+    UlyssesSelfAttention,
+    UlyssesCrossAttention,
+)
 
 from aiak_training_omni.models.custom.common.local_norm import LocalNorm
 
@@ -41,7 +46,7 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
             linear_fc2=TERowParallelLinear,
         ),
     )
-    
+
     return ModuleSpec(
         module=STDiT3Layer,
         submodules=STDiT3LayerSubmodules(
@@ -57,7 +62,10 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
                     # Self Attention
                     self_attention=ModuleSpec(
                         module=UlyssesSelfAttention,
-                        params={"attn_mask_type": AttnMaskType.padding, "ulysses_gather_idx": 1},
+                        params={
+                            "attn_mask_type": AttnMaskType.padding,
+                            "ulysses_gather_idx": 1,
+                        },
                         submodules=SelfAttentionSubmodules(
                             linear_qkv=TEColumnParallelLinear,
                             core_attention=TEDotProductAttention,
@@ -72,7 +80,6 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
                         ),
                     ),
                     self_attn_bda=get_bias_dropout_add,
-
                     # Cross attention
                     cross_attention=ModuleSpec(
                         module=UlyssesCrossAttention,
@@ -86,7 +93,6 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
                         ),
                     ),
                     cross_attn_bda=get_bias_dropout_add,
-
                     # MLP
                     pre_mlp_layernorm=ModuleSpec(
                         module=LocalNorm,
@@ -123,7 +129,6 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
                         ),
                     ),
                     self_attn_bda=get_bias_dropout_add,
-
                     # Cross attention
                     cross_attention=ModuleSpec(
                         module=UlyssesCrossAttention,
@@ -137,7 +142,6 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
                         ),
                     ),
                     cross_attn_bda=get_bias_dropout_add,
-
                     # MLP
                     pre_mlp_layernorm=ModuleSpec(
                         module=LocalNorm,
@@ -145,7 +149,7 @@ def get_stdit3_layer_with_te_spec() -> ModuleSpec:
                     ),
                     mlp=mlp,
                     mlp_bda=get_bias_dropout_add,
-                )
-            )
-        )
+                ),
+            ),
+        ),
     )

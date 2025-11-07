@@ -20,7 +20,7 @@ logger.setLevel(logging.INFO)
 
 
 class BlendedHuggingFaceDatasetBuilder(object):
-    """Builder class for the SFT Dataset. 
+    """Builder class for the SFT Dataset.
 
     Args:
         cls (HuggingFaceDataset): The class to instantiate, wich build on huggingface. i.e. SFTDataset
@@ -42,7 +42,7 @@ class BlendedHuggingFaceDatasetBuilder(object):
         config: BlendedHuggingFaceDatasetConfig,
     ):
         self.cls = cls
-        self.sizes = sizes # Note: the sizes not use now
+        self.sizes = sizes  # Note: the sizes not use now
         self.is_built_on_rank = is_built_on_rank
         self.config = config
 
@@ -60,7 +60,9 @@ class BlendedHuggingFaceDatasetBuilder(object):
                 else:
                     if self.config.blend_per_split[split.value] is None:
                         continue
-                    weights_are_none = self.config.blend_per_split[split.value][1] is None
+                    weights_are_none = (
+                        self.config.blend_per_split[split.value][1] is None
+                    )
                 if size_is_none:
                     assert (
                         weights_are_none
@@ -76,21 +78,23 @@ class BlendedHuggingFaceDatasetBuilder(object):
 
     def build(self) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """Build all dataset splits according to the provided blend(s)
-        
+
         Returns:
             List[Optional[Union[Dataset, IterableDataset]]]: A list containing a dataset instance (or None) per split
         """
         assert not self.config.mock, "Not support mock dataset for SFT!"
-        
+
         if self.config.blend:
             return self._build_splits_from_same_blend()
 
         return self._build_splits_from_separate_blend()
 
-    def _build_splits_from_same_blend(self) -> List[Optional[Union[Dataset, IterableDataset]]]:
+    def _build_splits_from_same_blend(
+        self,
+    ) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """
         Each split comes from the same distribution
-        
+
         Returns:
             List[Optional[Union[Dataset, IterableDataset]]]: A list containing a dataset instance (or None)
         """
@@ -104,14 +108,20 @@ class BlendedHuggingFaceDatasetBuilder(object):
 
         # blend consists of a single prefix
         if len(prefixes) == 1:
-            return self._build_huggingface_dataset_splits(prefixes[0], dataset_names[0], split)
+            return self._build_huggingface_dataset_splits(
+                prefixes[0], dataset_names[0], split
+            )
 
         # blend consists of multiple prefixes
         huggingface_datasets = [[] for _ in range(len(Split))]
         all_datasets_split = []
         for i in range(len(prefixes)):
-           all_datasets_split.append(self._build_huggingface_dataset_splits(prefixes[i], dataset_names[i], split))
-        
+            all_datasets_split.append(
+                self._build_huggingface_dataset_splits(
+                    prefixes[i], dataset_names[i], split
+                )
+            )
+
         for dataset_split in all_datasets_split:
             for j in range(len(dataset_split)):
                 huggingface_datasets[j].append(dataset_split[j])
@@ -120,28 +130,32 @@ class BlendedHuggingFaceDatasetBuilder(object):
         blended_datasets = [None] * len(Split)
         for i in range(len(Split)):
             if split[i] is not None:
-                blended_datasets[i] = self._build_blend_huggingface_dataset_splits(huggingface_datasets[i], weights)
+                blended_datasets[i] = self._build_blend_huggingface_dataset_splits(
+                    huggingface_datasets[i], weights
+                )
 
         return blended_datasets
 
-    def _build_splits_from_separate_blend(self) -> List[Optional[Union[Dataset, IterableDataset]]]:
+    def _build_splits_from_separate_blend(
+        self,
+    ) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """
         Each split comes from a separate distribution
-        
+
         Returns:
             List[Optional[Union[Dataset, IterableDataset]]]: A list containing a dataset instance (or None)
         """
         blended_datasets = [None] * len(Split)
-        for i in range(len(Split)):            
+        for i in range(len(Split)):
             split_spoof = [None] * len(Split)
             split_spoof[i] = (0.0, 1.0)
-            
+
             blend = self.config.blend_per_split[i]
             dataset_names = self.config.dataset_per_split[i]
 
             if blend is None:
                 continue
-            
+
             prefixes, weights = blend
             if weights is not None:
                 weights = normalize(weights)
@@ -151,7 +165,7 @@ class BlendedHuggingFaceDatasetBuilder(object):
                 blended_datasets[i] = self._build_huggingface_dataset_splits(
                     prefixes[0], dataset_names[0], split_spoof
                 )[i]
-                
+
                 continue
 
             # Blend consists of multiple prefixes
@@ -163,7 +177,9 @@ class BlendedHuggingFaceDatasetBuilder(object):
                     )[i]
                 )
 
-            blended_datasets[i] = self._build_blend_huggingface_dataset_splits(all_datasets, weights)
+            blended_datasets[i] = self._build_blend_huggingface_dataset_splits(
+                all_datasets, weights
+            )
 
         return blended_datasets
 
@@ -174,12 +190,12 @@ class BlendedHuggingFaceDatasetBuilder(object):
         split: Optional[List[Tuple[float, float]]],
     ) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """Build each Dataset split
-        
+
         Args:
             dataset_path (str): The path to the dataset
             dataset_name (str): The name of the dataset
             split (Optional[List[Tuple[float, float]]]): The split of the dataset
-        
+
         Returns:
             List[Optional[Union[Dataset, IterableDataset]]]: A list containing a dataset instance (or None)
         """
@@ -201,19 +217,19 @@ class BlendedHuggingFaceDatasetBuilder(object):
         weights: Optional[List[float]],
     ) -> Optional[Union[Dataset, IterableDataset]]:
         """Build each blend Dataset split
-        
+
         Args:
             datasets (List[Optional[Union[Dataset, IterableDataset]]]): The list of datasets
             weights (Optional[List[float]]): The list of weights
-        
+
         Returns:
             Optional[Union[Dataset, IterableDataset]]: A mixed dataset instance (or None)
-            
+
         """
         if torch.distributed.is_initialized():
             if not self.is_built_on_rank():
                 return None
-            
+
         if len(datasets) == 1:
             return datasets[0]
 
@@ -233,7 +249,7 @@ class BlendedHuggingFaceDatasetBuilder(object):
                 seed=self.config.random_seed,
                 stopping_strategy="first_exhausted",
             )
-        
+
         if self.config.mix_strategy == "interleave_over":
             return interleave_datasets(
                 datasets=datasets,

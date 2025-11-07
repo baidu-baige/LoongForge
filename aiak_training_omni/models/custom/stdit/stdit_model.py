@@ -32,8 +32,13 @@ from megatron.core.parallel_state import (
     get_context_parallel_world_size,
 )
 
-from aiak_training_omni.models.stdit.communications import split_forward_gather_backward, gather_forward_split_backward
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import StditTransformerConfig
+from aiak_training_omni.models.stdit.communications import (
+    split_forward_gather_backward,
+    gather_forward_split_backward,
+)
+from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
+    StditTransformerConfig,
+)
 
 
 class STDiTModel(VisionModule):
@@ -47,16 +52,16 @@ class STDiTModel(VisionModule):
         pre_process (bool, optional): Include embedding layer (used with pipeline parallelism). Defaults to True.
         post_process (bool, optional): Include an output layer (used with pipeline parallelism). Defaults to True.
         fp16_lm_cross_entropy (bool, optional): Defaults to True.
-        parallel_output (bool, optional): Do not gather the outputs, keep them split across tensor parallel ranks. 
+        parallel_output (bool, optional): Do not gather the outputs, keep them split across tensor parallel ranks.
             Defaults to True.
-        share_embeddings_and_output_weights (bool, optional): When True, input embeddings and output logit weights 
+        share_embeddings_and_output_weights (bool, optional): When True, input embeddings and output logit weights
             are shared. Defaults to False.
         position_embedding_type (Literal[learned_absolute,rope], optional): Position embedding type, Defaults to 'rope'.
-        rotary_percent (float, optional): Percent of rotary dimension to use for rotary position embeddings. 
+        rotary_percent (float, optional): Percent of rotary dimension to use for rotary position embeddings.
             Ignored unless position_embedding_type is 'rope'. Defaults to 1.0.
-        rotary_base (int, optional): Base period for rotary position embeddings. Ignored unless position_embedding_type 
+        rotary_base (int, optional): Base period for rotary position embeddings. Ignored unless position_embedding_type
             is 'rope'. Defaults to 10000.
-        seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer 
+        seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer
             sequences. The value must be a float larger than 1.0. Defaults to None.
     """
 
@@ -71,7 +76,7 @@ class STDiTModel(VisionModule):
         fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
         share_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal['learned_absolute', 'rope'] = 'rope',
+        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         seq_len_interpolation_factor: Optional[float] = None,
@@ -105,18 +110,14 @@ class STDiTModel(VisionModule):
 
         if self.pre_process:
             self.x_embedder = PatchEmbed3D(
-                patch_size=config.latent_patch_size, 
-                in_chans=config.latent_in_channels, 
-                embed_dim=config.hidden_size
+                patch_size=config.latent_patch_size,
+                in_chans=config.latent_in_channels,
+                embed_dim=config.hidden_size,
             )
-            self.t_embedder = TimestepEmbedder(
-                config.hidden_size
-            )
+            self.t_embedder = TimestepEmbedder(config.hidden_size)
             self.t_block = nn.Sequential(
-                nn.SiLU(), 
-                nn.Linear(config.hidden_size, 
-                6 * config.hidden_size, 
-                bias=True)
+                nn.SiLU(),
+                nn.Linear(config.hidden_size, 6 * config.hidden_size, bias=True),
             )
             self.y_embedder = CaptionEmbedder(
                 in_channels=config.caption_channels,
@@ -150,37 +151,43 @@ class STDiTModel(VisionModule):
             else:
                 self.embedding_activation_buffer = None
                 self.grad_output_buffer = None
-            
+
             self.output_layer = T2IFinalLayer(
                 config.hidden_size,
                 np.prod(config.latent_patch_size),
-                config.latent_out_channels
+                config.latent_out_channels,
             )
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(
-                self.config, self.state_dict(), prefix=f'{type(self).__name__}_init_ckpt'
+                self.config,
+                self.state_dict(),
+                prefix=f"{type(self).__name__}_init_ckpt",
             )
 
     def get_spatial_pos_embed(self):
-        """ Spatial position embedding. """
+        """Spatial position embedding."""
         pos_embed = get_2d_sincos_pos_embed(
             self.config.hidden_size,
             (self.num_height, self.num_width),
             scale=self.config.latent_space_scale,
-        ) # S H
-        pos_embed = torch.from_numpy(pos_embed).float().unsqueeze(0).requires_grad_(False) # 1 S H
+        )  # S H
+        pos_embed = (
+            torch.from_numpy(pos_embed).float().unsqueeze(0).requires_grad_(False)
+        )  # 1 S H
         return pos_embed
 
     def get_temporal_pos_embed(self):
-        """ Temporal position embedding. """
+        """Temporal position embedding."""
         config = self.config
         pos_embed = get_1d_sincos_pos_embed(
             config.hidden_size,
             self.num_temporal,
             scale=config.latent_time_scale,
-        ) # T H
-        pos_embed = torch.from_numpy(pos_embed).float().unsqueeze(0).requires_grad_(False) # 1 T H
+        )  # T H
+        pos_embed = (
+            torch.from_numpy(pos_embed).float().unsqueeze(0).requires_grad_(False)
+        )  # 1 T H
         return pos_embed
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
@@ -196,7 +203,7 @@ class STDiTModel(VisionModule):
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
 
-        assert len(input_tensor) == 1, 'input_tensor should only be length 1'
+        assert len(input_tensor) == 1, "input_tensor should only be length 1"
         self.decoder.set_input_tensor(input_tensor[0])
 
     def forward(
@@ -220,15 +227,22 @@ class STDiTModel(VisionModule):
         """
         # If decoder_input is provided (not None), then video and position_ids are ignored.
         # Otherwise, apply embedding layer on video and position_ids to get decoder_input.
-        
+
         # TODO: support PP
         assert decoder_input is None and self.pre_process and self.post_process
         assert videos_mask is not None, "TODO"
 
         decoder_input = self.x_embedder(videos)
 
-        decoder_input = rearrange(decoder_input, "B (T S) C -> B T S C", T=self.num_temporal, S=self.num_spatial)
-        decoder_input += self.spatial_pos_embed.to(device=decoder_input.device, dtype=decoder_input.dtype)
+        decoder_input = rearrange(
+            decoder_input,
+            "B (T S) C -> B T S C",
+            T=self.num_temporal,
+            S=self.num_spatial,
+        )
+        decoder_input += self.spatial_pos_embed.to(
+            device=decoder_input.device, dtype=decoder_input.dtype
+        )
         decoder_input = rearrange(decoder_input, "B T S C -> (T S) B C")
         t = self.t_embedder(timestep, dtype=videos.dtype)  # [B, C]
         text = self.y_embedder(text, True)  # [B, 1, N_token, C]
@@ -240,45 +254,59 @@ class STDiTModel(VisionModule):
         H_indice = np.linspace(0, H, self.num_height + 1, dtype=int)[:-1]
         W_indice = np.linspace(0, W, self.num_width + 1, dtype=int)[:-1]
 
-        t_padding = videos_mask[:, 0, T_indice, 0, 0] # B T
-        t_attn_mask = t_padding.repeat(self.num_spatial, 1) # B T -> (BS) T
+        t_padding = videos_mask[:, 0, T_indice, 0, 0]  # B T
+        t_attn_mask = t_padding.repeat(self.num_spatial, 1)  # B T -> (BS) T
 
-        s_padding = videos_mask[:, 0, 0, H_indice, :][:, :, W_indice].flatten(1) # B S
-        s_attn_mask = s_padding[:, None, :] * t_padding[:, :, None] # B 1 S * B T 1->  B T S
-        s_attn_mask = s_attn_mask.flatten(0, 1) # B T S -> (BT) S
+        s_padding = videos_mask[:, 0, 0, H_indice, :][:, :, W_indice].flatten(1)  # B S
+        s_attn_mask = (
+            s_padding[:, None, :] * t_padding[:, :, None]
+        )  # B 1 S * B T 1->  B T S
+        s_attn_mask = s_attn_mask.flatten(0, 1)  # B T S -> (BT) S
 
         # B C T H W -> B 1 1 THW
-        videos_mask = videos_mask[:, 0, T_indice, ...][..., H_indice, :][..., W_indice].view(B, 1, 1, -1)
-        text_mask = text_mask[:, None, ...] # B 1 1 N_token
-        
+        videos_mask = videos_mask[:, 0, T_indice, ...][..., H_indice, :][
+            ..., W_indice
+        ].view(B, 1, 1, -1)
+        text_mask = text_mask[:, None, ...]  # B 1 1 N_token
+
         extra_block_kwargs["s_attn_mask"] = s_attn_mask[:, None, None, :].logical_not()
         extra_block_kwargs["t_attn_mask"] = t_attn_mask[:, None, None, :].logical_not()
         extra_block_kwargs["timestep"] = self.t_block(t)  # [B, C]
-        extra_block_kwargs["temporal_pos_embed"] = self.temporal_pos_embed.transpose(0, 1) # T 1 C
+        extra_block_kwargs["temporal_pos_embed"] = self.temporal_pos_embed.transpose(
+            0, 1
+        )  # T 1 C
 
         # Run decoder.
 
         # TODO: Fuse in embeddings
         if self.config.sequence_parallel:
-            decoder_input = tensor_parallel.scatter_to_sequence_parallel_region(decoder_input)
+            decoder_input = tensor_parallel.scatter_to_sequence_parallel_region(
+                decoder_input
+            )
             text = tensor_parallel.scatter_to_sequence_parallel_region(text)
-            extra_block_kwargs["temporal_pos_embed"] = tensor_parallel.scatter_to_sequence_parallel_region(
-                                        extra_block_kwargs["temporal_pos_embed"])
+            extra_block_kwargs["temporal_pos_embed"] = (
+                tensor_parallel.scatter_to_sequence_parallel_region(
+                    extra_block_kwargs["temporal_pos_embed"]
+                )
+            )
             if self.config.clone_scatter_output_in_embedding:
                 decoder_input = decoder_input.clone()
                 text = text.clone()
-                extra_block_kwargs["temporal_pos_embed"] = extra_block_kwargs["temporal_pos_embed"].clone()
+                extra_block_kwargs["temporal_pos_embed"] = extra_block_kwargs[
+                    "temporal_pos_embed"
+                ].clone()
 
         if self.config.context_parallel_size > 1:
             decoder_input = split_forward_gather_backward(
-                decoder_input,
-                get_context_parallel_group(),
-                dim=0,
-                grad_scale="down"
+                decoder_input, get_context_parallel_group(), dim=0, grad_scale="down"
             )
-            text = split_forward_gather_backward(text, get_context_parallel_group(), dim=0, grad_scale="down")
+            text = split_forward_gather_backward(
+                text, get_context_parallel_group(), dim=0, grad_scale="down"
+            )
             extra_block_kwargs["temporal_pos_embed"] = torch.chunk(
-                extra_block_kwargs["temporal_pos_embed"], get_context_parallel_world_size(), dim=0
+                extra_block_kwargs["temporal_pos_embed"],
+                get_context_parallel_world_size(),
+                dim=0,
             )[get_context_parallel_rank()].contiguous()
 
         videos_mask = videos_mask.logical_not()
@@ -298,20 +326,17 @@ class STDiTModel(VisionModule):
 
         if self.config.context_parallel_size > 1:
             hidden_states = gather_forward_split_backward(
-                hidden_states, 
-                get_context_parallel_group(),
-                dim=0, 
-                grad_scale="up"
+                hidden_states, get_context_parallel_group(), dim=0, grad_scale="up"
             )
 
         # TODO Fuse in final layer
         if self.config.sequence_parallel:
             hidden_states = gather_from_sequence_parallel_region(hidden_states)
 
-        # logits and loss # 
+        # logits and loss #
         hidden_states = hidden_states.transpose(0, 1).contiguous()
-        logits = self.output_layer(hidden_states, t) # B（t s）C -> B (t s) p*C_out
-        logits = self.unpatchify(logits) # [B, C_out, T, H, W]
+        logits = self.output_layer(hidden_states, t)  # B（t s）C -> B (t s) p*C_out
+        logits = self.unpatchify(logits)  # [B, C_out, T, H, W]
 
         return logits
 
@@ -340,9 +365,12 @@ class STDiTModel(VisionModule):
         return x
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[Dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[Dict] = None,
     ) -> ShardedStateDict:
-        """ Sharded state dict implementation for GPTModel backward-compatibility (removing extra state).
+        """Sharded state dict implementation for GPTModel backward-compatibility (removing extra state).
 
         Args:
             prefix (str): Module name prefix.
@@ -352,15 +380,17 @@ class STDiTModel(VisionModule):
         Returns:
             ShardedStateDict: sharded state dict for the GPTModel
         """
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
-        output_layer_extra_state_key = f'{prefix}output_layer._extra_state'
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
+        output_layer_extra_state_key = f"{prefix}output_layer._extra_state"
 
         # Old GPT checkpoints only stored the output layer weight key. So we remove the _extra_state key
         # but check that it doesn't contain any data anyway
         output_extra_state = sharded_state_dict.pop(output_layer_extra_state_key, None)
         assert not (
             output_extra_state and output_extra_state.data
-        ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
+        ), f"Expected output layer extra state to be empty, got: {output_extra_state}"
 
         return sharded_state_dict
 
@@ -396,7 +426,9 @@ class STDiTModel(VisionModule):
         """
         if not self.post_process:
             # No output layer
-            assert output_layer_weight_key not in sharded_state_dict, sharded_state_dict.keys()
+            assert (
+                output_layer_weight_key not in sharded_state_dict
+            ), sharded_state_dict.keys()
             return
 
         if self.pre_process:
@@ -412,9 +444,11 @@ class STDiTModel(VisionModule):
             parallel_state.get_data_parallel_rank(with_context_parallel=True),
         )
 
-        sharded_state_dict[output_layer_weight_key] = make_tp_sharded_tensor_for_checkpoint(
-            tensor=tensor,
-            key=first_stage_word_emb_key,
-            replica_id=last_stage_word_emb_replica_id,
-            allow_shape_mismatch=True,
+        sharded_state_dict[output_layer_weight_key] = (
+            make_tp_sharded_tensor_for_checkpoint(
+                tensor=tensor,
+                key=first_stage_word_emb_key,
+                replica_id=last_stage_word_emb_replica_id,
+                allow_shape_mismatch=True,
+            )
         )

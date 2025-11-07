@@ -3,7 +3,10 @@
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_layer import TransformerLayer, TransformerLayerSubmodules
+from megatron.core.transformer.transformer_layer import (
+    TransformerLayer,
+    TransformerLayerSubmodules,
+)
 from megatron.core.transformer.attention import SelfAttention, SelfAttentionSubmodules
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
@@ -11,13 +14,22 @@ from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.transformer.moe.experts import SequentialMLP, TEGroupedMLP
 
-from aiak_training_llm.utils import is_te_min_version
-from aiak_training_llm.models.dispatch import multiacc_modules
+from aiak_training_omni.utils import is_te_min_version
+from aiak_training_omni.models.dispatch import multiacc_modules
+from megatron.core.extensions.transformer_engine import (
+    TELinear,
+    TELayerNormColumnParallelLinear,
+    TEDotProductAttention,
+    TERowParallelLinear,
+)
+from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
+import torch
+from megatron.core import parallel_state
+from megatron.core.fusions.fused_bias_dropout import get_bias_dropout_add
 
 
 def _get_mlp_module_spec(
-    num_experts: int=None,
-    moe_grouped_gemm: bool=False
+    num_experts: int = None, moe_grouped_gemm: bool = False
 ) -> ModuleSpec:
     """Helper function to get module spec for MLP/MoE"""
 
@@ -39,7 +51,7 @@ def _get_mlp_module_spec(
         expert_module = TEGroupedMLP
         linear_fc1 = multiacc_modules.TEColumnParallelGroupedLinear
         linear_fc2 = multiacc_modules.TERowParallelGroupedLinear
-        
+
     else:
         expert_module = SequentialMLP
         linear_fc1 = multiacc_modules.TEColumnParallelLinear
@@ -54,9 +66,9 @@ def _get_mlp_module_spec(
                     linear_fc1=linear_fc1,
                     linear_fc2=linear_fc2,
                     bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
-                )
+                ),
             )
-        )
+        ),
     )
 
 
@@ -66,7 +78,9 @@ def get_qwen_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """
     # To simplify the code, temporarily remove the compatibility with MoE/MLA.
     # If there is a new version in the future, add and test it separately.
-    assert not config.multi_latent_attention, "Not supporting multi-latent attention for Qwen model yet."
+    assert (
+        not config.multi_latent_attention
+    ), "Not supporting multi-latent attention for Qwen model yet."
 
     mlp = _get_mlp_module_spec(
         num_experts=config.num_moe_experts,
@@ -75,7 +89,11 @@ def get_qwen_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
 
     # TENorm significantly harms convergence when used for QKLayerNorm if TE Version < 1.9;
     # we instead use the Apex implementation.
-    qk_norm = multiacc_modules.TENorm if is_te_min_version("1.9.0") else multiacc_modules.LocalNorm
+    qk_norm = (
+        multiacc_modules.TENorm
+        if is_te_min_version("1.9.0")
+        else multiacc_modules.LocalNorm
+    )
 
     return ModuleSpec(
         module=TransformerLayer,
@@ -99,6 +117,96 @@ def get_qwen_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
             ),
             mlp=mlp,
             mlp_bda=multiacc_modules.get_bias_dropout_add,
-        )
+        ),
     )
 
+
+def _rotate_half(x):
+    x1, x2 = torch.chunk(x, 2, dim=-1)
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def _apply_mrope_bshd(t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 24]):
+    """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors
+    (https://qwenlm.github.io/blog/qwen2-vl/).
+    Args:
+        t (torch.Tensor): Input tensor of shape [S, B, heads, dim]
+        freq (torch.Tensor): Frequency tensor of shape [S, B, 3, dim]
+    """
+    cos = freq.cos().to(dtype=t.dtype)
+    sin = freq.sin().to(dtype=t.dtype)
+    mrope_section = mrope_section * 2
+
+    cos = torch.cat(
+        [m[..., i % 3, :] for i, m in enumerate(cos.split(mrope_section, dim=-1))],
+        dim=-1,
+    ).unsqueeze(2)
+    sin = torch.cat(
+        [m[..., i % 3, :] for i, m in enumerate(sin.split(mrope_section, dim=-1))],
+        dim=-1,
+    ).unsqueeze(2)
+
+    t = (t * cos) + (_rotate_half(t) * sin)
+    return t
+
+
+def apply_mrope(t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 24]):
+    """mrope"""
+    if cu_seqlens is not None:
+        cp_size = parallel_state.get_context_parallel_world_size()
+        cp_rank = parallel_state.get_context_parallel_rank()
+        cu_seqlens = cu_seqlens // cp_size
+        seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
+
+        return torch.cat(
+            [
+                _apply_mrope_bshd(
+                    x.unsqueeze(1),
+                    freq[int(cu_seqlens[i]) : int(cu_seqlens[i]) + x.size(0)],
+                    config,
+                    cu_seqlens,
+                    mrope_section,
+                )
+                for i, x in enumerate(torch.split(t, seqlens))
+            ]
+        ).squeeze(1)
+    else:
+        return _apply_mrope_bshd(t, freq, config, cu_seqlens, mrope_section)
+
+
+def get_qwen_layer_with_spec(config: TransformerConfig) -> ModuleSpec:
+    """
+    Use this spec for an implementation using transformer, local or multi-accel engine
+    """
+    return ModuleSpec(
+        module=TransformerLayer,
+        submodules=TransformerLayerSubmodules(
+            input_layernorm=IdentityOp,
+            self_attention=ModuleSpec(
+                module=SelfAttention,
+                params={"attn_mask_type": AttnMaskType.causal},
+                submodules=SelfAttentionSubmodules(
+                    linear_qkv=TELayerNormColumnParallelLinear,
+                    core_attention=TEDotProductAttention,
+                    linear_proj=TERowParallelLinear,
+                    q_layernorm=LocalNorm if config.qk_layernorm else IdentityOp,
+                    k_layernorm=LocalNorm if config.qk_layernorm else IdentityOp,
+                    apply_rotary_fn=apply_mrope,
+                ),
+            ),
+            self_attn_bda=get_bias_dropout_add,
+            pre_mlp_layernorm=IdentityOp,
+            mlp=ModuleSpec(
+                module=MLP,
+                submodules=MLPSubmodules(
+                    linear_fc1=TELayerNormColumnParallelLinear,
+                    linear_fc2=TERowParallelLinear,
+                ),
+            ),
+            mlp_bda=get_bias_dropout_add,
+            sharded_state_dict_keys_map={
+                "input_layernorm.": "self_attention.linear_qkv.layer_norm_",
+                "pre_mlp_layernorm.": "mlp.linear_fc1.layer_norm_",
+            },
+        ),
+    )

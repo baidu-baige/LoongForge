@@ -1,4 +1,4 @@
-""" mm """
+"""mm"""
 
 from aiak_training_omni.data.multimodal.flavors import (
     PackedCaptioningSample,
@@ -7,7 +7,7 @@ from aiak_training_omni.data.multimodal.flavors import (
     MultiVidQASample,
     MultiMixQASample,
 )
-    
+
 __all__ = [
     "PackedCaptioningSample",
     "PackedVQASample",

@@ -23,7 +23,7 @@ from megatron.core.utils import prepare_input_tensors_for_wgrad_compute
 from megatron.core.tensor_parallel.mappings import (
     copy_to_tensor_model_parallel_region,
     gather_from_sequence_parallel_region,
-    gather_from_tensor_model_parallel_region
+    gather_from_tensor_model_parallel_region,
 )
 
 from megatron.core.tensor_parallel.layers import (
@@ -68,10 +68,10 @@ def linear_with_frozen_weight(
 ) -> torch.Tensor:
     """Linear layer execution with weight.requires_grad == False.
 
-    This function handles linear layers with weight frozen (untrainable). 
+    This function handles linear layers with weight frozen (untrainable).
     In the forward, it only saves weight and does not save input activations.
-    In the backward, it does not perform weight gradient calculation, or 
-    weight gradient allreduce. 
+    In the backward, it does not perform weight gradient calculation, or
+    weight gradient allreduce.
 
     Args:
 
@@ -81,10 +81,10 @@ def linear_with_frozen_weight(
 
     bias (torch.Tensor optional): bias like torch.nn.functional.linear
 
-    gradient_accumulation_fusion (bool required): dummy argument, used to 
+    gradient_accumulation_fusion (bool required): dummy argument, used to
     keep the API unified between all forward implementation functions.
 
-    async_grad_allreduce (bool required): dummy argument, used to 
+    async_grad_allreduce (bool required): dummy argument, used to
     keep the API unified between all forward implementation functions.
 
     sequence_parallel (bool required): Indicates that sequence
@@ -114,11 +114,14 @@ def linear_with_frozen_weight(
     )
 
     assert wgrad_deferral_limit is None, (
-        "This arg is only supported with " "linear_with_grad_accumulation_and_async_allreduce"
+        "This arg is only supported with "
+        "linear_with_grad_accumulation_and_async_allreduce"
     )
 
     if sequence_parallel:
-        input = gather_from_sequence_parallel_region(input, tensor_parallel_output_grad=True)
+        input = gather_from_sequence_parallel_region(
+            input, tensor_parallel_output_grad=True
+        )
     else:
         input = input
 
@@ -146,14 +149,16 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
     ):
         """Forward pass with async communication and gradient accumulation."""
         if use_normhead:
-            norm = (torch.sqrt(torch.sum(weight.pow(2), axis=1))
-                    .reshape(weight.size(0), 1)
-                    .expand(weight.size(0), weight.size(1)))
+            norm = (
+                torch.sqrt(torch.sum(weight.pow(2), axis=1))
+                .reshape(weight.size(0), 1)
+                .expand(weight.size(0), weight.size(1))
+            )
             ctx.save_for_backward(input, weight, norm)
             weight = torch.nn.functional.normalize(weight)
         else:
             ctx.save_for_backward(input, weight, None)
-        
+
         ctx.use_bias = bias is not None
         ctx.gradient_accumulation_fusion = gradient_accumulation_fusion
         ctx.allreduce_dgrad = allreduce_dgrad
@@ -167,8 +172,12 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             dim_size = list(input.size())
             dim_size[0] = dim_size[0] * world_size
 
-            all_gather_buffer = get_global_memory_buffer().get_tensor(dim_size, input.dtype, "mpu")
-            dist_all_gather_func(all_gather_buffer, input, group=get_tensor_model_parallel_group())
+            all_gather_buffer = get_global_memory_buffer().get_tensor(
+                dim_size, input.dtype, "mpu"
+            )
+            dist_all_gather_func(
+                all_gather_buffer, input, group=get_tensor_model_parallel_group()
+            )
             total_input = all_gather_buffer
         else:
             total_input = input
@@ -190,7 +199,10 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
 
         wgrad_compute = True
         if grad_output_buffer is not None:
-            if wgrad_deferral_limit == 0 or len(grad_output_buffer) < wgrad_deferral_limit:
+            if (
+                wgrad_deferral_limit == 0
+                or len(grad_output_buffer) < wgrad_deferral_limit
+            ):
                 grad_output_buffer.append(grad_output)
                 wgrad_compute = False
 
@@ -204,7 +216,10 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
                     dim_size, input.dtype, "mpu"
                 )
                 handle = dist_all_gather_func(
-                    all_gather_buffer, input, group=get_tensor_model_parallel_group(), async_op=True
+                    all_gather_buffer,
+                    input,
+                    group=get_tensor_model_parallel_group(),
+                    async_op=True,
                 )
 
                 # Here we rely on CUDA_DEVICE_MAX_CONNECTIONS=1 to ensure that the
@@ -235,11 +250,17 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             assert not ctx.allreduce_dgrad
             dim_size = list(input.size())
             sub_grad_input = torch.empty(
-                dim_size, dtype=input.dtype, device=torch.cuda.current_device(), requires_grad=False
+                dim_size,
+                dtype=input.dtype,
+                device=torch.cuda.current_device(),
+                requires_grad=False,
             )
             # reduce_scatter
             handle = dist_reduce_scatter_func(
-                sub_grad_input, grad_input, group=get_tensor_model_parallel_group(), async_op=True
+                sub_grad_input,
+                grad_input,
+                group=get_tensor_model_parallel_group(),
+                async_op=True,
             )
             # Here we rely on CUDA_DEVICE_MAX_CONNECTIONS=1 to ensure that the
             # reduce scatter is scheduled before the weight gradient computation
@@ -257,15 +278,16 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
                         total_input, grad_output, weight.main_grad
                     )
                 else:
-                    raise RuntimeError("Unsupported gradient type for gradient accumulation fusion")
+                    raise RuntimeError(
+                        "Unsupported gradient type for gradient accumulation fusion"
+                    )
 
-
-            if hasattr(weight, 'grad_added_to_main_grad'):
+            if hasattr(weight, "grad_added_to_main_grad"):
                 # When overlap_grad_reduce is True, need to ensure that backward hooks
                 # are all run on the main backprop thread to prevent deadlocks. Setup
                 # dummy grad_weight tensor to prevent backward hooks from being run
                 # in a background thread.
-                if getattr(weight, 'zero_out_wgrad', False):
+                if getattr(weight, "zero_out_wgrad", False):
                     grad_weight = torch.zeros(
                         weight.main_grad.shape,
                         dtype=input.dtype,
@@ -288,13 +310,25 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
         # normhead requires grad_weight to be involved in the computation,
         # it does not support gradient_accumulation_fusion.
         if ctx.use_normhead:
-            rs = weight.sum(axis=1).reshape(weight.size(0), 1).expand(-1, weight.size(1))
+            rs = (
+                weight.sum(axis=1).reshape(weight.size(0), 1).expand(-1, weight.size(1))
+            )
             scale = (-weight * rs + norm.pow(2)) / norm.pow(3)
             grad_weight = grad_weight * scale
         if ctx.sequence_parallel:
             # Need to return None's as gradient has to flow for all the input arguments
             # provided during forward
-            return sub_grad_input, grad_weight, grad_bias, None, None, None, None, None, None
+            return (
+                sub_grad_input,
+                grad_weight,
+                grad_bias,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
 
         if ctx.allreduce_dgrad:
             handle.wait()
@@ -396,7 +430,7 @@ def linear_with_grad_accumulation_and_async_allreduce(
     ]
 
     if not linear_with_grad_accumulation_and_async_allreduce.warned:
-        if os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') != "1":
+        if os.environ.get("CUDA_DEVICE_MAX_CONNECTIONS") != "1":
             if sequence_parallel:
                 warnings.warn(
                     "When using sequence parallelism it is recommended to set the "
@@ -484,11 +518,10 @@ class ColumnParallelLinear(MegatronColumnParallelLinear):
             grad_output_buffer=grad_output_buffer,
             is_expert=is_expert,
             tp_comm_buffer_name=tp_comm_buffer_name,
-            disable_grad_reduce=disable_grad_reduce
+            disable_grad_reduce=disable_grad_reduce,
         )
 
         self.use_normhead = use_normhead
-
 
     def forward(
         self,
@@ -546,7 +579,8 @@ class ColumnParallelLinear(MegatronColumnParallelLinear):
         if self.config.defer_embedding_wgrad_compute:
             if (
                 self.config.wgrad_deferral_limit == 0
-                or len(self.embedding_activation_buffer) < self.config.wgrad_deferral_limit
+                or len(self.embedding_activation_buffer)
+                < self.config.wgrad_deferral_limit
             ):
                 self.embedding_activation_buffer.append(input_parallel)
 
@@ -555,7 +589,7 @@ class ColumnParallelLinear(MegatronColumnParallelLinear):
             self._forward_impl = linear_with_frozen_weight
         else:
             self._forward_impl = linear_with_grad_accumulation_and_async_allreduce
-        
+
         allreduce_dgrad = False if self.explicit_expert_comm else self.allreduce_dgrad
 
         output_parallel = self._forward_impl(
@@ -564,21 +598,27 @@ class ColumnParallelLinear(MegatronColumnParallelLinear):
             bias=bias,
             gradient_accumulation_fusion=self.gradient_accumulation_fusion,
             allreduce_dgrad=allreduce_dgrad,
-            sequence_parallel=False if self.explicit_expert_comm else self.sequence_parallel,
+            sequence_parallel=(
+                False if self.explicit_expert_comm else self.sequence_parallel
+            ),
             use_normhead=self.use_normhead,
             grad_output_buffer=(
-                self.grad_output_buffer if self.config.defer_embedding_wgrad_compute else None
+                self.grad_output_buffer
+                if self.config.defer_embedding_wgrad_compute
+                else None
             ),
             wgrad_deferral_limit=(
-                self.config.wgrad_deferral_limit if self.config.defer_embedding_wgrad_compute else None
-            ),   
+                self.config.wgrad_deferral_limit
+                if self.config.defer_embedding_wgrad_compute
+                else None
+            ),
         )
-        
+
         gather_output = self.gather_output
         # Use the runtime gather output if it's set explicitly.
         if runtime_gather_output is not None:
             gather_output = runtime_gather_output
-        
+
         if gather_output:
             # All-gather across the partitions.
             assert not self.sequence_parallel

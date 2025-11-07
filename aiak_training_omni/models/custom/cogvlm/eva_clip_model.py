@@ -15,10 +15,11 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 class PatchEmbedding(torch.nn.Module):
     """
     image to patch embedding
-    
+
     refer to:
     https://huggingface.co/THUDM/cogvlm2-llama3-chinese-chat-19B/blob/main/visual.py#L8
     """
+
     def __init__(
         self,
         in_channels: int,
@@ -26,7 +27,6 @@ class PatchEmbedding(torch.nn.Module):
         seq_length: int,
         class_token_len: int = 0,
         patch_dim: int = 14,
-
     ) -> None:
         super().__init__()
         self.seq_length = seq_length
@@ -37,15 +37,17 @@ class PatchEmbedding(torch.nn.Module):
             kernel_size=patch_dim,
             stride=patch_dim,
         )
-        
+
         if self.add_class_token:
-            self.class_token = torch.nn.Parameter(torch.zeros(class_token_len, visual_hidden_size))
+            self.class_token = torch.nn.Parameter(
+                torch.zeros(class_token_len, visual_hidden_size)
+            )
 
         self.position_ids = torch.arange(seq_length).expand(1, -1).cuda()
         self.position_embedding = torch.nn.Embedding(seq_length, visual_hidden_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """ forward function """
+        """forward function"""
         x = self.proj(x)
         x = rearrange(x, "B C h w -> B (h w) C")
 
@@ -59,7 +61,7 @@ class PatchEmbedding(torch.nn.Module):
 
         assert x.shape[1] == self.seq_length, f"{x.shape[1]} != {self.seq_length}"
         x = x + self.position_embedding(self.position_ids)
-        
+
         return x
 
 
@@ -128,7 +130,7 @@ class EVA2CLIPModel(VisionModule):
         self.decoder.set_input_tensor(input_tensor)
 
     def forward(
-        self, 
+        self,
         x: torch.Tensor,
     ) -> torch.Tensor:
         """Forward function of the CLIP ViT Model. This function passes the input tensors

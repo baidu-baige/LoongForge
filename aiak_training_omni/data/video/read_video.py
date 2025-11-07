@@ -1,4 +1,4 @@
-""" read_video """
+"""read_video"""
 
 import gc
 import math
@@ -49,7 +49,9 @@ def read_video_av(
 
     output_format = output_format.upper()
     if output_format not in ("THWC", "TCHW"):
-        raise ValueError(f"output_format should be either 'THWC' or 'TCHW', got {output_format}.")
+        raise ValueError(
+            f"output_format should be either 'THWC' or 'TCHW', got {output_format}."
+        )
 
     from torchvision import get_video_backend
 
@@ -57,7 +59,9 @@ def read_video_av(
         raise RuntimeError(f"File not found: {filename}")
 
     if get_video_backend() != "pyav":
-        vframes, aframes, info = _video_opt._read_video(filename, start_pts, end_pts, pts_unit)
+        vframes, aframes, info = _video_opt._read_video(
+            filename, start_pts, end_pts, pts_unit
+        )
     else:
         _check_av_available()
 
@@ -138,7 +142,7 @@ def read_video_av(
 
 
 def read_video_cv2(video_path):
-    """ Read video using OpenCV """
+    """Read video using OpenCV"""
     cap = cv2.VideoCapture(video_path)
 
     if not cap.isOpened():
@@ -176,11 +180,13 @@ def read_video_cv2(video_path):
 
 
 def read_video(video_path, backend="av"):
-    """ Read video using ffmpeg or OpenCV """
+    """Read video using ffmpeg or OpenCV"""
     if backend == "cv2":
         vframes, vinfo = read_video_cv2(video_path)
     elif backend == "av":
-        vframes, _, vinfo = read_video_av(filename=video_path, pts_unit="sec", output_format="TCHW")
+        vframes, _, vinfo = read_video_av(
+            filename=video_path, pts_unit="sec", output_format="TCHW"
+        )
     else:
         raise ValueError
 

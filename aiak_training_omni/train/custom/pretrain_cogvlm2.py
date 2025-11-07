@@ -42,7 +42,7 @@ def model_provider(pre_process=True, post_process=True):
     args = get_args()
     model_family = get_model_family(args.model_name)
     model_provider = get_model_provider(model_family)
-    assert model_provider is not None, f'model provider for {args.model_name} not found'
+    assert model_provider is not None, f"model provider for {args.model_name} not found"
     return model_provider(pre_process, post_process)
 
 
@@ -60,13 +60,13 @@ def get_batch(data_iterator):
     # batch = get_batch_on_this_cp_rank(batch)
 
     batch = (
-        batch['images'],
-        batch['input_ids'],
-        batch['position_ids'],
-        batch['attention_mask'],
-        batch['token_type_ids'],
-        batch['labels'],
-        batch['loss_mask'],
+        batch["images"],
+        batch["input_ids"],
+        batch["position_ids"],
+        batch["attention_mask"],
+        batch["token_type_ids"],
+        batch["labels"],
+        batch["loss_mask"],
         AttnMaskType.padding_causal,
     )
 
@@ -91,7 +91,9 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     loss_mask = loss_mask.view(-1).float()
 
     total_tokens = loss_mask.sum()
-    loss = torch.cat([torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)])
+    loss = torch.cat(
+        [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
+    )
 
     if args.context_parallel_size > 1:
         torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
@@ -100,8 +102,8 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     if args.check_for_nan_in_loss_and_grad:
         global_rank = torch.distributed.get_rank()
         assert not loss[0].isnan(), (
-            f'Rank {global_rank}: found NaN in local forward loss calculation. '
-            f'Device: {torch.cuda.current_device()}, node: {os.uname()[1]}'
+            f"Rank {global_rank}: found NaN in local forward loss calculation. "
+            f"Device: {torch.cuda.current_device()}, node: {os.uname()[1]}"
         )
 
     # Reduce loss for logging.
@@ -112,7 +114,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     return (
         loss[0] * args.context_parallel_size,
         local_num_tokens,
-        {'lm loss': (reporting_loss[0], reporting_loss[1])},
+        {"lm loss": (reporting_loss[0], reporting_loss[1])},
     )
 
 
@@ -126,17 +128,33 @@ def forward_step(data_iterator, model):
     timers = get_timers()
 
     # Get the batch.
-    timers('batch-generator', log_level=2).start()
+    timers("batch-generator", log_level=2).start()
 
     global stimer
     with stimer(bdata=True):
-        images, input_ids, position_ids, attention_mask, token_type_ids, labels, loss_mask, attn_mask_type \
-            = get_batch(data_iterator)
+        (
+            images,
+            input_ids,
+            position_ids,
+            attention_mask,
+            token_type_ids,
+            labels,
+            loss_mask,
+            attn_mask_type,
+        ) = get_batch(data_iterator)
 
-    timers('batch-generator').stop()
+    timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(images, input_ids, position_ids, attention_mask, attn_mask_type, token_type_ids, labels)
+        output_tensor = model(
+            images,
+            input_ids,
+            position_ids,
+            attention_mask,
+            attn_mask_type,
+            token_type_ids,
+            labels,
+        )
 
     return output_tensor, partial(loss_func, loss_mask)
 
@@ -163,8 +181,10 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     return dataset, None, None
 
 
-@register_model_trainer(model_family=constants.VisionLanguageModelFamilies.COGVLM2,
-                        training_phase=constants.TrainingPhase.PRETRAIN)
+@register_model_trainer(
+    model_family=constants.VisionLanguageModelFamilies.COGVLM2,
+    training_phase=constants.TrainingPhase.PRETRAIN,
+)
 def default_pretrain_trainer(train_args):
     """build trainer"""
     trainer = MegatronTrainer(

@@ -5,16 +5,17 @@ from .training_utils import pretrain
 
 class MegatronTrainer(object):
     """megatron trainer"""
+
     def __init__(
-            self,
-            train_args,
-            train_valid_test_dataset_provider,
-            model_provider,
-            model_type,
-            forward_step_func,
-            process_non_loss_data_func=None,
-            get_embedding_ranks=None,
-            get_position_embedding_ranks=None,
+        self,
+        train_args,
+        train_valid_test_dataset_provider,
+        model_provider,
+        model_type,
+        forward_step_func,
+        process_non_loss_data_func=None,
+        get_embedding_ranks=None,
+        get_position_embedding_ranks=None,
     ):
         """
         train_valid_test_dataset_provider: a function that takes the size of

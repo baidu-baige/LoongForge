@@ -8,7 +8,11 @@ from aiak_training_omni.models import get_model_family
 MODEL_FAMILY_TRAINER_FACTORY = {}
 
 
-def register_model_trainer(model_family: Union[str, List[str]], training_phase: str, training_func: Callable = None):
+def register_model_trainer(
+    model_family: Union[str, List[str]],
+    training_phase: str,
+    training_func: Callable = None,
+):
     """
     register model training function
 
@@ -17,8 +21,9 @@ def register_model_trainer(model_family: Union[str, List[str]], training_phase: 
                       cannot be retrieved correctly. (Case-insensitive)
 
         training_phase: need to be consistent with the --training-phase definition in train.arguments
-        trainig_func: training function. 
+        trainig_func: training function.
     """
+
     def _add_trainer(families, phase, func):
         if not isinstance(families, list):
             families = [families]
@@ -29,10 +34,12 @@ def register_model_trainer(model_family: Union[str, List[str]], training_phase: 
                 MODEL_FAMILY_TRAINER_FACTORY[_family] = {}
 
             if phase in MODEL_FAMILY_TRAINER_FACTORY[_family]:
-                raise ValueError(f"Cannot register duplicate trainer ({_family} family, {phase} phase)")
+                raise ValueError(
+                    f"Cannot register duplicate trainer ({_family} family, {phase} phase)"
+                )
 
             MODEL_FAMILY_TRAINER_FACTORY[_family][phase] = func
-        
+
     def _register_function(fn):
         _add_trainer(model_family, training_phase, fn)
         return fn
@@ -46,16 +53,19 @@ def register_model_trainer(model_family: Union[str, List[str]], training_phase: 
 def build_model_trainer(args):
     """create model trainer"""
 
-    # get model family name
-    model_family = get_model_family(args.model_name)    
-
+    model_family = "vision_language_models"
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
-        raise ValueError(f"Not found trainer for {args.model_name} (family: {model_family})")
-    
+        raise ValueError(
+            f"Not found trainer for {args.model_name} (family: {model_family})"
+        )
 
     if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:
-        raise ValueError(f"AIAK not support {args.training_phase} phase for {args.model_name} (family: {model_family})")
-    
-    trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][args.training_phase]
+        raise ValueError(
+            f"AIAK not support {args.training_phase} phase for {args.model_name} (family: {model_family})"
+        )
+
+    trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][
+        args.training_phase
+    ]
     return trainer(args)

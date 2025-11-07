@@ -16,7 +16,6 @@ limitations under the License.# Modified from Latte
 - This file is adapted from https://github.com/Vchitect/Latte/blob/main/datasets/video_transforms.py
 """
 
-
 import numbers
 import random
 
@@ -44,19 +43,27 @@ def crop(clip, i, j, h, w):
 
 
 def resize(clip, target_size, interpolation_mode):
-    """ Resize the input video clip to the given size. """
+    """Resize the input video clip to the given size."""
     if len(target_size) != 2:
-        raise ValueError(f"target size should be tuple (height, width), instead got {target_size}")
-    return torch.nn.functional.interpolate(clip, size=target_size, mode=interpolation_mode, align_corners=False)
+        raise ValueError(
+            f"target size should be tuple (height, width), instead got {target_size}"
+        )
+    return torch.nn.functional.interpolate(
+        clip, size=target_size, mode=interpolation_mode, align_corners=False
+    )
 
 
 def resize_scale(clip, target_size, interpolation_mode):
-    """ Resize the input video clip to the given size. """
+    """Resize the input video clip to the given size."""
     if len(target_size) != 2:
-        raise ValueError(f"target size should be tuple (height, width), instead got {target_size}")
+        raise ValueError(
+            f"target size should be tuple (height, width), instead got {target_size}"
+        )
     H, W = clip.size(-2), clip.size(-1)
     scale_ = target_size[0] / min(H, W)
-    return torch.nn.functional.interpolate(clip, scale_factor=scale_, mode=interpolation_mode, align_corners=False)
+    return torch.nn.functional.interpolate(
+        clip, scale_factor=scale_, mode=interpolation_mode, align_corners=False
+    )
 
 
 def resized_crop(clip, i, j, h, w, size, interpolation_mode="bilinear"):
@@ -80,7 +87,7 @@ def resized_crop(clip, i, j, h, w, size, interpolation_mode="bilinear"):
 
 
 def center_crop(clip, crop_size):
-    """ Crops the given video clip centered around its centre point."""
+    """Crops the given video clip centered around its centre point."""
     if not _is_tensor_video_clip(clip):
         raise ValueError("clip should be a 4D torch.tensor")
     h, w = clip.size(-2), clip.size(-1)
@@ -94,7 +101,7 @@ def center_crop(clip, crop_size):
 
 
 def center_crop_using_short_edge(clip):
-    """ Crops the given video clip centered around its centre point."""
+    """Crops the given video clip centered around its centre point."""
     if not _is_tensor_video_clip(clip):
         raise ValueError("clip should be a 4D torch.tensor")
     h, w = clip.size(-2), clip.size(-1)
@@ -110,7 +117,7 @@ def center_crop_using_short_edge(clip):
 
 
 def resize_crop_to_fill(clip, target_size):
-    """ resize_crop_to_fill """
+    """resize_crop_to_fill"""
     if not _is_tensor_video_clip(clip):
         raise ValueError("clip should be a 4D torch.tensor")
     h, w = clip.size(-2), clip.size(-1)
@@ -161,7 +168,9 @@ def to_tensor(clip):
     """
     _is_tensor_video_clip(clip)
     if not clip.dtype == torch.uint8:
-        raise TypeError("clip tensor should have data type uint8. Got %s" % str(clip.dtype))
+        raise TypeError(
+            "clip tensor should have data type uint8. Got %s" % str(clip.dtype)
+        )
     # return clip.float().permute(3, 0, 1, 2) / 255.0
     return clip.float() / 255.0
 
@@ -199,7 +208,8 @@ def hflip(clip):
 
 
 class ResizeCrop:
-    """ ResizeCrop """
+    """ResizeCrop"""
+
     def __init__(self, size):
         if isinstance(size, numbers.Number):
             self.size = (int(size), int(size))
@@ -215,7 +225,8 @@ class ResizeCrop:
 
 
 class RandomCropVideo:
-    """ RandomCropVideo """
+    """RandomCropVideo"""
+
     def __init__(self, size):
         if isinstance(size, numbers.Number):
             self.size = (int(size), int(size))
@@ -234,12 +245,14 @@ class RandomCropVideo:
         return crop(clip, i, j, h, w)
 
     def get_params(self, clip):
-        """ get_params """
+        """get_params"""
         h, w = clip.shape[-2:]
         th, tw = self.size
 
         if h < th or w < tw:
-            raise ValueError(f"Required crop size {(th, tw)} is larger than input image size {(h, w)}")
+            raise ValueError(
+                f"Required crop size {(th, tw)} is larger than input image size {(h, w)}"
+            )
 
         if w == tw and h == th:
             return 0, 0, h, w
@@ -266,7 +279,9 @@ class CenterCropResizeVideo:
     ):
         if isinstance(size, tuple):
             if len(size) != 2:
-                raise ValueError(f"size should be tuple (height, width), instead got {size}")
+                raise ValueError(
+                    f"size should be tuple (height, width), instead got {size}"
+                )
             self.size = size
         else:
             self.size = (size, size)
@@ -283,7 +298,9 @@ class CenterCropResizeVideo:
         """
         clip_center_crop = center_crop_using_short_edge(clip)
         clip_center_crop_resize = resize(
-            clip_center_crop, target_size=self.size, interpolation_mode=self.interpolation_mode
+            clip_center_crop,
+            target_size=self.size,
+            interpolation_mode=self.interpolation_mode,
         )
         return clip_center_crop_resize
 
@@ -304,7 +321,9 @@ class UCFCenterCropVideo:
     ):
         if isinstance(size, tuple):
             if len(size) != 2:
-                raise ValueError(f"size should be tuple (height, width), instead got {size}")
+                raise ValueError(
+                    f"size should be tuple (height, width), instead got {size}"
+                )
             self.size = size
         else:
             self.size = (size, size)
@@ -319,7 +338,9 @@ class UCFCenterCropVideo:
             torch.tensor: scale resized / center cropped video clip.
                 size is (T, C, crop_size, crop_size)
         """
-        clip_resize = resize_scale(clip=clip, target_size=self.size, interpolation_mode=self.interpolation_mode)
+        clip_resize = resize_scale(
+            clip=clip, target_size=self.size, interpolation_mode=self.interpolation_mode
+        )
         clip_center_crop = center_crop(clip_resize, self.size)
         return clip_center_crop
 
@@ -339,7 +360,9 @@ class KineticsRandomCropResizeVideo:
     ):
         if isinstance(size, tuple):
             if len(size) != 2:
-                raise ValueError(f"size should be tuple (height, width), instead got {size}")
+                raise ValueError(
+                    f"size should be tuple (height, width), instead got {size}"
+                )
             self.size = size
         else:
             self.size = (size, size)
@@ -353,7 +376,8 @@ class KineticsRandomCropResizeVideo:
 
 
 class CenterCropVideo:
-    """ CenterCropVideo """
+    """CenterCropVideo"""
+
     def __init__(
         self,
         size,
@@ -361,7 +385,9 @@ class CenterCropVideo:
     ):
         if isinstance(size, tuple):
             if len(size) != 2:
-                raise ValueError(f"size should be tuple (height, width), instead got {size}")
+                raise ValueError(
+                    f"size should be tuple (height, width), instead got {size}"
+                )
             self.size = size
         else:
             self.size = (size, size)
@@ -475,15 +501,17 @@ class TemporalRandomCrop(object):
         return begin_index, end_index
 
 
-def random_crop_random_size_from_video(vframes, min_crop_size=24 * 2, max_crop_size=24 * 30):
-    """ Return a list of randomly selected frames from the video """
+def random_crop_random_size_from_video(
+    vframes, min_crop_size=24 * 2, max_crop_size=24 * 30
+):
+    """Return a list of randomly selected frames from the video"""
     total_frames = len(vframes)
     if total_frames < min_crop_size:
         return vframes
 
     random_crop_size = random.randint(min_crop_size, min(total_frames, max_crop_size))
     random_start = random.randint(0, total_frames - random_crop_size)
-    return vframes[random_start: random_start + random_crop_size]
+    return vframes[random_start : random_start + random_crop_size]
 
 
 if __name__ == "__main__":
@@ -494,7 +522,9 @@ if __name__ == "__main__":
     from torchvision import transforms
     from torchvision.utils import save_image
 
-    vframes, aframes, info = io.read_video(filename="./v_Archery_g01_c03.avi", pts_unit="sec", output_format="TCHW")
+    vframes, aframes, info = io.read_video(
+        filename="./v_Archery_g01_c03.avi", pts_unit="sec", output_format="TCHW"
+    )
 
     trans = transforms.Compose(
         [
@@ -502,7 +532,9 @@ if __name__ == "__main__":
             RandomHorizontalFlipVideo(),
             UCFCenterCropVideo(512),
             # NormalizeVideo(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True),
+            transforms.Normalize(
+                mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True
+            ),
         ]
     )
 
@@ -518,7 +550,9 @@ if __name__ == "__main__":
     # print(start_frame_ind)
     # print(end_frame_ind)
     assert end_frame_ind - start_frame_ind >= target_video_len
-    frame_indice = np.linspace(start_frame_ind, end_frame_ind - 1, target_video_len, dtype=int)
+    frame_indice = np.linspace(
+        start_frame_ind, end_frame_ind - 1, target_video_len, dtype=int
+    )
     print(frame_indice)
 
     select_vframes = vframes[frame_indice]
@@ -529,7 +563,9 @@ if __name__ == "__main__":
     print(select_vframes_trans.shape)
     print(select_vframes_trans.dtype)
 
-    select_vframes_trans_int = ((select_vframes_trans * 0.5 + 0.5) * 255).to(dtype=torch.uint8)
+    select_vframes_trans_int = ((select_vframes_trans * 0.5 + 0.5) * 255).to(
+        dtype=torch.uint8
+    )
     print(select_vframes_trans_int.dtype)
     print(select_vframes_trans_int.permute(0, 2, 3, 1).shape)
 
@@ -537,5 +573,8 @@ if __name__ == "__main__":
 
     for i in range(target_video_len):
         save_image(
-            select_vframes_trans[i], os.path.join("./test000", "%04d.png" % i), normalize=True, value_range=(-1, 1)
+            select_vframes_trans[i],
+            os.path.join("./test000", "%04d.png" % i),
+            normalize=True,
+            value_range=(-1, 1),
         )

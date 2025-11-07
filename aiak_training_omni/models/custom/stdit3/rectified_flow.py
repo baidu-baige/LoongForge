@@ -1,4 +1,5 @@
-""" Open-Sora/opensora/schedulers/rf/rectified_flow.py """
+"""Open-Sora/opensora/schedulers/rf/rectified_flow.py"""
+
 import torch
 from einops import rearrange
 
@@ -20,9 +21,10 @@ def mean_flat(tensor: torch.Tensor, mask=None):
 
 class RFlowScheduler:
     """
-        Rectified Flow Scheduler
-        https://arxiv.org/abs/2107.06493
+    Rectified Flow Scheduler
+    https://arxiv.org/abs/2107.06493
     """
+
     def __init__(
         self,
         num_timesteps=1000,
@@ -34,7 +36,9 @@ class RFlowScheduler:
         self.num_timesteps = num_timesteps
         self.num_sampling_steps = num_sampling_steps
 
-        self.distribution = torch.distributions.LogisticNormal(torch.tensor([loc]), torch.tensor([scale]))
+        self.distribution = torch.distributions.LogisticNormal(
+            torch.tensor([loc]), torch.tensor([scale])
+        )
         self.sample_t = lambda x: self.distribution.sample()[0]
 
         # timestep transform
@@ -47,7 +51,7 @@ class RFlowScheduler:
         base_resolution=512 * 512,
         base_num_frames=1,
     ):
-        """ transform the timestep """
+        """transform the timestep"""
         t = self.sample_t(x_start)
         resolution = model_kwargs["height"] * model_kwargs["width"]
         ratio_space = (resolution / base_resolution).sqrt()
@@ -80,6 +84,8 @@ class RFlowScheduler:
         # timepoint  (bsz) noise: (bsz, 4, frame, w ,h)
         # expand timepoint to noise shape
         timepoints = timepoints.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
-        timepoints = timepoints.repeat(1, noise.shape[1], noise.shape[2], noise.shape[3], noise.shape[4])
+        timepoints = timepoints.repeat(
+            1, noise.shape[1], noise.shape[2], noise.shape[3], noise.shape[4]
+        )
 
         return timepoints * original_samples + (1 - timepoints) * noise

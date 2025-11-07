@@ -1,11 +1,11 @@
-""" Aspect Ratio """
+"""Aspect Ratio"""
 
 import math
 
 
 # computation
 def get_h_w(a, ts, eps=1e-4):
-    """ get h, w from aspect ratio """
+    """get h, w from aspect ratio"""
     h = (ts * a) ** 0.5
     h = h + eps
     h = math.ceil(h) if math.ceil(h) % 2 == 0 else math.floor(h)
@@ -16,13 +16,13 @@ def get_h_w(a, ts, eps=1e-4):
 
 
 def get_aspect_ratios_dict(ars, ts=360 * 640):
-    """ get h, w from aspect ratio """
+    """get h, w from aspect ratio"""
     est = {f"{a:.2f}": get_h_w(a, ts) for a in ars}
     return est
 
 
 def get_ar(ratio):
-    """ get aspect ratio from string """
+    """get aspect ratio from string"""
     h, w = ratio.split(":")
     return int(h) / int(w)
 
@@ -443,9 +443,11 @@ ASPECT_RATIO_256 = {
 
 
 def get_closest_ratio(height: float, width: float, ratios: dict):
-    """ Get the closest aspect ratio to the given height and width. """
+    """Get the closest aspect ratio to the given height and width."""
     aspect_ratio = height / width
-    closest_ratio = min(ratios.keys(), key=lambda ratio: abs(float(ratio) - aspect_ratio))
+    closest_ratio = min(
+        ratios.keys(), key=lambda ratio: abs(float(ratio) - aspect_ratio)
+    )
     return closest_ratio
 
 
@@ -467,15 +469,17 @@ ASPECT_RATIOS = {
 
 
 def get_num_pixels(name):
-    """ Get the number of pixels for a given resolution. """
+    """Get the number of pixels for a given resolution."""
     return ASPECT_RATIOS[name][0]
 
 
 def get_image_size(resolution, ar_ratio):
-    """ Get the image size for a given resolution and aspect ratio """
+    """Get the image size for a given resolution and aspect ratio"""
     ar_key = ASPECT_RATIO_MAP[ar_ratio]
     rs_dict = ASPECT_RATIOS[resolution][1]
-    assert ar_key in rs_dict, f"Aspect ratio {ar_ratio} not found for resolution {resolution}"
+    assert (
+        ar_key in rs_dict
+    ), f"Aspect ratio {ar_ratio} not found for resolution {resolution}"
     return rs_dict[ar_key]
 
 
@@ -494,7 +498,7 @@ NUM_FRAMES_MAP = {
 
 
 def get_num_frames(num_frames):
-    """ Get the number of frames for a given speed. """
+    """Get the number of frames for a given speed."""
     if num_frames in NUM_FRAMES_MAP:
         return NUM_FRAMES_MAP[num_frames]
     else:

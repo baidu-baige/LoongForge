@@ -13,13 +13,15 @@ class AutoTokenizerFromHF(MegatronTokenizer):
     1、使用体验和用户使用 HF 一致，方便使用 HuggingFace Tokenizer 提供的功能，后续如果有需要，可继续扩展接口；
     2、可满足 MegatronTokenizer 的接口定义, 避免出现与 Megatron 接口不兼容问题;
     """
-    def __init__(self,
-                 name_or_path: str,
-                 use_fast_tokenizer: bool,
-                 padding_side: str,
-                 model_max_length: int,
-                 split_special_tokens: bool,
-                 **kwargs,
+
+    def __init__(
+        self,
+        name_or_path: str,
+        use_fast_tokenizer: bool,
+        padding_side: str,
+        model_max_length: int,
+        split_special_tokens: bool,
+        **kwargs,
     ):
         super().__init__(name_or_path)
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -34,14 +36,14 @@ class AutoTokenizerFromHF(MegatronTokenizer):
 
     def tokenize(self, text: str, **kwargs) -> List[int]:
         """tokenize text
-        
+
         Args:
             text (`str`): The text to be tokenized.
             **kwargs: Additional keyword arguments passed along to the `encode` method
-        
+
         Returns:
             `List[int]`: The token ids of the text.
-        
+
         """
         return self.tokenizer.encode(text, **kwargs)
 
@@ -53,7 +55,7 @@ class AutoTokenizerFromHF(MegatronTokenizer):
         **kwargs,
     ) -> str:
         """Convert embedding ids to text
-        
+
         Args:
             token_ids (`int` or `List[int]`): One or several token id(s) to convert to text.
             skip_special_tokens (`bool`, *optional*, default to `False`): Whether to remove all special tokens from the
@@ -61,16 +63,20 @@ class AutoTokenizerFromHF(MegatronTokenizer):
             clean_up_tokenization_spaces (`bool`, *optional*, default to `None`): Whether to clean up the tokenization
                 spaces before decoding.
             **kwargs: Additional keyword arguments passed along to the `decode` method
-        
+
         Returns:
             `str`: The decoded text.
         """
-        return self.tokenizer.decode(token_ids=token_ids,
-                                     skip_special_tokens=skip_special_tokens,
-                                     clean_up_tokenization_spaces=clean_up_tokenization_spaces,
-                                     **kwargs)
+        return self.tokenizer.decode(
+            token_ids=token_ids,
+            skip_special_tokens=skip_special_tokens,
+            clean_up_tokenization_spaces=clean_up_tokenization_spaces,
+            **kwargs,
+        )
 
-    def convert_tokens_to_ids(self, tokens: Union[str, List[str]]) -> Union[int, List[int]]:
+    def convert_tokens_to_ids(
+        self, tokens: Union[str, List[str]]
+    ) -> Union[int, List[int]]:
         """
         Converts a token string (or a sequence of tokens) in a single integer id (or a sequence of ids), using the
         vocabulary.
@@ -89,11 +95,13 @@ class AutoTokenizerFromHF(MegatronTokenizer):
         replace_additional_special_tokens: bool = True,
     ) -> int:
         """add special tokens
-        
+
         Returns:
             `int`: Number of tokens added to the vocabulary.
         """
-        return self.tokenizer.add_special_tokens(special_tokens_dict, replace_additional_special_tokens)
+        return self.tokenizer.add_special_tokens(
+            special_tokens_dict, replace_additional_special_tokens
+        )
 
     @property
     def vocab(self) -> Dict[str, int]:
@@ -164,12 +172,12 @@ class AutoTokenizerFromHF(MegatronTokenizer):
     def bos(self, value):
         """set BOS token id"""
         self.tokenizer.bos_token_id = value
-        
+
     @eos.setter
     def eos(self, value):
         """set EOS token id"""
         self.tokenizer.eos_token_id = value
-        
+
     @mask.setter
     def mask(self, value):
         """set MASK token id"""

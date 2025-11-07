@@ -6,7 +6,9 @@ from megatron.core.transformer.moe.moe_layer import (
     MoESubmodules,
 )
 
-from aiak_training_omni.models.deepseek.transformer.transformer_config import DeepSeekTransformerConfig
+from aiak_training_omni.models.deepseek.transformer.transformer_config import (
+    DeepSeekTransformerConfig,
+)
 from aiak_training_omni.models.deepseek.transformer.router import TopKRouter
 
 
@@ -18,9 +20,14 @@ class MoELayer(MegatronMoELayer):
     """
 
     def __init__(
-        self, config: DeepSeekTransformerConfig, submodules: MoESubmodules = None, layer_number: int = None
+        self,
+        config: DeepSeekTransformerConfig,
+        submodules: MoESubmodules = None,
+        layer_number: int = None,
     ):
-        super(MoELayer, self).__init__(config=config, submodules=submodules, layer_number=layer_number)
-        
+        super(MoELayer, self).__init__(
+            config=config, submodules=submodules, layer_number=layer_number
+        )
+
         # overwrite router with mtp verison
         self.router = TopKRouter(config=self.config)

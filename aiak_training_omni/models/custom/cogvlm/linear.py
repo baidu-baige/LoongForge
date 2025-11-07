@@ -1,4 +1,4 @@
-""" Vision Expert Linear Layers """
+"""Vision Expert Linear Layers"""
 
 import torch
 from abc import ABC, abstractmethod
@@ -11,26 +11,29 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 
 
 def get_expert_mask(token_type_ids, **kwargs):
-    """ torch.LongTensor(S, B) -> [torch.BoolTensor(S, B), torch.BoolTensor(S, B)] """
+    """torch.LongTensor(S, B) -> [torch.BoolTensor(S, B), torch.BoolTensor(S, B)]"""
     LANGUAGE_TOKEN_TYPE = 0
     VISION_TOKEN_TYPE = 1
     vision_token_mask = torch.zeros_like(token_type_ids, dtype=torch.bool)
-    vision_token_mask[:-1, :] = \
-        (token_type_ids[:-1, :] == VISION_TOKEN_TYPE) & (token_type_ids[1:, :] == VISION_TOKEN_TYPE)
+    vision_token_mask[:-1, :] = (token_type_ids[:-1, :] == VISION_TOKEN_TYPE) & (
+        token_type_ids[1:, :] == VISION_TOKEN_TYPE
+    )
     language_token_mask = ~vision_token_mask
     return vision_token_mask, language_token_mask
 
 
 @dataclass
 class VisionExpertLinearSubmodules:
-    """ Vision Expert Linear Submodules """
+    """Vision Expert Linear Submodules"""
+
     vision_linear: Union[ModuleSpec, type] = None
     language_linear: Union[ModuleSpec, type] = None
     apply_mask_fn: Union[ModuleSpec, type] = None
 
 
 class VisionExpertLinear(MegatronModule, ABC):
-    """ Vision Expert Linear Layers """
+    """Vision Expert Linear Layers"""
+
     def __init__(
         self,
         input_size: int,
@@ -69,14 +72,20 @@ class VisionExpertLinear(MegatronModule, ABC):
         self.apply_mask_fn = build_module(submodules.apply_mask_fn)
         assert self.vision_linear.weight.shape == self.language_linear.weight.shape
         self.output_size = self.vision_linear.weight.shape[0]
-    
+
     def forward(self, hidden_states, **kwargs):
-        """ forward pass for the model """
+        """forward pass for the model"""
         vision_token_mask, language_token_mask = self.apply_mask_fn(**kwargs)
         shape = list(hidden_states.shape)
         shape[-1] = self.output_size
-        mixed = torch.empty(shape, dtype=hidden_states.dtype, device=hidden_states.device)
-        mixed[vision_token_mask], _ = self.vision_linear(hidden_states[vision_token_mask])
-        mixed[language_token_mask], _ = self.language_linear(hidden_states[language_token_mask])
-        
+        mixed = torch.empty(
+            shape, dtype=hidden_states.dtype, device=hidden_states.device
+        )
+        mixed[vision_token_mask], _ = self.vision_linear(
+            hidden_states[vision_token_mask]
+        )
+        mixed[language_token_mask], _ = self.language_linear(
+            hidden_states[language_token_mask]
+        )
+
         return mixed, None

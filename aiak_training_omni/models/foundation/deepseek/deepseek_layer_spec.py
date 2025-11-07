@@ -1,13 +1,23 @@
 """Deepseek layer spec."""
+
 from typing import Tuple, Optional
 
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
-from megatron.core.transformer.transformer_block import TransformerBlockSubmodules, get_num_layers_to_build
-from megatron.core.transformer.transformer_layer import TransformerLayer, get_transformer_layer_offset
-from megatron.core.transformer.multi_latent_attention import MLASelfAttention, MLASelfAttentionSubmodules
+from megatron.core.transformer.transformer_block import (
+    TransformerBlockSubmodules,
+    get_num_layers_to_build,
+)
+from megatron.core.transformer.transformer_layer import (
+    TransformerLayer,
+    get_transformer_layer_offset,
+)
+from megatron.core.transformer.multi_latent_attention import (
+    MLASelfAttention,
+    MLASelfAttentionSubmodules,
+)
 
 from megatron.core.transformer.moe.experts import SequentialMLP, TEGroupedMLP
 from megatron.core.transformer.moe.shared_experts import SharedExpertMLP
@@ -16,7 +26,9 @@ from megatron.core.enums import Fp8Recipe
 
 from aiak_training_omni.models.deepseek.transformer import DeepSeekTransformerConfig
 from aiak_training_omni.models.deepseek.transformer.moe_layer import MoELayer
-from aiak_training_omni.models.deepseek.transformer.mtp_transformer_layer import MultiTokenPredLayerDeepSeekSubmodules
+from aiak_training_omni.models.deepseek.transformer.mtp_transformer_layer import (
+    MultiTokenPredLayerDeepSeekSubmodules,
+)
 
 from aiak_training_omni.models.dispatch import multiacc_modules
 
@@ -45,12 +57,14 @@ def _get_deepseek_layer_with_te_spec(
                     linear_q_down_proj=multiacc_modules.TEColumnParallelLinear,
                     linear_q_up_proj=(
                         multiacc_modules.TELayerNormColumnParallelLinear
-                        if qk_layernorm else multiacc_modules.TEColumnParallelLinear
+                        if qk_layernorm
+                        else multiacc_modules.TEColumnParallelLinear
                     ),
                     linear_kv_down_proj=multiacc_modules.TEColumnParallelLinear,
                     linear_kv_up_proj=(
                         multiacc_modules.TELayerNormColumnParallelLinear
-                        if qk_layernorm else multiacc_modules.TEColumnParallelLinear
+                        if qk_layernorm
+                        else multiacc_modules.TEColumnParallelLinear
                     ),
                     core_attention=multiacc_modules.DotProductAttention,
                     linear_proj=multiacc_modules.TERowParallelLinear,
@@ -67,13 +81,12 @@ def _get_deepseek_layer_with_te_spec(
             enorm=multiacc_modules.TENorm,
             hnorm=multiacc_modules.TENorm,
             output_layernorm=multiacc_modules.TENorm,
-        )
+        ),
     )
 
 
 def _get_mlp_module_spec(
-    num_experts: int=None,
-    moe_grouped_gemm: bool=False
+    num_experts: int = None, moe_grouped_gemm: bool = False
 ) -> ModuleSpec:
     """Helper function to get module spec for MLP/MoE"""
 
@@ -95,7 +108,7 @@ def _get_mlp_module_spec(
         expert_module = TEGroupedMLP
         linear_fc1 = multiacc_modules.TEColumnParallelGroupedLinear
         linear_fc2 = multiacc_modules.TERowParallelGroupedLinear
-        
+
     else:
         expert_module = SequentialMLP
         linear_fc1 = multiacc_modules.TEColumnParallelLinear
@@ -115,7 +128,7 @@ def _get_mlp_module_spec(
                     linear_fc1=shared_linear_fc1,
                     linear_fc2=shared_linear_fc2,
                     bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
-                )
+                ),
             ),
             experts=ModuleSpec(
                 module=expert_module,
@@ -123,9 +136,9 @@ def _get_mlp_module_spec(
                     linear_fc1=linear_fc1,
                     linear_fc2=linear_fc2,
                     bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
-                )
-            )
-        )
+                ),
+            ),
+        ),
     )
 
 
@@ -134,7 +147,9 @@ def get_deepseek_decoder_block_and_mtp_spec(
 ) -> Tuple[TransformerBlockSubmodules, Optional[ModuleSpec]]:
     """Get the deepseek decoder block and multi-token prediction layer spec."""
     assert config.num_moe_experts > 0, "Only support MOE when using DeepSeek"
-    assert config.multi_latent_attention, "Only support multi-latent attention when using DeepSeek"
+    assert (
+        config.multi_latent_attention
+    ), "Only support multi-latent attention when using DeepSeek"
 
     block_spec = None
     mtp_spec = None
@@ -155,22 +170,31 @@ def get_deepseek_decoder_block_and_mtp_spec(
     # In FP8 training, replace `linear_q_down_proj` and `linear_kv_down_proj`
     # with TELinear to support tensor parallelism
     if config.fp8 and config.fp8_recipe == Fp8Recipe.blockwise:
-        dense_layer_spec.submodules.self_attention.submodules.linear_q_down_proj = multiacc_modules.TELinear
-        dense_layer_spec.submodules.self_attention.submodules.linear_kv_down_proj = multiacc_modules.TELinear
-        moe_layer_spec.submodules.self_attention.submodules.linear_q_down_proj = multiacc_modules.TELinear
-        moe_layer_spec.submodules.self_attention.submodules.linear_kv_down_proj = multiacc_modules.TELinear
-    
+        dense_layer_spec.submodules.self_attention.submodules.linear_q_down_proj = (
+            multiacc_modules.TELinear
+        )
+        dense_layer_spec.submodules.self_attention.submodules.linear_kv_down_proj = (
+            multiacc_modules.TELinear
+        )
+        moe_layer_spec.submodules.self_attention.submodules.linear_q_down_proj = (
+            multiacc_modules.TELinear
+        )
+        moe_layer_spec.submodules.self_attention.submodules.linear_kv_down_proj = (
+            multiacc_modules.TELinear
+        )
+
     if config.num_nextn_predict_layers > 0:
         # copy for mtp
         mtp_spec = moe_layer_spec
-    
+
     # Parse config.moe_layer_freq to determine the pattern of expert/dense layers.
     # 0 stands for dense layers, 1 stands for expert layers.
     # For integer N: Creates a pattern with one expert layer every N layers.
     # For string pattern: Evaluates the str directly (e.g. "[1,0,1]" for alternating expert/dense).
     if isinstance(config.moe_layer_freq, int):
         moe_layer_pattern = [
-            1 if (i % config.moe_layer_freq == 0) else 0 for i in range(config.num_layers)
+            1 if (i % config.moe_layer_freq == 0) else 0
+            for i in range(config.num_layers)
         ]
     elif isinstance(config.moe_layer_freq, list):
         moe_layer_pattern = config.moe_layer_freq
@@ -203,7 +227,7 @@ def get_deepseek_decoder_block_and_mtp_spec(
     # Block spec.
     block_spec = TransformerBlockSubmodules(
         layer_specs=layer_specs,
-        layer_norm=multiacc_modules.TENorm, # TODO: Whether the Local Norm should be compatible
+        layer_norm=multiacc_modules.TENorm,  # TODO: Whether the Local Norm should be compatible
     )
 
     return block_spec, mtp_spec

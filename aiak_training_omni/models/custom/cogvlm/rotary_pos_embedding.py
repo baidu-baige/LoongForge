@@ -1,4 +1,4 @@
-""" Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved. """
+"""Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
-__all__ = ['apply_rotary_pos_emb_with_position_ids']
+__all__ = ["apply_rotary_pos_emb_with_position_ids"]
+
 
 def _rotate_half(x: Tensor, rotary_interleaved: bool) -> Tensor:
     """Change sign so the last dimension becomes [-odd, +even]
@@ -37,11 +38,11 @@ def _rotate_half(x: Tensor, rotary_interleaved: bool) -> Tensor:
 
 
 def apply_rotary_pos_emb_bshd(
-        t: Tensor, 
-        freqs: Tensor, 
-        rotary_interleaved: bool = False, 
-        position_ids: Tensor = None
-    ) -> Tensor:
+    t: Tensor,
+    freqs: Tensor,
+    rotary_interleaved: bool = False,
+    position_ids: Tensor = None,
+) -> Tensor:
     """Apply rotary positional embedding to input tensor T.
 
     check https://kexue.fm/archives/8265 for detailed formulas
@@ -71,9 +72,9 @@ def apply_rotary_pos_emb_bshd(
 
 
 def apply_rotary_pos_emb_with_position_ids(
-    t: Tensor, 
-    freqs: Tensor, 
-    config: TransformerConfig, 
+    t: Tensor,
+    freqs: Tensor,
+    config: TransformerConfig,
     cu_seqlens: Optional[Tensor] = None,
     position_ids: Optional[Tensor] = None,
     **kwargs,
@@ -88,5 +89,5 @@ def apply_rotary_pos_emb_with_position_ids(
         t,
         freqs,
         rotary_interleaved=config.rotary_interleaved,
-        position_ids=position_ids
+        position_ids=position_ids,
     )

@@ -1,4 +1,5 @@
-""" comunication functions """
+"""comunication functions"""
+
 import torch
 import torch.distributed as dist
 
@@ -54,7 +55,7 @@ class _GatherForwardSplitBackward(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, process_group, dim, grad_scale):
-        """ Forward """
+        """Forward"""
         ctx.mode = process_group
         ctx.dim = dim
         ctx.grad_scale = grad_scale
@@ -62,7 +63,7 @@ class _GatherForwardSplitBackward(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        """ Backward """
+        """Backward"""
         if ctx.grad_scale == "up":
             grad_output = grad_output * dist.get_world_size(ctx.mode)
         elif ctx.grad_scale == "down":
@@ -82,7 +83,7 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, process_group, dim, grad_scale):
-        """ Forward """
+        """Forward"""
         ctx.mode = process_group
         ctx.dim = dim
         ctx.grad_scale = grad_scale
@@ -90,7 +91,7 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        """ Backward """
+        """Backward"""
         if ctx.grad_scale == "up":
             grad_output = grad_output * dist.get_world_size(ctx.mode)
         elif ctx.grad_scale == "down":
@@ -99,10 +100,10 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
 
 
 def split_forward_gather_backward(input_, process_group, dim, grad_scale=1.0):
-    """ Split then gather """
+    """Split then gather"""
     return _SplitForwardGatherBackward.apply(input_, process_group, dim, grad_scale)
 
 
 def gather_forward_split_backward(input_, process_group, dim, grad_scale=None):
-    """ Gather then split """
+    """Gather then split"""
     return _GatherForwardSplitBackward.apply(input_, process_group, dim, grad_scale)

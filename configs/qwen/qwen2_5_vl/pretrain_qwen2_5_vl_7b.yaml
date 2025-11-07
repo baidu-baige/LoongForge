@@ -7,10 +7,10 @@ defaults:
   - _self_
 
 model:
-  #_target_: aiak_training_omni.models.common.BaseModelConfig
+  _target_: aiak_training_omni.models.omni_models.omni_model_config.OmniModelConfig
 
   image_encoder:
-    _target_: aiak_training_omni.models.encoder.QwenVisionConfig
+    _target_: aiak_training_omni.models.encoder.QwenVisionRMSNormConfig
 
   image_projector:
     _target_: aiak_training_omni.models.encoder.MLPAdapterConfig
@@ -23,3 +23,7 @@ data:
 
 train:
   _target_: aiak_training_omni.train.base_train_config.TrainConfig
+  variable_seq_lengths: True
+  model_family: vision_language_model
+  training_phase: pretrain
+  use_fp8: True

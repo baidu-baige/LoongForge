@@ -9,6 +9,7 @@ from aiak_training_omni.models.factory import register_model_config
 @dataclass
 class BaichuanConfig:
     """config for baichuan model"""
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -19,7 +20,7 @@ class BaichuanConfig:
     add_position_embedding: bool = False
     rotary_interleaved: bool = False
     use_normhead: bool = False
-    normalization: str  = "RMSNorm"
+    normalization: str = "RMSNorm"
     swiglu: bool = True
     attention_dropout: float = 0
     hidden_dropout: float = 0
@@ -29,7 +30,9 @@ class BaichuanConfig:
     untie_embeddings_and_output_weights: bool = True
 
 
-@register_model_config(model_family=LanguageModelFamilies.BAICHUAN, model_arch="baichuan-7b")
+@register_model_config(
+    model_family=LanguageModelFamilies.BAICHUAN, model_arch="baichuan-7b"
+)
 def baichuan_7b():
     """baichuan 7b"""
     return BaichuanConfig(
@@ -41,7 +44,9 @@ def baichuan_7b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.BAICHUAN, model_arch="baichuan-13b")
+@register_model_config(
+    model_family=LanguageModelFamilies.BAICHUAN, model_arch="baichuan-13b"
+)
 def baichuan_13b():
     """baichuan 13b"""
     return BaichuanConfig(
@@ -51,9 +56,11 @@ def baichuan_13b():
         num_attention_heads=40,
         position_embedding_type="alibi",
     )
-    
 
-@register_model_config(model_family=LanguageModelFamilies.BAICHUAN2, model_arch="baichuan2-7b")
+
+@register_model_config(
+    model_family=LanguageModelFamilies.BAICHUAN2, model_arch="baichuan2-7b"
+)
 def baichuan2_7b():
     """baichuan2 7b"""
     return BaichuanConfig(
@@ -66,7 +73,9 @@ def baichuan2_7b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.BAICHUAN2, model_arch="baichuan2-13b")
+@register_model_config(
+    model_family=LanguageModelFamilies.BAICHUAN2, model_arch="baichuan2-13b"
+)
 def baichuan2_13b():
     """baichuan2 13b"""
     return BaichuanConfig(

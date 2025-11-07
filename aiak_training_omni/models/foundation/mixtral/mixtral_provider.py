@@ -1,4 +1,5 @@
 """mixtral model provider"""
+
 import inspect
 from contextlib import nullcontext
 from megatron.core.transformer.spec_utils import import_module
@@ -14,7 +15,9 @@ from .mixtral_layer_spec import get_mixtral_layer_with_te_spec
 
 @register_model_provider(model_family=LanguageModelFamilies.MIXTRAL)
 def mixtral_model_provider(
-    pre_process: bool = True, post_process: bool = True, parallel_output: bool = True,
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
 ) -> MixtralModel:
     """Builds the mixtral model.
 
@@ -28,7 +31,7 @@ def mixtral_model_provider(
     """
     args = get_args()
 
-    print_rank_0('building Mixtral model ...')
+    print_rank_0("building Mixtral model ...")
 
     config = build_transformer_config(args)
 
@@ -50,10 +53,15 @@ def mixtral_model_provider(
             build_model_context_args["enabled"] = True
 
             # Check if fp8_model_init supports preserve_high_precision_init_val
-            if "preserve_high_precision_init_val" in inspect.signature(fp8_model_init).parameters:
+            if (
+                "preserve_high_precision_init_val"
+                in inspect.signature(fp8_model_init).parameters
+            ):
                 build_model_context_args["preserve_high_precision_init_val"] = True
         except:
-            raise RuntimeError("--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found.")
+            raise RuntimeError(
+                "--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found."
+            )
 
     with build_model_context(**build_model_context_args):
         model = MixtralModel(

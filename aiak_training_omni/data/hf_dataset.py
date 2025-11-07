@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class HuggingFaceDataset(ABC):
     """The highest level wrapper class for huggingface dataset.
 
-    Assumes that methods such as __len__, __getitem__, and __iter__ will not be overridden.  
+    Assumes that methods such as __len__, __getitem__, and __iter__ will not be overridden.
 
     Args:
         dataset_name (Optional[str]): The name of the dataset, for bookkeeping
@@ -29,10 +29,12 @@ class HuggingFaceDataset(ABC):
         self.dataset_name = dataset_name
         self.dataset_path = dataset_path
         self.config = config
-        
+
         # TODO: add unique identifiers for dataset description?
 
     @abstractmethod
-    def split(self, split: Optional[List[Tuple[float, float]]]) -> List[Optional[Union["Dataset", "IterableDataset"]]]:
+    def split(
+        self, split: Optional[List[Tuple[float, float]]]
+    ) -> List[Optional[Union["Dataset", "IterableDataset"]]]:
         """split dataset"""
         raise NotImplementedError

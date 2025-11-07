@@ -22,7 +22,9 @@ from copy import deepcopy
 
 @register_model_provider(model_family=[VisionLanguageModelFamilies.COGVLM2])
 def cogvlm_model_provider(
-    pre_process: bool = True, post_process: bool = True, parallel_output: bool = True,
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
 ) -> CogVLMModel:
     """Builds the CogVlm model.
 
@@ -36,14 +38,13 @@ def cogvlm_model_provider(
     """
     args = get_args()
 
-    print_rank_0('building CovVLM model ...')
+    print_rank_0("building CovVLM model ...")
 
     config = build_transformer_config(args)
-    
+
     language_config = deepcopy(config)
     vision_config = deepcopy(config)
     adapter_config = deepcopy(config)
-
 
     for k, v in asdict(get_vision_config()).items():
         setattr(vision_config, k, v)
@@ -51,7 +52,6 @@ def cogvlm_model_provider(
     for k, v in asdict(get_adapeter_config()).items():
         setattr(adapter_config, k, v)
 
-    
     if args.use_legacy_models:
         raise ValueError("Classic Megatron-LM models are not supported.")
 
@@ -60,9 +60,9 @@ def cogvlm_model_provider(
     else:
         adapter_layer_spec = get_adapeter_layer_with_spec()
         vision_layer_spec = get_vision_layer_with_spec()
-        language_layer_spec = get_language_layer_with_spec(args.num_experts,
-                                                           args.moe_grouped_gemm,
-                                                           args.qk_layernorm)
+        language_layer_spec = get_language_layer_with_spec(
+            args.num_experts, args.moe_grouped_gemm, args.qk_layernorm
+        )
 
     model = CogVLMModel(
         language_config=language_config,
@@ -85,16 +85,22 @@ def cogvlm_model_provider(
         seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
     )
 
-    if args.trainable_modules != ['all']:
+    if args.trainable_modules != ["all"]:
         train_language_model = "language_model" in args.trainable_modules
         train_vision_model = "vision_model" in args.trainable_modules
         train_adapter = "adapter" in args.trainable_modules
-        model.freeze(freeze_language_model=not train_language_model,
-                    freeze_vision_model=not train_vision_model,
-                    freeze_adapter=not train_adapter)
+        model.freeze(
+            freeze_language_model=not train_language_model,
+            freeze_vision_model=not train_vision_model,
+            freeze_adapter=not train_adapter,
+        )
 
-        train_language_expert_linear = "language_expert_linear" in args.trainable_modules
+        train_language_expert_linear = (
+            "language_expert_linear" in args.trainable_modules
+        )
         train_vision_expert_linear = "vision_expert_linear" in args.trainable_modules
-        model.unfreeze_expert_linear(train_language_expert_linear, train_vision_expert_linear)
+        model.unfreeze_expert_linear(
+            train_language_expert_linear, train_vision_expert_linear
+        )
 
     return model

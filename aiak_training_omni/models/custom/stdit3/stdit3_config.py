@@ -9,9 +9,10 @@ from aiak_training_omni.models.factory import register_model_config
 @dataclass
 class STDiT3Config:
     """configuration for STDiT3 model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     latent_in_channels: int
     latent_out_channels: int
     latent_patch_size: tuple
@@ -37,7 +38,9 @@ class STDiT3Config:
     attention_softmax_in_fp32: bool = True
 
 
-@register_model_config(model_family=VideoLanguageModelFamilies.STDIT3, model_arch="STDiT3-XL/2")
+@register_model_config(
+    model_family=VideoLanguageModelFamilies.STDIT3, model_arch="STDiT3-XL/2"
+)
 def STDiT3_XL_2():
     """STDiT3-XL/2"""
     return STDiT3Config(
@@ -50,12 +53,14 @@ def STDiT3_XL_2():
         latent_patch_size=(1, 2, 2),
         latent_space_scale=0.5,
         latent_time_scale=1.0,
-        position_embedding_type='rope',
+        position_embedding_type="rope",
         qk_layernorm=True,
     )
 
 
-@register_model_config(model_family=VideoLanguageModelFamilies.STDIT3, model_arch="STDiT3-3B/2")
+@register_model_config(
+    model_family=VideoLanguageModelFamilies.STDIT3, model_arch="STDiT3-3B/2"
+)
 def STDiT3_3B_2():
     """STDiT3-3B/2"""
     return STDiT3Config(
@@ -68,6 +73,6 @@ def STDiT3_3B_2():
         latent_patch_size=(1, 2, 2),
         latent_space_scale=0.5,
         latent_time_scale=1.0,
-        position_embedding_type='rope',
+        position_embedding_type="rope",
         qk_layernorm=True,
     )

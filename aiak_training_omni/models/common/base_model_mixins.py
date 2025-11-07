@@ -1,5 +1,4 @@
-"""Omni 基础混入类：编码器/foundation model/decoder的抽象接口。用于实现灵活的多模态组合。
-"""
+"""Omni 基础混入类：编码器/foundation model/decoder的抽象接口。用于实现灵活的多模态组合。"""
 
 from __future__ import annotations
 
@@ -7,8 +6,15 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Optional, Tuple, List
 
 import torch
-from transformers import BatchFeature, PreTrainedModel, PretrainedConfig, ProcessorMixin, AutoConfig
+from transformers import (
+    BatchFeature,
+    PreTrainedModel,
+    PretrainedConfig,
+    ProcessorMixin,
+    AutoConfig,
+)
 import logging
+
 logger = logging.getLogger(__name__)
 import dataclasses
 from dataclasses import fields, asdict
@@ -18,7 +24,6 @@ from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.transformer.module import MegatronModule
 import torch.nn.functional as F
-from aiak_training_llm.utils.constants import OmniModulerType
 from copy import deepcopy
 
 
@@ -93,7 +98,10 @@ class BaseMegatronVisionModuler(VisionModule):
 
 # TODO: 需要抽象？
 
-def base_position_id_func(input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
+
+def base_position_id_func(
+    input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs
+) -> Dict[str, torch.Tensor]:
     """Base function to generate position ids."""
     if len(input_ids.shape) == 1:
         input_ids = input_ids.unsqueeze(0)
@@ -116,8 +124,7 @@ class PositionIDFuncCompose:
 
 
 class BaseFoundationModelMixin(PreTrainedModel, ABC):
-    """统一的foundation model(LLM)模型混入类。
-    """
+    """统一的foundation model(LLM)模型混入类。"""
 
     def get_generation_position_id(self, **kwargs: Any) -> Dict[str, torch.Tensor]:
         """获取生成位置id"""
@@ -139,7 +146,11 @@ class BaseDecoderModelMixin(PreTrainedModel, ABC):
     """统一decoder模型混入类。"""
 
     @abstractmethod
-    def forward_loss(self, decoder_inputs: Dict[str, torch.Tensor], foundation_outputs: torch.Tensor,
-                     **kwargs: Any) -> Dict[str, torch.Tensor]:
+    def forward_loss(
+        self,
+        decoder_inputs: Dict[str, torch.Tensor],
+        foundation_outputs: torch.Tensor,
+        **kwargs: Any,
+    ) -> Dict[str, torch.Tensor]:
         """计算decoder损失函数 ，用于训练阶段。"""
         raise NotImplementedError

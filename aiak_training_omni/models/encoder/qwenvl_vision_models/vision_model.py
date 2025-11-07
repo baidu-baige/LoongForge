@@ -1,4 +1,4 @@
-""" VisionTransformer module """
+"""VisionTransformer module"""
 
 import torch
 import torch.nn.functional as F
@@ -9,13 +9,13 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import ModuleSpec
 from .vision_transformer_block import TransformerBlock
 from .qwen2_vl_config import QwenVisionConfig, QwenVisionRMSNormConfig
-from aiak_training_llm.models.omni.base_mixins import BaseMegatronVisionModuler
-from .qwen2_vl_layer_spec import get_vision_layer_with_spec
-
+from aiak_training_omni.models.common import BaseMegatronVisionModuler
+from aiak_training_omni.utils.utils import import_module
 
 
 class PatchEmbed(torch.nn.Module):
-    """" Patch Embedding """
+    """ " Patch Embedding"""
+
     def __init__(
         self,
         patch_size: int = 14,
@@ -30,42 +30,64 @@ class PatchEmbed(torch.nn.Module):
         self.embed_dim = embed_dim
 
         kernel_size = [temporal_patch_size, patch_size, patch_size]
-        self.proj = torch.nn.Conv3d(in_channels, embed_dim, kernel_size=kernel_size, stride=kernel_size, bias=False)
+        self.proj = torch.nn.Conv3d(
+            in_channels,
+            embed_dim,
+            kernel_size=kernel_size,
+            stride=kernel_size,
+            bias=False,
+        )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        """" Forward pass """
+        """ " Forward pass"""
         target_dtype = self.proj.weight.dtype
         hidden_states = hidden_states.view(
-            -1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size
+            -1,
+            self.in_channels,
+            self.temporal_patch_size,
+            self.patch_size,
+            self.patch_size,
         )
-        hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(-1, self.embed_dim)
+        hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(
+            -1, self.embed_dim
+        )
         return hidden_states
 
 
 class VisionRotaryEmbedding(torch.nn.Module):
-    """" Rotary Position Embedding """
+    """ " Rotary Position Embedding"""
+
     def __init__(self, dim: int, theta: float = 10000.0) -> None:
         super().__init__()
         inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float) / dim))
         self.inv_freq = inv_freq.to(torch.cuda.current_device())
 
     def forward(self, seqlen: int) -> torch.Tensor:
-        """ Forward Pass """
-        seq = torch.arange(seqlen, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
+        """Forward Pass"""
+        seq = torch.arange(
+            seqlen, device=self.inv_freq.device, dtype=self.inv_freq.dtype
+        )
         freqs = torch.outer(seq, self.inv_freq)
         return freqs
 
 
 class VisionModel(BaseMegatronVisionModuler):
-    """VisionTransformer model. """
+    """VisionTransformer model."""
+
     config_class = QwenVisionConfig
-    def __init__(self, 
-        config: TransformerConfig,
-        train_args=None,
-        spatial_merge_size: int = 2,
+
+    def __init__(
+        self, config: TransformerConfig, spatial_merge_size: int = 2, **kwargs
     ) -> None:
-        super().__init__(config, train_args)
-        self.transformer_layer_spec = get_vision_layer_with_spec()
+        super().__init__(config)
+        if self.config.model_spec is None:
+            model_spec = [
+                "aiak_training_omni.models.encoder.qwenvl_vision_models.qwen2_vl_layer_spec",
+                "get_vision_layer_with_spec",
+            ]
+        else:
+            model_spec = self.config.model_spec
+        self.transformer_layer_spec = import_module(model_spec, self.config)
         self.model_type = ModelType.encoder_or_decoder
         self.spatial_merge_size = spatial_merge_size
 
@@ -93,7 +115,7 @@ class VisionModel(BaseMegatronVisionModuler):
         self.decoder.set_input_tensor(input_tensor)
 
     def rot_pos_emb(self, grid_thw):
-        """ rotation position embedding """
+        """rotation position embedding"""
         pos_ids = []
         for t, h, w in grid_thw:
             hpos_ids = torch.arange(h).unsqueeze(1).expand(-1, w)
@@ -122,49 +144,62 @@ class VisionModel(BaseMegatronVisionModuler):
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(1)
         return rotary_pos_emb
 
-    def forward(self, images: torch.Tensor, image_grid_thw: torch.Tensor) -> torch.Tensor:
-        """ forward function """
+    def forward(
+        self, images: torch.Tensor, image_grid_thw: torch.Tensor
+    ) -> torch.Tensor:
+        """forward function"""
         rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
         rotary_pos_emb = rotary_pos_emb.unsqueeze(1).unsqueeze(2).float()
 
         x = self.patch_embed(images)
         x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
-        x = self.decoder(x, rotary_pos_emb=rotary_pos_emb, attention_mask=None, attn_mask_type=AttnMaskType.no_mask)
+        x = self.decoder(
+            x,
+            rotary_pos_emb=rotary_pos_emb,
+            attention_mask=None,
+            attn_mask_type=AttnMaskType.no_mask,
+        )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
         return x, None
 
 
 class VisionModelWithRMSNorm(VisionModel):
-    """ VisionModel With RMSNorm """
+    """VisionModel With RMSNorm"""
+
     config_class = QwenVisionRMSNormConfig
-    def __init__(self,
+
+    def __init__(
+        self,
         config: TransformerConfig,
-        train_args: any = None,
         spatial_merge_size: int = 2,
         fullatt_block_indexes: list = [7, 15, 23, 31],
         window_size: int = 112,
+        **kwargs,
     ) -> None:
-        super().__init__(config, train_args, spatial_merge_size=spatial_merge_size)
-        self.transformer_layer_spec = get_vision_layer_with_spec()
+        super().__init__(config, spatial_merge_size=spatial_merge_size)
         self.patch_size = config.patch_size
         self.fullatt_block_indexes = fullatt_block_indexes
         self.window_size = window_size
         self.spatial_merge_unit = self.spatial_merge_size * self.spatial_merge_size
 
     def get_window_index(self, grid_thw):
-        """" Get window index for each token """
+        """ " Get window index for each token"""
 
         window_index: list = []
         cu_window_seqlens: list = [0]
         window_index_id = 0
-        vit_merger_window_size = self.window_size // self.spatial_merge_size // self.patch_size
+        vit_merger_window_size = (
+            self.window_size // self.spatial_merge_size // self.patch_size
+        )
 
         for grid_t, grid_h, grid_w in grid_thw:
             llm_grid_h, llm_grid_w = (
                 grid_h // self.spatial_merge_size,
                 grid_w // self.spatial_merge_size,
             )
-            index = torch.arange(grid_t * llm_grid_h * llm_grid_w).reshape(grid_t, llm_grid_h, llm_grid_w)
+            index = torch.arange(grid_t * llm_grid_h * llm_grid_w).reshape(
+                grid_t, llm_grid_h, llm_grid_w
+            )
             pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size
             pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
             num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size
@@ -187,7 +222,9 @@ class VisionModelWithRMSNorm(VisionModel):
             index_padded = index_padded.reshape(-1)
             index_new = index_padded[index_padded != -100]
             window_index.append(index_new + window_index_id)
-            cu_seqlens_tmp = seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+            cu_seqlens_tmp = (
+                seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+            )
             cu_window_seqlens.extend(cu_seqlens_tmp.tolist())
             window_index_id += (grid_t * llm_grid_h * llm_grid_w).item()
         window_index = torch.cat(window_index, dim=0)
@@ -209,11 +246,15 @@ class VisionModelWithRMSNorm(VisionModel):
         x = x.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
         x = x[window_index, :, :]
         x = x.reshape(seq_len, -1)
-        rotary_pos_emb = rotary_pos_emb.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
+        rotary_pos_emb = rotary_pos_emb.reshape(
+            seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1
+        )
         rotary_pos_emb = rotary_pos_emb[window_index, :, :]
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
 
-        cu_seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
+        cu_seqlens = torch.repeat_interleave(
+            grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]
+        ).cumsum(
             dim=0,
             # Select dtype based on the following factors:
             #  - FA2 requires that cu_seqlens_q must have dtype int32
@@ -226,14 +267,25 @@ class VisionModelWithRMSNorm(VisionModel):
         x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
         x = self.decoder(
             x,
-            packed_seq_params=[PackedSeqParams(
-                qkv_format="thd",
-                cu_seqlens_q=cu_seqlens if i in self.fullatt_block_indexes else cu_window_seqlens,
-                cu_seqlens_kv=cu_seqlens if i in self.fullatt_block_indexes else cu_window_seqlens,
-            ) for i in range(self.config.num_layers)],
+            packed_seq_params=[
+                PackedSeqParams(
+                    qkv_format="thd",
+                    cu_seqlens_q=(
+                        cu_seqlens
+                        if i in self.fullatt_block_indexes
+                        else cu_window_seqlens
+                    ),
+                    cu_seqlens_kv=(
+                        cu_seqlens
+                        if i in self.fullatt_block_indexes
+                        else cu_window_seqlens
+                    ),
+                )
+                for i in range(self.config.num_layers)
+            ],
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask
+            attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 

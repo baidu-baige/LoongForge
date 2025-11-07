@@ -6,7 +6,10 @@ from typing import Union
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.transformer.transformer_layer import TransformerLayer, TransformerLayerSubmodules
+from megatron.core.transformer.transformer_layer import (
+    TransformerLayer,
+    TransformerLayerSubmodules,
+)
 
 from megatron.core.utils import make_viewless_tensor
 
@@ -22,6 +25,7 @@ class TransformerLayerCogvlmSubmodules(TransformerLayerSubmodules):
         moe_mlp (Union[ModuleSpec, type], optional): Specification or type of the MLP module for MoE.
             Defaults to IdentityOp.
     """
+
     post_self_attn_layernorm: Union[ModuleSpec, type] = IdentityOp
     post_cross_attn_layernorm: Union[ModuleSpec, type] = IdentityOp
     post_mlp_layernorm: Union[ModuleSpec, type] = IdentityOp
@@ -44,19 +48,24 @@ class TransformerLayerCogvlm(TransformerLayer):
     ):
         """
             Initializes the TransformerLayerDeepSeek module.
-        
+
         Args:
             config (TransformerConfig): The configuration of the model.
             submodules (TransformerLayerDeepSeekSubmodules): The submodules of the model.
             layer_number (int, optional): The number of the current layer. Defaults to 1.
             hidden_dropout (float, optional): The dropout probability for the hidden state. Defaults to None.
             **kwargs (dict, optional): Additional keyword arguments passed to the parent class. Defaults to {}.
-        
+
         Raises:
             ValueError: If the `submodules` argument is not a valid type.
         """
         super(TransformerLayerCogvlm, self).__init__(
-            config=config, submodules=submodules, layer_number=layer_number, hidden_dropout=hidden_dropout, **kwargs)
+            config=config,
+            submodules=submodules,
+            layer_number=layer_number,
+            hidden_dropout=hidden_dropout,
+            **kwargs,
+        )
 
         self.post_self_attn_layernorm = build_module(
             submodules.post_self_attn_layernorm,
@@ -117,16 +126,22 @@ class TransformerLayerCogvlm(TransformerLayer):
             **kwargs,
         )
 
-        if self.post_self_attn_layernorm is not None and not isinstance(self.post_self_attn_layernorm, IdentityOp):
-            attention_output_with_bias = \
-                self.post_self_attn_layernorm(attention_output_with_bias[0] + attention_output_with_bias[1]), None
+        if self.post_self_attn_layernorm is not None and not isinstance(
+            self.post_self_attn_layernorm, IdentityOp
+        ):
+            attention_output_with_bias = (
+                self.post_self_attn_layernorm(
+                    attention_output_with_bias[0] + attention_output_with_bias[1]
+                ),
+                None,
+            )
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.self_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                attention_output_with_bias, residual, self.hidden_dropout
-            )
+            hidden_states = self.self_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(attention_output_with_bias, residual, self.hidden_dropout)
 
         # Residual connection.
         residual = hidden_states
@@ -144,19 +159,28 @@ class TransformerLayerCogvlm(TransformerLayer):
             **kwargs,
         )
 
-        if self.post_cross_attn_layernorm is not None and not isinstance(self.post_cross_attn_layernorm, IdentityOp):
-            attention_output_with_bias = \
-                self.post_cross_attn_layernorm(attention_output_with_bias[0] + attention_output_with_bias[1]), None
+        if self.post_cross_attn_layernorm is not None and not isinstance(
+            self.post_cross_attn_layernorm, IdentityOp
+        ):
+            attention_output_with_bias = (
+                self.post_cross_attn_layernorm(
+                    attention_output_with_bias[0] + attention_output_with_bias[1]
+                ),
+                None,
+            )
 
-        if isinstance(attention_output_with_bias, dict) and "context" in attention_output_with_bias:
+        if (
+            isinstance(attention_output_with_bias, dict)
+            and "context" in attention_output_with_bias
+        ):
             context = attention_output_with_bias["context"]
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.cross_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                attention_output_with_bias, residual, self.hidden_dropout
-            )
+            hidden_states = self.cross_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(attention_output_with_bias, residual, self.hidden_dropout)
 
         # Residual connection.
         residual = hidden_states
@@ -167,15 +191,22 @@ class TransformerLayerCogvlm(TransformerLayer):
         # MLP.
         mlp_output_with_bias = self.mlp(pre_mlp_layernorm_output, **kwargs)
 
-        if self.post_mlp_layernorm is not None and not isinstance(self.post_mlp_layernorm, IdentityOp):
-            mlp_output_with_bias = self.post_mlp_layernorm(mlp_output_with_bias[0] + mlp_output_with_bias[1]), None
+        if self.post_mlp_layernorm is not None and not isinstance(
+            self.post_mlp_layernorm, IdentityOp
+        ):
+            mlp_output_with_bias = (
+                self.post_mlp_layernorm(
+                    mlp_output_with_bias[0] + mlp_output_with_bias[1]
+                ),
+                None,
+            )
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.mlp_bda(self.training, self.config.bias_dropout_fusion)(
-                mlp_output_with_bias, residual, self.hidden_dropout
-            )
+            hidden_states = self.mlp_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(mlp_output_with_bias, residual, self.hidden_dropout)
 
         # Jit compiled function creates 'view' tensor. This tensor
         # potentially gets saved in the MPU checkpoint function context,
@@ -184,7 +215,9 @@ class TransformerLayerCogvlm(TransformerLayer):
         # p2p_communication), it serves to document the origin of this
         # 'view' tensor.
         output = make_viewless_tensor(
-            inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
+            inp=hidden_states,
+            requires_grad=hidden_states.requires_grad,
+            keep_graph=True,
         )
 
         return output, context

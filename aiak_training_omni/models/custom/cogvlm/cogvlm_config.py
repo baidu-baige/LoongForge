@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from aiak_training_omni.utils.constants import VisionLanguageModelFamilies
 from aiak_training_omni.models.factory import register_model_config
 
+
 @dataclass
 class VisionConfig:
     """configuration for vision model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -35,14 +37,15 @@ class VisionConfig:
     add_bias_linear: bool = False
     add_qkv_bias: bool = False
     position_embedding_type: str = "none"
-    
+
 
 @dataclass
 class AdapterConfig:
     """configuration for adapter model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     hidden_size: int
     ffn_hidden_size: int
     normalization: str
@@ -52,12 +55,14 @@ class AdapterConfig:
     bias_activation_fusion: bool = True
     activation_func: torch.nn.Module = torch.nn.functional.silu
 
+
 @dataclass
 class LanguageConfig:
     """configuration for cogvlm model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -78,7 +83,10 @@ class LanguageConfig:
     apply_rope_fusion: bool = True
 
 
-@register_model_config(model_family=VisionLanguageModelFamilies.COGVLM2, model_arch="cogvlm2-llama3-chinese-chat-19b")
+@register_model_config(
+    model_family=VisionLanguageModelFamilies.COGVLM2,
+    model_arch="cogvlm2-llama3-chinese-chat-19b",
+)
 def cogvlm2_llama3_chinese_chat_19b():
     """cogvlm2-llama3-chinese-chat-19B"""
     return LanguageConfig(
@@ -91,8 +99,9 @@ def cogvlm2_llama3_chinese_chat_19b():
         apply_rope_fusion=False,
     )
 
+
 def get_vision_config():
-    """ get vision config """
+    """get vision config"""
     return VisionConfig(
         num_layers=63,
         hidden_size=1792,
@@ -111,9 +120,7 @@ def get_vision_config():
 
 
 def get_adapeter_config():
-    """ get adapeter config """
+    """get adapeter config"""
     return AdapterConfig(
-        hidden_size=4096,
-        ffn_hidden_size=14336,
-        normalization="LayerNorm"
+        hidden_size=4096, ffn_hidden_size=14336, normalization="LayerNorm"
     )

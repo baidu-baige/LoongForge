@@ -13,12 +13,14 @@ from megatron.core import mpu, tensor_parallel
 
 from megatron.training.arguments import (
     parse_args,
-    validate_args as validate_megatron_args
+    validate_args as validate_megatron_args,
 )
 
 from megatron.training.checkpointing import load_args_from_checkpoint
 from megatron.training.async_utils import init_persistent_async_worker
-from megatron.training.global_vars import set_global_variables as set_megatron_global_variables
+from megatron.training.global_vars import (
+    set_global_variables as set_megatron_global_variables,
+)
 from megatron.core.rerun_state_machine import (
     RerunDiagnostic,
     RerunErrorInjector,
@@ -31,7 +33,7 @@ from megatron.training.initialize import (
     _set_random_seed,
     _init_autoresume,
     _compile_dependencies,
-    _initialize_tp_communicators
+    _initialize_tp_communicators,
 )
 
 from .global_vars import set_aiak_extra_global_vars
@@ -47,7 +49,7 @@ def parse_arguments(
 ):
     """Parse arguments."""
     args = parse_args(extra_args_provider, ignore_unknown_args)
-    
+
     # Prep for checkpoint conversion.
     if args.ckpt_convert_format is not None:
         assert args.ckpt_convert_save is not None
@@ -73,7 +75,7 @@ def parse_arguments(
 
     assert args.yaml_cfg is None, "yaml_cfg is not supported in AIAK-Training-Omni yet"
     validate_megatron_args(args)
-    
+
     return args
 
 
@@ -82,7 +84,7 @@ def initialize_aiak_megatron(
     allow_no_cuda=False,
     skip_mpu_initialization=False,
     get_embedding_ranks=None,
-    get_position_embedding_ranks=None
+    get_position_embedding_ranks=None,
 ):
     """Set global variables, initialize distributed, and
     set autoresume and random seeds.
@@ -111,11 +113,15 @@ def initialize_aiak_megatron(
 
     # init rerun state
     def state_save_func():
-        return {'rng_tracker_states': tensor_parallel.get_cuda_rng_tracker().get_states()}
+        return {
+            "rng_tracker_states": tensor_parallel.get_cuda_rng_tracker().get_states()
+        }
 
     def state_restore_func(state_dict):
-        if state_dict['rng_tracker_states']:
-            tensor_parallel.get_cuda_rng_tracker().set_states(state_dict['rng_tracker_states'])
+        if state_dict["rng_tracker_states"]:
+            tensor_parallel.get_cuda_rng_tracker().set_states(
+                state_dict["rng_tracker_states"]
+            )
 
     initialize_rerun_state_machine(
         state_save_func=state_save_func,
@@ -127,7 +133,7 @@ def initialize_aiak_megatron(
         ),
         result_rejected_tracker_filename=args.result_rejected_tracker_filename,
     )
-    
+
     # torch.distributed initialization
     def finish_mpu_init():
         """torch.distributed initialization"""
@@ -147,7 +153,7 @@ def initialize_aiak_megatron(
 
     if skip_mpu_initialization:
         return None
-    
+
     if args.lazy_mpu_init:
         # TODO is this still a necessary option?
         args.use_cpu_initialization = True
@@ -169,14 +175,14 @@ def initialize_aiak_megatron(
         _compile_dependencies()
 
         if args.tp_comm_overlap:
-           _initialize_tp_communicators()
+            _initialize_tp_communicators()
 
         # No continuation function
         return None
 
 
 def setup_logging(args) -> None:
-    """ Sets the default logging level based on cmdline args and env vars.
+    """Sets the default logging level based on cmdline args and env vars.
 
     Precedence:
     1. Command line argument `--logging-level`
@@ -186,12 +192,12 @@ def setup_logging(args) -> None:
     Returns: None
     """
     logging_level = None
-    env_logging_level = os.getenv('MEGATRON_LOGGING_LEVEL', None)
+    env_logging_level = os.getenv("MEGATRON_LOGGING_LEVEL", None)
     if env_logging_level is not None:
         logging_level = int(env_logging_level)
     if args.logging_level is not None:
         logging_level = args.logging_level
 
     if logging_level is not None:
-        logger.info(f'Setting logging level to {logging_level}')
+        logger.info(f"Setting logging level to {logging_level}")
         logging.getLogger().setLevel(logging_level)

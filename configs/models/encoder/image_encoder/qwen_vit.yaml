@@ -1,12 +1,13 @@
 defaults:
   # <folder_name>@<field_name>.<field_name>: <yaml_file_name>
   #- ../image_encoder@: base
+  #- ../../base_model
   - _self_
 
 # image_encoder:
 model_name: qwen_vit
 
-num_layers: 32
+num_layers: 10
 
 hidden_size: 1280
 
@@ -40,7 +41,7 @@ hidden_dropout: 0.0
 
 layernorm_epsilon: 0
 
-activation_func: quick_gelu  # Assuming quick_gelu is defined elsewhere
+# activation_func: quick_gelu  # Assuming quick_gelu is defined elsewhere
 
 bias_activation_fusion: false
 

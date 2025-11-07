@@ -1,4 +1,5 @@
 """utils for sft"""
+
 import logging
 
 from typing import TYPE_CHECKING, List, Optional, Union, Any, Type
@@ -27,7 +28,9 @@ logger = logging.getLogger(__name__)
 
 
 ######## utils for build dataset ########
-def get_dataset_blend_from_list(dataset_names: Optional[List[str]]) -> Optional[List[str]]:
+def get_dataset_blend_from_list(
+    dataset_names: Optional[List[str]],
+) -> Optional[List[str]]:
     """get dataset from list"""
     if dataset_names is None:
         return None
@@ -43,27 +46,35 @@ def _cyclic_iter(iter):
 
 
 def build_sft_data_collator(
-        cls: Type[DataCollatorForSupervisedDataset],
-        **kwargs
-    ) -> DataCollatorForSupervisedDataset:
+    cls: Type[DataCollatorForSupervisedDataset], **kwargs
+) -> DataCollatorForSupervisedDataset:
     """build data collator for sft"""
     args = get_args()
     tokenizer = get_tokenizer()
 
-    assert isinstance(tokenizer, AutoTokenizerFromHF), \
-        f"Only support HFTokenizer for sft, but got {args.tokenizer_type}."
+    assert isinstance(
+        tokenizer, AutoTokenizerFromHF
+    ), f"Only support HFTokenizer for sft, but got {args.tokenizer_type}."
 
     pad_to_multiple_of = 1
     # When using sequence parallel, sequence will further be split by TP size
     # When using context parallel, sequence is split by CP size as well
-    pad_to_multiple_of *= args.tensor_model_parallel_size if args.sequence_parallel else 1
-    pad_to_multiple_of *= (2 * args.context_parallel_size) if args.context_parallel_size > 1 else 1
+    pad_to_multiple_of *= (
+        args.tensor_model_parallel_size if args.sequence_parallel else 1
+    )
+    pad_to_multiple_of *= (
+        (2 * args.context_parallel_size) if args.context_parallel_size > 1 else 1
+    )
 
     # https://github.com/NVIDIA/TransformerEngine/blob/v2.4/transformer_engine/pytorch/utils.py#L425
     # https://github.com/NVIDIA/TransformerEngine/blob/main/transformer_engine/common/gemm/cublaslt_gemm.cu#L151
     pad_to_multiple_of *= 16 if args.fp8 else 1
 
-    padding = PaddingStrategy.LONGEST if args.variable_seq_lengths else PaddingStrategy.MAX_LENGTH
+    padding = (
+        PaddingStrategy.LONGEST
+        if args.variable_seq_lengths
+        else PaddingStrategy.MAX_LENGTH
+    )
 
     data_collator = cls(
         tokenizer=tokenizer.hf_tokenizer(),
@@ -71,9 +82,10 @@ def build_sft_data_collator(
         pad_to_multiple_of=pad_to_multiple_of,
         padding=padding,
         max_length=args.seq_length,
-        **kwargs
+        **kwargs,
     )
     return data_collator
+
 
 class _IterableWithState:
     def __init__(self, dataloader):
@@ -91,7 +103,7 @@ class _IterableWithState:
             return batch
         except StopIteration:
             self._iterator = iter(self.dataloader)
-            #self.step = 0
+            # self.step = 0
             batch = next(self._iterator)
             self.step += 1
             return batch
@@ -109,6 +121,7 @@ class _IterableWithState:
             next(self._iterator)
         self.step = target
 
+
 class SavableCyclicIterator:
     """
     Cyclic iterator that:
@@ -116,6 +129,7 @@ class SavableCyclicIterator:
       - yields batches infinitely
     Compatible with Megatron's maybe_save_dataloader_state().
     """
+
     def __init__(self, dataloader):
         self.iterable = _IterableWithState(dataloader)
         self._iterator = self._cyclic_iter(self.iterable)
@@ -130,7 +144,7 @@ class SavableCyclicIterator:
 
     def __next__(self):
         return next(self._iterator)
-    
+
     def save_state(self):
         """dataloader save state"""
         return self.iterable.save_state()
@@ -138,11 +152,13 @@ class SavableCyclicIterator:
     def load_state(self, state):
         """dataloader load state"""
         return self.iterable.load_state(state)
-    
+
+
 def _build_cylic_iterator(
     dataset: Union["Dataset", "IterableDataset"],
     consumed_samples: int,
-    data_collator: DataCollatorForSupervisedDataset):
+    data_collator: DataCollatorForSupervisedDataset,
+):
     """build data iterator for sft"""
     if dataset is None:
         return None
@@ -171,7 +187,7 @@ def _build_cylic_iterator(
         _batch_sampler = MegatronPretrainingRandomSampler(
             dataset,
             total_samples=len(dataset),
-            consumed_samples=consumed_samples, # not support for streaming now!
+            consumed_samples=consumed_samples,  # not support for streaming now!
             micro_batch_size=args.micro_batch_size,
             data_parallel_rank=mpu.get_data_parallel_rank(),
             data_parallel_size=mpu.get_data_parallel_world_size(),
@@ -182,7 +198,7 @@ def _build_cylic_iterator(
             batch_sampler=_batch_sampler,
             persistent_workers=True if args.num_workers > 0 else False,
         )
-    
+
     dataloader = DataLoader(
         dataset,
         collate_fn=data_collator,
@@ -190,11 +206,12 @@ def _build_cylic_iterator(
         pin_memory=True,
         **_dataloader_kwargs,
     )
-    
+
     if args.dataloader_save is not None:
         return SavableCyclicIterator(dataloader)
     else:
-        return iter(_cyclic_iter(dataloader))    
+        return iter(_cyclic_iter(dataloader))
+
 
 def build_sft_cyclic_iterators(
     train_ds: Optional[Union["Dataset", "IterableDataset"]],
@@ -204,8 +221,12 @@ def build_sft_cyclic_iterators(
 ):
     """build data iterators for sft"""
     args = get_args()
-    train_iter = _build_cylic_iterator(train_ds, args.consumed_train_samples, data_collator)
-    valid_iter = _build_cylic_iterator(valid_ds, 0 if args.skip_train else args.consumed_valid_samples, data_collator)
+    train_iter = _build_cylic_iterator(
+        train_ds, args.consumed_train_samples, data_collator
+    )
+    valid_iter = _build_cylic_iterator(
+        valid_ds, 0 if args.skip_train else args.consumed_valid_samples, data_collator
+    )
     test_iter = _build_cylic_iterator(test_ds, 0, data_collator)
     return train_iter, valid_iter, test_iter
 
@@ -237,7 +258,11 @@ def _get_attention_mask(attention_mask: torch.Tensor) -> torch.Tensor:
         # and micro-batch-size does not need to be increased, nor padding occurs
         # create causal mask here, shape [B, 1, S, S].
         attention_mask = torch.tril(
-            torch.ones((batch_size, seq_length, seq_length), dtype=torch.long, device=current_device)
+            torch.ones(
+                (batch_size, seq_length, seq_length),
+                dtype=torch.long,
+                device=current_device,
+            )
         )
         attention_mask.unsqueeze_(1)
         attention_mask = (attention_mask < 0.5).bool()
@@ -274,7 +299,7 @@ def _get_packed_sequence_params(attention_mask: torch.Tensor) -> PackedSeqParams
     cu_seqlens = torch.cat((zero, cu_seqlens))
 
     packed_seq_params.cu_seqlens_q = cu_seqlens
-    packed_seq_params.cu_seqlens_kv = cu_seqlens # just for self-attention
+    packed_seq_params.cu_seqlens_kv = cu_seqlens  # just for self-attention
     packed_seq_params.max_seqlen_q = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
     packed_seq_params.max_seqlen_kv = packed_seq_params.max_seqlen_q
 
@@ -295,13 +320,17 @@ def get_batch_on_this_tp_rank(data_iterator):
     required_keys = ["attention_mask"]
 
     if args.pipeline_model_parallel_size == 1:
-        required_keys += ["input_ids", "labels"] + (["loss_mask"] if not args.eod_mask_loss else [])
+        required_keys += ["input_ids", "labels"] + (
+            ["loss_mask"] if not args.eod_mask_loss else []
+        )
 
     elif mpu.is_pipeline_first_stage():
         required_keys.append("input_ids")
 
     elif mpu.is_pipeline_last_stage():
-        required_keys += ["input_ids", "labels"] + (["loss_mask"] if not args.eod_mask_loss else [])
+        required_keys += ["input_ids", "labels"] + (
+            ["loss_mask"] if not args.eod_mask_loss else []
+        )
 
     data_b = tensor_parallel.broadcast_data(required_keys, data, torch.int64)
 
@@ -313,8 +342,7 @@ def get_batch_on_this_tp_rank(data_iterator):
 
     # set AIAK-ACCELERATOR custom_roll
     try:
-        from aiak_accelerator.multiacc_engine import \
-                multiacc_utils
+        from aiak_accelerator.multiacc_engine import multiacc_utils
     except ImportError:
         multiacc_utils = None
 
@@ -351,10 +379,14 @@ def get_batch_on_this_tp_rank(data_iterator):
     packed_seq_params = None
 
     if not args.packing_sft_data:
-        attention_mask, attn_mask_type = _get_attention_mask(data_b["attention_mask"].long())
+        attention_mask, attn_mask_type = _get_attention_mask(
+            data_b["attention_mask"].long()
+        )
     else:
         # attention_mask will be ignored in te
-        packed_seq_params, attn_mask_type = _get_packed_sequence_params(data_b["attention_mask"].long())
+        packed_seq_params, attn_mask_type = _get_packed_sequence_params(
+            data_b["attention_mask"].long()
+        )
 
     batch = {
         "tokens": tokens,
@@ -363,7 +395,7 @@ def get_batch_on_this_tp_rank(data_iterator):
         "position_ids": position_ids,
         "attention_mask": attention_mask,
         "attn_mask_type": attn_mask_type,
-        "packed_seq_params": packed_seq_params
+        "packed_seq_params": packed_seq_params,
     }
 
     return batch

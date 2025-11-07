@@ -1,4 +1,5 @@
 """baichuan model provider"""
+
 import inspect
 from contextlib import nullcontext
 
@@ -13,9 +14,13 @@ from .baichuan_model import BaichuanModel
 from .baichuan_layer_spec import get_baichuan_layer_with_te_spec
 
 
-@register_model_provider(model_family=[LanguageModelFamilies.BAICHUAN, LanguageModelFamilies.BAICHUAN2])
+@register_model_provider(
+    model_family=[LanguageModelFamilies.BAICHUAN, LanguageModelFamilies.BAICHUAN2]
+)
 def baichuan_model_provider(
-    pre_process: bool = True, post_process: bool = True, parallel_output: bool = True,
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
 ) -> BaichuanModel:
     """Builds the baichuan model.
 
@@ -29,7 +34,7 @@ def baichuan_model_provider(
     """
     args = get_args()
 
-    print_rank_0('building Baichuan model ...')
+    print_rank_0("building Baichuan model ...")
     config = build_transformer_config(args)
 
     if args.use_legacy_models:
@@ -50,10 +55,15 @@ def baichuan_model_provider(
             build_model_context_args["enabled"] = True
 
             # Check if fp8_model_init supports preserve_high_precision_init_val
-            if "preserve_high_precision_init_val" in inspect.signature(fp8_model_init).parameters:
+            if (
+                "preserve_high_precision_init_val"
+                in inspect.signature(fp8_model_init).parameters
+            ):
                 build_model_context_args["preserve_high_precision_init_val"] = True
         except:
-            raise RuntimeError("--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found.")
+            raise RuntimeError(
+                "--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found."
+            )
 
     with build_model_context(**build_model_context_args):
         model = BaichuanModel(

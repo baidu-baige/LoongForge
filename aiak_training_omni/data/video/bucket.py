@@ -1,4 +1,4 @@
-""" buck module """
+"""buck module"""
 
 from collections import OrderedDict
 import numpy as np
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def find_approximate_hw(hw, hw_dict, approx=0.8):
-    """ find the largest bucket that is smaller than hw """
+    """find the largest bucket that is smaller than hw"""
     for k, v in hw_dict.items():
         if hw >= v * approx:
             return k
@@ -17,7 +17,7 @@ def find_approximate_hw(hw, hw_dict, approx=0.8):
 
 
 def find_closet_smaller_bucket(t, t_dict, frame_interval):
-    """ find the closest smaller bucket """
+    """find the closest smaller bucket"""
     # process image
     if t == 1:
         if 1 in t_dict:
@@ -32,7 +32,8 @@ def find_closet_smaller_bucket(t, t_dict, frame_interval):
 
 
 class Bucket:
-    """ Bucket class """
+    """Bucket class"""
+
     def __init__(self, bucket_config):
         for key in bucket_config:
             assert key in ASPECT_RATIOS, f"Aspect ratio {key} not found."
@@ -40,13 +41,20 @@ class Bucket:
         # wrap config with OrderedDict
         bucket_probs = OrderedDict()
         bucket_bs = OrderedDict()
-        bucket_names = sorted(bucket_config.keys(), key=lambda x: ASPECT_RATIOS[x][0], reverse=True)
+        bucket_names = sorted(
+            bucket_config.keys(), key=lambda x: ASPECT_RATIOS[x][0], reverse=True
+        )
         for key in bucket_names:
-            bucket_time_names = sorted(bucket_config[key].keys(), key=lambda x: x, reverse=True)
-            bucket_probs[key] = OrderedDict({k: bucket_config[key][k][0] for k in bucket_time_names})
-            bucket_bs[key] = OrderedDict({k: bucket_config[key][k][1] for k in bucket_time_names})
+            bucket_time_names = sorted(
+                bucket_config[key].keys(), key=lambda x: x, reverse=True
+            )
+            bucket_probs[key] = OrderedDict(
+                {k: bucket_config[key][k][0] for k in bucket_time_names}
+            )
+            bucket_bs[key] = OrderedDict(
+                {k: bucket_config[key][k][1] for k in bucket_time_names}
+            )
 
-        
         # first level: HW
         num_bucket = 0
         hw_criteria = dict()
@@ -78,7 +86,7 @@ class Bucket:
         logger.info("Number of buckets: %s", num_bucket)
 
     def get_bucket_id(self, T, H, W, frame_interval=1, seed=None):
-        """ get bucket id """
+        """get bucket id"""
         resolution = H * W
         approx = 0.8
 
@@ -127,18 +135,18 @@ class Bucket:
         return hw_id, t_id, ar_id
 
     def get_thw(self, bucket_id):
-        """ get T, H, W """
+        """get T, H, W"""
         assert len(bucket_id) == 3
         T = self.t_criteria[bucket_id[0]][bucket_id[1]]
         H, W = self.ar_criteria[bucket_id[0]][bucket_id[1]][bucket_id[2]]
         return T, H, W
 
     def get_prob(self, bucket_id):
-        """ get prob """
+        """get prob"""
         return self.bucket_probs[bucket_id[0]][bucket_id[1]]
 
     def get_batch_size(self, bucket_id):
-        """ get batch size """
+        """get batch size"""
         return self.bucket_bs[bucket_id[0]][bucket_id[1]]
 
     def __len__(self):
@@ -146,7 +154,7 @@ class Bucket:
 
 
 def closet_smaller_bucket(value, bucket):
-    """ get the closest smaller bucket """
+    """get the closest smaller bucket"""
     for i in range(1, len(bucket)):
         if value < bucket[i]:
             return bucket[i - 1]

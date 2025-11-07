@@ -9,9 +9,10 @@ from aiak_training_omni.models.factory import register_model_config
 @dataclass
 class STDiTConfig:
     """configuration for STDiT model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     latent_in_channels: int
     latent_out_channels: int
     latent_patch_size: tuple
@@ -37,7 +38,9 @@ class STDiTConfig:
     attention_softmax_in_fp32: bool = True
 
 
-@register_model_config(model_family=VideoLanguageModelFamilies.STDIT, model_arch="STDiT-XL/2")
+@register_model_config(
+    model_family=VideoLanguageModelFamilies.STDIT, model_arch="STDiT-XL/2"
+)
 def STDiT_XL_2():
     """STDiT-XL/2"""
     return STDiTConfig(

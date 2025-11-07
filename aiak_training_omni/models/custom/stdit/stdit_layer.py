@@ -16,16 +16,24 @@ from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.dist_checkpointing.utils import apply_prefix_mapping
 from megatron.core.transformer.identity_op import IdentityFuncOp, IdentityOp
 from megatron.core.transformer.module import MegatronModule
-from megatron.core.transformer.transformer_layer import BaseTransformerLayer, get_transformer_layer_offset
+from megatron.core.transformer.transformer_layer import (
+    BaseTransformerLayer,
+    get_transformer_layer_offset,
+)
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 
-from aiak_training_omni.models.custom.transformer.vision.stdit_model_embedding import t2i_modulate
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import StditTransformerConfig
+from aiak_training_omni.models.custom.transformer.vision.stdit_model_embedding import (
+    t2i_modulate,
+)
+from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
+    StditTransformerConfig,
+)
 
 
 @dataclass
 class STDiTLayerSubmodules:
     """Submodules for a transformer layer."""
+
     input_layernorm: Union[ModuleSpec, type] = IdentityOp
     spatial_self_attention: Union[ModuleSpec, type] = IdentityOp
     spatial_self_attn_bda: Union[ModuleSpec, type] = IdentityFuncOp
@@ -62,16 +70,24 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         self.submodules_config = submodules
 
         self.layer_number = layer_number + get_transformer_layer_offset(self.config)
-        self.hidden_dropout = config.hidden_dropout if hidden_dropout is None else hidden_dropout
+        self.hidden_dropout = (
+            config.hidden_dropout if hidden_dropout is None else hidden_dropout
+        )
         self.d_t = config.num_latent_frames // config.latent_patch_size[0]
-        self.d_s = config.max_latent_height // config.latent_patch_size[1] \
-                * config.max_latent_width // config.latent_patch_size[2]
+        self.d_s = (
+            config.max_latent_height
+            // config.latent_patch_size[1]
+            * config.max_latent_width
+            // config.latent_patch_size[2]
+        )
         if config.context_parallel_size > 1:
             self.d_t //= parallel_state.get_context_parallel_world_size()
         if config.sequence_parallel:
             self.d_t //= parallel_state.get_tensor_model_parallel_world_size()
 
-        self.scale_shift_table = torch.nn.Parameter(torch.randn(6, config.hidden_size) / config.hidden_size**0.5)
+        self.scale_shift_table = torch.nn.Parameter(
+            torch.randn(6, config.hidden_size) / config.hidden_size**0.5
+        )
 
         ## [Module 1: Input Layernorm] Optional Layernorm on the input data
         # TODO: add pytorch only layernorm
@@ -84,13 +100,17 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
 
         ## [Module 2: Spatial SelfAttention]
         self.spatial_self_attention = build_module(
-            submodules.spatial_self_attention, config=self.config, layer_number=layer_number,
+            submodules.spatial_self_attention,
+            config=self.config,
+            layer_number=layer_number,
         )
         self.spatial_self_attn_bda = build_module(submodules.spatial_self_attn_bda)
 
         ## [Module 3: Temporal SelfAttention]
         self.temporal_self_attention = build_module(
-            submodules.temporal_self_attention, config=self.config, layer_number=layer_number,
+            submodules.temporal_self_attention,
+            config=self.config,
+            layer_number=layer_number,
         )
         self.temporal_self_attn_bda = build_module(submodules.temporal_self_attn_bda)
 
@@ -104,10 +124,13 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
 
         ## [Module 5: CrossAttention]
         self.cross_attention = build_module(
-            submodules.cross_attention, config=self.config, layer_number=layer_number)
+            submodules.cross_attention, config=self.config, layer_number=layer_number
+        )
 
         ## [Module 6: BiasDropoutFusion]
-        self.cross_attn_bda = build_module(submodules.cross_attn_bda, config=self.config)
+        self.cross_attn_bda = build_module(
+            submodules.cross_attn_bda, config=self.config
+        )
 
         ## [Module 7: Pre MLP] Optional Layernorm before MLP
         self.pre_mlp_layernorm = build_module(
@@ -121,7 +144,7 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         # TODO how to set the gpt_layer_spec.py when we have moe_frequency > 1,
         #      where MLP and MoE layer both appear alternately?
         self.mlp = build_module(submodules.mlp, config=self.config)
-        if hasattr(self.mlp, 'set_layer_number'):
+        if hasattr(self.mlp, "set_layer_number"):
             self.mlp.set_layer_number(self.layer_number)
 
         ## [Module 9: BiasDropoutFusion]
@@ -154,59 +177,83 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         sequence_len_offset=None,
         temporal_pos_embed=None,
     ):
-        """ hidden_states: [s, b, h] """
+        """hidden_states: [s, b, h]"""
         S, B, H = hidden_states.shape
 
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
-            self.scale_shift_table[: , None] + timestep.reshape(6, B, -1)
+            self.scale_shift_table[:, None] + timestep.reshape(6, B, -1)
         ).chunk(6)
 
         # Spatial Self Attention.
         residual = hidden_states
-        hidden_states = t2i_modulate(self.input_layernorm(hidden_states), shift_msa, scale_msa)
-        hidden_states = rearrange(hidden_states, "(T S) B C -> S (B T) C", T=self.d_t, S=self.d_s).contiguous()
+        hidden_states = t2i_modulate(
+            self.input_layernorm(hidden_states), shift_msa, scale_msa
+        )
+        hidden_states = rearrange(
+            hidden_states, "(T S) B C -> S (B T) C", T=self.d_t, S=self.d_s
+        ).contiguous()
         spatial_attention_output, spatial_attention_bias = self.spatial_self_attention(
             hidden_states,
             attention_mask=s_attn_mask,
-            attn_mask_type=AttnMaskType.padding if s_attn_mask.any() else AttnMaskType.no_mask,
+            attn_mask_type=(
+                AttnMaskType.padding if s_attn_mask.any() else AttnMaskType.no_mask
+            ),
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
         )
-        spatial_attention_output = rearrange(spatial_attention_output, "S (B T) C -> (T S) B C",
-                T=self.d_t, S=self.d_s).contiguous()
+        spatial_attention_output = rearrange(
+            spatial_attention_output, "S (B T) C -> (T S) B C", T=self.d_t, S=self.d_s
+        ).contiguous()
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.spatial_self_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                (spatial_attention_output, spatial_attention_bias), gate_msa, residual, self.hidden_dropout
+            hidden_states = self.spatial_self_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(
+                (spatial_attention_output, spatial_attention_bias),
+                gate_msa,
+                residual,
+                self.hidden_dropout,
             )
 
         # Temporal Self attention.
         residual = hidden_states
-        hidden_states = rearrange(hidden_states, "(T S) B C -> T (B S) C", T=self.d_t, S=self.d_s)
+        hidden_states = rearrange(
+            hidden_states, "(T S) B C -> T (B S) C", T=self.d_t, S=self.d_s
+        )
         if self.layer_number == 1 and temporal_pos_embed is not None:
             pos_embed_hidden_states = hidden_states + temporal_pos_embed.to(
-                    device=hidden_states.device, dtype=hidden_states.dtype)
+                device=hidden_states.device, dtype=hidden_states.dtype
+            )
         else:
             pos_embed_hidden_states = hidden_states
 
-        temporal_attention_output, temporal_attention_bias = self.temporal_self_attention(
-            pos_embed_hidden_states,
-            attention_mask=t_attn_mask,
-            attn_mask_type=AttnMaskType.padding if t_attn_mask.any() else AttnMaskType.no_mask,
-            inference_params=inference_params,
-            packed_seq_params=packed_seq_params,
+        temporal_attention_output, temporal_attention_bias = (
+            self.temporal_self_attention(
+                pos_embed_hidden_states,
+                attention_mask=t_attn_mask,
+                attn_mask_type=(
+                    AttnMaskType.padding if t_attn_mask.any() else AttnMaskType.no_mask
+                ),
+                inference_params=inference_params,
+                packed_seq_params=packed_seq_params,
+            )
         )
-        temporal_attention_output = rearrange(temporal_attention_output, "T (B S) C -> (T S) B C",
-                T=self.d_t, S=self.d_s).contiguous()
-
+        temporal_attention_output = rearrange(
+            temporal_attention_output, "T (B S) C -> (T S) B C", T=self.d_t, S=self.d_s
+        ).contiguous()
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.temporal_self_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                (temporal_attention_output, temporal_attention_bias), gate_msa, residual, self.hidden_dropout
+            hidden_states = self.temporal_self_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(
+                (temporal_attention_output, temporal_attention_bias),
+                gate_msa,
+                residual,
+                self.hidden_dropout,
             )
 
         # Cross attention.
@@ -214,34 +261,41 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         attention_output_with_bias = self.cross_attention(
             hidden_states,
             attention_mask=context_mask,
-            attn_mask_type=AttnMaskType.padding if context_mask[0].any() or context_mask[1].any()
-                    else AttnMaskType.no_mask,
+            attn_mask_type=(
+                AttnMaskType.padding
+                if context_mask[0].any() or context_mask[1].any()
+                else AttnMaskType.no_mask
+            ),
             key_value_states=context,
             inference_params=inference_params,
         )
 
-        if isinstance(attention_output_with_bias, dict) and "context" in attention_output_with_bias:
+        if (
+            isinstance(attention_output_with_bias, dict)
+            and "context" in attention_output_with_bias
+        ):
             context = attention_output_with_bias["context"]
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.cross_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                attention_output_with_bias, None, residual, self.hidden_dropout
-            )
-
+            hidden_states = self.cross_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(attention_output_with_bias, None, residual, self.hidden_dropout)
 
         # MLP.
         residual = hidden_states
-        pre_mlp_layernorm_output = t2i_modulate(self.pre_mlp_layernorm(hidden_states), shift_mlp, scale_mlp)
+        pre_mlp_layernorm_output = t2i_modulate(
+            self.pre_mlp_layernorm(hidden_states), shift_mlp, scale_mlp
+        )
         mlp_output = self.mlp(pre_mlp_layernorm_output)
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.mlp_bda(self.training, self.config.bias_dropout_fusion)(
-                mlp_output, gate_mlp, residual, self.hidden_dropout
-            )
+            hidden_states = self.mlp_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(mlp_output, gate_mlp, residual, self.hidden_dropout)
 
         # Jit compiled function creates 'view' tensor. This tensor
         # potentially gets saved in the MPU checkpoint function context,
@@ -250,20 +304,26 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         # p2p_communication), it serves to document the origin of this
         # 'view' tensor.
 
-
         output = make_viewless_tensor(
-            inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
+            inp=hidden_states,
+            requires_grad=hidden_states.requires_grad,
+            keep_graph=True,
         )
 
         return output, context
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[dict] = None,
     ) -> ShardedStateDict:
         """sharded state dict"""
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
         prefixed_map = {
-            f'{prefix}{k}': f'{prefix}{v}'
+            f"{prefix}{k}": f"{prefix}{v}"
             for k, v in self.submodules_config.sharded_state_dict_keys_map.items()
         }
         if prefixed_map:

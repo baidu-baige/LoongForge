@@ -15,17 +15,25 @@ from megatron.core.dist_checkpointing.utils import apply_prefix_mapping
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityFuncOp, IdentityOp
 from megatron.core.transformer.module import MegatronModule
-from megatron.core.transformer.transformer_layer import BaseTransformerLayer, get_transformer_layer_offset
+from megatron.core.transformer.transformer_layer import (
+    BaseTransformerLayer,
+    get_transformer_layer_offset,
+)
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.utils import make_viewless_tensor
 
-from aiak_training_omni.models.custom.transformer.vision.stdit_model_embedding import t2i_modulate
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import StditTransformerConfig
+from aiak_training_omni.models.custom.transformer.vision.stdit_model_embedding import (
+    t2i_modulate,
+)
+from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
+    StditTransformerConfig,
+)
 
 
 @dataclass
 class STDiT3BlockSubmodules:
     """Submodules for a stdit3 block."""
+
     input_layernorm: Union[ModuleSpec, type] = IdentityOp
     self_attention: Union[ModuleSpec, type] = IdentityOp
     self_attn_bda: Union[ModuleSpec, type] = IdentityFuncOp
@@ -45,6 +53,7 @@ class STDiT3BlockSubmodules:
 @dataclass
 class STDiT3LayerSubmodules:
     """Submodules for a transformer layer."""
+
     spatial_block: Union[ModuleSpec, type] = IdentityOp
     temporal_block: Union[ModuleSpec, type] = IdentityOp
     # Mapping for sharded tensor keys to be applied in `sharded_state_dict` method
@@ -53,6 +62,7 @@ class STDiT3LayerSubmodules:
 
 class LlamaRMSNorm(torch.nn.Module):
     """RMS normalization layer from Llama model."""
+
     def __init__(self, config: StditTransformerConfig, hidden_size, **kwargs):
         """
         copy from transformers/src/transformers/models/llama/modeling_llama.py
@@ -72,6 +82,7 @@ class LlamaRMSNorm(torch.nn.Module):
 
 class STDiT3Block(MegatronModule):
     """A single transformer block."""
+
     def __init__(
         self,
         config: StditTransformerConfig,
@@ -85,8 +96,12 @@ class STDiT3Block(MegatronModule):
         self.submodules_config = submodules
         self.attention_shape = attention_shape
         self.layer_number = layer_number + get_transformer_layer_offset(self.config)
-        self.hidden_dropout = config.hidden_dropout if hidden_dropout is None else hidden_dropout
-        self.scale_shift_table = torch.nn.Parameter(torch.randn(6, config.hidden_size) / config.hidden_size**0.5)
+        self.hidden_dropout = (
+            config.hidden_dropout if hidden_dropout is None else hidden_dropout
+        )
+        self.scale_shift_table = torch.nn.Parameter(
+            torch.randn(6, config.hidden_size) / config.hidden_size**0.5
+        )
 
         ## [Module 1: Input Layernorm] Optional Layernorm on the input data
         # TODO: add pytorch only layernorm
@@ -99,7 +114,9 @@ class STDiT3Block(MegatronModule):
 
         ## [Module 2: SelfAttention]
         self.self_attention = build_module(
-            submodules.self_attention, config=self.config, layer_number=layer_number,
+            submodules.self_attention,
+            config=self.config,
+            layer_number=layer_number,
         )
         self.self_attn_bda = build_module(submodules.self_attn_bda)
 
@@ -113,10 +130,13 @@ class STDiT3Block(MegatronModule):
 
         ## [Module 5: CrossAttention]
         self.cross_attention = build_module(
-            submodules.cross_attention, config=self.config, layer_number=layer_number)
+            submodules.cross_attention, config=self.config, layer_number=layer_number
+        )
 
         ## [Module 6: BiasDropoutFusion]
-        self.cross_attn_bda = build_module(submodules.cross_attn_bda, config=self.config)
+        self.cross_attn_bda = build_module(
+            submodules.cross_attn_bda, config=self.config
+        )
 
         # ## [Module 7: Pre MLP] Optional Layernorm before MLP
         self.pre_mlp_layernorm = build_module(
@@ -128,7 +148,7 @@ class STDiT3Block(MegatronModule):
 
         # ## [Module 8: MLP block]
         self.mlp = build_module(submodules.mlp, config=self.config)
-        if hasattr(self.mlp, 'set_layer_number'):
+        if hasattr(self.mlp, "set_layer_number"):
             self.mlp.set_layer_number(self.layer_number)
 
         # ## [Module 9: BiasDropoutFusion]
@@ -153,34 +173,46 @@ class STDiT3Block(MegatronModule):
         packed_seq_params=None,
         sequence_len_offset=None,
     ):
-        """ hidden_states: [ts, b, h] """
+        """hidden_states: [ts, b, h]"""
         TS, B, H = hidden_states.shape
 
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
-            self.scale_shift_table[: , None] + timestep.reshape(6, B, -1)
+            self.scale_shift_table[:, None] + timestep.reshape(6, B, -1)
         ).chunk(6)
 
         # Spatial Self Attention.
         residual = hidden_states
-        hidden_states = t2i_modulate(self.input_layernorm(hidden_states), shift_msa, scale_msa)
-        hidden_states = rearrange(hidden_states, f"(T S) B C -> {self.attention_shape}", T=T, S=S).contiguous()
+        hidden_states = t2i_modulate(
+            self.input_layernorm(hidden_states), shift_msa, scale_msa
+        )
+        hidden_states = rearrange(
+            hidden_states, f"(T S) B C -> {self.attention_shape}", T=T, S=S
+        ).contiguous()
 
         attention_output, attention_bias = self.self_attention(
             hidden_states,
             attention_mask=attention_mask,
-            attn_mask_type=AttnMaskType.padding if attention_mask.any() else AttnMaskType.no_mask,
+            attn_mask_type=(
+                AttnMaskType.padding if attention_mask.any() else AttnMaskType.no_mask
+            ),
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=packed_seq_params,
         )
-        attention_output = rearrange(attention_output, f"{self.attention_shape} -> (T S) B C",
-                T=T, S=S).contiguous()
+        attention_output = rearrange(
+            attention_output, f"{self.attention_shape} -> (T S) B C", T=T, S=S
+        ).contiguous()
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.self_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                (attention_output, attention_bias), gate_msa, residual, self.hidden_dropout
+            hidden_states = self.self_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(
+                (attention_output, attention_bias),
+                gate_msa,
+                residual,
+                self.hidden_dropout,
             )
 
         # Cross attention.
@@ -188,33 +220,41 @@ class STDiT3Block(MegatronModule):
         attention_output_with_bias = self.cross_attention(
             hidden_states,
             attention_mask=context_mask,
-            attn_mask_type=AttnMaskType.padding if context_mask[0].any() or context_mask[1].any()
-                    else AttnMaskType.no_mask,
+            attn_mask_type=(
+                AttnMaskType.padding
+                if context_mask[0].any() or context_mask[1].any()
+                else AttnMaskType.no_mask
+            ),
             key_value_states=context,
             inference_params=inference_params,
         )
 
-        if isinstance(attention_output_with_bias, dict) and "context" in attention_output_with_bias:
+        if (
+            isinstance(attention_output_with_bias, dict)
+            and "context" in attention_output_with_bias
+        ):
             context = attention_output_with_bias["context"]
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.cross_attn_bda(self.training, self.config.bias_dropout_fusion)(
-                attention_output_with_bias, None, residual, self.hidden_dropout
-            )
+            hidden_states = self.cross_attn_bda(
+                self.training, self.config.bias_dropout_fusion
+            )(attention_output_with_bias, None, residual, self.hidden_dropout)
 
         # MLP.
         residual = hidden_states
-        pre_mlp_layernorm_output = t2i_modulate(self.pre_mlp_layernorm(hidden_states), shift_mlp, scale_mlp)
+        pre_mlp_layernorm_output = t2i_modulate(
+            self.pre_mlp_layernorm(hidden_states), shift_mlp, scale_mlp
+        )
         mlp_output, mlp_bias = self.mlp(pre_mlp_layernorm_output)
 
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
-            hidden_states = self.mlp_bda(self.training, self.config.bias_dropout_fusion)(
-                (mlp_output, mlp_bias), gate_mlp, residual, self.hidden_dropout
-            )
+            hidden_states = self.mlp_bda(
+                self.training, self.config.bias_dropout_fusion
+            )((mlp_output, mlp_bias), gate_mlp, residual, self.hidden_dropout)
 
         # Jit compiled function creates 'view' tensor. This tensor
         # potentially gets saved in the MPU checkpoint function context,
@@ -223,18 +263,25 @@ class STDiT3Block(MegatronModule):
         # p2p_communication), it serves to document the origin of this
         # 'view' tensor.
         output = make_viewless_tensor(
-            inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
+            inp=hidden_states,
+            requires_grad=hidden_states.requires_grad,
+            keep_graph=True,
         )
 
         return output, context
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[dict] = None,
     ) -> ShardedStateDict:
         """sharded state dict"""
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
         prefixed_map = {
-            f'{prefix}{k}': f'{prefix}{v}'
+            f"{prefix}{k}": f"{prefix}{v}"
             for k, v in self.submodules_config.sharded_state_dict_keys_map.items()
         }
         if prefixed_map:
@@ -282,9 +329,9 @@ class STDiT3Layer(MegatronModule, BaseTransformerLayer):
         s_attn_mask=None,
         t_attn_mask=None,
         attention_mask=None,
-        **kwargs
+        **kwargs,
     ):
-        """ hidden_states: [TS, B, H] """
+        """hidden_states: [TS, B, H]"""
         hidden_states, context = self.spatial_block(
             hidden_states,
             T,
@@ -292,7 +339,7 @@ class STDiT3Layer(MegatronModule, BaseTransformerLayer):
             attention_mask=s_attn_mask,
             context=context,
             rotary_pos_emb=None,
-            **kwargs
+            **kwargs,
         )
         hidden_states, context = self.temporal_block(
             hidden_states,
@@ -301,17 +348,22 @@ class STDiT3Layer(MegatronModule, BaseTransformerLayer):
             attention_mask=t_attn_mask,
             context=context,
             rotary_pos_emb=rotary_pos_emb,
-            **kwargs
+            **kwargs,
         )
         return hidden_states, context
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[dict] = None,
     ) -> ShardedStateDict:
         """sharded state dict"""
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
         prefixed_map = {
-            f'{prefix}{k}': f'{prefix}{v}'
+            f"{prefix}{k}": f"{prefix}{v}"
             for k, v in self.submodules_config.sharded_state_dict_keys_map.items()
         }
         if prefixed_map:

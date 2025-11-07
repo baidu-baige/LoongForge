@@ -48,17 +48,28 @@ def _convert_path(images: Sequence[str], dataset_dir: str):
 
 
 def _convert_alpaca(samples: Dict[str, List[Any]], alpaca_columns: "AlpacaColumns"):
-    outputs = {"prompt": [], "response": [], "system": [], "d_len": [], "videos": [], "images": []}
+    outputs = {
+        "prompt": [],
+        "response": [],
+        "system": [],
+        "d_len": [],
+        "videos": [],
+        "images": [],
+    }
     for i in range(len(samples[alpaca_columns.prompt])):
         prompt = []
         d_len = 0
         # preprocess history
-        if alpaca_columns.history and isinstance(samples[alpaca_columns.history][i], list):
+        if alpaca_columns.history and isinstance(
+            samples[alpaca_columns.history][i], list
+        ):
             for history_prompt, history_response in samples[alpaca_columns.history][i]:
-                prompt.extend([
-                    {"role": DataRoles.USER, "content": history_prompt},
-                    {"role": DataRoles.ASSISTANT, "content": history_response}
-                ])
+                prompt.extend(
+                    [
+                        {"role": DataRoles.USER, "content": history_prompt},
+                        {"role": DataRoles.ASSISTANT, "content": history_response},
+                    ]
+                )
                 d_len += len(history_prompt) + len(history_response)
         # preprocess prompt & query
         _content = []
@@ -74,7 +85,10 @@ def _convert_alpaca(samples: Dict[str, List[Any]], alpaca_columns: "AlpacaColumn
         if alpaca_columns.response:
             resp = samples[alpaca_columns.response][i]
             if isinstance(resp, list):
-                response = [{"role": DataRoles.ASSISTANT, "content": content} for content in resp]
+                response = [
+                    {"role": DataRoles.ASSISTANT, "content": content}
+                    for content in resp
+                ]
                 for content in resp:
                     d_len += len(content)
             elif isinstance(resp, str):
@@ -83,24 +97,33 @@ def _convert_alpaca(samples: Dict[str, List[Any]], alpaca_columns: "AlpacaColumn
 
         outputs["prompt"].append(prompt)
         outputs["response"].append(response)
-        outputs["system"].append(samples[alpaca_columns.system][i] if alpaca_columns.system else "")
+        outputs["system"].append(
+            samples[alpaca_columns.system][i] if alpaca_columns.system else ""
+        )
         outputs["d_len"].append(d_len)
-        outputs["videos"].append([]) # TODO: support videos
-        outputs["images"].append([]) # TODO: support images
+        outputs["videos"].append([])  # TODO: support videos
+        outputs["images"].append([])  # TODO: support images
 
     return outputs
 
 
 def _convert_sharegpt(
-        samples: Dict[str, Any],
-        sharegpt_columns: "ShareGPTColumns",
-        sharegpt_tags: "ShareGPTTags",
-        dataset_dir: str
-    ):
+    samples: Dict[str, Any],
+    sharegpt_columns: "ShareGPTColumns",
+    sharegpt_tags: "ShareGPTTags",
+    dataset_dir: str,
+):
     """
     Converts sharegpt format dataset to the standard format.
     """
-    outputs = {"prompt": [], "response": [], "system": [], "d_len": [], "videos": [], "images": []}
+    outputs = {
+        "prompt": [],
+        "response": [],
+        "system": [],
+        "d_len": [],
+        "videos": [],
+        "images": [],
+    }
     convert_path = partial(_convert_path, dataset_dir=dataset_dir)
     # custom role name => standard role name
     tag_mapping = {
@@ -115,11 +138,17 @@ def _convert_sharegpt(
         (sharegpt_tags.user_tag, sharegpt_tags.observation_tag),
         (sharegpt_tags.assistant_tag, sharegpt_tags.function_tag),
     )
-    
+
     for i, messages in enumerate(samples[sharegpt_columns.messages]):
-        
-        system_message = next((msg for msg in messages
-                               if msg[sharegpt_tags.role_tag] == sharegpt_tags.system_tag), None)
+
+        system_message = next(
+            (
+                msg
+                for msg in messages
+                if msg[sharegpt_tags.role_tag] == sharegpt_tags.system_tag
+            ),
+            None,
+        )
 
         if sharegpt_tags.system_tag is not None and system_message is not None:
             # if message contain system
@@ -128,11 +157,13 @@ def _convert_sharegpt(
             messages.remove(system_message)
         else:
             # try use system from global column
-            system = samples[sharegpt_columns.system][i] if sharegpt_columns.system else ""
+            system = (
+                samples[sharegpt_columns.system][i] if sharegpt_columns.system else ""
+            )
 
         aligned_messages = []
         invalid_data = False
-        
+
         for turn_idx, message in enumerate(messages):
             if message[sharegpt_tags.role_tag] not in accept_tags[turn_idx % 2]:
                 logger.warning(f"Invalid role tag in: {messages}, skipping.")
@@ -145,7 +176,7 @@ def _convert_sharegpt(
                     "content": message[sharegpt_tags.content_tag],
                 }
             )
-        
+
         if len(aligned_messages) % 2 != 0:
             logger.warning(f"Invalid number of turns in: {messages}, skipping.")
             invalid_data = True
@@ -155,7 +186,7 @@ def _convert_sharegpt(
 
         prompt = aligned_messages[:-1]
         response = aligned_messages[-1:]
-        d_len = sum(len(msg['content']) for msg in aligned_messages)
+        d_len = sum(len(msg["content"]) for msg in aligned_messages)
         videos = samples[sharegpt_columns.videos][i] if sharegpt_columns.videos else []
         images = samples[sharegpt_columns.images][i] if sharegpt_columns.images else []
 
@@ -175,8 +206,7 @@ def convert_to_unified_format(
     config: "SFTDatasetConfig",
     load_from_cache_file: bool = False,
 ) -> Union["Dataset", "IterableDataset"]:
-    """Convert the dataset to the unified format. 
-    """
+    """Convert the dataset to the unified format."""
     if data_format.format == SFTDataFormats.ALPACA:
         convert_func = partial(_convert_alpaca, alpaca_columns=data_format.columns)
     elif data_format.format == SFTDataFormats.SHAREGPT:
@@ -184,21 +214,29 @@ def convert_to_unified_format(
             _convert_sharegpt,
             sharegpt_columns=data_format.columns,
             sharegpt_tags=data_format.tags,
-            dataset_dir=os.path.dirname(dataset_path)
+            dataset_dir=os.path.dirname(dataset_path),
         )
     else:
         raise NotImplementedError()
 
-    column_names = [col for col in next(iter(dataset)).keys() if col not in ['images', 'videos']]
+    column_names = [
+        col for col in next(iter(dataset)).keys() if col not in ["images", "videos"]
+    ]
 
-    features = Features({
-        "prompt": [{"role": Value(dtype='string'), "content": Value(dtype='string')}],
-        "response": [{"role": Value(dtype='string'), "content": Value(dtype='string')}],
-        "system": Value(dtype='string'),
-        "d_len": Value(dtype='int64'),
-        "videos": [Value(dtype='string')],
-        "images": [Value(dtype='string')],
-    })
+    features = Features(
+        {
+            "prompt": [
+                {"role": Value(dtype="string"), "content": Value(dtype="string")}
+            ],
+            "response": [
+                {"role": Value(dtype="string"), "content": Value(dtype="string")}
+            ],
+            "system": Value(dtype="string"),
+            "d_len": Value(dtype="int64"),
+            "videos": [Value(dtype="string")],
+            "images": [Value(dtype="string")],
+        }
+    )
 
     kwargs = {}
     if not config.streaming:
