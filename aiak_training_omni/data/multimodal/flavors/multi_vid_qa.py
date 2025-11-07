@@ -1,4 +1,4 @@
-""" MultiVidQASample """
+"""MultiVidQASample"""
 
 from dataclasses import dataclass
 from typing import List, Optional

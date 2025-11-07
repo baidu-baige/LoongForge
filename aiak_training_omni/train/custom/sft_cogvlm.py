@@ -12,7 +12,9 @@ from megatron.core import mpu
 from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 
-from megatron.core.datasets.blended_megatron_dataset_builder import BlendedMegatronDatasetBuilder
+from megatron.core.datasets.blended_megatron_dataset_builder import (
+    BlendedMegatronDatasetBuilder,
+)
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.transformer.enums import AttnMaskType
 
@@ -45,7 +47,7 @@ def model_provider(pre_process=True, post_process=True):
     args = get_args()
     model_family = get_model_family(args.model_name)
     model_provider = get_model_provider(model_family)
-    assert model_provider is not None, f'model provider for {args.model_name} not found'
+    assert model_provider is not None, f"model provider for {args.model_name} not found"
     return model_provider(pre_process, post_process)
 
 
@@ -56,21 +58,25 @@ def get_batch(data_iterator):
         return None, None, None, None, None
 
     # get batches based on the TP rank you are on
-    batch = get_batch_on_this_tp_rank(data_iterator) 
+    batch = get_batch_on_this_tp_rank(data_iterator)
 
     # slice batch along sequence dimension for context parallelism
     assert mpu.get_context_parallel_world_size() == 1, "not implemented"
     # batch = get_batch_on_this_cp_rank(batch)
 
     batch = (
-        batch['images'],
-        batch['input_ids'],
-        batch['position_ids'],
-        batch['attention_mask'],
-        batch['token_type_ids'],
-        batch['labels'],
-        batch['loss_mask'],
-        AttnMaskType.padding_causal if batch['attention_mask'].any() else AttnMaskType.causal,
+        batch["images"],
+        batch["input_ids"],
+        batch["position_ids"],
+        batch["attention_mask"],
+        batch["token_type_ids"],
+        batch["labels"],
+        batch["loss_mask"],
+        (
+            AttnMaskType.padding_causal
+            if batch["attention_mask"].any()
+            else AttnMaskType.causal
+        ),
     )
 
     return batch
@@ -87,15 +93,17 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
         the loss scalar for this micro-batch
         the number of non-padded tokens in this microbatch
         a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
-    """    
+    """
     args = get_args()
 
     losses = output_tensor.float()
     loss_mask = loss_mask.view(-1).float()
 
     total_tokens = loss_mask.sum()
-    loss = torch.cat([torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)])
-    
+    loss = torch.cat(
+        [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
+    )
+
     if args.context_parallel_size > 1:
         torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
 
@@ -103,8 +111,8 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     if args.check_for_nan_in_loss_and_grad:
         global_rank = torch.distributed.get_rank()
         assert not loss[0].isnan(), (
-            f'Rank {global_rank}: found NaN in local forward loss calculation. '
-            f'Device: {torch.cuda.current_device()}, node: {os.uname()[1]}'
+            f"Rank {global_rank}: found NaN in local forward loss calculation. "
+            f"Device: {torch.cuda.current_device()}, node: {os.uname()[1]}"
         )
 
     # Reduce loss for logging.
@@ -113,22 +121,22 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
 
     local_num_tokens = loss[1].clone().detach().to(torch.int)
 
-    loss_reduced_dict = {'lm loss': (reporting_loss[0], reporting_loss[1])}
+    loss_reduced_dict = {"lm loss": (reporting_loss[0], reporting_loss[1])}
 
     if args.variable_seq_lengths:
         # for variable seq length, we need to calculate the number of tokens on fly
         # model output tensor shape is [B, S, H]
         num_input_tokens = output_tensor.shape[0] * output_tensor.shape[1]
-        input_tokens = torch.tensor(num_input_tokens, dtype=torch.int, device=output_tensor.device)
+        input_tokens = torch.tensor(
+            num_input_tokens, dtype=torch.int, device=output_tensor.device
+        )
         # sum across all dp ranks
         torch.distributed.all_reduce(input_tokens, group=mpu.get_data_parallel_group())
-        loss_reduced_dict["total_inputs"] = input_tokens.item() * args.context_parallel_size
+        loss_reduced_dict["total_inputs"] = (
+            input_tokens.item() * args.context_parallel_size
+        )
 
-    return (
-        loss[0] * args.context_parallel_size,
-        local_num_tokens,
-        loss_reduced_dict
-    )
+    return (loss[0] * args.context_parallel_size, local_num_tokens, loss_reduced_dict)
 
 
 def forward_step(data_iterator, model):
@@ -141,24 +149,40 @@ def forward_step(data_iterator, model):
     timers = get_timers()
 
     # Get the batch.
-    timers('batch-generator', log_level=2).start()
+    timers("batch-generator", log_level=2).start()
 
     global stimer
     with stimer(bdata=True):
-        images, input_ids, position_ids, attention_mask, token_type_ids, labels, loss_mask, attn_mask_type \
-            = get_batch(data_iterator)
-        
-    timers('batch-generator').stop()
+        (
+            images,
+            input_ids,
+            position_ids,
+            attention_mask,
+            token_type_ids,
+            labels,
+            loss_mask,
+            attn_mask_type,
+        ) = get_batch(data_iterator)
+
+    timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(images, input_ids, position_ids, attention_mask, attn_mask_type, token_type_ids, labels)
- 
+        output_tensor = model(
+            images,
+            input_ids,
+            position_ids,
+            attention_mask,
+            attn_mask_type,
+            token_type_ids,
+            labels,
+        )
+
     return output_tensor, partial(loss_func, loss_mask)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):
     """Build the train test and validation datasets.
-    
+
     For GPT-like models, if there are no special requirements, we should directly reuse the Megatron GPTDataset.
     """
     args = get_args()
@@ -180,7 +204,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         consumed_samples=args.consumed_train_samples,
         micro_batch_size=args.micro_batch_size,
         data_parallel_rank=mpu.get_data_parallel_rank(),
-        data_parallel_size=mpu.get_data_parallel_world_size())
+        data_parallel_size=mpu.get_data_parallel_world_size(),
+    )
 
     data_loader = torch.utils.data.DataLoader(
         dataset,
@@ -195,8 +220,10 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     return iter(data_loader), None, None
 
 
-@register_model_trainer(model_family=[constants.VisionLanguageModelFamilies.COGVLM2],
-                        training_phase=constants.TrainingPhase.SFT)
+@register_model_trainer(
+    model_family=[constants.VisionLanguageModelFamilies.COGVLM2],
+    training_phase=constants.TrainingPhase.SFT,
+)
 def default_pretrain_trainer(train_args):
     """build trainer"""
     trainer = MegatronTrainer(
@@ -206,5 +233,5 @@ def default_pretrain_trainer(train_args):
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
     )
-    
+
     return trainer

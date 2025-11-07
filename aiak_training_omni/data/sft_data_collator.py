@@ -17,6 +17,7 @@ class DataCollatorForSupervisedDataset:
     """
     Data collator that will dynamically pad the inputs received, as well as the labels.
     """
+
     tokenizer: "PreTrainedTokenizerBase"
     model: Optional[Any] = None
     padding: Optional[Union[bool, str, "PaddingStrategy"]] = None
@@ -42,11 +43,22 @@ class DataCollatorForSupervisedDataset:
             return_tensors = self.return_tensors
 
         # padding loss mask here
-        loss_mask = [feature["loss_mask"] for feature in features] if "loss_mask" in features[0].keys() else None
+        loss_mask = (
+            [feature["loss_mask"] for feature in features]
+            if "loss_mask" in features[0].keys()
+            else None
+        )
 
-        if loss_mask is not None and self.padding and self.padding != PaddingStrategy.DO_NOT_PAD:
+        if (
+            loss_mask is not None
+            and self.padding
+            and self.padding != PaddingStrategy.DO_NOT_PAD
+        ):
             max_loss_length = max(len(l) for l in loss_mask)
-            if self.padding == PaddingStrategy.MAX_LENGTH and self.max_length is not None:
+            if (
+                self.padding == PaddingStrategy.MAX_LENGTH
+                and self.max_length is not None
+            ):
                 max_loss_length = self.max_length
             if self.pad_to_multiple_of is not None:
                 max_loss_length = (
@@ -66,9 +78,13 @@ class DataCollatorForSupervisedDataset:
                             feature["loss_mask"] = remainder + feature["loss_mask"]
                     else:
                         if padding_side == "right":
-                            feature["loss_mask"] = np.concatenate([feature["loss_mask"], remainder]).astype(np.int64)
+                            feature["loss_mask"] = np.concatenate(
+                                [feature["loss_mask"], remainder]
+                            ).astype(np.int64)
                         else:
-                            feature["loss_mask"] = np.concatenate([remainder, feature["loss_mask"]]).astype(np.int64)
+                            feature["loss_mask"] = np.concatenate(
+                                [remainder, feature["loss_mask"]]
+                            ).astype(np.int64)
 
         # default only padding labels
         return self.collator(features, return_tensors)
@@ -76,11 +92,19 @@ class DataCollatorForSupervisedDataset:
 
 @dataclass
 class MultiModalDataCollatorForSupervisedDataset(DataCollatorForSupervisedDataset):
-    """ Multi-modal data collator  """
+    """Multi-modal data collator"""
+
     processor: "ProcessorMixin" = None
     plugin: "MMPlugin" = None
+
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, "torch.Tensor"]:
-        batch_images, batch_videos, batch_imglens, batch_vidlens, batch_seqlens = [], [], [], [], []
+        batch_images, batch_videos, batch_imglens, batch_vidlens, batch_seqlens = (
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
         for feature in features:
             images = feature.pop("images", None) or []
             videos = feature.pop("videos", None) or []
@@ -91,17 +115,22 @@ class MultiModalDataCollatorForSupervisedDataset(DataCollatorForSupervisedDatase
             batch_seqlens.append(len(feature["input_ids"]))
 
         mm_inputs = self.plugin.get_mm_inputs(
-            batch_images, batch_videos, batch_imglens, batch_vidlens, batch_seqlens, self.processor
+            batch_images,
+            batch_videos,
+            batch_imglens,
+            batch_vidlens,
+            batch_seqlens,
+            self.processor,
         )
 
         features: Dict[str, "torch.Tensor"] = super().__call__(features)
 
         # keys are named in transformers/src/transformers/models/qwen2_vl/image_processing_qwen2_vl.py
         if "pixel_values" in mm_inputs:
-            features['images'] = mm_inputs.get('pixel_values')
-            features['image_grid_thw'] = mm_inputs.get('image_grid_thw')
+            features["images"] = mm_inputs.get("pixel_values")
+            features["image_grid_thw"] = mm_inputs.get("image_grid_thw")
         if "pixel_values_videos" in mm_inputs:
-            features['videos'] = mm_inputs.get('pixel_values_videos')
-            features['video_grid_thw'] = mm_inputs.get('video_grid_thw')
+            features["videos"] = mm_inputs.get("pixel_values_videos")
+            features["video_grid_thw"] = mm_inputs.get("video_grid_thw")
 
         return features

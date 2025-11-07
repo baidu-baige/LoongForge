@@ -9,7 +9,17 @@ LICENSE file in the root directory of this source tree.
 import math
 from copy import deepcopy
 from io import BytesIO
-from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple, TypedDict, Union, Type
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+    Type,
+)
 
 import numpy as np
 from transformers.image_utils import get_image_size, to_numpy_array
@@ -24,8 +34,10 @@ from PIL.Image import Image as ImageObject
 if TYPE_CHECKING:
     import torch
     from transformers.image_processing_utils import BaseImageProcessor
+
     class EncodedImage(TypedDict):
-        """ Encoded image type. """
+        """Encoded image type."""
+
         path: Optional[str]
         bytes: Optional[bytes]
 
@@ -34,7 +46,8 @@ if TYPE_CHECKING:
 
 
 class MMPlugin:
-    """ MM Plugin """
+    """MM Plugin"""
+
     def __init__(self, image_token: Optional[str], video_token: Optional[str]) -> None:
         self.image_token = image_token
         self.video_token = video_token
@@ -60,7 +73,9 @@ class MMPlugin:
         image_resolution: int = kwargs.get("image_resolution")
         if max(image.width, image.height) > image_resolution:
             resize_factor = image_resolution / max(image.width, image.height)
-            width, height = int(image.width * resize_factor), int(image.height * resize_factor)
+            width, height = int(image.width * resize_factor), int(
+                image.height * resize_factor
+            )
             image = image.resize((width, height), resample=Image.NEAREST)
 
         if image.mode != "RGB":
@@ -75,11 +90,15 @@ class MMPlugin:
         video_fps: float = kwargs.get("video_fps")
         video_maxlen: int = kwargs.get("video_maxlen")
         total_frames = video_stream.frames
-        sample_frames = float(video_stream.duration * video_stream.time_base) * video_fps
+        sample_frames = (
+            float(video_stream.duration * video_stream.time_base) * video_fps
+        )
         sample_frames = min(total_frames, video_maxlen, sample_frames)
         return math.floor(sample_frames)
 
-    def _regularize_images(self, images: Sequence["ImageInput"], **kwargs) -> List["ImageObject"]:
+    def _regularize_images(
+        self, images: Sequence["ImageInput"], **kwargs
+    ) -> List["ImageObject"]:
         r"""
         Regularizes images to avoid error. Including reading and pre-processing.
         """
@@ -94,12 +113,13 @@ class MMPlugin:
                     image = Image.open(image["path"])
 
             if not isinstance(image, ImageObject):
-                raise ValueError("Expect input is a list of Images, but got {}.".format(type(image)))
+                raise ValueError(
+                    "Expect input is a list of Images, but got {}.".format(type(image))
+                )
 
             results.append(self._preprocess_image(image, **kwargs))
 
         return results
-
 
     def _get_mm_inputs(
         self,
@@ -120,7 +140,9 @@ class MMPlugin:
         It holds num_patches == torch.prod(image_grid_thw)
         """
         image_processor: "BaseImageProcessor" = getattr(processor, "image_processor")
-        video_processor: "BaseImageProcessor" = getattr(processor, "video_processor", image_processor)
+        video_processor: "BaseImageProcessor" = getattr(
+            processor, "video_processor", image_processor
+        )
         input_dict = {"images": None}  # default key
         if len(images) != 0:
             images = self._regularize_images(
@@ -135,10 +157,16 @@ class MMPlugin:
         mm_inputs = {}
         if image_processor != video_processor:
             if input_dict.get("images") is not None:
-                mm_inputs.update(image_processor(input_dict["images"], return_tensors="pt"))
+                mm_inputs.update(
+                    image_processor(input_dict["images"], return_tensors="pt")
+                )
             if input_dict.get("videos") is not None:
-                mm_inputs.update(video_processor(input_dict["videos"], return_tensors="pt"))
-        elif input_dict.get("images") is not None or input_dict.get("videos") is not None:  # same processor (qwen2-vl)
+                mm_inputs.update(
+                    video_processor(input_dict["videos"], return_tensors="pt")
+                )
+        elif (
+            input_dict.get("images") is not None or input_dict.get("videos") is not None
+        ):  # same processor (qwen2-vl)
             mm_inputs.update(image_processor(**input_dict, return_tensors="pt"))
 
         return mm_inputs
@@ -173,7 +201,8 @@ class MMPlugin:
 
 
 class Qwen2VLPlugin(MMPlugin):
-    """ Qwen2VL plugin """
+    """Qwen2VL plugin"""
+
     @override
     def _preprocess_image(self, image: "ImageObject", **kwargs) -> "ImageObject":
         image = super()._preprocess_image(image, **kwargs)
@@ -218,12 +247,17 @@ class Qwen2VLPlugin(MMPlugin):
             content = message["content"]
             while Placeholder.IMAGE in content:
                 if num_image_tokens > len(image_grid_thw):
-                    raise ValueError("`len(images)` is less than the number of {} tokens.".format(Placeholder.IMAGE))
+                    raise ValueError(
+                        "`len(images)` is less than the number of {} tokens.".format(
+                            Placeholder.IMAGE
+                        )
+                    )
 
                 content = content.replace(
                     Placeholder.IMAGE,
                     "<|vision_start|>{}<|vision_end|>".format(
-                        self.image_token * (image_grid_thw[num_image_tokens].prod() // merge_length)
+                        self.image_token
+                        * (image_grid_thw[num_image_tokens].prod() // merge_length)
                     ),
                     1,
                 )
@@ -231,12 +265,17 @@ class Qwen2VLPlugin(MMPlugin):
 
             while Placeholder.VIDEO in content:
                 if num_video_tokens > len(video_grid_thw):
-                    raise ValueError("`len(videos)` is less than the number of {} tokens.".format(Placeholder.VIDEO))
+                    raise ValueError(
+                        "`len(videos)` is less than the number of {} tokens.".format(
+                            Placeholder.VIDEO
+                        )
+                    )
 
                 content = content.replace(
                     Placeholder.VIDEO,
                     "<|vision_start|>{}<|vision_end|>".format(
-                        self.video_token * (video_grid_thw[num_video_tokens].prod() // merge_length)
+                        self.video_token
+                        * (video_grid_thw[num_video_tokens].prod() // merge_length)
                     ),
                     1,
                 )
@@ -245,10 +284,18 @@ class Qwen2VLPlugin(MMPlugin):
             message["content"] = content
 
         if len(images) != num_image_tokens:
-            raise ValueError("The number of images does not match the number of {} tokens".format(Placeholder.IMAGE))
+            raise ValueError(
+                "The number of images does not match the number of {} tokens".format(
+                    Placeholder.IMAGE
+                )
+            )
 
         if len(videos) != num_video_tokens:
-            raise ValueError("The number of videos does not match the number of {} tokens".format(Placeholder.VIDEO))
+            raise ValueError(
+                "The number of videos does not match the number of {} tokens".format(
+                    Placeholder.VIDEO
+                )
+            )
 
         return messages, mm_inputs
 

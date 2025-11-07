@@ -48,16 +48,13 @@ def _encode_supervised_example(
     system: Optional[str],
     images: Sequence[str],
     videos: Sequence[str],
-    config: "SFTDatasetConfig"
+    config: "SFTDatasetConfig",
 ) -> Tuple[List[int], List[int], List[int], List[int], List[int], int]:
     """Preprocess single sample"""
 
     if config.chat_template.mm_plugin is not None:
         messages, _ = config.chat_template.mm_plugin.process_messages(
-            prompt + response,
-            images,
-            videos,
-            config.processor
+            prompt + response, images, videos, config.processor
         )
     else:
         messages = prompt + response
@@ -82,7 +79,9 @@ def _encode_supervised_example(
         if total_len >= config.sequence_length:
             break
 
-        source_len, target_len = _infer_seqlen(len(source_ids), len(target_ids), config.sequence_length - total_len)
+        source_len, target_len = _infer_seqlen(
+            len(source_ids), len(target_ids), config.sequence_length - total_len
+        )
         source_ids = source_ids[:source_len]
         target_ids = target_ids[:target_len]
         total_len += source_len + target_len
@@ -91,7 +90,9 @@ def _encode_supervised_example(
             source_label = source_ids
         elif turn_idx != 0 and config.chat_template.efficient_eos:
             # refer to https://github.com/baichuan-inc/Baichuan2/blob/main/fine-tune/fine-tune.py#L81
-            source_label = [config.tokenizer.eos] + [config.ignore_index] * (source_len - 1)
+            source_label = [config.tokenizer.eos] + [config.ignore_index] * (
+                source_len - 1
+            )
         else:
             source_label = [config.ignore_index] * source_len
 
@@ -101,16 +102,22 @@ def _encode_supervised_example(
         else:
             # turn_idx == 0 is the last turn
             target_label = target_ids
-            
+
         if config.history_mask_loss:
             # reversed order
             input_ids = source_ids + target_ids + input_ids
             labels = source_label + target_label + labels
-            loss_mask = [0 if t == config.ignore_index else 1 for t in (source_label + target_label)] + loss_mask
+            loss_mask = [
+                0 if t == config.ignore_index else 1
+                for t in (source_label + target_label)
+            ] + loss_mask
         else:
             input_ids += source_ids + target_ids
             labels += source_label + target_label
-            loss_mask += [0 if t == config.ignore_index else 1 for t in (source_label + target_label)]
+            loss_mask += [
+                0 if t == config.ignore_index else 1
+                for t in (source_label + target_label)
+            ]
 
     if config.chat_template.efficient_eos:
         # for efficient_eos, we need to add eos token to the end of the last turn
@@ -163,7 +170,13 @@ def _preprocess_supervised_dataset(
     """
     Preprocess supervised dataset.
     """
-    model_inputs = {"input_ids": [], "labels": [], "attention_mask": [], "images": [], "videos": []}
+    model_inputs = {
+        "input_ids": [],
+        "labels": [],
+        "attention_mask": [],
+        "images": [],
+        "videos": [],
+    }
 
     if not config.eod_mask_loss:
         # pad may be equal to eos, in order to avoid the wrong execution of mask,
@@ -177,12 +190,17 @@ def _preprocess_supervised_dataset(
         len_to_sample_indexs = defaultdict(list)
         index = 0
         # When using context parallel, sequence is split by CP size
-        pad_to_multiple_of *= (2 * config.context_parallel_size) if (config.context_parallel_size
-                                                                     and config.context_parallel_size > 1) else 1
+        pad_to_multiple_of *= (
+            (2 * config.context_parallel_size)
+            if (config.context_parallel_size and config.context_parallel_size > 1)
+            else 1
+        )
 
     for i in range(len(samples["prompt"])):
         if len(samples["prompt"][i]) % 2 != 1 or len(samples["response"][i]) != 1:
-            logger.warning(f"Ignore invalid sample, prompt: {samples['prompt'][i]}, response: {samples['response'][i]}")
+            logger.warning(
+                f"Ignore invalid sample, prompt: {samples['prompt'][i]}, response: {samples['response'][i]}"
+            )
             continue
 
         input_ids, labels, loss_mask, ori_total_len = _encode_supervised_example(
@@ -209,19 +227,28 @@ def _preprocess_supervised_dataset(
 
         else:
             # TODO: support packing for images/videos
-            assert samples["images"][i] in [None, []] and samples["videos"][i] in [None, []], \
-                "packing is not supported for images/videos yet."
+            assert samples["images"][i] in [None, []] and samples["videos"][i] in [
+                None,
+                [],
+            ], "packing is not supported for images/videos yet."
 
             if pad_to_multiple_of > 1:
-                input_ids = _pad_sequence_to_multiple(config, input_ids, pad_to_multiple_of,
-                                                      config.tokenizer.pad)
-                labels = _pad_sequence_to_multiple(config, labels, pad_to_multiple_of, constants.IGNORE_INDEX)
-                loss_mask = _pad_sequence_to_multiple(config, loss_mask, pad_to_multiple_of, 0)
+                input_ids = _pad_sequence_to_multiple(
+                    config, input_ids, pad_to_multiple_of, config.tokenizer.pad
+                )
+                labels = _pad_sequence_to_multiple(
+                    config, labels, pad_to_multiple_of, constants.IGNORE_INDEX
+                )
+                loss_mask = _pad_sequence_to_multiple(
+                    config, loss_mask, pad_to_multiple_of, 0
+                )
 
             # prepare for packing
             _sample_len = len(input_ids)
             if _sample_len > config.sequence_length:
-                logger.warning(f"Ignore too long sample with length {_sample_len} > {config.sequence_length}.")
+                logger.warning(
+                    f"Ignore too long sample with length {_sample_len} > {config.sequence_length}."
+                )
                 continue
 
             all_input_ids.append(input_ids)
@@ -238,7 +265,12 @@ def _preprocess_supervised_dataset(
     knapsacks = _build_knapsacks(all_sampel_lens, config.sequence_length)
     estimated_computational_load_list = []
     for knapsack in knapsacks:
-        packed_input_ids, packed_attention_masks, packed_labels, packed_loss_masks = [], [], [], []
+        packed_input_ids, packed_attention_masks, packed_labels, packed_loss_masks = (
+            [],
+            [],
+            [],
+            [],
+        )
         # for language model, we use the estimated computational load to sort the batch
         estimated_computational_load = 0
 
@@ -249,7 +281,9 @@ def _preprocess_supervised_dataset(
             estimated_computational_load += len(all_input_ids[index]) ** 2
             packed_labels += all_labels[index]
             packed_loss_masks += all_loss_mask[index]
-            packed_attention_masks += [i + 1] * len(all_input_ids[index])  # start from 1
+            packed_attention_masks += [i + 1] * len(
+                all_input_ids[index]
+            )  # start from 1
 
         estimated_computational_load_list.append(estimated_computational_load)
         model_inputs["input_ids"].append(packed_input_ids)
@@ -258,20 +292,28 @@ def _preprocess_supervised_dataset(
         # TODO: support images/videos, just placeholder for now
         model_inputs["images"].append([])
         model_inputs["videos"].append([])
-        
+
         if not config.eod_mask_loss:
             model_inputs["loss_mask"].append(packed_loss_masks)
 
     if config.sort_batch:
-        sorted_indices = sorted(range(len(model_inputs["input_ids"])),
-                                key=lambda i: estimated_computational_load_list[i])
-        model_inputs["input_ids"] = [model_inputs["input_ids"][i] for i in sorted_indices]
+        sorted_indices = sorted(
+            range(len(model_inputs["input_ids"])),
+            key=lambda i: estimated_computational_load_list[i],
+        )
+        model_inputs["input_ids"] = [
+            model_inputs["input_ids"][i] for i in sorted_indices
+        ]
         model_inputs["labels"] = [model_inputs["labels"][i] for i in sorted_indices]
-        model_inputs["attention_mask"] = [model_inputs["attention_mask"][i] for i in sorted_indices]
+        model_inputs["attention_mask"] = [
+            model_inputs["attention_mask"][i] for i in sorted_indices
+        ]
         # TODO: add images pixels
 
         if not config.eod_mask_loss:
-            model_inputs["loss_mask"] = [model_inputs["loss_mask"][i] for i in sorted_indices]
+            model_inputs["loss_mask"] = [
+                model_inputs["loss_mask"][i] for i in sorted_indices
+            ]
 
     return model_inputs
 
@@ -279,9 +321,10 @@ def _preprocess_supervised_dataset(
 def _chunked_sort(dataset: List[Dict], chunk_size: int) -> List[Dict]:
     """Sort the dataset in chunks and merge them."""
     import heapq
-    chunks = [dataset[i:i + chunk_size] for i in range(0, len(dataset), chunk_size)]
-    sorted_chunks = [sorted(chunk, key=lambda x: x['d_len']) for chunk in chunks]
-    return list(heapq.merge(*sorted_chunks, key=lambda x: x['d_len']))
+
+    chunks = [dataset[i : i + chunk_size] for i in range(0, len(dataset), chunk_size)]
+    sorted_chunks = [sorted(chunk, key=lambda x: x["d_len"]) for chunk in chunks]
+    return list(heapq.merge(*sorted_chunks, key=lambda x: x["d_len"]))
 
 
 def convert_to_tokenized_data(
@@ -290,7 +333,9 @@ def convert_to_tokenized_data(
     load_from_cache_file: bool = False,
 ) -> Union["Dataset", "IterableDataset"]:
     """Convert the dataset to the tokenized form."""
-    columns = [col for col in next(iter(dataset)).keys() if col not in ['images', 'videos']]
+    columns = [
+        col for col in next(iter(dataset)).keys() if col not in ["images", "videos"]
+    ]
 
     kwargs = {}
     if not config.streaming:
@@ -309,13 +354,25 @@ def convert_to_tokenized_data(
     # resulting in the error "The features can't be aligned." ,
     # Therefore, it is necessary to specify the output type through features to avoid automatic type inference.
     features = datasets.Features()
-    features['input_ids'] = datasets.Sequence(feature=datasets.Value(dtype='int64', id=None), length=-1, id=None)
-    features['labels'] = datasets.Sequence(feature=datasets.Value(dtype='int64', id=None), length=-1, id=None)
-    features['attention_mask'] = datasets.Sequence(feature=datasets.Value(dtype='int64', id=None), length=-1, id=None)
+    features["input_ids"] = datasets.Sequence(
+        feature=datasets.Value(dtype="int64", id=None), length=-1, id=None
+    )
+    features["labels"] = datasets.Sequence(
+        feature=datasets.Value(dtype="int64", id=None), length=-1, id=None
+    )
+    features["attention_mask"] = datasets.Sequence(
+        feature=datasets.Value(dtype="int64", id=None), length=-1, id=None
+    )
     if not config.eod_mask_loss:
-        features['loss_mask'] = datasets.Sequence(feature=datasets.Value(dtype='int64', id=None), length=-1, id=None)
-    features['images'] = datasets.Sequence(datasets.Value(dtype='string', id=None), length=-1, id=None)
-    features['videos'] = datasets.Sequence(datasets.Value(dtype='string', id=None), length=-1, id=None)
+        features["loss_mask"] = datasets.Sequence(
+            feature=datasets.Value(dtype="int64", id=None), length=-1, id=None
+        )
+    features["images"] = datasets.Sequence(
+        datasets.Value(dtype="string", id=None), length=-1, id=None
+    )
+    features["videos"] = datasets.Sequence(
+        datasets.Value(dtype="string", id=None), length=-1, id=None
+    )
 
     dataset = dataset.map(
         partial(_preprocess_supervised_dataset, config=config),
@@ -323,7 +380,7 @@ def convert_to_tokenized_data(
         remove_columns=columns,
         features=features,
         batch_size=config.packing_batch_size,
-        **kwargs
+        **kwargs,
     )
 
     return dataset

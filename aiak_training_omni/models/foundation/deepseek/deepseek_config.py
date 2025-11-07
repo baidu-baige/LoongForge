@@ -11,6 +11,7 @@ from megatron.training.arguments import moe_freq_type
 @dataclass
 class DeepseekConfig:
     """config for deepseek model"""
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -41,7 +42,9 @@ class DeepseekConfig:
     multi_latent_attention: bool = True
 
 
-@register_model_config(model_family=LanguageModelFamilies.DEEPSEEK, model_arch="deepseek-v2-lite")
+@register_model_config(
+    model_family=LanguageModelFamilies.DEEPSEEK, model_arch="deepseek-v2-lite"
+)
 def deepseek_v2_lite():
     """deepseek-v2-lite"""
     return DeepseekConfig(
@@ -60,11 +63,13 @@ def deepseek_v2_lite():
         v_head_dim=128,
         moe_layer_freq=moe_freq_type("[0]*1+[1]*26"),
         qk_layernorm=True,
-        vocab_size_in_config_file=102400
+        vocab_size_in_config_file=102400,
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.DEEPSEEK, model_arch="deepseek-v2")
+@register_model_config(
+    model_family=LanguageModelFamilies.DEEPSEEK, model_arch="deepseek-v2"
+)
 def deepseek_v2():
     """deepseek-v2"""
     return DeepseekConfig(
@@ -83,11 +88,13 @@ def deepseek_v2():
         v_head_dim=128,
         moe_layer_freq=moe_freq_type("[0]*1+[1]*59"),
         qk_layernorm=True,
-        vocab_size_in_config_file=102400
+        vocab_size_in_config_file=102400,
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.DEEPSEEK, model_arch="deepseek-v3")
+@register_model_config(
+    model_family=LanguageModelFamilies.DEEPSEEK, model_arch="deepseek-v3"
+)
 def deepseek_v3():
     """deepseek-v3"""
     return DeepseekConfig(
@@ -106,5 +113,5 @@ def deepseek_v3():
         v_head_dim=128,
         moe_layer_freq=moe_freq_type("[0]*3+[1]*58"),
         qk_layernorm=True,
-        vocab_size_in_config_file=129280
+        vocab_size_in_config_file=129280,
     )

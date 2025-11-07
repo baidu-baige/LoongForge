@@ -1,12 +1,12 @@
 # qwen2 model configuration
 defaults:
-  #- ../../foundation@: base
+  #- ../../base_model
   - _self_
 
 #foundation:
 model_name: qwen2
 
-num_layers: 28
+num_layers: 10
 
 hidden_size: 3584
 
@@ -44,6 +44,4 @@ qk_layernorm: false  # bool
 
 untie_embeddings_and_output_weights: true  # bool
 
-norm_epsilon: 1e-06  # float
-
-rotary_base: 1000000  # int
+variable_seq_lengths: true

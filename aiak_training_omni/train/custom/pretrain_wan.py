@@ -97,12 +97,15 @@ def gen_time_steps(batch):
     args = get_args()
     max_timestep = args.max_timestep_boundary
     min_timestep = args.min_timestep_boundary
-    assert max_timestep <= 1 and max_timestep >= 0, \
-        "max_timestep should range from 0 to 1"
-    assert min_timestep <= 1 and min_timestep >= 0, \
-        "min_timestep should range from 0 to 1"
-    assert min_timestep <= max_timestep, \
-        f"min_timestep: {min_timestep} should <= max_timestep: {max_timestep}"
+    assert (
+        max_timestep <= 1 and max_timestep >= 0
+    ), "max_timestep should range from 0 to 1"
+    assert (
+        min_timestep <= 1 and min_timestep >= 0
+    ), "min_timestep should range from 0 to 1"
+    assert (
+        min_timestep <= max_timestep
+    ), f"min_timestep: {min_timestep} should <= max_timestep: {max_timestep}"
     max_timestep_boundary = int(max_timestep * scheduler.num_train_timesteps)
     min_timestep_boundary = int(min_timestep * scheduler.num_train_timesteps)
 
@@ -127,8 +130,12 @@ def get_batch(data_iterator):
     # TODO: this is pretty hacky, find a better way
     if data_iterator is not None and mpu.get_context_parallel_rank() == 0:
         batch = next(data_iterator)
-        batch["timestep"], batch["latents"], batch["training_target"], \
-            batch["scale"] = gen_time_steps(batch)
+        (
+            batch["timestep"],
+            batch["latents"],
+            batch["training_target"],
+            batch["scale"],
+        ) = gen_time_steps(batch)
     else:
         batch = None
 

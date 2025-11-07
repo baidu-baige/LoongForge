@@ -21,12 +21,14 @@ SFT_SUPPORT_DATA_TYPE = {
 
 class SFTDataFormats(object):
     """sft data formats"""
+
     ALPACA = "alpaca"
     SHAREGPT = "sharegpt"
 
 
 class DataRoles(object):
     """data roles"""
+
     USER = "user"
     ASSISTANT = "assistant"
     OBSERVATION = "observation"
@@ -35,7 +37,8 @@ class DataRoles(object):
 
 
 class Placeholder(object):
-    """ Placeholders """
+    """Placeholders"""
+
     IMAGE = "<image>"
     VIDEO = "<video>"
 
@@ -43,6 +46,7 @@ class Placeholder(object):
 ######## training args ########
 class TrainingPhase(object):
     """Training phase"""
+
     PRETRAIN = "pretrain"
     SFT = "sft"
 
@@ -53,13 +57,17 @@ class _BaseFamilies(object):
     @classmethod
     def names(cls) -> List[str]:
         """Return a list of all string names defined in the class and its subclasses"""
-        string_names = [value for name, value in vars(cls).items()
-                        if isinstance(value, str) and not name.startswith("__")]
+        string_names = [
+            value
+            for name, value in vars(cls).items()
+            if isinstance(value, str) and not name.startswith("__")
+        ]
         return string_names
 
 
 class LanguageModelFamilies(_BaseFamilies):
     """Language model families"""
+
     LLAMA = "llama"
     LLAMA2 = "llama2"
     LLAMA3 = "llama3"
@@ -78,6 +86,7 @@ class LanguageModelFamilies(_BaseFamilies):
 
 class VideoLanguageModelFamilies(_BaseFamilies):
     """Video language model families"""
+
     STDIT = "stdit"
     STDIT3 = "stdit3"
     WAN2_1_T2V = "wan2_1_t2v"
@@ -86,8 +95,15 @@ class VideoLanguageModelFamilies(_BaseFamilies):
 
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""
+
     COGVLM2 = "cogvlm2"
     QWEN2_VL = "qwen2_vl"
     QWEN2_5_VL = "qwen2_5_vl"
     INTERN_VL = "intern_vl"
     LLAVA_OV_1_5 = "llava_ov_1_5"
+
+
+class OmniModelFamilies(_BaseFamilies):
+    """Omni model families"""
+
+    VLM = "vision_language_model"

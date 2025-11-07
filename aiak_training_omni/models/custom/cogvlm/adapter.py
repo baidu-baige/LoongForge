@@ -1,4 +1,4 @@
-""" Adapters for the transformer model. """
+"""Adapters for the transformer model."""
 
 import torch
 from dataclasses import dataclass
@@ -12,14 +12,17 @@ from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 @dataclass
 class AdapterSubmodules:
     """Adapter sub-modules."""
+
     linear_proj: Union[ModuleSpec, type] = None
     layernorm: Union[ModuleSpec, type] = None
     mlp: Union[ModuleSpec, type] = None
 
 
 class Adapter(MegatronModule):
-    """ Adapter module. """
-    def __init__(self,
+    """Adapter module."""
+
+    def __init__(
+        self,
         config: TransformerConfig,
         submodules: AdapterSubmodules,
         input_size: int = None,
@@ -45,7 +48,7 @@ class Adapter(MegatronModule):
             skip_bias_add=False,
             parallel_mode=None,
             skip_weight_param_allocation=False,
-            tp_comm_buffer_name='proj',
+            tp_comm_buffer_name="proj",
         )
 
         self.layernorm = build_module(
@@ -61,9 +64,9 @@ class Adapter(MegatronModule):
         self.eoi = torch.nn.Parameter(torch.zeros(1, 1, config.hidden_size))
 
     def forward(self, x):
-        """ Forward method. """
+        """Forward method."""
         s, b, h = x.shape
-        grid_size = int(s ** 0.5)
+        grid_size = int(s**0.5)
         x = x.view(grid_size, grid_size, b, h).permute(2, 3, 0, 1)
         x = self.conv(x)
         x = x.flatten(2).permute(2, 0, 1).contiguous()
@@ -79,11 +82,16 @@ class Adapter(MegatronModule):
         return x
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[dict] = None,
     ) -> ShardedStateDict:
         """sharded state dict"""
         sharded_state_dict = {}
         for name, module in self._modules.items():
-            sub_sd = module.sharded_state_dict(f'{prefix}{name}.', sharded_offsets, metadata)
+            sub_sd = module.sharded_state_dict(
+                f"{prefix}{name}.", sharded_offsets, metadata
+            )
             sharded_state_dict.update(sub_sd)
         return sharded_state_dict

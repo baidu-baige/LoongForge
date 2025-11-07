@@ -16,6 +16,7 @@ from megatron.core.transformer.dot_product_attention import DotProductAttention
 try:
     from flash_attn.flash_attn_interface import flash_attn_varlen_func
     import rearrange
+
     HAVE_FLASH_ATTN = True
 except:
     HAVE_FLASH_ATTN = False
@@ -31,6 +32,7 @@ class FlashSelfAttention(MegatronModule):
         attention_dropout: The dropout rate to apply to the attention
                            (default: 0.0)
     """
+
     def __init__(
         self,
         config: TransformerConfig,
@@ -56,7 +58,7 @@ class FlashSelfAttention(MegatronModule):
         # assert HAVE_FLASH_ATTN is True,
         # ('Please implement an available flashattn kernel for the underlying accelerator')
 
-        self.layer_number = max(1, layer_number) # unused
+        self.layer_number = max(1, layer_number)  # unused
         self.attn_mask_type = attn_mask_type
         self.attention_type = attention_type  # unused
 
@@ -65,14 +67,21 @@ class FlashSelfAttention(MegatronModule):
         # Per attention head and per partition values.
         world_size = parallel_state.get_tensor_model_parallel_world_size()
         self.hidden_size_per_partition = divide(projection_size, world_size)
-        self.hidden_size_per_attention_head = divide(projection_size, config.num_attention_heads)
-        self.num_attention_heads_per_partition = divide(self.config.num_attention_heads, world_size)
+        self.hidden_size_per_attention_head = divide(
+            projection_size, config.num_attention_heads
+        )
+        self.num_attention_heads_per_partition = divide(
+            self.config.num_attention_heads, world_size
+        )
 
         self.causal = True
         self.softmax_scale = 1.0 / math.sqrt(self.hidden_size_per_attention_head)
-        self.dropout_p = self.config.attention_dropout if attention_dropout is None else attention_dropout
+        self.dropout_p = (
+            self.config.attention_dropout
+            if attention_dropout is None
+            else attention_dropout
+        )
         self.nheads = self.num_attention_heads_per_partition
-
 
     def forward(
         self,
@@ -92,15 +101,24 @@ class FlashSelfAttention(MegatronModule):
             "Packed sequence is not supported by DotProductAttention."
             "Please use TEDotProductAttention instead."
         )
-        assert all((i.dtype in [torch.float16, torch.bfloat16] for i in (query, key, value)))
+        assert all(
+            (i.dtype in [torch.float16, torch.bfloat16] for i in (query, key, value))
+        )
         assert all((i.is_cuda for i in (query, key, value)))
 
         batch_size, seqlen_q = query.shape[0], query.shape[1]
         seqlen_k = key.shape[1]
 
-        query, key, value = [rearrange(x, 'b s ... -> (b s) ...') for x in [query, key, value]]
-        cu_seqlens_q = torch.arange(0, (batch_size + 1) * seqlen_q, step=seqlen_q, dtype=torch.int32,
-                                    device=query.device)
+        query, key, value = [
+            rearrange(x, "b s ... -> (b s) ...") for x in [query, key, value]
+        ]
+        cu_seqlens_q = torch.arange(
+            0,
+            (batch_size + 1) * seqlen_q,
+            step=seqlen_q,
+            dtype=torch.int32,
+            device=query.device,
+        )
 
         if self.training:
             # during training q,k,v always have same seqlen
@@ -112,17 +130,29 @@ class FlashSelfAttention(MegatronModule):
             # turn off FA causal mask after first inference autoregressive iteration
             # only on first autoregressive step q,k,v have same seqlen
             is_causal = seqlen_q == seqlen_k
-            cu_seqlens_k = torch.arange(0, (batch_size + 1) * seqlen_k, step=seqlen_k, dtype=torch.int32,
-                        device=query.device)
+            cu_seqlens_k = torch.arange(
+                0,
+                (batch_size + 1) * seqlen_k,
+                step=seqlen_k,
+                dtype=torch.int32,
+                device=query.device,
+            )
             self.dropout_p = 0
 
         output = flash_attn_varlen_func(
-            query, key, value, cu_seqlens_q, cu_seqlens_k, seqlen_q, seqlen_k,
+            query,
+            key,
+            value,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            seqlen_q,
+            seqlen_k,
             self.dropout_p,
-            softmax_scale=self.softmax_scale, causal=is_causal
+            softmax_scale=self.softmax_scale,
+            causal=is_causal,
         )
 
-        output = rearrange(output, '(b s) ... -> b s ...', b=batch_size)
+        output = rearrange(output, "(b s) ... -> b s ...", b=batch_size)
         return output
 
 
@@ -149,7 +179,7 @@ class LocalAttention:
             layer_number=layer_number,
             attn_mask_type=attn_mask_type,
             attention_type=attention_type,
-            attention_dropout=attention_dropout
+            attention_dropout=attention_dropout,
         )
         # else:
         #     raise Exception('Only LayerNorm and RMSNorm are curently supported')

@@ -1,4 +1,5 @@
 """LengthPoolSortDataset"""
+
 from typing import Callable, Iterator, List, TypeVar, Optional
 import random
 from megatron.energon.flavors.base_dataset import SavableDataset
@@ -6,12 +7,14 @@ from megatron.energon.worker import WorkerConfig
 
 T_sample = TypeVar("T_sample")
 
+
 class LengthPoolSortDataset(SavableDataset[T_sample]):
     """
     局部池化长度排序:
       - 累积 pool_size 个样本，按 key_fn(sample) 排序后依次输出
       - 剩余不足 pool_size 的尾部再排序输出
     """
+
     def __init__(
         self,
         dataset: SavableDataset[T_sample],
@@ -99,4 +102,3 @@ class LengthPoolSortDataset(SavableDataset[T_sample]):
             "tail_shuffle": self.tail_shuffle,
             "dataset": self.dataset.config(),
         }
-

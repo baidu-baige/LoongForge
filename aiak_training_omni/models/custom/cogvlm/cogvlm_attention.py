@@ -1,4 +1,5 @@
-""" attention module for aiak """
+"""attention module for aiak"""
+
 import torch
 
 from megatron.core.transformer.attention import SelfAttention
@@ -21,6 +22,7 @@ class CogvlmSelfAttention(SelfAttention):
     """
     SelfAttention for cogvlm
     """
+
     def __init__(self, config: TransformerConfig, **kwargs):
         super().__init__(config, **kwargs)
 
@@ -63,16 +65,18 @@ class CogvlmSelfAttention(SelfAttention):
         # ===================================================
         # Adjust key, value, and rotary_pos_emb for inference
         # ===================================================
-        query, key, value, rotary_pos_emb, attn_mask_type = self._adjust_key_value_for_inference(
-            inference_params,
-            query,
-            key,
-            value,
-            rotary_pos_emb,
-            rotary_pos_cos,
-            rotary_pos_sin,
-            attn_mask_type,
-            sequence_len_offset,
+        query, key, value, rotary_pos_emb, attn_mask_type = (
+            self._adjust_key_value_for_inference(
+                inference_params,
+                query,
+                key,
+                value,
+                rotary_pos_emb,
+                rotary_pos_cos,
+                rotary_pos_sin,
+                attn_mask_type,
+                sequence_len_offset,
+            )
         )
 
         if packed_seq_params is not None:
@@ -98,7 +102,6 @@ class CogvlmSelfAttention(SelfAttention):
             else:
                 cu_seqlens_q = cu_seqlens_kv = None
 
-                
             query = self.apply_rotary_fn(
                 query,
                 q_pos_emb,
@@ -155,7 +158,9 @@ class CogvlmSelfAttention(SelfAttention):
 
         return output, bias
 
-    def get_query_key_value_tensors(self, hidden_states, key_value_states=None, **kwargs):
+    def get_query_key_value_tensors(
+        self, hidden_states, key_value_states=None, **kwargs
+    ):
         """
         Derives `query`, `key` and `value` tensors from `hidden_states`.
         """
@@ -166,7 +171,11 @@ class CogvlmSelfAttention(SelfAttention):
         new_tensor_shape = mixed_qkv.size()[:-1] + (
             self.num_query_groups_per_partition,
             (
-                (self.num_attention_heads_per_partition // self.num_query_groups_per_partition + 2)
+                (
+                    self.num_attention_heads_per_partition
+                    // self.num_query_groups_per_partition
+                    + 2
+                )
                 * self.hidden_size_per_attention_head
             ),
         )
@@ -200,7 +209,9 @@ class CogvlmSelfAttention(SelfAttention):
             )
 
         # [sq, b, ng, np/ng * hn] -> [sq, b, np, hn]
-        query = query.reshape(query.size(0), query.size(1), -1, self.hidden_size_per_attention_head)
+        query = query.reshape(
+            query.size(0), query.size(1), -1, self.hidden_size_per_attention_head
+        )
 
         if self.q_layernorm is not None:
             query = self.q_layernorm(query)

@@ -14,7 +14,11 @@ from megatron.core.utils import log_single_rank
 from megatron.core.datasets.utils import Split
 from transformers import ProcessorMixin
 
-from aiak_training_omni.utils.constants import SFTDataFormats, DEFAULT_DATASET_NAME, SFT_SUPPORT_DATA_TYPE
+from aiak_training_omni.utils.constants import (
+    SFTDataFormats,
+    DEFAULT_DATASET_NAME,
+    SFT_SUPPORT_DATA_TYPE,
+)
 
 from .blended_hf_dataset_config import BlendedHuggingFaceDatasetConfig
 from .hf_dataset import HuggingFaceDataset
@@ -30,13 +34,14 @@ logger.setLevel(logging.INFO)
 @dataclass
 class Columns(object):
     """The field of the dataset."""
+
     pass
 
 
 @dataclass
 class AlpacaColumns(Columns):
-    """The field of the dataset.
-    """    
+    """The field of the dataset."""
+
     system: Optional[str] = None
     """The system prompt for sft"""
 
@@ -55,8 +60,8 @@ class AlpacaColumns(Columns):
 
 @dataclass
 class ShareGPTColumns(Columns):
-    """The field of the dataset.
-    """
+    """The field of the dataset."""
+
     messages: Optional[List[dict]] = field(default_factory=list)
     """The messages for sft"""
 
@@ -75,8 +80,8 @@ class ShareGPTColumns(Columns):
 
 @dataclass
 class ShareGPTTags(object):
-    """The tag of the dataset.
-    """
+    """The tag of the dataset."""
+
     role_tag: Optional[str] = None
     """The role of the tag"""
 
@@ -101,8 +106,8 @@ class ShareGPTTags(object):
 
 @dataclass
 class SFTDataFormat(object):
-    """The data format of the dataset.
-    """
+    """The data format of the dataset."""
+
     format: Optional[str] = None
     """The format of the dataset."""
 
@@ -118,8 +123,8 @@ class SFTDataFormat(object):
 
 @dataclass
 class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
-    """The data config in SFT dataset
-    """
+    """The data config in SFT dataset"""
+
     dataset_config_file: str = ""
     """A path to a json file containing the dataset configuration for each dataset"""
 
@@ -137,13 +142,13 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
 
     eod_mask_loss: bool = None
     """Option to enable the EOD/EOS mask loss"""
-    
+
     history_mask_loss: bool = False
     """Option to enable the history mask loss"""
 
     is_tokenized: bool = False
     """Whether the dataset is tokenized or not."""
-    
+
     packing: bool = False
     """Whether to pack the dataset or not."""
 
@@ -162,6 +167,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
 
     def _setup_default_dataset(self):
         """Setup default dataset or fix the length of dataset list"""
+
         def _setup(_blend, _dataset):
             if _blend is not None:
                 if _dataset is None:
@@ -170,7 +176,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
                     log_single_rank(
                         logger,
                         logging.WARN,
-                        f">>> Not given any dataset name for {_blend}, setting to {_dataset}."
+                        f">>> Not given any dataset name for {_blend}, setting to {_dataset}.",
                     )
 
                 elif len(_dataset) != len(_blend[0]) and len(_dataset) == 1:
@@ -179,7 +185,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
                         logger,
                         logging.WARN,
                         f">>> Only given one dataset name for {_blend}, "
-                         "and all datasets will be parsed according to the given dataset format"
+                        "and all datasets will be parsed according to the given dataset format",
                     )
 
             return _dataset
@@ -192,16 +198,21 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
             if self.dataset_per_split is None:
                 self.dataset_per_split = [None] * len(self.blend_per_split)
 
-            assert len(self.dataset_per_split) == len(self.blend_per_split), \
-                f"datset_per_split must contain {len(self.blend_per_split)} items"
+            assert len(self.dataset_per_split) == len(
+                self.blend_per_split
+            ), f"datset_per_split must contain {len(self.blend_per_split)} items"
 
             for i in range(len(self.blend_per_split)):
-                self.dataset_per_split[i] = _setup(self.blend_per_split[i], self.dataset_per_split[i])
+                self.dataset_per_split[i] = _setup(
+                    self.blend_per_split[i], self.dataset_per_split[i]
+                )
 
     def __post_init__(self) -> None:
         self._setup_default_dataset()
 
-        assert self.dataset_config_file is not None, "dataset_config_file must be provided"
+        assert (
+            self.dataset_config_file is not None
+        ), "dataset_config_file must be provided"
         assert self.chat_template is not None, "chat_template must be provided"
         assert self.eod_mask_loss is not None, "eod_mask_loss must be provided"
 
@@ -212,7 +223,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
 
 
 class SFTDataset(HuggingFaceDataset):
-    """Build the sft dataset. """
+    """Build the sft dataset."""
 
     def __init__(
         self,
@@ -226,11 +237,11 @@ class SFTDataset(HuggingFaceDataset):
         self.config = config
         self.dataset_path = dataset_path
         self.dataset_name = dataset_name
-        
+
         self.sft_dataset = None
         self.num_samples = 0
         self.split_dataset = [None] * len(Split)
-        
+
         self.build()
 
         if print_example:
@@ -239,7 +250,7 @@ class SFTDataset(HuggingFaceDataset):
     def build(self) -> Optional[Tuple[Union[Dataset, IterableDataset], int]]:
         """
         build the sft dataset.
-    
+
         Returns:
             dataset: The sft dataset.
             num_samples: The number of samples in the dataset.
@@ -248,13 +259,13 @@ class SFTDataset(HuggingFaceDataset):
             return self._build_from_tokenized_data()
 
         return self._build_from_raw_data()
-    
+
     def _build_from_raw_data(self):
         """
         Build dataset from raw data.
         """
         self.dataset_format = self._get_format_config()
-        
+
         path_to_cache = self.config.path_to_cache
         if path_to_cache is None or not torch.distributed.is_initialized():
             return self._build_low_level_dataset(path_to_cache=path_to_cache)
@@ -268,24 +279,29 @@ class SFTDataset(HuggingFaceDataset):
 
         if rank != 0:
             self._build_low_level_dataset(path_to_cache=path_to_cache)
-    
+
     def _build_from_tokenized_data(self):
         """
         Build dataset from tokenized data.
         """
-        assert os.path.isdir(self.dataset_path) and len(os.listdir(self.dataset_path)) > 0, \
-            f"dataset path {self.dataset_path} is not a directory, or empty"
+        assert (
+            os.path.isdir(self.dataset_path) and len(os.listdir(self.dataset_path)) > 0
+        ), f"dataset path {self.dataset_path} is not a directory, or empty"
 
-        log_single_rank(logger,
-                        logging.INFO,
-                        f">>> Loading tokenized dataset from {self.dataset_path}, and will ignore --split flag ...")
+        log_single_rank(
+            logger,
+            logging.INFO,
+            f">>> Loading tokenized dataset from {self.dataset_path}, and will ignore --split flag ...",
+        )
 
         dataset_dict = DatasetDict.load_from_disk(self.dataset_path)
 
         for i, split in enumerate(Split):
             if split.name in dataset_dict:
-                dataset = dataset_dict[split.name]    
-                log_single_rank(logger, logging.INFO, f">>> {split.name} samples: {len(dataset)}")
+                dataset = dataset_dict[split.name]
+                log_single_rank(
+                    logger, logging.INFO, f">>> {split.name} samples: {len(dataset)}"
+                )
 
                 if self.config.streaming:
                     dataset = dataset.to_iterable_dataset()
@@ -295,7 +311,7 @@ class SFTDataset(HuggingFaceDataset):
     def _get_format_config(self) -> SFTDataFormat:
         """
         Get the format config of the dataset.
-        
+
         Returns:
             SFTDataFormat: The format config of the dataset.
         """
@@ -305,12 +321,16 @@ class SFTDataset(HuggingFaceDataset):
             config_file = json.load(f)
 
         _dataset_desc = config_file.get(self.dataset_name, None)
-        
-        if _dataset_desc is None:
-            raise ValueError(f"Dataset {self.dataset_name} not found "
-                             f"in config file {self.config.dataset_config_file}")
 
-        _desc_format = _dataset_desc.get("format", None) or _dataset_desc.get("formatting", None)
+        if _dataset_desc is None:
+            raise ValueError(
+                f"Dataset {self.dataset_name} not found "
+                f"in config file {self.config.dataset_config_file}"
+            )
+
+        _desc_format = _dataset_desc.get("format", None) or _dataset_desc.get(
+            "formatting", None
+        )
         _desc_columns = _dataset_desc.get("columns", None)
         _desc_tags = _dataset_desc.get("tags", None)
 
@@ -321,11 +341,11 @@ class SFTDataset(HuggingFaceDataset):
                 f">>> Not found dataset {self.dataset_name} format in config {self.config.dataset_config_file}, "
                 f"use default {SFTDataFormats.ALPACA} format.",
             )
-            _desc_format = SFTDataFormats.ALPACA # default alpaca
+            _desc_format = SFTDataFormats.ALPACA  # default alpaca
 
         # build sft dataset config
         sft_format = SFTDataFormat(format=_desc_format)
-        
+
         # build sft dataset columns
         if sft_format.format == SFTDataFormats.ALPACA:
             sft_format.columns = AlpacaColumns()
@@ -347,13 +367,19 @@ class SFTDataset(HuggingFaceDataset):
                 sft_format.tags.content_tag = _desc_tags.get("content_tag", None)
                 sft_format.tags.user_tag = _desc_tags.get("user_tag", None)
                 sft_format.tags.assistant_tag = _desc_tags.get("assistant_tag", None)
-                sft_format.tags.observation_tag = _desc_tags.get("observation_tag", None)
+                sft_format.tags.observation_tag = _desc_tags.get(
+                    "observation_tag", None
+                )
                 sft_format.tags.function_tag = _desc_tags.get("function_tag", None)
                 sft_format.tags.system_tag = _desc_tags.get("system_tag", None)
         else:
             raise ValueError(f"Unknown dataset format {sft_format.format}")
 
-        log_single_rank(logger, logging.INFO, f">>> Dataset {self.dataset_name} format: {sft_format}")
+        log_single_rank(
+            logger,
+            logging.INFO,
+            f">>> Dataset {self.dataset_name} format: {sft_format}",
+        )
 
         return sft_format
 
@@ -362,7 +388,7 @@ class SFTDataset(HuggingFaceDataset):
         path_to_cache: Optional[str] = None,
     ) -> Optional[Tuple[Union[Dataset, IterableDataset], int]]:
         """
-        Use the huggingface datasets library to build the dataset, and execute data preprocessing with .map() function. 
+        Use the huggingface datasets library to build the dataset, and execute data preprocessing with .map() function.
 
         TODO: Maybe we should support lazy data preprocessing when not using streaming? (It should inheirit from
         the base class, and override the __getitem__() function)
@@ -375,22 +401,30 @@ class SFTDataset(HuggingFaceDataset):
         # get files
         data_files = []
         if os.path.isdir(self.dataset_path):
-            data_files = [os.path.join(self.dataset_path, file) for file in os.listdir(self.dataset_path)]
+            data_files = [
+                os.path.join(self.dataset_path, file)
+                for file in os.listdir(self.dataset_path)
+            ]
         elif os.path.isfile(self.dataset_path):
             data_files = [self.dataset_path]
         else:
             raise ValueError(f"The dataset path [{self.dataset_path}] does not exist")
 
         # check file type
-        data_type = SFT_SUPPORT_DATA_TYPE.get(os.path.splitext(data_files[0])[-1][1:], None)
-        assert data_type is not None, f"Only support file types: {', '.join(SFT_SUPPORT_DATA_TYPE.keys())}"
+        data_type = SFT_SUPPORT_DATA_TYPE.get(
+            os.path.splitext(data_files[0])[-1][1:], None
+        )
+        assert (
+            data_type is not None
+        ), f"Only support file types: {', '.join(SFT_SUPPORT_DATA_TYPE.keys())}"
 
-        if any(data_type != SFT_SUPPORT_DATA_TYPE.get(os.path.splitext(file)[-1][1:], None) for file in data_files):
+        if any(
+            data_type != SFT_SUPPORT_DATA_TYPE.get(os.path.splitext(file)[-1][1:], None)
+            for file in data_files
+        ):
             raise ValueError(f"All files must be of the same type.")
 
-        log_single_rank(logger,
-                        logging.INFO,
-                        f">>> Detected data files: {data_files}")
+        log_single_rank(logger, logging.INFO, f">>> Detected data files: {data_files}")
 
         dataset = load_dataset(
             data_type,
@@ -400,13 +434,15 @@ class SFTDataset(HuggingFaceDataset):
             token=False,
             num_proc=self.config.num_preprocess_workers,
         )
-        
+
         num_samples = len(dataset)
 
-        log_single_rank(logger,
-                        logging.INFO,
-                        f">>> Loading dataset {self.dataset_path}（{num_samples} samples) "
-                        f"with {self.dataset_name} config ...")
+        log_single_rank(
+            logger,
+            logging.INFO,
+            f">>> Loading dataset {self.dataset_path}（{num_samples} samples) "
+            f"with {self.dataset_name} config ...",
+        )
 
         if self.config.streaming:
             # FIXME: or just set streaming=True in the load_dataset() function?
@@ -418,20 +454,24 @@ class SFTDataset(HuggingFaceDataset):
             self.dataset_path,
             self.dataset_format,
             self.config,
-            path_to_cache is not None
+            path_to_cache is not None,
         )
 
         # run sft preprocess
-        dataset = convert_to_tokenized_data(dataset, self.config, path_to_cache is not None)
-        
+        dataset = convert_to_tokenized_data(
+            dataset, self.config, path_to_cache is not None
+        )
+
         if not self.config.streaming:
             # the dataset len may be changed when the dataset is packed in preprocess function,
             # so we need to update it here, but it is not a good idea to do this when streaming is enabled
-            if len(dataset) != num_samples:                
-                log_single_rank(logger,
-                                logging.INFO,
-                                f">>> The number of samples have been changed from "
-                                f"{num_samples} to {len(dataset)} after preprocess.")
+            if len(dataset) != num_samples:
+                log_single_rank(
+                    logger,
+                    logging.INFO,
+                    f">>> The number of samples have been changed from "
+                    f"{num_samples} to {len(dataset)} after preprocess.",
+                )
 
                 num_samples = len(dataset)
 
@@ -450,27 +490,37 @@ class SFTDataset(HuggingFaceDataset):
                 if subset is not None:
                     example = next(iter(subset))
                     break
-        
+
         if example is None:
-            log_single_rank(logger, logging.ERROR, f">>> No example data found in {self.dataset_path}")
+            log_single_rank(
+                logger,
+                logging.ERROR,
+                f">>> No example data found in {self.dataset_path}",
+            )
             return
 
-        example_str = f"\n----------------Example Data In {self.dataset_path}----------------\n"
+        example_str = (
+            f"\n----------------Example Data In {self.dataset_path}----------------\n"
+        )
         example_str += f">>> input: \n"
         example_str += f"{self.config.tokenizer.detokenize(example['input_ids'], skip_special_tokens=False)}\n"
         example_str += f">>> input_ids: \n{example['input_ids']}\n"
-        
-        _labels = list(filter(lambda x: x != self.config.ignore_index, example['labels']))
+
+        _labels = list(
+            filter(lambda x: x != self.config.ignore_index, example["labels"])
+        )
         example_str += f">>> labels: \n{self.config.tokenizer.detokenize(_labels, skip_special_tokens=False)}\n"
         example_str += f">>> label_ids: \n{example['labels']}\n"
         log_single_rank(logger, logging.INFO, f"{example_str}")
 
-    def split(self, split: Optional[List[Tuple[float, float]]]) -> List[Optional[Union[Dataset, IterableDataset]]]:
+    def split(
+        self, split: Optional[List[Tuple[float, float]]]
+    ) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """split the dataset into multiple subsets
-        
+
         Args:
             split (Optional[List[Tuple[float, float]]]): The split of the dataset
-        
+
         Returns:
             List[Optional[Union[Dataset, IterableDataset]]]: A list containing a dataset instance (or None)
         """
@@ -487,7 +537,9 @@ class SFTDataset(HuggingFaceDataset):
             if split[i] is not None:
                 beg = int(round(split[i][0] * float(num_elements)))
                 end = int(round(split[i][1] * float(num_elements)))
-                split_samplers.append(end - beg) #  can also calculate directly based on the proportion
+                split_samplers.append(
+                    end - beg
+                )  #  can also calculate directly based on the proportion
             else:
                 split_samplers.append(None)
 
@@ -508,7 +560,9 @@ class SFTDataset(HuggingFaceDataset):
                         low_level_dataset = temp_split["test"]
                     else:
                         # for iterable dataset
-                        self.split_dataset[i] = low_level_dataset.take(split_samplers[i])
+                        self.split_dataset[i] = low_level_dataset.take(
+                            split_samplers[i]
+                        )
                         low_level_dataset = low_level_dataset.skip(split_samplers[i])
 
                     # update the split_times

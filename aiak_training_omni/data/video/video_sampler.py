@@ -1,4 +1,4 @@
-""" VariableVideoBatchSampler """
+"""VariableVideoBatchSampler"""
 
 from collections import OrderedDict, defaultdict
 from pprint import pformat
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def format_numel_str(numel: int) -> str:
-    """ Return the number of elements as a human-readable string. """
+    """Return the number of elements as a human-readable string."""
     B = 1024**3
     M = 1024**2
     K = 1024
@@ -33,7 +33,7 @@ def format_numel_str(numel: int) -> str:
 
 
 def apply(data, method=None, frame_interval=None, seed=None, num_bucket=None):
-    """ Apply the method to the data. """
+    """Apply the method to the data."""
     return method(
         data["num_frames"],
         data["height"],
@@ -44,7 +44,7 @@ def apply(data, method=None, frame_interval=None, seed=None, num_bucket=None):
 
 
 def _get_bucket_config(bucket_config_file):
-    """ Get the bucket config from file. """
+    """Get the bucket config from file."""
     config = {}
     with open(bucket_config_file, "r") as f:
         for resolution, _conf in json.load(f).items():
@@ -55,7 +55,8 @@ def _get_bucket_config(bucket_config_file):
 
 
 class VariableVideoBatchSampler(DistributedSampler):
-    """ Sample the data based on the bucket size. """
+    """Sample the data based on the bucket size."""
+
     def __init__(
         self,
         dataset: Dataset,
@@ -74,7 +75,7 @@ class VariableVideoBatchSampler(DistributedSampler):
             rank=data_parallel_rank,
             shuffle=shuffle,
             seed=seed,
-            drop_last=drop_last
+            drop_last=drop_last,
         )
         self.dataset = dataset
         self.bucket = Bucket(_get_bucket_config(config_file))
@@ -133,16 +134,24 @@ class VariableVideoBatchSampler(DistributedSampler):
 
         # randomize the access order
         if self.shuffle:
-            bucket_id_access_order_indices = torch.randperm(len(bucket_id_access_order), generator=g).tolist()
-            bucket_id_access_order = [bucket_id_access_order[i] for i in bucket_id_access_order_indices]
+            bucket_id_access_order_indices = torch.randperm(
+                len(bucket_id_access_order), generator=g
+            ).tolist()
+            bucket_id_access_order = [
+                bucket_id_access_order[i] for i in bucket_id_access_order_indices
+            ]
 
         # make the number of bucket accesses divisible by dp size
         remainder = len(bucket_id_access_order) % self.num_replicas
         if remainder > 0:
             if self.drop_last:
-                bucket_id_access_order = bucket_id_access_order[: len(bucket_id_access_order) - remainder]
+                bucket_id_access_order = bucket_id_access_order[
+                    : len(bucket_id_access_order) - remainder
+                ]
             else:
-                bucket_id_access_order += bucket_id_access_order[: self.num_replicas - remainder]
+                bucket_id_access_order += bucket_id_access_order[
+                    : self.num_replicas - remainder
+                ]
 
         # prepare each batch from its bucket
         # according to the predefined bucket access order
@@ -161,7 +170,9 @@ class VariableVideoBatchSampler(DistributedSampler):
                 bucket_last_consumed[bucket_id] = bucket_bs
 
         for i in range(start_iter_idx, num_iters):
-            bucket_access_list = bucket_id_access_order[i * self.num_replicas : (i + 1) * self.num_replicas]
+            bucket_access_list = bucket_id_access_order[
+                i * self.num_replicas : (i + 1) * self.num_replicas
+            ]
             self.last_micro_batch_access_index += self.num_replicas
 
             # compute the data samples consumed by each access
@@ -169,7 +180,9 @@ class VariableVideoBatchSampler(DistributedSampler):
             for bucket_id in bucket_access_list:
                 bucket_bs = self.bucket.get_batch_size(bucket_id)
                 last_consumed_index = bucket_last_consumed.get(bucket_id, 0)
-                bucket_access_boundaries.append([last_consumed_index, last_consumed_index + bucket_bs])
+                bucket_access_boundaries.append(
+                    [last_consumed_index, last_consumed_index + bucket_bs]
+                )
 
                 # update consumption
                 if bucket_id in bucket_last_consumed:
@@ -184,7 +197,9 @@ class VariableVideoBatchSampler(DistributedSampler):
 
             # encode t, h, w into the sample index
             real_t, real_h, real_w = self.bucket.get_thw(bucket_id)
-            cur_micro_batch = [f"{idx}-{real_t}-{real_h}-{real_w}" for idx in cur_micro_batch]
+            cur_micro_batch = [
+                f"{idx}-{real_t}-{real_h}-{real_w}" for idx in cur_micro_batch
+            ]
             yield cur_micro_batch
 
         self.reset()
@@ -193,12 +208,14 @@ class VariableVideoBatchSampler(DistributedSampler):
         return self.get_num_batch() // dist.get_world_size()
 
     def group_by_bucket(self) -> dict:
-        """ Group the data samples by bucket """
+        """Group the data samples by bucket"""
         bucket_sample_dict = OrderedDict()
 
         from pandarallel import pandarallel
 
-        pandarallel.initialize(nb_workers=self.num_bucket_build_workers, progress_bar=False)
+        pandarallel.initialize(
+            nb_workers=self.num_bucket_build_workers, progress_bar=False
+        )
         logger.info("Building buckets...")
         bucket_ids = self.dataset.data.parallel_apply(
             apply,
@@ -208,7 +225,7 @@ class VariableVideoBatchSampler(DistributedSampler):
             seed=self.seed + self.epoch,
             num_bucket=self.bucket.num_bucket,
         )
-        
+
         # group by bucket
         # each data sample is put into a bucket with a similar image/video size
         for i in range(len(self.dataset)):
@@ -221,7 +238,7 @@ class VariableVideoBatchSampler(DistributedSampler):
         return bucket_sample_dict
 
     def get_num_batch(self) -> int:
-        """ Get the number of batches """
+        """Get the number of batches"""
         bucket_sample_dict = self.group_by_bucket()
         self._get_num_batch_cached_bucket_sample_dict = bucket_sample_dict
 
@@ -231,7 +248,7 @@ class VariableVideoBatchSampler(DistributedSampler):
         return self.approximate_num_batch
 
     def _print_bucket_info(self, bucket_sample_dict: dict) -> None:
-        """ Print the bucket info """
+        """Print the bucket info"""
         # collect statistics
         total_samples = 0
         total_batch = 0
@@ -252,7 +269,11 @@ class VariableVideoBatchSampler(DistributedSampler):
         # sort
         num_aspect_dict = dict(sorted(num_aspect_dict.items(), key=lambda x: x[0]))
         num_hwt_dict = dict(
-            sorted(num_hwt_dict.items(), key=lambda x: (get_num_pixels(x[0][0]), x[0][1]), reverse=True)
+            sorted(
+                num_hwt_dict.items(),
+                key=lambda x: (get_num_pixels(x[0][0]), x[0][1]),
+                reverse=True,
+            )
         )
         num_hwt_img_dict = {k: v for k, v in num_hwt_dict.items() if k[1] == 1}
         num_hwt_vid_dict = {k: v for k, v in num_hwt_dict.items() if k[1] > 1}
@@ -261,13 +282,16 @@ class VariableVideoBatchSampler(DistributedSampler):
         if dist.get_rank() == 0 and self.verbose:
             logger.info("Bucket Info:")
             logger.info(
-                "Bucket [#sample, #batch] by aspect ratio:\n%s", pformat(num_aspect_dict, sort_dicts=False)
+                "Bucket [#sample, #batch] by aspect ratio:\n%s",
+                pformat(num_aspect_dict, sort_dicts=False),
             )
             logger.info(
-                "Image Bucket [#sample, #batch] by HxWxT:\n%s", pformat(num_hwt_img_dict, sort_dicts=False)
+                "Image Bucket [#sample, #batch] by HxWxT:\n%s",
+                pformat(num_hwt_img_dict, sort_dicts=False),
             )
             logger.info(
-                "Video Bucket [#sample, #batch] by HxWxT:\n%s", pformat(num_hwt_vid_dict, sort_dicts=False)
+                "Video Bucket [#sample, #batch] by HxWxT:\n%s",
+                pformat(num_hwt_vid_dict, sort_dicts=False),
             )
             logger.info(
                 "#training batch: %s, #training sample: %s, #non empty bucket: %s",
@@ -278,17 +302,21 @@ class VariableVideoBatchSampler(DistributedSampler):
         self.approximate_num_batch = total_batch
 
     def reset(self):
-        """ Reset the last micro batch access index """
+        """Reset the last micro batch access index"""
         self.last_micro_batch_access_index = 0
 
     def state_dict(self, num_steps: int) -> dict:
-        """ Get the state dict """
+        """Get the state dict"""
         # the last_micro_batch_access_index in the __iter__ is often
         # not accurate during multi-workers and data prefetching
         # thus, we need the user to pass the actual steps which have been executed
         # to calculate the correct last_micro_batch_access_index
-        return {"seed": self.seed, "epoch": self.epoch, "last_micro_batch_access_index": num_steps * self.num_replicas}
+        return {
+            "seed": self.seed,
+            "epoch": self.epoch,
+            "last_micro_batch_access_index": num_steps * self.num_replicas,
+        }
 
     def load_state_dict(self, state_dict: dict) -> None:
-        """ Load the state dict """
+        """Load the state dict"""
         self.__dict__.update(state_dict)

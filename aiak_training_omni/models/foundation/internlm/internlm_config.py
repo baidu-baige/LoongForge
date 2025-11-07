@@ -5,12 +5,14 @@ from dataclasses import dataclass
 from aiak_training_omni.utils.constants import LanguageModelFamilies
 from aiak_training_omni.models.factory import register_model_config
 
+
 @dataclass
 class InternLMConfig:
     """configuration for internlm model
-    
+
     The fields need to be consistent with the definitions in args
     """
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -29,9 +31,12 @@ class InternLMConfig:
     qk_layernorm: bool = False
     untie_embeddings_and_output_weights: bool = True
 
-@register_model_config(model_family=LanguageModelFamilies.INTERNLM2_5, model_arch="internlm2.5-1.8b")
+
+@register_model_config(
+    model_family=LanguageModelFamilies.INTERNLM2_5, model_arch="internlm2.5-1.8b"
+)
 def internlm2_5_1_8b():
-    """ intern2.5 1.8b """
+    """intern2.5 1.8b"""
     return InternLMConfig(
         num_layers=24,
         hidden_size=2048,
@@ -41,9 +46,12 @@ def internlm2_5_1_8b():
         num_query_groups=8,
     )
 
-@register_model_config(model_family=LanguageModelFamilies.INTERNLM2_5, model_arch="internlm2.5-7b")
+
+@register_model_config(
+    model_family=LanguageModelFamilies.INTERNLM2_5, model_arch="internlm2.5-7b"
+)
 def internlm2_5_7b():
-    """ intern2.5 7b """
+    """intern2.5 7b"""
     return InternLMConfig(
         num_layers=32,
         hidden_size=4096,
@@ -53,9 +61,12 @@ def internlm2_5_7b():
         num_query_groups=8,
     )
 
-@register_model_config(model_family=LanguageModelFamilies.INTERNLM2_5, model_arch="internlm2.5-20b")
+
+@register_model_config(
+    model_family=LanguageModelFamilies.INTERNLM2_5, model_arch="internlm2.5-20b"
+)
 def internlm2_5_20b():
-    """ intern2.5 20b """
+    """intern2.5 20b"""
     return InternLMConfig(
         num_layers=48,
         hidden_size=6144,

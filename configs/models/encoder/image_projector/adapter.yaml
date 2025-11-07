@@ -1,5 +1,6 @@
 defaults:
   #- ../image_projector@: base
+  # - ../../base_model
   - _self_
 
 #image_projector:
@@ -11,3 +12,4 @@ activation_func:
 
 
 layernorm_epsilon: 1e-06
+

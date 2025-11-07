@@ -3,7 +3,10 @@
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_layer import TransformerLayer, TransformerLayerSubmodules
+from megatron.core.transformer.transformer_layer import (
+    TransformerLayer,
+    TransformerLayerSubmodules,
+)
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.attention import SelfAttention, SelfAttentionSubmodules
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
@@ -20,7 +23,9 @@ def get_baichuan_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     # To simplify the code, temporarily remove the compatibility with MoE/MLA.
     # If there is a new Baichuan version in the future, add and test it separately.
     assert config.num_moe_experts is None, "Not supporting MoE for Baichuan model yet."
-    assert not config.multi_latent_attention, "Not supporting multi-latent attention for Baichuan model yet."
+    assert (
+        not config.multi_latent_attention
+    ), "Not supporting multi-latent attention for Baichuan model yet."
 
     # Dense MLP with TE modules.
     dense_mlp = ModuleSpec(
@@ -34,7 +39,11 @@ def get_baichuan_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
 
     # TENorm significantly harms convergence when used for QKLayerNorm if TE Version < 1.9;
     # we instead use the Apex implementation.
-    qk_norm = multiacc_modules.TENorm if is_te_min_version("1.9.0") else multiacc_modules.LocalNorm
+    qk_norm = (
+        multiacc_modules.TENorm
+        if is_te_min_version("1.9.0")
+        else multiacc_modules.LocalNorm
+    )
 
     return ModuleSpec(
         module=TransformerLayer,
@@ -56,6 +65,5 @@ def get_baichuan_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
             pre_mlp_layernorm=IdentityOp,
             mlp=dense_mlp,
             mlp_bda=multiacc_modules.get_bias_dropout_add,
-        )
+        ),
     )
-

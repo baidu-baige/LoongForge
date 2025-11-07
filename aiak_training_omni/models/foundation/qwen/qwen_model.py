@@ -1,4 +1,5 @@
 """qwen model"""
+
 from collections import OrderedDict
 from typing import Dict, Literal, Optional
 
@@ -7,18 +8,24 @@ from .qwen_config import QwenConfig
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
-from megatron.core.models.common.embeddings.language_model_embedding import LanguageModelEmbedding
+from megatron.core.models.common.embeddings.language_model_embedding import (
+    LanguageModelEmbedding,
+)
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
-from aiak_training_llm.models.omni.base_mixins import BaseMegatronLanuageModuler
+from aiak_training_omni.models.common.base_model_mixins import (
+    BaseMegatronLanuageModuler,
+)
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
-from aiak_training_llm.utils.constants import LanguageModelFamilies, VisionLanguageModelFamilies
 import torch
+
 # from .qwen_layer_spec import get_qwen_layer_with_te_spec
-from ..qwen_vl.qwen2_vl_layer_spec import get_qwen_layer_with_spec
+from aiak_training_omni.utils.utils import import_module
+
+
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
     """Hook to ignore Transformer Engine _extra_state used for FP8.
 
@@ -31,8 +38,9 @@ def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
             which collect the missing and unexpected keys, respectively.
     """
     keys_to_remove = [
-        key for key in incompatible_keys.missing_keys
-        if "input_layernorm._extra_state" in key 
+        key
+        for key in incompatible_keys.missing_keys
+        if "input_layernorm._extra_state" in key
         or "pre_mlp_layernorm._extra_state" in key
         or "enorm._extra_state" in key
         or "hnorm._extra_state" in key
@@ -73,8 +81,17 @@ class DynamicRotaryEmbedding(RotaryEmbedding):
         use_cpu_initialization: bool = False,
         max_position_embeddings: int = 4096,
     ) -> None:
-        super().__init__(kv_channels, rotary_percent, rotary_interleaved, seq_len_interpolation_factor, rotary_base,
-                         dtype, rope_scaling, rope_scaling_factor, use_cpu_initialization)
+        super().__init__(
+            kv_channels,
+            rotary_percent,
+            rotary_interleaved,
+            seq_len_interpolation_factor,
+            rotary_base,
+            dtype,
+            rope_scaling,
+            rope_scaling_factor,
+            use_cpu_initialization,
+        )
         self.dim = kv_channels
         self.rotary_base = rotary_base
         self.scaling_factor = rope_scaling_factor
@@ -83,48 +100,70 @@ class DynamicRotaryEmbedding(RotaryEmbedding):
         self.max_position_embeddings = max_position_embeddings
         self.max_seq_len_cached = max_position_embeddings
 
-    def forward(self, max_seq_len: int, offset: int = 0, packed_seq: bool = False) -> Tensor:
-        """Forward pass of RoPE embedding """
+    def forward(
+        self, max_seq_len: int, offset: int = 0, packed_seq: bool = False
+    ) -> Tensor:
+        """Forward pass of RoPE embedding"""
         if max_seq_len > self.max_position_embeddings:
             base = self.rotary_base * (
-                    (self.scaling_factor * max_seq_len / self.max_position_embeddings) - (self.scaling_factor - 1)
+                (self.scaling_factor * max_seq_len / self.max_position_embeddings)
+                - (self.scaling_factor - 1)
             ) ** (self.dim / (self.dim - 2))
             self.inv_freq = 1.0 / (
-                    base
-                    ** (
-                            torch.arange(0, self.dim, 2, dtype=torch.float32, device=torch.cuda.current_device())
-                            / self.dim
+                base
+                ** (
+                    torch.arange(
+                        0,
+                        self.dim,
+                        2,
+                        dtype=torch.float32,
+                        device=torch.cuda.current_device(),
                     )
+                    / self.dim
+                )
             )
 
         return super().forward(max_seq_len, offset, packed_seq)
 
 
-
 class Qwen2VLRotaryEmbedding(torch.nn.Module):
-    """ Implements multimodal rotation """
+    """Implements multimodal rotation"""
+
     def __init__(self, dim, theta=1000000):
         super().__init__()
         self.inv_freq = 1.0 / (
-            theta ** (
-                torch.arange(0, dim, 2, dtype=torch.int64).float().to(torch.cuda.current_device()) / dim
+            theta
+            ** (
+                torch.arange(0, dim, 2, dtype=torch.int64)
+                .float()
+                .to(torch.cuda.current_device())
+                / dim
             )
         )
 
     @torch.no_grad()
     def forward(self, position_ids, packed_seq):
-        """ Returns the frequency """
+        """Returns the frequency"""
         # Core RoPE block. In contrast to other models, Qwen2_VL has different position ids for thw grids
         # So we expand the inv_freq to shape (3, ...)
-        inv_freq_expanded = self.inv_freq[None, None, :, None].float().expand(3, position_ids.shape[1], -1, 1)
-        position_ids_expanded = position_ids[:, :, None, :].float()  # shape (3, bs, 1, positions)
+        inv_freq_expanded = (
+            self.inv_freq[None, None, :, None]
+            .float()
+            .expand(3, position_ids.shape[1], -1, 1)
+        )
+        position_ids_expanded = position_ids[
+            :, :, None, :
+        ].float()  # shape (3, bs, 1, positions)
 
-        freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(2, 3)
+        freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(
+            2, 3
+        )
         emb = torch.cat((freqs, freqs), dim=-1)
 
         # if parallel_state.get_context_parallel_world_size() > 1:
         #     emb=get_pos_emb_on_this_cp_rank_by_tex(emb, 2, packed_seq)
         return emb
+
 
 class QwenModel(BaseMegatronLanuageModuler):
     """Qwen Transformer language model.
@@ -149,11 +188,12 @@ class QwenModel(BaseMegatronLanuageModuler):
         seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer
             sequences. The value must be a float larger than 1.0. Defaults to None.
     """
+
     config_class = QwenConfig
+
     def __init__(
         self,
         config: TransformerConfig,
-        train_args: dict,
         vocab_size: int,
         max_sequence_length: int,
         pre_process: bool = True,
@@ -161,7 +201,7 @@ class QwenModel(BaseMegatronLanuageModuler):
         fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
         share_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal['learned_absolute', 'rope'] = 'rope',
+        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         rotary_dtype: torch.dtype = torch.float32,
@@ -171,11 +211,18 @@ class QwenModel(BaseMegatronLanuageModuler):
         seq_len_interpolation_factor: Optional[float] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config=config, train_args=train_args)
+        super().__init__(config=config)
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
-        self.transformer_layer_spec = get_qwen_layer_with_spec(train_args.qk_layernorm)
+        if self.config.model_spec is None:
+            model_spec = [
+                "aiak_training_omni.models.foundation.qwen.qwen_layer_spec",
+                "get_qwen_layer_with_te_spec",
+            ]
+        else:
+            model_spec = self.config.model_spec
+        self.transformer_layer_spec = import_module(model_spec, self.config)
         self.vocab_size = vocab_size
         self.max_sequence_length = max_sequence_length
         self.pre_process = pre_process
@@ -205,24 +252,36 @@ class QwenModel(BaseMegatronLanuageModuler):
                 scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
             )
 
-        if  self.config.METAINFO['model_family'] in [VisionLanguageModelFamilies.QWEN2_5_VL, VisionLanguageModelFamilies.QWEN2_VL] and self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+        if (
+            self.config.rotary_emb_func == "Qwen2VLRotaryEmbedding"
+            and self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
             self.rotary_pos_emb = Qwen2VLRotaryEmbedding(
-                    dim=self.config.hidden_size // self.config.num_attention_heads,
-                    theta=rotary_base
+                dim=self.config.hidden_size // self.config.num_attention_heads,
+                theta=rotary_base,
             )
-        elif self.config.METAINFO['model_family'] in [VisionLanguageModelFamilies.INTERN_VL] and self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+        elif (
+            self.config.rotary_emb_func == "DynamicRotaryEmbedding"
+            and self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
             self.rotary_pos_emb = DynamicRotaryEmbedding(
-                        kv_channels=self.config.kv_channels,
-                        rotary_percent=rotary_percent,
-                        rotary_interleaved=self.config.rotary_interleaved,
-                        seq_len_interpolation_factor=seq_len_interpolation_factor,
-                        rotary_base=rotary_base,
-                        dtype=rotary_dtype,
-                        rope_scaling=rope_scaling,
-                        rope_scaling_factor=rope_scaling_factor,
-                        use_cpu_initialization=self.config.use_cpu_initialization,
-                    )
-        elif  self.config.METAINFO['model_family'] in LanguageModelFamilies.names() and self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+                kv_channels=self.config.kv_channels,
+                rotary_percent=rotary_percent,
+                rotary_interleaved=self.config.rotary_interleaved,
+                seq_len_interpolation_factor=seq_len_interpolation_factor,
+                rotary_base=rotary_base,
+                dtype=rotary_dtype,
+                rope_scaling=rope_scaling,
+                rope_scaling_factor=rope_scaling_factor,
+                use_cpu_initialization=self.config.use_cpu_initialization,
+            )
+        elif (
+            self.config.rotary_emb_func == "RotaryEmbedding"
+            and self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
             self.rotary_pos_emb = RotaryEmbedding(
                 kv_channels=self.config.kv_channels,
                 rotary_percent=rotary_percent,
@@ -232,6 +291,10 @@ class QwenModel(BaseMegatronLanuageModuler):
                 rope_scaling=rope_scaling,
                 rope_scaling_factor=rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
+            )
+        else:
+            raise NotImplementedError(
+                f"Rotarty embedding type {self.config.rotary_emb_func} not implemented."
             )
         # Cache for RoPE tensors which do not change between iterations.
         self.rotary_pos_emb_cache = {}
@@ -279,10 +342,14 @@ class QwenModel(BaseMegatronLanuageModuler):
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(
-                self.config, self.state_dict(), prefix=f'{type(self).__name__}_init_ckpt'
+                self.config,
+                self.state_dict(),
+                prefix=f"{type(self).__name__}_init_ckpt",
             )
 
-        self.register_load_state_dict_post_hook(_load_state_dict_hook_ignore_extra_state)
+        self.register_load_state_dict_post_hook(
+            _load_state_dict_hook_ignore_extra_state
+        )
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
         """Sets input tensor to the model.
@@ -297,7 +364,7 @@ class QwenModel(BaseMegatronLanuageModuler):
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
 
-        assert len(input_tensor) == 1, 'input_tensor should only be length 1'
+        assert len(input_tensor) == 1, "input_tensor should only be length 1"
         self.decoder.set_input_tensor(input_tensor[0])
 
     def forward(
@@ -331,27 +398,42 @@ class QwenModel(BaseMegatronLanuageModuler):
         # Decoder embedding.
         if decoder_input is None:
             if self.pre_process:
-                decoder_input = self.embedding(input_ids=input_ids, position_ids=position_ids)
+                decoder_input = self.embedding(
+                    input_ids=input_ids, position_ids=position_ids
+                )
             else:
                 # intermediate stage of pipeline
                 # decoder will get hidden_states from encoder.input_tensor
                 decoder_input = None
 
         # Rotary positional embeddings (embedding is None for PP intermediate devices)
-        if rotary_pos_emb is None and self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+        if (
+            rotary_pos_emb is None
+            and self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
             rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
-                inference_params, self.decoder, decoder_input, self.config, packed_seq_params
+                inference_params,
+                self.decoder,
+                decoder_input,
+                self.config,
+                packed_seq_params,
             )
             rotary_pos_emb = self.rotary_pos_emb(
                 rotary_seq_len,
-                packed_seq=packed_seq_params is not None and packed_seq_params.qkv_format == 'thd',
+                packed_seq=packed_seq_params is not None
+                and packed_seq_params.qkv_format == "thd",
             )
         else:
-            rotary_pos_emb = self.rotary_emb(
+            rotary_pos_emb = (
+                self.rotary_emb(
                     position_ids,
                     packed_seq=packed_seq_params,
-                ).transpose(0, 2).contiguous()
-    
+                )
+                .transpose(0, 2)
+                .contiguous()
+            )
+
         # Run decoder.
         hidden_states = self.decoder(
             hidden_states=decoder_input,
@@ -372,20 +454,22 @@ class QwenModel(BaseMegatronLanuageModuler):
             output_weight = self.shared_embedding_or_output_weight()
 
         logits, _ = self.output_layer(
-            hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
+            hidden_states,
+            weight=output_weight,
+            runtime_gather_output=runtime_gather_output,
         )
 
         if has_config_logger_enabled(self.config):
             payload = OrderedDict(
                 {
-                    'input_ids': input_ids,
-                    'position_ids': position_ids,
-                    'attention_mask': attention_mask,
-                    'decoder_input': decoder_input,
-                    'logits': logits,
+                    "input_ids": input_ids,
+                    "position_ids": position_ids,
+                    "attention_mask": attention_mask,
+                    "decoder_input": decoder_input,
+                    "logits": logits,
                 }
             )
-            log_config_to_disk(self.config, payload, prefix='input_and_logits')
+            log_config_to_disk(self.config, payload, prefix="input_and_logits")
 
         if labels is None:
             # [s b h] => [b s h]
@@ -396,7 +480,10 @@ class QwenModel(BaseMegatronLanuageModuler):
         return loss
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[Dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[Dict] = None,
     ) -> ShardedStateDict:
         """Sharded state dict implementation for GPTModel backward-compatibility
         (removing extra state).
@@ -409,14 +496,16 @@ class QwenModel(BaseMegatronLanuageModuler):
         Returns:
             ShardedStateDict: sharded state dict for the GPTModel
         """
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
-        output_layer_extra_state_key = f'{prefix}output_layer._extra_state'
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
+        output_layer_extra_state_key = f"{prefix}output_layer._extra_state"
 
         # Old GPT checkpoints only stored the output layer weight key. So we remove the
         # _extra_state key but check that it doesn't contain any data anyway
         output_extra_state = sharded_state_dict.pop(output_layer_extra_state_key, None)
         assert not (
             output_extra_state and output_extra_state.data
-        ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
+        ), f"Expected output layer extra state to be empty, got: {output_extra_state}"
 
         return sharded_state_dict

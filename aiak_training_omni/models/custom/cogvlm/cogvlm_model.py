@@ -100,7 +100,7 @@ class CogVLMModel(MegatronModule):
         language_max_sequence_length: int,
         allow_missing_adapter_checkpoint: bool = False,
         parallel_output: bool = True,
-        language_position_embedding_type: str = 'rope',
+        language_position_embedding_type: str = "rope",
         language_rotary_percent: float = 1.0,
         language_rotary_dtype: torch.dtype = torch.float32,
         pre_process: bool = True,
@@ -151,11 +151,12 @@ class CogVLMModel(MegatronModule):
             # vision and language models but not the projection from vision model outputs to language model inputs.
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
-                    f"adapter.{name}"
-                    for name in self.adapter.state_dict().keys()
+                    f"adapter.{name}" for name in self.adapter.state_dict().keys()
                 ]
                 self.adapter.register_load_state_dict_post_hook(
-                    partial(_load_state_dict_hook_ignore_param_names, adapter_param_names)
+                    partial(
+                        _load_state_dict_hook_ignore_param_names, adapter_param_names
+                    )
                 )
 
         # # This attribute is needed to check if an all-reduce is required
@@ -195,7 +196,7 @@ class CogVLMModel(MegatronModule):
         # gives us non-lists or None
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
-        assert len(input_tensor) == 1, 'input_tensor should only be length 1 for llava'
+        assert len(input_tensor) == 1, "input_tensor should only be length 1 for llava"
 
         if self.add_encoder and self.add_decoder:
             self.vision_model.set_input_tensor(input_tensor[0])
@@ -207,7 +208,10 @@ class CogVLMModel(MegatronModule):
             self.language_model.set_input_tensor(input_tensor[0])
 
     def freeze(
-        self, freeze_language_model: bool, freeze_vision_model: bool, freeze_adapter: bool
+        self,
+        freeze_language_model: bool,
+        freeze_vision_model: bool,
+        freeze_adapter: bool,
     ):
         """Freeze model modules.
 
@@ -230,12 +234,20 @@ class CogVLMModel(MegatronModule):
             for param in module.parameters():
                 param.requires_grad = False
 
-    def unfreeze_expert_linear(self, unfreeze_language_expert_linear, unfreeze_vision_expert_linear):
+    def unfreeze_expert_linear(
+        self, unfreeze_language_expert_linear, unfreeze_vision_expert_linear
+    ):
         """Unfreeze model modules."""
         for param in self.language_model.parameters():
-            if getattr(param, "is_language_expert_parameter", False) and unfreeze_language_expert_linear:
+            if (
+                getattr(param, "is_language_expert_parameter", False)
+                and unfreeze_language_expert_linear
+            ):
                 param.requires_grad = True
-            if getattr(param, "is_vision_expert_parameter", False) and unfreeze_vision_expert_linear:
+            if (
+                getattr(param, "is_vision_expert_parameter", False)
+                and unfreeze_vision_expert_linear
+            ):
                 param.requires_grad = True
 
     def forward(
@@ -275,7 +287,9 @@ class CogVLMModel(MegatronModule):
         elif self.add_encoder:
             image_embeddings = self.vision_model(images)  # [b, img_seq_len, h_vision]
             if self._drop_vision_class_token:
-                image_embeddings = image_embeddings[:, self.vision_model.class_token_len :, :]
+                image_embeddings = image_embeddings[
+                    :, self.vision_model.class_token_len :, :
+                ]
             # contiguous() call required as `permute` can sparsify the tensor and this breaks pipelining
             image_embeddings = image_embeddings.permute(
                 1, 0, 2
@@ -307,10 +321,15 @@ class CogVLMModel(MegatronModule):
             if use_inference_kv_cache:
                 combined_embeddings = language_embeddings
             else:
-                combined_embeddings = language_embeddings.transpose(0, 1).index_put(
-                    [token_type_ids == VISION_TOKEN_TYPE],
-                    rearrange(image_embeddings, "s b h -> (b s) h")
-                ).transpose(0, 1).contiguous()
+                combined_embeddings = (
+                    language_embeddings.transpose(0, 1)
+                    .index_put(
+                        [token_type_ids == VISION_TOKEN_TYPE],
+                        rearrange(image_embeddings, "s b h -> (b s) h"),
+                    )
+                    .transpose(0, 1)
+                    .contiguous()
+                )
                 # [combined_seq_len, b, h_language]
         else:
             combined_embeddings = None

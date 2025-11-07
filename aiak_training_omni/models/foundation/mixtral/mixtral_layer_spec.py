@@ -3,7 +3,10 @@
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_layer import TransformerLayer, TransformerLayerSubmodules
+from megatron.core.transformer.transformer_layer import (
+    TransformerLayer,
+    TransformerLayerSubmodules,
+)
 from megatron.core.transformer.attention import SelfAttention, SelfAttentionSubmodules
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
@@ -16,8 +19,7 @@ from aiak_training_omni.models.dispatch import multiacc_modules
 
 
 def _get_mlp_module_spec(
-    num_experts: int=None,
-    moe_grouped_gemm: bool=False
+    num_experts: int = None, moe_grouped_gemm: bool = False
 ) -> ModuleSpec:
     """Helper function to get module spec for MLP/MoE"""
 
@@ -39,7 +41,7 @@ def _get_mlp_module_spec(
         expert_module = TEGroupedMLP
         linear_fc1 = multiacc_modules.TEColumnParallelGroupedLinear
         linear_fc2 = multiacc_modules.TERowParallelGroupedLinear
-        
+
     else:
         expert_module = SequentialMLP
         linear_fc1 = multiacc_modules.TEColumnParallelLinear
@@ -54,9 +56,9 @@ def _get_mlp_module_spec(
                     linear_fc1=linear_fc1,
                     linear_fc2=linear_fc2,
                     bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
-                )
+                ),
             )
-        )
+        ),
     )
 
 
@@ -65,7 +67,9 @@ def get_mixtral_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     Use this spec for an implementation using transformer
     """
     assert config.num_moe_experts > 0, "Only support MOE when using Mixtral"
-    assert not config.multi_latent_attention, "Not support multi-latent attention for Mixtral model yet."
+    assert (
+        not config.multi_latent_attention
+    ), "Not support multi-latent attention for Mixtral model yet."
 
     mlp = _get_mlp_module_spec(
         num_experts=config.num_moe_experts,
@@ -74,7 +78,11 @@ def get_mixtral_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
 
     # TENorm significantly harms convergence when used for QKLayerNorm if TE Version < 1.9;
     # we instead use the Apex implementation.
-    qk_norm = multiacc_modules.TENorm if is_te_min_version("1.9.0") else multiacc_modules.LocalNorm
+    qk_norm = (
+        multiacc_modules.TENorm
+        if is_te_min_version("1.9.0")
+        else multiacc_modules.LocalNorm
+    )
 
     return ModuleSpec(
         module=TransformerLayer,

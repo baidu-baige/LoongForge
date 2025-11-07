@@ -11,7 +11,7 @@ MODEL_FAMILY_TO_PROVIDER = {}
 def get_model_family(name: str):
     """get model family name"""
     _name = name.lower()
-    
+
     if _name in MODEL_FAMILY_TO_ARCHS:
         return _name
     elif _name in MODEL_ARCH_TO_FAMILY:
@@ -41,7 +41,7 @@ def get_support_model_archs(families: Union[List[str], str]):
         archs.extend(MODEL_FAMILY_TO_ARCHS.get(family, []))
 
     return archs
-    
+
 
 def register_model_config(model_family: str, model_arch: str):
     """
@@ -55,16 +55,20 @@ def register_model_config(model_family: str, model_arch: str):
     def _register_function(fn):
         _family = model_family.lower()
         _arch = model_arch.lower()
-        
+
         if _arch in MODEL_ARCH_CONFIGS:
-            raise ValueError(f"Cannot register duplicate model, family ({_family}), arch ({_arch})")
+            raise ValueError(
+                f"Cannot register duplicate model, family ({_family}), arch ({_arch})"
+            )
 
         if not callable(fn):
-            raise ValueError(f"Model arch register must be callable, family ({_family}), arch ({_arch})")
+            raise ValueError(
+                f"Model arch register must be callable, family ({_family}), arch ({_arch})"
+            )
 
         MODEL_ARCH_CONFIGS[_arch] = fn
         MODEL_ARCH_TO_FAMILY[_arch] = _family
-        
+
         if _family not in MODEL_FAMILY_TO_ARCHS:
             MODEL_FAMILY_TO_ARCHS[_family] = []
 
@@ -99,8 +103,10 @@ def register_model_provider(model_family: Union[str, List[str]]):
             family = str(family).lower()
 
             if family in MODEL_FAMILY_TO_PROVIDER:
-                raise ValueError(f"Cannot register duplicate model provider, family ({family})")
-            
+                raise ValueError(
+                    f"Cannot register duplicate model provider, family ({family})"
+                )
+
             if not callable(fn):
                 raise ValueError(f"Model provider must be callable, family ({family})")
 

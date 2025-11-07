@@ -9,7 +9,9 @@ from torch import Tensor
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
-from megatron.core.models.common.embeddings.language_model_embedding import LanguageModelEmbedding
+from megatron.core.models.common.embeddings.language_model_embedding import (
+    LanguageModelEmbedding,
+)
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.packed_seq_params import PackedSeqParams
@@ -17,7 +19,6 @@ from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
-
 
 
 class LLaMAModel(LanguageModule):
@@ -55,7 +56,7 @@ class LLaMAModel(LanguageModule):
         fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
         share_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal['learned_absolute', 'rope'] = 'rope',
+        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         rope_scaling: bool = False,
@@ -98,7 +99,10 @@ class LLaMAModel(LanguageModule):
                 scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
             )
 
-        if self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+        if (
+            self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
             self.rotary_pos_emb = RotaryEmbedding(
                 kv_channels=self.config.kv_channels,
                 rotary_percent=rotary_percent,
@@ -154,10 +158,12 @@ class LLaMAModel(LanguageModule):
 
         if self.pre_process or self.post_process:
             self.setup_embeddings_and_output_layer()
-            
+
         if has_config_logger_enabled(self.config):
             log_config_to_disk(
-                self.config, self.state_dict(), prefix=f'{type(self).__name__}_init_ckpt'
+                self.config,
+                self.state_dict(),
+                prefix=f"{type(self).__name__}_init_ckpt",
             )
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
@@ -173,7 +179,7 @@ class LLaMAModel(LanguageModule):
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
 
-        assert len(input_tensor) == 1, 'input_tensor should only be length 1'
+        assert len(input_tensor) == 1, "input_tensor should only be length 1"
         self.decoder.set_input_tensor(input_tensor[0])
 
     def forward(
@@ -206,20 +212,31 @@ class LLaMAModel(LanguageModule):
         # Decoder embedding.
         if decoder_input is None:
             if self.pre_process:
-                decoder_input = self.embedding(input_ids=input_ids, position_ids=position_ids)
+                decoder_input = self.embedding(
+                    input_ids=input_ids, position_ids=position_ids
+                )
             else:
                 # intermediate stage of pipeline
                 # decoder will get hidden_states from encoder.input_tensor
                 decoder_input = None
 
         # Rotary positional embeddings (embedding is None for PP intermediate devices)
-        if self.position_embedding_type == 'rope' and rotary_pos_emb is None and not self.config.multi_latent_attention:
+        if (
+            self.position_embedding_type == "rope"
+            and rotary_pos_emb is None
+            and not self.config.multi_latent_attention
+        ):
             rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
-                inference_params, self.decoder, decoder_input, self.config, packed_seq_params
+                inference_params,
+                self.decoder,
+                decoder_input,
+                self.config,
+                packed_seq_params,
             )
             rotary_pos_emb = self.rotary_pos_emb(
                 rotary_seq_len,
-                packed_seq=packed_seq_params is not None and packed_seq_params.qkv_format == 'thd',
+                packed_seq=packed_seq_params is not None
+                and packed_seq_params.qkv_format == "thd",
             )
 
         # Run decoder.
@@ -241,20 +258,22 @@ class LLaMAModel(LanguageModule):
         if self.share_embeddings_and_output_weights:
             output_weight = self.shared_embedding_or_output_weight()
         logits, _ = self.output_layer(
-            hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
+            hidden_states,
+            weight=output_weight,
+            runtime_gather_output=runtime_gather_output,
         )
 
         if has_config_logger_enabled(self.config):
             payload = OrderedDict(
                 {
-                    'input_ids': input_ids,
-                    'position_ids': position_ids,
-                    'attention_mask': attention_mask,
-                    'decoder_input': decoder_input,
-                    'logits': logits,
+                    "input_ids": input_ids,
+                    "position_ids": position_ids,
+                    "attention_mask": attention_mask,
+                    "decoder_input": decoder_input,
+                    "logits": logits,
                 }
             )
-            log_config_to_disk(self.config, payload, prefix='input_and_logits')
+            log_config_to_disk(self.config, payload, prefix="input_and_logits")
 
         if labels is None:
             # [s b h] => [b s h]
@@ -265,7 +284,10 @@ class LLaMAModel(LanguageModule):
         return loss
 
     def sharded_state_dict(
-        self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[Dict] = None
+        self,
+        prefix: str = "",
+        sharded_offsets: tuple = (),
+        metadata: Optional[Dict] = None,
     ) -> ShardedStateDict:
         """Sharded state dict implementation for GPTModel backward-compatibility
         (removing extra state).
@@ -278,14 +300,16 @@ class LLaMAModel(LanguageModule):
         Returns:
             ShardedStateDict: sharded state dict for the GPTModel
         """
-        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
-        output_layer_extra_state_key = f'{prefix}output_layer._extra_state'
+        sharded_state_dict = super().sharded_state_dict(
+            prefix, sharded_offsets, metadata
+        )
+        output_layer_extra_state_key = f"{prefix}output_layer._extra_state"
 
         # Old GPT checkpoints only stored the output layer weight key. So we remove the
         # _extra_state key but check that it doesn't contain any data anyway
         output_extra_state = sharded_state_dict.pop(output_layer_extra_state_key, None)
         assert not (
             output_extra_state and output_extra_state.data
-        ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
+        ), f"Expected output layer extra state to be empty, got: {output_extra_state}"
 
         return sharded_state_dict

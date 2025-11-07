@@ -305,7 +305,7 @@ class WanCrossAttention(CrossAttention):
         layer_number: int,
         attn_mask_type=AttnMaskType.padding,
         cp_comm_type: str = None,
-        **kwargs
+        **kwargs,
     ):
 
         _submodules = deepcopy(submodules)
@@ -316,7 +316,7 @@ class WanCrossAttention(CrossAttention):
             layer_number=layer_number,
             attn_mask_type=attn_mask_type,
             cp_comm_type=cp_comm_type,
-            **kwargs
+            **kwargs,
         )
 
         _config = deepcopy(config)

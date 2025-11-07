@@ -10,9 +10,14 @@ from torch import Tensor
 from megatron.core import tensor_parallel
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
-from megatron.core.transformer.transformer_layer import TransformerLayer, TransformerLayerSubmodules
+from megatron.core.transformer.transformer_layer import (
+    TransformerLayer,
+    TransformerLayerSubmodules,
+)
 
-from megatron.core.models.common.embeddings.language_model_embedding import LanguageModelEmbedding
+from megatron.core.models.common.embeddings.language_model_embedding import (
+    LanguageModelEmbedding,
+)
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 
 from megatron.core.fusions.fused_cross_entropy import fused_vocab_parallel_cross_entropy
@@ -20,7 +25,9 @@ from megatron.core.fusions.fused_cross_entropy import fused_vocab_parallel_cross
 from megatron.core.enums import Fp8Recipe
 from megatron.core.fp8_utils import get_fp8_context
 
-from aiak_training_omni.models.deepseek.transformer.transformer_config import DeepSeekTransformerConfig
+from aiak_training_omni.models.deepseek.transformer.transformer_config import (
+    DeepSeekTransformerConfig,
+)
 
 
 @dataclass
@@ -36,6 +43,7 @@ class MultiTokenPredLayerDeepSeekSubmodules(TransformerLayerSubmodules):
         output_layernorm (Union[ModuleSpec, type], optional): Specification or type of the output head pre-layernorm.
             Defaults to IdentityOp.
     """
+
     eh_proj: Union[ModuleSpec, type] = IdentityOp
     hnorm: Union[ModuleSpec, type] = IdentityOp
     enorm: Union[ModuleSpec, type] = IdentityOp
@@ -59,7 +67,9 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
         # Params for MTP embedding layer
         vocab_size: int,
         max_sequence_length: int,
-        position_embedding_type: Literal['learned_absolute', 'rope'] = 'learned_absolute',
+        position_embedding_type: Literal[
+            "learned_absolute", "rope"
+        ] = "learned_absolute",
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         seq_len_interpolation_factor: Optional[float] = None,
@@ -83,19 +93,23 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
                 submodules=submodules,
                 layer_number=layer_number,
                 hidden_dropout=hidden_dropout,
-                **kwargs
+                **kwargs,
             )
 
         self.vocab_size = vocab_size
         self.max_sequence_length = max_sequence_length
-        self.share_mtp_embeddings_and_output_weights = share_mtp_embeddings_and_output_weights 
+        self.share_mtp_embeddings_and_output_weights = (
+            share_mtp_embeddings_and_output_weights
+        )
         self.position_embedding_type = position_embedding_type
 
         self.pre_process = pre_process
         self.post_process = post_process
 
         # Whether use FP8 mixed precision in TransformerLayer forward
-        self.use_inner_fp8_context = self.config.fp8 and self.config.fp8_recipe != Fp8Recipe.delayed
+        self.use_inner_fp8_context = (
+            self.config.fp8 and self.config.fp8_recipe != Fp8Recipe.delayed
+        )
 
         # The embedding section
         self.embedding = LanguageModelEmbedding(
@@ -106,7 +120,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
             # TODO: add `skip_weight_param_allocation` after megatron-core update
         )
 
-        if position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+        if position_embedding_type == "rope" and not self.config.multi_latent_attention:
             # not used for mla
             self.rotary_pos_emb = RotaryEmbedding(
                 kv_channels=self.config.kv_channels,
@@ -127,7 +141,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
             bias=self.config.add_bias_linear,
             skip_bias_add=True,
             is_expert=False,
-            tp_comm_buffer_name='eh',
+            tp_comm_buffer_name="eh",
             skip_weight_param_allocation=False,
         )
 
@@ -137,7 +151,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
             config=self.config,
             hidden_size=self.config.hidden_size,
             eps=self.config.layernorm_epsilon,
-            )
+        )
 
         # Setup the hidden_states norm
         self.hnorm = build_module(
@@ -145,7 +159,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
             config=self.config,
             hidden_size=self.config.hidden_size,
             eps=self.config.layernorm_epsilon,
-            )
+        )
 
         # Setup the layernorm before the output head layer, notably,
         # the layernorm is differ from the main model and not shared.
@@ -234,13 +248,21 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
 
         # Rotary positional embeddings (embedding is None for PP intermediate devices)
         rotary_pos_emb = None
-        if self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+        if (
+            self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
             rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
-                inference_params, self.decoder, decoder_input, self.config, packed_seq_params
+                inference_params,
+                self.decoder,
+                decoder_input,
+                self.config,
+                packed_seq_params,
             )
             rotary_pos_emb = self.rotary_pos_emb(
                 rotary_seq_len,
-                packed_seq=packed_seq_params is not None and packed_seq_params.qkv_format == 'thd',
+                packed_seq=packed_seq_params is not None
+                and packed_seq_params.qkv_format == "thd",
             )
 
         with torch.cuda.nvtx.range("MTP_layer_forward"):
@@ -251,7 +273,11 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
             hidden_states, _ = self.eh_proj(hidden_states)
 
             # Only the transformer layer is warpped in FP8 context
-            inner_fp8_context = get_fp8_context(self.config) if self.use_inner_fp8_context else nullcontext()
+            inner_fp8_context = (
+                get_fp8_context(self.config)
+                if self.use_inner_fp8_context
+                else nullcontext()
+            )
             with inner_fp8_context:
                 # Forward pass through the MTP layer's TransformerLayer
                 hidden_states, _ = super(MultiTokenPredLayerDeepSeek, self).forward(
@@ -270,7 +296,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
                 output_layernorm_output = self.output_layernorm(hidden_states)
             else:
                 output_layernorm_output = hidden_states
-            
+
             logits, _ = self.output_head(output_layernorm_output, weight=output_weight)
 
         if labels is None:
@@ -278,7 +304,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
             return logits.transpose(0, 1).contiguous()
 
         loss = self.compute_language_model_loss(labels, logits)
-        
+
         return hidden_states, loss
 
     def _submodule_eh_proj_dw(self):

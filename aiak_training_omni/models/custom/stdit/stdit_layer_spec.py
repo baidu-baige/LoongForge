@@ -13,7 +13,9 @@ from megatron.core.transformer.attention import (
     SelfAttentionSubmodules,
 )
 
-from megatron.core.models.common.embeddings.rotary_pos_embedding import apply_rotary_pos_emb
+from megatron.core.models.common.embeddings.rotary_pos_embedding import (
+    apply_rotary_pos_emb,
+)
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.spec_utils import ModuleSpec
@@ -50,7 +52,10 @@ def get_stdit_layer_with_te_spec() -> ModuleSpec:
             # Spatial Attention
             spatial_self_attention=ModuleSpec(
                 module=UlyssesSelfAttention,
-                params={"attn_mask_type": AttnMaskType.padding, "ulysses_gather_idx": 1},
+                params={
+                    "attn_mask_type": AttnMaskType.padding,
+                    "ulysses_gather_idx": 1,
+                },
                 submodules=SelfAttentionSubmodules(
                     linear_qkv=TEColumnParallelLinear,
                     core_attention=TEDotProductAttention,
@@ -59,7 +64,6 @@ def get_stdit_layer_with_te_spec() -> ModuleSpec:
                 ),
             ),
             spatial_self_attn_bda=get_bias_dropout_add,
-
             # Temporal Attention
             temporal_self_attention=ModuleSpec(
                 module=UlyssesSelfAttention,
@@ -72,7 +76,6 @@ def get_stdit_layer_with_te_spec() -> ModuleSpec:
                 ),
             ),
             temporal_self_attn_bda=get_bias_dropout_add,
-
             # Cross attention
             cross_attention=ModuleSpec(
                 module=UlyssesCrossAttention,
@@ -86,7 +89,6 @@ def get_stdit_layer_with_te_spec() -> ModuleSpec:
                 ),
             ),
             cross_attn_bda=get_bias_dropout_add,
-
             # MLP
             pre_mlp_layernorm=ModuleSpec(
                 module=LocalNorm,

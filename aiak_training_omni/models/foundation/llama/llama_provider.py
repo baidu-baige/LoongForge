@@ -1,4 +1,5 @@
 """llama model provider"""
+
 import inspect
 from contextlib import nullcontext
 from megatron.core.transformer.spec_utils import import_module
@@ -12,12 +13,18 @@ from .llama_model import LLaMAModel
 from .llama_layer_spec import get_llama_layer_with_te_spec
 
 
-@register_model_provider(model_family=[LanguageModelFamilies.LLAMA,
-                                       LanguageModelFamilies.LLAMA2,
-                                       LanguageModelFamilies.LLAMA3,
-                                       LanguageModelFamilies.LLAMA3_1,])
+@register_model_provider(
+    model_family=[
+        LanguageModelFamilies.LLAMA,
+        LanguageModelFamilies.LLAMA2,
+        LanguageModelFamilies.LLAMA3,
+        LanguageModelFamilies.LLAMA3_1,
+    ]
+)
 def llama_model_provider(
-    pre_process: bool = True, post_process: bool = True, parallel_output: bool = True,
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
 ) -> LLaMAModel:
     """Builds the llama model.
 
@@ -31,7 +38,7 @@ def llama_model_provider(
     """
     args = get_args()
 
-    print_rank_0('building LLaMA model ...')
+    print_rank_0("building LLaMA model ...")
 
     config = build_transformer_config(args)
 
@@ -53,10 +60,15 @@ def llama_model_provider(
             build_model_context_args["enabled"] = True
 
             # Check if fp8_model_init supports preserve_high_precision_init_val
-            if "preserve_high_precision_init_val" in inspect.signature(fp8_model_init).parameters:
+            if (
+                "preserve_high_precision_init_val"
+                in inspect.signature(fp8_model_init).parameters
+            ):
                 build_model_context_args["preserve_high_precision_init_val"] = True
         except:
-            raise RuntimeError("--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found.")
+            raise RuntimeError(
+                "--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found."
+            )
 
     with build_model_context(**build_model_context_args):
         model = LLaMAModel(

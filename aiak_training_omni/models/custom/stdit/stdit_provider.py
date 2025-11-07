@@ -7,7 +7,9 @@ from aiak_training_omni.utils.constants import VideoLanguageModelFamilies
 
 from aiak_training_omni.models.factory import register_model_provider
 
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import StditTransformerConfig
+from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
+    StditTransformerConfig,
+)
 
 from .stdit_model import STDiTModel
 from .stdit_layer_spec import get_stdit_layer_with_te_spec
@@ -15,7 +17,9 @@ from .stdit_layer_spec import get_stdit_layer_with_te_spec
 
 @register_model_provider(model_family=[VideoLanguageModelFamilies.STDIT])
 def stdit_model_provider(
-    pre_process: bool = True, post_process: bool = True, parallel_output: bool = True,
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
 ) -> STDiTModel:
     """Builds the STDiT model.
 
@@ -29,16 +33,16 @@ def stdit_model_provider(
     """
     args = get_args()
 
-    print_rank_0('building STDiT model ...')
-    
+    print_rank_0("building STDiT model ...")
+
     config = build_transformer_config(args, config_class=StditTransformerConfig)
-    
+
     if args.use_legacy_models:
         raise ValueError("Classic Megatron-LM models are not supported.")
-    
+
     if args.pipeline_model_parallel_size > 1:
         raise NotImplementedError("Pipeline parallelism is not supported yet.")
-    
+
     if args.spec is not None:
         transformer_layer_spec = import_module(args.spec)
     else:
@@ -53,7 +57,9 @@ def stdit_model_provider(
         raise ValueError(f"seq_length {args.seq_length} != {f} * {h} * {w}")
 
     if args.max_position_embeddings < f * h * w:
-        raise ValueError(f"max_position_embeddings {args.max_position_embeddings} < {f} * {h} * {w}")
+        raise ValueError(
+            f"max_position_embeddings {args.max_position_embeddings} < {f} * {h} * {w}"
+        )
 
     model = STDiTModel(
         config=config,

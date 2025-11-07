@@ -9,6 +9,7 @@ from aiak_training_omni.models.factory import register_model_config
 @dataclass
 class MixtralConfig:
     """config for mixtral model"""
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -32,7 +33,9 @@ class MixtralConfig:
     make_vocab_size_divisible_by: int = 128
 
 
-@register_model_config(model_family=LanguageModelFamilies.MIXTRAL, model_arch="mixtral-8x7b")
+@register_model_config(
+    model_family=LanguageModelFamilies.MIXTRAL, model_arch="mixtral-8x7b"
+)
 def mixtral_8x7b():
     """mixtral 8x7b"""
     return MixtralConfig(
@@ -49,7 +52,9 @@ def mixtral_8x7b():
     )
 
 
-@register_model_config(model_family=LanguageModelFamilies.MIXTRAL, model_arch="mixtral-8x22b")
+@register_model_config(
+    model_family=LanguageModelFamilies.MIXTRAL, model_arch="mixtral-8x22b"
+)
 def mixtral_8x22b():
     """mixtral 8x22b"""
     return MixtralConfig(

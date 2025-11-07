@@ -1,11 +1,14 @@
 """register qwen model with different config"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from aiak_training_omni.models.common.base_config import BaseModelConfig
+from megatron.core.transformer import TransformerConfig
 
 
+@dataclass
 class QwenConfig(BaseModelConfig):
     """config for qwen model"""
+
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
@@ -28,6 +31,6 @@ class QwenConfig(BaseModelConfig):
     kv_channels: int = None
     num_experts: int = None
     moe_ffn_hidden_size: int = None
-    rotary_embedding_type: str = "standard"
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    rotary_emb_func: str = "RotaryEmbedding"
+    model_spec = None
+    model_name: str = "qwen"

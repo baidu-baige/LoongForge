@@ -26,7 +26,9 @@ from einops import rearrange
 approx_gelu = lambda: nn.GELU(approximate="tanh")
 
 
-def get_layernorm(hidden_size: torch.Tensor, eps: float, affine: bool, use_kernel: bool):
+def get_layernorm(
+    hidden_size: torch.Tensor, eps: float, affine: bool, use_kernel: bool
+):
     """Get LayerNorm."""
     if use_kernel:
         try:
@@ -40,7 +42,7 @@ def get_layernorm(hidden_size: torch.Tensor, eps: float, affine: bool, use_kerne
 
 
 def modulate(norm_func, x, shift, scale):
-    """ Modulate x by shift and scale. """
+    """Modulate x by shift and scale."""
     # Suppose x is (B, N, D), shift is (B, D), scale is (B, D)
     dtype = x.dtype
     x = norm_func(x.to(torch.float32)).to(dtype)
@@ -50,7 +52,7 @@ def modulate(norm_func, x, shift, scale):
 
 
 def t2i_modulate(x, shift, scale):
-    """ t2i_modulate. """
+    """t2i_modulate."""
     return x * (1 + scale) + shift
 
 
@@ -84,7 +86,9 @@ class PatchEmbed3D(nn.Module):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
-        self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv3d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -143,16 +147,22 @@ class TimestepEmbedder(nn.Module):
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
-        freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half)
+        freqs = torch.exp(
+            -math.log(max_period)
+            * torch.arange(start=0, end=half, dtype=torch.float32)
+            / half
+        )
         freqs = freqs.to(device=t.device)
         args = t[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
-            embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+            embedding = torch.cat(
+                [embedding, torch.zeros_like(embedding[:, :1])], dim=-1
+            )
         return embedding
 
     def forward(self, t, dtype):
-        """ forward function. """
+        """forward function."""
         t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
         if t_freq.dtype != dtype:
             t_freq = t_freq.to(dtype)
@@ -168,7 +178,9 @@ class LabelEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size, dropout_prob):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
-        self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding, hidden_size)
+        self.embedding_table = nn.Embedding(
+            num_classes + use_cfg_embedding, hidden_size
+        )
         self.num_classes = num_classes
         self.dropout_prob = dropout_prob
 
@@ -184,7 +196,7 @@ class LabelEmbedder(nn.Module):
         return labels
 
     def forward(self, labels, train, force_drop_ids=None):
-        """ forward function. """
+        """forward function."""
         use_dropout = self.dropout_prob > 0
         if (train and use_dropout) or (force_drop_ids is not None):
             labels = self.token_drop(labels, force_drop_ids)
@@ -197,7 +209,9 @@ class SizeEmbedder(TimestepEmbedder):
     """
 
     def __init__(self, hidden_size, frequency_embedding_size=256):
-        super().__init__(hidden_size=hidden_size, frequency_embedding_size=frequency_embedding_size)
+        super().__init__(
+            hidden_size=hidden_size, frequency_embedding_size=frequency_embedding_size
+        )
         self.mlp = nn.Sequential(
             nn.Linear(frequency_embedding_size, hidden_size, bias=True),
             nn.SiLU(),
@@ -215,7 +229,9 @@ class SizeEmbedder(TimestepEmbedder):
             assert s.shape[0] == bs
         b, dims = s.shape[0], s.shape[1]
         s = rearrange(s, "b d -> (b d)")
-        s_freq = self.timestep_embedding(s, self.frequency_embedding_size).to(self.dtype)
+        s_freq = self.timestep_embedding(s, self.frequency_embedding_size).to(
+            self.dtype
+        )
         s_emb = self.mlp(s_freq)
         s_emb = rearrange(s_emb, "(b d) d2 -> b (d d2)", b=b, d=dims, d2=self.outdim)
         return s_emb
@@ -233,13 +249,28 @@ class CaptionEmbedder(nn.Module):
     Embeds class labels into vector representations. Also handles label dropout for classifier-free guidance.
     """
 
-    def __init__(self, in_channels, hidden_size, uncond_prob, act_layer=nn.GELU(approximate="tanh"), token_num=120):
+    def __init__(
+        self,
+        in_channels,
+        hidden_size,
+        uncond_prob,
+        act_layer=nn.GELU(approximate="tanh"),
+        token_num=120,
+    ):
         from timm.models.vision_transformer import Mlp
+
         super().__init__()
         self.y_proj = Mlp(
-            in_features=in_channels, hidden_features=hidden_size, out_features=hidden_size, act_layer=act_layer, drop=0
+            in_features=in_channels,
+            hidden_features=hidden_size,
+            out_features=hidden_size,
+            act_layer=act_layer,
+            drop=0,
         )
-        self.register_buffer("y_embedding", nn.Parameter(torch.randn(token_num, in_channels) / in_channels**0.5))
+        self.register_buffer(
+            "y_embedding",
+            nn.Parameter(torch.randn(token_num, in_channels) / in_channels**0.5),
+        )
         self.uncond_prob = uncond_prob
 
     def token_drop(self, caption, force_drop_ids=None):
@@ -254,9 +285,11 @@ class CaptionEmbedder(nn.Module):
         return caption
 
     def forward(self, caption, train, force_drop_ids=None):
-        """ forward function. """
+        """forward function."""
         if train:
-            assert caption.shape[2:] == self.y_embedding.shape, f"{caption.shape[2:]} != {self.y_embedding.shape}"
+            assert (
+                caption.shape[2:] == self.y_embedding.shape
+            ), f"{caption.shape[2:]} != {self.y_embedding.shape}"
         use_dropout = self.uncond_prob > 0
         if (train and use_dropout) or (force_drop_ids is not None):
             caption = self.token_drop(caption, force_drop_ids)
@@ -273,11 +306,13 @@ class T2IFinalLayer(nn.Module):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.linear = nn.Linear(hidden_size, num_patch * out_channels, bias=True)
-        self.scale_shift_table = nn.Parameter(torch.randn(2, hidden_size) / hidden_size**0.5)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size**0.5
+        )
         self.out_channels = out_channels
 
     def forward(self, x, t):
-        """ forward function. """
+        """forward function."""
         shift, scale = (self.scale_shift_table[None] + t[:, None]).chunk(2, dim=1)
         x = t2i_modulate(self.norm_final(x), shift, scale)
         x = self.linear(x)
@@ -290,7 +325,9 @@ class T2IFinalLayer(nn.Module):
 # https://github.com/facebookresearch/mae/blob/main/util/pos_embed.py
 
 
-def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0, scale=1.0, base_size=None):
+def get_2d_sincos_pos_embed(
+    embed_dim, grid_size, cls_token=False, extra_tokens=0, scale=1.0, base_size=None
+):
     """
     grid_size: int of the grid height and width
     return:
@@ -310,7 +347,9 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=
     grid = grid.reshape([2, 1, grid_size[1], grid_size[0]])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
+        pos_embed = np.concatenate(
+            [np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0
+        )
     return pos_embed
 
 
@@ -329,7 +368,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
 
 
 def get_1d_sincos_pos_embed(embed_dim, length, scale=1.0):
-    """ get_1d_sincos_pos_embed """
+    """get_1d_sincos_pos_embed"""
     pos = np.arange(0, length)[..., None] / scale
     return get_1d_sincos_pos_embed_from_grid(embed_dim, pos)
 
@@ -356,7 +395,8 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 
 
 class PositionEmbedding2D(nn.Module):
-    """ Position Embedding 2D. """
+    """Position Embedding 2D."""
+
     def __init__(self, dim: int) -> None:
         super().__init__()
         self.dim = dim
@@ -405,5 +445,5 @@ class PositionEmbedding2D(nn.Module):
         scale: Optional[float] = 1.0,
         base_size: Optional[int] = None,
     ) -> torch.Tensor:
-        """ forward """
+        """forward"""
         return self._get_cached_emb(x.device, x.dtype, h, w, scale, base_size)

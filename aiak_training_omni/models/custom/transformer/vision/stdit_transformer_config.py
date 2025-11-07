@@ -50,23 +50,23 @@ class StditTransformerConfig(TransformerConfig):
 
         if len(self.latent_patch_size) != 3:
             raise ValueError(
-                f'latent_patch_size: {self.latent_patch_size} must have three dimensions.'
+                f"latent_patch_size: {self.latent_patch_size} must have three dimensions."
             )
         if self.latent_patch_size[1] != self.latent_patch_size[2]:
             raise ValueError(
-                f'latent_patch_size: {self.latent_patch_size} must have equal height and width.'
+                f"latent_patch_size: {self.latent_patch_size} must have equal height and width."
             )
         if self.latent_time_scale is None:
             self.latent_time_scale = 1.0 / self.latent_patch_size[0]
 
         elif self.latent_time_scale != 1.0 / self.latent_patch_size[0]:
             raise ValueError(
-                f'latent_time_scale: {self.latent_time_scale} must be 1.0 / latent_patch_size[0].'
+                f"latent_time_scale: {self.latent_time_scale} must be 1.0 / latent_patch_size[0]."
             )
 
         if self.latent_space_scale is None:
             self.latent_space_scale = 1.0 / self.latent_patch_size[1]
         elif self.latent_space_scale != 1.0 / self.latent_patch_size[1]:
             raise ValueError(
-                f'latent_space_scale: {self.latent_space_scale} must be 1.0 / latent_patch_size[1].'
+                f"latent_space_scale: {self.latent_space_scale} must be 1.0 / latent_patch_size[1]."
             )

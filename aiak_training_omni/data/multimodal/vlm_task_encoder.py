@@ -1,4 +1,5 @@
-""" VLMTaskEncoder class."""
+"""VLMTaskEncoder class."""
+
 import torch
 from typing import Dict, List, Optional, Tuple, Union
 from typing_extensions import override
@@ -15,12 +16,17 @@ from aiak_training_omni.utils import constants, get_chat_template
 from qwen_vl_utils.vision_process import smart_nframes, smart_resize
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
-from .base.task_encoder import BaseTaskEncoder, BaseTaskSample, BaseTaskSamplePacked, BaseTaskBatchPacked
+from .base.task_encoder import (
+    BaseTaskEncoder,
+    BaseTaskSample,
+    BaseTaskSamplePacked,
+    BaseTaskBatchPacked,
+)
 from aiak_training_omni.data.multimodal import (
     MultiMixQASample,
     PackedCaptioningSample,
     PackedVQASample,
-    PackedMultiMixQASample
+    PackedMultiMixQASample,
 )
 
 IGNORE_INDEX = -100  # ID for labels that should be ignored.
@@ -33,7 +39,8 @@ VIDEO_TOKEN_WITH_TAGS = VISION_TAGS[0] + VIDEO_TOKEN + VISION_TAGS[1]
 
 @dataclass
 class VLMTaskSample(BaseTaskSample):
-    """ An image task sample with a grid of tokens and their corresponding pixel values."""
+    """An image task sample with a grid of tokens and their corresponding pixel values."""
+
     image_grid_thw: Optional[torch.Tensor] = None
     video_grid_thw: Optional[torch.Tensor] = None
 
@@ -45,11 +52,14 @@ class VLMTaskSample(BaseTaskSample):
 
 @dataclass
 class VLMTaskSamplePacked(BaseTaskSamplePacked):
-    """ An image task sample with a grid of tokens and their corresponding pixel values."""
+    """An image task sample with a grid of tokens and their corresponding pixel values."""
+
     image_grid_thw: Optional[torch.Tensor] = None
     video_grid_thw: Optional[torch.Tensor] = None
 
-    def __init__(self, sample: BaseTaskSample, image_grid_thw: str, video_grid_thw=None):
+    def __init__(
+        self, sample: BaseTaskSample, image_grid_thw: str, video_grid_thw=None
+    ):
         super().__init__(**vars(sample))
         self.image_grid_thw = image_grid_thw
         self.video_grid_thw = video_grid_thw
@@ -69,13 +79,17 @@ class VLMTaskSamplePacked(BaseTaskSamplePacked):
             )
         return base[:-1] + grid_str + ")"
 
+
 @dataclass
 class VLMTaskBatchPacked(BaseTaskBatchPacked):
-    """ An image task sample with a grid of tokens and their corresponding pixel values."""
+    """An image task sample with a grid of tokens and their corresponding pixel values."""
+
     image_grid_thw: Optional[torch.Tensor] = None
     video_grid_thw: Optional[torch.Tensor] = None
 
-    def __init__(self, sample: BaseTaskSample, image_grid_thw: str, video_grid_thw=None):
+    def __init__(
+        self, sample: BaseTaskSample, image_grid_thw: str, video_grid_thw=None
+    ):
         super().__init__(**vars(sample))
         self.image_grid_thw = image_grid_thw
         self.video_grid_thw = video_grid_thw
@@ -86,32 +100,40 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def __init__(self, args):
         super().__init__()
-        if args.training_phase in ['sft']:
-            self.chat_template = get_chat_template()
-        self.processor = AutoProcessor.from_pretrained(self.args.hf_tokenizer_path, trust_remote_code=True)
-        if args.image_resolution:
-            setattr(self.processor, "image_resolution", args.image_resolution)
+        # if args.training_phase in ['sft']:
+        #     self.chat_template = get_chat_template()
+        # self.processor = AutoProcessor.from_pretrained(self.args.hf_tokenizer_path, trust_remote_code=True)
+        self.processor = AutoProcessor.from_pretrained(
+            "/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/",
+            trust_remote_code=True,
+        )
+        # if args.image_resolution:
+        #     setattr(self.processor, "image_resolution", args.image_resolution)
         # video
-        self.frame_min_pixels = args.frame_min_pixels
-        self.frame_max_pixels = args.frame_max_pixels
-        self.video_max_pixels = args.video_max_pixels
-        self.fps = args.fps
-        self.fps_min_frames = args.fps_min_frames
-        self.fps_max_frames = args.fps_max_frames
+        # self.frame_min_pixels = args.frame_min_pixels
+        # self.frame_max_pixels = args.frame_max_pixels
+        # self.video_max_pixels = args.video_max_pixels
+        # self.fps = args.fps
+        # self.fps_min_frames = args.fps_min_frames
+        # self.fps_max_frames = args.fps_max_frames
         # image
-        self.min_pixels = args.min_pixels
-        self.max_pixels = args.max_pixels
+        # self.min_pixels = args.min_pixels
+        # self.max_pixels = args.max_pixels
+        self.min_pixels = 1144
+        self.max_pixels = 1144
 
     def _resize_video(self, vision: VideoData, image_factor=28, frame_factor=2):
-        """ Resize video: frame number, height, width """
+        """Resize video: frame number, height, width"""
         total_frames = len(vision.frames)
-        video_fps = vision.info['video_fps']
-        vision.info['fps'] = self.fps
-        vision.info['min_frames'] = self.fps_min_frames
-        vision.info['max_frames'] = self.fps_max_frames
+        video_fps = vision.info["video_fps"]
+        vision.info["fps"] = self.fps
+        vision.info["min_frames"] = self.fps_min_frames
+        vision.info["max_frames"] = self.fps_max_frames
 
         # resize frame
-        nframes = smart_nframes(vision.info, total_frames=total_frames, video_fps=video_fps)
+        nframes = smart_nframes(
+            vision.info, total_frames=total_frames, video_fps=video_fps
+        )
         idx = torch.linspace(0, total_frames - 1, nframes).round().long()
         video = vision.frames[idx]
         # resize height, width
@@ -121,7 +143,9 @@ class VLMTaskEncoder(BaseTaskEncoder):
             width,
             factor=image_factor,
             min_pixels=int(self.frame_min_pixels * 1.05),
-            max_pixels=min(self.frame_max_pixels, self.video_max_pixels / nframes * frame_factor),
+            max_pixels=min(
+                self.frame_max_pixels, self.video_max_pixels / nframes * frame_factor
+            ),
         )
         video = transforms.functional.resize(
             video,
@@ -143,29 +167,29 @@ class VLMTaskEncoder(BaseTaskEncoder):
         image = image.resize((resized_width, resized_height))
 
         return image
- 
+
     def _process(self, image, text):
-        """" Process the data to get the model's input """
+        """ " Process the data to get the model's input"""
         inputs = self.processor(
             text=text,
             images=image,
             padding=True,
             return_tensors="pt",
         )
-        input_ids = inputs['input_ids'][0]
-        attn_mask = inputs['attention_mask'][0].logical_not()
+        input_ids = inputs["input_ids"][0]
+        attn_mask = inputs["attention_mask"][0].logical_not()
         image_grid_thw = None
         pixel = []
         if image is not None:
-            image_grid_thw = inputs['image_grid_thw'] # [t,h,w]
-            pixel = [inputs['pixel_values']] # [hw, 2*3*14*14]
+            image_grid_thw = inputs["image_grid_thw"]  # [t,h,w]
+            pixel = [inputs["pixel_values"]]  # [hw, 2*3*14*14]
 
         target = input_ids.clone()
-        vision_start_id, img_pad_id, vision_end_id = self.tokenizer.convert_tokens_to_ids([
-            VISION_TAGS[0],
-            IMAGE_TOKEN,
-            VISION_TAGS[1]
-        ])
+        vision_start_id, img_pad_id, vision_end_id = (
+            self.tokenizer.convert_tokens_to_ids(
+                [VISION_TAGS[0], IMAGE_TOKEN, VISION_TAGS[1]]
+            )
+        )
         target[target == vision_start_id] = IGNORE_INDEX
         target[target == img_pad_id] = IGNORE_INDEX
         target[target == vision_end_id] = IGNORE_INDEX
@@ -173,37 +197,33 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return input_ids, target, pixel, image_grid_thw, attn_mask
 
     def process_sft_vqa(self, context, answer, image):
-        """ process the data for sft vqa """
+        """process the data for sft vqa"""
         text = self.processor.apply_chat_template(
-            [{
-                'role': 'user',
-                'content': context
-            }, {
-                'role': 'assistant',
-                'content': answer
-            }],
-            tokenize=False
-        ).replace(
-            "<image>", IMAGE_TOKEN_WITH_TAGS
-        )
-        if text[-1] == '\n':
+            [
+                {"role": "user", "content": context},
+                {"role": "assistant", "content": answer},
+            ],
+            tokenize=False,
+        ).replace("<image>", IMAGE_TOKEN_WITH_TAGS)
+        if text[-1] == "\n":
             text = text[:-1]
         input_ids, _, imgs, image_grid_thw, attn_mask = self._process(image, text)
         target = torch.ones_like(input_ids) * IGNORE_INDEX
         answer = self.tokenizer.tokenize(answer)
-        target[-len(answer) - 1: -1] = torch.tensor(answer)
+        target[-len(answer) - 1 : -1] = torch.tensor(answer)
 
         return input_ids, target, attn_mask, imgs, image_grid_thw
 
-    def process_sft_qa(self, messages: list, system: str, raw_video: list, raw_image: list):
-        """ process the data for sft qa """
+    def process_sft_qa(
+        self, messages: list, system: str, raw_video: list, raw_image: list
+    ):
+        """process the data for sft qa"""
         video_grid_thw = None
         pixel_values_videos = []
         image_grid_thw = None
         pixel_values_images = []
         video = []
         image = []
-
 
         if raw_image is not None:
             for i in raw_image:
@@ -217,7 +237,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             messages,
             image if image is not None else [],
             video if raw_video is not None else [],
-            self.processor
+            self.processor,
         )
         if raw_video is not None:
             video_grid_thw = mm_inputs["video_grid_thw"]
@@ -240,9 +260,15 @@ class VLMTaskEncoder(BaseTaskEncoder):
         target = torch.tensor(target)
         attn_mask = torch.zeros_like(input_ids).bool()
 
-        return input_ids, target, attn_mask, pixel_values_images, image_grid_thw, \
-                    pixel_values_videos, video_grid_thw
-
+        return (
+            input_ids,
+            target,
+            attn_mask,
+            pixel_values_images,
+            image_grid_thw,
+            pixel_values_videos,
+            video_grid_thw,
+        )
 
     def encode_captioning(self, sample: CaptioningSample) -> BaseTaskSample:
         """Encode CaptioningSample."""
@@ -251,17 +277,21 @@ class VLMTaskEncoder(BaseTaskEncoder):
         https://github.com/NVIDIA/Megatron-Energon/blob/develop/src/megatron/energon/flavors/captioning.py
         """
 
-        assert self.args.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
+        # assert self.args.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
 
-        text = IMAGE_TOKEN_WITH_TAGS + sample.caption + self.tokenizer.tokenizer.eos_token
+        text = (
+            IMAGE_TOKEN_WITH_TAGS + sample.caption + self.tokenizer.tokenizer.eos_token
+        )
 
-        input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
+        input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
+            sample.image, text
+        )
         num_tiles = [len(image_grid_thw)]
 
-        if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
-        else:
-            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
+        # if self.args.enable_discard_sample:
+        #     assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+        # else:
+        #     assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -277,30 +307,33 @@ class VLMTaskEncoder(BaseTaskEncoder):
             total_len=len(input_ids),
         )
 
-
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
-            if self.args.add_question_in_pretrain:
-                text = (sample.context + sample.answers).replace(
-                    "<image>", IMAGE_TOKEN_WITH_TAGS
-                )
-            else:
-                text = IMAGE_TOKEN_WITH_TAGS + sample.answers
-            text = text + self.tokenizer.tokenizer.eos_token
-            input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
-        elif self.args.training_phase == constants.TrainingPhase.SFT:
-            input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
-                                        sample.answers, sample.image)
-        else:
-            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
-
+        # if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
+        #     if self.args.add_question_in_pretrain:
+        #         text = (sample.context + sample.answers).replace(
+        #             "<image>", IMAGE_TOKEN_WITH_TAGS
+        #         )
+        #     else:
+        #         text = IMAGE_TOKEN_WITH_TAGS + sample.answers
+        #     text = text + self.tokenizer.tokenizer.eos_token
+        #     input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
+        # elif self.args.training_phase == constants.TrainingPhase.SFT:
+        #     input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
+        #                                 sample.answers, sample.image)
+        # else:
+        #     raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+        text = IMAGE_TOKEN_WITH_TAGS + sample.answers
+        text = text + self.tokenizer.tokenizer.eos_token
+        input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
+            sample.image, text
+        )
         num_tiles = [len(image_grid_thw)]
 
-        if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
-        else:
-            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
+        # if self.enable_discard_sample:
+        #     assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+        # else:
+        #     assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -319,16 +352,28 @@ class VLMTaskEncoder(BaseTaskEncoder):
     def encode_multi_vid_qa(self, sample: VQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
         if self.args.training_phase == constants.TrainingPhase.SFT:
-            input_ids, target, attn_mask, imgs, image_grid_thw, video, video_grid_thw = \
-                        self.process_sft_qa(sample.messages, sample.system, sample.video, None)
+            (
+                input_ids,
+                target,
+                attn_mask,
+                imgs,
+                image_grid_thw,
+                video,
+                video_grid_thw,
+            ) = self.process_sft_qa(sample.messages, sample.system, sample.video, None)
         else:
-            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+            raise NotImplementedError(
+                f"Unknown training phase {self.args.training_phase}"
+            )
 
         if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+            assert (
+                len(input_ids) <= self.args.seq_length
+            ), f"{sample.__key__} input length {len(input_ids)}"
         else:
-            assert video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
-                    f"{sample.__key__} grid_thw: {video_grid_thw}"
+            assert (
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -351,23 +396,38 @@ class VLMTaskEncoder(BaseTaskEncoder):
         if self.args.training_phase == constants.TrainingPhase.SFT:
             num_tiles = []
 
-            input_ids, target, attn_mask, imgs, image_grid_thw, pixel_values_videos, video_grid_thw = \
-                        self.process_sft_qa(sample.messages, sample.system, sample.video, sample.image)
+            (
+                input_ids,
+                target,
+                attn_mask,
+                imgs,
+                image_grid_thw,
+                pixel_values_videos,
+                video_grid_thw,
+            ) = self.process_sft_qa(
+                sample.messages, sample.system, sample.video, sample.image
+            )
             if sample.video is not None:
                 num_tiles = [len(video_grid_thw)]
             elif sample.image is not None:
                 num_tiles = [len(image_grid_thw)]
         else:
-            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+            raise NotImplementedError(
+                f"Unknown training phase {self.args.training_phase}"
+            )
 
         if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+            assert (
+                len(input_ids) <= self.args.seq_length
+            ), f"{sample.__key__} input length {len(input_ids)}"
         elif sample.video is not None:
-            assert video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
-                        f"{sample.__key__} grid_thw: {video_grid_thw}"
+            assert (
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
         elif sample.image is not None:
-            assert image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
-                        f"{sample.__key__} grid_thw: {image_grid_thw}"
+            assert (
+                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -385,8 +445,10 @@ class VLMTaskEncoder(BaseTaskEncoder):
             total_len=len(input_ids),
         )
 
-    def encode_packed_captioning(self, sample: PackedCaptioningSample) -> BaseTaskSample:
-        """ Generates an encoded multimodal packed captioning sample from a raw sample. """
+    def encode_packed_captioning(
+        self, sample: PackedCaptioningSample
+    ) -> BaseTaskSample:
+        """Generates an encoded multimodal packed captioning sample from a raw sample."""
         n_orig_sample = len(sample.images)
         l_VLMTaskSample = []
         for idx in range(n_orig_sample):
@@ -396,14 +458,14 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 __subflavor__=None,
                 __subflavors__=sample.__subflavors__,
                 image=sample.images[idx],
-                caption=sample.captions[idx]
+                caption=sample.captions[idx],
             )
             l_VLMTaskSample.append(self.encode_captioning(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
         return l_sample_packed
 
     def encode_packed_vqa(self, sample: PackedVQASample) -> BaseTaskSample:
-        """ Generates an encoded multimodal packed vqa sample from a raw sample. """
+        """Generates an encoded multimodal packed vqa sample from a raw sample."""
         n_orig_sample = len(sample.images)
         l_VLMTaskSample = []
         for idx in range(n_orig_sample):
@@ -414,14 +476,16 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 __subflavors__=sample.__subflavors__,
                 image=sample.images[idx],
                 answers=sample.answers[idx],
-                context=sample.contexts[idx]
-            )                    
+                context=sample.contexts[idx],
+            )
             l_VLMTaskSample.append(self.encode_vqa4packing(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
         return l_sample_packed
 
-    def encode_packed_multi_mix_qa(self, sample: PackedMultiMixQASample) -> BaseTaskSample:
-        """Generates an encoded multimodal packed multi mix qa sample from a raw sample. """
+    def encode_packed_multi_mix_qa(
+        self, sample: PackedMultiMixQASample
+    ) -> BaseTaskSample:
+        """Generates an encoded multimodal packed multi mix qa sample from a raw sample."""
         n_orig_sample = len(sample.contexts)
         l_VLMTaskSample = []
         images = sample.images if sample.images is not None else []
@@ -435,7 +499,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         media_list = images if has_images else videos
         media_type = "image" if has_images else "video"
-        
+
         if len(media_list) != n_orig_sample:
             raise ValueError(
                 f"encode_packed_multi_mix_qa: media count ({len(media_list)}) "
@@ -443,7 +507,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         for idx in range(n_orig_sample):
             context = sample.contexts[idx]  # str
-            media_group = media_list[idx]   # List[Tensor] 或 List[VideoData]
+            media_group = media_list[idx]  # List[Tensor] 或 List[VideoData]
             answer_group = sample.answers[idx] if sample.answers else []  # List[str]
 
             if isinstance(answer_group, list):
@@ -452,14 +516,8 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 answer = answer_group or ""
 
             messages = [
-                {
-                    'role': 'user',
-                    'content': context
-                },
-                {
-                    'role': 'assistant',
-                    'content': answer
-                }
+                {"role": "user", "content": context},
+                {"role": "assistant", "content": answer},
             ]
             if has_images:
                 cur_sample = MultiMixQASample(
@@ -489,28 +547,42 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_mix_qa4packing(self, sample: MultiMixQASample) -> BaseTaskSample:
         """Encode MultiMixQASample in Qwen2VL style."""
-        
+
         if self.args.training_phase == constants.TrainingPhase.SFT:
-            input_ids, target, attn_mask, imgs, image_grid_thw, pixel_values_videos, video_grid_thw = \
-                self.process_sft_qa(sample.messages, sample.system, sample.video, sample.image)
-            
+            (
+                input_ids,
+                target,
+                attn_mask,
+                imgs,
+                image_grid_thw,
+                pixel_values_videos,
+                video_grid_thw,
+            ) = self.process_sft_qa(
+                sample.messages, sample.system, sample.video, sample.image
+            )
+
             num_tiles = []
             if sample.video is not None:
                 num_tiles = [len(video_grid_thw)]
             elif sample.image is not None:
                 num_tiles = [len(image_grid_thw)]
         else:
-            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
-        
+            raise NotImplementedError(
+                f"Unknown training phase {self.args.training_phase}"
+            )
+
         if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, \
-                f"{sample.__key__} input length {len(input_ids)}"
+            assert (
+                len(input_ids) <= self.args.seq_length
+            ), f"{sample.__key__} input length {len(input_ids)}"
         elif sample.video is not None:
-            assert video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
-                f"{sample.__key__} grid_thw: {video_grid_thw}"
+            assert (
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
         elif sample.image is not None:
-            assert image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length, \
-                f"{sample.__key__} grid_thw: {image_grid_thw}"
+            assert (
+                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -527,37 +599,40 @@ class VLMTaskEncoder(BaseTaskEncoder):
             attn_mask=attn_mask,
             total_len=len(input_ids),
         )
-    
+
     def encode_vqa4packing(self, sample: VQASample) -> BaseTaskSample:
         """Encode VQASample in Qwen2VL style."""
-        
-        text = self.processor.apply_chat_template(
-            [{
-                'role': 'user',
-                'content': sample.context
-            }, {
-                'role': 'assistant',
-                'content': sample.answers
-            }],
-            tokenize=False
-        ).replace("<image>", IMAGE_TOKEN_WITH_TAGS)        
 
-        if text[-1] == '\n':
+        text = self.processor.apply_chat_template(
+            [
+                {"role": "user", "content": sample.context},
+                {"role": "assistant", "content": sample.answers},
+            ],
+            tokenize=False,
+        ).replace("<image>", IMAGE_TOKEN_WITH_TAGS)
+
+        if text[-1] == "\n":
             text = text[:-1]
-            pass  
-            
-        input_ids, _, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
+            pass
+
+        input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
+            sample.image, text
+        )
         target = torch.ones_like(input_ids) * IGNORE_INDEX
         answers = self.tokenizer.tokenize(sample.answers)
-        target[-len(answers) - 1: -1] = torch.tensor(answers)
-        target[-1] = input_ids[-1]     
-        
+        target[-len(answers) - 1 : -1] = torch.tensor(answers)
+        target[-1] = input_ids[-1]
+
         num_tiles = [len(image_grid_thw)]
         if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+            assert (
+                len(input_ids) <= self.args.seq_length
+            ), f"{sample.__key__} input length {len(input_ids)}"
         else:
-            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
-            
+            assert (
+                image_grid_thw.prod() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
+
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
@@ -573,9 +648,13 @@ class VLMTaskEncoder(BaseTaskEncoder):
         )
 
     def process_samples_grid(self, samples):
-        """ concat grid_thw for image and video """
-        image_grid_thw = [x.image_grid_thw for x in samples if x.image_grid_thw is not None]
-        video_grid_thw = [x.video_grid_thw for x in samples if x.video_grid_thw is not None]
+        """concat grid_thw for image and video"""
+        image_grid_thw = [
+            x.image_grid_thw for x in samples if x.image_grid_thw is not None
+        ]
+        video_grid_thw = [
+            x.video_grid_thw for x in samples if x.video_grid_thw is not None
+        ]
 
         if len(image_grid_thw) > 0:
             image_grid_thw = torch.cat(image_grid_thw).to(dtype=torch.int32)
@@ -591,30 +670,34 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     @override
     @stateless
-    def pack_selected_samples(self, samples: List[VLMTaskSample]) -> List[VLMTaskSamplePacked]:
-        """ Pack selected samples into one big sample."""
+    def pack_selected_samples(
+        self, samples: List[VLMTaskSample]
+    ) -> List[VLMTaskSamplePacked]:
+        """Pack selected samples into one big sample."""
         image_grid_thw, video_grid_thw = self.process_samples_grid(samples)
         return VLMTaskSamplePacked(
             super().pack_selected_samples(samples),
             image_grid_thw=image_grid_thw,
-            video_grid_thw=video_grid_thw
+            video_grid_thw=video_grid_thw,
         )
 
     @override
-    def batch(self, samples: List[Union[VLMTaskSample, VLMTaskSamplePacked]]) \
-                                                                                    -> VLMTaskBatchPacked:
-        """ Batch samples together """
+    def batch(
+        self, samples: List[Union[VLMTaskSample, VLMTaskSamplePacked]]
+    ) -> VLMTaskBatchPacked:
+        """Batch samples together"""
         image_grid_thw, video_grid_thw = self.process_samples_grid(samples)
         return VLMTaskBatchPacked(
             super().batch(samples),
             image_grid_thw=image_grid_thw,
-            video_grid_thw=video_grid_thw
+            video_grid_thw=video_grid_thw,
         )
 
     @override
-    def process_images(self, samples: List[Union[VLMTaskSample, VLMTaskSamplePacked]]) \
-                                                                                    -> torch.Tensor:
-        """" Process the data to get the model's input """
+    def process_images(
+        self, samples: List[Union[VLMTaskSample, VLMTaskSamplePacked]]
+    ) -> torch.Tensor:
+        """ " Process the data to get the model's input"""
         imgs = [img for s in samples if s.imgs is not None for img in s.imgs]
         if len(imgs) > 0:
             return torch.cat(imgs)
@@ -622,11 +705,16 @@ class VLMTaskEncoder(BaseTaskEncoder):
             return torch.tensor([[0]], dtype=torch.float32)
 
     @override
-    def process_videos(self, samples: List[Union[VLMTaskSample, VLMTaskSamplePacked]]) \
-                                                                                    -> torch.Tensor:
-        """" Process the data to get the model's input """
-        pixel_values_videos = [pixel_values_video for s in samples if s.pixel_values_videos is not None \
-                for pixel_values_video in s.pixel_values_videos]
+    def process_videos(
+        self, samples: List[Union[VLMTaskSample, VLMTaskSamplePacked]]
+    ) -> torch.Tensor:
+        """ " Process the data to get the model's input"""
+        pixel_values_videos = [
+            pixel_values_video
+            for s in samples
+            if s.pixel_values_videos is not None
+            for pixel_values_video in s.pixel_values_videos
+        ]
         if len(pixel_values_videos) > 0:
             return torch.cat(pixel_values_videos)
         else:

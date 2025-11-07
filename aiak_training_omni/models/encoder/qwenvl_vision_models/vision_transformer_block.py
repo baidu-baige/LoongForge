@@ -15,10 +15,15 @@ from megatron.core import InferenceParams, parallel_state, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.transformer.transformer_block import TransformerBlock as MegatronTransformerBlock
+from megatron.core.transformer.transformer_block import (
+    TransformerBlock as MegatronTransformerBlock,
+)
 from megatron.core.utils import make_viewless_tensor
+
 try:
-    from megatron.core.transformer.custom_layers.transformer_engine import TEDelayedScaling
+    from megatron.core.transformer.custom_layers.transformer_engine import (
+        TEDelayedScaling,
+    )
 except ImportError:
     pass
 
@@ -41,7 +46,7 @@ class TransformerBlock(MegatronTransformerBlock):
         packed_seq_params: List[PackedSeqParams] = None,
         **kwargs,
     ):
-        """ forward with list of packed params """
+        """forward with list of packed params"""
         # hidden_states (float): [s, b, h]
         # attention_mask (bool): [1, 1, s, s]
 
@@ -92,7 +97,9 @@ class TransformerBlock(MegatronTransformerBlock):
             )
             fp8_group = None
             if parallel_state.model_parallel_is_initialized():
-                fp8_group = parallel_state.get_amax_reduction_group(with_context_parallel=True)
+                fp8_group = parallel_state.get_amax_reduction_group(
+                    with_context_parallel=True
+                )
             fp8_context = transformer_engine.pytorch.fp8_autocast(
                 enabled=True, fp8_recipe=fp8_recipe, fp8_group=fp8_group
             )
@@ -101,7 +108,7 @@ class TransformerBlock(MegatronTransformerBlock):
 
         with rng_context and fp8_context:
             # Forward pass.
-            if self.config.recompute_granularity == 'full' and self.training:
+            if self.config.recompute_granularity == "full" and self.training:
                 hidden_states = self._checkpointed_forward(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
@@ -125,7 +132,11 @@ class TransformerBlock(MegatronTransformerBlock):
                                 context_mask=context_mask,
                                 rotary_pos_emb=rotary_pos_emb,
                                 inference_params=inference_params,
-                                packed_seq_params=packed_seq_params[l_no] if packed_seq_params is not None else None,
+                                packed_seq_params=(
+                                    packed_seq_params[l_no]
+                                    if packed_seq_params is not None
+                                    else None
+                                ),
                                 **kwargs,
                             )
                             # CUDA graph doesn't output context and is expected to be None
@@ -142,7 +153,9 @@ class TransformerBlock(MegatronTransformerBlock):
                             assert (len(self.cuda_graphs) > l_no) and (
                                 self.current_microbatch < len(self.cuda_graphs[l_no])
                             )
-                            hidden_states = self.cuda_graphs[l_no][self.current_microbatch](
+                            hidden_states = self.cuda_graphs[l_no][
+                                self.current_microbatch
+                            ](
                                 hidden_states,
                                 is_first_microbatch=(self.current_microbatch == 0),
                             )
@@ -152,7 +165,9 @@ class TransformerBlock(MegatronTransformerBlock):
                         and self.config.cpu_offloading
                         and self.group_prefetch_offload_commit_async is not None
                     ):
-                        hidden_states = self.group_prefetch_offload_commit_async(hidden_states)
+                        hidden_states = self.group_prefetch_offload_commit_async(
+                            hidden_states
+                        )
 
         # Final layer norm.
         if self.final_layernorm is not None:
@@ -186,7 +201,12 @@ class TransformerBlock(MegatronTransformerBlock):
 
         def custom(start: int, end: int):
             def custom_forward(
-                hidden_states, attention_mask, attn_mask_type, context, context_mask, rotary_pos_emb,
+                hidden_states,
+                attention_mask,
+                attn_mask_type,
+                context,
+                context_mask,
+                rotary_pos_emb,
             ):
                 if attn_mask_type is not None:
                     attn_mask_type = AttnMaskType(attn_mask_type.item())
@@ -202,7 +222,11 @@ class TransformerBlock(MegatronTransformerBlock):
                         rotary_pos_emb=rotary_pos_emb,
                         attention_bias=attention_bias,
                         inference_params=None,
-                        packed_seq_params=packed_seq_params[index] if packed_seq_params is not None else None,
+                        packed_seq_params=(
+                            packed_seq_params[index]
+                            if packed_seq_params is not None
+                            else None
+                        ),
                         **kwargs,
                     )
                 return hidden_states, context
@@ -213,6 +237,7 @@ class TransformerBlock(MegatronTransformerBlock):
             """Determines whether to use the `te_checkpoint` or `tensor_parallel.checkpoint`"""
             if self.config.fp8:
                 from megatron.core.extensions.transformer_engine import te_checkpoint
+
                 return te_checkpoint(
                     forward_func,
                     self.config.distribute_saved_activations,
@@ -239,7 +264,7 @@ class TransformerBlock(MegatronTransformerBlock):
                     **kwargs,
                 )
 
-        if self.config.recompute_method == 'uniform':
+        if self.config.recompute_method == "uniform":
             # Uniformly divide the total number of Transformer layers and checkpoint
             # the input activation of each divided chunk.
             # A method to further reduce memory usage reducing checkpoints.
@@ -251,7 +276,7 @@ class TransformerBlock(MegatronTransformerBlock):
 
                 layer_idx += self.config.recompute_num_layers
 
-        elif self.config.recompute_method == 'block':
+        elif self.config.recompute_method == "block":
             # Checkpoint the input activation of only a set number of individual
             # Transformer layers and skip the rest.
             # A method fully use the device memory removing redundant re-computation.
@@ -264,9 +289,12 @@ class TransformerBlock(MegatronTransformerBlock):
                     recompute_skip_num_layers += 1
                 if (
                     layer_idx >= recompute_skip_num_layers
-                    and layer_idx < self.config.recompute_num_layers + recompute_skip_num_layers
+                    and layer_idx
+                    < self.config.recompute_num_layers + recompute_skip_num_layers
                 ):
-                    hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1))
+                    hidden_states, context = checkpoint_handler(
+                        custom(layer_idx, layer_idx + 1)
+                    )
                 else:
                     hidden_states, context = custom(layer_idx, layer_idx + 1)(
                         hidden_states,

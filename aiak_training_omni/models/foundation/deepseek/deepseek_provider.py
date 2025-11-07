@@ -1,4 +1,5 @@
 """Deepseek model provider"""
+
 import inspect
 from contextlib import nullcontext
 
@@ -16,7 +17,9 @@ from .deepseek_layer_spec import get_deepseek_decoder_block_and_mtp_spec
 
 @register_model_provider(model_family=LanguageModelFamilies.DEEPSEEK)
 def deekseek_model_provider(
-    pre_process: bool = True, post_process: bool = True, parallel_output: bool = True,
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
 ) -> DeepseekModelWithMTP:
     """Builds the deepseek model.
 
@@ -30,7 +33,7 @@ def deekseek_model_provider(
     """
     args = get_args()
 
-    print_rank_0('building Deepseek model ...')
+    print_rank_0("building Deepseek model ...")
 
     config = build_transformer_config(args, config_class=DeepSeekTransformerConfig)
 
@@ -38,7 +41,7 @@ def deekseek_model_provider(
         raise ValueError("Classic Megatron-LM models are not supported.")
 
     assert args.spec is None, "Not support --spec option for Deepseek"
-        
+
     decoder_block_spec, mtp_spec = get_deepseek_decoder_block_and_mtp_spec(config)
 
     model = DeepseekModelWithMTP(

@@ -1,4 +1,5 @@
-""" Qwen2VLTaskEncoder class."""
+"""Qwen2VLTaskEncoder class."""
+
 import math
 import re
 from dataclasses import dataclass, field
@@ -20,9 +21,18 @@ from aiak_training_omni.data.multimodal import MultiMixQASample
 from aiak_training_omni.data.multimodal.length_sort_dataset import LengthPoolSortDataset
 from aiak_training_omni.utils import constants, get_chat_template
 
-from .base.task_encoder import (BaseTaskBatchPacked, BaseTaskSample,
-                           BaseTaskSamplePacked, BaseTaskEncoder)
-from .vlm_task_encoder import VLMTaskEncoder, VLMTaskSample, VLMTaskSamplePacked, VLMTaskBatchPacked
+from .base.task_encoder import (
+    BaseTaskBatchPacked,
+    BaseTaskSample,
+    BaseTaskSamplePacked,
+    BaseTaskEncoder,
+)
+from .vlm_task_encoder import (
+    VLMTaskEncoder,
+    VLMTaskSample,
+    VLMTaskSamplePacked,
+    VLMTaskBatchPacked,
+)
 from megatron.energon.flavors.base_dataset import (
     BaseCoreDatasetFactory,
     PinMemoryMixin,
@@ -46,6 +56,7 @@ from megatron.energon.wrappers import (
     PackingDataset,
     ShuffleBufferDataset,
 )
+
 # from .batch_dataset import BatchDataset
 from megatron.energon.wrappers.repeat_dataset import RepeatDataset
 
@@ -65,7 +76,6 @@ IMAGE_TOKEN_WITH_TAGS = VISION_TAGS[0] + IMAGE_TOKEN + VISION_TAGS[1]
 VIDEO_TOKEN_WITH_TAGS = VISION_TAGS[0] + VIDEO_TOKEN + VISION_TAGS[1]
 
 
-
 def get_stateless(fn: Callable[..., T_sample]) -> bool:
     """Get whether a function is stateless."""
     return getattr(fn, "__stateless__", False)
@@ -73,15 +83,17 @@ def get_stateless(fn: Callable[..., T_sample]) -> bool:
 
 class LLavaOv15TaskEncoder(VLMTaskEncoder):
     """A task encoder for LLava OV 1.5 that extends VLMTaskEncoder."""
-    
+
     def __init__(self, args):
         super().__init__(args=args)
-        if args.training_phase in ['sft']:
+        if args.training_phase in ["sft"]:
             self.chat_template = get_chat_template()
-        self.processor = AutoProcessor.from_pretrained(self.args.hf_tokenizer_path, trust_remote_code=True)
+        self.processor = AutoProcessor.from_pretrained(
+            self.args.hf_tokenizer_path, trust_remote_code=True
+        )
 
         if args.image_resolution:
-            setattr(self.processor, 'image_resolution', args.image_resolution)
+            setattr(self.processor, "image_resolution", args.image_resolution)
         # video
         self.frame_min_pixels = args.frame_min_pixels
         self.frame_max_pixels = args.frame_max_pixels
@@ -98,15 +110,15 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
         if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
             if self.args.add_question_in_pretrain:
                 text = (sample.context + sample.answers).replace(
-                    "<image>",
-                    IMAGE_TOKEN_WITH_TAGS
+                    "<image>", IMAGE_TOKEN_WITH_TAGS
                 )
             else:
                 text = IMAGE_TOKEN_WITH_TAGS + sample.answers
             text = text + self.tokenizer.tokenizer.eos_token
-            input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
+            input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
+                sample.image, text
+            )
         elif self.args.training_phase == constants.TrainingPhase.SFT:
-
 
             if len(sample.answers) < 1:
                 raise ValueError("sample.answers < 1!")
@@ -127,12 +139,12 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
                 preliminary_cut = sample.answers[:max_answer_length]
 
                 # Clean up trailing punctuation and whitespace from the preliminary cut
-                cleaned_cut = preliminary_cut.rstrip('.。 \t\n')
+                cleaned_cut = preliminary_cut.rstrip(".。 \t\n")
 
-                # Find the last occurrence of a sentence-ending punctuation mark 
+                # Find the last occurrence of a sentence-ending punctuation mark
                 # followed by a space or the end of the string.
                 # This pattern looks for sentence enders (. or 。)
-                sentence_enders_pattern = r'[.。]'
+                sentence_enders_pattern = r"[.。]"
 
                 # Find all matches and get the end position of the last match
                 matches = list(re.finditer(sentence_enders_pattern, cleaned_cut))
@@ -152,32 +164,37 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
                 )
 
             text = self.processor.apply_chat_template(
-                [{
-                    'role': 'user',
-                    'content': sample.context
-                }, {
-                    'role': 'assistant',
-                    'content': sample.answers
-                }],
-                tokenize=False
+                [
+                    {"role": "user", "content": sample.context},
+                    {"role": "assistant", "content": sample.answers},
+                ],
+                tokenize=False,
             ).replace("<image>", IMAGE_TOKEN_WITH_TAGS)
-            if text[-1] == '\n':
+            if text[-1] == "\n":
                 text = text[:-1]
-            input_ids, _, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
+            input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
+                sample.image, text
+            )
             target = torch.ones_like(input_ids) * IGNORE_INDEX
             answers = self.tokenizer.tokenize(sample.answers)
-            target[-len(answers) - 1: -1] = torch.tensor(answers)
+            target[-len(answers) - 1 : -1] = torch.tensor(answers)
             target[-1] = input_ids[-1]
             # print(target[-1])
         else:
-            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+            raise NotImplementedError(
+                f"Unknown training phase {self.args.training_phase}"
+            )
 
         num_tiles = [len(image_grid_thw)]
 
         if self.args.enable_discard_sample:
-            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+            assert (
+                len(input_ids) <= self.args.seq_length
+            ), f"{sample.__key__} input length {len(input_ids)}"
         else:
-            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
+            assert (
+                image_grid_thw.prod() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -197,7 +214,9 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
     def build_train_datasets(
         self,
         *,
-        datasets: List[Tuple[BaseCoreDatasetFactory[T_sample], Union[float, int, None]]],
+        datasets: List[
+            Tuple[BaseCoreDatasetFactory[T_sample], Union[float, int, None]]
+        ],
         worker_config: WorkerConfig,
         batch_size: Optional[int],
         batch_drop_last: bool = False,
@@ -209,7 +228,6 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
     ) -> SavableDataset[T_batch]:
         """Combines train datasets to a single dataset."""
 
-
         # Check if there's a CrudeWebdataset but no cookers
         for dataset, _ in datasets:
             if isinstance(dataset, CrudeWebdataset):
@@ -220,7 +238,8 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
         for i in range(1, len(rotation_lengths)):
             rotation_lengths[i] += rotation_lengths[i - 1]
         worker_rotation_offsets = [
-            rotation_length % global_workers for rotation_length in [0] + rotation_lengths[:-1]
+            rotation_length % global_workers
+            for rotation_length in [0] + rotation_lengths[:-1]
         ]
 
         if repeat:
@@ -249,7 +268,9 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
                         dataset.build(worker_rotation_offset=worker_rotation_offset)
                         if repetition is None or repetition == 1
                         else RepeatDataset(
-                            dataset.build(worker_rotation_offset=worker_rotation_offset),
+                            dataset.build(
+                                worker_rotation_offset=worker_rotation_offset
+                            ),
                             repeats=int(repetition),
                             worker_config=worker_config,
                         )
@@ -281,8 +302,11 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
         dataset = self.build_cook_crude_sample(dataset, worker_config=worker_config)
         dataset = self.build_encode_sample(dataset, worker_config=worker_config)
 
-         # 在进入 BatchDataset 之前插入池化排序
-        if getattr(self.args, "length_sort_pool_size", 0) and self.args.length_sort_pool_size > 0:
+        # 在进入 BatchDataset 之前插入池化排序
+        if (
+            getattr(self.args, "length_sort_pool_size", 0)
+            and self.args.length_sort_pool_size > 0
+        ):
             dataset = LengthPoolSortDataset(
                 dataset,
                 pool_size=self.args.length_sort_pool_size,
@@ -304,5 +328,7 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
                 worker_config=worker_config,
             )
         if worker_config.should_log(level=1):
-            dataset = LogSampleDataset(dataset, mode="train", worker_config=worker_config)
+            dataset = LogSampleDataset(
+                dataset, mode="train", worker_config=worker_config
+            )
         return dataset

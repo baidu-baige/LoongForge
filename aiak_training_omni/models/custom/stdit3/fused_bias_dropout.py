@@ -1,4 +1,4 @@
-""" bias_dropout_add """
+"""bias_dropout_add"""
 
 from typing import Optional, Tuple
 
@@ -37,7 +37,8 @@ def _bias_dropout_add_func(x_with_bias, gate, residual, prob, training):
 
 
 def bias_dropout_add_unfused(training):
-    """ bias_dropout_add_unfused """
+    """bias_dropout_add_unfused"""
+
     def _bias_dropout_add(x_with_bias, gate, residual, prob):
         return _bias_dropout_add_func(x_with_bias, gate, residual, prob, training)
 
@@ -46,22 +47,28 @@ def bias_dropout_add_unfused(training):
 
 @jit_fuser
 def bias_dropout_add_fused_train(
-    x_with_bias: Tuple[torch.Tensor, Optional[torch.Tensor]], gate: torch.Tensor, residual: torch.Tensor, prob: float,
+    x_with_bias: Tuple[torch.Tensor, Optional[torch.Tensor]],
+    gate: torch.Tensor,
+    residual: torch.Tensor,
+    prob: float,
 ) -> torch.Tensor:
-    """ bias_dropout_add_fused_train """
+    """bias_dropout_add_fused_train"""
     return _bias_dropout_add_func(x_with_bias, gate, residual, prob, True)
 
 
 @jit_fuser
 def bias_dropout_add_fused_inference(
-    x_with_bias: Tuple[torch.Tensor, Optional[torch.Tensor]], gate: torch.Tensor, residual: torch.Tensor, prob: float,
+    x_with_bias: Tuple[torch.Tensor, Optional[torch.Tensor]],
+    gate: torch.Tensor,
+    residual: torch.Tensor,
+    prob: float,
 ) -> torch.Tensor:
-    """ bias_dropout_add_fused_inference """
+    """bias_dropout_add_fused_inference"""
     return _bias_dropout_add_func(x_with_bias, gate, residual, prob, False)
 
 
 def get_bias_dropout_add(training, fused):
-    """ get_bias_dropout_add """
+    """get_bias_dropout_add"""
     if fused:
         # jit scripting for a nn.module (with dropout) is not
         # triggering the fusion kernel. For now, we use two

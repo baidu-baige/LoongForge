@@ -21,7 +21,9 @@ from megatron.core.transformer.moe.moe_utils import (
 )
 from megatron.core.transformer.moe.router import Router
 
-from aiak_training_omni.models.deepseek.transformer.transformer_config import DeepSeekTransformerConfig
+from aiak_training_omni.models.deepseek.transformer.transformer_config import (
+    DeepSeekTransformerConfig,
+)
 
 
 class TopKRouter(Router):
@@ -42,12 +44,13 @@ class TopKRouter(Router):
         self.enable_expert_bias = self.config.moe_router_enable_expert_bias
         if self.enable_expert_bias:
             self.register_buffer(
-                'local_tokens_per_expert',
+                "local_tokens_per_expert",
                 torch.zeros(self.config.num_moe_experts, dtype=torch.float32),
                 persistent=False,
             )
             self.register_buffer(
-                'expert_bias', torch.zeros(self.config.num_moe_experts, dtype=torch.float32)
+                "expert_bias",
+                torch.zeros(self.config.num_moe_experts, dtype=torch.float32),
             )
         else:
             self.local_tokens_per_expert = None
@@ -60,7 +63,7 @@ class TopKRouter(Router):
         When using bf16/fp16, the expert bias gets converted to lower precision in Float16Module.
         We keep it in float32 to avoid routing errors when updating the expert_bias.
         """
-        if hasattr(self, 'expert_bias') and self.expert_bias is not None:
+        if hasattr(self, "expert_bias") and self.expert_bias is not None:
             if self.expert_bias.dtype != torch.float32:
                 self.expert_bias.data = self.expert_bias.data.to(torch.float32)
 
@@ -79,10 +82,14 @@ class TopKRouter(Router):
             if self.topk == 1:
                 logits = torch.sigmoid(logits)
             else:  # k > 1
-                logits = torch.softmax(logits, dim=-1, dtype=torch.float32).type_as(logits)
+                logits = torch.softmax(logits, dim=-1, dtype=torch.float32).type_as(
+                    logits
+                )
             return logits
 
-        assert self.config.moe_aux_loss_coeff == 0, "Sinkhorn routing does not support aux loss."
+        assert (
+            self.config.moe_aux_loss_coeff == 0
+        ), "Sinkhorn routing does not support aux loss."
         if self.training:
             with torch.no_grad():
                 norm_logits = sinkhorn(
@@ -98,7 +105,9 @@ class TopKRouter(Router):
         scores = scores.to(dtype=ori_dtype) if ori_dtype is not None else scores
         return scores, map
 
-    def compute_routing_scores_for_aux_loss(self, logits: torch.Tensor, ori_dtype=None) -> torch.Tensor:
+    def compute_routing_scores_for_aux_loss(
+        self, logits: torch.Tensor, ori_dtype=None
+    ) -> torch.Tensor:
         """Compute routing scores based on the score function.
 
         Args:
@@ -150,7 +159,9 @@ class TopKRouter(Router):
         if self.training and torch.is_grad_enabled():
             # Apply auxiliary load balancing loss
             # Skip auxiliary loss calculations when using torch.no_grad() or checkpointing.
-            scores, loss_routing_map = self.compute_routing_scores_for_aux_loss(logits, ori_dtype=ori_dtype)
+            scores, loss_routing_map = self.compute_routing_scores_for_aux_loss(
+                logits, ori_dtype=ori_dtype
+            )
             aux_loss_func = partial(
                 switch_load_balancing_loss_func,
                 probs=scores,
@@ -162,7 +173,9 @@ class TopKRouter(Router):
             )
         return probs, routing_map
 
-    def seq_aux_loss_load_balancing(self, logits: torch.Tensor, bsz: int, seq_length: int, ori_dtype=None):
+    def seq_aux_loss_load_balancing(
+        self, logits: torch.Tensor, bsz: int, seq_length: int, ori_dtype=None
+    ):
         """Apply sequence-auxiliary loss-based load balancing to the logits tensor.
 
         Args:
@@ -193,7 +206,9 @@ class TopKRouter(Router):
 
         if self.training and torch.is_grad_enabled():
             # Apply sequence-auxiliary load balancing loss
-            scores, loss_routing_map = self.compute_routing_scores_for_aux_loss(logits, ori_dtype=ori_dtype)
+            scores, loss_routing_map = self.compute_routing_scores_for_aux_loss(
+                logits, ori_dtype=ori_dtype
+            )
             aux_loss_func = partial(
                 sequence_load_balancing_loss_func,
                 probs=scores,
@@ -220,10 +235,13 @@ class TopKRouter(Router):
             sequence_partition_group = parallel_state.get_context_parallel_group()
             moe_aux_loss_coeff /= parallel_state.get_tensor_model_parallel_world_size()
         elif parallel_state.get_tensor_and_context_parallel_world_size() > 1:
-            sequence_partition_group = parallel_state.get_tensor_and_context_parallel_group()
+            sequence_partition_group = (
+                parallel_state.get_tensor_and_context_parallel_group()
+            )
 
         aux_loss = load_balancing_loss_func(
-            moe_aux_loss_coeff=moe_aux_loss_coeff, sequence_partition_group=sequence_partition_group
+            moe_aux_loss_coeff=moe_aux_loss_coeff,
+            sequence_partition_group=sequence_partition_group,
         )
         save_to_aux_losses_tracker(
             "load_balancing_loss",
@@ -240,7 +258,9 @@ class TopKRouter(Router):
             # which scales both the main_loss gradient and aux_loss gradient by
             # 1/(num_local_tokens * dp_size * num_micro_batches) in finalize_model_grads function.
             # To correct this scaling, we need to scale the aux_loss by num_local_tokens here.
-            activation = MoEAuxLossAutoScaler.apply(activation, aux_loss * activation.shape[0])
+            activation = MoEAuxLossAutoScaler.apply(
+                activation, aux_loss * activation.shape[0]
+            )
         else:
             activation = MoEAuxLossAutoScaler.apply(activation, aux_loss)
         return activation
@@ -255,7 +275,11 @@ class TopKRouter(Router):
         Returns:
             torch.Tensor: The logits after applying the z-loss.
         """
-        if self.config.moe_z_loss_coeff is not None and self.training and torch.is_grad_enabled():
+        if (
+            self.config.moe_z_loss_coeff is not None
+            and self.training
+            and torch.is_grad_enabled()
+        ):
             moe_z_loss_coeff = (
                 self.config.moe_z_loss_coeff
                 / parallel_state.get_tensor_and_context_parallel_world_size()
@@ -324,11 +348,17 @@ class TopKRouter(Router):
             logits = gather_from_sequence_parallel_region(logits)
 
         if self.routing_type == "sinkhorn":
-            scores, routing_map = self.sinkhorn_load_balancing(logits, ori_dtype=ori_dtype)
+            scores, routing_map = self.sinkhorn_load_balancing(
+                logits, ori_dtype=ori_dtype
+            )
         elif self.routing_type == "aux_loss":
-            scores, routing_map = self.aux_loss_load_balancing(logits, ori_dtype=ori_dtype)
+            scores, routing_map = self.aux_loss_load_balancing(
+                logits, ori_dtype=ori_dtype
+            )
         elif self.routing_type == "seq_aux_loss":
-            scores, routing_map = self.seq_aux_loss_load_balancing(logits, bsz, seq_length, ori_dtype=ori_dtype)
+            scores, routing_map = self.seq_aux_loss_load_balancing(
+                logits, bsz, seq_length, ori_dtype=ori_dtype
+            )
         elif self.routing_type == "none":
             # A naive top-k routing without load balancing
             scores, routing_map, _ = topk_softmax_with_capacity(

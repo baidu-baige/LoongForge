@@ -18,3 +18,13 @@ add_question_in_pretrain: true
 enable_discard_sample: true
 
 num_workers: 16
+
+additional_special_tokens: none
+
+use_fast_tokenizer: true
+
+padding_side: right
+
+seq_length: 1024
+
+split_special_tokens: true
