@@ -10,9 +10,8 @@ from .omni_combination_model import OmniCombinationModel
 from aiak_training_omni.utils import get_args
 from megatron.core import mpu
 import torch
-from aiak_training_omni.utils import build_transformer_config
+from aiak_training_omni.utils import build_transformer_config, get_model_config
 from aiak_training_omni.models.common import BaseModelConfig
-from aiak_training_omni.train.arguments import model_configs
 
 
 def check_model_config(model_config: BaseModelConfig):
@@ -48,7 +47,7 @@ def omni_model_provider(
         - 包含语言模型相关参数配置
     """
     args = get_args()
-    model_config = model_configs[0]
+    model_config = get_model_config()
     # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: fix this if model_type is encoder_and_decoder

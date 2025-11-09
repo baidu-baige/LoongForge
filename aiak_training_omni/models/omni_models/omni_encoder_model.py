@@ -161,7 +161,7 @@ class OmniEncoderModel(torch.nn.Module):
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for image encoding."""
         image_embeddings, window_index = self.image_encoder(
-            images, grid_thw=image_grid_thw
+            images, image_grid_thw=image_grid_thw
         )
         image_embeddings = self.image_projector(image_embeddings, window_index)
         image_token_id = self.config.image_encoder.image_token_id

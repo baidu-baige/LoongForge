@@ -6,11 +6,14 @@ from dataclasses import dataclass, fields
 from megatron.training.activations import quick_gelu
 from ...common.base_config import BaseModelConfig
 from megatron.core.transformer import TransformerConfig
+from aiak_training_omni.models.factory import register_model_config
+from aiak_training_omni.utils.constants import VisionLanguageModelFamilies
 
 
 @dataclass
-class QwenVisionConfig(BaseModelConfig): 
+class QwenVisionConfig(BaseModelConfig):
     """configuration for vision model"""
+
     # ------- 无默认值字段 先写 -------
 
     num_layers: int
@@ -63,3 +66,34 @@ class MLPAdapterConfig(BaseModelConfig):
     layernorm_epsilon: float = 1e-06
     model_spec = None
     model_name: str = "qwen_adapter"
+
+
+@register_model_config(
+    model_family=VisionLanguageModelFamilies.QWEN2_5_VL, model_arch="qwen_vit"
+)
+def get_vision_config():
+    """get vision config"""
+    return dict(
+        num_layers=32,
+        hidden_size=1280,
+        kv_channels=80,
+        ffn_hidden_size=5120,
+        patch_size=14,
+        num_attention_heads=16,
+        num_query_groups=16,
+        image_size=(1344, 1344),
+        normalization="RMSNorm",
+        activation_func=torch.nn.functional.silu,
+        add_bias_linear=True,
+        add_qkv_bias=True,
+        swiglu=True,
+        gated_linear_unit=True,
+    )
+
+
+@register_model_config(
+    model_family=VisionLanguageModelFamilies.QWEN2_5_VL, model_arch="qwen_adpater"
+)
+def get_adapter():
+    """get vision config"""
+    return dict(normalization="RMSNorm", add_bias_linear=True)

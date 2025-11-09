@@ -8,15 +8,14 @@ import argparse
 from omegaconf import OmegaConf
 
 
-@hydra.main(config_path="conf", config_name="config", version_base=None)
-def main(config):
+def main():
     """train cmd"""
-    print(OmegaConf.to_yaml(config))
+    # print(OmegaConf.to_yaml(config))
 
     # parse args
     args = parse_train_args()
-    parse_args_from_config(config, args)
 
+    parse_args_from_config(args)
     # get model trainer
     trainer = build_model_trainer(args)
 
