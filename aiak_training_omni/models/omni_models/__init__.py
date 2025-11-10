@@ -1,28 +1,24 @@
-"""AIAK-Omni 多模态训练框架。"""
+"""initialize the model"""
 
 from ..common.base_model_mixins import (
     BaseMegatronVisionModuler,
     BaseMegatronLanuageModuler,
     BaseMegatronModuler,
 )
-
-
 from .omni_encoder_model import OmniEncoderModel
-
 from .omni_decoder_model import OmniDecoderModel
 from .omni_combination_model import OmniCombinationModel
-
 from .omni_model_provider import omni_model_provider
 
 __all__ = [
-    # 基础Mixin
+    # Basic Mixins
     "BaseMegatronVisionModuler",
     "BaseMegatronLanuageModuler",
-    "BaseMegatronModuler"
-    # 模型类
+    "BaseMegatronModuler",
+    # Model classes
     "OmniEncoderModel",
     "OmniDecoderModel",
     "OmniCombinationModel",
-    # 具体实现
+    # Implementations
     "omni_model_provider",
 ]

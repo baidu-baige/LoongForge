@@ -1,8 +1,9 @@
-"""OmniEncoderModel:组合多模态编码器以产生输入嵌入。
+"""OmniEncoderModel: A multimodal encoder that produces input embeddings.
 
-此模块将模态特征映射到文本嵌入空间并返回：
-    - 供基础模型使用的 input_embeds
-    - 供可选解码器使用的 decoder_inputs
+This model integrates various modality encoders (text, image, video, audio)
+    and projects their features into a unified embedding space and returns:
+    - input_embeds: For the base model
+    - decoder_inputs: Optional inputs for the decoder
 """
 
 from __future__ import annotations
@@ -22,8 +23,6 @@ from transformers.models.auto.modeling_auto import AutoModel
 
 
 class OmniEncoderModel(torch.nn.Module):
-    """Omni 多模态编码器模型。"""
-
     def __init__(
         self,
         config: BaseModelConfig,
@@ -34,25 +33,22 @@ class OmniEncoderModel(torch.nn.Module):
         super().__init__()
         self.config = config
         self.modality: List[str] = []
-
-        # 文本encoder
         self.text_encoder = language_embedding
-        # mutli-modal encoder
         if self.config.image_encoder is not None:
             self.image_encoder: BaseMegatronModuler = AutoModel.from_config(
                 config.image_encoder, **kwargs
             )
             self.modality.append("image")
 
-        # if self.config.video_encoder is not None:
-        #     self.video_encoder: BaseMegatronModuler = AutoModel.from_config(self.config.video_encoder,
-        #                                                                     **kwargs)
-        #     self.modality.append("video")
+        if self.config.video_encoder is not None:
+            self.video_encoder: BaseMegatronModuler = AutoModel.from_config(
+                self.config.video_encoder, **kwargs)
+            self.modality.append("video")
 
-        # if self.config.audio_encoder is not None:
-        #     self.audio_encoder: BaseMegatronModuler = AutoModel.from_config(self.config.audio_encoder,
-        #                                                                     **kwargs)
-        #     self.modality.append("audio")
+        if self.config.audio_encoder is not None:
+            self.audio_encoder: BaseMegatronModuler = AutoModel.from_config(
+                self.config.audio_encoder, **kwargs)
+            self.modality.append("audio")
 
         if self.config.image_projector is not None:
             self.image_projector: BaseMegatronModuler = AutoModel.from_config(
@@ -71,33 +67,39 @@ class OmniEncoderModel(torch.nn.Module):
                         _load_state_dict_hook_ignore_param_names, adapter_param_names
                     )
                 )
-        # if self.config.video_projector is not None:
-        #     self.video_projector: BaseMegatronModuler = AutoModel.from_config(self.config.video_projector,
-        #                                                                         **kwargs)
-        #     if allow_missing_adapter_checkpoint:
-        #         adapter_param_names = [
-        #             f"video_projector.{name}"
-        #             for name in self.video_projector.state_dict().keys()
-        #         ]
-        #         self.video_projector.register_load_state_dict_post_hook(
-        #             partial(_load_state_dict_hook_ignore_param_names, adapter_param_names)
-        #         )
-        # if self.config.audio_projector is not None:
-        #     self.audio_projector: BaseMegatronModuler = AutoModel.from_config(self.config.audio_projector,
-        #                                                                       **kwargs)
-        #     if allow_missing_adapter_checkpoint:
-        #         adapter_param_names = [
-        #             f"audio_projector.{name}"
-        #             for name in self.audio_projector.state_dict().keys()
-        #         ]
-        #         self.audio_projector.register_load_state_dict_post_hook(
-        #             partial(_load_state_dict_hook_ignore_param_names, adapter_param_names)
-        #         )
+
+        if self.config.video_projector is not None:
+            self.video_projector: BaseMegatronModuler = AutoModel.from_config(
+                self.config.video_projector, **kwargs)
+            if allow_missing_adapter_checkpoint:
+                adapter_param_names = [
+                    f"video_projector.{name}"
+                    for name in self.video_projector.state_dict().keys()
+                ]
+                self.video_projector.register_load_state_dict_post_hook(
+                    partial(_load_state_dict_hook_ignore_param_names, adapter_param_names)
+                )
+
+        if self.config.audio_projector is not None:
+            self.audio_projector: BaseMegatronModuler = AutoModel.from_config(
+                self.config.audio_projector, **kwargs)
+            if allow_missing_adapter_checkpoint:
+                adapter_param_names = [
+                    f"audio_projector.{name}"
+                    for name in self.audio_projector.state_dict().keys()
+                ]
+                self.audio_projector.register_load_state_dict_post_hook(
+                    partial(_load_state_dict_hook_ignore_param_names, adapter_param_names)
+                )
 
     def set_input_tensor(self, input_tensor) -> None:
-        """set input tensor"""
-        # This is usually handled in schedules.py but some inference code still
-        # gives us non-lists or None
+        """Set the input tensor for the encoder.
+        Args:
+            input_tensor: Input tensor to process. Will be converted to list if not already.
+            
+        Raises:
+            ValueError: If image_encoder is not initialized.
+        """
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
         assert len(input_tensor) == 1, "input_tensor should only be length 1 for llava"
@@ -108,47 +110,12 @@ class OmniEncoderModel(torch.nn.Module):
             raise ValueError("image_encoder is None, cannot set input tensor.")
 
     def set_projector_trainable_only(self):
-        """pipeline parallel schedule interact"""
+        """Configure only projector layers to be trainable.
+        Used for pipeline parallel training schedules.
+        """
         for module in self.children():
             if isinstance(module, BaseMegatronModuler):
                 module.set_projector_trainable_only()
-
-    # def freeze(self, modality: Optional[str] = None, freeze_text_encoder: bool = True) -> None:
-    #     """冻结编码器模型参数。
-
-    #     参数:
-    #     ----------
-    #     modality : str, 可选
-    #         要冻结的特定模态 ('image', 'video', 'audio')。如果为 None,则冻结所有模态编码器。
-    #     freeze_text_encoder : bool, 默认 True
-    #         是否同时冻结文本编码器。
-    #     """
-    #     if modality is not None:
-    #         # 冻结特定模态的编码器
-    #         if modality not in self.modality:
-    #             raise ValueError(f"模态 '{modality}' 不存在。可用模态: {self.modality}")
-
-    #         encoder_name = f"{modality}_encoder"
-    #         if hasattr(self, encoder_name):
-    #             encoder = getattr(self, encoder_name)
-    #             for param in encoder.parameters():
-    #                 param.requires_grad = False
-    #             print(f"已冻结 {modality} 编码器")
-    #     else:
-    #         # 冻结所有模态编码器
-    #         for mod in self.modality:
-    #             encoder_name = f"{mod}_encoder"
-    #             if hasattr(self, encoder_name):
-    #                 encoder = getattr(self, encoder_name)
-    #                 for param in encoder.parameters():
-    #                     param.requires_grad = False
-    #                 print(f"已冻结 {mod} 编码器")
-
-    #     # 冻结文本编码器
-    #     if freeze_text_encoder and hasattr(self, 'text_encoder'):
-    #         for param in self.text_encoder.parameters():
-    #             param.requires_grad = False
-    #         print("已冻结文本编码器")
 
     def image_forward(
         self,
@@ -161,18 +128,22 @@ class OmniEncoderModel(torch.nn.Module):
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for image encoding."""
         image_embeddings, window_index = self.image_encoder(
-            images, image_grid_thw=image_grid_thw
+            images, 
+            image_grid_thw=image_grid_thw
         )
         image_embeddings = self.image_projector(image_embeddings, window_index)
+        
         image_token_id = self.config.image_encoder.image_token_id
         n_image_tokens = (
             (input_ids == self.config.image_encoder.image_token_id).sum().item()
         )
         n_image_features = image_embeddings.shape[0]
+        
         if n_image_tokens != n_image_features:
             raise ValueError(
                 f"Image features {n_image_features} != image tokens {n_image_tokens}"
             )
+            
         if inference_params is not None:
             inference_params.key_value_memory_dict["image_tokens_count"] = (
                 image_embeddings.shape[0]
@@ -185,8 +156,10 @@ class OmniEncoderModel(torch.nn.Module):
             .expand_as(input_embeds)
             .to(input_embeds.device)
         )
+        
         image_embeddings = image_embeddings.to(input_embeds.device, input_embeds.dtype)
         combined_embeddings = input_embeds.masked_scatter(images_mask, image_embeddings)
+        
         return combined_embeddings
 
     def video_forward(self, inputs_embeds: torch.Tensor, decoder_inputs, **kwargs):
@@ -215,8 +188,23 @@ class OmniEncoderModel(torch.nn.Module):
         inference_params: Optional[Dict] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """Forward function for OmniEncoderModel."""
-        # 文本嵌入或外部 inputs_embeds
+        """Forward pass for the OmniEncoderModel.
+
+        Args:
+            input_ids: Token IDs for text input
+            position_ids: Position IDs for text tokens
+            attention_mask: Attention mask
+            image_inputs: Dictionary of image inputs
+            video_inputs: Dictionary of video inputs
+            audio_inputs: Dictionary of audio inputs
+            inference_params: Additional parameters for inference
+            kwargs: Additional keyword arguments
+            
+        Returns:
+            Tuple containing:
+                - Combined embeddings tensor
+                - Dictionary of decoder inputs
+        """
         if self.text_encoder is not None and input_ids is not None:
             input_embeds = self.text_forward(input_ids, position_ids)
         else:
@@ -224,7 +212,7 @@ class OmniEncoderModel(torch.nn.Module):
 
         decoder_inputs: Dict[str, torch.Tensor] = {}
 
-        # 图像
+        # Process image modality
         if "image" in self.modality:
             if image_inputs is None:
                 input_embeds = self.lm_dummy_encode()
@@ -235,7 +223,20 @@ class OmniEncoderModel(torch.nn.Module):
                     inference_params=inference_params,
                     **image_inputs,
                 )
-        # 视频
+
+        # Process audio modality
+        if "audio" in self.modality:
+            if audio_inputs is None:
+                input_embeds = self.lm_dummy_encode()
+            else:
+                input_embeds = self.audio_forward(
+                    input_ids=input_ids,
+                    input_embeds=input_embeds,
+                    inference_params=inference_params,
+                    **audio_inputs,
+                )
+
+        # Process video modality
         if "video" in self.modality:
             if video_inputs is None:
                 input_embeds = self.lm_dummy_encode()
@@ -246,7 +247,7 @@ class OmniEncoderModel(torch.nn.Module):
                     inference_params=inference_params,
                     **video_inputs,
                 )
-        # 音频
+                
         return input_embeds, decoder_inputs
 
 

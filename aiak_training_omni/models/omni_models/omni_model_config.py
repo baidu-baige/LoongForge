@@ -8,5 +8,9 @@ class OmniModelConfig:
     """config for omni model"""
     image_encoder: BaseModelConfig = None
     image_projector: BaseModelConfig = None
+    audio_encoder: BaseModelConfig = None
+    audio_projector: BaseModelConfig = None
+    video_encoder: BaseModelConfig = None
+    video_projector: BaseModelConfig = None
     foundation: BaseModelConfig = None
     model_name: str = None
