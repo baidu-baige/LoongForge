@@ -1,11 +1,7 @@
 
 _target_: aiak_training_omni.models.encoder.MLPAdapterConfig
 
-normalization: "LayerNorm"
+normalization: "RMSNorm"
 
 add_bias_linear: True
-
-activation_func:
-
-layernorm_epsilon: 1e-06
 

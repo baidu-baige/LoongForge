@@ -54,6 +54,16 @@ def omni_model_provider(
     if args.encoder_pipeline_model_parallel_size in [0, None]:
         add_encoder = mpu.is_pipeline_first_stage()
 
+    # temporary fix for omni model config
+    for name in ["image_encoder", "image_projector"]:
+        component_config = getattr(model_config, name)
+        component_config.pipeline_model_parallel_size = 1
+        component_config.tensor_model_parallel_size = 1
+        component_config.sequence_parallel = False
+        component_config.tp_comm_overlap = False
+        component_config.context_parallel_size = 1
+        component_config.context_parallel_ulysses_degree = 1
+
     # TODO: fp8 support
     model = OmniCombinationModel(
         model_config,

@@ -105,6 +105,7 @@ from megatron.training.training import (
 )
 
 from aiak_training_omni.utils import get_args, initialize_aiak_megatron
+from aiak_training_omni.train.arguments import parse_args_from_config
 
 try:
     from inspector.hooks import register_hooks
@@ -441,6 +442,9 @@ def setup_model_and_optimizer(
     """Setup model and optimizer."""
     args = get_args()
     timers = get_timers()
+
+    # set model config from args and hydra config
+    parse_args_from_config(args)
 
     model = get_model(model_provider_func, model_type)
     unwrapped_model = unwrap_model(model)

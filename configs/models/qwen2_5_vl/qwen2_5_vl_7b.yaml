@@ -6,8 +6,6 @@ defaults:
   - ../../models/image_encoder@model.image_encoder: qwen_vit
   - ../../models/image_projector@model.image_projector: mlp_adapter
   - ../../models/qwen@model.foundation: qwen2_5_7b
-  - ../../data@data: vlm_data
+  #- ../../data@data: vlm_data
   - _self_
 
-model:
-  _target_: aiak_training_omni.models.omni_models.omni_model_config.OmniModelConfig

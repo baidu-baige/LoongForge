@@ -1,17 +1,18 @@
 """AIAK arguments"""
 
 import os
-import hydra
 import argparse
 import importlib
-from dataclasses import fields
+from aiak_training_omni.models.omni_models.omni_model_config import OmniModelConfig
+from omegaconf import OmegaConf
+import torch.nn.functional as F
 
 from megatron.core.transformer.enums import AttnBackend
 from megatron.training.arguments import (
     add_megatron_arguments,
     validate_args as validate_megatron_args,
 )
-import omegaconf
+
 from aiak_training_omni.models import (
     get_support_model_family_and_archs,
     get_model_config,
@@ -25,9 +26,9 @@ from aiak_training_omni.utils import (
     constants,
     parse_arguments,
     print_rank_0,
-    convert_megatron_transformer_config_args,
+    build_model_config,
 )
-from aiak_training_omni.utils.global_vars import set_model_config, set_data_config
+from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
 from aiak_training_omni.models.common.base_config import BaseModelConfig
 import importlib
@@ -44,97 +45,37 @@ def is_subclass_from_path(class_path: str, base_class: type):
         return False
 
 
-def build_model_config(model_config, megatron_args, using_config_strategy=False):
-    """build model config"""
-    for model_name in model_config:
-        if isinstance(model_config[model_name], omegaconf.dictconfig.DictConfig):
-            model_config[model_name] = build_model_config(
-                model_config[model_name], megatron_args, using_config_strategy
-            )
-    if "_target_" not in model_config or model_config._target_ is None:
-        raise ValueError("_target_ is not set in model_config")
-
-    model_config_class_path = model_config._target_
-
-    if not is_subclass_from_path(model_config_class_path, BaseModelConfig):
-        model_config_dict = omegaconf.OmegaConf.to_container(model_config, resolve=True)
-        if using_config_strategy:
-            megatron_args.update(model_config_dict)
-            return hydra.utils.instantiate(
-                model_config, _recursive_=False, **megatron_args
-            )
-        else:
-            model_config_dict.update(megatron_args)
-            return hydra.utils.instantiate(
-                model_config, _recursive_=False, **model_config_dict
-            )
-    else:
-        if using_config_strategy:
-            return hydra.utils.instantiate(
-                model_config, _recursive_=False, **megatron_args
-            )
-        return hydra.utils.instantiate(model_config, _recursive_=False)
-
-
 def parse_args_from_config(args):
     """parse args from config"""
-    # data_config = hydra.utils.instantiate(config.data, **vars(args))
-    # using_config_strategy = getattr(data_config, "using_config_strategy", False)
-    # tc_megatron_args = convert_megatron_transformer_config_args(vars(args))
-    # model_config = build_model_config(config.model, tc_megatron_args, using_config_strategy)
-    #   # TODO: add support for other model
-    # set_model_config(model_config)
-    # set_data_config(data_config)
-    from aiak_training_omni.models.omni_models.omni_model_config import OmniModelConfig
-    from copy import deepcopy
-    from aiak_training_omni.models.foundation.qwen.qwen_config import QwenConfig
-    from aiak_training_omni.models.encoder.qwenvl_vision_models.qwen2_vl_config import (
-        QwenVisionConfig,
-        MLPAdapterConfig,
-    )
+    config = get_hydra_config()
+    model_cfgs, model_type = build_model_config(args, config)
 
-    foundation = get_model_config("qwen-7b")
-    image_encoder = get_model_config("qwen_vit")
-    image_projector = get_model_config("qwen_adpater")
-    args = convert_megatron_transformer_config_args(vars(args))
-    foundation_args = deepcopy(args)
-    foundation_args.update(foundation)
-    foundation = QwenConfig(**foundation_args)
-    image_encoder_args = deepcopy(args)
-    image_encoder_args.update(image_encoder)
-    image_encoder = QwenVisionConfig(**image_encoder_args)
-    image_projector_args = deepcopy(args)
-    image_projector_args.update(image_projector)
-    image_projector = MLPAdapterConfig(**image_projector_args)
-    image_encoder.pipeline_model_parallel_size = 1
-    image_encoder.tensor_model_parallel_size = 1
-    image_encoder.sequence_parallel = False
-    image_encoder.tp_comm_overlap = False
-    image_encoder.context_parallel_size = 1
-    image_encoder.context_parallel_ulysses_degree = 1
-
-    image_projector.pipeline_model_parallel_size = 1
-    image_projector.tensor_model_parallel_size = 1
-    image_projector.sequence_parallel = False
-    image_projector.tp_comm_overlap = False
-    image_projector.context_parallel_size = 1
-    image_projector.context_parallel_ulysses_degree = 1
-
-    model_config = OmniModelConfig(
-        foundation=foundation,
-        image_encoder=image_encoder,
-        image_projector=image_projector,
-    )
+    if model_type == "vlm":
+        foundation = model_cfgs.get("foundation")
+        image_encoder = model_cfgs.get("image_encoder")
+        image_projector = model_cfgs.get("image_projector")
+        # model_config = OmniModelConfig(**model_cfgs)
+        model_config = OmniModelConfig(
+            foundation=foundation,
+            image_encoder=image_encoder,
+            image_projector=image_projector,
+        )
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
+    
     set_model_config(model_config)
 
 
 def parse_train_args(args_defaults={}):
     """parse arguments for training"""
-    args = parse_arguments(
+    args, hydra_cfg = parse_arguments(
         extra_args_provider=aiak_extra_train_args_provider,
         validate_extra_args_provider=validate_aiak_extra_args,
         args_defaults=args_defaults,
+        parse_unknown_args=True,
     )
+    set_hydra_config(hydra_cfg)
+
     return args
 
 
@@ -209,10 +150,10 @@ def aiak_extra_train_args_provider(parser: argparse.ArgumentParser):
     return parser
 
 
-def validate_aiak_extra_args(args):
+def validate_aiak_extra_args(args, config):
     """ "Validate AIAK extra arguments"""
     # args.model_family = get_model_family(args.model_name)
-    _validate_extra_model_args(args)
+    _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
     _validate_extra_training_args(args)
     _validate_extra_sft_args(args)
@@ -287,6 +228,12 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         "this option, the head dimensions will be aligned by padding, so that fa can be used."
         "Deprecated: use --attention-backend=flash",
     )
+
+     # # ============ Hydra config ============
+    group.add_argument('--config-path', type=str, required=True,
+                        help='Hydra path to config directory')
+    group.add_argument('--config-name', type=str, required=True,
+                        help='Hydra config file name (without .yaml suffix)')
 
     return parser
 
@@ -935,9 +882,18 @@ def _add_extra_parallel_args(parser):
     return parser
 
 
-def _validate_extra_model_args(args):
+def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
-    model_config = get_model_config("qwen-7b")
+    if not hasattr(config, "model"):
+        raise ValueError("Hydra config doesn't have model section.")
+    
+    model_config = None
+    if "foundation" in config.model:
+        model_config = config.model.foundation
+    else:
+        # compatibility for llm
+        model_config = config.model
+    
     if model_config is not None:
         # the structural configuration of model will be overwritten, such as num_layers, hidden_states..
         # print_rank_0(

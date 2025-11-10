@@ -1,9 +1,7 @@
 
-_target_: aiak_training_omni.models.encoder.QwenVisionRMSNormConfig
+_target_: aiak_training_omni.models.encoder.QwenVisionConfig
 
-model_name: qwen_vit
-
-num_layers: 10
+num_layers: 32
 
 hidden_size: 1280
 
@@ -19,30 +17,13 @@ num_query_groups: 16
 
 image_size: [1344, 1344]
 
-normalization: LayerNorm
+activation_func: ${act:silu}
 
 add_bias_linear: true
 
 add_qkv_bias: true
 
-swiglu: false
+swiglu: true
 
-class_token_len: 0
+gated_linear_unit: true
 
-group_query_attention: false
-
-attention_dropout: 0.0
-
-hidden_dropout: 0.0
-
-layernorm_epsilon: 0
-
-# activation_func: quick_gelu  # Assuming quick_gelu is defined elsewhere
-
-bias_activation_fusion: false
-
-gated_linear_unit: false
-
-in_channels: 3
-
-position_embedding_type: "none"

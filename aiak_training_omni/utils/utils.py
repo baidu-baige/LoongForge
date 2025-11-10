@@ -2,6 +2,9 @@
 
 import os
 import torch
+from copy import deepcopy
+from hydra.utils import instantiate
+from omegaconf import OmegaConf, DictConfig
 from pathlib import Path
 from typing import Optional, Tuple
 from importlib.metadata import version
@@ -73,6 +76,62 @@ def convert_megatron_transformer_config_args(megatron_args):
         transformer_config_args["cp_comm_type"] = megatron_args["cp_comm_type"][0]
     transformer_config_args["config_logger_dir"] = megatron_args["config_logger_dir"]
     return transformer_config_args
+
+
+def build_model_config(args, config):
+    """Build model config from args and config"""
+    args_dict = convert_megatron_transformer_config_args(vars(args))
+
+    model_cfgs = {}
+
+    if not hasattr(config, 'model'):
+        raise ValueError("Invalid model configuration structure")
+    
+    model_type = detect_model_type(config) 
+
+    if model_type == "vlm":
+        for name, model_conf in config.model.items():
+            # must have _target_ field
+            if "_target_" not in model_conf:
+                raise ValueError(
+                    f"Model config 'model.{name}' don't have '_target_' field.\n"
+                )
+
+            merged = deepcopy(args_dict)
+            merged.update(OmegaConf.to_container(model_conf, resolve=True))
+
+            model_cfgs[name] = instantiate(model_conf, **merged)
+    else:
+        # TODO: support other model types
+        raise ValueError(f"Invalid model type: {model_type}")
+
+    return model_cfgs, model_type
+
+
+def register_custom_resolvers():
+    """register custom omegaconf resolvers"""
+    # Activation functions
+    ACTIVATION_MAP = {
+        'relu': F.relu,
+        'gelu': F.gelu,
+        'silu': F.silu,
+    }
+    
+    OmegaConf.register_new_resolver(
+        "act", 
+        lambda name: ACTIVATION_MAP[name.lower()], 
+        replace=True
+    )
+
+
+def detect_model_type(hydra_cfg):
+    """detect model type"""
+    model_cfg = hydra_cfg.model
+
+    for key, value in model_cfg.items():
+        if isinstance(value, (dict, DictConfig)) and "_target_" in value:
+            return "vlm"
+    return "llm"
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig):

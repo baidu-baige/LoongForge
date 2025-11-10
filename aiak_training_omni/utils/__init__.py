@@ -6,6 +6,8 @@ from .utils import (
     print_rank_0,
     is_te_min_version,
     convert_megatron_transformer_config_args,
+    build_model_config,
+    register_custom_resolvers,
 )
 
 
