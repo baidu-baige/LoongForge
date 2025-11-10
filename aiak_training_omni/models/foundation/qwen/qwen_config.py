@@ -49,7 +49,7 @@ def qwen_7b():
         vocab_size_in_config_file=151936,
         make_vocab_size_divisible_by=128,
         group_query_attention=False,
-        num_query_groups=1,
+        num_query_groups=4,
         position_embedding_type="rope",
         add_position_embedding=False,
         rotary_interleaved=False,

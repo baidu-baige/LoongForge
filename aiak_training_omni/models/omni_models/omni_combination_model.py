@@ -190,7 +190,9 @@ class OmniCombinationModel(BaseMegatronModuler):
                 video_inputs=video_inputs,
                 inference_params=inference_params,
             )
-
+        # If it is not the first stage, the passed-in input_tensor is used.    
+        if not self.pre_process:
+            combined_embeddings = None
         # rotary_pos_emb = self.rotary_emb(
         #     position_ids,
         #     packed_seq=packed_seq_params,
