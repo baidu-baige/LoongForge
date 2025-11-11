@@ -1,4 +1,5 @@
 """Pretrain traniner for omni models"""
+
 import os
 import torch
 from typing import Tuple, Optional
@@ -270,18 +271,21 @@ def seq_padding_for_cp(data, tp_size=1, cp_size=1, has_sp=False):
 
     return data
 
+
 def get_batch(data_iterator):
     """Generate a batch"""
     args = get_args()
     if data_iterator is not None and mpu.get_tensor_model_parallel_rank() == 0:
         data = next(data_iterator)
         # When enabling CP or SP and using packing, it is necessary to pad the sequence.
-        if (args.context_parallel_size > 1 or args.sequence_parallel) and args.packing_sft_data:
+        if (
+            args.context_parallel_size > 1 or args.sequence_parallel
+        ) and args.packing_sft_data:
             data = seq_padding_for_cp(
                 data=data,
                 tp_size=args.tensor_model_parallel_size,
                 cp_size=args.context_parallel_size,
-                has_sp=args.sequence_parallel
+                has_sp=args.sequence_parallel,
             )
         if args.is_tokenized_data:
             if "cu_lengths" in data and data["cu_lengths"].dtype == torch.int64:
@@ -292,8 +296,13 @@ def get_batch(data_iterator):
                 data["image_grid_thw"] = data["image_grid_thw"].to(torch.int32)
             if "video_grid_thw" in data and data["video_grid_thw"].dtype == torch.int64:
                 data["video_grid_thw"] = data["video_grid_thw"].to(torch.int32)
-            if "pixel_values_videos" in data and data["pixel_values_videos"].dtype == torch.int64:
-                data["pixel_values_videos"] = data["pixel_values_videos"].to(torch.float32)
+            if (
+                "pixel_values_videos" in data
+                and data["pixel_values_videos"].dtype == torch.int64
+            ):
+                data["pixel_values_videos"] = data["pixel_values_videos"].to(
+                    torch.float32
+                )
 
             data["tokens"] = data["tokens"].squeeze(0)
             data["input_ids"] = data["input_ids"].squeeze(0)
@@ -301,7 +310,7 @@ def get_batch(data_iterator):
             data["attn_mask"] = data["attn_mask"].squeeze(0)
             data["max_lengths"] = data["max_lengths"].squeeze(0)
             data["cu_lengths"] = data["cu_lengths"].squeeze(0)
-            #data["num_tiles"] = data["num_tiles"].squeeze(0)
+            # data["num_tiles"] = data["num_tiles"].squeeze(0)
             if "pixel_values_videos" in data:
                 data["pixel_values_videos"] = data["pixel_values_videos"].squeeze(0)
             if "imgs" in data:
@@ -315,9 +324,15 @@ def get_batch(data_iterator):
 
     tokens = tensor_parallel.broadcast_data(["tokens"], data, torch.int64)["tokens"]
     labels = tensor_parallel.broadcast_data(["labels"], data, torch.int64)["labels"]
-    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)["attn_mask"]
-    cu_lengths = tensor_parallel.broadcast_data(["cu_lengths"], data, torch.int32)["cu_lengths"]
-    max_lengths = tensor_parallel.broadcast_data(["max_lengths"], data, torch.int32)["max_lengths"] 
+    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)[
+        "attn_mask"
+    ]
+    cu_lengths = tensor_parallel.broadcast_data(["cu_lengths"], data, torch.int32)[
+        "cu_lengths"
+    ]
+    max_lengths = tensor_parallel.broadcast_data(["max_lengths"], data, torch.int32)[
+        "max_lengths"
+    ]
 
     has_video = video_token_id in tokens
     has_image = image_token_id in tokens
@@ -327,11 +342,16 @@ def get_batch(data_iterator):
     pixel_values_videos = None
     if has_image:
         imgs = tensor_parallel.broadcast_data(["imgs"], data, torch.float32)["imgs"]
-        thw = tensor_parallel.broadcast_data(["image_grid_thw"], data, torch.int32)["image_grid_thw"]
+        thw = tensor_parallel.broadcast_data(["image_grid_thw"], data, torch.int32)[
+            "image_grid_thw"
+        ]
     if has_video:
-        pixel_values_videos = tensor_parallel.broadcast_data(["pixel_values_videos"], \
-                                    data, torch.float32)["pixel_values_videos"]
-        video_grid_thw = tensor_parallel.broadcast_data(["video_grid_thw"], data, torch.int32)["video_grid_thw"]
+        pixel_values_videos = tensor_parallel.broadcast_data(
+            ["pixel_values_videos"], data, torch.float32
+        )["pixel_values_videos"]
+        video_grid_thw = tensor_parallel.broadcast_data(
+            ["video_grid_thw"], data, torch.int32
+        )["video_grid_thw"]
 
     packed_seq_params = None
     is_video = video_token_id in tokens
@@ -339,10 +359,12 @@ def get_batch(data_iterator):
         input_ids=tokens,
         image_grid_thw=thw,
         video_grid_thw=video_grid_thw,
-        attention_mask=attn_mask
+        attention_mask=attn_mask,
     )
     loss_mask = (labels != -100).long()
-    attn_mask_type = AttnMaskType.padding_causal if attn_mask.any() else AttnMaskType.causal
+    attn_mask_type = (
+        AttnMaskType.padding_causal if attn_mask.any() else AttnMaskType.causal
+    )
 
     labels = torch.roll(labels, shifts=-1, dims=1)
     if cu_lengths.shape == torch.Size([1, 1]):
@@ -371,48 +393,30 @@ def get_batch(data_iterator):
     attn_mask_type = AttnMaskType.causal
     attn_mask = None
 
-    return imgs, thw, pixel_values_videos, video_grid_thw, tokens, position_ids, attn_mask, labels, \
-            loss_mask, attn_mask_type, packed_seq_params
-
-def qwen2vl_position_embedding_ranks(pp_ranks):
-    """qwen2vl's embedding ranks consist of the singular rank of the model or the decoder's first rank.
-    Args:
-        pp_ranks: A list of global ranks that constitute a pipeline group.
-    """
-    args = get_args()
-
-    # encoder size is also the index to the first rank of the decoder.
-    epp = args.encoder_pipeline_model_parallel_size or 0
-
-    last_rank = pp_ranks[-1]
-    if len(pp_ranks) == 1:
-        return [last_rank]
-    else:
-        return [pp_ranks[epp]]
-
-
-def qwen2vl_embedding_ranks(pp_ranks):
-    """qwen2vl's embedding ranks consist of the decoder's first and last ranks (ie, the ViT has no embeddings).
-    Args:
-        pp_ranks: A list of global ranks that constitute a pipeline group.
-    """
-    args = get_args()
-
-    # encoder size is also the index to the first rank of the decoder.
-    epp = args.encoder_pipeline_model_parallel_size or 0
-
-    last_rank = pp_ranks[-1]
-    if len(pp_ranks) == 1 or pp_ranks[epp] == last_rank:
-        return [last_rank]
-    else:
-        return [pp_ranks[epp], last_rank]
+    return (
+        imgs,
+        thw,
+        pixel_values_videos,
+        video_grid_thw,
+        tokens,
+        position_ids,
+        attn_mask,
+        labels,
+        loss_mask,
+        attn_mask_type,
+        packed_seq_params,
+    )
 
 
 # define spiky loss as a loss that's 10x the max loss observed
 SPIKY_LOSS_FACTOR = 10
 
 
-def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
+def loss_func(
+    loss_mask: torch.Tensor,
+    output_tensor: torch.Tensor,
+    loss_weight: torch.Tensor = None,
+):
     """Loss function.
 
     Args:
@@ -425,14 +429,39 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
         a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
     """
     args = get_args()
-
+    if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
+        output_tensor = output_tensor * 0.0
+        valid_mask = False
+    else:
+        valid_mask = True
     losses = output_tensor.float()
     loss_mask = loss_mask.view(-1).float()
-
     total_tokens = loss_mask.sum()
-    loss = torch.cat(
-        [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
-    )
+    if loss_weight is not None:
+        shift_weights = loss_weight.view(-1)
+        shift_weights_sum = shift_weights.sum()
+        if (
+            args.loss_reduction_all_gather and args.context_parallel_size > 1
+        ):  # TODO: check args.loss_reduction_all_gather
+            torch.distributed.all_reduce(
+                shift_weights_sum,
+                op=torch.distributed.ReduceOp.SUM,
+                group=mpu.get_data_parallel_group(with_context_parallel=True),
+            )
+            shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
+                with_context_parallel=True
+            )
+        loss = torch.cat(
+            [
+                torch.sum(losses.view(-1) * shift_weights)
+                / (shift_weights_sum if valid_mask else 1.0).view(1),
+                total_tokens.view(1),
+            ]
+        )
+    else:
+        loss = torch.cat(
+            [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
+        )
 
     if args.context_parallel_size > 1:
         torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
@@ -519,9 +548,12 @@ def forward_step(data_iterator, model):
 
     return output_tensor, partial(loss_func, loss_mask)
 
+
 GLOBAL_TRAIN_DATASET_SIZE = None
+
+
 def train_valid_test_dataset_provider(train_val_test_num_samples):
-    """ Provides the datasets used by the trainer """
+    """Provides the datasets used by the trainer"""
     global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
 
@@ -531,8 +563,9 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
         print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
         train_ds = load_from_disk(save_path)
         collator = build_sft_data_collator(DataCollatorForSeq2Seq)
-        train_data_iterator, valid_data_iterator, test_data_iterator = \
+        train_data_iterator, valid_data_iterator, test_data_iterator = (
             build_sft_cyclic_iterators(train_ds, None, None, collator)
+        )
         return train_data_iterator, None, None
 
     else:
@@ -546,7 +579,8 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
 
         collator = build_sft_data_collator(DataCollatorForSeq2Seq)
         train_dataloader = get_train_loader(train_dataset, collator)
-        return train_dataloader, None, None    
+        return train_dataloader, None, None
+
 
 @register_model_trainer(
     model_family=[constants.OmniModelFamilies.VLM],
