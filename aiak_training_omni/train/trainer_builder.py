@@ -53,7 +53,9 @@ def register_model_trainer(
 def build_model_trainer(args):
     """create model trainer"""
 
-    model_family = "vision_language_models"
+    # model_family = "vision_language_models"
+    model_family = 'vision_language_model'
+
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
         raise ValueError(

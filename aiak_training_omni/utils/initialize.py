@@ -6,6 +6,9 @@
 
 import os
 import logging
+import argparse
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 
 import torch
 
@@ -14,6 +17,7 @@ from megatron.core import mpu, tensor_parallel
 from megatron.training.arguments import (
     parse_args,
     validate_args as validate_megatron_args,
+    add_megatron_arguments,
 )
 
 from megatron.training.checkpointing import load_args_from_checkpoint
@@ -37,19 +41,80 @@ from megatron.training.initialize import (
 )
 
 from .global_vars import set_aiak_extra_global_vars
+from .utils import register_custom_resolvers
 
 logger = logging.getLogger(__name__)
+
+
+def load_and_merge_config(config_path, config_name, hydra_overrides):
+    """
+    Load configuration using the Hydra API and handle defaults inheritance.
+    
+    This function will:
+    1. Load the configuration using Hydra's compose API.
+    2. Automatically handle combined configurations in the defaults list.
+    3. Handle package redirection with the @ symbol.
+    4. Apply command-line overrides.
+    """
+    # Convert to absolute path
+    config_path = os.path.abspath(config_path)
+
+    # Clear previous Hydra instance (if exists)
+    GlobalHydra.instance().clear()
+
+    try:
+        # Initialize using Hydra's initialize_config_dir
+        with initialize_config_dir(config_dir=config_path, version_base=None):
+            # Load configuration using compose, which automatically processes defaults
+            cfg = compose(config_name=config_name, overrides=hydra_overrides)
+
+        return cfg
+
+    except Exception as e:
+        print(f"Cannot load hydra config: {e}. Config path: {config_path}, \
+                config name: {config_name}")
+        raise
+
+
+def parse_megatron_arguments(extra_args_provider=None, parse_unknown_args=False):
+    """Parse megatron arguments."""
+    parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
+                                     allow_abbrev=False)
+
+    parser = add_megatron_arguments(parser)
+
+    # Custom arguments.
+    if extra_args_provider is not None:
+        parser = extra_args_provider(parser)
+
+    # Parse.
+    hydra_overrides = []
+    if parse_unknown_args:
+        args, hydra_overrides = parser.parse_known_args()
+    else:
+        args = parser.parse_args()
+
+    # Args from environment
+    # support MPI
+    args.rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '-1'))
+    if args.rank == -1:
+        args.rank = int(os.getenv('RANK', '0'))
+    args.world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '-1'))
+    if args.world_size == -1:
+        args.world_size = int(os.getenv("WORLD_SIZE", '1'))
+
+    return args, hydra_overrides
 
 
 def parse_arguments(
     extra_args_provider=None,
     validate_extra_args_provider=None,
     args_defaults={},
-    ignore_unknown_args=False,
+    parse_unknown_args=False,
 ):
     """Parse arguments."""
-    args = parse_args(extra_args_provider, ignore_unknown_args)
-
+    args, hydra_overrides = parse_megatron_arguments(extra_args_provider, parse_unknown_args)
+    
     # Prep for checkpoint conversion.
     if args.ckpt_convert_format is not None:
         assert args.ckpt_convert_save is not None
@@ -65,9 +130,21 @@ def parse_arguments(
         )
         load_args_from_checkpoint(args)
 
+    hydra_cfg = None
+
+    # mapping those parameters that can't be parsed
+    register_custom_resolvers()
+
+    if args.config_path and args.config_name:
+        hydra_cfg = load_and_merge_config(
+            args.config_path,
+            args.config_name,
+            hydra_overrides
+        )
+    
     # Validate arguments.
     if validate_extra_args_provider is not None:
-        validate_extra_args_provider(args)
+        validate_extra_args_provider(args, hydra_cfg)
 
     for key in args_defaults:
         # just overwrite the args with defaults
@@ -75,8 +152,8 @@ def parse_arguments(
 
     assert args.yaml_cfg is None, "yaml_cfg is not supported in AIAK-Training-Omni yet"
     validate_megatron_args(args)
-
-    return args
+    
+    return args, hydra_cfg
 
 
 def initialize_aiak_megatron(

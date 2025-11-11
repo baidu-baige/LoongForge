@@ -1,4 +1,5 @@
 """Pretrain traniner for omni models"""
+
 import os
 import torch
 from typing import Tuple, Optional
@@ -286,61 +287,40 @@ def get_batch(data_iterator):
                 cp_size=args.context_parallel_size,
                 has_sp=args.sequence_parallel,
             )
-    #     if args.is_tokenized_data:
-    #         if "cu_lengths" in data and data["cu_lengths"].dtype == torch.int64:
-    #             data["cu_lengths"] = data["cu_lengths"].to(torch.int32)
-    #         if "max_lengths" in data and data["max_lengths"].dtype == torch.int64:
-    #             data["max_lengths"] = data["max_lengths"].to(torch.int32)
-    #         if "image_grid_thw" in data and data["image_grid_thw"].dtype == torch.int64:
-    #             data["image_grid_thw"] = data["image_grid_thw"].to(torch.int32)
-    #         if "video_grid_thw" in data and data["video_grid_thw"].dtype == torch.int64:
-    #             data["video_grid_thw"] = data["video_grid_thw"].to(torch.int32)
-    #         if "pixel_values_videos" in data and data["pixel_values_videos"].dtype == torch.int64:
-    #             data["pixel_values_videos"] = data["pixel_values_videos"].to(torch.float32)
+        if args.is_tokenized_data:
+            if "cu_lengths" in data and data["cu_lengths"].dtype == torch.int64:
+                data["cu_lengths"] = data["cu_lengths"].to(torch.int32)
+            if "max_lengths" in data and data["max_lengths"].dtype == torch.int64:
+                data["max_lengths"] = data["max_lengths"].to(torch.int32)
+            if "image_grid_thw" in data and data["image_grid_thw"].dtype == torch.int64:
+                data["image_grid_thw"] = data["image_grid_thw"].to(torch.int32)
+            if "video_grid_thw" in data and data["video_grid_thw"].dtype == torch.int64:
+                data["video_grid_thw"] = data["video_grid_thw"].to(torch.int32)
+            if (
+                "pixel_values_videos" in data
+                and data["pixel_values_videos"].dtype == torch.int64
+            ):
+                data["pixel_values_videos"] = data["pixel_values_videos"].to(
+                    torch.float32
+                )
 
-    #         data["tokens"] = data["tokens"].squeeze(0)
-    #         data["input_ids"] = data["input_ids"].squeeze(0)
-    #         data["labels"] = data["labels"].squeeze(0)
-    #         data["attn_mask"] = data["attn_mask"].squeeze(0)
-    #         data["max_lengths"] = data["max_lengths"].squeeze(0)
-    #         data["cu_lengths"] = data["cu_lengths"].squeeze(0)
-    #         #data["num_tiles"] = data["num_tiles"].squeeze(0)
-    #         if "pixel_values_videos" in data:
-    #             data["pixel_values_videos"] = data["pixel_values_videos"].squeeze(0)
-    #         if "imgs" in data:
-    #             data["imgs"] = data["imgs"].squeeze(0)
-    #         if "image_grid_thw" in data:
-    #             data["image_grid_thw"] = data["image_grid_thw"].squeeze(0)
-    #         if "video_grid_thw" in data:
-    #             data["video_grid_thw"] = data["video_grid_thw"].squeeze(0)
-    # else:
-    #     data = None
-    if "cu_lengths" in data and data["cu_lengths"].dtype == torch.int64:
-        data["cu_lengths"] = data["cu_lengths"].to(torch.int32)
-    if "max_lengths" in data and data["max_lengths"].dtype == torch.int64:
-        data["max_lengths"] = data["max_lengths"].to(torch.int32)
-    if "image_grid_thw" in data and data["image_grid_thw"].dtype == torch.int64:
-        data["image_grid_thw"] = data["image_grid_thw"].to(torch.int32)
-    # if "video_grid_thw" in data and data["video_grid_thw"].dtype == torch.int64:
-    #     data["video_grid_thw"] = data["video_grid_thw"].to(torch.int32)
-    # if "pixel_values_videos" in data and data["pixel_values_videos"].dtype == torch.int64:
-    #     data["pixel_values_videos"] = data["pixel_values_videos"].to(torch.float32)
-
-    data["tokens"] = data["tokens"].squeeze(0)
-    data["input_ids"] = data["input_ids"].squeeze(0)
-    data["labels"] = data["labels"].squeeze(0)
-    data["attn_mask"] = data["attn_mask"].squeeze(0)
-    data["max_lengths"] = data["max_lengths"].squeeze(0)
-    data["cu_lengths"] = data["cu_lengths"].squeeze(0)
-    # data["num_tiles"] = data["num_tiles"].squeeze(0)
-    if "pixel_values_videos" in data:
-        data["pixel_values_videos"] = data["pixel_values_videos"].squeeze(0)
-    if "imgs" in data:
-        data["imgs"] = data["imgs"].squeeze(0)
-    if "image_grid_thw" in data:
-        data["image_grid_thw"] = data["image_grid_thw"].squeeze(0)
-    if "video_grid_thw" in data:
-        data["video_grid_thw"] = data["video_grid_thw"].squeeze(0)
+            data["tokens"] = data["tokens"].squeeze(0)
+            data["input_ids"] = data["input_ids"].squeeze(0)
+            data["labels"] = data["labels"].squeeze(0)
+            data["attn_mask"] = data["attn_mask"].squeeze(0)
+            data["max_lengths"] = data["max_lengths"].squeeze(0)
+            data["cu_lengths"] = data["cu_lengths"].squeeze(0)
+            # data["num_tiles"] = data["num_tiles"].squeeze(0)
+            if "pixel_values_videos" in data:
+                data["pixel_values_videos"] = data["pixel_values_videos"].squeeze(0)
+            if "imgs" in data:
+                data["imgs"] = data["imgs"].squeeze(0)
+            if "image_grid_thw" in data:
+                data["image_grid_thw"] = data["image_grid_thw"].squeeze(0)
+            if "video_grid_thw" in data:
+                data["video_grid_thw"] = data["video_grid_thw"].squeeze(0)
+    else:
+        data = None
 
     tokens = tensor_parallel.broadcast_data(["tokens"], data, torch.int64)["tokens"]
     labels = tensor_parallel.broadcast_data(["labels"], data, torch.int64)["labels"]
@@ -428,45 +408,15 @@ def get_batch(data_iterator):
     )
 
 
-def qwen2vl_position_embedding_ranks(pp_ranks):
-    """qwen2vl's embedding ranks consist of the singular rank of the model or the decoder's first rank.
-    Args:
-        pp_ranks: A list of global ranks that constitute a pipeline group.
-    """
-    args = get_args()
-
-    # encoder size is also the index to the first rank of the decoder.
-    epp = args.encoder_pipeline_model_parallel_size or 0
-
-    last_rank = pp_ranks[-1]
-    if len(pp_ranks) == 1:
-        return [last_rank]
-    else:
-        return [pp_ranks[epp]]
-
-
-def qwen2vl_embedding_ranks(pp_ranks):
-    """qwen2vl's embedding ranks consist of the decoder's first and last ranks (ie, the ViT has no embeddings).
-    Args:
-        pp_ranks: A list of global ranks that constitute a pipeline group.
-    """
-    args = get_args()
-
-    # encoder size is also the index to the first rank of the decoder.
-    epp = args.encoder_pipeline_model_parallel_size or 0
-
-    last_rank = pp_ranks[-1]
-    if len(pp_ranks) == 1 or pp_ranks[epp] == last_rank:
-        return [last_rank]
-    else:
-        return [pp_ranks[epp], last_rank]
-
-
 # define spiky loss as a loss that's 10x the max loss observed
 SPIKY_LOSS_FACTOR = 10
 
 
-def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
+def loss_func(
+    loss_mask: torch.Tensor,
+    output_tensor: torch.Tensor,
+    loss_weight: torch.Tensor = None,
+):
     """Loss function.
 
     Args:
@@ -479,14 +429,39 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
         a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
     """
     args = get_args()
-
+    if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
+        output_tensor = output_tensor * 0.0
+        valid_mask = False
+    else:
+        valid_mask = True
     losses = output_tensor.float()
     loss_mask = loss_mask.view(-1).float()
-
     total_tokens = loss_mask.sum()
-    loss = torch.cat(
-        [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
-    )
+    if loss_weight is not None:
+        shift_weights = loss_weight.view(-1)
+        shift_weights_sum = shift_weights.sum()
+        if (
+            args.loss_reduction_all_gather and args.context_parallel_size > 1
+        ):  # TODO: check args.loss_reduction_all_gather
+            torch.distributed.all_reduce(
+                shift_weights_sum,
+                op=torch.distributed.ReduceOp.SUM,
+                group=mpu.get_data_parallel_group(with_context_parallel=True),
+            )
+            shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
+                with_context_parallel=True
+            )
+        loss = torch.cat(
+            [
+                torch.sum(losses.view(-1) * shift_weights)
+                / (shift_weights_sum if valid_mask else 1.0).view(1),
+                total_tokens.view(1),
+            ]
+        )
+    else:
+        loss = torch.cat(
+            [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
+        )
 
     if args.context_parallel_size > 1:
         torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
@@ -574,42 +549,44 @@ def forward_step(data_iterator, model):
     return output_tensor, partial(loss_func, loss_mask)
 
 
+GLOBAL_TRAIN_DATASET_SIZE = None
+
+
 def train_valid_test_dataset_provider(train_val_test_num_samples):
     """Provides the datasets used by the trainer"""
     global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
-    from aiak_training_omni.train.arguments import data_configs
 
-    cfg_data = data_configs[0]
-    # if cfg_data.is_tokenized_data:
-    #     rank = parallel_state.get_data_parallel_rank()
-    #     save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
-    #     print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
-    #     train_ds = load_from_disk(save_path)
-    #     collator = build_sft_data_collator(DataCollatorForSeq2Seq)
-    #     train_data_iterator, valid_data_iterator, test_data_iterator = \
-    #         build_sft_cyclic_iterators(train_ds, None, None, collator)
-    #     return train_data_iterator, None, None
+    if args.is_tokenized_data:
+        rank = parallel_state.get_data_parallel_rank()
+        save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
+        print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
+        train_ds = load_from_disk(save_path)
+        collator = build_sft_data_collator(DataCollatorForSeq2Seq)
+        train_data_iterator, valid_data_iterator, test_data_iterator = (
+            build_sft_cyclic_iterators(train_ds, None, None, collator)
+        )
+        return train_data_iterator, None, None
 
-    # else:
-    task_encoder = VLMTaskEncoder(cfg_data)
-    train_dataset = get_train_dataset(task_encoder)
+    else:
+        task_encoder = VLMTaskEncoder(args)
+        train_dataset = get_train_dataset(task_encoder)
 
-    try:
-        GLOBAL_TRAIN_DATASET_SIZE = len(train_dataset)
-    except TypeError:
-        GLOBAL_TRAIN_DATASET_SIZE = getattr(train_dataset, "num_rows", None)
+        try:
+            GLOBAL_TRAIN_DATASET_SIZE = len(train_dataset)
+        except TypeError:
+            GLOBAL_TRAIN_DATASET_SIZE = getattr(train_dataset, "num_rows", None)
 
-    collator = build_sft_data_collator(DataCollatorForSeq2Seq)
-    train_dataloader = get_train_loader(train_dataset, collator)
-    return train_dataloader, None, None  # TODO: add support test/eval dataset
+        collator = build_sft_data_collator(DataCollatorForSeq2Seq)
+        train_dataloader = get_train_loader(train_dataset, collator)
+        return train_dataloader, None, None
 
 
 @register_model_trainer(
     model_family=[constants.OmniModelFamilies.VLM],
     training_phase=constants.TrainingPhase.PRETRAIN,
 )
-def default_omni_pretrain_trainer(train_args):
+def default_vlm_pretrain_trainer(train_args):
     """build trainer"""
     trainer = MegatronTrainer(
         train_args=train_args,

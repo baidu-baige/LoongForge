@@ -1,5 +1,5 @@
 """
-编排 encoder -> foundation -> decoder 的执行流程
+Orchestrate the execution flow of encoder -> foundation -> decoder
 """
 
 from __future__ import annotations
@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-
 from .omni_encoder_model import OmniEncoderModel
 from .omni_decoder_model import OmniDecoderModel
 from transformers.models.auto.modeling_auto import AutoModel
@@ -19,8 +18,7 @@ from megatron.core.transformer.module import MegatronModule
 
 
 class OmniCombinationModel(BaseMegatronModuler):
-    """Omni 多模态组合模型"""
-
+    """Omni multimodal combination model"""
     def __init__(
         self,
         config: BaseModelConfig,
@@ -72,7 +70,6 @@ class OmniCombinationModel(BaseMegatronModuler):
                 "OmniCombinationModel requires a foundation_config to initialize foundation_model."
             )
 
-        # 构建子模型
         if config.image_encoder is not None and add_encoder:
             self.encoder_model = OmniEncoderModel(
                 config,
@@ -95,8 +92,10 @@ class OmniCombinationModel(BaseMegatronModuler):
         )
 
     def shared_embedding_or_output_weight(self):
-        """This is a convenience method to surface the language model's word embeddings, which is
-        necessary for `finalize_model_grads._allreduce_word_embedding_grads`."""
+        """Get shared embedding or output weight from foundation model.
+        This is a convenience method to surface the language model's word embeddings, which is
+        necessary for `finalize_model_grads._allreduce_word_embedding_grads`.
+        """
         if self.add_decoder:
             return self.foundation_model.shared_embedding_or_output_weight()
         return None
@@ -104,17 +103,17 @@ class OmniCombinationModel(BaseMegatronModuler):
     def set_input_embeddings(
         self, inputs: Dict[str, Any]
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """跳过encoder,使用输入中的值用于后续 foundation + decoder 模型。"""
+        """Skip encoder and use input values directly for foundation + decoder models."""
         input_embeds = inputs.get("inputs_embeds")
         decoder_inputs = inputs.get("decoder_inputs", {})
 
         if input_embeds is None:
-            raise ValueError("离线模式下必须提供 inputs_embeds")
+            raise ValueError("In offline mode, `inputs_embeds` must be provided.")
 
         return input_embeds, decoder_inputs
 
     def set_input_tensor(self, input_tensor) -> None:
-        """set input tensor"""
+        """Set input tensor for the model"""
         # This is usually handled in schedules.py but some inference code still
         # gives us non-lists or None
         if not isinstance(input_tensor, list):
@@ -126,21 +125,21 @@ class OmniCombinationModel(BaseMegatronModuler):
         elif self.add_encoder:
             self.encoder_model.set_input_tensor(input_tensor[0])
         elif self.pre_process:
-            self.encoder_hidden_state = input_tensor[0]  # TOOD
+            self.encoder_hidden_state = input_tensor[0]  # TODO: Handle encoder hidden state
         else:
             self.foundation_model.set_input_tensor(input_tensor[0])
 
     def set_output_embeddings(self, inputs: Dict[str, Any]) -> torch.Tensor:
-        """跳过foundation model,使用输入中的值用于decoder模型。"""
+        """Skip foundation model and use input values directly for decoder model."""
         output_embeddings = inputs.get("output_embeddings")
 
         if output_embeddings is None:
-            raise ValueError("离线模式下必须提供 output_embeddings")
+            raise ValueError("In offline mode, `output_embeddings` must be provided.")
 
         return output_embeddings
 
     def get_modality(self):
-        """获取当前模型的输入输出类型"""
+        """Get input/output modality types of the current model"""
         input_modality = self.encoder.modality
         output_modality = self.decoder.modality
         return {"input": input_modality, "output": output_modality}
@@ -148,11 +147,11 @@ class OmniCombinationModel(BaseMegatronModuler):
     def prepare_inputs_for_generation(
         self, input_ids: Optional[torch.LongTensor] = None
     ):
-        """准备生成过程所需的输入"""
+        """Prepare inputs for generation process"""
         pass
 
     def generate_multimodal(self, hidden_states):
-        """生成多模态数据"""
+        """Generate multimodal data"""
         pass
 
     def forward(
@@ -169,13 +168,13 @@ class OmniCombinationModel(BaseMegatronModuler):
         audio_inputs: Optional[Dict[str, torch.Tensor]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """前向传播，支持多种执行路径。
+        """Forward pass supporting multiple execution paths.
 
-        执行路径：
-        1. 完整路径:encoder -> foundation -> decoder
-        2. 离线编码器：使用预处理的 inputs_embeds
-        3. 离线foundation model:使用预处理的 output_embeddings
-        4. 仅解码器：冻结 encoder 和 foundation
+        Execution paths:
+            1. Full path: encoder -> foundation -> decoder
+            2. Offline encoder: use preprocessed inputs_embeds
+            3. Offline foundation model: use preprocessed output_embeddings
+            4. Decoder only: freeze encoder and foundation
         """
         use_inference_kv_cache = (
             inference_params is not None
@@ -190,12 +189,8 @@ class OmniCombinationModel(BaseMegatronModuler):
                 video_inputs=video_inputs,
                 inference_params=inference_params,
             )
-
-        # rotary_pos_emb = self.rotary_emb(
-        #     position_ids,
-        #     packed_seq=packed_seq_params,
-        # ).transpose(0, 2).contiguous()
-
+        if not self.pre_process:
+            combined_embeddings = None
         output = self.foundation_model(
             input_ids=None,
             position_ids=None,

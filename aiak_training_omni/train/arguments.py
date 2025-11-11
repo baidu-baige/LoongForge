@@ -1,17 +1,18 @@
 """AIAK arguments"""
 
 import os
-import hydra
 import argparse
 import importlib
-from dataclasses import fields
+from aiak_training_omni.models.omni_models.omni_model_config import OmniModelConfig
+from omegaconf import OmegaConf
+import torch.nn.functional as F
 
 from megatron.core.transformer.enums import AttnBackend
 from megatron.training.arguments import (
     add_megatron_arguments,
     validate_args as validate_megatron_args,
 )
-import omegaconf
+
 from aiak_training_omni.models import (
     get_support_model_family_and_archs,
     get_model_config,
@@ -25,36 +26,56 @@ from aiak_training_omni.utils import (
     constants,
     parse_arguments,
     print_rank_0,
-    convert_megatron_transformer_config_args,
+    build_model_config,
 )
-from aiak_training_omni.utils.global_vars import set_model_config, set_data_config
+from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
+from aiak_training_omni.models.common.base_config import BaseModelConfig
+import importlib
 
 
-def parse_args_from_config(config, args):
+def is_subclass_from_path(class_path: str, base_class: type):
+    """Check whether the given class path belongs to the specified base class"""
+    try:
+        mod_path, cls_name = class_path.rsplit(".", 1)
+        mod = importlib.import_module(mod_path)
+        cls = getattr(mod, cls_name)
+        return issubclass(cls, base_class)
+    except (ValueError, ImportError, AttributeError, TypeError):
+        return False
+
+
+def parse_args_from_config(args):
     """parse args from config"""
+    config = get_hydra_config()
+    model_cfgs, model_type = build_model_config(args, config)
 
-    data_config = hydra.utils.instantiate(config.data, **vars(args))
-
-    tc_megatron_args = convert_megatron_transformer_config_args(vars(args))
-
-    model_config = hydra.utils.instantiate(
-        config.model,
-        image_encoder=dict(**tc_megatron_args),
-        image_projector=dict(**tc_megatron_args),
-        foundation=dict(**tc_megatron_args),
-    )  # TODO: add support for other model
+    if model_type == "vlm":
+        foundation = model_cfgs.get("foundation")
+        image_encoder = model_cfgs.get("image_encoder")
+        image_projector = model_cfgs.get("image_projector")
+        # model_config = OmniModelConfig(**model_cfgs)
+        model_config = OmniModelConfig(
+            foundation=foundation,
+            image_encoder=image_encoder,
+            image_projector=image_projector,
+        )
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
+    
     set_model_config(model_config)
-    set_data_config(data_config)
 
 
 def parse_train_args(args_defaults={}):
     """parse arguments for training"""
-    args = parse_arguments(
+    args, hydra_cfg = parse_arguments(
         extra_args_provider=aiak_extra_train_args_provider,
         validate_extra_args_provider=validate_aiak_extra_args,
         args_defaults=args_defaults,
+        parse_unknown_args=True,
     )
+    set_hydra_config(hydra_cfg)
+
     return args
 
 
@@ -129,10 +150,10 @@ def aiak_extra_train_args_provider(parser: argparse.ArgumentParser):
     return parser
 
 
-def validate_aiak_extra_args(args):
+def validate_aiak_extra_args(args, config):
     """ "Validate AIAK extra arguments"""
     # args.model_family = get_model_family(args.model_name)
-    # _validate_extra_model_args(args)
+    _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
     _validate_extra_training_args(args)
     _validate_extra_sft_args(args)
@@ -148,17 +169,35 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
     """Add model arguments"""
     group = parser.add_argument_group(title="extra-model")
     group.add_argument(
-        "--model-name",
+        "--config-path",
         type=str,
         required=True,
-        choices=get_support_model_family_and_archs(),
-        help="The name of model to be trained, which can be either a model family name (e.g., llama2) "
-        "or a model architecture name (e.g., llama2-7b). "
-        "If specifies the model family name, you need to completely configure the hyperparameters "
-        "of the model architecture, such as num_layers, hidden_size, etc. "
-        "And if specifies the model architecture name, aiak system will automatically override the"
-        "model architecture hyperparameters to ensure consistency with the open source version. ",
+        help="The config file path for model configuration.",
     )
+    group.add_argument(
+        "--config-name",
+        type=str,
+        required=True,
+        help="The config file path for model configuration.",
+    )
+    group.add_argument(
+        "--model-family",
+        type=str,
+        required=True,
+        help="The config file path for model configuration.",
+    )
+    # group.add_argument(
+    #     "--model-name",
+    #     type=str,
+    #     required=True,
+    #     choices=get_support_model_family_and_archs(),
+    #     help="The name of model to be trained, which can be either a model family name (e.g., llama2) "
+    #     "or a model architecture name (e.g., llama2-7b). "
+    #     "If specifies the model family name, you need to completely configure the hyperparameters "
+    #     "of the model architecture, such as num_layers, hidden_size, etc. "
+    #     "And if specifies the model architecture name, aiak system will automatically override the"
+    #     "model architecture hyperparameters to ensure consistency with the open source version. ",
+    # )
 
     # use for cogvlm2
     group.add_argument(
@@ -189,6 +228,12 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         "this option, the head dimensions will be aligned by padding, so that fa can be used."
         "Deprecated: use --attention-backend=flash",
     )
+
+     # # ============ Hydra config ============
+    group.add_argument('--config-path', type=str, required=True,
+                        help='Hydra path to config directory')
+    group.add_argument('--config-name', type=str, required=True,
+                        help='Hydra config file name (without .yaml suffix)')
 
     return parser
 
@@ -829,27 +874,44 @@ def _add_extra_parallel_args(parser):
         default=1,
         help="Degree of context parallelism in ulysses attention.",
     )
-
+    group.add_argument(
+        "--using-config-strategy",
+        action="store_true",
+        help="Use the parallel configuration in the model configuration file.",
+    )
     return parser
 
 
-def _validate_extra_model_args(args):
+def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
-    model_config = get_model_config(args.model_name)
+    if not hasattr(config, "model"):
+        raise ValueError("Hydra config doesn't have model section.")
+    
+    model_config = None
+    if "foundation" in config.model:
+        model_config = config.model.foundation
+    else:
+        # compatibility for llm
+        model_config = config.model
+    
     if model_config is not None:
         # the structural configuration of model will be overwritten, such as num_layers, hidden_states..
-        print_rank_0(
-            f"-------------- Configure model to {args.model_name} --------------",
-            args.rank,
-        )
+        # print_rank_0(
+        #     f"-------------- Configure model to {args.model_name} --------------",
+        #     args.rank,
+        # )
 
-        for field in fields(model_config.__class__):
-            assert hasattr(
-                args, field.name
-            ), f"The model config field ({field.name}) is not defined in args."
-            key, value = field.name, getattr(model_config, field.name)
-            setattr(args, key, value)
-            print_rank_0(f"  {key} = {value} ", args.rank)
+        # for field in fields(model_config.__class__):
+        #     # assert hasattr(
+        #     #     args, field.name
+        #     # ), f"The model config field ({field.name}) is not defined in args."
+        #     key, value = field.name, getattr(model_config, field.name)
+        #     setattr(args, key, value)
+        #     print_rank_0(f"  {key} = {value} ", args.rank)
+        for key in model_config:
+            if hasattr(args, key):
+                setattr(args, key, model_config[key])
+                print_rank_0(f"  {key} = {model_config[key]} ", args.rank)
 
         print_rank_0(
             "---------------- End of configuration ----------------", args.rank

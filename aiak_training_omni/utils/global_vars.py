@@ -21,12 +21,18 @@ if TYPE_CHECKING:
 _GLOBAL_CHAT_TEMPLATE: Optional["ChatTemplate"] = None
 _GLOBAL_AIAK_TOKENIZER: Optional["MegatronTokenizer"] = None
 _GLOBAL_MODEL_CONFIG = None
+_GLOBAL_HYDRA_CONFIG = None
 _GLOBAL_DATA_CONFIG = None
 
 
 def get_model_config():
     """Get the model configuration"""
     return _GLOBAL_MODEL_CONFIG
+
+
+def get_hydra_config():
+    """Get the hydra configuration"""
+    return _GLOBAL_HYDRA_CONFIG
 
 
 def get_data_config():
@@ -39,6 +45,13 @@ def set_model_config(model_config):
     global _GLOBAL_MODEL_CONFIG
     _ensure_var_is_not_initialized(_GLOBAL_MODEL_CONFIG, "model config")
     _GLOBAL_MODEL_CONFIG = model_config
+
+
+def set_hydra_config(hydra_config):
+    """Set the hydra configuration"""
+    global _GLOBAL_HYDRA_CONFIG
+    _ensure_var_is_not_initialized(_GLOBAL_HYDRA_CONFIG, "hydra config")
+    _GLOBAL_HYDRA_CONFIG = hydra_config
 
 
 def set_data_config(data_config):

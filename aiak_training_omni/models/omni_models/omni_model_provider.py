@@ -1,5 +1,4 @@
-"""AIAK Omni 模型提供者。
-提供与现有训练框架兼容的模型构建接口。
+"""Omni Model Provider.Provides model construction interfaces compatible with existing training frameworks.
 """
 
 from __future__ import annotations
@@ -10,15 +9,14 @@ from .omni_combination_model import OmniCombinationModel
 from aiak_training_omni.utils import get_args
 from megatron.core import mpu
 import torch
-from aiak_training_omni.utils import build_transformer_config
+from aiak_training_omni.utils import build_transformer_config, get_model_config
 from aiak_training_omni.models.common import BaseModelConfig
-from aiak_training_omni.train.arguments import model_configs
 
 
 def check_model_config(model_config: BaseModelConfig):
-    """检查模型配置是否正确,包括隐藏大小和注意力头数等参数"""
-    for config in model_config:  # TODO
-        # check hidden_size and num_attention_heads
+    """Validate model configuration including hidden size and number of attention heads."""
+    for config in model_config:  # TODO: Implement actual validation logic
+        # Check hidden_size and num_attention_heads
         print(config)
     return model_config
 
@@ -30,30 +28,42 @@ def omni_model_provider(
     # model_config: BaseModelConfig = None,
 ) -> OmniCombinationModel:
     """
-    构建并返回一个Omni组合模型实例。
-    该函数根据提供的参数和全局args配置,构建一个多模态组合模型。模型配置从args.model_name获取,
-    并支持并行处理和前后处理选项。
+    Construct and return an Omni combination model instance.
+    
+    This function builds a multimodal combination model based on provided parameters 
+    and global args configuration. Model configuration is obtained from args.model_name,
+    with support for parallel processing and pre/post-processing options.
 
     Args:
-        pre_process: 是否进行预处理,默认为True
-        post_process: 是否进行后处理,默认为True
-        parallel_output: 是否启用并行输出,默认为True
+        pre_process: Whether to perform pre-processing (default: True)
+        post_process: Whether to perform post-processing (default: True)
+        parallel_output: Whether to enable parallel output (default: True)
 
     Returns:
-        OmniCombinationModel: 构建好的组合模型实例
+        OmniCombinationModel: Constructed combination model instance
 
-    Note:
-        - 模型配置从args.model_name获取
-        - 支持编码器管道并行处理
-        - 包含语言模型相关参数配置
+    Notes:
+        - Model configuration is obtained from args.model_name
+        - Supports encoder pipeline parallel processing
+        - Includes language model related parameter configuration
     """
     args = get_args()
-    model_config = model_configs[0]
+    model_config = get_model_config()
     # check_model_config(model_config)
     # build_transformer_config(args)
-    # FIXME: fix this if model_type is encoder_and_decoder
+    # FIXME: Need to handle when model_type is encoder_and_decoder
     if args.encoder_pipeline_model_parallel_size in [0, None]:
         add_encoder = mpu.is_pipeline_first_stage()
+
+    # temporary fix for omni model config
+    for name in ["image_encoder", "image_projector"]:
+        component_config = getattr(model_config, name)
+        component_config.pipeline_model_parallel_size = 1
+        component_config.tensor_model_parallel_size = 1
+        component_config.sequence_parallel = False
+        component_config.tp_comm_overlap = False
+        component_config.context_parallel_size = 1
+        component_config.context_parallel_ulysses_degree = 1
 
     # TODO: fp8 support
     model = OmniCombinationModel(
