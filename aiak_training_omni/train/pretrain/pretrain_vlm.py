@@ -272,95 +272,85 @@ def seq_padding_for_cp(data, tp_size=1, cp_size=1, has_sp=False):
     return data
 
 
-def get_batch(data_iterator):
-    """Generate a batch"""
+def get_batch_on_this_tp_rank(data_iterator):
+    """Get the current micro-batch on this rank."""
     args = get_args()
+
     if data_iterator is not None and mpu.get_tensor_model_parallel_rank() == 0:
         data = next(data_iterator)
         # When enabling CP or SP and using packing, it is necessary to pad the sequence.
-        if (
-            args.context_parallel_size > 1 or args.sequence_parallel
-        ) and args.packing_sft_data:
+        if (args.context_parallel_size > 1 or args.sequence_parallel) and args.packing_sft_data:
             data = seq_padding_for_cp(
                 data=data,
                 tp_size=args.tensor_model_parallel_size,
                 cp_size=args.context_parallel_size,
-                has_sp=args.sequence_parallel,
+                has_sp=args.sequence_parallel
             )
-        if args.is_tokenized_data:
-            if "cu_lengths" in data and data["cu_lengths"].dtype == torch.int64:
-                data["cu_lengths"] = data["cu_lengths"].to(torch.int32)
-            if "max_lengths" in data and data["max_lengths"].dtype == torch.int64:
-                data["max_lengths"] = data["max_lengths"].to(torch.int32)
-            if "image_grid_thw" in data and data["image_grid_thw"].dtype == torch.int64:
-                data["image_grid_thw"] = data["image_grid_thw"].to(torch.int32)
-            if "video_grid_thw" in data and data["video_grid_thw"].dtype == torch.int64:
-                data["video_grid_thw"] = data["video_grid_thw"].to(torch.int32)
-            if (
-                "pixel_values_videos" in data
-                and data["pixel_values_videos"].dtype == torch.int64
-            ):
-                data["pixel_values_videos"] = data["pixel_values_videos"].to(
-                    torch.float32
-                )
-
-            data["tokens"] = data["tokens"].squeeze(0)
-            data["input_ids"] = data["input_ids"].squeeze(0)
-            data["labels"] = data["labels"].squeeze(0)
-            data["attn_mask"] = data["attn_mask"].squeeze(0)
-            data["max_lengths"] = data["max_lengths"].squeeze(0)
-            data["cu_lengths"] = data["cu_lengths"].squeeze(0)
-            # data["num_tiles"] = data["num_tiles"].squeeze(0)
-            if "pixel_values_videos" in data:
-                data["pixel_values_videos"] = data["pixel_values_videos"].squeeze(0)
-            if "imgs" in data:
-                data["imgs"] = data["imgs"].squeeze(0)
-            if "image_grid_thw" in data:
-                data["image_grid_thw"] = data["image_grid_thw"].squeeze(0)
-            if "video_grid_thw" in data:
-                data["video_grid_thw"] = data["video_grid_thw"].squeeze(0)
     else:
         data = None
 
     tokens = tensor_parallel.broadcast_data(["tokens"], data, torch.int64)["tokens"]
     labels = tensor_parallel.broadcast_data(["labels"], data, torch.int64)["labels"]
-    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)[
-        "attn_mask"
-    ]
-    cu_lengths = tensor_parallel.broadcast_data(["cu_lengths"], data, torch.int32)[
-        "cu_lengths"
-    ]
-    max_lengths = tensor_parallel.broadcast_data(["max_lengths"], data, torch.int32)[
-        "max_lengths"
-    ]
+    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)["attn_mask"]
+    cu_lengths = tensor_parallel.broadcast_data(["cu_lengths"], data, torch.int32)["cu_lengths"]
+    max_lengths = tensor_parallel.broadcast_data(["max_lengths"], data, torch.int32)["max_lengths"]
 
     has_video = video_token_id in tokens
     has_image = image_token_id in tokens
-    thw = None
-    video_grid_thw = None
-    imgs = None
+
+    images = None
+    image_grid_thw = None
     pixel_values_videos = None
+    video_grid_thw = None
     if has_image:
-        imgs = tensor_parallel.broadcast_data(["imgs"], data, torch.float32)["imgs"]
-        thw = tensor_parallel.broadcast_data(["image_grid_thw"], data, torch.int32)[
-            "image_grid_thw"
-        ]
+        images = tensor_parallel.broadcast_data(["imgs"], data, torch.float32)["imgs"]
+        image_grid_thw = tensor_parallel.broadcast_data(["image_grid_thw"], data, torch.int32)["image_grid_thw"]
     if has_video:
-        pixel_values_videos = tensor_parallel.broadcast_data(
-            ["pixel_values_videos"], data, torch.float32
-        )["pixel_values_videos"]
-        video_grid_thw = tensor_parallel.broadcast_data(
-            ["video_grid_thw"], data, torch.int32
-        )["video_grid_thw"]
+        pixel_values_videos = tensor_parallel.broadcast_data(["pixel_values_videos"], \
+                                    data, torch.float32)["pixel_values_videos"]
+        video_grid_thw = tensor_parallel.broadcast_data(["video_grid_thw"], data, torch.int32)["video_grid_thw"]
+    batch = {
+        "images": images.cuda(non_blocking=True) if images is not None else None,
+        "image_grid_thw": image_grid_thw.cuda(non_blocking=True) if image_grid_thw is not None else None,
+        "pixel_values_videos": pixel_values_videos.cuda(non_blocking=True) if pixel_values_videos is not None else None,
+        "video_grid_thw": video_grid_thw.cuda(non_blocking=True) if video_grid_thw is not None else None,
+        "tokens": tokens.cuda(non_blocking=True),
+        "attn_mask": attn_mask.cuda(non_blocking=True),
+        "labels": labels.cuda(non_blocking=True),
+        "cu_lengths": cu_lengths.cuda(non_blocking=True),
+        "max_lengths": max_lengths.cuda(non_blocking=True),
+    }
+
+    return batch
+
+
+def get_ltor_masks_and_position_ids(
+        batch
+    ):
+    """Build masks and position id for left to right model."""
+    # Position ids. [3 X bs X seqlen]
+
+    input_ids = batch['tokens']
+    position_ids, _ = get_rope_index(
+        input_ids=input_ids,
+        image_grid_thw=batch.get('image_grid_thw'),
+        video_grid_thw=batch.get('video_grid_thw'),
+        attention_mask=batch['attn_mask']
+    )
+    labels = batch.get('labels')
+    cu_lengths = batch['cu_lengths']
+    max_lengths = batch['max_lengths']
+    # Loss mask.
+    loss_mask = torch.ones(labels.size(), dtype=torch.float, device=input_ids.device)
+    loss_mask[labels == PAD_TOKEN_ID] = 0.0  # mask paddings
+    if IGNORE_INDEX is not None:
+        loss_mask[labels == IGNORE_INDEX] = 0.0  # mask prompts
+
+    # Attention mask.
+    attn_mask = batch['attn_mask']
 
     packed_seq_params = None
-    is_video = video_token_id in tokens
-    position_ids, _ = get_rope_index(
-        input_ids=tokens,
-        image_grid_thw=thw,
-        video_grid_thw=video_grid_thw,
-        attention_mask=attn_mask,
-    )
+
     loss_mask = (labels != -100).long()
     attn_mask_type = (
         AttnMaskType.padding_causal if attn_mask.any() else AttnMaskType.causal
@@ -376,7 +366,6 @@ def get_batch(data_iterator):
                 loss_mask[i, cu_lengths[i][j] - 1] = 0
 
         assert cu_lengths.shape[0] == 1, "micro-batch-size must be 1 for packing"
-        attn_mask = None
         packed_seq_params = PackedSeqParams(
             qkv_format="thd",
             cu_seqlens_q=cu_lengths[0],
@@ -384,28 +373,25 @@ def get_batch(data_iterator):
             max_seqlen_q=max_lengths[0].item(),
             max_seqlen_kv=max_lengths[0].item(),
         )
+    batch['attn_mask'] = None
+    batch['labels'] = labels
+    batch['position_ids'] = position_ids
+    batch['loss_mask'] = loss_mask
+    batch['attn_mask_type'] = attn_mask_type
+    batch['packed_seq_params'] = packed_seq_params
 
-    # if args.context_parallel_size > 1:
-    #     labels = get_inputs_on_this_cp_rank_by_tex(labels.transpose(0, 1), packed_seq_params).transpose(0, 1)
-    #     loss_mask = get_inputs_on_this_cp_rank_by_tex(loss_mask.transpose(0, 1), packed_seq_params).transpose(0, 1)
+    return batch
 
-    # TODO
-    attn_mask_type = AttnMaskType.causal
-    attn_mask = None
 
-    return (
-        imgs,
-        thw,
-        pixel_values_videos,
-        video_grid_thw,
-        tokens,
-        position_ids,
-        attn_mask,
-        labels,
-        loss_mask,
-        attn_mask_type,
-        packed_seq_params,
-    )
+def get_batch(data_iterator):
+    """Generate a batch"""
+
+    batch = get_batch_on_this_tp_rank(data_iterator)
+
+
+    batch = get_ltor_masks_and_position_ids(batch)
+
+    return batch.values()
 
 
 # define spiky loss as a loss that's 10x the max loss observed
@@ -429,6 +415,7 @@ def loss_func(
         a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
     """
     args = get_args()
+
     if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
         output_tensor = output_tensor * 0.0
         valid_mask = False
@@ -517,10 +504,12 @@ def forward_step(data_iterator, model):
             image_grid_thw,
             pixel_values_videos,
             video_grid_thw,
-            input_ids,
-            position_ids,
-            attention_mask,
+            tokens,
+            attn_mask,
             labels,
+            cu_lengths,
+            max_lengths,
+            position_ids,
             loss_mask,
             attn_mask_type,
             packed_seq_params,
@@ -530,9 +519,9 @@ def forward_step(data_iterator, model):
 
     with stimer:
         output_tensor = model(
-            input_ids=input_ids,
+            input_ids=tokens,
             position_ids=position_ids,
-            attention_mask=attention_mask,
+            attention_mask=attn_mask,
             attn_mask_type=attn_mask_type,
             labels=labels,
             packed_seq_params=packed_seq_params,
