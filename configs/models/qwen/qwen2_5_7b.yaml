@@ -2,15 +2,15 @@
 
 _target_: aiak_training_omni.models.foundation.QwenConfig
 
-num_layers: 32
+num_layers: 28
 
-hidden_size: 4096
+hidden_size: 3584
 
-ffn_hidden_size: 11008
+ffn_hidden_size: 18944
 
-num_attention_heads: 32
+num_attention_heads: 28
 
-vocab_size_in_config_file: 151936
+vocab_size_in_config_file: 152064
 
 make_vocab_size_divisible_by: 128
 

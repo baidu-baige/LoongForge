@@ -7,7 +7,7 @@ hidden_size: 1280
 
 kv_channels: 80
 
-ffn_hidden_size: 5120
+ffn_hidden_size: 3420
 
 patch_size: 14
 
