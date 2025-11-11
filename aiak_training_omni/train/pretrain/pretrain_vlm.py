@@ -586,7 +586,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
     model_family=[constants.OmniModelFamilies.VLM],
     training_phase=constants.TrainingPhase.PRETRAIN,
 )
-def default_omni_pretrain_trainer(train_args):
+def default_vlm_pretrain_trainer(train_args):
     """build trainer"""
     trainer = MegatronTrainer(
         train_args=train_args,
