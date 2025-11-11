@@ -443,8 +443,7 @@ class BaseTaskEncoder(
         self.args = get_args()
 
         self.tokenizer = get_tokenizer()
-        # self.is_packing_enabled = self.args.packing_pretrain_data or self.args.packing_sft_data
-        self.is_packing_enabled = True
+        self.is_packing_enabled = self.args.packing_pretrain_data or self.args.packing_sft_data
 
     @stateless(restore_seeds=True)
     def encode_sample(
