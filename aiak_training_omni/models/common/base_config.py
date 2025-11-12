@@ -15,6 +15,7 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     """Base configuration class for AIAK training LLM models."""
 
     model_name: str = None
+    freeze: bool = False
 
     def __post_init__(self):
         PretrainedConfig.__init__(self)

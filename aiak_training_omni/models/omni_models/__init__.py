@@ -1,9 +1,9 @@
 """initialize the model"""
 
 from ..common.base_model_mixins import (
-    BaseMegatronVisionModuler,
-    BaseMegatronLanuageModuler,
-    BaseMegatronModuler,
+    BaseMegatronVisionModule,
+    BaseMegatronLanuageModule,
+    BaseMegatronModule,
 )
 from .omni_encoder_model import OmniEncoderModel
 from .omni_decoder_model import OmniDecoderModel
@@ -12,9 +12,9 @@ from .omni_model_provider import omni_model_provider
 
 __all__ = [
     # Basic Mixins
-    "BaseMegatronVisionModuler",
-    "BaseMegatronLanuageModuler",
-    "BaseMegatronModuler",
+    "BaseMegatronVisionModule",
+    "BaseMegatronLanuageModule",
+    "BaseMegatronModule",
     # Model classes
     "OmniEncoderModel",
     "OmniDecoderModel",

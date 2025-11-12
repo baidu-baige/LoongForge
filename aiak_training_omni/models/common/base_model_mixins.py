@@ -1,4 +1,5 @@
-"""Omni 基础混入类：编码器/foundation model/decoder的抽象接口。用于实现灵活的多模态组合。"""
+"""Omni Foundation Mixin Class: Abstract Base Class for Encoders/Foundation Models/Decoders
+Alternative translations"""
 
 from __future__ import annotations
 
@@ -27,11 +28,17 @@ import torch.nn.functional as F
 from copy import deepcopy
 
 
-class BaseMegatronLanuageModuler(LanguageModule):
-    """所有模态的统一Encoder模型接口。"""
+class BaseMegatronLanuageModule(LanguageModule):
+    """Unified Base Class for Language Models"""
 
     def __init__(self, config: AutoConfig, **kwargs):
         super().__init__(config=config, **kwargs)
+    
+    def freeze(self):
+        """Freeze model parameters during training to prevent them from being updated.
+        """
+        for param in self.parameters():
+            param.requires_grad = False
 
     @classmethod
     def _from_config(cls, config, **kwargs):
@@ -50,11 +57,16 @@ class BaseMegatronLanuageModuler(LanguageModule):
         return model
 
 
-class BaseMegatronModuler(MegatronModule):
-    """所有模态的统一Encoder模型接口。"""
-
+class BaseMegatronModule(MegatronModule):
+    """A Unified Encoder Model Interface Supporting All Modalities."""
     def __init__(self, config: AutoConfig, **kwargs):
         super().__init__(config=config, **kwargs)
+
+    def freeze(self):
+        """Freeze model parameters during training to prevent them from being updated.
+        """
+        for param in self.parameters():
+            param.requires_grad = False
 
     @classmethod
     def _from_config(cls, config, **kwargs):
@@ -73,11 +85,17 @@ class BaseMegatronModuler(MegatronModule):
         return model
 
 
-class BaseMegatronVisionModuler(VisionModule):
-    """所有模态的统一Encoder模型接口。"""
+class BaseMegatronVisionModule(VisionModule):
+    """Unified Abstract Base Class for Vision Models"""
 
     def __init__(self, config: AutoConfig, **kwargs):
         super().__init__(config=config, **kwargs)
+    
+    def freeze(self):
+        """Freeze model parameters during training to prevent them from being updated.
+        """
+        for param in self.parameters():
+            param.requires_grad = False
 
     @classmethod
     def _from_config(cls, config, **kwargs):

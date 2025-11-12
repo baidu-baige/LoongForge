@@ -104,4 +104,7 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
-    ${LOGGING_ARGS[@]}
+    ${LOGGING_ARGS[@]} \
+    #+model.image_encoder.freeze=True \
+    #+model.image_projector.freeze=True \
+    #+model.foundation.freeze=True

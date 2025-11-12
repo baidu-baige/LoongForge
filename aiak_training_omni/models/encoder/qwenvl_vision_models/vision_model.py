@@ -9,7 +9,7 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import ModuleSpec
 from .vision_transformer_block import TransformerBlock
 from .qwen2_vl_config import QwenVisionConfig, QwenVisionRMSNormConfig
-from aiak_training_omni.models.common import BaseMegatronVisionModuler
+from aiak_training_omni.models.common import BaseMegatronVisionModule
 from aiak_training_omni.utils.utils import import_module
 
 
@@ -71,7 +71,7 @@ class VisionRotaryEmbedding(torch.nn.Module):
         return freqs
 
 
-class VisionModel(BaseMegatronVisionModuler):
+class VisionModel(BaseMegatronVisionModule):
     """VisionTransformer model."""
 
     config_class = QwenVisionConfig
@@ -105,6 +105,8 @@ class VisionModel(BaseMegatronVisionModuler):
             pre_process=True,
             post_process=False,
         )
+        if hasattr(config, 'freeze') and config.freeze:
+            self.freeze()
 
     def set_input_tensor(self, input_tensor: torch.Tensor) -> None:
         """Sets input tensor to the model.

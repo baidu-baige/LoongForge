@@ -11,13 +11,13 @@ import torch.nn as nn
 from .omni_encoder_model import OmniEncoderModel
 from .omni_decoder_model import OmniDecoderModel
 from transformers.models.auto.modeling_auto import AutoModel
-from aiak_training_omni.models.common import BaseMegatronModuler, BaseModelConfig
+from aiak_training_omni.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core import InferenceParams
 from megatron.core.transformer.module import MegatronModule
 
 
-class OmniCombinationModel(BaseMegatronModuler):
+class OmniCombinationModel(BaseMegatronModule):
     """Omni multimodal combination model"""
     def __init__(
         self,

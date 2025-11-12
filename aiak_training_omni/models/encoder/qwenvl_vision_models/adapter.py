@@ -6,11 +6,11 @@ from typing import Union
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from .qwen2_vl_config import MLPAdapterConfig
-from aiak_training_omni.models.common import BaseMegatronModuler
+from aiak_training_omni.models.common import BaseMegatronModule
 from aiak_training_omni.utils.utils import import_module
 
 
-class Adapter(BaseMegatronModuler):
+class Adapter(BaseMegatronModule):
     """Adaptor"""
 
     config_class = MLPAdapterConfig
@@ -65,7 +65,9 @@ class Adapter(BaseMegatronModuler):
             parallel_mode=None,
             skip_weight_param_allocation=False,
         )
-
+        if hasattr(config, 'freeze') and config.freeze:
+            self.freeze()
+            
     def forward(
         self, x: torch.Tensor, window_index: torch.LongTensor = None
     ) -> torch.Tensor:

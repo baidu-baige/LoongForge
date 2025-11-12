@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from collections import namedtuple
 from functools import partial
-from ..common import BaseMegatronModuler, BaseModelConfig
+from ..common import BaseMegatronModule, BaseModelConfig
 from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
@@ -35,23 +35,23 @@ class OmniEncoderModel(torch.nn.Module):
         self.modality: List[str] = []
         self.text_encoder = language_embedding
         if self.config.image_encoder is not None:
-            self.image_encoder: BaseMegatronModuler = AutoModel.from_config(
+            self.image_encoder: BaseMegatronModule = AutoModel.from_config(
                 config.image_encoder, **kwargs
             )
             self.modality.append("image")
 
         if self.config.video_encoder is not None:
-            self.video_encoder: BaseMegatronModuler = AutoModel.from_config(
+            self.video_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.video_encoder, **kwargs)
             self.modality.append("video")
 
         if self.config.audio_encoder is not None:
-            self.audio_encoder: BaseMegatronModuler = AutoModel.from_config(
+            self.audio_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.audio_encoder, **kwargs)
             self.modality.append("audio")
 
         if self.config.image_projector is not None:
-            self.image_projector: BaseMegatronModuler = AutoModel.from_config(
+            self.image_projector: BaseMegatronModule = AutoModel.from_config(
                 config.image_projector,
                 input_size=config.image_encoder.hidden_size,
                 output_size=config.foundation.hidden_size,
@@ -69,7 +69,7 @@ class OmniEncoderModel(torch.nn.Module):
                 )
 
         if self.config.video_projector is not None:
-            self.video_projector: BaseMegatronModuler = AutoModel.from_config(
+            self.video_projector: BaseMegatronModule = AutoModel.from_config(
                 self.config.video_projector, **kwargs)
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
@@ -81,7 +81,7 @@ class OmniEncoderModel(torch.nn.Module):
                 )
 
         if self.config.audio_projector is not None:
-            self.audio_projector: BaseMegatronModuler = AutoModel.from_config(
+            self.audio_projector: BaseMegatronModule = AutoModel.from_config(
                 self.config.audio_projector, **kwargs)
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
@@ -114,7 +114,7 @@ class OmniEncoderModel(torch.nn.Module):
         Used for pipeline parallel training schedules.
         """
         for module in self.children():
-            if isinstance(module, BaseMegatronModuler):
+            if isinstance(module, BaseMegatronModule):
                 module.set_projector_trainable_only()
 
     def image_forward(

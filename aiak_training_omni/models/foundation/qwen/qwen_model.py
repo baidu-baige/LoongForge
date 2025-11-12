@@ -13,7 +13,7 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
 )
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 from aiak_training_omni.models.common.base_model_mixins import (
-    BaseMegatronLanuageModuler,
+    BaseMegatronLanuageModule,
 )
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
@@ -165,7 +165,7 @@ class Qwen2VLRotaryEmbedding(torch.nn.Module):
         return emb
 
 
-class QwenModel(BaseMegatronLanuageModuler):
+class QwenModel(BaseMegatronLanuageModule):
     """Qwen Transformer language model.
 
     Args:
@@ -350,6 +350,8 @@ class QwenModel(BaseMegatronLanuageModuler):
         self.register_load_state_dict_post_hook(
             _load_state_dict_hook_ignore_extra_state
         )
+        if hasattr(config, 'freeze') and config.freeze:
+            self.freeze()
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
         """Sets input tensor to the model.
