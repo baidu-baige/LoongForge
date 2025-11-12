@@ -12,7 +12,7 @@ CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/qwen2_5-vl/qw
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/aiak-training-llm/tensorboard-log/qwen2_5-vl-7b"}
 
-GPUS_PER_NODE=1
+GPUS_PER_NODE=8
 
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -100,7 +100,6 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
     --config-path $MODEL_CONFIG_PATH \
     --config-name $MODEL_CONFIG_NAME \
-    --model-family qwen2_5_vl \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \

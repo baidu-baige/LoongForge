@@ -8,19 +8,12 @@ from typing import Any, Callable, Dict, Optional, Tuple, List
 
 import torch
 from transformers import (
-    BatchFeature,
     PreTrainedModel,
-    PretrainedConfig,
-    ProcessorMixin,
     AutoConfig,
 )
 import logging
 
 logger = logging.getLogger(__name__)
-import dataclasses
-from dataclasses import fields, asdict
-from megatron.core.transformer import TransformerConfig
-from megatron.training.activations import squared_relu
 from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.transformer.module import MegatronModule

@@ -3,7 +3,7 @@
 import os
 import argparse
 import importlib
-from aiak_training_omni.models.omni_models.omni_model_config import OmniModelConfig
+from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
 from omegaconf import OmegaConf
 import torch.nn.functional as F
 
@@ -30,7 +30,6 @@ from aiak_training_omni.utils import (
 )
 from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
-from aiak_training_omni.models.common.base_config import BaseModelConfig
 import importlib
 
 
@@ -48,22 +47,8 @@ def is_subclass_from_path(class_path: str, base_class: type):
 def parse_args_from_config(args):
     """parse args from config"""
     config = get_hydra_config()
-    model_cfgs, model_type = build_model_config(args, config)
-
-    if model_type == "vlm":
-        foundation = model_cfgs.get("foundation")
-        image_encoder = model_cfgs.get("image_encoder")
-        image_projector = model_cfgs.get("image_projector")
-        # model_config = OmniModelConfig(**model_cfgs)
-        model_config = OmniModelConfig(
-            foundation=foundation,
-            image_encoder=image_encoder,
-            image_projector=image_projector,
-        )
-    else:
-        raise ValueError(f"Unsupported model type: {model_type}")
-    
-    set_model_config(model_config)
+    model_cfgs = build_model_config(args, config)    
+    set_model_config(model_cfgs)
 
 
 def parse_train_args(args_defaults={}):
@@ -152,7 +137,6 @@ def aiak_extra_train_args_provider(parser: argparse.ArgumentParser):
 
 def validate_aiak_extra_args(args, config):
     """ "Validate AIAK extra arguments"""
-    # args.model_family = get_model_family(args.model_name)
     _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
     _validate_extra_training_args(args)
@@ -180,24 +164,6 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         required=True,
         help="The config file path for model configuration.",
     )
-    group.add_argument(
-        "--model-family",
-        type=str,
-        required=True,
-        help="The config file path for model configuration.",
-    )
-    # group.add_argument(
-    #     "--model-name",
-    #     type=str,
-    #     required=True,
-    #     choices=get_support_model_family_and_archs(),
-    #     help="The name of model to be trained, which can be either a model family name (e.g., llama2) "
-    #     "or a model architecture name (e.g., llama2-7b). "
-    #     "If specifies the model family name, you need to completely configure the hyperparameters "
-    #     "of the model architecture, such as num_layers, hidden_size, etc. "
-    #     "And if specifies the model architecture name, aiak system will automatically override the"
-    #     "model architecture hyperparameters to ensure consistency with the open source version. ",
-    # )
 
     # use for cogvlm2
     group.add_argument(
@@ -886,28 +852,16 @@ def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
     if not hasattr(config, "model"):
         raise ValueError("Hydra config doesn't have model section.")
-    
+    args.model_family =  config.model.model_type
     model_config = None
     if "foundation" in config.model:
         model_config = config.model.foundation
     else:
         # compatibility for llm
         model_config = config.model
-    
+
     if model_config is not None:
         # the structural configuration of model will be overwritten, such as num_layers, hidden_states..
-        # print_rank_0(
-        #     f"-------------- Configure model to {args.model_name} --------------",
-        #     args.rank,
-        # )
-
-        # for field in fields(model_config.__class__):
-        #     # assert hasattr(
-        #     #     args, field.name
-        #     # ), f"The model config field ({field.name}) is not defined in args."
-        #     key, value = field.name, getattr(model_config, field.name)
-        #     setattr(args, key, value)
-        #     print_rank_0(f"  {key} = {value} ", args.rank)
         for key in model_config:
             if hasattr(args, key):
                 setattr(args, key, model_config[key])
@@ -1058,17 +1012,7 @@ def _validata_extra_multimodal_args(args):
     """Validate multimodal arguments"""
     if args.model_family not in constants.VisionLanguageModelFamilies.names():
         return
-
-    for module in args.trainable_modules:
-        assert module in [
-            "all",
-            "language_model",
-            "adapter",
-            "vision_model",
-            "language_expert_linear",
-            "vision_expert_linear",
-        ]
-
+    
     args.variable_seq_lengths = True
     if not (args.packing_pretrain_data or args.packing_sft_data):
         args.packing_batch_size = None

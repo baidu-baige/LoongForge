@@ -572,7 +572,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
 
 
 @register_model_trainer(
-    model_family=[constants.OmniModelFamilies.VLM],
+    model_family=constants.VisionLanguageModelFamilies.names(),
     training_phase=constants.TrainingPhase.PRETRAIN,
 )
 def default_vlm_pretrain_trainer(train_args):

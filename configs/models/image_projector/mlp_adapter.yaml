@@ -5,3 +5,4 @@ normalization: "RMSNorm"
 
 add_bias_linear: True
 
+model_type: "qwen2_5_vl_adapter"

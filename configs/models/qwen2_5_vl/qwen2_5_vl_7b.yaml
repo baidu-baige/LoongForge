@@ -9,3 +9,7 @@ defaults:
   #- ../../data@data: vlm_data
   - _self_
 
+
+
+model:
+  model_type: qwen2_5_vl

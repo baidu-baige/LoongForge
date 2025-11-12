@@ -27,3 +27,4 @@ swiglu: true
 
 gated_linear_unit: true
 
+model_type: "qwen2_5_vit"

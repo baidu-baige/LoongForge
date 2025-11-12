@@ -3,7 +3,7 @@
 from typing import Union, List, Callable
 
 from aiak_training_omni.models import get_model_family
-
+from aiak_training_omni.utils.global_vars import get_hydra_config
 
 MODEL_FAMILY_TRAINER_FACTORY = {}
 
@@ -52,10 +52,10 @@ def register_model_trainer(
 
 def build_model_trainer(args):
     """create model trainer"""
-
-    # model_family = "vision_language_models"
-    model_family = 'vision_language_model'
-
+    config = get_hydra_config()
+    if not hasattr(config, 'model'):
+        raise ValueError("Invalid model configuration structure")
+    model_family = config.model.model_type
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
         raise ValueError(

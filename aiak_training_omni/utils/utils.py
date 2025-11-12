@@ -14,7 +14,7 @@ from .constants import DEFAULT_DATASET_CONFIG
 from megatron.core.transformer import TransformerConfig
 from megatron.training.activations import squared_relu
 import torch.nn.functional as F
-
+from aiak_training_omni.utils import constants
 _te_version = None
 
 
@@ -86,26 +86,31 @@ def build_model_config(args, config):
 
     if not hasattr(config, 'model'):
         raise ValueError("Invalid model configuration structure")
-    
-    model_type = detect_model_type(config) 
 
-    if model_type == "vlm":
-        for name, model_conf in config.model.items():
+    assert hasattr(config.model, 'model_type'), "model_type is required in model config"
+    if config.model.model_type in constants.VisionLanguageModelFamilies.names():
+        from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
+        model_config = config.model
+        for name, config_values in model_config.items():
             # must have _target_ field
-            if "_target_" not in model_conf:
-                raise ValueError(
-                    f"Model config 'model.{name}' don't have '_target_' field.\n"
-                )
-
-            merged = deepcopy(args_dict)
-            merged.update(OmegaConf.to_container(model_conf, resolve=True))
-
-            model_cfgs[name] = instantiate(model_conf, **merged)
+            if "_target_" in config_values:
+                merged = deepcopy(args_dict)
+                merged.update(OmegaConf.to_container(config_values, resolve=True))
+                model_cfgs[name] = instantiate(config_values, **merged)
+            else:
+                model_cfgs[name] = config_values
+        model_cfgs = VLMModelConfig(**model_cfgs)
+    elif config.model.model_type in constants.LanguageModelFamilies.names():
+        merged = deepcopy(args_dict)
+        merged.update(OmegaConf.to_container(config.model, resolve=True))
+        model_cfgs = instantiate(config_values, **merged)
+    elif config.model.model_type in constants.VideoLanguageModelFamilies.names():
+        merged = deepcopy(args_dict)
+        merged.update(OmegaConf.to_container(config.model, resolve=True))
+        model_cfgs = instantiate(config_values, **merged)
     else:
-        # TODO: support other model types
-        raise ValueError(f"Invalid model type: {model_type}")
-
-    return model_cfgs, model_type
+        raise ValueError(f"Unsupported model type: {config.model.model_type}")
+    return model_cfgs
 
 
 def register_custom_resolvers():
@@ -123,15 +128,6 @@ def register_custom_resolvers():
         replace=True
     )
 
-
-def detect_model_type(hydra_cfg):
-    """detect model type"""
-    model_cfg = hydra_cfg.model
-
-    for key, value in model_cfg.items():
-        if isinstance(value, (dict, DictConfig)) and "_target_" in value:
-            return "vlm"
-    return "llm"
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig):

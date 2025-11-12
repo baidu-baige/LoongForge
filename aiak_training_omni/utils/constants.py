@@ -96,14 +96,9 @@ class VideoLanguageModelFamilies(_BaseFamilies):
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""
 
-    COGVLM2 = "cogvlm2"
     QWEN2_VL = "qwen2_vl"
     QWEN2_5_VL = "qwen2_5_vl"
     INTERN_VL = "intern_vl"
     LLAVA_OV_1_5 = "llava_ov_1_5"
+    VLM = "vlm"
 
-
-class OmniModelFamilies(_BaseFamilies):
-    """Omni model families"""
-
-    VLM = "vision_language_model"

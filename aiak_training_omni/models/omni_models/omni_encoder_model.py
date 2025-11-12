@@ -34,23 +34,23 @@ class OmniEncoderModel(torch.nn.Module):
         self.config = config
         self.modality: List[str] = []
         self.text_encoder = language_embedding
-        if self.config.image_encoder is not None:
+        if  hasattr(self.config, "image_encoder") and self.config.image_encoder is not None:
             self.image_encoder: BaseMegatronModule = AutoModel.from_config(
                 config.image_encoder, **kwargs
             )
             self.modality.append("image")
 
-        if self.config.video_encoder is not None:
+        if hasattr(self.config, "video_encoder") and self.config.video_encoder is not None:
             self.video_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.video_encoder, **kwargs)
             self.modality.append("video")
 
-        if self.config.audio_encoder is not None:
+        if hasattr(self.config, "audio_encoder") and self.config.audio_encoder is not None:
             self.audio_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.audio_encoder, **kwargs)
             self.modality.append("audio")
 
-        if self.config.image_projector is not None:
+        if hasattr(self.config, "image_projector")  and self.config.image_projector is not None:
             self.image_projector: BaseMegatronModule = AutoModel.from_config(
                 config.image_projector,
                 input_size=config.image_encoder.hidden_size,
@@ -68,7 +68,7 @@ class OmniEncoderModel(torch.nn.Module):
                     )
                 )
 
-        if self.config.video_projector is not None:
+        if hasattr(self.config, "video_projector") and self.config.video_projector is not None:
             self.video_projector: BaseMegatronModule = AutoModel.from_config(
                 self.config.video_projector, **kwargs)
             if allow_missing_adapter_checkpoint:
@@ -80,7 +80,7 @@ class OmniEncoderModel(torch.nn.Module):
                     partial(_load_state_dict_hook_ignore_param_names, adapter_param_names)
                 )
 
-        if self.config.audio_projector is not None:
+        if hasattr(self.config, "audio_projector") and self.config.audio_projector is not None:
             self.audio_projector: BaseMegatronModule = AutoModel.from_config(
                 self.config.audio_projector, **kwargs)
             if allow_missing_adapter_checkpoint:
