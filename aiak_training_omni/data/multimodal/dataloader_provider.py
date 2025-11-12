@@ -34,7 +34,7 @@ def get_train_dataset(task_encoder):
             worker_config=worker_config,
             max_samples_per_sequence=None,
             shuffle_buffer_size=None,
-            packing_buffer_size=500,
+            packing_buffer_size=args.packing_batch_size,
             handler=print_error_handler,
             image_decode="pil",
         )
