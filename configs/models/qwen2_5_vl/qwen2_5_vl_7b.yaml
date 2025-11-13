@@ -13,3 +13,6 @@ defaults:
 
 model:
   model_type: qwen2_5_vl
+  foundation: 
+    rotary_emb_func: "Qwen2VLRotaryEmbedding"
+    model_spec: ["aiak_training_omni.models.foundation.qwen.qwen_layer_spec", "get_qwen_layer_with_spec"]

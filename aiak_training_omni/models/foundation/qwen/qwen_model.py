@@ -413,6 +413,7 @@ class QwenModel(BaseMegatronLanuageModule):
             rotary_pos_emb is None
             and self.position_embedding_type == "rope"
             and not self.config.multi_latent_attention
+            and self.config.rotary_emb_func != "Qwen2VLRotaryEmbedding"
         ):
             rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
                 inference_params,
@@ -428,7 +429,7 @@ class QwenModel(BaseMegatronLanuageModule):
             )
         else:
             rotary_pos_emb = (
-                self.rotary_emb(
+                self.rotary_pos_emb(
                     position_ids,
                     packed_seq=packed_seq_params,
                 )

@@ -27,4 +27,8 @@ swiglu: true
 
 gated_linear_unit: true
 
+position_embedding_type: "none"
+
+bias_activation_fusion: False
+
 model_type: "qwen2_5_vit"

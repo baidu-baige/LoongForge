@@ -189,11 +189,13 @@ class OmniCombinationModel(BaseMegatronModule):
                 video_inputs=video_inputs,
                 inference_params=inference_params,
             )
+            
         if not self.pre_process:
             combined_embeddings = None
+
         output = self.foundation_model(
             input_ids=None,
-            position_ids=None,
+            position_ids=position_ids,
             attention_mask=attention_mask,
             attn_mask_type=attn_mask_type,
             decoder_input=combined_embeddings,
