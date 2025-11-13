@@ -3,8 +3,11 @@
 import os
 import torch
 from copy import deepcopy
+from hydra import compose, initialize_config_dir
 from hydra.utils import instantiate
-from omegaconf import OmegaConf, DictConfig
+from hydra.core.global_hydra import GlobalHydra
+from omegaconf import OmegaConf, open_dict
+
 from pathlib import Path
 from typing import Optional, Tuple
 from importlib.metadata import version
@@ -13,6 +16,7 @@ from packaging.version import Version as PkgVersion
 from .constants import DEFAULT_DATASET_CONFIG
 from megatron.core.transformer import TransformerConfig
 from megatron.training.activations import squared_relu
+from megatron.training.arguments import moe_freq_type
 import torch.nn.functional as F
 from aiak_training_omni.utils import constants
 
@@ -79,9 +83,102 @@ def convert_megatron_transformer_config_args(megatron_args):
     return transformer_config_args
 
 
+def flatten_foundation_model(config):
+    """
+    Detect the config.model.foundation field. If there is a model field under it, 
+    move the contents of model up one level:
+    e.g. from config.model.foundation.model.xxx to config.model.foundation.xxx.
+    """
+    # Check if config.model.foundation exists
+    if not hasattr(config.model, 'foundation'):
+        return config
+    elif hasattr(config.model, 'foundation') and config.model.foundation is not None:
+        foundation = config.model.foundation
+
+        if hasattr(foundation, 'model') and foundation.model is not None:
+            with open_dict(foundation):
+                model_dict = OmegaConf.to_container(
+                    foundation.model, resolve=False)
+
+                del foundation['model']
+
+                for key, value in model_dict.items():
+                    foundation[key] = value
+
+    return config
+
+
+def transform_overrides_for_nested_model(hydra_overrides):
+    """
+    Convert flattened override paths to nested paths
+    model.foundation.xxx -> model.foundation.model.xxx
+    """
+    if hydra_overrides is None:
+        return hydra_overrides
+    
+    transformed = []
+    for override in hydra_overrides:
+        # Check if the override starts with model.foundation
+        if override.startswith('model.foundation.') and not override.startswith('model.foundation.model.'):
+            # Extract the prefix and the remaining part
+            # For example: model.foundation.num_layers=32
+            parts = override.split('=', 1)  # Split into key and value
+            if len(parts) == 2:
+                key, value = parts
+                # Convert model.foundation.xxx to model.foundation.model.xxx
+                key = key.replace('model.foundation.',
+                                  'model.foundation.model.', 1)
+                transformed.append(f"{key}={value}")
+            else:
+                transformed.append(override)
+        else:
+            transformed.append(override)
+
+    return transformed
+
+
+def load_and_merge_config(config_path, config_name, hydra_overrides):
+    """
+    Load configuration using the Hydra API and handle defaults inheritance.
+    
+    This function will:
+    1. Load the configuration using Hydra's compose API.
+    2. Automatically handle combined configurations in the defaults list.
+    3. Handle package redirection with the @ symbol.
+    4. Apply command-line overrides.
+    """
+    # Convert to absolute path
+    config_path = os.path.abspath(config_path)
+
+    # Clear previous Hydra instance (if exists)
+    GlobalHydra.instance().clear()
+
+    try:
+        # Filter out empty strings
+        hydra_overrides = [o for o in hydra_overrides if o.strip()]
+        # Change hydra_overrides to nested format
+        transformed_overrides = transform_overrides_for_nested_model(
+            hydra_overrides)
+
+        # Initialize using Hydra's initialize_config_dir
+        with initialize_config_dir(config_dir=config_path, version_base=None):
+            # Load configuration using compose, which automatically processes defaults
+            config = compose(config_name=config_name,
+                             overrides=transformed_overrides)
+
+        config = flatten_foundation_model(config)
+
+        return config
+
+    except Exception as e:
+        print(f"Cannot load hydra config: {e}. Config path: {config_path}, \
+                config name: {config_name}")
+        raise
+
+
 def build_model_config(args, config):
     """Build model config from args and config"""
-    args_dict = convert_megatron_transformer_config_args(vars(args))
+    args_dict = deepcopy(vars(args))
 
     model_cfgs = {}
 
@@ -97,26 +194,37 @@ def build_model_config(args, config):
             # must have _target_ field
             if "_target_" in config_values:
                 merged = deepcopy(args_dict)
-                merged.update(OmegaConf.to_container(config_values, resolve=True))
+                merged.update(OmegaConf.to_container(
+                    config_values, resolve=True))
+                merged = convert_megatron_transformer_config_args(merged)
                 model_cfgs[name] = instantiate(config_values, **merged)
             else:
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)
-    elif config.model.model_type in constants.LanguageModelFamilies.names():
+    elif model_config.model_type in constants.LanguageModelFamilies.names():
+        # Language model
+        if "_target_" not in model_config:
+            raise ValueError(
+                "Model config 'model' missing '_target_' field for llm type.\n")
+
         merged = deepcopy(args_dict)
-        merged.update(OmegaConf.to_container(config.model, resolve=True))
-        model_cfgs = instantiate(config_values, **merged)
-    elif config.model.model_type in constants.VideoLanguageModelFamilies.names():
+        merged.update(OmegaConf.to_container(model_config, resolve=True))
+        merged = convert_megatron_transformer_config_args(merged)
+
+        model_cfgs = instantiate(model_config, **merged)
+    elif model_config.model_type in constants.VideoLanguageModelFamilies.names():
         merged = deepcopy(args_dict)
-        merged.update(OmegaConf.to_container(config.model, resolve=True))
-        model_cfgs = instantiate(config_values, **merged)
+        merged.update(OmegaConf.to_container(model_config, resolve=True))
+        model_cfgs = instantiate(model_config, **merged)
     else:
-        raise ValueError(f"Unsupported model type: {config.model.model_type}")
+        raise ValueError(f"Unsupported model type: {model_config.model_type}")
     return model_cfgs
 
 
 def register_custom_resolvers():
-    """register custom omegaconf resolvers"""
+    """
+    To resolve parameters that cannot be directly mapped to the specified type by YAML.
+    """
     # Activation functions
     ACTIVATION_MAP = {
         "relu": F.relu,

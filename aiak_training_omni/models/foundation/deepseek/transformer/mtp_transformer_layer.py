@@ -25,9 +25,7 @@ from megatron.core.fusions.fused_cross_entropy import fused_vocab_parallel_cross
 from megatron.core.enums import Fp8Recipe
 from megatron.core.fp8_utils import get_fp8_context
 
-from aiak_training_omni.models.deepseek.transformer.transformer_config import (
-    DeepSeekTransformerConfig,
-)
+from aiak_training_omni.models.foundation import DeepseekConfig
 
 
 @dataclass
@@ -62,7 +60,7 @@ class MultiTokenPredLayerDeepSeek(TransformerLayer):
 
     def __init__(
         self,
-        config: DeepSeekTransformerConfig,
+        config: DeepseekConfig,
         submodules: MultiTokenPredLayerDeepSeekSubmodules,
         # Params for MTP embedding layer
         vocab_size: int,

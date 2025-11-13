@@ -332,7 +332,7 @@ def forward_step_func(data_iterator, model):
 ### 1. 基本使用
 
 ```python
-from aiak_training_llm.models.omni import OmniCombinationModel, OmniConfig
+from aiak_training_omni.models.omni import OmniCombinationModel, OmniConfig
 
 # 加载配置
 config = OmniConfig.from_json_file("config.json")
@@ -351,7 +351,7 @@ outputs = model(
 ### 2. 自定义编码器
 
 ```python
-from aiak_training_llm.models.omni import BaseEncoderModelMixin
+from aiak_training_omni.models.omni import BaseEncoderModelMixin
 
 class CustomEncoder(BaseEncoderModelMixin):
     def __init__(self, config):

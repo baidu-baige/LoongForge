@@ -7,8 +7,6 @@
 import os
 import logging
 import argparse
-from hydra import compose, initialize_config_dir
-from hydra.core.global_hydra import GlobalHydra
 
 import torch
 
@@ -41,7 +39,7 @@ from megatron.training.initialize import (
 )
 
 from .global_vars import set_aiak_extra_global_vars
-from .utils import register_custom_resolvers
+from .utils import register_custom_resolvers, load_and_merge_config, resolve_model_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +137,10 @@ def parse_arguments(
 
     # mapping those parameters that can't be parsed
     register_custom_resolvers()
+
+    # mapping model name to config path and name
+    if args.model_name is not None:
+        args.config_path, args.config_name = resolve_model_config_path(args)
 
     if args.config_path and args.config_name:
         hydra_cfg = load_and_merge_config(

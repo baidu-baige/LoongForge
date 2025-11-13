@@ -155,14 +155,22 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
     group.add_argument(
         "--config-path",
         type=str,
-        required=True,
-        help="The config file path for model configuration.",
+        required=False,
+        help='Hydra path to config directory',
     )
     group.add_argument(
         "--config-name",
         type=str,
-        required=True,
-        help="The config file path for model configuration.",
+        required=False,
+        help='Hydra config file name (without .yaml suffix)',
+    )
+
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default=None,
+        required=False,
+        help="Model name (e.g., deepseek-v2-lite -> deepseek_v2_lite.yaml)",
     )
 
     # use for cogvlm2
@@ -194,12 +202,6 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         "this option, the head dimensions will be aligned by padding, so that fa can be used."
         "Deprecated: use --attention-backend=flash",
     )
-
-     # # ============ Hydra config ============
-    group.add_argument('--config-path', type=str, required=True,
-                        help='Hydra path to config directory')
-    group.add_argument('--config-name', type=str, required=True,
-                        help='Hydra config file name (without .yaml suffix)')
 
     return parser
 
