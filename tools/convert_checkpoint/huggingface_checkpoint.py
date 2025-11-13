@@ -409,7 +409,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             if ATTENTION_QNORM in name_map:
                 name = name_map[ATTENTION_QNORM]
                 name = f"{transformer}.{layer_prefix}.{layer_id}.{name}"
-                print(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
+                logging.info(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
 
                 weight = c_ckpt.get_layer_attention_q_layernorm_weight(layer_id, one_layer_weights=one_layer_weights)
                 if num_padded_heads != 0:
@@ -423,7 +423,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             if ATTENTION_KNORM in name_map:
                 name = name_map[ATTENTION_KNORM]
                 name = f"{transformer}.{layer_prefix}.{layer_id}.{name}"
-                print(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
+                logging.info(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
 
                 weight = c_ckpt.get_layer_attention_k_layernorm_weight(layer_id, one_layer_weights=one_layer_weights)
                 if num_padded_heads != 0:
@@ -437,7 +437,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             if POST_ATTENTION_LAYERSCALE in name_map:
                 name = name_map[POST_ATTENTION_LAYERSCALE]
                 name = f"{transformer}.{layer_prefix}.{layer_id}.{name}"
-                print(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
+                logging.info(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
                 h_ckpt.update_tensor(name, c_ckpt.get_layer_post_attention_layerscale(layer_id, one_layer_weights=one_layer_weights))
                 c_ckpt.clear_layer_post_attention_layerscale(layer_id, one_layer_weights=one_layer_weights)
 
@@ -575,7 +575,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             if POST_MLP_LAYERSCALE in name_map:
                 name = name_map[POST_MLP_LAYERSCALE]
                 name = f"{transformer}.{layer_prefix}.{layer_id}.{name}"
-                print(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
+                logging.info(f"> update_tensor: {name}, max_memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}")
                 h_ckpt.update_tensor(name, c_ckpt.get_layer_post_mlp_layerscale(layer_id, one_layer_weights=one_layer_weights))
                 c_ckpt.clear_layer_post_mlp_layerscale(layer_id, one_layer_weights=one_layer_weights)
 
@@ -849,7 +849,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     weight = padded_tensor
 
                 c_ckpt.set_layer_attention_q_layernorm(layer_id, weight, bias, one_layer_weights=one_layer_weights)
-                print(f"> layer {layer_id} self attention q_norm weight: {weight.shape}")
+                logging.info(f"> layer {layer_id} self attention q_norm weight: {weight.shape}")
 
             # slef attention k_layernorm
             if ATTENTION_KNORM in name_map:
@@ -866,7 +866,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     weight = padded_tensor
 
                 c_ckpt.set_layer_attention_k_layernorm(layer_id, weight, bias, one_layer_weights=one_layer_weights)
-                print(f"> layer {layer_id} self attention k_norm weight: {weight.shape}")
+                logging.info(f"> layer {layer_id} self attention k_norm weight: {weight.shape}")
 
             # post attention layerscale
             if POST_ATTENTION_LAYERSCALE in name_map:
@@ -874,7 +874,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 name = f"{transformer}.{layer_prefix}.{layer_id}.{name}"
                 weight = self.state_dict[name]
                 c_ckpt.set_layer_post_attention_layerscale(layer_id, weight, one_layer_weights=one_layer_weights)
-                print(f"> layer {layer_id} post attention layerscale weight: {weight.shape}")
+                logging.info(f"> layer {layer_id} post attention layerscale weight: {weight.shape}")
 
             if args.num_experts is not None:
                 if MOE_MLP in name_map:
@@ -979,7 +979,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 name = f"{transformer}.{layer_prefix}.{layer_id}.{name}"
                 weight = self.state_dict[name]
                 c_ckpt.set_layer_post_mlp_layerscale(layer_id, weight, one_layer_weights=one_layer_weights)
-                print(f"> layer {layer_id} post mlp layerscale weight: {weight.shape}")
+                logging.info(f"> layer {layer_id} post mlp layerscale weight: {weight.shape}")
 
             first_k_dense_replace = hargs.get("first_k_dense_replace", None)
             if args.num_experts is None:

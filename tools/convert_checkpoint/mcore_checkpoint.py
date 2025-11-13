@@ -11,6 +11,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 import resource
+import argparse
 
 import concurrent.futures
 from convert_checkpoint.arguments import parse_args
@@ -2075,6 +2076,8 @@ class McoreCheckpoint(AbstractCheckpoint):
 
     def get_transformer_name(self, stage_index):
         """ get transformer name """
+        if self.args.vit_in_first_virtual_stage_only:
+            return self.name_map[TRANSFORMER_TPL] % 0
         if self.num_stages > 1:
             return self.name_map[TRANSFORMER_TPL] % stage_index
         else:
@@ -2322,7 +2325,11 @@ class McoreCheckpoint(AbstractCheckpoint):
             state_dict = self.get_state_dict(p, 0, key_e)
         self.iteration = state_dict.get('iteration', 0)
         self.version = state_dict['checkpoint_version']
-        self.args = state_dict['args']
+        #self.args = state_dict['args']
+        args_dict = vars(state_dict['args']).copy()
+        args_dict['vit_in_first_virtual_stage_only'] = self.args.vit_in_first_virtual_stage_only
+        self.args = argparse.Namespace(**args_dict)
+
         self.rng_state = state_dict.get('rng_state', None)
 
         self.optim_state_dict = None
