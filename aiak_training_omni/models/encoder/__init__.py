@@ -7,8 +7,11 @@ from .qwenvl_vision_models.qwen2_vl_config import (
     QwenVisionRMSNormConfig,
     MLPAdapterConfig,
 )
+from .llavaov_vision_models.llavaov_1_5_config import RiceVisionConfig
+from .llavaov_vision_models.rice_vision_model import RiceViTModel
 from transformers import AutoModel
 
 AutoModel.register(QwenVisionConfig, VisionModel)
 AutoModel.register(QwenVisionRMSNormConfig, VisionModelWithRMSNorm)
 AutoModel.register(MLPAdapterConfig, Adapter)
+AutoModel.register(RiceVisionConfig, RiceViTModel)
