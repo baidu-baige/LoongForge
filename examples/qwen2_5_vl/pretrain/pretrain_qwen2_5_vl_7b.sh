@@ -82,6 +82,10 @@ MODEL_PARALLEL_ARGS=(
     --distributed-backend nccl
 )
 
+MODEL_CONFIG_ARGS=(
+    --config-path $MODEL_CONFIG_PATH
+    --config-name $MODEL_CONFIG_NAME
+)
 LOGGING_ARGS=(
     --log-interval 1
     --tensorboard-dir ${TENSORBOARD_PATH}
@@ -98,8 +102,7 @@ fi
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
     $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
-    --config-path $MODEL_CONFIG_PATH \
-    --config-name $MODEL_CONFIG_NAME \
+    ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
