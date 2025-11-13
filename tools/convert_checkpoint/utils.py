@@ -14,6 +14,10 @@ import torch
 from bisect import bisect_left
 from math import floor, ceil
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 
 LOADED_STATE_DICT = None
 
@@ -333,7 +337,7 @@ def make_hf_sub_checkpoints(base_path):
 
                 # 遍历子目录中的所有文件
                 one_dict = {}
-                print(f"{subdir_path=}")
+                logging.info(f"{subdir_path=}")
                 for filename in os.listdir(subdir_path):
                     if filename.startswith('model-') and filename.endswith('.safetensors'):
                         # 解析文件名，提取 i 和 sub_count
@@ -380,8 +384,8 @@ def make_hf_sub_checkpoints(base_path):
                 subdir_path = os.path.join(path, index)
                 one_dict = all_dict[subdir_path]
                 for key, value in file_content["weight_map"].items():
-#                    print(f"{key=}, {value=}, {one_dict=}")
-#                    print(f"{one_dict[value]=}")
+#                    logging.info(f"{key=}, {value=}, {one_dict=}")
+#                    logging.info(f"{one_dict[value]=}")
                     if value in one_dict:
                         # 替换成one_dict中对应的值
                         merged_weight_map[key] = one_dict[value]
@@ -410,10 +414,15 @@ def make_hf_sub_checkpoints(base_path):
                     old_filepath = os.path.join(subdir_path, filename)
                     new_filepath = os.path.join(base_path, new_filename)
                     os.rename(old_filepath, new_filepath)
-                    print(f'Renamed: {old_filepath} -> {new_filepath}')
+                    logging.info(f'Renamed: {old_filepath} -> {new_filepath}')
 
-    print(f"合并和替换完成，新的model.safetensors.index.json文件已生成。"
+    logging.info(f"合并和替换完成，新的model.safetensors.index.json文件已生成。"
           f"{base_path}/model.safetensors.index.json")
+    old_filepath = f"{base_path}/model-00001-of-00001.safetensors"
+    if os.path.exists(old_filepath):
+        new_filepath = f"{base_path}/model.safetensors"
+        os.rename(old_filepath, new_filepath)
+        os.remove(f"{base_path}/model.safetensors.index.json")
     import shutil
     shutil.rmtree(f'{base_path}/sub_checkpoint')
 
@@ -522,7 +531,7 @@ def get_ep_map(num_experts, ep, num_experts_for_test=None):
         for idx, ele in enumerate(chunk):
             expert_local_mapping[ele] = idx # expert_id -> local_ep_id
             expert_ep_mapping[ele] = ep_id # expert_id -> ep_id
-    print(f"expert_local_mapping: {expert_local_mapping}")
-    print(f"expert_ep_mapping: {expert_ep_mapping}")
-    print(f"ep_expert_mapping: {ep_expert_mapping}")
+    logging.info(f"expert_local_mapping: {expert_local_mapping}")
+    logging.info(f"expert_ep_mapping: {expert_ep_mapping}")
+    logging.info(f"ep_expert_mapping: {ep_expert_mapping}")
     return expert_local_mapping, expert_ep_mapping, ep_expert_mapping
