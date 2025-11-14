@@ -6,8 +6,10 @@ from megatron.core.transformer.moe.moe_layer import (
     MoESubmodules,
 )
 
-from aiak_training_omni.models.foundation import DeepseekConfig
-from aiak_training_omni.models.foundation.deepseek.transformer.router import TopKRouter
+from aiak_training_omni.models.deepseek.transformer.transformer_config import (
+    DeepSeekTransformerConfig,
+)
+from aiak_training_omni.models.deepseek.transformer.router import TopKRouter
 
 
 class MoELayer(MegatronMoELayer):
@@ -19,7 +21,7 @@ class MoELayer(MegatronMoELayer):
 
     def __init__(
         self,
-        config: DeepseekConfig,
+        config: DeepSeekTransformerConfig,
         submodules: MoESubmodules = None,
         layer_number: int = None,
     ):

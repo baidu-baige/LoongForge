@@ -7,6 +7,8 @@
 import os
 import logging
 import argparse
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 
 import torch
 
@@ -39,9 +41,41 @@ from megatron.training.initialize import (
 )
 
 from .global_vars import set_aiak_extra_global_vars
-from .utils import register_custom_resolvers, load_and_merge_config, resolve_model_config_path
+from .utils import register_custom_resolvers
 
 logger = logging.getLogger(__name__)
+
+
+def load_and_merge_config(config_path, config_name, hydra_overrides):
+    """
+    Load configuration using the Hydra API and handle defaults inheritance.
+
+    This function will:
+    1. Load the configuration using Hydra's compose API.
+    2. Automatically handle combined configurations in the defaults list.
+    3. Handle package redirection with the @ symbol.
+    4. Apply command-line overrides.
+    """
+    # Convert to absolute path
+    config_path = os.path.abspath(config_path)
+
+    # Clear previous Hydra instance (if exists)
+    GlobalHydra.instance().clear()
+
+    try:
+        # Initialize using Hydra's initialize_config_dir
+        with initialize_config_dir(config_dir=config_path, version_base=None):
+            # Load configuration using compose, which automatically processes defaults
+            cfg = compose(config_name=config_name, overrides=hydra_overrides)
+
+        return cfg
+
+    except Exception as e:
+        print(
+            f"Cannot load hydra config: {e}. Config path: {config_path}, \
+                config name: {config_name}"
+        )
+        raise
 
 
 def parse_megatron_arguments(extra_args_provider=None, parse_unknown_args=False):
@@ -105,10 +139,6 @@ def parse_arguments(
 
     # mapping those parameters that can't be parsed
     register_custom_resolvers()
-
-    # mapping model name to config path and name
-    if args.model_name is not None:
-        args.config_path, args.config_name = resolve_model_config_path(args)
 
     if args.config_path and args.config_name:
         hydra_cfg = load_and_merge_config(

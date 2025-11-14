@@ -1,54 +1,54 @@
 # qwen2 model configuration
-model:
-  _target_: aiak_training_omni.models.foundation.QwenConfig
 
-  num_layers: 28
+_target_: aiak_training_omni.models.foundation.QwenConfig
 
-  hidden_size: 3584
+num_layers: 28
 
-  ffn_hidden_size: 18944
+hidden_size: 3584
 
-  num_attention_heads: 28
+ffn_hidden_size: 18944
 
-  vocab_size_in_config_file: 152064
+num_attention_heads: 28
 
-  make_vocab_size_divisible_by: 128
+vocab_size_in_config_file: 152064
 
-  group_query_attention: false
+make_vocab_size_divisible_by: 128
 
-  num_query_groups: 4
+group_query_attention: false
 
-  position_embedding_type: "rope"
+num_query_groups: 4
 
-  add_position_embedding: false
+position_embedding_type: "rope"
 
-  rotary_interleaved: false
+add_position_embedding: false
 
-  normalization: "RMSNorm"
+rotary_interleaved: false
 
-  swiglu: true
+normalization: "RMSNorm"
 
-  attention_dropout: 0
+swiglu: true
 
-  hidden_dropout: 0
+attention_dropout: 0
 
-  add_bias_linear: false
+hidden_dropout: 0
 
-  add_qkv_bias: true
+add_bias_linear: false
 
-  qk_layernorm: false
+add_qkv_bias: true
 
-  untie_embeddings_and_output_weights: true
+qk_layernorm: false
 
-  kv_channels: null
+untie_embeddings_and_output_weights: true
 
-  num_experts: null
+kv_channels: null
 
-  moe_ffn_hidden_size: null
+num_experts: null
 
-  rotary_emb_func: "RotaryEmbedding"
+moe_ffn_hidden_size: null
 
-  model_type: "qwen"
+rotary_emb_func: "RotaryEmbedding"
 
-  # variable_seq_lengths: true
+model_type: "qwen"
+
+# variable_seq_lengths: true
 

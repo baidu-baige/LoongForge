@@ -21,13 +21,15 @@ from megatron.core.transformer.moe.moe_utils import (
 )
 from megatron.core.transformer.moe.router import Router
 
-from aiak_training_omni.models.foundation import DeepseekConfig
+from aiak_training_omni.models.deepseek.transformer.transformer_config import (
+    DeepSeekTransformerConfig,
+)
 
 
 class TopKRouter(Router):
     """Route each token to the top-k experts."""
 
-    def __init__(self, config: DeepseekConfig) -> None:
+    def __init__(self, config: DeepSeekTransformerConfig) -> None:
         """Initialize the zero token dropping router.
 
         Args:

@@ -53,10 +53,8 @@ def register_model_trainer(
 def build_model_trainer(args):
     """create model trainer"""
     config = get_hydra_config()
-    
     if not hasattr(config, 'model'):
         raise ValueError("Invalid model configuration structure")
-    
     model_family = config.model.model_type
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
@@ -66,7 +64,7 @@ def build_model_trainer(args):
 
     if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:
         raise ValueError(
-            f"AIAK not support {args.training_phase} phase for family: {model_family}"
+            f"AIAK not support {args.training_phase} phase for {args.model_name} (family: {model_family})"
         )
 
     trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][
