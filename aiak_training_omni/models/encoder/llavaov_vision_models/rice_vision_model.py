@@ -10,6 +10,37 @@ from aiak_training_omni.models.encoder.qwenvl_vision_models.vision_model import 
 )
 
 
+class PatchEmbed(torch.nn.Module):
+    """" Patch Embedding """
+    def __init__(
+        self,
+        patch_size: int = 14,
+        in_channels: int = 3,
+        embed_dim: int = 1152,
+    ) -> None:
+        super().__init__()
+        self.patch_size = patch_size
+        self.in_channels = in_channels
+        self.embed_dim = embed_dim
+
+        self.proj = torch.nn.Conv2d(
+            in_channels,
+            embed_dim,
+            kernel_size=(patch_size, patch_size),
+            stride=(patch_size, patch_size),
+            bias=False
+        )
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """" Forward pass """
+        target_dtype = self.proj.weight.dtype
+        hidden_states = hidden_states.view(
+            -1, self.in_channels, self.patch_size, self.patch_size
+        )
+        hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(-1, self.embed_dim)
+        
+        return hidden_states
+
 class RiceViTModel(VisionModel):
     """"""
 
@@ -27,6 +58,12 @@ class RiceViTModel(VisionModel):
         self.patch_size = config.patch_size
         self.fullatt_block_indexes = list(range(config.num_layers))
         self.spatial_merge_unit = self.spatial_merge_size * self.spatial_merge_size
+
+        self.patch_embed = PatchEmbed(
+            patch_size=config.patch_size,
+            in_channels=config.in_channels,
+            embed_dim=config.hidden_size,
+        )
 
         self.register_buffer("class_embedding", torch.randn(config.hidden_size))
         self.register_buffer("class_pos_emb", torch.randn(1, config.kv_channels // 2))
