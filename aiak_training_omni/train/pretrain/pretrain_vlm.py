@@ -40,6 +40,7 @@ from megatron.core import parallel_state
 from aiak_training_omni.models.omni_models.omni_model_provider import (
     omni_model_provider,
 )
+from aiak_training_omni.models.omni_models.utils import get_batch_on_this_cp_rank
 
 stimer = StragglerDetector()
 
@@ -122,7 +123,7 @@ def get_batch(data_iterator):
 
     batch = get_batch_on_this_tp_rank(data_iterator)
 
-    # TODO get_batch_on_this_cp_rank @yizhan
+    batch = get_batch_on_this_cp_rank(batch)
 
     return batch.values()
 

@@ -5,7 +5,7 @@ from typing import Dict, Literal, Optional
 
 from torch import Tensor
 from .qwen_config import QwenConfig
-from megatron.core import InferenceParams, tensor_parallel
+from megatron.core import InferenceParams, tensor_parallel, parallel_state
 from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.models.common.embeddings.language_model_embedding import (
@@ -24,6 +24,7 @@ import torch
 
 # from .qwen_layer_spec import get_qwen_layer_with_te_spec
 from aiak_training_omni.utils.utils import import_module
+from aiak_training_omni.models.omni_models.utils import get_pos_emb_on_this_cp_rank
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
@@ -160,8 +161,9 @@ class Qwen2VLRotaryEmbedding(torch.nn.Module):
         )
         emb = torch.cat((freqs, freqs), dim=-1)
 
-        # if parallel_state.get_context_parallel_world_size() > 1:
-        #     emb=get_pos_emb_on_this_cp_rank_by_tex(emb, 2, packed_seq)
+        if parallel_state.get_context_parallel_world_size() > 1:
+            emb = get_pos_emb_on_this_cp_rank(emb, 2, packed_seq)
+
         return emb
 
 
