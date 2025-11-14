@@ -1,0 +1,24 @@
+# qwen3_5 model configuration
+_target_: aiak_training_omni.models.foundation.QwenConfig
+
+num_layers: 36
+
+hidden_size: 4096
+
+ffn_hidden_size: 12288
+
+num_attention_heads: 32
+
+group_query_attention: true
+
+num_query_groups: 8
+
+vocab_size_in_config_file: 151936
+
+make_vocab_size_divisible_by: 128
+
+qk_layernorm: true
+
+kv_channels: 128
+
+add_qkv_bias: false
