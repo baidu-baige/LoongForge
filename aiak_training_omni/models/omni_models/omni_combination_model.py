@@ -207,3 +207,34 @@ class OmniCombinationModel(BaseMegatronModule):
         )
 
         return output
+
+    def build_schedule_plan(
+        self,
+        input_ids: Optional[torch.LongTensor],
+        position_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        attn_mask_type: Optional[AttnMaskType] = None,
+        packed_seq_params=None,
+        labels: Optional[torch.LongTensor] = None,
+        inference_params: InferenceParams = None,
+        image_inputs: Optional[Dict[str, torch.Tensor]] = None,
+        video_inputs: Optional[Dict[str, torch.Tensor]] = None,
+        audio_inputs: Optional[Dict[str, torch.Tensor]] = None,
+        **kwargs: Any,
+    ):
+        """ Build the schedule plan for the model."""
+        from ..common.fine_grained_schedule import build_model_chunk_schedule_plan
+
+        return build_model_chunk_schedule_plan(
+            self,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            attn_mask_type=attn_mask_type,
+            labels=labels,
+            inference_params=inference_params,
+            packed_seq_params=packed_seq_params,
+            image_inputs=image_inputs,
+            video_inputs=video_inputs,
+            audio_inputs=audio_inputs,
+        )
