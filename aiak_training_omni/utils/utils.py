@@ -182,14 +182,16 @@ def build_model_config(args, config):
 
     model_cfgs = {}
 
-    if not hasattr(config, "model"):
+    if not hasattr(config, 'model'):
         raise ValueError("Invalid model configuration structure")
 
-    assert hasattr(config.model, "model_type"), "model_type is required in model config"
-    if config.model.model_type in constants.VisionLanguageModelFamilies.names():
-        from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
+    model_config = config.model
 
-        model_config = config.model
+    assert hasattr(
+        model_config, 'model_type'), "model_type is required in model config"
+
+    if model_config.model_type in constants.VisionLanguageModelFamilies.names():
+        from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
         for name, config_values in model_config.items():
             # must have _target_ field
             if "_target_" in config_values:
@@ -215,6 +217,7 @@ def build_model_config(args, config):
     elif model_config.model_type in constants.VideoLanguageModelFamilies.names():
         merged = deepcopy(args_dict)
         merged.update(OmegaConf.to_container(model_config, resolve=True))
+        merged = convert_megatron_transformer_config_args(merged)
         model_cfgs = instantiate(model_config, **merged)
     else:
         raise ValueError(f"Unsupported model type: {model_config.model_type}")
@@ -233,8 +236,53 @@ def register_custom_resolvers():
     }
 
     OmegaConf.register_new_resolver(
-        "act", lambda name: ACTIVATION_MAP[name.lower()], replace=True
+        "act",
+        lambda name: ACTIVATION_MAP[name.lower()],
+        replace=True
     )
+
+    # moe layer freq resolver
+    OmegaConf.register_new_resolver(
+        "moe_freq",
+        lambda expr: moe_freq_type(expr),
+        replace=True
+    )
+
+
+def find_config_file_recursive(root_dir, target_filename):
+    """
+    Recursively traverse root_dir and its subdirectories to search for the target file name target_filename.
+    Return the path to the found file (if multiple are found, return the first one; if none are found, return None).
+    """
+    for dirpath, _, filenames in os.walk(root_dir):
+        if target_filename in filenames:
+            return os.path.join(dirpath, target_filename)
+    return None
+
+
+def resolve_model_config_path(args):
+    """reslove the model name to config path and config name"""
+    current_file = Path(__file__).resolve()
+    project_root = current_file.parent.parent.parent  # AIAK root path
+    
+    if not project_root.exists():
+        raise RuntimeError(f"Project root directory not found: {project_root}")
+
+    config_name = args.model_name.replace("-", "_")
+    target_filename = f"{config_name}.yaml"
+
+    configs_root = os.path.join(project_root, "configs")
+    if not os.path.isdir(configs_root):
+        raise NotADirectoryError(f"Configs root directory not found: {configs_root}")
+    
+    found_path = find_config_file_recursive(configs_root, target_filename)
+    if not found_path:
+        raise FileNotFoundError(
+            f"Config file '{target_filename}' not found in {configs_root} or its subdirectories."
+        )
+    config_path = os.path.dirname(found_path)
+
+    return config_path, config_name
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig):
