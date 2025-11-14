@@ -33,19 +33,17 @@ DISTRIBUTED_ARGS=(
 )
 
 DATA_ARGS=(
-    --tokenizer-type HFTokenizer
-    --hf-tokenizer-path $TOKENIZER_PATH
+    --tokenizer-type HFTokenizer \
+    --hf-tokenizer-path $TOKENIZER_PATH \
     --data-path $DATA_PATH
     --dataloader-type external
     --split 100,0,0
-    --add-question-in-pretrain
-    --enable-discard-sample
     --num-workers 16
+    --chat-template qwen2-vl
 )
 
 TRAINING_ARGS=(
-    --norm-epsilon 1e-6
-    --training-phase pretrain
+    --training-phase sft
     --seq-length 1024
     --max-position-embeddings 4096
     --init-method-std 0.02
@@ -59,6 +57,7 @@ TRAINING_ARGS=(
     --adam-beta1 0.9
     --adam-beta2 0.95
     --adam-eps 1e-05
+    --norm-epsilon 1e-6
     --train-iters 50000
     --lr-decay-iters 50000
     --lr-decay-style cosine
@@ -81,6 +80,7 @@ MODEL_PARALLEL_ARGS=(
     --overlap-param-gather
     --distributed-backend nccl
 )
+
 
 MODEL_CONFIG_ARGS=(
     --config-path $MODEL_CONFIG_PATH
@@ -108,6 +108,5 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${LOGGING_ARGS[@]} \
-    #+model.image_encoder.freeze=True \
-    #+model.image_projector.freeze=True \
-    #+model.foundation.freeze=True
+    +model.image_projector.freeze=True \
+    +model.foundation.freeze=True

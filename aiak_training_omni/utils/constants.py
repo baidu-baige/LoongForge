@@ -101,4 +101,3 @@ class VisionLanguageModelFamilies(_BaseFamilies):
     INTERN_VL = "intern_vl"
     LLAVA_OV_1_5 = "llava_ov_1_5"
     VLM = "vlm"
-

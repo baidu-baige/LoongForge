@@ -59,7 +59,7 @@ def build_model_trainer(args):
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
         raise ValueError(
-            f"Not found trainer for {args.model_name} (family: {model_family})"
+            f"Not found trainer for family: {model_family}"
         )
 
     if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:

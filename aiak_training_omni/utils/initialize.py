@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 def load_and_merge_config(config_path, config_name, hydra_overrides):
     """
     Load configuration using the Hydra API and handle defaults inheritance.
-    
+
     This function will:
     1. Load the configuration using Hydra's compose API.
     2. Automatically handle combined configurations in the defaults list.
@@ -71,15 +71,18 @@ def load_and_merge_config(config_path, config_name, hydra_overrides):
         return cfg
 
     except Exception as e:
-        print(f"Cannot load hydra config: {e}. Config path: {config_path}, \
-                config name: {config_name}")
+        print(
+            f"Cannot load hydra config: {e}. Config path: {config_path}, \
+                config name: {config_name}"
+        )
         raise
 
 
 def parse_megatron_arguments(extra_args_provider=None, parse_unknown_args=False):
     """Parse megatron arguments."""
-    parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
-                                     allow_abbrev=False)
+    parser = argparse.ArgumentParser(
+        description="Megatron-LM Arguments", allow_abbrev=False
+    )
 
     parser = add_megatron_arguments(parser)
 
@@ -96,12 +99,12 @@ def parse_megatron_arguments(extra_args_provider=None, parse_unknown_args=False)
 
     # Args from environment
     # support MPI
-    args.rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '-1'))
+    args.rank = int(os.getenv("OMPI_COMM_WORLD_RANK", "-1"))
     if args.rank == -1:
-        args.rank = int(os.getenv('RANK', '0'))
-    args.world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '-1'))
+        args.rank = int(os.getenv("RANK", "0"))
+    args.world_size = int(os.getenv("OMPI_COMM_WORLD_SIZE", "-1"))
     if args.world_size == -1:
-        args.world_size = int(os.getenv("WORLD_SIZE", '1'))
+        args.world_size = int(os.getenv("WORLD_SIZE", "1"))
 
     return args, hydra_overrides
 
@@ -113,8 +116,10 @@ def parse_arguments(
     parse_unknown_args=False,
 ):
     """Parse arguments."""
-    args, hydra_overrides = parse_megatron_arguments(extra_args_provider, parse_unknown_args)
-    
+    args, hydra_overrides = parse_megatron_arguments(
+        extra_args_provider, parse_unknown_args
+    )
+
     # Prep for checkpoint conversion.
     if args.ckpt_convert_format is not None:
         assert args.ckpt_convert_save is not None
@@ -137,11 +142,9 @@ def parse_arguments(
 
     if args.config_path and args.config_name:
         hydra_cfg = load_and_merge_config(
-            args.config_path,
-            args.config_name,
-            hydra_overrides
+            args.config_path, args.config_name, hydra_overrides
         )
-    
+
     # Validate arguments.
     if validate_extra_args_provider is not None:
         validate_extra_args_provider(args, hydra_cfg)
@@ -152,7 +155,7 @@ def parse_arguments(
 
     assert args.yaml_cfg is None, "yaml_cfg is not supported in AIAK-Training-Omni yet"
     validate_megatron_args(args)
-    
+
     return args, hydra_cfg
 
 

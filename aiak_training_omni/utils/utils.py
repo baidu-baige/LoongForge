@@ -15,6 +15,7 @@ from megatron.core.transformer import TransformerConfig
 from megatron.training.activations import squared_relu
 import torch.nn.functional as F
 from aiak_training_omni.utils import constants
+
 _te_version = None
 
 
@@ -84,12 +85,13 @@ def build_model_config(args, config):
 
     model_cfgs = {}
 
-    if not hasattr(config, 'model'):
+    if not hasattr(config, "model"):
         raise ValueError("Invalid model configuration structure")
 
-    assert hasattr(config.model, 'model_type'), "model_type is required in model config"
+    assert hasattr(config.model, "model_type"), "model_type is required in model config"
     if config.model.model_type in constants.VisionLanguageModelFamilies.names():
         from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
+
         model_config = config.model
         for name, config_values in model_config.items():
             # must have _target_ field
@@ -117,17 +119,14 @@ def register_custom_resolvers():
     """register custom omegaconf resolvers"""
     # Activation functions
     ACTIVATION_MAP = {
-        'relu': F.relu,
-        'gelu': F.gelu,
-        'silu': F.silu,
+        "relu": F.relu,
+        "gelu": F.gelu,
+        "silu": F.silu,
     }
-    
-    OmegaConf.register_new_resolver(
-        "act", 
-        lambda name: ACTIVATION_MAP[name.lower()], 
-        replace=True
-    )
 
+    OmegaConf.register_new_resolver(
+        "act", lambda name: ACTIVATION_MAP[name.lower()], replace=True
+    )
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig):
@@ -166,7 +165,10 @@ def build_transformer_config(args, config_class=None):
 def get_default_sft_dataset_config() -> Optional[str]:
     """get default sft dataset config"""
     default_config = str(
-        Path(__file__).parent.parent.parent / "configs" / DEFAULT_DATASET_CONFIG
+        Path(__file__).parent.parent.parent
+        / "configs"
+        / "data"
+        / DEFAULT_DATASET_CONFIG
     )
     if os.path.exists(default_config):
         return default_config
