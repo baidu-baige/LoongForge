@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple, Union, Optional, Any, Callable, TypeVar
 import numpy as np
 import torch
 from megatron.energon import CaptioningSample, VQASample
-from megatron.energon.flavors.webdataset import VideoData
+from megatron.energon.flavors.webdataset import AVData
 from megatron.energon.task_encoder.base import stateless
 from PIL import Image
 from qwen_vl_utils.vision_process import smart_nframes, smart_resize
@@ -199,7 +199,6 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,

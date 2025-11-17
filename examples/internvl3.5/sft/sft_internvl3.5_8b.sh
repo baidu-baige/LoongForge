@@ -1,0 +1,153 @@
+#! /bin/bash
+# The script needs to be run on at least 1 nodes.
+source /root/.bashrc
+
+#清除残留的共享内存数据
+ipcs -m | awk '$4 == 666 {print $2}' | while read shmid; do
+ipcrm -m $shmid
+echo "Deleted shared memory segment with ID: $shmid"
+done
+
+DATA_PATH=/home/users/jianghaicheng/intern_vl/dataset/filter_mmdu/webdataset/
+#DATA_PATH=/home/users/jianghaicheng/intern_vl/dataset/pure_texts/wbs/
+#DATA_PATH=/home/users/jianghaicheng/intern_vl/dataset/LLaVA-Video-100/webdataset/
+
+#TOKENIZER_PATH=/mnt/cluster/huggingface.co/OpenGVLab/InternVL3_5-8B/
+TOKENIZER_PATH=/ssd1/models/InternVL3_5-8B/
+CHECKPOINT_LOAD_PATH=/mnt/cluster/zhaiyanfeng/models/internvl/ckpt-megatron/Internvl3_5-8B-tp4-pp1
+CHECKPOINT_SAVE_PATH=/mnt/cluster/zhaiyanfeng/models/internvl/ckpt-megatron/Internvl3_5-8B-tp4-pp1-save
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/zhaiyanfeng/out/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node/"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/home/users/jianghaicheng/intern_vl/AIAK-Megatron"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/home/users/jianghaicheng/intern_vl/AIAK-Training-Omni"}
+# Change for multinode config
+MASTER_ADDR=${MASTER_ADDR:-"localhost"}
+MASTER_PORT=${MASTER_PORT:-"6020"}
+NNODES=${WORLD_SIZE:-"1"}
+NODE_RANK=${RANK:-"0"}
+GPUS_PER_NODE=4
+
+export CUDA_DEVICE_MAX_CONNECTIONS=1
+
+# To specify the model config file
+# MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2_5_vl
+# MODEL_CONFIG_NAME=qwen2_5_vl_7b
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl
+MODEL_CONFIG_NAME=internvl3.5_8b
+
+DISTRIBUTED_ARGS=(
+  --nproc_per_node $GPUS_PER_NODE
+  --nnodes $NNODES
+  --node_rank $NODE_RANK
+  --master_addr $MASTER_ADDR
+  --master_port $MASTER_PORT
+)
+
+MODEL_ARGS=(
+  --model-name internvl3.5-8b
+  --rotary-base 1000000  # for internvl
+  --rotary-seq-len-interpolation-factor 1
+)
+
+
+DATA_ARGS=(
+  --tokenizer-type HFTokenizer
+  --hf-tokenizer-path $TOKENIZER_PATH
+  --data-path $DATA_PATH
+  --split 100,0,0
+  --chat-template empty
+)
+
+TRAINING_ARGS=(
+  --training-phase sft
+  --seq-length 16384
+  --max-position-embeddings 40960
+  --max-packed-tokens 16384
+  --init-method-std 0.01
+  --micro-batch-size 1
+  --global-batch-size 1
+  --lr 1e-5
+  --min-lr 0.0
+  --clip-grad 1.0
+  --weight-decay 0.05
+  --optimizer adam
+  --adam-beta1 0.9
+  --adam-beta2 0.999
+  --adam-eps 1e-8
+  --norm-epsilon 1e-6
+  --attention-dropout 0
+  --hidden-dropout 0
+  --train-iters 2000
+  --lr-decay-style cosine
+  --lr-warmup-fraction 0.03
+  --bf16
+  --trainable-modules adapter vision_model language_model
+  --seed 42
+  --no-gradient-accumulation-fusion
+  --load $CHECKPOINT_LOAD_PATH
+  --save $CHECKPOINT_SAVE_PATH
+  --save-interval 2000
+  --exit-interval 500
+  --dataloader-type external
+  --variable-seq-lengths  # for packing
+  --min-num-frame 8
+  --max-num-frame 32
+  --max-buffer-size 20
+  --num-images-expected 48
+  --loss-reduction square
+  #--use-cpu-initialization
+  #--no-initialization
+  #--use-packed-ds
+  --use_thumbnail
+  --replacement
+  --dynamic-image-size
+  --loss-reduction-all-gather
+  --num-workers 0 # for debug
+  --dataloader-prefetch-factor 0
+  --manual-gc
+  --manual-gc-interval 0
+  --use-flash-attn
+  --recompute-granularity full
+  --recompute-method block
+  --recompute-num-layers 12
+  #--sequence-parallel
+  #--strict-mode
+  --conv-style internvl2_5
+  #--dataset-type synthetic
+  --max-dynamic-patch 12
+  --packing-sft-data
+  --packing-batch-size 20
+  --energon-pack-algo sequential_max_images
+)
+
+
+MODEL_PARALLEL_ARGS=(
+  --tensor-model-parallel-size 4
+  --pipeline-model-parallel-size 1
+  --use-distributed-optimizer
+  --context-parallel-size 1
+  --distributed-backend nccl
+)
+
+LOGGING_ARGS=(
+  --log-interval 1
+  --tensorboard-dir ${TENSORBOARD_PATH}
+  --log-timers-to-tensorboard
+)
+
+if [ -n "${WANDB_API_KEY}" ]; then
+  LOGGING_ARGS+=(
+      --wandb-project ${WANDB_PROJECT}
+      --wandb-exp-name ${WANDB_NAME}
+  )
+fi
+
+PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+  torchrun ${DISTRIBUTED_ARGS[@]} \
+  $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+  --config-path $MODEL_CONFIG_PATH \
+  --config-name $MODEL_CONFIG_NAME \
+  --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/sft_dataset_config.json \
+  ${DATA_ARGS[@]} \
+  ${TRAINING_ARGS[@]} \
+  ${MODEL_PARALLEL_ARGS[@]} \
+  ${LOGGING_ARGS[@]}

@@ -55,7 +55,8 @@ def construct_sample(args, vision, paths, index, entry):
     vision_data = {}
     vision_name = []
 
-    for i, path in enumerate(paths):
+    for i, path in enumerate(paths[0]):
+        # print(f"path: {path}, paths: {paths[0]}")
         with open(os.path.join(directory, path), "rb") as vision_file:
             vision_data.update({str(i) + '_' + os.path.basename(path) : vision_file.read()})
             vision_name.append(str(i) + '_' + os.path.basename(path))
@@ -85,8 +86,13 @@ def convert_to_wds(args):
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
 
-    with open(args.json_file, 'r') as f:
-        data = json.load(f)
+    if args.json_file.endswith('.jsonl'):
+        data = [json.loads(line) for line in open(args.json_file, 'r')]
+    elif args.json_file.endswith('.json'):
+        with open(args.json_file, 'r') as f:
+            data = json.load(f)
+    else:
+        raise ValueError("Unsupported file extension.")
 
     tar = os.path.join(args.output_dir, 'pretrain-%d.tar')
     with wds.ShardWriter(tar, maxcount=args.maxcount, maxsize=args.maxsize) as shard_writer:
@@ -119,29 +125,44 @@ def convert_to_wds(args):
                     }
             shard_writer.write(sample)
     if args.media == "mix" or args.media == "video":
-        write_config(EPath(args.output_dir).absolute(), args.media)
+        write_config(EPath(args.output_dir), args.media, args.enable_sample_loader)
 
     print(f"Dataset successfully converted to wds")
 
 
-def write_config(path: EPath, media: str=None):
+def write_config(path: EPath, media: str=None, enable_sample_loader: bool=False):
     """ Write config to path """
     (path / MAIN_FOLDER_NAME).mkdir()
     all_tars = list(path.glob("**/*.tar")) + list(path.glob("**/*.tgz"))
     all_tars = [str(p.relative_to(path)) for p in sorted(all_tars)]
     class_type = "MultiMixQASample" if media == 'mix' else "MultiVidQASample"
-    dataset_definition = {
-        "sample_type": {
-            "__module__": "aiak_training_omni.data.multimodal",
-            "__class__": class_type,
-        },
-        "part_filter": "sample_loader.py:part_filter",
-        "sample_loader": "sample_loader.py:sample_loader"
-    }
-    with (path / MAIN_FOLDER_NAME / "dataset.yaml").open("w") as f:
-        yaml.dump(dataset_definition, f, sort_keys=False)
-    with (path / MAIN_FOLDER_NAME / "sample_loader.py").open("w") as f:
-        f.write(sample_loader_template(media))
+
+    if enable_sample_loader:
+        with (path / MAIN_FOLDER_NAME / "sample_loader.py").open("w") as f:
+            f.write(sample_loader_template(media))
+        dataset_definition = {
+            "sample_type": {
+                "__module__": "aiak_training_omni.data.multimodal",
+                "__class__": class_type,
+                "sample_loader": "sample_loader.py:sample_loader",
+                "part_filter": "sample_loader.py:part_filter"
+            },
+        }
+        with (path / MAIN_FOLDER_NAME / "dataset.yaml").open("w") as f:
+            yaml.dump(dataset_definition, f, sort_keys=False)
+    else:
+        with (path / MAIN_FOLDER_NAME / "dataset.yaml").open("w") as f:
+            f.write(
+                "\n".join(
+                    [
+                        "__module__: megatron.energon",
+                        "__class__: CrudeWebdataset",
+                        "subflavors:",
+                        "  sample_type: multi_mix_qa",
+                        "  dataset.yaml: true",
+                    ]
+                )
+            )
 
     BaseWebdatasetFactory.prepare_dataset(
         path,
@@ -171,6 +192,7 @@ def _add_arguments(parser: argparse.ArgumentParser):
     group.add_argument('--maxsize', type=int, default=3000000000, help='Maximum size of each shard')
     group.add_argument('--media', type=str, choices=["mix", "image", "video"], default="image", help='Media type')
     group.add_argument('--columns_messages', type=str, default="messages", help='Column name for messages')
+    group.add_argument('--enable_sample_loader', type=bool, default=False, help='enable_sample_loader')
 
     return parser
 

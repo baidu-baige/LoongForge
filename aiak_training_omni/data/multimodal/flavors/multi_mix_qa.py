@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 from megatron.energon.flavors.base_dataset import Sample
-from megatron.energon.flavors.webdataset import VideoData
+from megatron.energon.flavors.webdataset import AVData
 import torch
 
 
@@ -15,7 +15,7 @@ class MultiMixQASample(Sample):
     messages: List[dict]
 
     #: The video data containing the image and audio info.
-    video: List[VideoData] = None
+    video: List[AVData] = None
 
     #: The input image tensor in the shape (C, H, W)
     image: List[torch.Tensor] = None

@@ -9,7 +9,7 @@ from megatron.energon import (
     CaptioningSample,
     VQASample,
 )
-from megatron.energon.flavors.webdataset import VideoData
+from megatron.energon.flavors.webdataset import AVData
 from megatron.energon.task_encoder.base import stateless
 from transformers import AutoProcessor
 from aiak_training_omni.utils import constants, get_chat_template
@@ -60,7 +60,13 @@ class VLMTaskSamplePacked(BaseTaskSamplePacked):
     def __init__(
         self, sample: BaseTaskSample, image_grid_thw: str, video_grid_thw=None
     ):
-        super().__init__(**vars(sample))
+        init_args = vars(sample).copy()
+        init_args.update({
+            '__key__': sample.__key__,
+            '__restore_key__': sample.__restore_key__,
+            '__subflavors__': sample.__subflavors__
+        })
+        super().__init__(**init_args)
         self.image_grid_thw = image_grid_thw
         self.video_grid_thw = video_grid_thw
 
@@ -90,7 +96,13 @@ class VLMTaskBatchPacked(BaseTaskBatchPacked):
     def __init__(
         self, sample: BaseTaskSample, image_grid_thw: str, video_grid_thw=None
     ):
-        super().__init__(**vars(sample))
+        init_args = vars(sample).copy()
+        init_args.update({
+            '__key__': sample.__key__,
+            '__restore_key__': sample.__restore_key__,
+            '__subflavors__': sample.__subflavors__
+        })
+        super().__init__(**init_args)
         self.image_grid_thw = image_grid_thw
         self.video_grid_thw = video_grid_thw
 
@@ -122,7 +134,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         self.min_pixels = 1144
         self.max_pixels = 1144
 
-    def _resize_video(self, vision: VideoData, image_factor=28, frame_factor=2):
+    def _resize_video(self, vision: AVData, image_factor=28, frame_factor=2):
         """Resize video: frame number, height, width"""
         total_frames = len(vision.frames)
         video_fps = vision.info["video_fps"]
@@ -296,7 +308,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,
@@ -338,7 +349,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,
@@ -378,7 +388,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,
@@ -432,7 +441,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,
@@ -455,7 +463,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
             cur_capsample = CaptioningSample(
                 __key__=f"{sample.__key__}.img{idx:03d}_jpg",
                 __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
                 __subflavors__=sample.__subflavors__,
                 image=sample.images[idx],
                 caption=sample.captions[idx],
@@ -472,7 +479,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
             cur_capsample = VQASample(
                 __key__=f"{sample.__key__}.img{idx:03d}_jpg",
                 __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
                 __subflavors__=sample.__subflavors__,
                 image=sample.images[idx],
                 answers=sample.answers[idx],
@@ -507,7 +513,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         for idx in range(n_orig_sample):
             context = sample.contexts[idx]  # str
-            media_group = media_list[idx]  # List[Tensor] 或 List[VideoData]
+            media_group = media_list[idx]  # List[Tensor] 或 List[AVData]
             answer_group = sample.answers[idx] if sample.answers else []  # List[str]
 
             if isinstance(answer_group, list):
@@ -523,7 +529,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 cur_sample = MultiMixQASample(
                     __key__=f"{sample.__key__}.q{idx:03d}",
                     __restore_key__=sample.__restore_key__,
-                    __subflavor__=None,
                     __subflavors__=sample.__subflavors__,
                     messages=messages,
                     image=media_group,
@@ -534,11 +539,10 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 cur_sample = MultiMixQASample(
                     __key__=f"{sample.__key__}.q{idx:03d}",
                     __restore_key__=sample.__restore_key__,
-                    __subflavor__=None,
                     __subflavors__=sample.__subflavors__,
                     messages=messages,
                     image=None,
-                    video=media_group,  # List[VideoData]
+                    video=media_group,  # List[AVData]
                     system=None,
                 )
             l_VLMTaskSample.append(self.encode_multi_mix_qa4packing(cur_sample))
@@ -587,7 +591,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,
@@ -636,7 +639,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,

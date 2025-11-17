@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 from megatron.energon.flavors.base_dataset import Sample
-from megatron.energon.flavors.webdataset import VideoData
+from megatron.energon.flavors.webdataset import AVData
 
 
 @dataclass
@@ -11,7 +11,7 @@ class MultiVidQASample(Sample):
     """Sample type for video question answering."""
 
     #: The video data containing the image and audio info.
-    video: List[VideoData]
+    video: List[AVData]
     #: The context/question for the video.
     messages: List[dict]
     # system

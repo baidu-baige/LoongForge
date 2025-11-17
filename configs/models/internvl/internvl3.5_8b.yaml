@@ -1,0 +1,16 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: qwen_vit
+  - ../../models/image_projector@model.image_projector: mlp_adapter
+  - ../../models/qwen@model.foundation: qwen3_5_8b
+  #- ../../data@data: vlm_data
+  - _self_
+
+model:
+  model_type: intern_vl
+  # foundation:
+  #   rotary_emb_func: "Qwen2VLRotaryEmbedding"
+  #   model_spec: ["aiak_training_omni.models.foundation.qwen.qwen_layer_spec", "get_qwen_layer_with_spec"]

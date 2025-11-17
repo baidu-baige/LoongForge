@@ -32,5 +32,4 @@ class QwenConfig(BaseModelConfig):
     num_experts: int = None
     moe_ffn_hidden_size: int = None
     rotary_emb_func: str = "RotaryEmbedding"
-
     model_type = LanguageModelFamilies.QWEN2

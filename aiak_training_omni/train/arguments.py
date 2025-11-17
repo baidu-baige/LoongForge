@@ -825,6 +825,14 @@ def _add_extra_multimodal_args(parser):
         help="The maximum number of frames of the video",
     )
 
+    group.add_argument('--energon-pack-algo', type=str, default="balanced",
+        choices=["balanced", "sequential", "sequential_max_images"],
+        help="Energon sample packing algorithm (default: balanced). Options: "
+        "1) 'balanced': Greedy knapsack approach that sorts samples by length and"
+            "packs them while balancing computational load across GPUs."
+        "2) 'sequential': Fills buffers in order, minimizing training sequence disruption."
+        "3) 'sequential_max_images': Like sequential but prioritizes maximizing images"
+            "per buffer (may reorder samples).")
     return parser
 
 
