@@ -374,7 +374,6 @@ class VLMPretrainCollator:
         batch["attn_mask_type_id"] = torch.tensor(
             [attn_mask_type.value], dtype=torch.int64
         )
-        batch["attn_mask"] = None
 
 
 def get_train_dataset(task_encoder):

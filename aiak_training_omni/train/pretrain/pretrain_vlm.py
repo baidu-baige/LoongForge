@@ -61,6 +61,7 @@ def get_batch_on_this_tp_rank(data_iterator):
     position_ids = tensor_parallel.broadcast_data(["position_ids"], data, torch.int64)["position_ids"]
     loss_mask = tensor_parallel.broadcast_data(["loss_mask"], data, torch.int64)["loss_mask"]
     attn_mask_type_id = tensor_parallel.broadcast_data(["attn_mask_type_id"], data, torch.int64)["attn_mask_type_id"]
+    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.float32)["attn_mask"]
 
     has_video = bool((tokens == VIDEO_TOKEN_ID).any())
     has_image = bool((tokens == IMAGE_TOKEN_ID).any())
@@ -84,6 +85,7 @@ def get_batch_on_this_tp_rank(data_iterator):
     max_lengths = max_lengths.cuda(non_blocking=True)
     position_ids = position_ids.cuda(non_blocking=True)
     loss_mask = loss_mask.cuda(non_blocking=True)
+    attn_mask = attn_mask.cuda(non_blocking=True)
 
     packed_seq_params = None
     if cu_lengths.shape != torch.Size([1, 1]):
@@ -102,7 +104,7 @@ def get_batch_on_this_tp_rank(data_iterator):
         "pixel_values_videos": pixel_values_videos.cuda(non_blocking=True) if pixel_values_videos is not None else None,
         "video_grid_thw": video_grid_thw.cuda(non_blocking=True) if video_grid_thw is not None else None,
         "tokens": tokens,
-        "attn_mask": None,
+        "attn_mask": attn_mask,
         "labels": labels,
         "cu_lengths": cu_lengths,
         "max_lengths": max_lengths,
