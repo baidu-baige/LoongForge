@@ -10,10 +10,11 @@ import torch
 import torch.nn as nn
 from .omni_encoder_model import OmniEncoderModel
 from .omni_decoder_model import OmniDecoderModel
+from .utils import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
 from aiak_training_omni.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core.transformer.enums import AttnMaskType
-from megatron.core import InferenceParams
+from megatron.core import InferenceParams, tensor_parallel
 from megatron.core.transformer.module import MegatronModule
 
 
@@ -189,6 +190,12 @@ class OmniCombinationModel(BaseMegatronModule):
                 video_inputs=video_inputs,
                 inference_params=inference_params,
             )
+
+            if self.config.context_parallel_size > 1:
+                combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+            if self.config.sequence_parallel:
+                combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
             
         if not self.pre_process:
             combined_embeddings = None

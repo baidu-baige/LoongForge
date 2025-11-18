@@ -26,6 +26,7 @@ from megatron.core.transformer.moe.token_dispatcher import MoEAlltoAllPerBatchSt
 from megatron.core.enums import Fp8Recipe
 from megatron.core.fp8_utils import get_fp8_context
 
+from aiak_training_omni.models.omni_models.utils import get_inputs_on_this_cp_rank
 
 def weak_method(method):
     """ weak_method is used to avoid circular references in the schedule graph."""
@@ -75,6 +76,12 @@ class PreProcessNode(ScheduleNode):
                     video_inputs=video_inputs,
                     inference_params=inference_params,
                 )
+
+                if model.config.context_parallel_size > 1:
+                    combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+                if model.config.sequence_parallel:
+                    combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
 
             decoder_input = combined_embeddings
 
