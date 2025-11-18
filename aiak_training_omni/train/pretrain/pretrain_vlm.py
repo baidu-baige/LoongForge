@@ -16,7 +16,7 @@ from megatron.core.transformer.enums import AttnMaskType
 
 from transformers import DataCollatorForSeq2Seq
 
-from aiak_training_omni.utils import constants, get_args
+from aiak_training_omni.utils import constants, get_args, get_model_config
 
 # from aiak_training_omni.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
 from aiak_training_omni.train.megatron_trainer import MegatronTrainer
@@ -29,8 +29,6 @@ from aiak_training_omni.data.multimodal.dataloader_provider import (
     get_train_dataset,
     get_train_loader,
     VLMPretrainCollator,
-    IMAGE_TOKEN_ID,
-    VIDEO_TOKEN_ID,
 )
 from aiak_training_omni.data.multimodal.vlm_task_encoder import VLMTaskEncoder
 from datasets import load_from_disk
@@ -41,15 +39,16 @@ from aiak_training_omni.models.omni_models.omni_model_provider import (
     omni_model_provider,
 )
 from aiak_training_omni.models.omni_models.utils import get_batch_on_this_cp_rank
+from aiak_training_omni.train.get_loss_func import default_loss_func
 
 stimer = StragglerDetector()
 
 
-
 def get_batch_on_this_tp_rank(data_iterator):
     """Get the current micro-batch on this rank."""
-    args = get_args()
-
+    model_config = get_model_config()
+    IMAGE_TOKEN_ID = getattr(model_config, "vision_token_id", 151655)
+    VIDEO_TOKEN_ID = getattr(model_config, "video_token_id", 151656)
     if data_iterator is not None and mpu.get_tensor_model_parallel_rank() == 0:
         data = next(data_iterator)
     else:
@@ -73,11 +72,16 @@ def get_batch_on_this_tp_rank(data_iterator):
     video_grid_thw = None
     if has_image:
         images = tensor_parallel.broadcast_data(["imgs"], data, torch.float32)["imgs"]
-        image_grid_thw = tensor_parallel.broadcast_data(["image_grid_thw"], data, torch.int32)["image_grid_thw"]
+        image_grid_thw = tensor_parallel.broadcast_data(
+            ["image_grid_thw"], data, torch.int32
+        )["image_grid_thw"]
     if has_video:
-        pixel_values_videos = tensor_parallel.broadcast_data(["pixel_values_videos"], \
-                                    data, torch.float32)["pixel_values_videos"]
-        video_grid_thw = tensor_parallel.broadcast_data(["video_grid_thw"], data, torch.int32)["video_grid_thw"]
+        pixel_values_videos = tensor_parallel.broadcast_data(
+            ["pixel_values_videos"], data, torch.float32
+        )["pixel_values_videos"]
+        video_grid_thw = tensor_parallel.broadcast_data(
+            ["video_grid_thw"], data, torch.int32
+        )["video_grid_thw"]
     attn_mask_type = AttnMaskType(int(attn_mask_type_id.item()))
 
     tokens = tokens.cuda(non_blocking=True)
@@ -101,9 +105,21 @@ def get_batch_on_this_tp_rank(data_iterator):
 
     batch = {
         "images": images.cuda(non_blocking=True) if images is not None else None,
-        "image_grid_thw": image_grid_thw.cuda(non_blocking=True) if image_grid_thw is not None else None,
-        "pixel_values_videos": pixel_values_videos.cuda(non_blocking=True) if pixel_values_videos is not None else None,
-        "video_grid_thw": video_grid_thw.cuda(non_blocking=True) if video_grid_thw is not None else None,
+        "image_grid_thw": (
+            image_grid_thw.cuda(non_blocking=True)
+            if image_grid_thw is not None
+            else None
+        ),
+        "pixel_values_videos": (
+            pixel_values_videos.cuda(non_blocking=True)
+            if pixel_values_videos is not None
+            else None
+        ),
+        "video_grid_thw": (
+            video_grid_thw.cuda(non_blocking=True)
+            if video_grid_thw is not None
+            else None
+        ),
         "tokens": tokens,
         "attn_mask": attn_mask,
         "labels": labels,
@@ -132,93 +148,6 @@ def get_batch(data_iterator):
 SPIKY_LOSS_FACTOR = 10
 
 
-def loss_func(
-    loss_mask: torch.Tensor,
-    output_tensor: torch.Tensor,
-    loss_weight: torch.Tensor = None,
-):
-    """Loss function.
-
-    Args:
-        loss_mask (torch.Tensor): Used to mask out some portions of the loss
-        output_tensor (torch.Tensor): The tensor with the losses
-
-    Returns:
-        the loss scalar for this micro-batch
-        the number of non-padded tokens in this microbatch
-        a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
-    """
-    args = get_args()
-
-    if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
-        output_tensor = output_tensor * 0.0
-        valid_mask = False
-    else:
-        valid_mask = True
-    losses = output_tensor.float()
-    loss_mask = loss_mask.view(-1).float()
-    total_tokens = loss_mask.sum()
-    if loss_weight is not None:
-        shift_weights = loss_weight.view(-1)
-        shift_weights_sum = shift_weights.sum()
-        if (
-            args.loss_reduction_all_gather and args.context_parallel_size > 1
-        ):  # TODO: check args.loss_reduction_all_gather
-            torch.distributed.all_reduce(
-                shift_weights_sum,
-                op=torch.distributed.ReduceOp.SUM,
-                group=mpu.get_data_parallel_group(with_context_parallel=True),
-            )
-            shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
-                with_context_parallel=True
-            )
-        loss = torch.cat(
-            [
-                torch.sum(losses.view(-1) * shift_weights)
-                / (shift_weights_sum if valid_mask else 1.0).view(1),
-                total_tokens.view(1),
-            ]
-        )
-    else:
-        loss = torch.cat(
-            [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
-        )
-
-    if args.context_parallel_size > 1:
-        torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
-
-    # Check individual rank losses are not NaN prior to DP all-reduce.
-    if args.check_for_nan_in_loss_and_grad:
-        global_rank = torch.distributed.get_rank()
-        assert not loss[0].isnan(), (
-            f"Rank {global_rank}: found NaN in local forward loss calculation. "
-            f"Device: {torch.cuda.current_device()}, node: {os.uname()[1]}"
-        )
-
-    # Reduce loss for logging.
-    reporting_loss = loss.clone().detach()
-    torch.distributed.all_reduce(reporting_loss, group=mpu.get_data_parallel_group())
-
-    local_num_tokens = loss[1].clone().detach().to(torch.int)
-
-    loss_reduced_dict = {"lm loss": (reporting_loss[0], reporting_loss[1])}
-
-    if args.variable_seq_lengths:
-        # for variable seq length, we need to calculate the number of tokens on fly
-        # model output tensor shape is [B, S, H]
-        num_input_tokens = output_tensor.shape[0] * output_tensor.shape[1]
-        input_tokens = torch.tensor(
-            num_input_tokens, dtype=torch.int, device=output_tensor.device
-        )
-        # sum across all dp ranks
-        torch.distributed.all_reduce(input_tokens, group=mpu.get_data_parallel_group())
-        loss_reduced_dict["total_inputs"] = (
-            input_tokens.item() * args.context_parallel_size
-        )
-
-    return (loss[0] * args.context_parallel_size, local_num_tokens, loss_reduced_dict)
-
-
 def forward_step(data_iterator, model):
     """Forward training step.
 
@@ -227,7 +156,7 @@ def forward_step(data_iterator, model):
         model: Megatron Model
     """
     timers = get_timers()
-
+    model_config = get_model_config()
     # Get the batch.
     timers("batch-generator", log_level=2).start()
 
@@ -268,8 +197,8 @@ def forward_step(data_iterator, model):
                 video_grid_thw=video_grid_thw,
             ),
         )
-
-    return output_tensor, partial(loss_func, loss_mask)
+    loss_func = getattr(model_config, "loss_func", default_loss_func)
+    return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
 
 GLOBAL_TRAIN_DATASET_SIZE = None

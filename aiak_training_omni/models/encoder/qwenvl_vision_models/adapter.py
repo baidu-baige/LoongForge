@@ -4,10 +4,10 @@ import torch
 from dataclasses import dataclass
 from typing import Union
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.transformer.spec_utils import ModuleSpec, build_module
+from megatron.core.transformer.spec_utils import  build_module
 from .qwen2_vl_config import MLPAdapterConfig
 from aiak_training_omni.models.common import BaseMegatronModule
-from aiak_training_omni.utils.utils import import_module
+from aiak_training_omni.models.utils import import_module
 
 
 class Adapter(BaseMegatronModule):

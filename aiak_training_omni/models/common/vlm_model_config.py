@@ -32,4 +32,6 @@ class VLMModelConfig:
         self.video_encoder = video_encoder
         self.video_projector = video_projector
         self.foundation = foundation
-        self.model_type = VisionLanguageModelFamilies.VLM
+        self.model_type = model_type
+        for k, v in kwargs.items():
+            setattr(self, k, v)

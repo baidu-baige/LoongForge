@@ -1,11 +1,7 @@
 """Training Entry"""
 
-#from aiak_training_omni.utils import register_custom_resolvers
 from aiak_training_omni.train import parse_train_args
 from aiak_training_omni.train import build_model_trainer
-import hydra
-import argparse
-from omegaconf import OmegaConf
 
 
 def main():
