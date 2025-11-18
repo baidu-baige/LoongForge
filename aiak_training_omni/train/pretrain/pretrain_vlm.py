@@ -61,7 +61,7 @@ def get_batch_on_this_tp_rank(data_iterator):
     position_ids = tensor_parallel.broadcast_data(["position_ids"], data, torch.int64)["position_ids"]
     loss_mask = tensor_parallel.broadcast_data(["loss_mask"], data, torch.int64)["loss_mask"]
     attn_mask_type_id = tensor_parallel.broadcast_data(["attn_mask_type_id"], data, torch.int64)["attn_mask_type_id"]
-    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.float32)["attn_mask"]
+    attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)["attn_mask"]
 
     has_video = bool((tokens == VIDEO_TOKEN_ID).any())
     has_image = bool((tokens == IMAGE_TOKEN_ID).any())
