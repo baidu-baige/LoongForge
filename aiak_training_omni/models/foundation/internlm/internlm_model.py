@@ -5,23 +5,97 @@ from typing import Dict, Literal, Optional
 
 import torch
 from torch import Tensor
-
+from .internlm_config import InternLMConfig
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
-from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
-from .dynamic_rotary_pos_embedding import DynamicRotaryEmbedding
+
+from aiak_training_omni.models.common.base_model_mixins import (
+    BaseMegatronLanuageModule,
+)
+from aiak_training_omni.models.utils import import_module
+from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 
 
-class InternLMModel(LanguageModule):
+class DynamicRotaryEmbedding(RotaryEmbedding):
+    """Dynamic Rotary Embedding for language model.
+
+    Args:
+        kv_channels (int): Projection weights dimension in multi-head attention. Obtained from transformer config
+        rotary_percent (float): Percent of rotary dimension to use for rotary position embeddings.
+        seq_len_interpolation_factor (float, optional): scale of linearly interpolating RoPE for longer sequences.
+        The value must be a float larger than 1.0. Defaults to None
+        rotary_base (int, optional): Base period for rotary position embeddings. Defaults to 10000.
+    """
+
+    def __init__(
+        self,
+        kv_channels: int,
+        rotary_percent: float,
+        rotary_interleaved: bool = False,
+        seq_len_interpolation_factor: float = None,
+        rotary_base: int = 10000,
+        dtype: torch.dtype = torch.float32,
+        rope_scaling: bool = False,
+        rope_scaling_factor: float = 8.0,
+        use_cpu_initialization: bool = False,
+        max_position_embeddings: int = 4096,
+    ) -> None:
+        super().__init__(
+            kv_channels,
+            rotary_percent,
+            rotary_interleaved,
+            seq_len_interpolation_factor,
+            rotary_base,
+            dtype,
+            rope_scaling,
+            rope_scaling_factor,
+            use_cpu_initialization,
+        )
+        
+        self.dim = kv_channels
+        self.rotary_base = rotary_base
+        self.scaling_factor = rope_scaling_factor
+        if rotary_percent < 1.0:
+            self.dim = int(self.dim * rotary_percent)
+        self.max_position_embeddings = max_position_embeddings
+        self.max_seq_len_cached = max_position_embeddings
+
+    def forward(
+        self, max_seq_len: int, offset: int = 0, packed_seq: bool = False
+    ) -> Tensor:
+        """Forward pass of RoPE embedding"""
+        if max_seq_len > self.max_position_embeddings:
+            base = self.rotary_base * (
+                (self.scaling_factor * max_seq_len / self.max_position_embeddings)
+                - (self.scaling_factor - 1)
+            ) ** (self.dim / (self.dim - 2))
+            self.inv_freq = 1.0 / (
+                base
+                ** (
+                    torch.arange(
+                        0,
+                        self.dim,
+                        2,
+                        dtype=torch.float32,
+                        device=torch.cuda.current_device(),
+                    )
+                    / self.dim
+                )
+            )
+
+        return super().forward(max_seq_len, offset, packed_seq)
+
+
+class InternLMModel(BaseMegatronLanuageModule):
     """InternLM Transformer language model.
 
     Args:
@@ -45,10 +119,11 @@ class InternLMModel(LanguageModule):
             sequences. The value must be a float larger than 1.0. Defaults to None.
     """
 
+    config_class = InternLMConfig
+
     def __init__(
         self,
         config: TransformerConfig,
-        transformer_layer_spec: ModuleSpec,
         vocab_size: int,
         max_sequence_length: int,
         pre_process: bool = True,
@@ -64,13 +139,21 @@ class InternLMModel(LanguageModule):
         rotary_dtype: torch.dtype = torch.float32,
         scatter_embedding_sequence_parallel: bool = True,
         seq_len_interpolation_factor: Optional[float] = None,
+        **kwargs,
     ) -> None:
         super().__init__(config=config)
 
         if has_config_logger_enabled(config):
-            log_config_to_disk(config, locals(), prefix=type(self).__name__)
-
-        self.transformer_layer_spec: ModuleSpec = transformer_layer_spec
+            log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
+        
+        if self.config.model_spec is None:
+            model_spec = [
+                "aiak_training_omni.models.foundation.internlm.internlm_layer_spec",
+                "get_internlm_layer_with_te_spec",
+            ]
+        else:
+            model_spec = self.config.model_spec
+        self.transformer_layer_spec = import_module(model_spec, self.config)
         self.vocab_size = vocab_size
         self.max_sequence_length = max_sequence_length
         self.pre_process = pre_process
@@ -121,7 +204,7 @@ class InternLMModel(LanguageModule):
         # Transformer.
         self.decoder = TransformerBlock(
             config=self.config,
-            spec=transformer_layer_spec,
+            spec=self.transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
         )
@@ -165,6 +248,8 @@ class InternLMModel(LanguageModule):
                 self.state_dict(),
                 prefix=f"{type(self).__name__}_init_ckpt",
             )
+        if hasattr(config, 'freeze') and config.freeze:
+            self.freeze()
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
         """Sets input tensor to the model.
@@ -195,6 +280,7 @@ class InternLMModel(LanguageModule):
         extra_block_kwargs: dict = None,
         rotary_pos_emb: Tensor = None,
         runtime_gather_output: Optional[bool] = None,
+        **kwargs,
     ) -> Tensor:
         """Forward function of the InternLM Model This function passes the input tensors
         through the embedding layer, and then the decoeder and finally into the post

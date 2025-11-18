@@ -12,7 +12,6 @@ from megatron.core.transformer.attention import SelfAttention, SelfAttentionSubm
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 
 from aiak_training_omni.utils import is_te_min_version
-
 from aiak_training_omni.models.dispatch import multiacc_modules
 
 

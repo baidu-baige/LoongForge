@@ -182,6 +182,7 @@ class OmniCombinationModel(BaseMegatronModule):
         elif self.add_encoder:
             combined_embeddings, decode_input = self.encoder_model(
                 input_ids=input_ids,
+                position_ids=position_ids,
                 image_inputs=image_inputs,
                 video_inputs=video_inputs,
                 inference_params=inference_params,

@@ -1,0 +1,12 @@
+# internlm2.5_8b model configuration
+
+_target_: aiak_training_omni.models.foundation.InternLMConfig
+
+num_layers: 48
+hidden_size: 6144
+ffn_hidden_size: 16384
+num_attention_heads: 48
+group_query_attention: True
+num_query_groups: 8
+
+model_type: "internlm"

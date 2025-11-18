@@ -219,9 +219,9 @@ def get_batch(data_iterator):
     return batch
 
 
-def filter_ignore_data(input_ids, image_flags, img_context_token_id, num_image_token):
+def filter_ignore_data(input_ids, image_flags, image_token_id, num_image_token):
     """ for qianfanvl """
-    selected = (input_ids == img_context_token_id).sum().item()
+    selected = (input_ids == image_token_id).sum().item()
     expected = (image_flags == 1).sum().item() * num_image_token
     return selected != expected
 
@@ -259,11 +259,10 @@ def forward_step(data_iterator, model):
 
     with stimer:
         output_tensor = model(
-            pixel_values,
-            input_ids,
-            position_ids,
-            attention_mask,
-            image_flags,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            image_inputs={"images": pixel_values, "image_flags": image_flags},
             labels=labels,
             attn_mask_type=attn_mask_type,
             packed_seq_params=packed_seq_params,
@@ -281,10 +280,10 @@ def forward_step(data_iterator, model):
         if args.communicate_dataset:
             ignore_flag = model.module.module.ignore[0]
         else:
-            # tokenizer = get_tokenizer().tokenizer
-            # img_context_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
+            tokenizer = get_tokenizer().tokenizer
+            image_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
             num_image_token = int((args.force_image_size // args.patch_size) ** 2 * (args.down_sample_ratio ** 2))
-            ignore_flag = filter_ignore_data(input_ids, image_flags, model.module.module.img_context_token_id,
+            ignore_flag = filter_ignore_data(input_ids, image_flags, image_token_id,
                                              num_image_token)
         if ignore_flag:
             print(f"filter_ignore_data get True, skip current microbatch...")
@@ -342,8 +341,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 #     trainer = MegatronTrainer(
 #         train_args=train_args,
 #         train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-#         model_provider=model_provider,
-#         # model_provider=omni_model_provider,
+#         model_provider=omni_model_provider,
 #         model_type=ModelType.encoder_or_decoder,
 #         forward_step_func=forward_step,
 #     )
