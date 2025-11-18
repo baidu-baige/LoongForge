@@ -2,10 +2,14 @@
 # 数据路径配置
 data:
   # webdataset数据样本目录
-  wds_dir: "/mnt/cluster/yxc/test_4/"
+  wds_dir: "/mnt/cluster/yxc/test_wds/"
   # 文本字段名
   template_text_key: "messages"
-  packed_json_dir: "/mnt/cluster/yxc/test_5/"
+  # 存储中间结果是json目录
+  packed_json_dir: "/mnt/cluster/yxc/test_packed_json/"
+  # packed 后的 wds 数据集
+  packed_wds_dir: "/mnt/cluster/yxc/test_packed_wds/"
+
 model:
   model_type: "qwenvl"
   processor_kwargs:
@@ -23,7 +27,7 @@ sample:
   # 训练数据的最大长度
   max_token_len: 8192
   # 决定解析方式
-  task_type: vqa
+  sample_type: packed_multi_mix_qa
 
 # 并行处理参数
 process:
