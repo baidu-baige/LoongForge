@@ -36,8 +36,58 @@ from megatron.training.initialize import (
     _compile_dependencies,
     _initialize_tp_communicators,
 )
+from megatron.core.parallel_state import initialize_model_parallel, is_initialized
 
 from aiak_training_omni.utils.global_vars import set_aiak_extra_global_vars
+from aiak_training_omni.utils import get_model_config
+
+import inspect
+
+_ParallelStatesDict = {}
+_DecoderTensorParallelSize = 1
+
+def change_parallel_state(module_name):
+    """
+    Change the parallel state of the model to the state saved in _ParallelStatesDict
+    """
+    target_globals = vars(mpu)
+    source_globals = _ParallelStatesDict[module_name]
+
+    for k, v in source_globals.items():
+        if k in target_globals:
+            target_globals[k] = v
+
+def save_parallel_state(module_name):
+    """
+    Save the current parallel state of the model
+    """
+    state_snapshot = {
+        k: v for k, v in vars((mpu)).items()
+        if k.startswith('_') and not k.startswith('__') and not inspect.isfunction(v)
+    }
+    _ParallelStatesDict.setdefault(module_name, {}).update(state_snapshot)
+
+def create_parallel_state(module_name, tp_size=0):
+    """
+    Create the parallel state of the model and save it
+    """
+    if tp_size == 0:
+        tp_size = _DecoderTensorParallelSize
+    assert tp_size <= _DecoderTensorParallelSize and _DecoderTensorParallelSize % tp_size == 0
+    mpu.destroy_model_parallel()
+
+    initialize_model_parallel(
+        tensor_model_parallel_size=tp_size,
+        pipeline_model_parallel_size=1,
+        virtual_pipeline_model_parallel_size=None,
+        pipeline_model_parallel_split_rank=None,
+        use_sharp=False,
+        context_parallel_size=1,
+        expert_model_parallel_size=1,
+        nccl_communicator_config_path=None,
+        distributed_timeout_minutes=30,
+        order="tp-cp-ep-dp-pp")
+    save_parallel_state(module_name)
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +153,26 @@ def initialize_aiak_megatron(
 
         # Pytorch distributed.
         _initialize_distributed(get_embedding_ranks, get_position_embedding_ranks)
+
+        save_parallel_state('text_decoder')
+        global _DecoderTensorParallelSize
+        _DecoderTensorParallelSize = mpu.get_tensor_model_parallel_world_size()
+
+        from .arguments import parse_args_from_config
+        # set model config from args and hydra config
+        parse_args_from_config(args)
+        
+        model_config = get_model_config()
+        from megatron.training import print_rank_0
+        print_rank_0(f"model_config: {model_config}")
+        if hasattr(model_config, "image_encoder") and model_config.image_encoder is not None:
+            create_parallel_state('image_encoder', model_config.image_encoder.tensor_model_parallel_size)
+        if hasattr(model_config, "video_encoder") and model_config.video_encoder is not None:
+            create_parallel_state('video_encoder', model_config.video_encoder.tensor_model_parallel_size)
+        if hasattr(model_config, "audio_encoder") and model_config.audio_encoder is not None:
+            create_parallel_state('audio_encoder', model_config.audio_encoder.tensor_model_parallel_size)
+
+        change_parallel_state('text_decoder')
 
         # Random seeds for reproducibility.
         if args.rank == 0:
