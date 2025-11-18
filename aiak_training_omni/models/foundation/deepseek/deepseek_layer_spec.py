@@ -24,11 +24,13 @@ from megatron.core.transformer.moe.shared_experts import SharedExpertMLP
 from megatron.core.transformer.moe.moe_layer import MoESubmodules
 from megatron.core.enums import Fp8Recipe
 
-from aiak_training_omni.models.deepseek.transformer import DeepSeekTransformerConfig
-from aiak_training_omni.models.deepseek.transformer.moe_layer import MoELayer
-from aiak_training_omni.models.deepseek.transformer.mtp_transformer_layer import (
+#from aiak_training_omni.models.foundation.deepseek.transformer import DeepSeekTransformerConfig
+from aiak_training_omni.models.foundation import DeepseekConfig
+from aiak_training_omni.models.foundation.deepseek.transformer.moe_layer import MoELayer
+from aiak_training_omni.models.foundation.deepseek.transformer.mtp_transformer_layer import (
     MultiTokenPredLayerDeepSeekSubmodules,
 )
+from omegaconf import ListConfig
 
 from aiak_training_omni.models.dispatch import multiacc_modules
 
@@ -143,7 +145,7 @@ def _get_mlp_module_spec(
 
 
 def get_deepseek_decoder_block_and_mtp_spec(
-    config: DeepSeekTransformerConfig,
+    config: DeepseekConfig,
 ) -> Tuple[TransformerBlockSubmodules, Optional[ModuleSpec]]:
     """Get the deepseek decoder block and multi-token prediction layer spec."""
     assert config.num_moe_experts > 0, "Only support MOE when using DeepSeek"
@@ -191,6 +193,11 @@ def get_deepseek_decoder_block_and_mtp_spec(
     # 0 stands for dense layers, 1 stands for expert layers.
     # For integer N: Creates a pattern with one expert layer every N layers.
     # For string pattern: Evaluates the str directly (e.g. "[1,0,1]" for alternating expert/dense).
+
+    # compatibility for hydra config
+    if isinstance(config.moe_layer_freq, ListConfig):
+        config.moe_layer_freq = list(config.moe_layer_freq)
+
     if isinstance(config.moe_layer_freq, int):
         moe_layer_pattern = [
             1 if (i % config.moe_layer_freq == 0) else 0

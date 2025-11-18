@@ -33,26 +33,10 @@ from aiak_training_omni.models import get_model_provider, get_model_family
 
 from aiak_training_omni.train.megatron_trainer import MegatronTrainer
 from aiak_training_omni.train.trainer_builder import register_model_trainer
+from aiak_training_omni.models.foundation.llm_model_provider import llm_model_provider
 
 
 stimer = StragglerDetector()
-
-
-def model_provider(pre_process=True, post_process=True):
-    """Builds the model.
-
-    Args:
-        pre_process (bool, optional): Set to true if you need to compute embedings. Defaults to True.
-        post_process (bool, optional): Set to true if you need to want to compute output logits/loss. Defaults to True.
-
-    Returns:
-        MCoreModel: The returned model
-    """
-    args = get_args()
-    model_family = get_model_family(args.model_name)
-    model_provider = get_model_provider(model_family)
-    assert model_provider is not None, f"model provider for {args.model_name} not found"
-    return model_provider(pre_process, post_process)
 
 
 def get_batch(data_iterator):
@@ -228,7 +212,7 @@ def default_pretrain_trainer(train_args):
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-        model_provider=model_provider,
+        model_provider=llm_model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
     )

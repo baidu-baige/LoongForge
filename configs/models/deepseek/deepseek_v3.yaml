@@ -1,21 +1,23 @@
-# deepseek_v2_lite model config
+# deepseek_v3 model config
 _target_: aiak_training_omni.models.foundation.DeepseekConfig
 
-num_layers: 27
+num_layers: 61
 
-hidden_size: 2048
+hidden_size: 7168
 
-ffn_hidden_size: 10944
+ffn_hidden_size: 18432
 
-num_attention_heads: 16
+num_attention_heads: 128
 
-num_experts: 64
+num_query_groups: 128
 
-moe_ffn_hidden_size: 1408
+num_experts: 256
 
-moe_shared_expert_intermediate_size: 2816
+moe_ffn_hidden_size: 2048
 
-q_lora_rank: null
+moe_shared_expert_intermediate_size: 2048
+
+q_lora_rank: 1536
 
 kv_lora_rank: 512
 
@@ -25,9 +27,13 @@ qk_pos_emb_head_dim: 64
 
 v_head_dim: 128
 
-moe_layer_freq: ${moe_freq:"[0]*1+[1]*26"}
+moe_layer_freq: moe_freq_type("[0]*3+[1]*58")
 
-# common default
+qk_layernorm: true
+
+vocab_size_in_config_file: 129280
+
+  # common default
 
 position_embedding_type: "rope"
 
@@ -47,13 +53,7 @@ add_bias_linear: false
 
 add_qkv_bias: false
 
-qk_layernorm: true
-
 untie_embeddings_and_output_weights: true
-
-vocab_size_in_config_file: 102400
-
-num_query_groups: 16
 
 apply_rope_fusion: true
 

@@ -4,6 +4,7 @@ from typing import Union, List, Callable
 
 from aiak_training_omni.models import get_model_family
 from aiak_training_omni.utils.global_vars import get_hydra_config
+from aiak_training_omni.utils import constants
 
 MODEL_FAMILY_TRAINER_FACTORY = {}
 
@@ -53,9 +54,14 @@ def register_model_trainer(
 def build_model_trainer(args):
     """create model trainer"""
     config = get_hydra_config()
-    if not hasattr(config, 'model'):
-        raise ValueError("Invalid model configuration structure")
-    model_family = config.model.model_type
+    
+    if hasattr(config, "model_type") and config.model_type in \
+            constants.LanguageModelFamilies.names():
+        model_family = config.model_type
+    else:
+        if not hasattr(config, 'model'):
+            raise ValueError("Invalid model configuration structure")
+        model_family = config.model.model_type
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
         raise ValueError(

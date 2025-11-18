@@ -89,34 +89,48 @@ def convert_megatron_transformer_config_args(megatron_args):
 
 def build_model_config(args, config):
     """Build model config from args and config"""
-    args_dict = convert_megatron_transformer_config_args(vars(args))
+    args_dict = deepcopy(vars(args))
 
     model_cfgs = {}
 
-    if not hasattr(config, "model"):
-        raise ValueError("Invalid model configuration structure")
-
-    assert hasattr(config.model, "model_type"), "model_type is required in model config"
-    if config.model.model_type in constants.VisionLanguageModelFamilies.names():
-
+    if hasattr(config, "model_type") and config.model_type in \
+            constants.LanguageModelFamilies.names():
+        model_type = config.model_type
+        model_config = config
+    else:
+        if not hasattr(config, "model"):
+            raise ValueError("Invalid model configuration structure")
+        model_type = config.model.model_type
         model_config = config.model
+
+    # assert hasattr(config.model, "model_type"), "model_type is required in model config"
+    if model_type in constants.VisionLanguageModelFamilies.names():
+
         for name, config_values in model_config.items():
             # must have _target_ field
             if isinstance(config_values, Iterable) and "_target_" in config_values:
                 merged = deepcopy(args_dict)
                 merged.update(OmegaConf.to_container(config_values, resolve=True))
+                merged = convert_megatron_transformer_config_args(merged)
                 model_cfgs[name] = instantiate(config_values, **merged)
             else:
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)
-    elif config.model.model_type in constants.LanguageModelFamilies.names():
+    elif model_type in constants.LanguageModelFamilies.names():
+        # Language model
+        if "_target_" not in model_config:
+            raise ValueError(
+                "Model config missing '_target_' field for llm type.\n")
+
         merged = deepcopy(args_dict)
-        merged.update(OmegaConf.to_container(config.model, resolve=True))
-        model_cfgs = instantiate(config_values, **merged)
-    elif config.model.model_type in constants.VideoLanguageModelFamilies.names():
+        merged.update(OmegaConf.to_container(model_config, resolve=True))
+        merged = convert_megatron_transformer_config_args(merged)
+
+        model_cfgs = instantiate(model_config, **merged)
+    elif model_type in constants.VideoLanguageModelFamilies.names():
         merged = deepcopy(args_dict)
         merged.update(OmegaConf.to_container(config.model, resolve=True))
         model_cfgs = instantiate(config_values, **merged)
     else:
-        raise ValueError(f"Unsupported model type: {config.model.model_type}")
+        raise ValueError(f"Unsupported model type: {model_type}")
     return model_cfgs

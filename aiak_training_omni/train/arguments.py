@@ -12,6 +12,7 @@ from megatron.training.arguments import (
     add_megatron_arguments,
     validate_args as validate_megatron_args,
 )
+from megatron.training.arguments import moe_freq_type
 
 from aiak_training_omni.models import (
     get_support_model_archs,
@@ -26,6 +27,7 @@ from aiak_training_omni.utils import (
 from aiak_training_omni.models.utils import build_model_config
 from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
+from aiak_training_omni.utils.config_map import get_config_from_model_name
 from aiak_training_omni.train.get_position_idx_func import get_mrope_index, get_position_ids, get_rope_index_internvl
 from aiak_training_omni.train.get_loss_func import loss_func_internvl, default_loss_func
 import importlib
@@ -58,6 +60,13 @@ def register_custom_resolvers():
     )
     OmegaConf.register_new_resolver(
         "loss_func", lambda name: LOSS_FUNC_MAP[name.lower()], replace=True
+    )
+
+    # moe layer freq resolver
+    OmegaConf.register_new_resolver(
+        "moe_freq",
+        lambda expr: moe_freq_type(expr),
+        replace=True
     )
 
 
@@ -154,6 +163,10 @@ def parse_arguments(
 
     # mapping those parameters that can't be parsed
     register_custom_resolvers()
+
+    # mapping model name to config path and name
+    if hasattr(args, "model_name") and args.model_name is not None:
+        args.config_path, args.config_name = get_config_from_model_name(args.model_name)
 
     if args.config_path and args.config_name:
         hydra_cfg = load_and_merge_config(
@@ -295,14 +308,22 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
     group.add_argument(
         "--config-path",
         type=str,
-        required=True,
-        help="The config file path for model configuration.",
+        required=False,
+        help='Hydra path to config directory',
     )
     group.add_argument(
         "--config-name",
         type=str,
-        required=True,
-        help="The config file path for model configuration.",
+        required=False,
+        help='Hydra config file name (without .yaml suffix)',
+    )
+
+    group.add_argument(
+        "--model-name",
+        type=str,
+        default=None,
+        required=False,
+        help="The model name to use. This name should match the key in the model config registry.",
     )
 
     # use for cogvlm2
@@ -334,12 +355,6 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         "this option, the head dimensions will be aligned by padding, so that fa can be used."
         "Deprecated: use --attention-backend=flash",
     )
-
-     # # ============ Hydra config ============
-    group.add_argument('--config-path', type=str, required=True,
-                        help='Hydra path to config directory')
-    group.add_argument('--config-name', type=str, required=True,
-                        help='Hydra config file name (without .yaml suffix)')
 
     return parser
 
@@ -998,15 +1013,18 @@ def _add_extra_parallel_args(parser):
 
 def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
-    if not hasattr(config, "model"):
-        raise ValueError("Hydra config doesn't have model section.")
-    args.model_family =  config.model.model_type
     model_config = None
-    if "foundation" in config.model:
-        model_config = config.model.foundation
+
+    if hasattr(config, "model_type") and config.model_type in \
+            constants.LanguageModelFamilies.names():
+        args.model_family = config.model_type
+        model_config = config
     else:
-        # compatibility for llm
-        model_config = config.model
+        if not hasattr(config, "model"):
+            raise ValueError("Hydra config doesn't have model section.")
+        args.model_family = config.model.model_type
+        if "foundation" in config.model:
+            model_config = config.model.foundation
 
     if model_config is not None:
         # the structural configuration of model will be overwritten, such as num_layers, hidden_states..

@@ -22,9 +22,13 @@ from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 
-from aiak_training_omni.models.deepseek.transformer import DeepSeekTransformerConfig
-from aiak_training_omni.models.deepseek.transformer.mtp_transformer_layer import (
+from aiak_training_omni.models.foundation import DeepseekConfig
+from aiak_training_omni.models.foundation.deepseek.transformer.mtp_transformer_layer import (
     MultiTokenPredLayerDeepSeek,
+)
+from aiak_training_omni.models.utils import import_module
+from aiak_training_omni.models.common.base_model_mixins import (
+    BaseMegatronLanuageModule,
 )
 
 
@@ -57,7 +61,7 @@ def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
             incompatible_keys.missing_keys.remove(key)
 
 
-class DeepseekModelWithMTP(LanguageModule):
+class DeepseekModelWithMTP(BaseMegatronLanuageModule):
     """DeepSeek Transformer language model with MTP module supported..
 
     Args:
@@ -84,62 +88,65 @@ class DeepseekModelWithMTP(LanguageModule):
             longer sequences. The value must be a float larger than 1.0. Defaults to None.th
     """
 
+    config_class = DeepseekConfig
+
     def __init__(
         self,
-        config: DeepSeekTransformerConfig,
-        transformer_layer_spec: ModuleSpec,
-        vocab_size: int,
-        max_sequence_length: int,
+        config: DeepseekConfig,
         pre_process: bool = True,
         post_process: bool = True,
-        fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
-        share_embeddings_and_output_weights: bool = False,
-        share_mtp_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal[
-            "learned_absolute", "rope", "none"
-        ] = "learned_absolute",
-        rotary_percent: float = 1.0,
-        rotary_base: int = 10000,
-        rope_scaling: bool = False,
-        rope_scaling_factor: float = 8.0,
         scatter_embedding_sequence_parallel: bool = True,
-        seq_len_interpolation_factor: Optional[float] = None,
-        mtp_layer_spec: ModuleSpec = None,
     ) -> None:
         """Initialize pre-process, transformer block and post-process modules."""
         super().__init__(config=config)
 
-        if has_config_logger_enabled(config):
-            log_config_to_disk(config, locals(), prefix=type(self).__name__)
+        if has_config_logger_enabled(self.config):
+            log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
 
-        self.transformer_layer_spec: ModuleSpec = transformer_layer_spec
-        self.vocab_size = vocab_size
-        self.max_sequence_length = max_sequence_length
+        if self.config.model_spec is None:
+            model_spec = [
+                "aiak_training_omni.models.foundation.deepseek.deepseek_layer_spec",
+                "get_deepseek_decoder_block_and_mtp_spec",
+            ]
+        else:
+            model_spec = self.config.model_spec
+
+        # TODO: how to pass this param?
+        self.scatter_embedding_sequence_parallel = scatter_embedding_sequence_parallel
+        
         self.pre_process = pre_process
         self.post_process = post_process
-        self.fp16_lm_cross_entropy = fp16_lm_cross_entropy
         self.parallel_output = parallel_output
-        self.share_embeddings_and_output_weights = share_embeddings_and_output_weights
-        self.position_embedding_type = position_embedding_type
+        self.vocab_size = self.config.padded_vocab_size
+        # self.vocab_size = args.padded_vocab_size
+        self.fp16_lm_cross_entropy = self.config.fp16_lm_cross_entropy
+        self.seq_len_interpolation_factor = self.config.rotary_seq_len_interpolation_factor
+
+
+        self.transformer_layer_spec, self.mtp_layer_spec = import_module(model_spec, self.config)
+        self.max_sequence_length = self.config.max_position_embeddings
+        self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
+        self.position_embedding_type = self.config.position_embedding_type
 
         # megatron core pipelining currently depends on model type
         # TODO: remove this dependency ?
         self.model_type = ModelType.encoder_or_decoder
 
         # These 4 attributes are needed for TensorRT-LLM export.
-        self.max_position_embeddings = max_sequence_length
-        self.rotary_percent = rotary_percent
-        self.rotary_base = rotary_base
-        self.rope_scaling = rope_scaling
+        self.max_position_embeddings = self.config.max_position_embeddings
+        self.rotary_percent = self.config.rotary_percent
+        self.rotary_base = self.config.rotary_base
+        self.rope_scaling = self.config.use_rope_scaling
+        self.rope_scaling_factor = self.config.rope_scaling_factor
 
         if self.pre_process:
             self.embedding = LanguageModelEmbedding(
                 config=self.config,
                 vocab_size=self.vocab_size,
                 max_sequence_length=self.max_sequence_length,
-                position_embedding_type=position_embedding_type,
-                scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                position_embedding_type=self.position_embedding_type,
+                scatter_to_sequence_parallel=self.scatter_embedding_sequence_parallel,
             )
 
         if (
@@ -149,12 +156,12 @@ class DeepseekModelWithMTP(LanguageModule):
             # unused for deepseek
             self.rotary_pos_emb = RotaryEmbedding(
                 kv_channels=self.config.kv_channels,
-                rotary_percent=rotary_percent,
+                rotary_percent=self.rotary_percent,
                 rotary_interleaved=self.config.rotary_interleaved,
-                seq_len_interpolation_factor=seq_len_interpolation_factor,
-                rotary_base=rotary_base,
-                rope_scaling=rope_scaling,
-                rope_scaling_factor=rope_scaling_factor,
+                seq_len_interpolation_factor=self.seq_len_interpolation_factor,
+                rotary_base=self.rotary_base,
+                rope_scaling=self.rope_scaling,
+                rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
             )
 
@@ -164,7 +171,7 @@ class DeepseekModelWithMTP(LanguageModule):
         # Transformer.
         self.decoder = TransformerBlock(
             config=self.config,
-            spec=transformer_layer_spec,
+            spec=self.transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
         )
@@ -186,10 +193,10 @@ class DeepseekModelWithMTP(LanguageModule):
                 self.grad_output_buffer = None
 
             self.output_layer = tensor_parallel.ColumnParallelLinear(
-                config.hidden_size,
+                self.config.hidden_size,
                 self.vocab_size,
-                config=config,
-                init_method=config.init_method,
+                config=self.config,
+                init_method=self.config.init_method,
                 bias=False,
                 skip_bias_add=False,
                 gather_output=not self.parallel_output,
@@ -205,7 +212,7 @@ class DeepseekModelWithMTP(LanguageModule):
         # MTP
         if self.config.num_nextn_predict_layers > 0:
             self.share_mtp_embeddings_and_output_weights = (
-                share_mtp_embeddings_and_output_weights
+                self.config.share_mtp_embeddings_and_output_weights
             )
         else:
             self.share_mtp_embeddings_and_output_weights = False
@@ -222,15 +229,15 @@ class DeepseekModelWithMTP(LanguageModule):
                 self.mtp_layers = torch.nn.ModuleList(
                     [
                         MultiTokenPredLayerDeepSeek(
-                            config,
-                            submodules=mtp_layer_spec.submodules,
+                            self.config,
+                            submodules=self.mtp_layer_spec.submodules,
                             # Params for MTP embedding layer
-                            vocab_size=vocab_size,
-                            max_sequence_length=max_sequence_length,
-                            position_embedding_type=position_embedding_type,
-                            rotary_percent=rotary_percent,
-                            rotary_base=rotary_base,
-                            seq_len_interpolation_factor=seq_len_interpolation_factor,
+                            vocab_size=self.vocab_size,
+                            max_sequence_length=self.max_sequence_length,
+                            position_embedding_type=self.position_embedding_type,
+                            rotary_percent=self.rotary_percent,
+                            rotary_base=self.rotary_base,
+                            seq_len_interpolation_factor=self.seq_len_interpolation_factor,
                             # Params for MTP layer
                             share_mtp_embeddings_and_output_weights=True,
                             # Params for TransformerLayer
