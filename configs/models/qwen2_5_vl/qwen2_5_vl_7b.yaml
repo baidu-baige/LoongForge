@@ -3,13 +3,11 @@
 #     - file://configs/
 
 defaults:
-  - ../../models/image_encoder@model.image_encoder: qwen_vit
+  - ../../models/image_encoder@model.image_encoder: qwen_vit_rmsnorm
   - ../../models/image_projector@model.image_projector: mlp_adapter
   - ../../models/qwen@model.foundation: qwen2_5_7b
   #- ../../data@data: vlm_data
   - _self_
-
-
 
 model:
   model_type: qwen2_5_vl
@@ -18,3 +16,7 @@ model:
   foundation: 
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
     model_spec: ["aiak_training_omni.models.foundation.qwen.qwen_layer_spec", "get_qwen_layer_with_spec"]
+    rotary_base: 1000000
+    group_query_attention: true
+  image_projector:
+    activation_func: ${act:gelu}

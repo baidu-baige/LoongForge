@@ -233,14 +233,14 @@ class VisionModelWithRMSNorm(VisionModel):
 
         return window_index, cu_window_seqlens
 
-    def forward(self, x: torch.Tensor, grid_thw: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, image_grid_thw: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
-        rotary_pos_emb = self.rot_pos_emb(grid_thw)
-        window_index, cu_window_seqlens = self.get_window_index(grid_thw)
+        rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
+        window_index, cu_window_seqlens = self.get_window_index(image_grid_thw)
         cu_window_seqlens = torch.tensor(
             cu_window_seqlens,
             device=x.device,
-            dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
+            dtype=image_grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
         )
         cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
 
@@ -255,14 +255,14 @@ class VisionModelWithRMSNorm(VisionModel):
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
 
         cu_seqlens = torch.repeat_interleave(
-            grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]
+            image_grid_thw[:, 1] * image_grid_thw[:, 2], image_grid_thw[:, 0]
         ).cumsum(
             dim=0,
             # Select dtype based on the following factors:
             #  - FA2 requires that cu_seqlens_q must have dtype int32
-            #  - torch.onnx.export requires that cu_seqlens_q must have same dtype as grid_thw
+            #  - torch.onnx.export requires that cu_seqlens_q must have same dtype as image_grid_thw
             # See https://github.com/huggingface/transformers/pull/34852 for more information
-            dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
+            dtype=image_grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
         )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
