@@ -87,7 +87,7 @@ sample:
   # 训练数据的最大长度
   max_token_len: 8192
   # 决定解析方式
-  task_type: vqa
+  sample_type: packed_multi_mix_qa
 
 # 并行处理参数
 process:

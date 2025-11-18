@@ -44,28 +44,28 @@ GLOBAL_PROCESSED_SAMPLE_COUNT = multiprocessing.Value("i", 0)
 
 
 # ----------------- Utility Functions -----------------
-def get_chat_template(task_type: str, model_type: str) -> Template:
+def get_chat_template(sample_type: str, model_type: str) -> Template:
     """
     Retrieve a chat template string and wrap it as a Template object.
 
     Args:
-        task_type (str): The logical task category, e.g. "caption", "sft", "vqa", etc.
+        sample_type (str): The logical task category, e.g. "packed_captioning", "packed_vqa", "packed_multi_mix_qa", etc.
         model_type (str): The model identifier, used for selecting model-specific templates.
 
     Returns:
-        Template: A Template object corresponding to the given task_type and model_type.
+        Template: A Template object corresponding to the given sample_type and model_type.
 
     Raises:
-        ValueError: If the specified task_type or model_type template is not defined.
+        ValueError: If the specified sample_type or model_type template is not defined.
     """
 
-    supported_task_types = list(TEMPLATES.keys())
+    supported_sample_types = list(TEMPLATES.keys())
 
-    task_templates = TEMPLATES.get(task_type)
+    task_templates = TEMPLATES.get(sample_type)
     if task_templates is None:
         raise ValueError(
-            f"Unsupported task_type '{task_type}'. "
-            f"Available task types: {supported_task_types}"
+            f"Unsupported sample_type '{sample_type}'. "
+            f"Available sample types: {supported_sample_types}"
         )
 
     if isinstance(task_templates, str):
@@ -76,12 +76,12 @@ def get_chat_template(task_type: str, model_type: str) -> Template:
         template_str = task_templates.get(model_type)
         if template_str is None:
             raise ValueError(
-                f"No template found for model_type '{model_type}' under task_type '{task_type}'. "
+                f"No template found for model_type '{model_type}' under sample_type '{sample_type}'. "
                 f"Available model types: {list(task_templates.keys())}"
             )
     else:
         raise TypeError(
-            f"Invalid template format for task_type '{task_type}': expected str or dict, got {type(task_templates)}"
+            f"Invalid template format for sample_type '{sample_type}': expected str or dict, got {type(task_templates)}"
         )
 
     return template_str
@@ -634,7 +634,7 @@ def main():
 
     # sample_config
     max_token_len = config["sample"]["max_token_len"]
-    task_type = config["sample"]["task_type"]
+    sample_type = config["sample"]["sample_type"]
 
     # data_config
     wds_dir = Path(config["data"]["wds_dir"])
@@ -678,7 +678,7 @@ def main():
     # ======== Initialize variables ========
     ready_to_batch_merge_files = []
     intermediate_merged_files = []
-    chat_template_str = get_chat_template(task_type, model_type)
+    chat_template_str = get_chat_template(sample_type, model_type)
 
     # Pipeline: record_samples_to_file → process_chunk → merge_by_batch → merge_files_by_token
     try:

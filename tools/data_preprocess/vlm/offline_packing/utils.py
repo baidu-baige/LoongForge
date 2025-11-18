@@ -8,8 +8,27 @@ from typing import Union, Dict
 
 # TODO TEMPLATES needs to be expanded with more templates
 TEMPLATES = {
-    "caption": "<|vision_start|><|image_pad|><|vision_end|>{{ captions[0].content }}<|im_end|>",
-    "vqa": {
+    "packed_captioning": "<|vision_start|><|image_pad|><|vision_end|>{{ captions[0].content }}<|im_end|>",
+    "packed_vqa": {
+        "qwenvl": """
+                    {% set image_count = namespace(value=0) %}
+                    {% set video_count = namespace(value=0) %}
+
+                    {% for message in messages %}
+                        {% if loop.first and message['from'] != 'system' %}
+                    <|im_start|>system
+                    You are a helpful assistant.<|im_end|>
+                        {% endif %}
+                    <|im_start|>{{ message['from'] }}
+                    {{ message['value'] | replace('<image>', '<|vision_start|><|image_pad|><|vision_end|>') }}<|im_end|>
+                    {% endfor %}
+
+                    {% if add_generation_prompt %}
+                    <|im_start|>assistant
+                    {% endif %}
+                """
+    },
+    "packed_multi_mix_qa": {
         "qwenvl": """
                     {% set image_count = namespace(value=0) %}
                     {% set video_count = namespace(value=0) %}
