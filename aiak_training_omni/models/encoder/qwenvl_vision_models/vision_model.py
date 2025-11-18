@@ -10,7 +10,7 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from .vision_transformer_block import TransformerBlock
 from .qwen2_vl_config import QwenVisionConfig, QwenVisionRMSNormConfig
 from aiak_training_omni.models.common import BaseMegatronVisionModule
-from aiak_training_omni.utils.utils import import_module
+from aiak_training_omni.models.utils import import_module
 
 
 class PatchEmbed(torch.nn.Module):

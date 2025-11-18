@@ -1,0 +1,122 @@
+"""Model utilities."""
+from typing import Tuple
+import torch
+from megatron.core.transformer import TransformerConfig
+from megatron.training.activations import squared_relu
+import torch.nn.functional as F
+from aiak_training_omni.utils import constants
+from copy import deepcopy
+from omegaconf import OmegaConf
+from hydra.utils import instantiate
+from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
+from collections.abc import Iterable
+
+
+def import_module(module_path: Tuple[str], config: TransformerConfig):
+    """Import a named object from a module in the context of this function.
+
+    TODO: make this importer module more robust, at least make sure there
+    are no side effects of using this as is
+    """
+    base_path, name = module_path
+    try:
+        module = __import__(base_path, globals(), locals(), [name])
+    except ImportError as e:
+        print(f"couldn't import module due to {e}")
+        return None
+    return vars(module)[name](config)
+
+
+def convert_megatron_transformer_config_args(megatron_args):
+    """convert megatron args to transformer config"""
+    transformer_config_args = {}
+    for k, v in megatron_args.items():
+        if k in TransformerConfig.__dataclass_fields__:
+            transformer_config_args[k] = v
+    transformer_config_args["persist_layer_norm"] = not megatron_args[
+        "no_persist_layer_norm"
+    ]
+    transformer_config_args["layernorm_zero_centered_gamma"] = megatron_args[
+        "apply_layernorm_1p"
+    ]
+    transformer_config_args["layernorm_epsilon"] = megatron_args["norm_epsilon"]
+    transformer_config_args["deallocate_pipeline_outputs"] = True
+    transformer_config_args["pipeline_dtype"] = megatron_args["params_dtype"]
+    transformer_config_args["batch_p2p_comm"] = not megatron_args["overlap_p2p_comm"]
+    transformer_config_args["num_moe_experts"] = megatron_args["num_experts"]
+    transformer_config_args["rotary_interleaved"] = megatron_args["rotary_interleaved"]
+    transformer_config_args["num_layers_in_first_pipeline_stage"] = megatron_args[
+        "decoder_first_pipeline_num_layers"
+    ]
+    transformer_config_args["num_layers_in_last_pipeline_stage"] = megatron_args[
+        "decoder_last_pipeline_num_layers"
+    ]
+    transformer_config_args["fp8_param"] = megatron_args["fp8_param_gather"]
+
+    if "activation_func_fp8_input_store" in megatron_args:
+        transformer_config_args["activation_func_fp8_input_store"] = megatron_args[
+            "activation_func_fp8_input_store"
+        ]
+
+    if megatron_args["swiglu"]:
+        transformer_config_args["activation_func"] = F.silu
+        transformer_config_args["gated_linear_unit"] = True
+        transformer_config_args["bias_activation_fusion"] = megatron_args[
+            "bias_swiglu_fusion"
+        ]
+    else:
+        transformer_config_args["bias_activation_fusion"] = megatron_args[
+            "bias_gelu_fusion"
+        ]
+
+    if megatron_args["squared_relu"]:
+        assert not megatron_args["swiglu"]
+        transformer_config_args["activation_func"] = squared_relu
+
+    if megatron_args["init_method_xavier_uniform"]:
+        transformer_config_args["init_method"] = torch.nn.init.xavier_uniform_
+        transformer_config_args["scaled_init_method"] = torch.nn.init.xavier_uniform_
+
+    if megatron_args["group_query_attention"]:
+        transformer_config_args["num_query_groups"] = megatron_args["num_query_groups"]
+    else:
+        transformer_config_args["num_query_groups"] = None
+    if len(megatron_args["cp_comm_type"]) == 1:
+        transformer_config_args["cp_comm_type"] = megatron_args["cp_comm_type"][0]
+    transformer_config_args["config_logger_dir"] = megatron_args["config_logger_dir"]
+    return transformer_config_args
+
+
+def build_model_config(args, config):
+    """Build model config from args and config"""
+    args_dict = convert_megatron_transformer_config_args(vars(args))
+
+    model_cfgs = {}
+
+    if not hasattr(config, "model"):
+        raise ValueError("Invalid model configuration structure")
+
+    assert hasattr(config.model, "model_type"), "model_type is required in model config"
+    if config.model.model_type in constants.VisionLanguageModelFamilies.names():
+
+        model_config = config.model
+        for name, config_values in model_config.items():
+            # must have _target_ field
+            if isinstance(config_values, Iterable) and "_target_" in config_values:
+                merged = deepcopy(args_dict)
+                merged.update(OmegaConf.to_container(config_values, resolve=True))
+                model_cfgs[name] = instantiate(config_values, **merged)
+            else:
+                model_cfgs[name] = config_values
+        model_cfgs = VLMModelConfig(**model_cfgs)
+    elif config.model.model_type in constants.LanguageModelFamilies.names():
+        merged = deepcopy(args_dict)
+        merged.update(OmegaConf.to_container(config.model, resolve=True))
+        model_cfgs = instantiate(config_values, **merged)
+    elif config.model.model_type in constants.VideoLanguageModelFamilies.names():
+        merged = deepcopy(args_dict)
+        merged.update(OmegaConf.to_container(config.model, resolve=True))
+        model_cfgs = instantiate(config_values, **merged)
+    else:
+        raise ValueError(f"Unsupported model type: {config.model.model_type}")
+    return model_cfgs

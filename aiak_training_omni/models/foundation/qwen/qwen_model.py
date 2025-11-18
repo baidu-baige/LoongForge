@@ -22,8 +22,7 @@ from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
 import torch
 
-# from .qwen_layer_spec import get_qwen_layer_with_te_spec
-from aiak_training_omni.utils.utils import import_module
+from aiak_training_omni.models.utils import import_module
 from aiak_training_omni.models.omni_models.utils import get_pos_emb_on_this_cp_rank
 
 
