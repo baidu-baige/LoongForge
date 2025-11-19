@@ -10,7 +10,7 @@ from typing import Optional
 from einops import rearrange
 
 from megatron.core import InferenceParams, parallel_state
-from aiak_training_omni.models.llama import LLaMAModel
+from aiak_training_omni.models.foundation import LLaMAModel
 from megatron.core.transformer import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.utils import make_viewless_tensor

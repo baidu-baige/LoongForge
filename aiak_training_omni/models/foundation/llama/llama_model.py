@@ -19,9 +19,13 @@ from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
+from aiak_training_omni.models.common import (
+    BaseMegatronLanuageModule,
+)
+from aiak_training_omni.models.utils import import_module
 
 
-class LLaMAModel(LanguageModule):
+class LLaMAModel(BaseMegatronLanuageModule):
     """LLaMA Transformer language model.
 
     Args:
@@ -44,58 +48,62 @@ class LLaMAModel(LanguageModule):
         seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer
             sequences. The value must be a float larger than 1.0. Defaults to None.
     """
+    from .llama_config import LLaMAConfig
+    config_class = LLaMAConfig
 
     def __init__(
         self,
-        config: TransformerConfig,
-        transformer_layer_spec: ModuleSpec,
-        vocab_size: int,
-        max_sequence_length: int,
+        config: LLaMAConfig,
         pre_process: bool = True,
         post_process: bool = True,
-        fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
-        share_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
-        rotary_percent: float = 1.0,
-        rotary_base: int = 10000,
-        rope_scaling: bool = False,
-        rope_scaling_factor: float = 8.0,
-        rotary_dtype: torch.dtype = torch.float32,
         scatter_embedding_sequence_parallel: bool = True,
-        seq_len_interpolation_factor: Optional[float] = None,
     ) -> None:
         super().__init__(config=config)
 
-        if has_config_logger_enabled(config):
-            log_config_to_disk(config, locals(), prefix=type(self).__name__)
+        if has_config_logger_enabled(self.config):
+            log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
 
-        self.transformer_layer_spec: ModuleSpec = transformer_layer_spec
-        self.vocab_size = vocab_size
-        self.max_sequence_length = max_sequence_length
+        if self.config.model_spec is None:
+            model_spec = [
+                "aiak_training_omni.models.foundation.llama.llama_layer_spec",
+                "get_llama_layer_with_te_spec",
+            ]
+        else:
+            model_spec = self.config.model_spec
+
         self.pre_process = pre_process
         self.post_process = post_process
-        self.fp16_lm_cross_entropy = fp16_lm_cross_entropy
         self.parallel_output = parallel_output
-        self.share_embeddings_and_output_weights = share_embeddings_and_output_weights
-        self.position_embedding_type = position_embedding_type
+        self.vocab_size = self.config.padded_vocab_size
+
+        self.transformer_layer_spec = import_module(model_spec, self.config)
+        self.max_sequence_length = self.config.max_position_embeddings
+        self.fp16_lm_cross_entropy = self.config.fp16_lm_cross_entropy
+        self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
+        self.position_embedding_type = self.config.position_embedding_type
+        self.seq_len_interpolation_factor = self.config.rotary_seq_len_interpolation_factor
+
+        # TODO: remove this dependency ?
+        self.rotary_dtype = torch.float32
 
         # megatron core pipelining currently depends on model type
         # TODO: remove this dependency ?
         self.model_type = ModelType.encoder_or_decoder
 
         # These 4 attributes are needed for TensorRT-LLM export.
-        self.max_position_embeddings = max_sequence_length
-        self.rotary_percent = rotary_percent
-        self.rotary_base = rotary_base
-        self.rotary_scaling = rope_scaling
+        self.max_position_embeddings = self.config.max_position_embeddings
+        self.rotary_percent = self.config.rotary_percent
+        self.rotary_base = self.config.rotary_base
+        self.rope_scaling = self.config.use_rope_scaling
+        self.rope_scaling_factor = self.config.rope_scaling_factor
 
         if self.pre_process:
             self.embedding = LanguageModelEmbedding(
                 config=self.config,
                 vocab_size=self.vocab_size,
                 max_sequence_length=self.max_sequence_length,
-                position_embedding_type=position_embedding_type,
+                position_embedding_type=self.position_embedding_type,
                 scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
             )
 
@@ -105,13 +113,13 @@ class LLaMAModel(LanguageModule):
         ):
             self.rotary_pos_emb = RotaryEmbedding(
                 kv_channels=self.config.kv_channels,
-                rotary_percent=rotary_percent,
+                rotary_percent=self.rotary_percent,
                 rotary_interleaved=self.config.rotary_interleaved,
-                seq_len_interpolation_factor=seq_len_interpolation_factor,
-                rotary_base=rotary_base,
-                dtype=rotary_dtype,
-                rope_scaling=rope_scaling,
-                rope_scaling_factor=rope_scaling_factor,
+                seq_len_interpolation_factor=self.seq_len_interpolation_factor,
+                rotary_base=self.rotary_base,
+                dtype=self.rotary_dtype,
+                rope_scaling=self.rope_scaling,
+                rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
             )
 
@@ -121,7 +129,7 @@ class LLaMAModel(LanguageModule):
         # Transformer.
         self.decoder = TransformerBlock(
             config=self.config,
-            spec=transformer_layer_spec,
+            spec=self.transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
         )
@@ -143,10 +151,10 @@ class LLaMAModel(LanguageModule):
                 self.grad_output_buffer = None
 
             self.output_layer = tensor_parallel.ColumnParallelLinear(
-                config.hidden_size,
+                self.config.hidden_size,
                 self.vocab_size,
-                config=config,
-                init_method=config.init_method,
+                config=self.config,
+                init_method=self.config.init_method,
                 bias=False,
                 skip_bias_add=False,
                 gather_output=not self.parallel_output,
