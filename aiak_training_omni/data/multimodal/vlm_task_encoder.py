@@ -112,27 +112,21 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def __init__(self, args):
         super().__init__()
-        # if args.training_phase in ['sft']:
-        #     self.chat_template = get_chat_template()
-        # self.processor = AutoProcessor.from_pretrained(self.args.hf_tokenizer_path, trust_remote_code=True)
-        self.processor = AutoProcessor.from_pretrained(
-            "/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/",
-            trust_remote_code=True,
-        )
-        # if args.image_resolution:
-        #     setattr(self.processor, "image_resolution", args.image_resolution)
+        if args.training_phase in ['sft']:
+            self.chat_template = get_chat_template()
+        self.processor = AutoProcessor.from_pretrained(self.args.hf_tokenizer_path, trust_remote_code=True)
+        if args.image_resolution:
+            setattr(self.processor, "image_resolution", args.image_resolution)
         # video
-        # self.frame_min_pixels = args.frame_min_pixels
-        # self.frame_max_pixels = args.frame_max_pixels
-        # self.video_max_pixels = args.video_max_pixels
-        # self.fps = args.fps
-        # self.fps_min_frames = args.fps_min_frames
-        # self.fps_max_frames = args.fps_max_frames
+        self.frame_min_pixels = args.frame_min_pixels
+        self.frame_max_pixels = args.frame_max_pixels
+        self.video_max_pixels = args.video_max_pixels
+        self.fps = args.fps
+        self.fps_min_frames = args.fps_min_frames
+        self.fps_max_frames = args.fps_max_frames
         # image
-        # self.min_pixels = args.min_pixels
-        # self.max_pixels = args.max_pixels
-        self.min_pixels = 1144
-        self.max_pixels = 1144
+        self.min_pixels = args.min_pixels
+        self.max_pixels = args.max_pixels
 
     def _resize_video(self, vision: AVData, image_factor=28, frame_factor=2):
         """Resize video: frame number, height, width"""
@@ -289,7 +283,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         https://github.com/NVIDIA/Megatron-Energon/blob/develop/src/megatron/energon/flavors/captioning.py
         """
 
-        # assert self.args.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
+        assert self.args.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
 
         text = (
             IMAGE_TOKEN_WITH_TAGS + sample.caption + self.tokenizer.tokenizer.eos_token
@@ -300,10 +294,10 @@ class VLMTaskEncoder(BaseTaskEncoder):
         )
         num_tiles = [len(image_grid_thw)]
 
-        # if self.args.enable_discard_sample:
-        #     assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
-        # else:
-        #     assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
+        if self.args.enable_discard_sample:
+            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+        else:
+            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
@@ -320,31 +314,27 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        # if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
-        #     if self.args.add_question_in_pretrain:
-        #         text = (sample.context + sample.answers).replace(
-        #             "<image>", IMAGE_TOKEN_WITH_TAGS
-        #         )
-        #     else:
-        #         text = IMAGE_TOKEN_WITH_TAGS + sample.answers
-        #     text = text + self.tokenizer.tokenizer.eos_token
-        #     input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
-        # elif self.args.training_phase == constants.TrainingPhase.SFT:
-        #     input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
-        #                                 sample.answers, sample.image)
-        # else:
-        #     raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
-        text = IMAGE_TOKEN_WITH_TAGS + sample.answers
-        text = text + self.tokenizer.tokenizer.eos_token
-        input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
-            sample.image, text
-        )
+        if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
+            if self.args.add_question_in_pretrain:
+                text = (sample.context + sample.answers).replace(
+                    "<image>", IMAGE_TOKEN_WITH_TAGS
+                )
+            else:
+                text = IMAGE_TOKEN_WITH_TAGS + sample.answers
+            text = text + self.tokenizer.tokenizer.eos_token
+            input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
+        elif self.args.training_phase == constants.TrainingPhase.SFT:
+            input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
+                                        sample.answers, sample.image)
+        else:
+            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+
         num_tiles = [len(image_grid_thw)]
 
-        # if self.enable_discard_sample:
-        #     assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
-        # else:
-        #     assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
+        if self.enable_discard_sample:
+            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+        else:
+            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return VLMTaskSample(
             __key__=sample.__key__,
