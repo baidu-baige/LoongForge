@@ -48,11 +48,24 @@ class OmniCombinationModel(BaseMegatronModule):
         self.add_encoder = add_encoder
         self.add_decoder = add_decoder
 
-        if config.foundation is not None and add_decoder:
-            self.foundation_model = AutoModel.from_config(
-                config.foundation,
+        if config.image_encoder is not None and add_encoder:
+            self.encoder_model = OmniEncoderModel(
+                config,
                 vocab_size=language_vocab_size,
                 max_sequence_length=language_max_sequence_length,
+                position_embedding_type=language_position_embedding_type,
+                scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
+                allow_missing_adapter_checkpoint=allow_missing_adapter_checkpoint,
+            )
+        else:
+            self.encoder_model = None
+
+        if config.foundation is not None and add_decoder:
+            self.foundation_model = AutoModel.from_config(
+                config.foundation,  
+                vocab_size=language_vocab_size,
+                max_sequence_length=language_max_sequence_length,
+                language_embedding=self.encoder_model.text_encoder,
                 parallel_output=parallel_output,
                 position_embedding_type=language_position_embedding_type,
                 rotary_percent=language_rotary_percent,
@@ -71,27 +84,10 @@ class OmniCombinationModel(BaseMegatronModule):
                 "OmniCombinationModel requires a foundation_config to initialize foundation_model."
             )
 
-        if config.image_encoder is not None and add_encoder:
-            self.encoder_model = OmniEncoderModel(
-                config,
-                self.foundation_model.embedding,
-                vocab_size=language_vocab_size,
-                max_sequence_length=language_max_sequence_length,
-                position_embedding_type=language_position_embedding_type,
-                scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
-                allow_missing_adapter_checkpoint=allow_missing_adapter_checkpoint,
-            )
-        else:
-            self.encoder_model = None
-
-        # if config.decoder_config is not None:
-        #     self.decoder_model = OmniDecoderModel(config.decoder_config)
-        # else:
-        #     self.decoder_model = None
         self.share_embeddings_and_output_weights = (
             self.foundation_model.share_embeddings_and_output_weights
         )
-
+        
     def shared_embedding_or_output_weight(self):
         """Get shared embedding or output weight from foundation model.
         This is a convenience method to surface the language model's word embeddings, which is

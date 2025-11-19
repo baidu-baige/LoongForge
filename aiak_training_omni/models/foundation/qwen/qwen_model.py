@@ -210,9 +210,10 @@ class QwenModel(BaseMegatronLanuageModule):
         rope_scaling_factor: float = 8.0,
         scatter_embedding_sequence_parallel: bool = True,
         seq_len_interpolation_factor: Optional[float] = None,
+        language_embedding: Optional[torch.nn.Module] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config=config)
+        super().__init__(config=config, **kwargs)
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
@@ -245,13 +246,16 @@ class QwenModel(BaseMegatronLanuageModule):
 
         # TODO: implement learned absolute position embedding
         if self.pre_process:
-            self.embedding = LanguageModelEmbedding(
-                config=self.config,
-                vocab_size=self.vocab_size,
-                max_sequence_length=self.max_sequence_length,
-                position_embedding_type=position_embedding_type,
-                scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
-            )
+            if language_embedding is None:
+                self.embedding = LanguageModelEmbedding(
+                    config=self.config,
+                    vocab_size=self.vocab_size,
+                    max_sequence_length=self.max_sequence_length,
+                    position_embedding_type=position_embedding_type,
+                    scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                )
+            else:
+                self.embedding = language_embedding
 
         if (
             self.config.rotary_emb_func == "Qwen2VLRotaryEmbedding"

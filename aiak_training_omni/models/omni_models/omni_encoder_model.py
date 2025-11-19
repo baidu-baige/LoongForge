@@ -26,14 +26,23 @@ class OmniEncoderModel(torch.nn.Module):
     def __init__(
         self,
         config: BaseModelConfig,
-        language_embedding,
+        vocab_size: int,
+        max_sequence_length: int,
         allow_missing_adapter_checkpoint=False,
+        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
+        scatter_embedding_sequence_parallel: bool = True,
         **kwargs,
     ) -> None:
         super().__init__()
         self.config = config
         self.modality: List[str] = []
-        self.text_encoder = language_embedding
+        self.text_encoder = LanguageModelEmbedding(
+                config=self.config.foundation,
+                vocab_size=vocab_size,
+                max_sequence_length=max_sequence_length,
+                position_embedding_type=position_embedding_type,
+                scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+            )
         if  hasattr(self.config, "image_encoder") and self.config.image_encoder is not None:
             self.image_encoder: BaseMegatronModule = AutoModel.from_config(
                 config.image_encoder, **kwargs
