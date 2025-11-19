@@ -331,7 +331,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
         num_tiles = [len(image_grid_thw)]
 
-        if self.enable_discard_sample:
+        if self.args.enable_discard_sample:
             assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
         else:
             assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
