@@ -3,14 +3,20 @@
 #     - file://configs/
 
 defaults:
-  - ../../models/image_encoder@model.image_encoder: qwen_vit
-  - ../../models/image_projector@model.image_projector: mlp_adapter
-  - ../../models/qwen@model.foundation: qwen3_5_8b
-  #- ../../data@data: vlm_data
+  - ../../models/image_encoder@model.image_encoder:  intern_vit_0.3b
+  - ../../models/image_projector@model.image_projector: intern_mlp_adapter
+  - ../../models/qwen@model.foundation: qwen3_8b
   - _self_
 
 model:
   model_type: intern_vl
-  # foundation:
-  #   rotary_emb_func: "Qwen2VLRotaryEmbedding"
-  #   model_spec: ["aiak_training_omni.models.foundation.qwen.qwen_layer_spec", "get_qwen_layer_with_spec"]
+  loss_func: ${loss_func:loss_func_internvl}
+
+  foundation:
+    rotary_emb_func: "RotaryEmbedding"
+    model_spec: ["aiak_training_omni.models.foundation.qwen.qwen_layer_spec", "get_qwen_layer_with_te_spec"]
+    rotary_base: 1000000
+  image_projector:
+    hidden_size: 4096  # same as llm hidden_size
+    ffn_hidden_size: 4096  # same as llm hidden_size
+    normalization: "LayerNorm"

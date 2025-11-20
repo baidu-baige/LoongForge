@@ -104,10 +104,10 @@ def build_model_config(args, config):
         model_config = config.model
 
     # assert hasattr(config.model, "model_type"), "model_type is required in model config"
-    if model_type in constants.VisionLanguageModelFamilies.names():
+    vision_custom_names = {*constants.VisionLanguageModelFamilies.names(), *constants.CustomModelFamilies.names()}
+    if model_type in vision_custom_names:
         # get the global args dict which contains all model component args
         global_args_dict = get_args_dict()
-
         for name, config_values in model_config.items():
             # must have _target_ field
             if isinstance(config_values, Iterable) and "_target_" in config_values:

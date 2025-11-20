@@ -98,6 +98,10 @@ class VisionLanguageModelFamilies(_BaseFamilies):
 
     QWEN2_VL = "qwen2_vl"
     QWEN2_5_VL = "qwen2_5_vl"
-    INTERN_VL = "intern_vl"
     LLAVA_OV_1_5 = "llava_ov_1_5"
     VLM = "vlm"
+
+
+class CustomModelFamilies(_BaseFamilies):
+    """User defined Custom Vision model families"""
+    INTERN_VL = "intern_vl"
