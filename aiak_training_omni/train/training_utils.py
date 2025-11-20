@@ -444,9 +444,6 @@ def setup_model_and_optimizer(
     args = get_args()
     timers = get_timers()
 
-    # set model config from args and hydra config
-    parse_args_from_config(args)
-
     model = get_model(model_provider_func, model_type)
     unwrapped_model = unwrap_model(model)
 

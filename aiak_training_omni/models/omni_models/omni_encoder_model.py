@@ -20,6 +20,74 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
 from transformers.models.auto.modeling_auto import AutoModel
+from aiak_training_omni.train.initialize import change_parallel_state
+
+def make_encoder_forward_pre_hook(module_name):
+    """
+    Create a forward pre-hook function that switches the tensor-parallel
+    context to a specific encoder module before executing its forward pass.
+
+    Args:
+        module_name (str): The name of the encoder module whose parallel
+            state should be activated before the forward computation.
+
+    Returns:
+        Callable: A forward pre-hook function that accepts (module, input)
+        and switches the tensor-parallel state by calling
+        `change_parallel_state(module_name)` before returning the input
+        unchanged.
+    """
+    def encoder_forward_pre_hook(module, input):
+        change_parallel_state(module_name)
+        return input
+    return encoder_forward_pre_hook
+
+def make_encoder_forward_hook(module_name):
+    """
+    Create a forward hook function that adjusts the tensor-parallel state
+    before returning the module's output.
+
+    Args:
+        module_name : str
+            The name of the module whose forward pass should trigger a
+            parallel-state change.
+
+    Returns:
+        callable:
+            A forward hook function with signature `(module, input, output)`,
+            which updates the parallel state and returns the original output.
+    """
+    def encoder_forward_hook(module, input, output):
+        change_parallel_state(module_name)
+        return output
+    return encoder_forward_hook
+
+def make_encoder_backward_pre_hook(module_name):
+    """
+    Create a backward pre-hook that adjusts the tensor-parallel state
+    before the backward pass of a module.
+
+    This factory function generates a backward pre-hook intended for use
+    with `module.register_full_backward_pre_hook(...)`. The returned hook
+    is invoked before gradients are computed for the module, allowing the
+    runtime to switch tensor-parallel or pipeline-parallel states
+    dynamically based on the module name.
+
+    Args:
+        module_name : str
+            The name of the module whose backward pass should trigger a
+            parallel-state change.
+
+    Returns:
+        callable:
+            A backward pre-hook function with signature `(module, input)`,
+            which updates the parallel state and returns the original input
+            tuple unchanged.
+    """
+    def encoder_backward_pre_hook(module, input):
+        change_parallel_state(module_name)
+        return input
+    return encoder_backward_pre_hook
 
 
 class OmniEncoderModel(torch.nn.Module):
@@ -43,21 +111,32 @@ class OmniEncoderModel(torch.nn.Module):
                 position_embedding_type=position_embedding_type,
                 scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
             )
-        if  hasattr(self.config, "image_encoder") and self.config.image_encoder is not None:
+        if hasattr(self.config, "image_encoder") and self.config.image_encoder is not None:
+            change_parallel_state('image_encoder')
             self.image_encoder: BaseMegatronModule = AutoModel.from_config(
                 config.image_encoder, **kwargs
             )
             self.modality.append("image")
+            self.image_encoder.register_forward_pre_hook(make_encoder_forward_pre_hook('image_encoder'))
+            self.image_encoder.register_forward_hook(make_encoder_forward_hook('text_decoder'))
 
         if hasattr(self.config, "video_encoder") and self.config.video_encoder is not None:
+            change_parallel_state('video_encoder')
             self.video_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.video_encoder, **kwargs)
             self.modality.append("video")
+            self.video_encoder.register_forward_pre_hook(make_encoder_forward_pre_hook('video_encoder'))
+            self.video_encoder.register_forward_hook(make_encoder_forward_hook('text_decoder'))
 
         if hasattr(self.config, "audio_encoder") and self.config.audio_encoder is not None:
+            change_parallel_state('audio_encoder')
             self.audio_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.audio_encoder, **kwargs)
             self.modality.append("audio")
+            self.audio_encoder.register_forward_pre_hook(make_encoder_forward_pre_hook('audio_encoder'))
+            self.audio_encoder.register_forward_hook(make_encoder_forward_hook('text_decoder'))
+
+        change_parallel_state('text_decoder')
 
         if hasattr(self.config, "image_projector")  and self.config.image_projector is not None:
             self.image_projector: BaseMegatronModule = AutoModel.from_config(

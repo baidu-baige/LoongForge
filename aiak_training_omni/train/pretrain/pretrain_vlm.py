@@ -40,6 +40,7 @@ from aiak_training_omni.models.omni_models.omni_model_provider import (
 )
 from aiak_training_omni.models.omni_models.utils import get_batch_on_this_cp_rank
 from aiak_training_omni.train.get_loss_func import default_loss_func
+from aiak_training_omni.train.initialize import change_parallel_state
 
 stimer = StragglerDetector()
 
@@ -159,6 +160,7 @@ def forward_step(data_iterator, model):
     model_config = get_model_config()
     # Get the batch.
     timers("batch-generator", log_level=2).start()
+    change_parallel_state('text_decoder')
 
     global stimer
     with stimer(bdata=True):
