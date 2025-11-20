@@ -61,23 +61,25 @@ class OmniCombinationModel(BaseMegatronModule):
             self.encoder_model = None
 
         if config.foundation is not None and add_decoder:
+            # TODO: remove this dependency?
+            config.foundation.padded_vocab_size = language_vocab_size
+            config.foundation.max_position_embeddings = language_max_sequence_length
+            config.foundation.position_embedding_type = language_position_embedding_type
+            config.foundation.rotary_percent = language_rotary_percent
+            config.foundation.rotary_base = language_rotary_base
+            config.foundation.use_rope_scaling = language_rope_scaling
+            config.foundation.rope_scaling_factor = language_rope_scaling_factor
+            config.foundation.rotary_seq_len_interpolation_factor = seq_len_interpolation_factor
+            config.foundation.untie_embeddings_and_output_weights = not share_embeddings_and_output_weights
+            config.foundation.fp16_lm_cross_entropy = fp16_lm_cross_entropy
             self.foundation_model = AutoModel.from_config(
                 config.foundation,  
-                vocab_size=language_vocab_size,
-                max_sequence_length=language_max_sequence_length,
-                language_embedding=self.encoder_model.text_encoder,
-                parallel_output=parallel_output,
-                position_embedding_type=language_position_embedding_type,
-                rotary_percent=language_rotary_percent,
                 pre_process=self.pre_process,
                 post_process=self.post_process,
-                rotary_base=language_rotary_base,
-                rotary_dtype=language_rotary_dtype,
-                rope_scaling=language_rope_scaling,
-                rope_scaling_factor=language_rope_scaling_factor,
-                seq_len_interpolation_factor=seq_len_interpolation_factor,
+                parallel_output=parallel_output,
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
-                share_embeddings_and_output_weights=share_embeddings_and_output_weights,
+                language_embedding=self.encoder_model.text_encoder,
+                rotary_dtype=language_rotary_dtype,
             )
         else:
             raise ValueError(

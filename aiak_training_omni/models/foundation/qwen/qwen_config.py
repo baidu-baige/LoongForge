@@ -1,12 +1,12 @@
 """register qwen model with different config"""
 
 from dataclasses import dataclass, fields
-from aiak_training_omni.models.common.base_model_config import BaseModelConfig
+from aiak_training_omni.models.common.base_model_config import BaseModelMLAConfig
 from aiak_training_omni.utils.constants import LanguageModelFamilies
 
 
 @dataclass
-class QwenConfig(BaseModelConfig):
+class QwenConfig(BaseModelMLAConfig):
     """config for qwen model"""
 
     num_layers: int

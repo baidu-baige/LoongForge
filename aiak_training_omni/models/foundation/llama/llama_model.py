@@ -58,8 +58,10 @@ class LLaMAModel(BaseMegatronLanuageModule):
         post_process: bool = True,
         parallel_output: bool = True,
         scatter_embedding_sequence_parallel: bool = True,
+        language_embedding: Optional[torch.nn.Module] = None,
+        **kwargs,
     ) -> None:
-        super().__init__(config=config)
+        super().__init__(config=config, **kwargs)
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
@@ -99,13 +101,16 @@ class LLaMAModel(BaseMegatronLanuageModule):
         self.rope_scaling_factor = self.config.rope_scaling_factor
 
         if self.pre_process:
-            self.embedding = LanguageModelEmbedding(
-                config=self.config,
-                vocab_size=self.vocab_size,
-                max_sequence_length=self.max_sequence_length,
-                position_embedding_type=self.position_embedding_type,
-                scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
-            )
+            if language_embedding is None:
+                self.embedding = LanguageModelEmbedding(
+                    config=self.config,
+                    vocab_size=self.vocab_size,
+                    max_sequence_length=self.max_sequence_length,
+                    position_embedding_type=self.position_embedding_type,
+                    scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                )
+            else:
+                self.embedding = language_embedding
 
         if (
             self.position_embedding_type == "rope"

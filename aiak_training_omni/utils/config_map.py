@@ -50,7 +50,137 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/llama",
         "config_name": "llama3_1_405b",
     },
+    # qwen
+    "qwen-1.8b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen_1_8b",
+    },
+    "qwen-7b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen_7b",
+    },
+    "qwen-14b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen_14b",
+    },
+    "qwen-72b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen_72b",
+    },
+    "qwen1.5-0.5b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_0_5b",
+    },
+    "qwen1.5-1.8b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_1_8b",
+    },
+    "qwen1.5-4b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_4b",
+    },
+    "qwen1.5-7b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_7b",
+    },
+    "qwen1.5-14b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_14b",
+    },
+    "qwen1.5-32b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_32b",
+    },
+    "qwen1.5-72b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen1_5_72b",
+    },
+    "qwen2-0.5b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_0_5b",
+    },
+    "qwen2-1.5b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_1_5b",
+    },
+    "qwen2-7b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_7b",
+    },
+    "qwen2-72b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_72b",
+    },
+    "qwen2.5-0.5b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_0_5b",
+    },
+    "qwen2.5-1.5b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_1_5b",
+    },
+    "qwen2.5-3b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_3b",
+    },
+    "qwen2.5-7b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_7b",
+    },
+    "qwen2.5-14b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_14b",
+    },
+    "qwen2.5-32b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_32b",
+    },
+    "qwen2.5-72b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen2_5_72b",
+    },
+    "qwen3-0.6b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_0_6b",
+    },
+    "qwen3-1.7b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_1_7b",
+    },
+    "qwen3-4b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_4b",
+    },
+    "qwen3-8b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_8b",
+    },
+    "qwen3-14b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_14b",
+    },
+    "qwen3-30b-a3b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_30b_a3b",
+    },
+    "qwen3-32b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_32b",
+    },
+    "qwen3-235b-a22b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_235b_a22b",
+    },
+    "qwen3-480b-a35b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_480b_a35b",
+    },
+    "qwen3-coder-30b-a3b": {
+        "config_path": "configs/models/qwen",
+        "config_name": "qwen3_coder_30b_a3b",
+    },
 
+    # qwen2.5-vl
     "qwen2_5-vl-7b": {
         "config_path": "configs/models/qwen2_5_vl",
         "config_name": "qwen2_5_vl_7b",
