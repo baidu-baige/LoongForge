@@ -1,10 +1,10 @@
 """register llama model with different config"""
 
 from dataclasses import dataclass
-from aiak_training_omni.models.common import BaseModelMLAConfig
+from aiak_training_omni.models.common import BaseModelConfig
 
 @dataclass
-class LLaMAConfig(BaseModelMLAConfig):
+class LLaMAConfig(BaseModelConfig):
     """configuration for llama model
 
     The fields need to be consistent with the definitions in args

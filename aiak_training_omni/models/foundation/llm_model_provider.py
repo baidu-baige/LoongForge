@@ -40,6 +40,12 @@ def llm_model_provider(
     config.rotary_seq_len_interpolation_factor = args.rotary_seq_len_interpolation_factor
     config.use_rope_scaling = args.use_rope_scaling
     config.rope_scaling_factor = args.rope_scaling_factor
+    config.max_position_embeddings = args.max_position_embeddings
+    config.rotary_base = args.rotary_base
+    config.rotary_percent = args.rotary_percent
+    config.use_rope_scaling = args.use_rope_scaling
+    config.rope_scaling_factor = args.rope_scaling_factor
+    config.rotary_seq_len_interpolation_factor = args.rotary_seq_len_interpolation_factor
 
     # copied from qwen model provider
     # TODO: remove or not?
