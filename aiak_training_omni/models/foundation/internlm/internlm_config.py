@@ -17,8 +17,11 @@ class InternLMConfig(BaseModelConfig):
     hidden_size: int
     ffn_hidden_size: int
     num_attention_heads: int
+    max_sequence_length: int = 32768
+    vocab_size: int = 92553
     group_query_attention: bool = False
     num_query_groups: int = 1
+    max_position_embeddings: int = 32768
     position_embedding_type: str = "rope"
     add_position_embedding: bool = False
     rotary_interleaved: bool = False

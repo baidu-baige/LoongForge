@@ -109,50 +109,6 @@ class BaseMegatronVisionModule(VisionModule):
 
 # TODO: 需要抽象？
 
-
-def base_position_id_func(
-    input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs
-) -> Dict[str, torch.Tensor]:
-    """Base function to generate position ids."""
-    if len(input_ids.shape) == 1:
-        input_ids = input_ids.unsqueeze(0)
-    if len(attention_mask.shape) == 1:
-        attention_mask = attention_mask.unsqueeze(0)
-
-    return dict(input_ids=input_ids, attention_mask=attention_mask, **kwargs)
-
-
-class PositionIDFuncCompose:
-    """Composes multiple functions together"""
-
-    def __init__(self, customized_funcs: List[Callable]):
-        self.transforms = [base_position_id_func] + customized_funcs
-
-    def __call__(self, **x):
-        for t in self.transforms:
-            x = t(**x)
-        return x
-
-
-class BaseFoundationModelMixin(PreTrainedModel, ABC):
-    """统一的foundation model(LLM)模型混入类。"""
-
-    def get_generation_position_id(self, **kwargs: Any) -> Dict[str, torch.Tensor]:
-        """获取生成位置id"""
-        return None
-
-    def get_position_id_func(self) -> List[Callable]:
-        """获取位置id函数"""
-        return None
-
-    @property
-    def position_id_func(self) -> Optional[Callable]:
-        """获取位置id函数组合"""
-        if self.get_position_id_func() is None:
-            return None
-        return PositionIDFuncCompose(self.get_position_id_func())
-
-
 class BaseDecoderModelMixin(PreTrainedModel, ABC):
     """统一decoder模型混入类。"""
 

@@ -124,8 +124,6 @@ class InternLMModel(BaseMegatronLanuageModule):
     def __init__(
         self,
         config: TransformerConfig,
-        vocab_size: int,
-        max_sequence_length: int,
         pre_process: bool = True,
         post_process: bool = True,
         fp16_lm_cross_entropy: bool = False,
@@ -154,8 +152,8 @@ class InternLMModel(BaseMegatronLanuageModule):
         else:
             model_spec = self.config.model_spec
         self.transformer_layer_spec = import_module(model_spec, self.config)
-        self.vocab_size = vocab_size
-        self.max_sequence_length = max_sequence_length
+        self.vocab_size = self.config.vocab_size
+        self.max_sequence_length = self.config.max_sequence_length
         self.pre_process = pre_process
         self.post_process = post_process
         self.fp16_lm_cross_entropy = fp16_lm_cross_entropy
@@ -168,7 +166,7 @@ class InternLMModel(BaseMegatronLanuageModule):
         self.model_type = ModelType.encoder_or_decoder
 
         # These 4 attributes are needed for TensorRT-LLM export.
-        self.max_position_embeddings = max_sequence_length
+        self.max_position_embeddings = self.config.max_sequence_length
         self.rotary_percent = rotary_percent
         self.rotary_base = rotary_base
         self.rotary_scaling = rope_scaling
