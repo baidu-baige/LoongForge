@@ -155,6 +155,10 @@ class OmniCombinationModel(BaseMegatronModule):
 
     def forward(
         self,
+        image_inputs: Optional[Dict[str, torch.Tensor]] = None,
+        video_inputs: Optional[Dict[str, torch.Tensor]] = None,
+        audio_inputs: Optional[Dict[str, torch.Tensor]] = None,
+        *,
         input_ids: Optional[torch.LongTensor],
         position_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
@@ -162,9 +166,6 @@ class OmniCombinationModel(BaseMegatronModule):
         packed_seq_params=None,
         labels: Optional[torch.LongTensor] = None,
         inference_params: InferenceParams = None,
-        image_inputs: Optional[Dict[str, torch.Tensor]] = None,
-        video_inputs: Optional[Dict[str, torch.Tensor]] = None,
-        audio_inputs: Optional[Dict[str, torch.Tensor]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Forward pass supporting multiple execution paths.

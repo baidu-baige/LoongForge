@@ -184,20 +184,21 @@ def forward_step(data_iterator, model):
 
     with stimer:
         output_tensor = model(
+            dict(
+                images=images,
+                image_grid_thw=image_grid_thw,
+            ),
+            dict(
+                pixel_values_videos=pixel_values_videos,
+                video_grid_thw=video_grid_thw,
+            ),
+            None,
             input_ids=tokens,
             position_ids=position_ids,
             attention_mask=attn_mask,
             attn_mask_type=attn_mask_type,
             labels=labels,
             packed_seq_params=packed_seq_params,
-            image_inputs=dict(
-                images=images,
-                image_grid_thw=image_grid_thw,
-            ),
-            video_inputs=dict(
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-            ),
         )
     loss_func = getattr(model_config, "loss_func", default_loss_func)
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
