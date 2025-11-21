@@ -11,3 +11,7 @@ defaults:
 
 model:
   model_type: llava_ov_1_5
+  foundation: 
+    rotary_base: 5000000
+  image_projector: 
+    normalization: "LayerNorm"
