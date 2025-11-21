@@ -10,6 +10,7 @@ from omegaconf import OmegaConf
 from hydra.utils import instantiate
 from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
 from collections.abc import Iterable
+from aiak_training_omni.utils.global_vars import get_args_dict
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig):
@@ -89,7 +90,6 @@ def convert_megatron_transformer_config_args(megatron_args):
 
 def build_model_config(args, config):
     """Build model config from args and config"""
-    args_dict = deepcopy(vars(args))
 
     model_cfgs = {}
 
@@ -105,29 +105,37 @@ def build_model_config(args, config):
 
     # assert hasattr(config.model, "model_type"), "model_type is required in model config"
     if model_type in constants.VisionLanguageModelFamilies.names():
+        # get the global args dict which contains all model component args
+        global_args_dict = get_args_dict()
 
         for name, config_values in model_config.items():
             # must have _target_ field
             if isinstance(config_values, Iterable) and "_target_" in config_values:
+                # get corresponding args dict
+                args_dict = deepcopy(vars(global_args_dict[name])) \
+                    if hasattr(global_args_dict[name], "__dict__") else deepcopy(global_args_dict[name])
+                # merge args dict and config values
                 merged = deepcopy(args_dict)
-                merged.update(OmegaConf.to_container(config_values, resolve=True))
                 merged = convert_megatron_transformer_config_args(merged)
+                merged.update(OmegaConf.to_container(config_values, resolve=True))
                 model_cfgs[name] = instantiate(config_values, **merged)
             else:
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)
     elif model_type in constants.LanguageModelFamilies.names():
+        args_dict = deepcopy(vars(args))
         # Language model
         if "_target_" not in model_config:
             raise ValueError(
                 "Model config missing '_target_' field for llm type.\n")
 
         merged = deepcopy(args_dict)
-        merged.update(OmegaConf.to_container(model_config, resolve=True))
         merged = convert_megatron_transformer_config_args(merged)
+        merged.update(OmegaConf.to_container(model_config, resolve=True))
 
         model_cfgs = instantiate(model_config, **merged)
     elif model_type in constants.VideoLanguageModelFamilies.names():
+        args_dict = deepcopy(vars(args))
         merged = deepcopy(args_dict)
         merged.update(OmegaConf.to_container(config.model, resolve=True))
         model_cfgs = instantiate(config_values, **merged)

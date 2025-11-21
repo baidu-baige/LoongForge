@@ -3,6 +3,8 @@
 import os
 import argparse
 import importlib
+from copy import deepcopy
+from omegaconf import DictConfig
 from aiak_training_omni.models.common.vlm_model_config import VLMModelConfig
 from omegaconf import OmegaConf
 import torch.nn.functional as F
@@ -25,7 +27,7 @@ from aiak_training_omni.utils import (
     print_rank_0,
 )
 from aiak_training_omni.models.utils import build_model_config
-from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config
+from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config, set_args_dict
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
 from aiak_training_omni.utils.config_map import get_config_from_model_name
 from aiak_training_omni.train.get_position_idx_func import get_mrope_index, get_position_ids, get_rope_index_internvl
@@ -173,18 +175,79 @@ def parse_arguments(
             args.config_path, args.config_name, hydra_overrides
         )
 
-    # Validate arguments.
-    if validate_extra_args_provider is not None:
-        validate_extra_args_provider(args, hydra_cfg)
+    if hasattr(hydra_cfg, "model_type") and hydra_cfg.model_type in \
+            constants.LanguageModelFamilies.names():
+        model_config = hydra_cfg
+        model_type = hydra_cfg.model_type
+    else:
+        if not hasattr(hydra_cfg, "model"):
+            raise ValueError("Invalid model configuration structure")
+        model_config = hydra_cfg.model
+        model_type = hydra_cfg.model.model_type
 
-    for key in args_defaults:
-        # just overwrite the args with defaults
-        setattr(args, key, args_defaults[key])
+    # TODO: remove this in the future
+    args.model_family = model_type
+    
+    if model_type in constants.VisionLanguageModelFamilies.names():
+        args_dict = {}
+        for name, config_values in model_config.items():
+            # exclude those non-iterable config values
+            if not (isinstance(config_values, (dict, DictConfig)) and "_target_" in config_values):
+                continue
+            # Validate arguments.
+            args_deepcopy = deepcopy(args)
+            if validate_extra_args_provider is not None:
+                validate_extra_args_provider(args_deepcopy, config_values)
 
-    assert args.yaml_cfg is None, "yaml_cfg is not supported in AIAK-Training-Omni yet"
-    validate_megatron_args(args)
+            for key in args_defaults:
+                # just overwrite the args with defaults
+                setattr(args_deepcopy, key, args_defaults[key])
+
+            assert args_deepcopy.yaml_cfg is None, "yaml_cfg is not supported in AIAK-Training-Omni yet"
+
+            # TODO: any better way to do this?
+            # set default model values for projector so that it can be validated by megatron
+            if "num_layers" not in config_values:
+                set_default_model_values(args_deepcopy)
+            validate_megatron_args(args_deepcopy)
+
+            args_dict[name] = args_deepcopy
+        
+        if "foundation" not in args_dict:
+            raise ValueError("args_dict does not contain 'foundation'")
+        args = args_dict["foundation"]
+        
+        # set global args dict
+        set_args_dict(args_dict)
+
+    elif model_type in constants.LanguageModelFamilies.names():
+        # Validate arguments.
+        if validate_extra_args_provider is not None:
+            validate_extra_args_provider(args, hydra_cfg)
+
+        for key in args_defaults:
+            # just overwrite the args with defaults
+            setattr(args, key, args_defaults[key])
+
+        assert args.yaml_cfg is None, "yaml_cfg is not supported in AIAK-Training-Omni yet"
+        validate_megatron_args(args)
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
 
     return args, hydra_cfg
+
+
+def set_default_model_values(args):
+    """set default model values"""
+    default_model_values = {
+        "num_layers": 1,
+        "hidden_size": 1,
+        "num_attention_heads": 1,
+        "tensor_model_parallel_size": 1,
+        "pipeline_model_parallel_size": 1,
+        }
+    for k, v in default_model_values.items():
+        setattr(args, k, v)
 
 def is_subclass_from_path(class_path: str, base_class: type):
     """Check whether the given class path belongs to the specified base class"""
@@ -1013,25 +1076,11 @@ def _add_extra_parallel_args(parser):
 
 def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
-    model_config = None
-
-    if hasattr(config, "model_type") and config.model_type in \
-            constants.LanguageModelFamilies.names():
-        args.model_family = config.model_type
-        model_config = config
-    else:
-        if not hasattr(config, "model"):
-            raise ValueError("Hydra config doesn't have model section.")
-        args.model_family = config.model.model_type
-        if "foundation" in config.model:
-            model_config = config.model.foundation
-
-    if model_config is not None:
-        # the structural configuration of model will be overwritten, such as num_layers, hidden_states..
-        for key in model_config:
+    if config is not None:
+        for key in config:
             if hasattr(args, key):
-                setattr(args, key, model_config[key])
-                print_rank_0(f"  {key} = {model_config[key]} ", args.rank)
+                setattr(args, key, config[key])
+                print_rank_0(f"  {key} = {config[key]} ", args.rank)
 
         print_rank_0(
             "---------------- End of configuration ----------------", args.rank

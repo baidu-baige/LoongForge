@@ -23,6 +23,7 @@ _GLOBAL_AIAK_TOKENIZER: Optional["MegatronTokenizer"] = None
 _GLOBAL_MODEL_CONFIG = None
 _GLOBAL_HYDRA_CONFIG = None
 _GLOBAL_DATA_CONFIG = None
+_GLOBAL_ARGS_DICT = None
 
 
 def get_model_config():
@@ -38,6 +39,11 @@ def get_hydra_config():
 def get_data_config():
     """Get the data configuration"""
     return _GLOBAL_DATA_CONFIG
+
+
+def get_args_dict():
+    """Get the args dictionary"""
+    return _GLOBAL_ARGS_DICT
 
 
 def set_model_config(model_config):
@@ -59,6 +65,13 @@ def set_data_config(data_config):
     global _GLOBAL_DATA_CONFIG
     _ensure_var_is_not_initialized(_GLOBAL_DATA_CONFIG, "data config")
     _GLOBAL_DATA_CONFIG = data_config
+
+
+def set_args_dict(args_dict):
+    """Set the args dictionary"""
+    global _GLOBAL_ARGS_DICT
+    _ensure_var_is_not_initialized(_GLOBAL_ARGS_DICT, "args dict")
+    _GLOBAL_ARGS_DICT = args_dict
 
 
 def set_aiak_extra_global_vars(args, build_tokenizer=True) -> None:
