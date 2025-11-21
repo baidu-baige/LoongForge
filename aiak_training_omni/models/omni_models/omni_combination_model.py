@@ -78,7 +78,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 post_process=self.post_process,
                 parallel_output=parallel_output,
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
-                language_embedding=self.encoder_model.text_encoder,
+                language_embedding=self.encoder_model.text_encoder if add_encoder else True,
                 rotary_dtype=language_rotary_dtype,
             )
         else:
