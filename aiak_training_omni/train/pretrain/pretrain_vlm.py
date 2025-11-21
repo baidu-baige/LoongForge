@@ -184,14 +184,17 @@ def forward_step(data_iterator, model):
 
     with stimer:
         output_tensor = model(
-            tokens,
-            position_ids,
-            attn_mask,
-            attn_mask_type,
-            labels,
-            packed_seq_params,
-            dict(images=images, image_grid_thw=image_grid_thw),
-            dict(
+            input_ids=tokens,
+            position_ids=position_ids,
+            attention_mask=attn_mask,
+            attn_mask_type=attn_mask_type,
+            labels=labels,
+            packed_seq_params=packed_seq_params,
+            image_inputs=dict(
+                images=images,
+                image_grid_thw=image_grid_thw,
+            ),
+            video_inputs=dict(
                 pixel_values_videos=pixel_values_videos,
                 video_grid_thw=video_grid_thw,
             ),
