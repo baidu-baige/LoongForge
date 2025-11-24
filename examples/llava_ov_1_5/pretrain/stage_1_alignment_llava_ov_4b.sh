@@ -96,8 +96,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov_1_5
-MODEL_CONFIG_NAME=llava_ov_1_5_4b
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov_1_5/llava_ov_1_5_4b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -152,8 +151,7 @@ MODEL_PARALLEL_ARGS=(
 )
 
 MODEL_CONFIG_ARGS=(
-    --config-path $MODEL_CONFIG_PATH
-    --config-name $MODEL_CONFIG_NAME
+    --config-file $MODEL_CONFIG_PATH
 )
 
 LOGGING_ARGS=(

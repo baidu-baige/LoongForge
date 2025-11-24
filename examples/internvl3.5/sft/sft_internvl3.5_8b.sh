@@ -31,8 +31,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 # To specify the model config file
 # MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2_5_vl
 # MODEL_CONFIG_NAME=qwen2_5_vl_7b
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl
-MODEL_CONFIG_NAME=internvl3.5_8b
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl/internvl3.5_8b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -43,9 +42,10 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-  --model-name internvl3.5-8b
+  #--model-name internvl3.5-8b
   --rotary-base 1000000  # for internvl
   --rotary-seq-len-interpolation-factor 1
+  --config-file $MODEL_CONFIG_PATH
 )
 
 
@@ -144,8 +144,6 @@ fi
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
   $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
-  --config-path $MODEL_CONFIG_PATH \
-  --config-name $MODEL_CONFIG_NAME \
   --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/sft_dataset_config.json \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

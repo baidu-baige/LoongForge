@@ -66,3 +66,26 @@ def is_te_min_version(version, check_equality=True):
     if check_equality:
         return get_te_version() >= PkgVersion(version)
     return get_te_version() > PkgVersion(version)
+
+
+def get_config_from_file(config_file: str):
+    """
+    Split a full config file path into:
+    - config_path (directory)
+    - config_name (file name without extension)
+    """
+    config_file = os.path.abspath(config_file)
+
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f"Config file not found: {config_file}")
+
+    config_dir = os.path.dirname(config_file)
+    file_name = os.path.basename(config_file)
+
+    if not file_name.endswith((".yaml", ".yml")):
+        raise ValueError("Config file must end with .yaml or .yml")
+
+    # remove extension
+    config_name = os.path.splitext(file_name)[0]
+
+    return config_dir, config_name

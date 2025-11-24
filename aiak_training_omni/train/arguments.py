@@ -28,7 +28,7 @@ from aiak_training_omni.utils import (
 )
 from aiak_training_omni.models.utils import build_model_config
 from aiak_training_omni.utils.global_vars import set_model_config, set_hydra_config, get_hydra_config, set_args_dict
-from aiak_training_omni.utils.utils import get_default_sft_dataset_config
+from aiak_training_omni.utils.utils import get_default_sft_dataset_config, get_config_from_file
 from aiak_training_omni.utils.config_map import get_config_from_model_name
 from aiak_training_omni.train.get_position_idx_func import get_mrope_index, get_position_ids, get_rope_index_internvl
 from aiak_training_omni.train.get_loss_func import loss_func_internvl, default_loss_func
@@ -169,6 +169,10 @@ def parse_arguments(
     # mapping model name to config path and name
     if hasattr(args, "model_name") and args.model_name is not None:
         args.config_path, args.config_name = get_config_from_model_name(args.model_name)
+    elif args.config_file:
+        args.config_path, args.config_name = get_config_from_file(args.config_file)
+    else:
+        raise ValueError("Either --model-name or --config-file must be specified.")
 
     if args.config_path and args.config_name:
         hydra_cfg = load_and_merge_config(
@@ -368,18 +372,13 @@ def validate_aiak_extra_args(args, config):
 def _add_extra_model_args(parser: argparse.ArgumentParser):
     """Add model arguments"""
     group = parser.add_argument_group(title="extra-model")
-    group.add_argument(
-        "--config-path",
-        type=str,
+
+    # only need to pass one argument
+    parser.add_argument(
+        "--config-file", 
+        type=str, 
         required=False,
-        help='Hydra path to config directory',
-    )
-    group.add_argument(
-        "--config-name",
-        type=str,
-        required=False,
-        help='Hydra config file name (without .yaml suffix)',
-    )
+        help="Path to YAML config file. Example: /path/to/.../config_name.yaml")
 
     group.add_argument(
         "--model-name",

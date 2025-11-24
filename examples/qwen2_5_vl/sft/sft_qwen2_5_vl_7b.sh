@@ -21,8 +21,7 @@ NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2_5_vl
-MODEL_CONFIG_NAME=qwen2_5_vl_7b
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2_5_vl/qwen2_5_vl_7b.yaml
 
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE
@@ -83,8 +82,7 @@ MODEL_PARALLEL_ARGS=(
 
 
 MODEL_CONFIG_ARGS=(
-    --config-path $MODEL_CONFIG_PATH
-    --config-name $MODEL_CONFIG_NAME
+    --config-file $MODEL_CONFIG_PATH
 )
 
 LOGGING_ARGS=(

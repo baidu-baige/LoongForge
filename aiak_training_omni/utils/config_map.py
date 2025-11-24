@@ -204,7 +204,9 @@ def get_config_from_model_name(model_name: str):
     if name not in MODEL_CONFIG_REGISTRY:
         raise KeyError(
             f"Unknown model_name '{model_name}'. "
-            f"Available: {list(MODEL_CONFIG_REGISTRY.keys())}"
+            f"You may consider passing the --config-file directly or"
+            f"register the config file path in config_map.py to add the model name '{model_name}'."
+            f"Now the available model names are: {list(MODEL_CONFIG_REGISTRY.keys())}"
         )
     entry = MODEL_CONFIG_REGISTRY[name]
 

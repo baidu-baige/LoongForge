@@ -25,8 +25,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl2.5
-MODEL_CONFIG_NAME=internvl2.5_8b
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl2.5/internvl2.5_8b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -121,8 +120,7 @@ MODEL_PARALLEL_ARGS=(
 )
 
 MODEL_CONFIG_ARGS=(
-    --config-path $MODEL_CONFIG_PATH
-    --config-name $MODEL_CONFIG_NAME
+    --config-file $MODEL_CONFIG_PATH
 )
 
 LOGGING_ARGS=(
