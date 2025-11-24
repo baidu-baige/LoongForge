@@ -21,7 +21,7 @@ def construct_sample(args, vision, paths, index, entry):
     vision_data = {}
     vision_name = []
 
-    for i, path in enumerate(iterable=paths):
+    for i, path in enumerate(iterable=paths[0]):
         with open(os.path.join(directory, path), "rb") as vision_file:
             vision_data.update({str(i) + '_' + os.path.basename(path) : vision_file.read()})
             vision_name.append(str(i) + '_' + os.path.basename(path))
@@ -89,7 +89,7 @@ def convert_to_wds(args):
                     }
             shard_writer.write(sample)
     write_config(
-        EPath(args.output_dir).absolute(), 
+        EPath(args.output_dir),
         args.media,
         args.sample_type
     )

@@ -1,9 +1,17 @@
 """InternVL configuration"""
 
 import torch
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from ...common.base_model_config import BaseModelConfig
+from aiak_training_omni.utils import get_tokenizer
+from aiak_training_omni.data.multimodal.internvl.internvl_constants import IMG_CONTEXT_TOKEN
 
+
+def generate_id() -> int:
+    """generate image_token_id automatically"""
+    tokenizer = get_tokenizer().tokenizer
+    image_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
+    return image_token_id
 
 @dataclass
 class InternVisionConfig(BaseModelConfig):
@@ -44,7 +52,7 @@ class InternVisionConfig(BaseModelConfig):
     vision_type: str = "vit_300m"
     original_num_attention_heads: int = None
     model_spec = None
-    image_token_id: int = 92546
+    image_token_id: int = field(default_factory=generate_id)
     model_type: str = "intern_vit"
 
 

@@ -4,7 +4,7 @@ from .arguments import parse_train_args, parse_args_from_config, parse_args_from
 from .trainer_builder import build_model_trainer
 
 from .pretrain import pretrain_llm, pretrain_vlm
-from .sft import sft_internvl_test
+from .sft import sft_internvl
 
 from .sft import sft_llm, sft_vlm
 # from .pretrain import pretrain_stdit3, pretrain_llavaov_1_5

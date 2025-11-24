@@ -2,7 +2,6 @@
 
 from .foundation import *
 from .encoder import *
-from .custom import internvl_config, internvl_provider
 
 from .factory import (
     get_support_model_archs,

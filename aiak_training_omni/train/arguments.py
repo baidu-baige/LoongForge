@@ -192,7 +192,8 @@ def parse_arguments(
     # TODO: remove this in the future
     args.model_family = model_type
     
-    if model_type in constants.VisionLanguageModelFamilies.names():
+    if model_type in constants.VisionLanguageModelFamilies.names() or  \
+        model_type in constants.CustomModelFamilies.names():
         args_dict = {}
         for name, config_values in model_config.items():
             # exclude those non-iterable config values
