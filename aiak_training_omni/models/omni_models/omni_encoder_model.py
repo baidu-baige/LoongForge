@@ -147,7 +147,7 @@ class OmniEncoderModel(torch.nn.Module):
             )
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
-                    f"image_projector.{name}"
+                    f"encoder_model.image_projector.{name}"
                     for name in self.image_projector.state_dict().keys()
                 ]
                 self.image_projector.register_load_state_dict_post_hook(
@@ -161,7 +161,7 @@ class OmniEncoderModel(torch.nn.Module):
                 self.config.video_projector, **kwargs)
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
-                    f"video_projector.{name}"
+                    f"encoder_model.video_projector.{name}"
                     for name in self.video_projector.state_dict().keys()
                 ]
                 self.video_projector.register_load_state_dict_post_hook(
@@ -173,7 +173,7 @@ class OmniEncoderModel(torch.nn.Module):
                 self.config.audio_projector, **kwargs)
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
-                    f"audio_projector.{name}"
+                    f"encoder_model.audio_projector.{name}"
                     for name in self.audio_projector.state_dict().keys()
                 ]
                 self.audio_projector.register_load_state_dict_post_hook(

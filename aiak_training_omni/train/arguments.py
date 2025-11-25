@@ -418,6 +418,12 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         "this option, the head dimensions will be aligned by padding, so that fa can be used."
         "Deprecated: use --attention-backend=flash",
     )
+    # adapter checkpoint control
+    group.add_argument(
+        "--allow-missing-adapter-checkpoint",
+        action="store_true",
+        help="Allow missing adapter checkpoint during model loading. Default is False (not allowed)."
+    )
 
     return parser
 

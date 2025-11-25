@@ -33,6 +33,7 @@ class InternLMConfig(BaseModelConfig):
     add_qkv_bias: bool = False
     qk_layernorm: bool = False
     untie_embeddings_and_output_weights: bool = True
+    rotary_base: int = 1000000
     rotary_emb_func: str = "RotaryEmbedding"
     model_spec = [
         "aiak_training_omni.models.foundation.internlm.internlm_layer_spec",

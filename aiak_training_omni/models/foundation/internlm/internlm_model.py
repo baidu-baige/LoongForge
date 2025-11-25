@@ -123,24 +123,17 @@ class InternLMModel(BaseMegatronLanuageModule):
 
     def __init__(
         self,
-        config: TransformerConfig,
+        config: InternLMConfig,
         pre_process: bool = True,
         post_process: bool = True,
-        fp16_lm_cross_entropy: bool = False,
         parallel_output: bool = True,
-        share_embeddings_and_output_weights: bool = True,
-        position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
-        rotary_percent: float = 1.0,
-        rotary_base: int = 10000,
-        rope_scaling: bool = False,
-        rope_scaling_factor: float = 8.0,
         rotary_dtype: torch.dtype = torch.float32,
         scatter_embedding_sequence_parallel: bool = True,
-        seq_len_interpolation_factor: Optional[float] = None,
+        language_embedding: Optional[torch.nn.Module] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config=config)
-
+        super().__init__(config=config, **kwargs)
+    
         if has_config_logger_enabled(config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
         
@@ -152,33 +145,41 @@ class InternLMModel(BaseMegatronLanuageModule):
         else:
             model_spec = self.config.model_spec
         self.transformer_layer_spec = import_module(model_spec, self.config)
-        self.vocab_size = self.config.vocab_size
+        self.vocab_size = self.config.padded_vocab_size
         self.max_sequence_length = self.config.max_sequence_length
         self.pre_process = pre_process
         self.post_process = post_process
-        self.fp16_lm_cross_entropy = fp16_lm_cross_entropy
+        self.fp16_lm_cross_entropy = self.config.fp16_lm_cross_entropy
         self.parallel_output = parallel_output
-        self.share_embeddings_and_output_weights = share_embeddings_and_output_weights
-        self.position_embedding_type = position_embedding_type
+        self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
+        self.position_embedding_type = self.config.position_embedding_type
 
         # megatron core pipelining currently depends on model type
         # TODO: remove this dependency ?
         self.model_type = ModelType.encoder_or_decoder
+        self.rotary_dtype = rotary_dtype
 
         # These 4 attributes are needed for TensorRT-LLM export.
         self.max_position_embeddings = self.config.max_sequence_length
-        self.rotary_percent = rotary_percent
-        self.rotary_base = rotary_base
-        self.rotary_scaling = rope_scaling
-
+        self.rotary_percent = self.config.rotary_percent
+        self.rotary_base = self.config.rotary_base
+        self.rotary_scaling = self.config.use_rope_scaling
+        self.rope_scaling = self.config.use_rope_scaling
+        self.rope_scaling_factor = self.config.rope_scaling_factor
+        self.seq_len_interpolation_factor = self.config.rotary_seq_len_interpolation_factor
+        
+        
         if self.pre_process:
-            self.embedding = LanguageModelEmbedding(
-                config=self.config,
-                vocab_size=self.vocab_size,
-                max_sequence_length=self.max_sequence_length,
-                position_embedding_type=position_embedding_type,
-                scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
-            )
+            if language_embedding is None:
+                self.embedding = LanguageModelEmbedding(
+                    config=self.config,
+                    vocab_size=self.vocab_size,
+                    max_sequence_length=self.max_sequence_length,
+                    position_embedding_type=self.position_embedding_type,
+                    scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                )
+            else:
+                self.embedding = language_embedding
 
         if (
             self.position_embedding_type == "rope"
@@ -186,13 +187,13 @@ class InternLMModel(BaseMegatronLanuageModule):
         ):
             self.rotary_pos_emb = DynamicRotaryEmbedding(
                 kv_channels=self.config.kv_channels,
-                rotary_percent=rotary_percent,
+                rotary_percent=self.rotary_percent,
                 rotary_interleaved=self.config.rotary_interleaved,
-                seq_len_interpolation_factor=seq_len_interpolation_factor,
-                rotary_base=rotary_base,
-                dtype=rotary_dtype,
-                rope_scaling=rope_scaling,
-                rope_scaling_factor=rope_scaling_factor,
+                seq_len_interpolation_factor=self.seq_len_interpolation_factor,
+                rotary_base=self.rotary_base,
+                dtype=self.rotary_dtype,
+                rope_scaling=self.rope_scaling,
+                rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
             )
 
@@ -224,10 +225,10 @@ class InternLMModel(BaseMegatronLanuageModule):
                 self.grad_output_buffer = None
 
             self.output_layer = tensor_parallel.ColumnParallelLinear(
-                config.hidden_size,
+                self.config.hidden_size,
                 self.vocab_size,
-                config=config,
-                init_method=config.init_method,
+                config=self.config,
+                init_method=self.config.init_method,
                 bias=False,
                 skip_bias_add=False,
                 gather_output=not self.parallel_output,
