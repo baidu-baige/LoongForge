@@ -11,7 +11,9 @@ defaults:
 
 model:
   model_type: llava_ov_1_5
-  foundation: 
+  foundation:
+    model_spec: ["aiak_training_omni.models.custom.llavaov_1_5.llavaov_1_5_layer_spec", "get_llava_ov_layer_with_te_spec"]
     rotary_base: 5000000
+    group_query_attention: true
   image_projector: 
     normalization: "LayerNorm"
