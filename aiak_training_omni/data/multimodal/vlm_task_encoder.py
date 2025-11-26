@@ -344,6 +344,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         return VLMTaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
+            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             imgs=imgs,
             image_grid_thw=image_grid_thw,
