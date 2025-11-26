@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import List, Optional
 from megatron.energon.flavors.base_dataset import Sample
-from megatron.energon.flavors.webdataset import AVData
+from importlib.metadata import version
+if version('megatron-energon') < "7.0.0":
+    from megatron.energon.flavors.webdataset import VideoData as AVData
+else:
+    from megatron.energon.flavors.webdataset import AVData
 
 
 @dataclass

@@ -79,6 +79,7 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         return MixQATaskSample(
             __key__=sample.__key__,
             __restore_key__=sample.__restore_key__,
+            __subflavor__=None,
             __subflavors__=sample.__subflavors__,
             tokens=ret["input_ids"],
             labels=ret["labels"],
@@ -164,6 +165,7 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         return MixQATaskPackedSample(
             __key__=",".join([s.__key__ for s in samples]),
             __restore_key__=(),
+            __subflavor__=None,
             __subflavors__=samples[0].__subflavors__,
             tokens=packed_tokens,
             labels=packed_labels,
