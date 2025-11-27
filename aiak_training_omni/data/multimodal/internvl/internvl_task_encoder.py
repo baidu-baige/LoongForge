@@ -16,7 +16,11 @@ from ..base.task_encoder import (
 )
 from .internvl_preprocess import InternvlPreprocess, IGNORE_TOKEN_ID, IGNORE_INDEX
 
-
+from importlib.metadata import version as _energon_version
+try:
+    _ENERGON_NEEDS_SUBFLAVOR = _energon_version("megatron-energon") < "7.0.0"
+except Exception:
+    _ENERGON_NEEDS_SUBFLAVOR = False
 @dataclass
 class MixQATaskSample(BaseTaskSample):
     """Dataclass to store a single unbatched sample."""
@@ -76,19 +80,33 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         else:
             ret = self.preproc.pure_text_get_item(data_item)
 
-        return MixQATaskSample(
-            __key__=sample.__key__,
-            __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
-            __subflavors__=sample.__subflavors__,
-            tokens=ret["input_ids"],
-            labels=ret["labels"],
-            attn_mask=ret["attention_mask"],
-            position_ids=ret["position_ids"],
-            imgs=ret["pixel_values"],
-            total_len=len(ret["input_ids"]),
-            image_flags=ret["image_flags"],
-        )
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return MixQATaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavor__=None,
+                __subflavors__=sample.__subflavors__,
+                tokens=ret["input_ids"],
+                labels=ret["labels"],
+                attn_mask=ret["attention_mask"],
+                position_ids=ret["position_ids"],
+                imgs=ret["pixel_values"],
+                total_len=len(ret["input_ids"]),
+                image_flags=ret["image_flags"],
+            )
+        else:
+            return MixQATaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavors__=sample.__subflavors__,
+                tokens=ret["input_ids"],
+                labels=ret["labels"],
+                attn_mask=ret["attention_mask"],
+                position_ids=ret["position_ids"],
+                imgs=ret["pixel_values"],
+                total_len=len(ret["input_ids"]),
+                image_flags=ret["image_flags"],
+            )
 
     @override
     @stateless
@@ -161,22 +179,37 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         curr_loss_weight = torch.where(
             packed_labels == IGNORE_TOKEN_ID, 0, curr_loss_weight
         )
-
-        return MixQATaskPackedSample(
-            __key__=",".join([s.__key__ for s in samples]),
-            __restore_key__=(),
-            __subflavor__=None,
-            __subflavors__=samples[0].__subflavors__,
-            tokens=packed_tokens,
-            labels=packed_labels,
-            attn_mask=cu_lengths,
-            position_ids=packed_pos_ids,
-            imgs=packed_pixel_values,
-            cu_lengths=cu_lengths,
-            loss_weight=curr_loss_weight,
-            image_flags=packed_image_flags,
-            max_length=max_length,
-        )
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return MixQATaskPackedSample(
+                __key__=",".join([s.__key__ for s in samples]),
+                __restore_key__=(),
+                __subflavor__=None,
+                __subflavors__=samples[0].__subflavors__,
+                tokens=packed_tokens,
+                labels=packed_labels,
+                attn_mask=cu_lengths,
+                position_ids=packed_pos_ids,
+                imgs=packed_pixel_values,
+                cu_lengths=cu_lengths,
+                loss_weight=curr_loss_weight,
+                image_flags=packed_image_flags,
+                max_length=max_length,
+            )
+        else:
+            return MixQATaskPackedSample(
+                __key__=",".join([s.__key__ for s in samples]),
+                __restore_key__=(),
+                __subflavors__=samples[0].__subflavors__,
+                tokens=packed_tokens,
+                labels=packed_labels,
+                attn_mask=cu_lengths,
+                position_ids=packed_pos_ids,
+                imgs=packed_pixel_values,
+                cu_lengths=cu_lengths,
+                loss_weight=curr_loss_weight,
+                image_flags=packed_image_flags,
+                max_length=max_length,
+            )
 
     @override
     def batch(
