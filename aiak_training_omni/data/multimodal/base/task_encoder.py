@@ -40,6 +40,11 @@ from aiak_training_omni.utils import get_args, get_tokenizer
 from .packer import Packer
 
 IGNORE_INDEX = -100  # ID for labels that should be ignored.
+from importlib.metadata import version as _energon_version
+try:
+    _ENERGON_NEEDS_SUBFLAVOR = _energon_version("megatron-energon") < "7.0.0"
+except Exception:
+    _ENERGON_NEEDS_SUBFLAVOR = False
 
 @dataclass
 class BaseTaskSample(Sample):
@@ -154,15 +159,27 @@ def cooker_multi_mix_qa(sample: dict):
         for name in sample["json"]["name"]:
             image.append(sample.get(name))
 
-    return MultiMixQASample(
-        __key__=sample["__key__"],
-        __restore_key__=sample["__restore_key__"],
-        __subflavors__=sample.get("__subflavors__", {}),
-        video=video if len(video) > 0 else None,
-        image=image if len(image) > 0 else None,
-        system=system,
-        messages=messages,
-    )
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        return MultiMixQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavor__=None,
+            __subflavors__=sample.get("__subflavors__", {}),
+            video=video if len(video) > 0 else None,
+            image=image if len(image) > 0 else None,
+            system=system,
+            messages=messages,
+        )
+    else:
+        return MultiMixQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavors__=sample.get("__subflavors__", {}),
+            video=video if len(video) > 0 else None,
+            image=image if len(image) > 0 else None,
+            system=system,
+            messages=messages,
+        )
 
 @stateless
 def cooker_multi_vid_vqa(sample: dict):
@@ -188,14 +205,26 @@ def cooker_multi_vid_vqa(sample: dict):
     elif sample["json"]["media"] == "image":
         for name in sample["json"]["name"]:
             image.append(sample.get(name))
-    return MultiVidQASample(
-        __key__=sample["__key__"],
-        __restore_key__=sample["__restore_key__"],
-        __subflavors__=sample.get("__subflavors__", {}),
-        video=video if len(video) > 0 else None,
-        system=system,
-        messages=messages,
-    )
+
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        return MultiVidQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavor__=None,
+            __subflavors__=sample.get("__subflavors__", {}),
+            video=video if len(video) > 0 else None,
+            system=system,
+            messages=messages,
+        )
+    else:
+        return MultiVidQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavors__=sample.get("__subflavors__", {}),
+            video=video if len(video) > 0 else None,
+            system=system,
+            messages=messages,
+        )
 
 
 @stateless
@@ -212,14 +241,25 @@ def cooker_packed_vqa(sample: dict):
     images = [sample.get(f"img{i}.jpg") for i in range(len(data["images"]))]
     captions = data["captions"]
     prompts = data["prompts"]
-    return PackedVQASample(
-        __key__=sample["__key__"],
-        __restore_key__=sample["__restore_key__"],
-        __subflavors__=sample.get("__subflavors__", {}),
-        answers=captions,
-        contexts=prompts,
-        images=images,
-    )
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        return PackedVQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavor__=None,
+            __subflavors__=sample.get("__subflavors__", {}),
+            answers=captions,
+            contexts=prompts,
+            images=images,
+        )
+    else:
+        return PackedVQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavors__=sample.get("__subflavors__", {}),
+            answers=captions,
+            contexts=prompts,
+            images=images,
+        )
 
 @stateless
 def cooker_packed_multi_mix_qa(sample: dict):
@@ -307,17 +347,29 @@ def cooker_packed_multi_mix_qa(sample: dict):
             f"[cooker_packed_multi_mix_qa] unknown media_type='{media_type}'. "
             f"Expect 'image' or 'video'."
         )
-
-    return PackedMultiMixQASample(
-        __key__=sample["__key__"],
-        __restore_key__=sample["__restore_key__"],
-        __subflavors__=sample.get("__subflavors__", {}),
-        images=images,
-        videos=videos,
-        contexts=prompts,
-        answers=answers,
-        answer_weights=None,
-    )
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        return PackedMultiMixQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavor__=None,
+            __subflavors__=sample.get("__subflavors__", {}),
+            images=images,
+            videos=videos,
+            contexts=prompts,
+            answers=answers,
+            answer_weights=None,
+        )
+    else:
+        return PackedMultiMixQASample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavors__=sample.get("__subflavors__", {}),
+            images=images,
+            videos=videos,
+            contexts=prompts,
+            answers=answers,
+            answer_weights=None,
+        )
 
 @stateless
 def cooker_packed_caption(sample: dict):
@@ -326,14 +378,25 @@ def cooker_packed_caption(sample: dict):
     images = [sample.get(f"img{i}.jpg") for i in range(len(data["images"]))]
     captions = data["captions"]
     prompts = data["prompts"]
-    return PackedCaptioningSample(
-        __key__=sample["__key__"],
-        __restore_key__=sample["__restore_key__"],
-        __subflavors__=sample.get("__subflavors__", {}),
-        captions=captions,
-        prompts=prompts,
-        images=images,
-    )
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        return PackedCaptioningSample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavor__=None,
+            __subflavors__=sample.get("__subflavors__", {}),
+            captions=captions,
+            prompts=prompts,
+            images=images,
+        )
+    else:
+        return PackedCaptioningSample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavors__=sample.get("__subflavors__", {}),
+            captions=captions,
+            prompts=prompts,
+            images=images,
+        )
 
 
 def cooker_default(sample: dict):
@@ -486,19 +549,35 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             cu_lengths = torch.stack([s.cu_lengths for s in samples])
             max_lengths = torch.tensor([s.max_length for s in samples], dtype=torch.int32)
 
-        return BaseTaskBatchPacked(
-            __key__=[s.__key__ for s in samples],
-            __restore_key__=[s.__restore_key__ for s in samples],
-            __subflavors__=samples[0].__subflavors__,
-            tokens=tokens,
-            labels=labels,
-            attn_mask=attn_masks,
-            imgs=imgs,
-            pixel_values_videos=pixel_values_videos,
-            num_tiles=num_tiles,
-            cu_lengths=cu_lengths,
-            max_lengths=max_lengths,
-        )
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return BaseTaskBatchPacked(
+                __key__=[s.__key__ for s in samples],
+                __restore_key__=[s.__restore_key__ for s in samples],
+                __subflavor__=None,
+                __subflavors__=samples[0].__subflavors__,
+                tokens=tokens,
+                labels=labels,
+                attn_mask=attn_masks,
+                imgs=imgs,
+                pixel_values_videos=pixel_values_videos,
+                num_tiles=num_tiles,
+                cu_lengths=cu_lengths,
+                max_lengths=max_lengths,
+            )
+        else:
+            return BaseTaskBatchPacked(
+                __key__=[s.__key__ for s in samples],
+                __restore_key__=[s.__restore_key__ for s in samples],
+                __subflavors__=samples[0].__subflavors__,
+                tokens=tokens,
+                labels=labels,
+                attn_mask=attn_masks,
+                imgs=imgs,
+                pixel_values_videos=pixel_values_videos,
+                num_tiles=num_tiles,
+                cu_lengths=cu_lengths,
+                max_lengths=max_lengths,
+            )
 
     def encode_batch(self, batch: BaseTaskBatchPacked) -> dict:
         """Generates a dictionary containing the data required by the model."""
@@ -576,19 +655,35 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         packed_labels = torch.cat(packed_labels, dim=0)
         packed_masks = torch.cat(packed_masks, dim=0)
 
-        return BaseTaskSamplePacked(
-            __key__=",".join([s.__key__ for s in samples]),
-            __restore_key__=(),  # Will be set by energon based on `samples`
-            __subflavors__=samples[0].__subflavors__,
-            tokens=packed_tokens,
-            labels=packed_labels,
-            attn_mask=packed_masks,
-            imgs=packed_imgs,
-            pixel_values_videos=packed_videos,
-            cu_lengths=torch.tensor(cu_lengths, dtype=torch.int32),
-            max_length=max_length,
-            num_tiles=[n for s in samples for n in s.num_tiles],
-        )
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return BaseTaskSamplePacked(
+                __key__=",".join([s.__key__ for s in samples]),
+                __restore_key__=(),  # Will be set by energon based on `samples`
+                __subflavor__=None,
+                __subflavors__=samples[0].__subflavors__,
+                tokens=packed_tokens,
+                labels=packed_labels,
+                attn_mask=packed_masks,
+                imgs=packed_imgs,
+                pixel_values_videos=packed_videos,
+                cu_lengths=torch.tensor(cu_lengths, dtype=torch.int32),
+                max_length=max_length,
+                num_tiles=[n for s in samples for n in s.num_tiles],
+            )
+        else:
+            return BaseTaskSamplePacked(
+                __key__=",".join([s.__key__ for s in samples]),
+                __restore_key__=(),  # Will be set by energon based on `samples`
+                __subflavors__=samples[0].__subflavors__,
+                tokens=packed_tokens,
+                labels=packed_labels,
+                attn_mask=packed_masks,
+                imgs=packed_imgs,
+                pixel_values_videos=packed_videos,
+                cu_lengths=torch.tensor(cu_lengths, dtype=torch.int32),
+                max_length=max_length,
+                num_tiles=[n for s in samples for n in s.num_tiles],
+            )
 
 
 def print_error_handler(exc: Exception, key: Optional[str]):
