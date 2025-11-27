@@ -206,7 +206,7 @@ def parse_arguments(
             if "foundation" in name:
                 validate_megatron_args(args_deepcopy)
             else:
-                validate_custom_model_args(args_deepcopy)
+                validate_custom_model_args(name, args_deepcopy)
 
             args_dict[name] = args_deepcopy
         

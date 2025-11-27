@@ -27,9 +27,9 @@ def validate_aiak_extra_args(args, config):
     args.enable_one_logger = False
 
 
-def validate_custom_model_args(args):
+def validate_custom_model_args(name, args):
     """Validate non foundational model arguments"""
-    _validate_custom_model_args(args)
+    _validate_custom_model_args(name, args)
 
 
 def _validate_extra_model_args(args, config):
@@ -266,38 +266,49 @@ def _check_arg_is_not_none(args, arg):
 
 
 # Adapted from megatron/training/arguments.py
-def _validate_custom_model_args(args, defaults={}):
+def _validate_custom_model_args(name, args, defaults={}):
     """Validate non foundational model arguments"""
     
     # Temporary model parallel size. Added by aiak
     if args.pipeline_model_parallel_size > 1:
-        warnings.warn("WARNING: Now for non foundational models, we only support pipeline model parallel size 1.")
+        warnings.warn(f"WARNING: Now for {name}, we only support pipeline model parallel size 1.")
         args.pipeline_model_parallel_size = 1
 
     if args.sequence_parallel:
-        warnings.warn("WARNING: Now for non foundational models, we do not support sequence parallel.")
+        warnings.warn(f"WARNING: Now for {name}, we do not support sequence parallel.")
         args.sequence_parallel = False
     
     if args.expert_model_parallel_size > 1:
-        warnings.warn("WARNING: Now for non foundational models, we only support expert model parallel size 1.")
+        warnings.warn(f"WARNING: Now for {name}, we only support expert model parallel size 1.")
         args.expert_model_parallel_size = 1
 
     if args.num_virtual_stages_per_pipeline_rank is not None:
-        warnings.warn("WARNING: Now for non foundational models, we do not support " \
-        "num_virtual_stages_per_pipeline_rank.")
+        warnings.warn(f"WARNING: Now for {name}, we do not support num_virtual_stages_per_pipeline_rank.")
         args.num_virtual_stages_per_pipeline_rank = None
 
     if args.context_parallel_ulysses_degree is not None:
-        warnings.warn("WARNING: Now for non foundational models, we do not support context_parallel_ulysses_degree.")
+        warnings.warn(f"WARNING: Now for {name}, we do not support context_parallel_ulysses_degree.")
         args.context_parallel_ulysses_degree = 1
 
     if args.context_parallel_size > 1:
-        warnings.warn("WARNING: Now for non foundational models, we only support context parallel size 1.")
+        warnings.warn(f"WARNING: Now for {name}, we only support context parallel size 1.")
         args.context_parallel_size = 1
 
     if args.tp_comm_overlap:
-        warnings.warn("WARNING: Now for non foundational models, we do not support tp_comm_overlap.")
+        warnings.warn(f"WARNING: Now for {name}, we do not support tp_comm_overlap.")
         args.tp_comm_overlap = False
+
+    if args.num_query_groups is None:
+        # To pass transformer config post init check
+        warnings.warn(f"WARNING: Now for {name}, the num_query_groups is None, using default value"
+                      " tensor_model_parallel_size to pass the transformer config check.")
+        args.num_query_groups = args.tensor_model_parallel_size
+
+    if args.num_attention_heads is None:
+        # To pass transformer config post init check
+        warnings.warn(f"WARNING: Now for {name}, the num_attention_heads is None, using default value"
+                      " tensor_model_parallel_size to pass the transformer config check.")
+        args.num_attention_heads = args.tensor_model_parallel_size
     
     # Temporary
     assert args.non_persistent_ckpt_type in ['global', 'local', None], \
@@ -647,20 +658,9 @@ def _validate_custom_model_args(args, defaults={}):
         args.num_layers = 1
 
     if args.hidden_size is None:
-        warnings.warn("WARNING: For some components, like image projector, hidden_size is None, using default value 1" \
-        "to pass the validation check.")
-        args.hidden_size = 1
-
-    if args.num_attention_heads is None:
-        warnings.warn("WARNING: For some components, like image projector, num_attention_heads is None, " \
-        "using default value 1 to pass the validation check.")
-        args.num_attention_heads = 1
-
-    # Check required arguments.
-    required_args = ['num_layers', 'hidden_size', 'num_attention_heads',
-                     'max_position_embeddings']
-    for req_arg in required_args:
-        _check_arg_is_not_none(args, req_arg)
+        warnings.warn("WARNING: For some components, like image projector, hidden_size is None, using default value "
+                      "num_attention_heads to pass the validation check.")
+        args.hidden_size = args.num_attention_heads
 
     # Checks.
     if args.ffn_hidden_size is None:
@@ -674,7 +674,7 @@ def _validate_custom_model_args(args, defaults={}):
         else:
             args.ffn_hidden_size = 4 * args.hidden_size
 
-    if args.kv_channels is None:
+    if args.kv_channels is None and args.num_attention_heads is not None:
         assert args.hidden_size % args.num_attention_heads == 0
         args.kv_channels = args.hidden_size // args.num_attention_heads
 
