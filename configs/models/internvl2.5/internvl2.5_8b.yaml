@@ -11,6 +11,12 @@ defaults:
 
 model:
   model_type: intern_vl
+  loss_func: ${loss_func:loss_func_internvl}
+  
+  image_projector:
+    hidden_size: 4096
+    ffn_hidden_size: 4096
   foundation: 
     rotary_emb_func: "DynamicRotaryEmbedding"
+    rotary_base: 1000000
     model_spec: ["aiak_training_omni.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]

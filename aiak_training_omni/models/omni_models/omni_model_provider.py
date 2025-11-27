@@ -81,6 +81,7 @@ def omni_model_provider(
         language_rotary_base=args.rotary_base,
         language_rotary_dtype=torch.float32,  # if args.rope_in_fp32 else args.params_dtype,
         seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
+        allow_missing_adapter_checkpoint=args.allow_missing_adapter_checkpoint,
     )
 
     return model
