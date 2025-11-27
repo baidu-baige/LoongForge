@@ -9,6 +9,12 @@ from packaging.version import Version as PkgVersion
 
 from .constants import DEFAULT_DATASET_CONFIG
 
+try:
+    _torch_version = PkgVersion(torch.__version__)
+except Exception:
+    # This is a WAR for building docs, where torch is not actually imported
+    _torch_version = PkgVersion("0.0.0")
+
 _te_version = None
 
 
@@ -61,11 +67,35 @@ def get_te_version():
     return _te_version
 
 
+def get_torch_version():
+    """Get pytorch version from __version__; if not available use pip's. Use caching."""
+
+    def get_torch_version_str():
+        import torch
+
+        if hasattr(torch, '__version__'):
+            return str(torch.__version__)
+        else:
+            return version("torch")
+
+    global _torch_version
+    if _torch_version is None:
+        _torch_version = PkgVersion(get_torch_version_str())
+    return _torch_version
+
+
 def is_te_min_version(version, check_equality=True):
     """Check if minimum version of `transformer-engine` is installed."""
     if check_equality:
         return get_te_version() >= PkgVersion(version)
     return get_te_version() > PkgVersion(version)
+
+
+def is_torch_min_version(version, check_equality=True):
+    """Check if minimum version of `torch` is installed."""
+    if check_equality:
+        return get_torch_version() >= PkgVersion(version)
+    return get_torch_version() > PkgVersion(version)
 
 
 def get_config_from_file(config_file: str):
@@ -89,3 +119,8 @@ def get_config_from_file(config_file: str):
     config_name = os.path.splitext(file_name)[0]
 
     return config_dir, config_name
+
+
+def get_device_arch_version():
+    """Returns GPU arch version (8: Ampere, 9: Hopper, 10: Blackwell, ...)"""
+    return torch.cuda.get_device_properties(torch.device("cuda:0")).major

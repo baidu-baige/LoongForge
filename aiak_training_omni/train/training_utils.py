@@ -106,7 +106,6 @@ from megatron.training.training import (
 
 from aiak_training_omni.utils import get_args
 from .initialize import initialize_aiak_megatron
-from aiak_training_omni.train.arguments import parse_args_from_config
 
 try:
     from inspector.hooks import register_hooks

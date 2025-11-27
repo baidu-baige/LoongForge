@@ -1,6 +1,6 @@
 """aiak train module"""
 
-from .arguments import parse_train_args, parse_args_from_config, parse_args_from_config
+from .parser import parse_train_args, parse_args_from_config, parse_args_from_config
 from .trainer_builder import build_model_trainer
 
 from .pretrain import pretrain_llm, pretrain_vlm

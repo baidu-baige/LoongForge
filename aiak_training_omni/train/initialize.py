@@ -158,7 +158,7 @@ def initialize_aiak_megatron(
         global _DecoderTensorParallelSize
         _DecoderTensorParallelSize = mpu.get_tensor_model_parallel_world_size()
 
-        from .arguments import parse_args_from_config
+        from .parser import parse_args_from_config
         # set model config from args and hydra config
         parse_args_from_config(args)
         
