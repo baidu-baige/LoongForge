@@ -639,35 +639,20 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         packed_labels = torch.cat(packed_labels, dim=0)
         packed_masks = torch.cat(packed_masks, dim=0)
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return BaseTaskSamplePacked(
-                __key__=",".join([s.__key__ for s in samples]),
-                __restore_key__=(),  # Will be set by energon based on `samples`
-                __subflavor__=None,
-                __subflavors__=samples[0].__subflavors__,
-                tokens=packed_tokens,
-                labels=packed_labels,
-                attn_mask=packed_masks,
-                imgs=packed_imgs,
-                pixel_values_videos=packed_videos,
-                cu_lengths=torch.tensor(cu_lengths, dtype=torch.int32),
-                max_length=max_length,
-                num_tiles=[n for s in samples for n in s.num_tiles],
-            )
-        else:
-            return BaseTaskSamplePacked(
-                __key__=",".join([s.__key__ for s in samples]),
-                __restore_key__=(),  # Will be set by energon based on `samples`
-                __subflavors__=samples[0].__subflavors__,
-                tokens=packed_tokens,
-                labels=packed_labels,
-                attn_mask=packed_masks,
-                imgs=packed_imgs,
-                pixel_values_videos=packed_videos,
-                cu_lengths=torch.tensor(cu_lengths, dtype=torch.int32),
-                max_length=max_length,
-                num_tiles=[n for s in samples for n in s.num_tiles],
-            )
+
+        return BaseTaskSamplePacked(
+            __key__=",".join([s.__key__ for s in samples]),
+            __restore_key__=(),  # Will be set by energon based on `samples`
+            __subflavors__=samples[0].__subflavors__,
+            tokens=packed_tokens,
+            labels=packed_labels,
+            attn_mask=packed_masks,
+            imgs=packed_imgs,
+            pixel_values_videos=packed_videos,
+            cu_lengths=torch.tensor(cu_lengths, dtype=torch.int32),
+            max_length=max_length,
+            num_tiles=[n for s in samples for n in s.num_tiles],
+        )
 
 
 def print_error_handler(exc: Exception, key: Optional[str]):
