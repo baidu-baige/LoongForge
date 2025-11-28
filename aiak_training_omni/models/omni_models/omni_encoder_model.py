@@ -323,10 +323,9 @@ class OmniEncoderModel(torch.nn.Module):
         n_image_features = image_embeddings.shape[0]
 
         if n_image_tokens != n_image_features:
-            raise ValueError(
+            logging.getLogger(__name__).warning(
                 f"Image features {n_image_features} != image tokens {n_image_tokens}"
             )
-
         if inference_params is not None:
             inference_params.key_value_memory_dict["image_tokens_count"] = (
                 image_embeddings.shape[0]

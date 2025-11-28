@@ -8,30 +8,24 @@ ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-DATA_PATH=/home/users/jianghaicheng/intern_vl/dataset/filter_mmdu/webdataset/
-#DATA_PATH=/home/users/jianghaicheng/intern_vl/dataset/pure_texts/wbs/
-#DATA_PATH=/home/users/jianghaicheng/intern_vl/dataset/LLaVA-Video-100/webdataset/
-
-#TOKENIZER_PATH=/mnt/cluster/huggingface.co/OpenGVLab/InternVL3_5-8B/
-TOKENIZER_PATH=/ssd1/models/InternVL3_5-8B/
-CHECKPOINT_LOAD_PATH=/mnt/cluster/zhaiyanfeng/models/internvl/ckpt-megatron/Internvl3_5-8B-tp4-pp1
-CHECKPOINT_SAVE_PATH=/mnt/cluster/zhaiyanfeng/models/internvl/ckpt-megatron/Internvl3_5-8B-tp4-pp1-save
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/zhaiyanfeng/out/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/home/users/jianghaicheng/intern_vl/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/home/users/jianghaicheng/intern_vl/AIAK-Training-Omni"}
+DATA_PATH=/workspace/dataset/filter_mmdu/webdataset/
+TOKENIZER_PATH=/mnt/cluster/models/InternVL3_5-30B-A3B/
+CHECKPOINT_LOAD_PATH=/mnt/cluster/models/internvl/ckpt-megatron/InternVL3_5-30B-A3B-tp4pp1ep8etp1
+CHECKPOINT_SAVE_PATH=/mnt/cluster/models/internvl/ckpt-megatron/InternVL3_5-30B-A3B-tp4pp1ep8etp1-save
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node/"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
-MASTER_PORT=${MASTER_PORT:-"6020"}
+MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
-GPUS_PER_NODE=4
+GPUS_PER_NODE=8
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 # To specify the model config file
-# MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2_5_vl
-# MODEL_CONFIG_NAME=qwen2_5_vl_7b
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl/internvl3.5_8b.yaml
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -41,13 +35,9 @@ DISTRIBUTED_ARGS=(
   --master_port $MASTER_PORT
 )
 
-MODEL_ARGS=(
-  #--model-name internvl3.5-8b
-  --rotary-base 1000000  # for internvl
-  --rotary-seq-len-interpolation-factor 1
+MODEL_CONFIG_ARGS=(
   --config-file $MODEL_CONFIG_PATH
 )
-
 
 DATA_ARGS=(
   --tokenizer-type HFTokenizer
@@ -64,7 +54,7 @@ TRAINING_ARGS=(
   --max-packed-tokens 16384
   --init-method-std 0.01
   --micro-batch-size 1
-  --global-batch-size 1
+  --global-batch-size 32
   --lr 1e-5
   --min-lr 0.0
   --clip-grad 1.0
@@ -80,12 +70,11 @@ TRAINING_ARGS=(
   --lr-decay-style cosine
   --lr-warmup-fraction 0.03
   --bf16
-  --trainable-modules adapter vision_model language_model
   --seed 42
   --no-gradient-accumulation-fusion
   --load $CHECKPOINT_LOAD_PATH
-  --save $CHECKPOINT_SAVE_PATH
-  --save-interval 2000
+  #--save $CHECKPOINT_SAVE_PATH
+  #--save-interval 2000
   --exit-interval 500
   --dataloader-type external
   --variable-seq-lengths  # for packing
@@ -96,36 +85,52 @@ TRAINING_ARGS=(
   --loss-reduction square
   #--use-cpu-initialization
   #--no-initialization
-  #--use-packed-ds
+  --use-packed-ds
   --use_thumbnail
   --replacement
   --dynamic-image-size
   --loss-reduction-all-gather
-  --num-workers 0 # for debug
-  --dataloader-prefetch-factor 0
+  --num-workers 8
+  --dataloader-prefetch-factor 4
   --manual-gc
   --manual-gc-interval 0
   --use-flash-attn
   --recompute-granularity full
   --recompute-method block
-  --recompute-num-layers 12
-  #--sequence-parallel
-  #--strict-mode
+  --recompute-num-layers 45
+  --sequence-parallel
+  --strict-mode
   --conv-style internvl2_5
-  #--dataset-type synthetic
   --max-dynamic-patch 12
   --packing-sft-data
-  --packing-batch-size 20
+  --packing-batch-size 200
   --energon-pack-algo sequential_max_images
+  --allow-missing-adapter-checkpoint
 )
 
 
 MODEL_PARALLEL_ARGS=(
   --tensor-model-parallel-size 4
   --pipeline-model-parallel-size 1
+  --expert-model-parallel-size 8
+  --expert-tensor-parallel-size 1
+  --moe-token-dispatcher-type alltoall
   --use-distributed-optimizer
   --context-parallel-size 1
   --distributed-backend nccl
+  --optimizer-cpu-offload
+  --use-precision-aware-optimizer
+  --optimizer-offload-fraction 0.2
+  --overlap-cpu-optimizer-d2h-h2d
+)
+
+MOE_ARGS=(
+  --moe-router-load-balancing-type aux_loss
+  --moe-router-topk 8
+  --moe-aux-loss-coeff 1e-2
+  #--moe-grouped-gemm
+  --moe-router-dtype fp32
+  --empty-unused-memory-level 2
 )
 
 LOGGING_ARGS=(
@@ -145,7 +150,9 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
   $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
   --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/sft_dataset_config.json \
+  ${MODEL_CONFIG_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \
+  ${MOE_ARGS[@]} \
   ${LOGGING_ARGS[@]}

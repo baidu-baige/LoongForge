@@ -173,7 +173,6 @@ def forward_step(data_iterator, model):
          packed_seq_params, loss_weights) = get_batch(data_iterator)
 
     timers('batch-generator').stop()
-    pixel_values = pixel_values.to(torch.bfloat16)
     with stimer:
         output_tensor = model(
             input_ids=input_ids,

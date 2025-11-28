@@ -1013,23 +1013,16 @@ class InternvlPreprocess:
 
     def pad_imgs(self, packed_sample, num_images_expected):
         """Pad images"""
-        if packed_sample["pixel_values"].size(0) == num_images_expected:
+        if len(packed_sample.imgs) == num_images_expected:
             return packed_sample
 
-        num_pad_images = num_images_expected - packed_sample["pixel_values"].size(0)
-        pad_images = torch.stack(
-            [
-                torch.zeros_like(packed_sample["pixel_values"][0])
-                for _ in range(num_pad_images)
-            ]
-        )
+        num_pad_images = num_images_expected - len(packed_sample.imgs)
+        pad_images = [torch.zeros_like(packed_sample.imgs[0]) for _ in range(num_pad_images)]
         pad_image_flags = torch.tensor([0] * num_pad_images, dtype=torch.long)
 
-        packed_sample["pixel_values"] = torch.cat(
-            [packed_sample["pixel_values"], pad_images]
-        )
-        packed_sample["image_flags"] = torch.cat(
-            [packed_sample["image_flags"], pad_image_flags]
+        packed_sample.imgs = packed_sample.imgs + pad_images
+        packed_sample.image_flags = torch.cat(
+            [packed_sample.image_flags, pad_image_flags]
         )
 
         return packed_sample
