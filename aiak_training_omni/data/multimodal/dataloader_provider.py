@@ -180,11 +180,10 @@ class VLMPretrainCollator:
         position_ids, _ = get_position_ids_func(batch)
         batch["position_ids"] = position_ids.to(dtype=torch.long)
 
-        # Keep loss mask aligned with pre-roll labels to match legacy behavior.
-        pre_roll_labels = labels.clone()
-        loss_mask = (pre_roll_labels != self.label_pad_token_id).long()
+        # Shift labels left for next-token prediction and build a loss mask aligned to the shifted labels.
+        labels = torch.roll(labels, shifts=-1, dims=1)
+        loss_mask = (labels != self.label_pad_token_id).long()
 
-        labels = torch.roll(pre_roll_labels, shifts=-1, dims=1)
         batch["labels"] = labels
 
         if attention_mask is not None:
