@@ -549,35 +549,19 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             cu_lengths = torch.stack([s.cu_lengths for s in samples])
             max_lengths = torch.tensor([s.max_length for s in samples], dtype=torch.int32)
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return BaseTaskBatchPacked(
-                __key__=[s.__key__ for s in samples],
-                __restore_key__=[s.__restore_key__ for s in samples],
-                __subflavor__=None,
-                __subflavors__=samples[0].__subflavors__,
-                tokens=tokens,
-                labels=labels,
-                attn_mask=attn_masks,
-                imgs=imgs,
-                pixel_values_videos=pixel_values_videos,
-                num_tiles=num_tiles,
-                cu_lengths=cu_lengths,
-                max_lengths=max_lengths,
-            )
-        else:
-            return BaseTaskBatchPacked(
-                __key__=[s.__key__ for s in samples],
-                __restore_key__=[s.__restore_key__ for s in samples],
-                __subflavors__=samples[0].__subflavors__,
-                tokens=tokens,
-                labels=labels,
-                attn_mask=attn_masks,
-                imgs=imgs,
-                pixel_values_videos=pixel_values_videos,
-                num_tiles=num_tiles,
-                cu_lengths=cu_lengths,
-                max_lengths=max_lengths,
-            )
+        return BaseTaskBatchPacked(
+            __key__=[s.__key__ for s in samples],
+            __restore_key__=[s.__restore_key__ for s in samples],
+            __subflavors__=samples[0].__subflavors__,
+            tokens=tokens,
+            labels=labels,
+            attn_mask=attn_masks,
+            imgs=imgs,
+            pixel_values_videos=pixel_values_videos,
+            num_tiles=num_tiles,
+            cu_lengths=cu_lengths,
+            max_lengths=max_lengths,
+        )
 
     def encode_batch(self, batch: BaseTaskBatchPacked) -> dict:
         """Generates a dictionary containing the data required by the model."""
