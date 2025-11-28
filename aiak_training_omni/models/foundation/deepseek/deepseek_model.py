@@ -3,7 +3,7 @@
 from contextlib import nullcontext
 import logging
 from collections import OrderedDict
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal, Optional, Any
 
 import torch
 import json
@@ -622,31 +622,27 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
 
     def build_schedule_plan(
         self,
-        input_ids: Tensor,
-        position_ids: Tensor,
-        attention_mask: Tensor,
-        attn_mask_type=None,
-        decoder_input: Tensor = None,
-        labels: Tensor = None,
+        input_ids: Optional[torch.Tensor],
+        position_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        attn_mask_type: Optional[AttnMaskType] = None,
+        decode_input: Optional[torch.Tensor] = None,
+        labels: Optional[torch.LongTensor] = None,
         inference_params: InferenceParams = None,
         packed_seq_params: PackedSeqParams = None,
-        extra_block_kwargs: dict = None,
-        runtime_gather_output: Optional[bool] = None,
+        **kwargs: Any,
     ):
         """Build the schedule plan for the model."""
-        from .fine_grained_schedule import build_model_chunk_schedule_plan
+        from aiak_training_omni.models.common.fine_grained_schedule import build_model_chunk_schedule_plan
 
         return build_model_chunk_schedule_plan(
             self,
-            input_ids,
-            position_ids,
-            attention_mask,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
             attn_mask_type=attn_mask_type,
-            decoder_input=decoder_input,
             labels=labels,
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
-            extra_block_kwargs=extra_block_kwargs,
-            runtime_gather_output=runtime_gather_output,
-            num_nextn_predict_layers=self.config.num_nextn_predict_layers,
+            **kwargs
         )

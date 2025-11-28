@@ -149,7 +149,12 @@ def forward_step(data_iterator, model):
     timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
+        output_tensor = model(
+            input_ids=tokens,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+        )
 
     return output_tensor, partial(loss_func, loss_mask)
 

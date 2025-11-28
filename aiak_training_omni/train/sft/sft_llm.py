@@ -193,9 +193,9 @@ def forward_step(data_iterator, model):
 
     with stimer:
         output_tensor = model(
-            tokens,
-            position_ids,
-            attention_mask,
+            input_ids=tokens,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
             attn_mask_type=attn_mask_type,
             labels=labels,
             packed_seq_params=packed_seq_params,
