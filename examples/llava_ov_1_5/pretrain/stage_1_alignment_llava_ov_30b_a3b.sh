@@ -7,7 +7,7 @@ MBS="${4:-1}"
 GBS="${5:-32}"
 NSTEP="${6:-21000}"
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/dataset/mllm/demo/wds/"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/rice_vl_30b_a3b_init_hf_1600px"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/llava_ov_1.5/rice_vl_30b_a3b_init_hf_1600px"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVision-1.5-4B-stage0_mcore_tp1_pp1"}
 
 #! /bin/bash
@@ -145,22 +145,29 @@ MODEL_PARALLEL_ARGS=(
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 8
     #--sequence-parallel
-    --moe-token-dispatcher-type alltoall
     --attention-backend flash
     --use-distributed-optimizer
     --overlap-grad-reduce
     --overlap-param-gather
     --distributed-backend nccl
-    # --num-virtual-stages-per-pipeline-rank 2
-    # --reduce-variable-seq-shape-p2p-comm
-    # --recompute-granularity full
-    # --custom-pipeline-recompute-layers 12,12
-    # --recompute-method block
-    # --custom-virtual-layers-first-pipeline 1,17
-    # --custom-pipeline-layers 18,30
+)
 
-    # --combined-1f1b
-    # --combined-1f1b-recipe ep_a2a
+MOE_ARGS=(
+    --moe-token-dispatcher-type alltoall
+    --moe-router-load-balancing-type aux_loss
+    --moe-router-topk 8
+    --moe-aux-loss-coeff 0.01
+    --moe-router-dtype fp32
+    --no-masked-softmax-fusion
+    --disable-bias-linear
+    --position-embedding-type rope
+    --no-rope-fusion
+    --normalization RMSNorm
+    --swiglu
+    --no-bias-swiglu-fusion
+    --rotary-base 10000000
+    --use-mcore-models
+    --moe-per-layer-logging
 )
 
 MODEL_CONFIG_ARGS=(
@@ -192,8 +199,8 @@ PYTHONPATH="$AIAK_MAGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
     "$AIAK_TRAINING_PATH/aiak_training_omni/train.py" \
     "${DATA_ARGS[@]}" \
-    ${IMG_ARGS:+${IMG_ARGS[@]}} \
     "${MODEL_CONFIG_ARGS[@]}" \
+    "${MOE_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
     "${MODEL_PARALLEL_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
