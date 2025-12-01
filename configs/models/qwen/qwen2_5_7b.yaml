@@ -24,6 +24,6 @@ kv_channels: null
 num_experts: null
 moe_ffn_hidden_size: null
 rotary_emb_func: "RotaryEmbedding"
-rotary_base: 10000
+rotary_base: 1000000
 model_type: "qwen"
 # variable_seq_lengths: true

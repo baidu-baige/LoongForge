@@ -8,7 +8,7 @@ num_attention_heads: 32
 
 # common default
 group_query_attention: false
-num_query_groups: 1
+num_query_groups: null
 position_embedding_type: "rope"
 add_position_embedding: false
 rotary_interleaved: false

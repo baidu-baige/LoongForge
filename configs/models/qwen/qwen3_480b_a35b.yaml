@@ -24,6 +24,6 @@ kv_channels: 128
 num_experts: 160
 moe_ffn_hidden_size: 2560
 rotary_emb_func: "RotaryEmbedding"
-rotary_base: 10000
+rotary_base: 1000000
 model_type: "qwen"
 # variable_seq_lengths: true
