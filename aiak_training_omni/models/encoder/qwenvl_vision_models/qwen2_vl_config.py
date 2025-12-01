@@ -43,7 +43,8 @@ class QwenVisionConfig(BaseModelConfig):
     spatial_merge_size: int = 2
     image_token_id: int = 151655
     video_token_id: int = 151656
-
+    mix_used_vision_encoder: bool = True
+    mix_used_vision_projector: bool = True
     model_type = "qwen2_5_vit"
 
 
