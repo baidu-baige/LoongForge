@@ -99,6 +99,14 @@ class RiceViTModel(VisionModel):
 
         x = torch.cat(new_x, dim=0)
 
+        seq_len = x.size(0)
+        pad_len = 0
+        # Pad x to multiple of 16 when using fp8 blockwise
+        if (self.config.fp8) and self.config.fp8_recipe == 'blockwise':
+            pad_len = (16 - seq_len % 16) % 16
+        if pad_len > 0:
+            x = F.pad(x, (0, 0, 0, pad_len))  # 在序列维度(第0维)末尾填充pad_len个0
+
         new_rotary_pos_emb = []
         start_idx = 0
         for i in range(batch_size):
@@ -110,6 +118,10 @@ class RiceViTModel(VisionModel):
 
         rotary_pos_emb = torch.cat(new_rotary_pos_emb, dim=0)
 
+        # Pad rotary_pos_emb to multiple of 16
+        if pad_len > 0:
+            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, pad_len))  # 在序列维度(第0维)末尾填充pad_len个0
+
         cu_seqlens = []
         cumulative_length = 0
         cu_seqlens.append(cumulative_length)  # 起始为0
@@ -118,11 +130,16 @@ class RiceViTModel(VisionModel):
             cumulative_length += int(length + 1)
             cu_seqlens.append(cumulative_length)
 
+        # Update cumulative length to include padding
+        if pad_len > 0:
+            cu_seqlens[-1] += pad_len
+
         cu_seqlens = torch.tensor(
             cu_seqlens,
             device=x.device,
             dtype=image_grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
         )
+        max_seqlen = max(tokens_per_sample) + 1  # +1 for class token
 
         x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
 
@@ -135,6 +152,8 @@ class RiceViTModel(VisionModel):
                     qkv_format="thd",
                     cu_seqlens_q=cu_seqlens,
                     cu_seqlens_kv=cu_seqlens,
+                    max_seqlen_q=max_seqlen,
+                    max_seqlen_kv=max_seqlen
                 )
                 for i in range(self.config.num_layers)
             ],
@@ -142,7 +161,7 @@ class RiceViTModel(VisionModel):
             attention_mask=None,
             attn_mask_type=AttnMaskType.no_mask,
         )
-        x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
+        x = x[:-pad_len if pad_len > 0 else None, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 
         patch_output = []
         start_idx = 0

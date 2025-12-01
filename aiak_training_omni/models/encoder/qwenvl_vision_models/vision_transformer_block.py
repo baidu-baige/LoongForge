@@ -19,6 +19,8 @@ from megatron.core.transformer.transformer_block import (
     TransformerBlock as MegatronTransformerBlock,
 )
 from megatron.core.utils import make_viewless_tensor
+from megatron.core.enums import Fp8Recipe
+from megatron.core.fp8_utils import get_fp8_context
 
 try:
     from megatron.core.transformer.custom_layers.transformer_engine import (
@@ -80,33 +82,16 @@ class TransformerBlock(MegatronTransformerBlock):
         else:
             rng_context = nullcontext()
 
-        if self.config.fp8:
-            import transformer_engine  # To keep out TE dependency when not training in fp8
+        # If fp8_recipe is delayed, wrap the entire pass with get_fp8_context(),
+        # otherwise do nothing extra at the outer level
+        # if we are using other fp8 recipes, then the context manager enter&exit are free
+        # we can wrap fp8_context within the for loop over layers, so that we can fine-grained
+        # control which layer will be fp8 or bf16
+        use_outer_fp8_context = self.config.fp8 and self.config.fp8_recipe == Fp8Recipe.delayed
+        use_inner_fp8_context = self.config.fp8 and self.config.fp8_recipe != Fp8Recipe.delayed
+        outer_fp8_context = get_fp8_context(self.config) if use_outer_fp8_context else nullcontext()
 
-            if self.config.fp8 == "e4m3":
-                fp8_format = transformer_engine.common.recipe.Format.E4M3
-            elif self.config.fp8 == "hybrid":
-                fp8_format = transformer_engine.common.recipe.Format.HYBRID
-            else:
-                raise ValueError("E4M3 and HYBRID are the only supported FP8 formats.")
-
-            fp8_recipe = TEDelayedScaling(
-                config=self.config,
-                fp8_format=fp8_format,
-                override_linear_precision=(False, False, not self.config.fp8_wgrad),
-            )
-            fp8_group = None
-            if parallel_state.model_parallel_is_initialized():
-                fp8_group = parallel_state.get_amax_reduction_group(
-                    with_context_parallel=True
-                )
-            fp8_context = transformer_engine.pytorch.fp8_autocast(
-                enabled=True, fp8_recipe=fp8_recipe, fp8_group=fp8_group
-            )
-        else:
-            fp8_context = nullcontext()
-
-        with rng_context and fp8_context:
+        with rng_context, outer_fp8_context:
             # Forward pass.
             if self.config.recompute_granularity == "full" and self.training:
                 hidden_states = self._checkpointed_forward(
@@ -118,11 +103,17 @@ class TransformerBlock(MegatronTransformerBlock):
                     rotary_pos_emb=rotary_pos_emb,
                     attention_bias=attention_bias,
                     packed_seq_params=packed_seq_params,
+                    use_inner_fp8_context=use_inner_fp8_context,
                     **kwargs,
                 )
             else:
                 for l_no, layer in enumerate(self.layers):
-                    with self.offload_context:
+                    inner_fp8_context = (
+                        get_fp8_context(self.config, layer.layer_number - 1)
+                        if use_inner_fp8_context
+                        else nullcontext()
+                    )
+                    with self.offload_context, inner_fp8_context:
                         if (len(self.cuda_graphs) == 0) or (not self.training):
                             hidden_states, context = layer(
                                 hidden_states=hidden_states,
@@ -193,6 +184,7 @@ class TransformerBlock(MegatronTransformerBlock):
         rotary_pos_emb: Tensor,
         attention_bias: Tensor,
         packed_seq_params: PackedSeqParams,
+        use_inner_fp8_context: bool,
         **kwargs,
     ):
         """Forward method with activation checkpointing."""
@@ -213,22 +205,24 @@ class TransformerBlock(MegatronTransformerBlock):
 
                 for index in range(start, end):
                     layer = self._get_layer(index)
-                    hidden_states, context = layer(
-                        hidden_states=hidden_states,
-                        attention_mask=attention_mask,
-                        attn_mask_type=attn_mask_type,
-                        context=context,
-                        context_mask=context_mask,
-                        rotary_pos_emb=rotary_pos_emb,
-                        attention_bias=attention_bias,
-                        inference_params=None,
-                        packed_seq_params=(
-                            packed_seq_params[index]
-                            if packed_seq_params is not None
-                            else None
-                        ),
-                        **kwargs,
+                    inner_fp8_context = (
+                        get_fp8_context(self.config, layer.layer_number - 1)
+                        if use_inner_fp8_context
+                        else nullcontext()
                     )
+                    with inner_fp8_context:
+                        hidden_states, context = layer(
+                            hidden_states=hidden_states,
+                            attention_mask=attention_mask,
+                            attn_mask_type=attn_mask_type,
+                            context=context,
+                            context_mask=context_mask,
+                            rotary_pos_emb=rotary_pos_emb,
+                            attention_bias=attention_bias,
+                            inference_params=None,
+                            packed_seq_params=packed_seq_params[index] if packed_seq_params is not None else None,
+                            **kwargs,
+                        )
                 return hidden_states, context
 
             return custom_forward
