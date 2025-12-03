@@ -296,14 +296,21 @@ def process_sample(
         with open(json_path, "r", encoding="utf-8") as f:
             json_data = json.load(f)
 
+        # Normalize list-style JSON (e.g. [{"role": ..., "content": ...}, ...]) to dict format.
+        # This keeps downstream logic untouched and allows config-defined TEMPLATE_TEXT_KEY usage.
+        if isinstance(json_data, list):
+            json_data = {TEMPLATE_TEXT_KEY: json_data}
+
         if not isinstance(json_data, dict):
             raise ValueError(f"Invalid JSON format in {json_path}")
 
         # --- Step 2: Render text input ---
         # @ref convert_to_webdataset.construct_sample_for_wds
-        text_data = json_data["texts"]
+        text_data = json_data.get(TEMPLATE_TEXT_KEY)
         if not text_data:
-            raise ValueError(f"Missing 'texts' field in {json_path}")
+            raise ValueError(
+                f"Missing '{TEMPLATE_TEXT_KEY}' field in {json_path}"
+            )
         text_input = chat_template.render(**{TEMPLATE_TEXT_KEY: text_data})
 
         # --- Step 3: Collect media paths ---
