@@ -106,8 +106,10 @@ class BaseMegatronVisionModule(VisionModule):
         model = cls(config, **kwargs)
         return model
 
-
-# TODO: 需要抽象？
+    def get_dummy_input(self, device):
+        """Get dummy inputs for vision models"""
+        return (torch.randn((4, 3 * 2 * 14 * 14), dtype=torch.bfloat16, device=device), \
+                torch.tensor([[1, 2, 2]], dtype=torch.int32, device=device))
 
 class BaseDecoderModelMixin(PreTrainedModel, ABC):
     """统一decoder模型混入类。"""

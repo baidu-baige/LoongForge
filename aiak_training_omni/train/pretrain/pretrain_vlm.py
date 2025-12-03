@@ -187,11 +187,11 @@ def forward_step(data_iterator, model):
             dict(
                 images=images,
                 image_grid_thw=image_grid_thw,
-            ),
+            ) if images is not None else None,
             dict(
                 pixel_values_videos=pixel_values_videos,
                 video_grid_thw=video_grid_thw,
-            ),
+            ) if pixel_values_videos is not None else None,
             None,
             input_ids=tokens,
             position_ids=position_ids,
