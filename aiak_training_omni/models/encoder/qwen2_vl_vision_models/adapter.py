@@ -28,7 +28,7 @@ class Adapter(BaseMegatronModule):
         if self.config.model_spec is None:
             model_spec = [
                 "aiak_training_omni.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
-                "get_adapeter_layer_with_spec",
+                "get_adapeter_layer_with_te_spec",
             ]
         else:
             model_spec = self.config.model_spec
