@@ -1,0 +1,17 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: intern_vit_6b
+  - ../../models/image_projector@model.image_projector: intern_mlp_adapter
+  - ../../models/internlm2.5@model.foundation: internvl2_5_26b
+  #- ../../data@data: vlm_data
+  - _self_
+
+model:
+  model_type: intern_vl
+
+  foundation: 
+    rotary_emb_func: "DynamicRotaryEmbedding"
+    model_spec: ["aiak_training_omni.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]

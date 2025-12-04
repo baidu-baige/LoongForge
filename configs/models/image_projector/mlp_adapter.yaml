@@ -1,8 +1,0 @@
-
-_target_: aiak_training_omni.models.encoder.MLPAdapterConfig
-
-normalization: "RMSNorm"
-
-add_bias_linear: True
-
-model_type: "qwen2_5_vl_adapter"
