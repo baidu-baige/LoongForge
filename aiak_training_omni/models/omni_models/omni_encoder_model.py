@@ -156,7 +156,6 @@ class OmniEncoderModel(torch.nn.Module):
                 make_encoder_forward_hook("text_decoder")
             )
         elif self.mix_used_vision_encoder:
-            self.video_encoder = self.image_encoder
             self.encoder_modality["video"] = True
 
         if (
@@ -217,8 +216,6 @@ class OmniEncoderModel(torch.nn.Module):
                         _load_state_dict_hook_ignore_param_names, adapter_param_names
                     )
                 )
-        elif self.mix_used_vision_projector:
-            self.video_projector = self.image_projector
         else:
             self.video_projector = None
 
@@ -312,12 +309,20 @@ class OmniEncoderModel(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for video encoding."""
-        video_embeddings, window_index = self.video_encoder(
-            pixel_values_videos, image_grid_thw=video_grid_thw
-        )
-        if self.video_projector is not None:
+        if self.mix_used_vision_encoder:
+            video_embeddings, window_index  = self.image_encoder(pixel_values_videos, 
+                                                                 image_grid_thw=video_grid_thw)
+            video_token_id = self.image_encoder.config.video_token_id
+        else:
+            video_embeddings, window_index = self.video_encoder(
+                pixel_values_videos, image_grid_thw=video_grid_thw
+            )
+            video_token_id = self.video_encoder.config.video_token_id
+        if self.mix_used_vision_projector and self.image_projector is not None:
+            video_embeddings = self.image_projector(video_embeddings, window_index)
+        elif self.video_projector is not None:
             video_embeddings = self.video_projector(video_embeddings, window_index)
-        video_token_id = self.video_encoder.config.video_token_id
+        
         n_video_tokens = (input_ids == video_token_id).sum().item()
         n_video_features = video_embeddings.shape[0]
         if n_video_tokens != n_video_features:
