@@ -6,48 +6,48 @@ from pathlib import Path
 MODEL_CONFIG_REGISTRY = {
     # deepseek
     "deepseek-v2": {
-        "config_path": "configs/models/deepseek",
+        "config_path": "configs/models/deepseek2",
         "config_name": "deepseek_v2",
     },
     "deepseek-v2-lite": {
-        "config_path": "configs/models/deepseek",
+        "config_path": "configs/models/deepseek2",
         "config_name": "deepseek_v2_lite",
     },
     "deepseek-v3": {
-        "config_path": "configs/models/deepseek",
+        "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3",
     },
     # llama
     "llama2-7b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama2",
         "config_name": "llama2_7b",
     },
     "llama2-13b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama2",
         "config_name": "llama2_13b",
     },
     "llama2-70b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama2",
         "config_name": "llama2_70b",
     },
     "llama3-8b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama3",
         "config_name": "llama3_8b",
     },
     "llama3-70b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama3",
         "config_name": "llama3_70b",
     },
     "llama3.1-8b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama3",
         "config_name": "llama3_1_8b",
     },
     "llama3.1-70b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama3",
         "config_name": "llama3_1_70b",
     },
     "llama3.1-405b": {
-        "config_path": "configs/models/llama",
+        "config_path": "configs/models/llama3",
         "config_name": "llama3_1_405b",
     },
     # qwen
@@ -96,93 +96,93 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen1_5_72b",
     },
     "qwen2-0.5b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2",
         "config_name": "qwen2_0_5b",
     },
     "qwen2-1.5b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2",
         "config_name": "qwen2_1_5b",
     },
     "qwen2-7b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2",
         "config_name": "qwen2_7b",
     },
     "qwen2-72b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2",
         "config_name": "qwen2_72b",
     },
     "qwen2.5-0.5b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_0_5b",
     },
     "qwen2.5-1.5b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_1_5b",
     },
     "qwen2.5-3b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_3b",
     },
     "qwen2.5-7b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_7b",
     },
     "qwen2.5-14b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_14b",
     },
     "qwen2.5-32b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_32b",
     },
     "qwen2.5-72b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen2.5",
         "config_name": "qwen2_5_72b",
     },
     "qwen3-0.6b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_0_6b",
     },
     "qwen3-1.7b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_1_7b",
     },
     "qwen3-4b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_4b",
     },
     "qwen3-8b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_8b",
     },
     "qwen3-14b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_14b",
     },
     "qwen3-30b-a3b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_30b_a3b",
     },
     "qwen3-32b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_32b",
     },
     "qwen3-235b-a22b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_235b_a22b",
     },
     "qwen3-480b-a35b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_480b_a35b",
     },
     "qwen3-coder-30b-a3b": {
-        "config_path": "configs/models/qwen",
+        "config_path": "configs/models/qwen3",
         "config_name": "qwen3_coder_30b_a3b",
     },
 
     # qwen2.5-vl
     "qwen2_5-vl-7b": {
-        "config_path": "configs/models/qwen2_5_vl",
+        "config_path": "configs/models/qwen2.5_vl",
         "config_name": "qwen2_5_vl_7b",
     },
 }

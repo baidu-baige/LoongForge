@@ -2,7 +2,5 @@
 _target_: aiak_training_omni.models.encoder.InternMLPAdapterConfig
 
 normalization: LayerNorm
-
 model_type: "intern_adapter"
-
 layernorm_epsilon: 1e-5
