@@ -17,7 +17,7 @@ from megatron.core.transformer.transformer_layer import (
     TransformerLayerSubmodules,
 )
 
-from aiak_training_omni.models.encoder.qwenvl_vision_models.qwen2_vl_layer_spec import (
+from aiak_training_omni.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec import (
     apply_rotary_pos_emb_vision,
 )
 

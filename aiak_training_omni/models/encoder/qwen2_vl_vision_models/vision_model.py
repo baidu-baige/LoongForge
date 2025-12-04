@@ -80,7 +80,7 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
         super().__init__(config)
         if self.config.model_spec is None:
             model_spec = [
-                "aiak_training_omni.models.encoder.qwenvl_vision_models.qwen2_vl_layer_spec",
+                "aiak_training_omni.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
                 "get_vision_layer_with_spec",
             ]
         else:
