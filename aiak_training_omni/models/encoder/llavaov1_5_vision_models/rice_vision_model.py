@@ -170,4 +170,4 @@ class RiceViTModel(Qwen2VisionModel):
             patch_output.append(x[start_idx : start_idx + tokens_per_sample[i]])
             start_idx += tokens_per_sample[i]
         patch_output = torch.cat(patch_output, dim=0)  # [原始seq_len, hidden_size]
-        return patch_output, None
+        return patch_output, None, None

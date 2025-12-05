@@ -222,7 +222,7 @@ class InternVisionModel(BaseMegatronVisionModule):
         # if not return_dict:
         #     return (last_hidden_state, pooled_output, None)
         
-        return output, None
+        return output, None, None
 
         # TODO add support for return intermediate hidden states
         # if not return_dict:

@@ -7,6 +7,9 @@ from .qwen2_vl_vision_models.qwen2_vl_config import (
     Qwen2VisionRMSNormConfig,
     MLPAdapterConfig,
 )
+from .qwen3_vl_vision_models.vision_model import Qwen3VisionModel
+from .qwen3_vl_vision_models.qwen3_vl_config import Qwen3VisionModelConfig
+
 from .llavaov1_5_vision_models.llavaov_1_5_config import RiceVisionConfig
 from .llavaov1_5_vision_models.rice_vision_model import RiceViTModel
 from transformers import AutoModel
@@ -20,6 +23,7 @@ from .internvl_vision_models.internvl_config import (
 
 AutoModel.register(Qwen2VisionModelConfig, Qwen2VisionModel)
 AutoModel.register(Qwen2VisionRMSNormConfig, Qwen2VisionModelWithRMSNorm)
+AutoModel.register(Qwen3VisionModelConfig, Qwen3VisionModel)
 AutoModel.register(MLPAdapterConfig, Adapter)
 AutoModel.register(RiceVisionConfig, RiceViTModel)
 AutoModel.register(InternVisionConfig, InternVisionModel)

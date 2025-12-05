@@ -1,5 +1,6 @@
 """register qwen model with different config"""
 
+from typing import List
 from dataclasses import dataclass, fields
 from aiak_training_omni.models.common.base_model_config import BaseModelConfig
 from aiak_training_omni.utils.constants import LanguageModelFamilies
@@ -33,4 +34,5 @@ class Qwen3Config(BaseModelConfig):
     moe_ffn_hidden_size: int = None
     rotary_base: int = 10000
     rotary_emb_func: str = "RotaryEmbedding"
+    mrope_section: List[int] = None
     model_type = LanguageModelFamilies.QWEN2

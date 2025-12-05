@@ -3,6 +3,7 @@
 from collections import OrderedDict
 from typing import Dict, Literal, Optional
 
+import torch
 from torch import Tensor
 from .qwen_config import Qwen3Config
 from megatron.core import InferenceParams, tensor_parallel, parallel_state
@@ -18,12 +19,13 @@ from aiak_training_omni.models.common.base_model_mixins import (
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_block import TransformerBlock
+from megatron.core.transformer.transformer_block import TransformerBlock as MegatronTransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
-import torch
 
+from aiak_training_omni.utils import get_model_config
 from aiak_training_omni.models.utils import import_module
 from aiak_training_omni.models.omni_models.utils import get_pos_emb_on_this_cp_rank
+from .qwen3_vl_transformer_block import TransformerBlock as Qwen3VLTransformerBlock
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
@@ -166,6 +168,58 @@ class Qwen2VLRotaryEmbedding(torch.nn.Module):
         return emb
 
 
+class Qwen3VLRotaryEmbedding(Qwen2VLRotaryEmbedding):
+    """Implements multimodal rotation"""
+    def __init__(self, dim, theta=1000000, mrope_section=[24, 20, 20]):
+        super().__init__(dim, theta)
+        self.mrope_section = mrope_section
+    
+    def apply_interleaved_mrope(self, freqs, mrope_section):
+        """Apply interleaved MRoPE to 3D rotary embeddings.
+        Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
+        interleaved [THTHWHTHW...TT], preserving frequency continuity.
+        args:
+            x: (3, bs, seq_len, head_dim // 2)
+            mrope_section: (3,)
+        returns:
+            x_t: (bs, seq_len, head_dim // 2)
+        """
+        freqs_t = freqs[0]  # just overwrite the first dimension T
+        for dim, offset in enumerate((1, 2), start=1):  # H, W
+            length = mrope_section[dim] * 3
+            idx = slice(offset, length, 3)
+            freqs_t[..., idx] = freqs[dim, ..., idx]
+        return freqs_t
+
+    @torch.no_grad()
+    def forward(self, position_ids, packed_seq):
+        """Returns the frequency"""
+        # Core RoPE block. In contrast to other models, Qwen2_VL has different position ids for thw grids
+        # So we expand the inv_freq to shape (3, ...)
+        inv_freq_expanded = (
+            self.inv_freq[None, None, :, None]
+            .float()
+            .expand(3, position_ids.shape[1], -1, 1)
+        ) # [3, 1, 32, 1]
+        # position_ids: [3, 1, 84]
+        position_ids_expanded = position_ids[
+            :, :, None, :
+        ].float()  # shape (3, bs, 1, positions) [3, 1, 1, 84]
+
+        freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(
+            2, 3
+        ) # [3, 1, 84, 32]
+        
+        freqs = self.apply_interleaved_mrope(freqs, self.mrope_section) # shape (bs, seq_length, dim)
+
+        emb = torch.cat((freqs, freqs), dim=-1)
+
+        # shape (seq_length, bs, 1, 2 * dim)
+        emb = emb[..., None, :].transpose(0, 1).contiguous()
+
+        return emb
+
+
 class Qwen3Model(BaseMegatronLanuageModule):
     """Qwen3 Transformer language model.
 
@@ -292,13 +346,27 @@ class Qwen3Model(BaseMegatronLanuageModule):
                 rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
             )
+        elif (
+            self.config.rotary_emb_func == "Qwen3VLRotaryEmbedding"
+            and self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
+        ):
+            self.rotary_pos_emb = Qwen3VLRotaryEmbedding(
+                dim=self.config.kv_channels,
+                theta=self.rotary_base,
+                mrope_section=self.config.mrope_section
+            )
         else:
             raise NotImplementedError(
                 f"Rotarty embedding type {self.config.rotary_emb_func} not implemented."
             )
         # Cache for RoPE tensors which do not change between iterations.
         self.rotary_pos_emb_cache = {}
-
+        
+        model_config = get_model_config()
+        TransformerBlock = MegatronTransformerBlock
+        if self.config.model_type == "qwen3_vit":
+            TransformerBlock = Qwen3VLTransformerBlock
         # Transformer.
         self.decoder = TransformerBlock(
             config=self.config,
@@ -382,6 +450,8 @@ class Qwen3Model(BaseMegatronLanuageModule):
         packed_seq_params: PackedSeqParams = None,
         extra_block_kwargs: dict = None,
         runtime_gather_output: Optional[bool] = None,
+        visual_pos_masks: Optional[list[Tensor]] = None,
+        deepstack_visual_embeds: Optional[list[Tensor]] = None, 
         **kwargs,
     ) -> Tensor:
         """Forward function of the GPT Model This function passes the input tensors
@@ -413,7 +483,7 @@ class Qwen3Model(BaseMegatronLanuageModule):
             rotary_pos_emb is None
             and self.position_embedding_type == "rope"
             and not self.config.multi_latent_attention
-            and self.config.rotary_emb_func != "Qwen2VLRotaryEmbedding"
+            and self.config.rotary_emb_func not in ["Qwen2VLRotaryEmbedding", "Qwen3VLRotaryEmbedding"]
         ):
             rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
                 inference_params,

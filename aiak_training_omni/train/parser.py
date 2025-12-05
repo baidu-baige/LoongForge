@@ -15,8 +15,10 @@ from aiak_training_omni.models.utils import build_model_config
 from aiak_training_omni.train.arguments import aiak_extra_train_args_provider
 from aiak_training_omni.train.get_loss_func import (default_loss_func,
                                                     loss_func_internvl)
-from aiak_training_omni.train.get_position_idx_func import (
-    get_mrope_index, get_position_ids, get_rope_index_internvl)
+from aiak_training_omni.train.get_position_idx_func import (get_mrope_index, 
+                                                            get_position_ids, 
+                                                            get_rope_index_internvl, 
+                                                            get_rope_index_qwen3vl)
 from aiak_training_omni.train.validators import (validate_aiak_extra_args,
                                                     validate_custom_model_args)
 from aiak_training_omni.utils import constants
@@ -39,7 +41,8 @@ def register_custom_resolvers():
     POSITION_IDX_FUNC_MAP = {
         "position_ids": get_position_ids,
         "mrope_ids": get_mrope_index,
-        "rope_ids_internvl": get_rope_index_internvl,  
+        "rope_ids_internvl": get_rope_index_internvl, 
+        "rope_ids_qwen3vl": get_rope_index_qwen3vl
     }
     LOSS_FUNC_MAP = {
         "default": default_loss_func,

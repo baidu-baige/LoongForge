@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.transformer_config import TransformerConfig
-from .vision_transformer_block import TransformerBlock
+from .vision_transformer_block import TransformerBlock as Qwen2VisionTransformerBlock
+from ..qwen3_vl_vision_models.vision_transformer_block import TransformerBlock as Qwen3VisionTransformerBlock
 from .qwen2_vl_config import Qwen2VisionModelConfig, Qwen2VisionRMSNormConfig
 from aiak_training_omni.models.common import BaseMegatronVisionModule
 from aiak_training_omni.models.utils import import_module
@@ -96,7 +97,9 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
             in_channels=self.config.in_channels,
             embed_dim=self.config.hidden_size,
         )
-
+        TransformerBlock = Qwen2VisionTransformerBlock
+        if self.config.model_type == "qwen3_vit":
+            TransformerBlock = Qwen3VisionTransformerBlock
         self.decoder = TransformerBlock(
             config=self.config,
             spec=self.transformer_layer_spec,
@@ -160,7 +163,7 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
             attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
-        return x, None
+        return x, None, None
 
 
 class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
@@ -289,4 +292,4 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 
-        return x, window_index
+        return x, window_index, None
