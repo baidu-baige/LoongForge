@@ -9,9 +9,7 @@
 import json
 
 import os
-from convert_checkpoint.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.abstact_config import AbstractConfig
-from convert_checkpoint.common_config import CommonConfig
+from convert_checkpoint.common.abstact_config import AbstractConfig
 from pprint import pprint
 
 

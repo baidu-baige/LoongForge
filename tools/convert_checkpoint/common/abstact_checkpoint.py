@@ -6,7 +6,6 @@
 #
 ################################################################################
 
-import torch
 from abc import ABC, abstractmethod
 
 
@@ -15,9 +14,8 @@ class AbstractCheckpoint(ABC):
        AbstractCheckpoint 
     """
     
-    def __init__(self, num_layers):
-        self.num_layers = num_layers
-        self.state_dict = {}
+    def __init__(self, c_config):
+        self.c_config = c_config
 
     @staticmethod
     @abstractmethod
@@ -34,20 +32,16 @@ class AbstractCheckpoint(ABC):
         """
         raise NotImplementedError()
 
-    def set_dtype(self, dtype):
-        """ set dtype """
-        self.dtype = dtype
-
     def load(self, ckpt_path):
         """
             load checkpoint
         """
-        self.state_dict = torch.load(ckpt_path)
+        raise NotImplementedError()
     
     def save(self, ckpt_path):
         """
             save checkpoint
         """
-        torch.save(self.state_dict, ckpt_path)
+        raise NotImplementedError()
           
     

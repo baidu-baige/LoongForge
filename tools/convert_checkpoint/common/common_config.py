@@ -9,7 +9,7 @@
 import torch
 import json
 
-from convert_checkpoint.abstact_config import AbstractConfig
+from convert_checkpoint.common.abstact_config import AbstractConfig
 
 
 class CommonConfig(AbstractConfig):
@@ -70,3 +70,5 @@ class CommonConfig(AbstractConfig):
         with open(config_path, 'r', encoding='utf-8') as f:
             self.data = json.loads(f.read())
 
+    def load_convert_data(self, convert_data):
+            self.data = convert_data

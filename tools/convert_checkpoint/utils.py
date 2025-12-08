@@ -14,6 +14,9 @@ import torch
 from bisect import bisect_left
 from math import floor, ceil
 
+from typing import Tuple, Literal
+
+
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -262,11 +265,11 @@ def _lprobe(weights, num_parts, bottleneck):
 
     return parts, bsum >= total_weight
 
-def touch_file(done_dir, p_id, ep_id=None):
+def touch_file(done_dir, p, ep_id=None):
     if ep_id is None:
-        fname = f'{p_id}.done'
+        fname = f'{p}.done'
     else:
-        fname = f'{p_id}_{ep_id}.done'
+        fname = f'{p}_{ep_id}.done'
     done_file_name = os.path.join(done_dir, fname)
     with open(done_file_name, 'w'):
         os.utime(done_file_name, None)
@@ -431,18 +434,17 @@ def get_num_layers_in_vp_map(stage, num_layers, pp,
                            custom_pipeline_layers=None,
                            num_layers_in_first_pipeline_stage=None,
                            num_layers_in_last_pipeline_stage=None):
-    ori_num_layers = num_layers - num_nextn_predict_layers
     if custom_pipeline_layers is not None:
         assert num_layers_in_first_pipeline_stage is None and num_layers_in_last_pipeline_stage is None, \
             "custom_pipeline_layers need not num_layers_in_first_pipeline_stage or in_last_pipeline_stage"
-        num_layers_in_vp, _ = custom_partition_imbalanced(ori_num_layers, pp * stage, custom_pipeline_layers)
+        num_layers_in_vp, _ = custom_partition_imbalanced(num_layers, pp * stage, custom_pipeline_layers)
         num_layers_in_vp[-1] += num_nextn_predict_layers
     elif num_layers_in_first_pipeline_stage is not None or num_layers_in_last_pipeline_stage is not None:
         num_layers_in_vp = uneven_vpp_partition(
-            num_layers, pp, stage, num_layers_in_first_pipeline_stage, num_layers_in_last_pipeline_stage)
+            num_layers + num_nextn_predict_layers, pp, stage, num_layers_in_first_pipeline_stage, num_layers_in_last_pipeline_stage)
         num_layers_in_vp[-1] += num_nextn_predict_layers
     else:
-        num_layers_in_vp, _ = partition_balanced(num_layers, pp * stage)
+        num_layers_in_vp, _ = partition_balanced(num_layers + num_nextn_predict_layers, pp * stage)
     return num_layers_in_vp
 
 def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
@@ -458,15 +460,13 @@ def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
 
 def get_layer_ids(c_config, args, p):
     cargs = c_config.get_args("common")
-    hargs = c_config.get_args("huggingface")
     margs = c_config.get_args("mcore")
 
-    ori_num_layers = cargs["num_layers"]
-    num_nextn_predict_layers = hargs.get("num_nextn_predict_layers", 0)
-    num_layers = ori_num_layers + num_nextn_predict_layers
-    num_layers_per_stage = margs["num_layers_per_virtual_pipeline_stage"]
+    num_layers = cargs["num_layers"]
+    num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
+    num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     if num_layers_per_stage:
-        stage = num_layers // pp // num_layers_per_stage
+        stage = (num_layers + num_nextn_predict_layers) // pp // num_layers_per_stage
     else:
         stage = args.num_virtual_stages_per_pipeline_rank or 1
     dualpipev = args.vpp_scheduler == 'dualpipev'
@@ -513,15 +513,12 @@ def get_pipeline_by_rank_id(rank_id, world_size, pp, ep=None):
     return p_dict
 
 
-def get_ep_map(num_experts, ep, num_experts_for_test=None):
-    if num_experts_for_test is None:
-        experts_ids = [x for x in range(num_experts)]
-        chunks = [experts_ids[x:x + num_experts // ep]
-            for x in range(0, len(experts_ids), num_experts // ep)] # ep_id -> [expert_ids]
-    else:
-        experts_ids = [x for x in range(num_experts_for_test)]
-        chunks = [experts_ids[x:x + num_experts_for_test // ep]
-            for x in range(0, len(experts_ids), num_experts_for_test // ep)] # ep_id -> [expert_ids]
+def get_ep_map(num_experts, ep):
+    if ep is None:
+        return None, None, None
+    experts_ids = [x for x in range(num_experts)]
+    chunks = [experts_ids[x:x + num_experts // ep]
+        for x in range(0, len(experts_ids), num_experts // ep)] # ep_id -> [expert_ids]
 
     expert_local_mapping = {}
     expert_ep_mapping = {}
@@ -535,3 +532,145 @@ def get_ep_map(num_experts, ep, num_experts_for_test=None):
     logging.info(f"expert_ep_mapping: {expert_ep_mapping}")
     logging.info(f"ep_expert_mapping: {ep_expert_mapping}")
     return expert_local_mapping, expert_ep_mapping, ep_expert_mapping
+
+def get_etp_map(tp, ep, etp):
+    if etp is None:
+        return None, None
+    assert tp % (etp * ep) == 0 or (etp * ep) % tp == 0, f"tp: {tp}, etp: {etp}, ep: {ep}, tp % (etp * ep) != 0"
+    etp_to_tp_mapping = {}
+    v_tp = tp
+    if tp < etp * ep:
+        v_tp = etp * ep
+    tp_to_ep = {}
+    for t in range (v_tp):
+        etp_id = t % etp
+        ep_id = (t // etp) % ep
+        if ep_id not in etp_to_tp_mapping:
+            etp_to_tp_mapping[ep_id] = {}
+        etp_to_tp_mapping[ep_id][etp_id] = t % tp
+        tp_to_ep[t] = ep_id if t not in tp_to_ep or ep_id < tp_to_ep[t] else tp_to_ep[t]
+
+    logging.info(f"{etp_to_tp_mapping=}, {tp_to_ep=}")
+    return etp_to_tp_mapping, tp_to_ep
+
+def is_power_of_two(x):
+    return bool(((x.view(torch.int32) & 0x007FFFFF) == 0).all())
+
+def get_quantizer_with_weight_scale_inv(weight, weight_scale_inv, dtype, amax_epsilon=False):
+    from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer
+    from transformer_engine.pytorch.constants import TE_DType
+    assert weight.dtype in (torch.float8_e4m3fn, torch.uint8)
+    q = Float8BlockQuantizer(fp8_dtype=TE_DType[torch.float8_e4m3fn],
+                                rowwise=True, columnwise=False,
+                                amax_epsilon=amax_epsilon,
+                                force_pow_2_scales=is_power_of_two(weight_scale_inv),
+                                block_scaling_dim=2)
+    qx = q.make_empty(weight.shape, dtype=dtype, device='cpu')
+    qx._rowwise_data.copy_(weight.view(torch.uint8))
+    qx._rowwise_scale_inv[:weight_scale_inv.size(0), :weight_scale_inv.size(1)].copy_(weight_scale_inv)
+    return qx
+
+def per_block_dequant_from_fp8(fp8_blocks: torch.Tensor,
+                                scales: torch.Tensor,
+                                dtype: torch.dtype = torch.bfloat16) -> torch.Tensor:
+    """
+    Dequantizes a tensor from FP8, assuming `fp8_blocks` has the original, unpadded shape.
+
+    Args:
+        fp8_blocks: The FP8 quantized tensor with its original shape.
+        scales: The per-block scales used for quantization.
+        dtype: The desired output data type (e.g., torch.bfloat16).
+
+    Returns:
+        The dequantized tensor with the same shape as `fp8_blocks`.
+    """
+
+    if fp8_blocks.dtype == torch.uint8:
+        fp8_blocks = fp8_blocks.view(torch.float8_e4m3fn)
+
+    # Get the original shape directly from the input tensor.
+    m, n = fp8_blocks.shape
+
+    # Calculate the padded dimensions required for 128x128 block operations.
+    m_pad = ceil_div(m, 128) * 128
+    n_pad = ceil_div(n, 128) * 128
+
+    # Trim the scales tensor to match the padded dimensions of the input.
+    scales = scales[:ceil_div(m, 128), :ceil_div(n, 128)].contiguous()
+
+    # Create a padded version of the input tensor if its dimensions are not
+    # a multiple of the block size.
+    if m_pad == m and n_pad == n:
+        fp8_padded = fp8_blocks
+    else:
+        fp8_padded = torch.zeros((m_pad, n_pad), dtype=fp8_blocks.dtype, device=fp8_blocks.device)
+        fp8_padded[:m, :n] = fp8_blocks
+
+    # Dequantize block by block.
+    fp8_view = fp8_padded.view(-1, 128, n_pad // 128, 128)
+    scale_expanded = scales.view(-1, 1, scales.size(1), 1)
+    x_recon_view = fp8_view.to(scale_expanded.dtype) * scale_expanded
+
+    # Reshape the dequantized blocks into a 2D tensor of the padded size,
+    # then slice it back to the original dimensions.
+    x_recon = x_recon_view.view(m_pad, n_pad)[:m, :n].contiguous()
+    x_recon = x_recon.to(dtype)
+
+    return x_recon
+
+def per_block_cast_to_fp8(
+    x: torch.Tensor,
+    method: Literal["te", "pt", "aiak"] = 'te',
+    fp8_dtype: torch.dtype = torch.float8_e4m3fn,
+    **kwargs,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Args:
+        x: 2d tensor, the model parameter what will be block-wise quantize to fp8.
+        method: one of the ["te", "pt", "aiak"], means using TransformerEngine, naive PyTorch, aiak-fp8-quantizer
+            to do the quantization respectively. Defaults to "te".
+        fp8_dtype: the dtype of the output fp8 tensor. Defaults to torch.float8_e4m3fn.
+        **kwargs: kwargs pass to the `te` method. Take no effect in other quantization methods. Belows are the args:
+            `amax_epsilon`: defaults to 0.
+            `force_pow_2_scales` defaults to True.
+    Returns:
+        x_scaled: 2d tensor, the quantized tensor.
+        weight_scale_inv: 2d tensor, the scale_inv of the quantized tensor.
+    """
+
+    # Always do the quantization on device
+    x = x.cuda()
+    
+    if method == "pt":
+        assert x.dim() == 2
+        m, n = x.shape
+        x_padded = torch.zeros((ceil_div(m, 128) * 128, ceil_div(n, 128) * 128), dtype=x.dtype, device=x.device)
+        x_padded[:m, :n] = x
+        x_view = x_padded.view(-1, 128, x_padded.size(1) // 128, 128)
+        x_amax = x_view.abs().float().amax(dim=(1, 3), keepdim=True).clamp(1e-4)
+        x_scaled = (x_view * (448.0 / x_amax)).to(fp8_dtype)
+        return x_scaled.view_as(x_padded)[:m, :n].contiguous().cpu(), \
+            (x_amax / 448.0).view(x_view.size(0), x_view.size(2)).cpu()
+
+    elif method == "aiak":
+        import aiak_fp8_quantizer
+        weight, weight_scale_inv, *_ = aiak_fp8_quantizer.per_block_cast_to_fp8_fprop_vector(x)
+        return weight.view(fp8_dtype).cpu(), weight_scale_inv.cpu()
+
+    elif method == "te":
+        from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer
+        from transformer_engine.pytorch.constants import TE_DType
+        quantizer = Float8BlockQuantizer(
+            fp8_dtype=TE_DType[fp8_dtype],
+            rowwise=True,
+            columnwise=False,
+            amax_epsilon=kwargs.get("amax_epsilon", 0.0),
+            force_pow_2_scales=kwargs.get("force_pow_2_scales", True),
+            block_scaling_dim=2,
+        )
+        xq = quantizer(x)
+        fp8_weight = xq._rowwise_data.view(fp8_dtype)
+        fp8_scale_inv = xq._rowwise_scale_inv
+        return fp8_weight.cpu(), fp8_scale_inv.cpu()
+    else:
+        raise ValueError(f"invalid quantization method: {method}")

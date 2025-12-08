@@ -10,15 +10,14 @@ import os
 import torch
 import types
 from tqdm import tqdm
-import pprint
 
-from convert_checkpoint.abstact_config import AbstractConfig
-from convert_checkpoint.common_config import CommonConfig
+from convert_checkpoint.common.abstact_config import AbstractConfig
+from convert_checkpoint.arguments import parse_args
 
 
-class MegatronConfig(AbstractConfig):
+class McoreConfig(AbstractConfig):
     """
-        MegatronConfig
+        McoreConfig
     """
 
     def __init__(self):
@@ -27,15 +26,16 @@ class MegatronConfig(AbstractConfig):
     @staticmethod
     def convert_from_common(c_config):
         """
-            return megatron config converted from common config 
+            return mcore config converted from common config 
         """
-        config = MegatronConfig()
+        config = McoreConfig()
+        args = parse_args()
         cargs = c_config.get_args("common")
-        margs = c_config.get_args("megatron")
+        margs = c_config.get_args("mcore")
         config.update(cargs)
         config.update(margs)
 
-        num_layers_per_stage = margs["num_layers_per_virtual_pipeline_stage"]
+        num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
         if num_layers_per_stage is not None:
             num_layers = cargs["num_layers"]
             pp = margs["pipeline_model_parallel_size"]
@@ -45,18 +45,20 @@ class MegatronConfig(AbstractConfig):
 
     def load(self, load_path):
         """ load config """
-        sub_dirs = os.listdir(load_path)
-        possible_sub_dirs = ["mp_rank_00", "mp_rank_00_000"]
-        rank0_checkpoint_name = None
-        rank0_checkpoint_path = None
-        for sub_dir in possible_sub_dirs:
-            if sub_dir in sub_dirs:
-                rank0_checkpoint_name = os.listdir(os.path.join(load_path, sub_dir))[0]
-                rank0_checkpoint_path = os.path.join(load_path, sub_dir, rank0_checkpoint_name)
-                break
-        print(f"Loading Megatron-LM config from: {rank0_checkpoint_path}")
+        if load_path is None:
+            return
+        else:
+            sub_dirs = os.listdir(load_path)
+            possible_sub_dirs = ["mp_rank_00", "mp_rank_00_000", "mp_rank_00_000_000"]
+            rank0_checkpoint_path = None
+            for sub_dir in possible_sub_dirs:
+                if sub_dir in sub_dirs:
+                    rank0_checkpoint_name = "model_optim_rng.pt"
+                    rank0_checkpoint_path = os.path.join(load_path, sub_dir, rank0_checkpoint_name)
+                    break
+            print(f"Loading Mcore config from: {rank0_checkpoint_path}")
 
-        rank0_state_dict = torch.load(rank0_checkpoint_path, map_location="cpu")
+            rank0_state_dict = torch.load(rank0_checkpoint_path, map_location="cpu", weights_only=False)
         if "args" not in rank0_state_dict:
             raise ValueError(
                 "Megatron-LM checkpoint does not contain arguments. This utility only supports Megatron-LM checkpoints"
@@ -82,7 +84,7 @@ class MegatronConfig(AbstractConfig):
                         else f"mp_rank_{t:02d}_{p:03d}"
                 checkpoint_name = os.listdir(os.path.join(release_dir, sub_dir_name))[0]
                 checkpoint_path = os.path.join(release_dir, sub_dir_name, checkpoint_name)
-                tp_state_dict = torch.load(checkpoint_path, map_location="cpu")
+                tp_state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
                 tp_state_dict["args"] = self.to_namespace()
                 torch.save(tp_state_dict, checkpoint_path)
                 pbar.update(1)

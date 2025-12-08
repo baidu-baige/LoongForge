@@ -97,6 +97,10 @@ def _add_checkpoint_args(parser):
     group.add_argument('--distributed_convert', action='store_true',
                        help='Convert checkpoint in distributed mode')
 
+    group.add_argument('--config_file', type=str, help="Config file for model configuration.")
+    group.add_argument('--convert_file', type=str, help="Convert file for checkpoint conversion.")
+    # group.add_argument('--config_name', type=str, help="Config file name for model configuration.")
+    # group.add_argument('--module', type=str, default="language", help="Module type, default: language", choices=["language", "vit"])
 
 def _add_common_args(parser):
     group = parser.add_argument_group(title='common')
@@ -108,7 +112,7 @@ def _add_common_args(parser):
                        choices=["dualpipev"],
                        help='By default, the original 1F1B scheduling method is used. When selecting DualPipeV, '
                             'the effect can be referred to at https://hackmd.io/@ufotalent/r1lVXsa9Jg')
-    group.add_argument('--num-virtual-stages-per-pipeline-rank', type=int, default=None,
+    group.add_argument('--num_virtual_stages_per_pipeline_rank', type=int, default=None,
                        help='Number of virtual pipeline stages per pipeline parallelism rank')
     group.add_argument('--decoder-first-pipeline-num-layers',
                        type=int, default=None,
@@ -149,6 +153,12 @@ def _add_megatron_args(parser):
                        help='Degree of expert model parallelism. Default is None, '
                        'which will be set to the value of --tensor-model-paralle-size.')
     group.add_argument('--pad_vocab_size_to', type=int, default=None,
+                       help='Pad the vocab size to this value.'
+                            'This value must be greater than the initial size of the tokenizer'
+                            ', needs to be divisible by TP size and `make-vocab-size-divisible-by`.')
+    group.add_argument('--add_embedding_padding', type=bool, default=True,
+                       help='Whether to add embedding padding.')
+    group.add_argument('--make_vocab_size_divisible_by', type=int, default=128,
                        help='Pad the vocab size to this value.'
                             'This value must be greater than the initial size of the tokenizer'
                             ', needs to be divisible by TP size and `make-vocab-size-divisible-by`.')

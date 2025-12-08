@@ -22,13 +22,11 @@ logging.basicConfig(level=logging.INFO)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from convert_checkpoint.huggingface_checkpoint import HuggingFaceCheckpoint
-from convert_checkpoint.megatron_checkpoint import MegatronCheckpoint
-from convert_checkpoint.mcore_checkpoint import McoreCheckpoint
-from convert_checkpoint.huggingface_config import HuggingFaceConfig
-from convert_checkpoint.megatron_config import MegatronConfig
-from convert_checkpoint.mcore_config import McoreConfig
-from convert_checkpoint.common_config import CommonConfig
+from convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
+from convert_checkpoint.huggingface.huggingface_config import HuggingFaceConfig
+from convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
+from convert_checkpoint.mcore.mcore_config import McoreConfig
+from convert_checkpoint.common.common_config import CommonConfig
 from convert_checkpoint.arguments import parse_args, set_args
 from convert_checkpoint import utils
 
@@ -39,6 +37,11 @@ from convert_checkpoint.utils import(
     get_ep_map,
 )
 
+from os.path import dirname
+sys.path.append(dirname(dirname(SCRIPT_DIR)))
+from omegaconf import OmegaConf
+from convert_checkpoint.config_utils import parse_at_configs, load_config, parallel_param_parser
+
 
 BIG_MODEL_LIST = ['llama2-70b', 'qwen-72b', 'codellama-70b', 'codellama-34b']
 
@@ -47,12 +50,19 @@ class Model():
     """
         Model
     """
-    def __init__(self):
-        self.config = CommonConfig()
+    def __init__(self, c_config):
+        self.config = c_config
         self.delay_convert_optimizer = False
 
-    def convert_checkpoint(self, platform, save_path=None, m_config=None, save_optim=True, p=None, layer_ids=[],
-                           cur_ep_ids=None, expert_ids=None):
+    @staticmethod
+    def check_done_files(platform, save_path, layer_dict, expert_dict):
+        if platform == 'mcore':
+            return McoreCheckpoint.check_done_files(save_path, layer_dict, expert_dict=expert_dict)
+        if platform == 'huggingface':
+            return HuggingFaceCheckpoint.check_done_files(save_path, layer_dict, expert_dict=expert_dict)
+        return False
+
+    def convert_from_common(self, platform, target_config, layer_dict, expert_dict=None):
         """
             Convert common checkpoint to the platform checkpoint.
 
@@ -61,16 +71,13 @@ class Model():
                 args (dict): arguments
         """
 
-        if platform == 'megatron':
-            return self.ckpt.convert(MegatronCheckpoint, self.config)
-
         if platform == 'mcore':
-            return self.ckpt.convert(
-                McoreCheckpoint, self.config, save_path, m_config, save_optim, p=p, cur_ep_ids=cur_ep_ids)
-
+            m_ckpt = McoreCheckpoint(self.config)
+            return m_ckpt.convert_from_common(self.c_ckpt, target_config, layer_dict, expert_dict=expert_dict)
         if platform == 'huggingface':
-            return self.ckpt.convert(HuggingFaceCheckpoint, self.config, p=p, layer_ids=layer_ids,
-                                     cur_ep_ids=cur_ep_ids, expert_ids=expert_ids)
+            hf_ckpt = HuggingFaceCheckpoint(self.config)
+            return hf_ckpt.convert_from_common(self.c_ckpt, layer_dict, expert_dict=expert_dict)
+        self.common_ckpt.clear()
 
     def convert_config(self, platform):
         """
@@ -79,16 +86,13 @@ class Model():
             Args:
                 platform (str): name of platform 
         """
-        if platform == 'megatron':
-            return self.config.convert(MegatronConfig)
-    
         if platform == 'mcore':
             return self.config.convert(McoreConfig)
 
         if platform == 'huggingface':
             return self.config.convert(HuggingFaceConfig)
 
-    def load(self, args, p=None, layer_ids=[], cur_ep_ids=None, expert_ids=None):
+    def convert_to_common(self, args, layer_dict, expert_dict=None):
         """
             Load checkpoint and config.
         """
@@ -106,34 +110,24 @@ class Model():
 
         # load common config
         assert isinstance(self.config, CommonConfig)
-        config_path = args.common_config_path
-        self.config.load(config_path)
-        common_args = self.config.get_args()
-        num_layers = common_args['num_layers']
-        platform_args = self.config.get_args(platform)
-        dtype = self.config.get_dtype()
-        name_map = self.config.get_name_map(platform)
 
         # load checkpoint
         if platform == 'huggingface':
-            hf_ckpt = HuggingFaceCheckpoint(num_layers)
-            hf_ckpt.set_dtype(dtype)
-            hf_ckpt.load(ckpt_path, args.safetensors, c_config=self.config, layer_ids=layer_ids, expert_ids=expert_ids)
-            self.ckpt = hf_ckpt.convert_to_common(self.config, layer_ids=layer_ids)
-            return hf_ckpt
+            hf_ckpt = HuggingFaceCheckpoint(self.config)
+            assert len(layer_dict.keys()) == 1, f"layer_dict keys: {layer_dict.keys()}"
+            p = list(layer_dict.keys())[0]
+            layer_ids = layer_dict[p]
+            expert_ids=expert_dict.values() if expert_dict is not None else None
+            hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids)
+            self.c_ckpt = hf_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
 
         # load checkpoint
         if platform == 'mcore':
             self.delay_convert_optimizer = args.model_type_custom in BIG_MODEL_LIST
-            m_config = McoreConfig()
-            m_config.load(ckpt_path)
-            m_config.update({"tensor_parallel_dim": self.config.get("tensor_parallel_dim")})
-            m_ckpt = McoreCheckpoint(num_layers, args.load_ckpt_path)
-            m_ckpt.set_dtype(dtype)
-            load_optim = not self.delay_convert_optimizer and not args.no_load_optim
-            m_ckpt.load(ckpt_path, m_config, name_map, load_optim, p=p, cur_ep_ids=cur_ep_ids)
-            self.ckpt = m_ckpt.convert_to_common(self.config, p=p, cur_ep_ids=cur_ep_ids)
-            return m_ckpt
+            m_ckpt = McoreCheckpoint(self.config)
+            m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict)
+            self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
+
 
     def update_args(self, args, group):
         """ update config accoding to args """
@@ -144,28 +138,49 @@ def main():
     """ main """
     args = parse_args()
 
+    config_path = args.common_config_path
+    c_config = CommonConfig()
+    if config_path is not None:
+        c_config.load(config_path)
+        tp = args.tensor_model_parallel_size
+        pp = args.pipeline_model_parallel_size
+        ep = args.expert_parallel_size
+        etp = args.expert_tensor_parallel_size
+    else:
+        with open(args.config_file, 'r') as f:
+            module_names = parse_at_configs(f.readlines())
+        module_type = args.convert_file.split('/')[-3]
+        cfg = load_config(args.convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
+        OmegaConf.set_struct(cfg, False)
+
+        model_cfg = load_config(args.config_file)
+        if module_type != 'image_encoder':
+            module_type = 'foundation'
+        tp = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', module_type)
+        pp = parallel_param_parser(args, model_cfg, 'pipeline_model_parallel_size', module_type)
+        ep = parallel_param_parser(args, model_cfg, 'expert_parallel_size', module_type)
+        etp = parallel_param_parser(args, model_cfg, 'expert_tensor_parallel_size', module_type)
+        vpp = parallel_param_parser(args, model_cfg, 'num_virtual_stages_per_pipeline_rank', module_type)
+
+        c_config.load_convert_data(cfg)
+    model = Model(c_config)
+
     if args.megatron_path is not None:
         sys.path.insert(0, args.megatron_path)
 
     if args.load_platform == "mcore"  or args.save_platform == "mcore":
         assert args.transformer_impl == "transformer_engine", \
             "Only support transformer_engine implemenation for mcore now!"
-    
+
         args.no_load_optim = True
         args.no_save_optim = True
         logging.info(f"<< Warning: not support mcore optimizer now, so no_load_optim and no_save_optim are set to True! >>")
 
-    model = Model()
     if not args.distributed_convert:
         os.environ['RANK'] = '0'
         os.environ['WORLD_SIZE'] = '1'
     rank_id = int(os.getenv('RANK', '0'))
     world_size = int(os.getenv("WORLD_SIZE", '1'))
-    tp = args.tensor_model_parallel_size
-    pp = args.pipeline_model_parallel_size
-    ep = args.expert_parallel_size
-    etp = args.expert_tensor_parallel_size
-    num_experts = args.num_experts
     if utils.LOADED_STATE_DICT is None:
         if etp is not None:
             assert (ep * pp // world_size) % (tp // etp) == 0, f"(ep * pp // world_size) % (tp // etp) must be 0"
@@ -176,21 +191,26 @@ def main():
             p_dict[p] = []
             for ep_id in ep_ids:
                 p_dict[p].append(ep_id)
-    config_path = args.common_config_path
-    c_config = CommonConfig()
-    c_config.load(config_path)
+
+    cargs = c_config.get_args("common")
+    num_experts = cargs.get("num_experts", None)
+    if num_experts is not None:
+        assert num_experts > 0, "num_experts must be greater than zero"
+        if ep is None:
+            args.expert_parallel_size = 1  # if ep is not set, will set ep=1
 
     def convert_one_p(p, cur_ep_ids=None):
-        expert_ids = None
-        layer_ids = get_layer_ids(c_config, args, p)
+        layer_dict = {}
+        layer_dict[p] = get_layer_ids(c_config, args, p)
+        ep_expert_mapping = None
         if cur_ep_ids is not None:
-            expert_local_mapping, expert_ep_mapping, ep_expert_mapping = get_ep_map(
-                    num_experts, ep, num_experts_for_test=None)
-            expert_ids = []
-            for ep_id in cur_ep_ids:
-                expert_ids += ep_expert_mapping[ep_id]
+            expert_local_mapping, expert_ep_mapping, ep_expert_mapping = get_ep_map(num_experts, ep)
 
-        source_ckpt = model.load(args, p=p, layer_ids=layer_ids, cur_ep_ids=cur_ep_ids, expert_ids=expert_ids)
+        if (Model.check_done_files(args.save_platform, args.save_ckpt_path, layer_dict, expert_dict=ep_expert_mapping)):
+            logging.info(f"{args.save_ckpt_path=}, {layer_dict=}, " \
+                    f"expert_dict={ep_expert_mapping}. already converted. pass.")
+            return
+        model.convert_to_common(args, layer_dict, expert_dict=ep_expert_mapping)
         for group in ["common", "megatron", "huggingface"]:
             _args = parse_args(group)
             model.update_args(_args, group)
@@ -199,25 +219,11 @@ def main():
 
         target_config = model.convert_config(args.save_platform)
         save_optim = not args.no_save_optim and not model.delay_convert_optimizer
-        target_ckpt = model.convert_checkpoint(
-            args.save_platform, args.save_ckpt_path, target_config, save_optim, p=p, layer_ids=layer_ids,
-            cur_ep_ids=cur_ep_ids, expert_ids=expert_ids)
+        target_ckpt = model.convert_from_common(args.save_platform, target_config, layer_dict, expert_dict=ep_expert_mapping)
         save_option = dict()
         save_option["save_optim"] = save_optim
         if isinstance(target_ckpt, HuggingFaceCheckpoint):
             save_option["save_safe"] = args.safetensors
-
-        if not args.no_save_optim and model.delay_convert_optimizer:
-            from convert_checkpoint.optim import change_tp, change_pp, change_dp
-            is_change_pp = (source_ckpt.pp != target_ckpt.pp) or (source_ckpt.num_stages != target_ckpt.num_stages)
-            is_change_tp = (source_ckpt.tp != target_ckpt.tp)
-            assert not (is_change_pp and is_change_tp), "cann't change tp and pp at the same time"
-            if is_change_tp:
-                change_tp(source_ckpt, target_ckpt, args.load_ckpt_path, args.save_ckpt_path, model.config)
-            elif is_change_pp:
-                change_pp(source_ckpt, target_ckpt, args.load_ckpt_path, args.save_ckpt_path, model.config)
-            else:
-                change_dp(source_ckpt, target_ckpt, args.load_ckpt_path, args.save_ckpt_path)
 
     if args.max_workers > 1 and ep is None:
         futures = []

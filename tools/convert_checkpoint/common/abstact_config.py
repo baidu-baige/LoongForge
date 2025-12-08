@@ -6,10 +6,7 @@
 #
 ################################################################################
 
-import torch
-import json
 from abc import ABC, abstractmethod
-from convert_checkpoint.utils import get_element_from_dict_by_path
 
 
 class AbstractConfig(ABC):
