@@ -15,5 +15,7 @@ add_bias_linear: True
 add_qkv_bias: False
 qk_layernorm: True
 apply_rope_fusion: False
+bias_activation_fusion: False
+position_embedding_type: 'none'
 initializer_factor: 0.1
-model_type: "intern_vit"
+model_type: "intern_vit_6b"

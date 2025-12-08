@@ -63,7 +63,7 @@ class InternVisionEmbeddings(nn.Module):
         patch_embeds = patch_embeds.flatten(2).transpose(1, 2)  # [b s h]
         class_embeds = self.class_embedding.expand(batch_size, 1, -1).to(target_dtype)
         embeddings = torch.cat([class_embeds, patch_embeds], dim=1)
-        if self.config.vision_type == 'vit_300m':
+        if self.config.model_type == 'intern_vit_300m':
             position_embedding = torch.cat([
                 self.position_embedding[:, :1, :],
                 self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)

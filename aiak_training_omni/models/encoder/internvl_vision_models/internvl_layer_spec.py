@@ -31,10 +31,10 @@ def get_vision_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     from .intern_vision_attention import InternViTTEDotProductAttention, InternViTRMSNorm
 
     qk_norm = multiacc_modules.TENorm if is_te_min_version("1.9.0") else multiacc_modules.LocalNorm
-    if config.vision_type == "vit_6b":
+    if config.model_type == "intern_vit_6b":
         qk_layernorm = InternViTRMSNorm
         core_attention = InternViTTEDotProductAttention
-    elif config.vision_type == "vit_300m":
+    elif config.model_type == "intern_vit_300m":
         qk_layernorm = qk_norm if config.qk_layernorm else IdentityOp
         core_attention = multiacc_modules.DotProductAttention
     else:

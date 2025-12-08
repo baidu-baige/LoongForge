@@ -16,4 +16,4 @@ qk_layernorm: False
 apply_rope_fusion: False
 bias_activation_fusion: False
 position_embedding_type: 'none'
-model_type: "intern_vit"
+model_type: "intern_vit_300m"

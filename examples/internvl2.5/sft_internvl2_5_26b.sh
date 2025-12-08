@@ -1,23 +1,21 @@
 #! /bin/bash
 # The script needs to be run on at least 1 nodes.
 source /root/.bashrc
+export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-#清除残留的共享内存数据
 ipcs -m | awk '$4 == 666 {print $2}' | while read shmid; do
 ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-export CUDA_DEVICE_MAX_CONNECTIONS=1
-DATA_PATH=/mnt/cluster/jianghaicheng/intern_vl/dataset/filter_mmdu/webdataset
-TOKENIZER_PATH=/mnt/cluster/huggingface.co/internvl/InternVL2_5-8B/
-CHECKPOINT_LOAD_PATH=/mnt/cluster/zhaiyanfeng/models/internvl/ckpt-megatron/Internvl2_5-8B-tp4-pp1
-CHECKPOINT_SAVE_PATH=/mnt/cluster/zhaiyanfeng/models/internvl/ckpt-megatron/Internvl2_5-8B-tp4-pp1-save
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/zhaiyanfeng/out/tensorboard/internvl2.5/internvl2.5-8b/stage2-16k-gbs32-1node/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron/"}
+DATA_PATH=/mnt/cluster/aiak-training-llm/dataset/internvl/webdataset
+TOKENIZER_PATH=/mnt/cluster/huggingface.co/internvl/InternVL2_5-26B/
+CHECKPOINT_LOAD_PATH=/mnt/cluster/aiak-training-llm/internvl2.5/internvl2.5-26b-tp4-pp1-Dec01/
+CHECKPOINT_SAVE_PATH=/mnt/cluster/aiak-training-llm/internvl2.5/internvl2.5-26b-tp4-pp1-Dec01-save/
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl2.5/internvl2.5-26b/"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-# Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
@@ -25,7 +23,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl2.5/internvl2.5_8b.yaml
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl2.5/internvl2_5_26b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -35,15 +33,10 @@ DISTRIBUTED_ARGS=(
   --master_port $MASTER_PORT
 )
 
-MODEL_ARGS=(
-  --rotary-base 1000000  # for internvl
-  --rotary-seq-len-interpolation-factor 2
-)
-
-
 DATA_ARGS=(
   --tokenizer-type HFTokenizer
   --hf-tokenizer-path $TOKENIZER_PATH
+  #--additional-special-tokens "<img>,</img>,<IMG_CONTEXT>,<quad>,</quad>,<ref>,</ref>,<box>,</box>"
   --data-path $DATA_PATH
   --split 100,0,0
   --chat-template empty
@@ -52,11 +45,11 @@ DATA_ARGS=(
 TRAINING_ARGS=(
   --training-phase sft
   --seq-length 16384
-  --max-position-embeddings 40960
+  --max-position-embeddings 32768
   --max-packed-tokens 16384
   --init-method-std 0.01
   --micro-batch-size 1
-  --global-batch-size 8
+  --global-batch-size 32
   --lr 1e-5
   --min-lr 0.0
   --clip-grad 1.0
@@ -65,7 +58,7 @@ TRAINING_ARGS=(
   --adam-beta1 0.9
   --adam-beta2 0.999
   --adam-eps 1e-8
-  --norm-epsilon 1e-6
+  --norm-epsilon 1e-5
   --attention-dropout 0
   --hidden-dropout 0
   --train-iters 2000
@@ -74,12 +67,12 @@ TRAINING_ARGS=(
   --bf16
   --seed 42
   --no-gradient-accumulation-fusion
-  #--load $CHECKPOINT_LOAD_PATH
+  --load $CHECKPOINT_LOAD_PATH
   --save $CHECKPOINT_SAVE_PATH
   --save-interval 2000
   --exit-interval 500
   --dataloader-type external
-  --variable-seq-lengths  # for packing
+  --variable-seq-lengths
   --min-num-frame 8
   --max-num-frame 32
   --max-buffer-size 20
@@ -87,33 +80,35 @@ TRAINING_ARGS=(
   --loss-reduction square
   #--use-cpu-initialization
   #--no-initialization
-  #--use-packed-ds
   --use_thumbnail
   --replacement
   --dynamic-image-size
   --loss-reduction-all-gather
-  --num-workers 0 # for debug
-  --dataloader-prefetch-factor 0
-  --manual-gc
-  --manual-gc-interval 0
+  --num-workers 8
+  --dataloader-prefetch-factor 4
   --use-flash-attn
   --recompute-granularity full
   --recompute-method block
-  --recompute-num-layers 12
-  #--sequence-parallel
-  #--strict-mode
+  --recompute-num-layers 48
+  --sequence-parallel
+  --strict-mode
   --conv-style internvl2_5
-  #--dataset-type synthetic
   --max-dynamic-patch 12
   --packing-sft-data
-  --packing-batch-size 20
+  --packing-batch-size 2000
   --energon-pack-algo sequential_max_images
+  --allow-missing-adapter-checkpoint
 )
-
 
 MODEL_PARALLEL_ARGS=(
   --tensor-model-parallel-size 4
   --pipeline-model-parallel-size 1
+  --optimizer-cpu-offload
+  --optimizer-offload-fraction 1.0
+  --use-precision-aware-optimizer
+  --overlap-cpu-optimizer-d2h-h2d
+  #--custom-pipeline-layers 8,40
+  #--custom-pipeline-recompute-layers 42,46
   --use-distributed-optimizer
   --context-parallel-size 1
   --distributed-backend nccl

@@ -48,10 +48,7 @@ def get_qwen2_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
         not config.multi_latent_attention
     ), "Not supporting multi-latent attention for Qwen model yet."
 
-    mlp = _get_mlp_module_spec(
-        num_experts=config.num_moe_experts,
-        moe_grouped_gemm=config.moe_grouped_gemm,
-    )
+    mlp = _get_mlp_module_spec()
 
     # TENorm significantly harms convergence when used for QKLayerNorm if TE Version < 1.9;
     # we instead use the Apex implementation.

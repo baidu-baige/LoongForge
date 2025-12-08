@@ -5,18 +5,19 @@
 defaults:
   - ../../models/image_encoder@model.image_encoder: intern_vit_6b
   - ../../models/image_projector@model.image_projector: intern_mlp_adapter
-  - ../../models/internlm2.5@model.foundation: internlm2_5_20b
+  - ../../models/qwen2.5@model.foundation: qwen2_5_32b
   #- ../../data@data: vlm_data
   - _self_
 
 model:
   model_type: intern_vl
   loss_func: ${loss_func:loss_func_internvl}
-  
+
   image_projector:
-    hidden_size: 6144
-    ffn_hidden_size: 6144
+    hidden_size: 5120
+    ffn_hidden_size: 5120
   foundation: 
-    rotary_emb_func: "DynamicRotaryEmbedding"
-    rotary_base: 50000000
-    model_spec: ["aiak_training_omni.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]
+    rotary_emb_func: "RotaryEmbedding"
+    rotary_base: 1000000
+    vocab_size_in_config_file: 151674
+    model_spec: ["aiak_training_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_layer_with_te_spec"]

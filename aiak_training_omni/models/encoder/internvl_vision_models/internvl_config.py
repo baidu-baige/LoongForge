@@ -49,7 +49,6 @@ class InternVisionConfig(BaseModelConfig):
     select_layer: int = -1
     ps_version: str = "v2"
     # "drop_path_rate": 0.1,  # TODO
-    vision_type: str = "vit_300m"
     original_num_attention_heads: int = None
     model_spec = None
     image_token_id: int = field(default_factory=generate_id)
