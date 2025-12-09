@@ -44,18 +44,27 @@ from aiak_training_omni.utils import get_model_config
 import inspect
 
 _ParallelStatesDict = {}
+_CurrentParallelStateModel = "defaults"
 _DecoderTensorParallelSize = 1
 
 def change_parallel_state(module_name):
     """
     Change the parallel state of the model to the state saved in _ParallelStatesDict
     """
+    global _CurrentParallelStateModel
+    if module_name == _CurrentParallelStateModel:
+        return
     target_globals = vars(mpu)
     source_globals = _ParallelStatesDict[module_name]
-
+    if _CurrentParallelStateModel in _ParallelStatesDict:
+        current_globals = _ParallelStatesDict[_CurrentParallelStateModel]
+        for k in current_globals:
+            if k in target_globals:
+                current_globals[k] = target_globals[k]
     for k, v in source_globals.items():
         if k in target_globals:
             target_globals[k] = v
+    _CurrentParallelStateModel = module_name
 
 def save_parallel_state(module_name):
     """
