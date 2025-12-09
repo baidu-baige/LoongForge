@@ -2,7 +2,7 @@
 defaults:
   - ../../models/image_encoder@model.image_encoder: qwen2_5_vit
   - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
-  - ../../models/qwe2.5@model.foundation: qwen2_5_3b
+  - ../../models/qwen2.5@model.foundation: qwen2_5_3b
   - _self_
 
 model:
