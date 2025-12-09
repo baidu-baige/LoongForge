@@ -26,7 +26,7 @@ class HuggingfaceMoe(HuggingfaceBase):
 
     #========from commmon to hf===========
     def common_e_to_hf(self, expert_name, name, c_ckpt, h_dict, layer_id=None, expert_id=None, layer_prefix=None):
-        if name not in self.name_map:
+        if name not in self.name_map or expert_name not in self.name_map:
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
@@ -62,7 +62,7 @@ class HuggingfaceMoe(HuggingfaceBase):
     # ====== from hf to common ========
 
     def hf_e_to_common(self, expert_name, name, c_ckpt, h_dict, layer_id=None, expert_id=None, layer_prefix=None):
-        if name not in self.name_map:
+        if name not in self.name_map or expert_name not in self.name_map:
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)

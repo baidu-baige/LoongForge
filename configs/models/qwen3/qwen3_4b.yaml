@@ -20,6 +20,7 @@ add_bias_linear: false
 add_qkv_bias: false
 qk_layernorm: true
 untie_embeddings_and_output_weights: true
+word_embeddings_for_head: null
 kv_channels: 128
 num_experts: null
 moe_ffn_hidden_size: null

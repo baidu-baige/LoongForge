@@ -112,7 +112,7 @@ def _add_common_args(parser):
                        choices=["dualpipev"],
                        help='By default, the original 1F1B scheduling method is used. When selecting DualPipeV, '
                             'the effect can be referred to at https://hackmd.io/@ufotalent/r1lVXsa9Jg')
-    group.add_argument('--num_virtual_stages_per_pipeline_rank', type=int, default=None,
+    group.add_argument('--num-virtual-stages-per-pipeline-rank', type=int, default=None,
                        help='Number of virtual pipeline stages per pipeline parallelism rank')
     group.add_argument('--decoder-first-pipeline-num-layers',
                        type=int, default=None,
@@ -165,6 +165,15 @@ def _add_megatron_args(parser):
     group.add_argument('--custom_pipeline_layers', type=str, default=None,
                        help='add by aiak for pp layer imbalance.For example 19,20,20,21.'
                        '19 for stage0 layers, 20 for stage1 layers...')
+    group.add_argument('--pipeline_model_parallel_layout',
+                       type=str, default=None,
+                       help=('Note: This argument will be converted into --custom_pipeline_layers.'
+                             'A string that describes a custom pipeline model parallel layout. '
+                             'e.g., "E|(t|)*3,m|m||L". E, L, t, m denotes embedding, loss, transformer '
+                             'decoder layer, and mtp layer, respectively. Stages are split by "|". '
+                             'Replicated stages or layers can be described with multiplication. '
+                             'Commas can be used cosmetically. '
+                             'Default None is not using this argument to set the layout.'))
     group.add_argument('--num_layers_per_virtual_pipeline_stage', type=int, default=None,
                        help='Number of layers per virtual pipeline stage')
     group.add_argument('--transformer_impl', default='transformer_engine',

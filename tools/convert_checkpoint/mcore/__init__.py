@@ -1,4 +1,10 @@
 """ convert_checkpoint """
+import os
+import sys
+from os.path import dirname
+SCRIPT_DIR = dirname(os.path.abspath(__file__))
+sys.path.append(dirname(SCRIPT_DIR))
+
 from common.common_config import CommonConfig
 
 from huggingface.huggingface_checkpoint import HuggingFaceCheckpoint

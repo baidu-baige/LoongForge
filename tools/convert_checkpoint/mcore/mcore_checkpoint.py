@@ -2,6 +2,7 @@
 import os
 import torch
 import logging
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 
@@ -11,7 +12,7 @@ from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.mcore.mcore_base import McoreBase
 from convert_checkpoint.mcore.mcore_moe import McoreMoe
-from convert_checkpoint.utils import (
+from convert_checkpoint.utils.utils import (
     touch_file,
     get_done_keys,
     get_virtual_partition,
@@ -20,18 +21,9 @@ from convert_checkpoint.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER,
-    TRANSFORMER_TPL,
-    MTP_LAYER_PREFIX,
-    WORD_EMBEDDINGS, WORD_POSITION_EMBEDDINGS, WORD_BLOCK_POSITION_EMBEDDINGS,
-    INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FREQ, ATTENTION_QUERY_KEY_VALUE,
-    ATTENTION_Q_DOWN, ATTENTION_Q_UP, ATTENTION_Q_UP_LAYERNORM, ATTENTION_KV_DOWN,
-    ATTENTION_KV_UP, ATTENTION_KV_UP_LAYERNORM, ATTENTION_DENSE,
-    POST_ATTENTION_LAYERNORM, ATTENTION_QNORM, ATTENTION_KNORM,
-    POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE,
-    MOE_SHARED_EXPERT, MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H,
-    MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD,
-    FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT
+    TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX,
+    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES,
+    MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT
 )
 
 
@@ -46,6 +38,8 @@ class McoreCheckpoint(AbstractCheckpoint):
         self.m_base = McoreBase(c_config)
         self.m_moe = McoreMoe(c_config)
         self.iteration = 0
+        self.checkpoint_version = 3.0
+        self.rng_state = None
         margs = c_config.get_args("mcore")
         cargs = c_config.get_args("common")
         num_layers = cargs["num_layers"]
@@ -134,6 +128,11 @@ class McoreCheckpoint(AbstractCheckpoint):
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)
 
+        self.iteration = c_ckpt.other_args.get("iteration", self.iteration)
+        self.checkpoint_version = c_ckpt.other_args.get("checkpoint_version", self.checkpoint_version)
+        self.args = c_ckpt.other_args.get("args", self.args)
+        self.rng_state = c_ckpt.other_args.get("rng_state", self.rng_state)
+
         assert layer_dict != None and len(layer_dict) == 1, "layer_dict must be provided and size == 1"
         p = list(layer_dict.keys())[0]
         layer_ids = layer_dict[p]
@@ -163,9 +162,8 @@ class McoreCheckpoint(AbstractCheckpoint):
                     m_dict[et] = {}
             if p == 0:
                 t_name = self.get_transformer_name(0)
-                self.m_base.common_to_mcore(WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
-                self.m_base.common_to_mcore(WORD_POSITION_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
-                self.m_base.common_to_mcore(WORD_BLOCK_POSITION_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                for c_name in FIRST_LAYER_NAMES:
+                    self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
@@ -178,59 +176,29 @@ class McoreCheckpoint(AbstractCheckpoint):
                     else:
                         mtp_layer_prefix = None
                         m_layer_id = cur_layer_id
-                    # ====
-                    self.m_base.common_to_mcore(INPUT_LAYERNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_ROTARY_EMB_INV_FREQ, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ROTARY_EMB_INV_FREQ, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    # ====attention qkv
-                    self.m_base.common_to_mcore(ATTENTION_QUERY_KEY_VALUE, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    # ====attention mla
-                    self.m_base.common_to_mcore(ATTENTION_Q_DOWN, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_Q_UP, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_Q_UP_LAYERNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_KV_DOWN, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_KV_UP, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_KV_UP_LAYERNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    # ====
-                    self.m_base.common_to_mcore(ATTENTION_DENSE, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(POST_ATTENTION_LAYERNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_QNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(ATTENTION_KNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    # ====mlp
-                    self.m_base.common_to_mcore(POST_MLP_LAYERNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(POST_MLP_LAYERSCALE, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    # ====mlp dense
-                    self.m_base.common_to_mcore(MLP_DENSE_H_TO_4H, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    self.m_base.common_to_mcore(MLP_DENSE_4H_TO_H, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                    # ====moe gate
-                    self.m_base.common_to_mcore(MOE_GATE, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
+                    for c_name in BASE_NAMES:
+                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
                     # ====moe shared_expert
-                    self.m_base.common_to_mcore(MOE_EXPERT_H_TO_4H, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id, expert_name=MOE_SHARED_EXPERT)
-                    self.m_base.common_to_mcore(MOE_EXPERT_4H_TO_H, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id, expert_name=MOE_SHARED_EXPERT)
+                    for c_name in MOE_EXPERT_PROJS:
+                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id, expert_name=MOE_SHARED_EXPERT)
 
                     # EXPERT
                     if expert_dict is not None:
                         for expert_id in expert_dict[ep_id]:
-                            self.m_moe.common_e_to_mcore(MOE_EXPERT, MOE_EXPERT_H_TO_4H, c_ckpt, m_dict, t_name, layer_id, m_layer_id, ep_id, expert_id, layer_prefix=mtp_layer_prefix)
-                            self.m_moe.common_e_to_mcore(MOE_EXPERT, MOE_EXPERT_4H_TO_H, c_ckpt, m_dict, t_name, layer_id, m_layer_id, ep_id, expert_id, layer_prefix=mtp_layer_prefix)
+                            for c_name in MOE_EXPERT_PROJS:
+                                self.m_moe.common_e_to_mcore(MOE_EXPERT, c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, ep_id, expert_id, layer_prefix=mtp_layer_prefix)
 
                     # MTP
                     if layer_id >= num_layers:
-                        self.m_base.common_to_mcore(MTP_WORD_EMBEDDING, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                        self.m_base.common_to_mcore(MTP_ENORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                        self.m_base.common_to_mcore(MTP_HNORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                        self.m_base.common_to_mcore(MTP_EH_PROJ, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix, ep_id=ep_id)
-                        self.m_base.common_to_mcore(MTP_SHARED_HEAD_NORM, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix, ep_id=ep_id)
+                        for c_name in MTP_NAMES:
+                            if c_name == MTP_SHARED_HEAD_HEAD:
+                                continue
+                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
 
                     # final pp
                     if layer_id == num_layers - 1:
-                        self.m_base.common_to_mcore(FINAL_LAYERNORM, c_ckpt, m_dict, t_name, ep_id=ep_id)
-                        self.m_base.common_to_mcore(WORD_EMBEDDINGS_FOR_HEAD, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                        for c_name in LAST_LAYER_NAMES:
+                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
 
             for mt in m_dict.keys():
                 if ep_id is None:
@@ -294,15 +262,15 @@ class McoreCheckpoint(AbstractCheckpoint):
         if ep_ids is None:
             for t in range(tp):
                 m_dict[t] = self.load_state_dict(load_path, p, t)
-            return m_dict, None
+                self.checkpoint_version = m_dict[t]['checkpoint_version']
+            ep_mcore_state_dict = None
         elif self.etp is None:
-            for t in range(tp):
-                m_dict[t] = self.load_state_dict(load_path, p, t, e=0)
             loaded_keys = {}
-            for t in range(tp):
-                ep_id = tp_to_ep[t]
-                m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
-                loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
+            for ep_id in ep_ids:
+                for t in range(tp):
+                    m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                    self.checkpoint_version = m_dict[t]['checkpoint_version']
+                    loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
             ep_mcore_state_dict = {}
             for ep_id in ep_ids:
                 ep_mcore_state_dict[ep_id] = {}
@@ -312,7 +280,6 @@ class McoreCheckpoint(AbstractCheckpoint):
                         ep_mcore_state_dict[ep_id][t] = loaded_keys[key]
                     else:
                         ep_mcore_state_dict[ep_id][t] = self.load_state_dict(load_path, p, t, e=ep_id)
-            return m_dict, ep_mcore_state_dict
         else:
             assert tp_to_ep is not None, f"tp_to_ep is not provided, {ep_ids=}"
             assert etp_to_tp_mapping is not None, f"etp_to_tp_mapping is not provided, {ep_ids=}"
@@ -320,6 +287,7 @@ class McoreCheckpoint(AbstractCheckpoint):
             for t in range(tp):
                 ep_id = tp_to_ep[t]
                 m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                self.checkpoint_version = m_dict[t]['checkpoint_version']
                 loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
             ep_mcore_state_dict = {}
             for ep_id in ep_ids:
@@ -333,15 +301,22 @@ class McoreCheckpoint(AbstractCheckpoint):
                         ep_mcore_state_dict[ep_id][et] = loaded_keys[key]
                     else:
                         ep_mcore_state_dict[ep_id][et] = self.load_state_dict(load_path, p, t, e=ep_id)
-            return m_dict, ep_mcore_state_dict
+
+        assert len(m_dict) > 0, f"m_dict must not be empty"
+        self.checkpoint_version = m_dict[0].get('checkpoint_version', 3.0)
+        self.rng_state = m_dict[0].get('rng_state', None)
+        return m_dict, ep_mcore_state_dict
+
 
     def load(self, load_path, layer_dict, expert_dict=None):
         p = list(layer_dict.keys())[0]
-        ep_ids = list(expert_dict.keys())
-        etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
-
-        self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(
-                load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping)
+        if expert_dict is None:
+            self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(load_path, p)
+        else:
+            ep_ids = list(expert_dict.keys())
+            etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
+            self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(
+                    load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping)
 
     def convert_to_common(self, layer_dict, expert_dict=None):
         """
@@ -385,9 +360,8 @@ class McoreCheckpoint(AbstractCheckpoint):
         def convert_one_ep_to_common(ep_id=None):
             if p == 0:
                 t_name = self.get_transformer_name(0)
-                self.m_base.mcore_to_common(WORD_EMBEDDINGS, c_ckpt, self.m_dict, t_name)
-                self.m_base.mcore_to_common(WORD_POSITION_EMBEDDINGS, c_ckpt, self.m_dict, t_name)
-                self.m_base.mcore_to_common(WORD_BLOCK_POSITION_EMBEDDINGS, c_ckpt, self.m_dict, t_name)
+                for c_name in FIRST_LAYER_NAMES:
+                    self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
@@ -400,66 +374,31 @@ class McoreCheckpoint(AbstractCheckpoint):
                     else:
                         mtp_layer_prefix = None
                         m_layer_id = cur_layer_id
-                    # ====
-                    self.m_base.mcore_to_common(INPUT_LAYERNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_ROTARY_EMB_INV_FREQ, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ROTARY_EMB_INV_FREQ, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    # ====attention qkv
-                    self.m_base.mcore_to_common(ATTENTION_QUERY_KEY_VALUE, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    # ====attention mla
-                    self.m_base.mcore_to_common(ATTENTION_Q_DOWN, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_Q_UP, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_Q_UP_LAYERNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_KV_DOWN, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_KV_UP, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_KV_UP_LAYERNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    # ====
-                    self.m_base.mcore_to_common(ATTENTION_DENSE, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(POST_ATTENTION_LAYERNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_QNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(ATTENTION_KNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    # ====mlp
-                    self.m_base.mcore_to_common(POST_MLP_LAYERNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(POST_MLP_LAYERSCALE, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    # ====mlp dense
-                    self.m_base.mcore_to_common(MLP_DENSE_H_TO_4H, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(MLP_DENSE_4H_TO_H, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
-                    # ====moe gate
-                    self.m_base.mcore_to_common(MOE_GATE, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
+                    for c_name in BASE_NAMES:
+                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
                     # ====moe shared_expert
-                    self.m_base.mcore_to_common(MOE_EXPERT_H_TO_4H, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, expert_name=MOE_SHARED_EXPERT, layer_prefix=mtp_layer_prefix)
-                    self.m_base.mcore_to_common(MOE_EXPERT_4H_TO_H, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, expert_name=MOE_SHARED_EXPERT, layer_prefix=mtp_layer_prefix)
+                    for c_name in MOE_EXPERT_PROJS:
+                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, expert_name=MOE_SHARED_EXPERT, layer_prefix=mtp_layer_prefix)
 
                     # EXPERT
                     if expert_dict is not None:
                         expert_ids = expert_dict[ep_id]
                         e_m_dict = self.ep_mcore_state_dict[ep_id]
                         for expert_id in expert_ids:
-                            self.m_moe.mcore_e_to_common(MOE_EXPERT, MOE_EXPERT_H_TO_4H, c_ckpt, e_m_dict, t_name,
-                                                        layer_id, m_layer_id, expert_id, layer_prefix=mtp_layer_prefix)
-                            self.m_moe.mcore_e_to_common(MOE_EXPERT, MOE_EXPERT_4H_TO_H, c_ckpt, e_m_dict, t_name,
-                                                        layer_id, m_layer_id, expert_id, layer_prefix=mtp_layer_prefix)
+                            for c_name in MOE_EXPERT_PROJS:
+                                self.m_moe.mcore_e_to_common(MOE_EXPERT, c_name, c_ckpt, e_m_dict, t_name,
+                                                             layer_id, m_layer_id, expert_id, layer_prefix=mtp_layer_prefix)
 
                     # MTP
                     if layer_id >= num_layers:
-                        self.m_base.mcore_to_common(MTP_WORD_EMBEDDING, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix)
-                        self.m_base.mcore_to_common(MTP_ENORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix)
-                        self.m_base.mcore_to_common(MTP_HNORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix)
-                        self.m_base.mcore_to_common(MTP_EH_PROJ, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix)
-                        self.m_base.mcore_to_common(MTP_SHARED_HEAD_NORM, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                             layer_prefix=mtp_layer_prefix)
-                        self.m_base.mcore_to_common(MTP_SHARED_HEAD_HEAD, c_ckpt, self.m_dict, t_name, layer_id, cur_layer_id,
-                                             layer_prefix=mtp_layer_prefix)
-                                                                                                
+                        for c_name in MTP_NAMES:
+                            self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
+                                                        layer_prefix=mtp_layer_prefix)                                                                                                
 
                     # final pp
                     if layer_id == num_layers - 1:
-                        self.m_base.mcore_to_common(FINAL_LAYERNORM, c_ckpt, self.m_dict, t_name)
-                        self.m_base.mcore_to_common(WORD_EMBEDDINGS_FOR_HEAD, c_ckpt, self.m_dict, t_name)
+                        for c_name in LAST_LAYER_NAMES:
+                            self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
 
         if expert_dict is None:
             convert_one_ep_to_common(ep_id=None)
@@ -479,6 +418,11 @@ class McoreCheckpoint(AbstractCheckpoint):
             else:
                 for ep_id in expert_dict.keys():
                     convert_one_ep_to_common(ep_id=ep_id)
+
+        c_ckpt.other_args["iteration"] = self.iteration
+        c_ckpt.other_args["checkpoint_version"] = self.checkpoint_version
+        c_ckpt.other_args["args"] = self.args
+        c_ckpt.other_args["rng_state"] = self.rng_state
 
         return c_ckpt
 
@@ -545,6 +489,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         Raises:
             None.
         """
+        state_dict_node["checkpoint_version"] = self.checkpoint_version
         if e is None or self.ep == 1:
             checkpoint_dir = (
                 f"mp_rank_{t:02d}"
@@ -563,6 +508,8 @@ class McoreCheckpoint(AbstractCheckpoint):
             state_dict_node.update(optim_state_dict_node.to_dict())
         if margs is not None:
             state_dict_node['args'] = margs
+        if self.rng_state is not None:
+            state_dict_node['rng_state'] = self.rng_state
         state_dict_node["iteration"] = self.iteration
         checkpoint_dir = os.path.join(release_dir, checkpoint_dir)
         os.makedirs(checkpoint_dir, exist_ok=True)

@@ -7,30 +7,8 @@
             "num_attention_heads": 16,
             "num_key_value_heads": 16
         },
-        "huggingface": {
-            "attention_dropout": 0.0,
-            "drop_path_rate": 0.1,
-            "dropout": 0.0,
-            "hidden_act": "gelu",
-            "image_size": 448,
-            "initializer_factor": 1.0,
-            "initializer_range": 0.02,
-            "layer_norm_eps": 1e-06,
-            "norm_type": "layer_norm",
-            "num_channels": 3,
-            "patch_size": 14,
-            "qk_normalization": false,
-            "qkv_bias": true,
-            "use_flash_attn": true
-        },
         "mcore": {
-            "num_layers_per_virtual_pipeline_stage": null,
-            "virtual_pipeline_model_parallel_size": null,
-            "tensor_model_parallel_size": 1,
-            "pipeline_model_parallel_size": 1,
-            "data_parallel_size": 1,
             "use_rotary_position_embeddings": false,
-            "use_distributed_optimizer": false,
             "transpose_mlp_dense": false,
             "transpose_query_key_value": true
         }
@@ -43,33 +21,48 @@
             "attention.query_key_value": "attn.qkv",
             "attention.dense": "attn.proj",
             "post_attention_layernorm": "norm2",
-            "post_attention_layerscale": "ls1",
+            "post_attention_layerscale": {
+                "name": "ls1",
+                "is_direct_name": true
+            },
             "mlp.dense_h_to_4h": "mlp.fc1",
             "mlp.dense_4h_to_h": "mlp.fc2",
-            "post_mlp_layerscale": "ls2"
+            "post_mlp_layerscale": {
+                "name": "ls2",
+                "is_direct_name": true
+            }
         },
         "mcore": {
             "transformer": "model",
             "layer_prefix": "vision_model.encoder.layers",
-            "input_layernorm": "self_attention.linear_qkv.layer_norm",
-            "attention.query_key_value": "self_attention.linear_qkv",
-            "attention.dense": "self_attention.linear_proj",
-            "post_attention_layernorm": "mlp.linear_fc1.layer_norm",
+            "input_layernorm": {
+                "name": "self_attention.linear_qkv",
+                "is_layernorm": true
+            },
+            "attention.query_key_value": {
+                "name": "self_attention.linear_qkv",
+                "extra": true
+            },
+            "attention.dense": {
+                "name": "self_attention.linear_proj",
+                "extra": true
+            },
+            "post_attention_layernorm": {
+                "name": "mlp.linear_fc1",
+                "is_layernorm": true
+            },
             "post_attention_layerscale": "post_attention_layerscale",
-            "mlp.dense_h_to_4h": "mlp.linear_fc1",
-            "mlp.dense_4h_to_h": "mlp.linear_fc2",
+            "mlp.dense_h_to_4h": {
+                "name": "mlp.linear_fc1",
+                "extra": true
+            },
+            "mlp.dense_4h_to_h": {
+                "name": "mlp.linear_fc2",
+                "extra": true
+            },
             "post_mlp_layerscale": "post_mlp_layerscale",
             "transformer_tpl": "model%d"
         }
     },
-    "tensor_parallel_dim": {
-        "attention.query_key_value.weight": 0,
-        "attention.query_key_value.bias": 0,
-        "attention.dense.weight": 1,
-        "mlp.dense_h_to_4h.weight": 0,
-        "mlp.dense_h_to_4h.bias": 0,
-        "mlp.dense_4h_to_h.weight": 1
-    },
-    "torch_dtype": "bfloat16",
-    "transformers_version": "4.37.2"
+    "torch_dtype": "bfloat16"
 }

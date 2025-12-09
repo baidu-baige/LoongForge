@@ -32,13 +32,19 @@ ATTENTION_Q_UP_LAYERNORM = "attention.q_up_layernorm"
 ATTENTION_KV_DOWN = "attention.kv_down"
 ATTENTION_KV_UP = "attention.kv_up"
 ATTENTION_KV_UP_LAYERNORM = "attention.kv_up_layernorm"
+ATTENTION_Q = "attention.q"
 
-ATTENTION_QUERY_KEY_VALUE = "attention.query_key_value"
+ATTENTION_LIGHTNING_INDEXER_K_NORM = "attention.lightning_indexer.k_norm"
+ATTENTION_LIGHTNING_INDEXER_WEIGHTS_PROJ = "attention.lightning_indexer.weights_proj"
+ATTENTION_LIGHTHING_INDEXER_WK = "attention.lightning_indexer.wk"
+ATTENTION_LIGHTHING_INDEXER_WQ_B = "attention.lightning_indexer.wq_b"
 # MLA end
 
+ATTENTION_QUERY_KEY_VALUE = "attention.query_key_value"
+
 ATTENTION_DENSE = "attention.dense"
-ATTENTION_QNORM = "attention.q_norm"
-ATTENTION_KNORM = "attention.k_norm"
+ATTENTION_QNORM = "attention.q_a_layernorm"
+ATTENTION_KNORM = "attention.kv_a_layernorm"
 POST_ATTENTION_LAYERNORM = "post_attention_layernorm"
 POST_ATTENTION_LAYERSCALE = "post_attention_layerscale"
 
@@ -79,10 +85,12 @@ MTP_SHARED_HEAD_HEAD = "mtp_shared_head_head"
 
 FIRST_LAYER_NAMES = [WORD_EMBEDDINGS, WORD_POSITION_EMBEDDINGS, WORD_BLOCK_POSITION_EMBEDDINGS] # in the first layer
 BASE_NAMES = [INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FREQ, ATTENTION_QUERY_KEY_VALUE,
-            ATTENTION_Q_DOWN, ATTENTION_Q_UP, ATTENTION_KV_DOWN,ATTENTION_KV_UP, ATTENTION_DENSE,
-            POST_ATTENTION_LAYERNORM, ATTENTION_QNORM, ATTENTION_KNORM,
-            POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE,
-            MOE_SHARED_EXPERT, MOE_EXPERT]
+            ATTENTION_Q_DOWN, ATTENTION_Q_UP, ATTENTION_Q_UP_LAYERNORM, ATTENTION_KV_DOWN, ATTENTION_KV_UP,
+            ATTENTION_KV_UP_LAYERNORM, ATTENTION_Q, ATTENTION_DENSE,
+            ATTENTION_LIGHTNING_INDEXER_K_NORM, ATTENTION_LIGHTNING_INDEXER_WEIGHTS_PROJ,
+            ATTENTION_LIGHTHING_INDEXER_WK, ATTENTION_LIGHTHING_INDEXER_WQ_B,
+            POST_ATTENTION_LAYERNORM, POST_ATTENTION_LAYERSCALE, ATTENTION_QNORM, ATTENTION_KNORM,
+            POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE]
 MOE_EXPERT_PROJS = [MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H]
 LAST_LAYER_NAMES = [FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD] # in the last layer
 MTP_NAMES = [MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD]
@@ -92,6 +100,7 @@ WEIGHT = "weight"
 BIAS = "bias"
 WEIGHT_SCALE = "weight_scale_inv"
 LAYERNORM_WEIGHT = "layer_norm_weight"
+LAYERNORM_BIAS = "layer_norm_bias"
 EXTRA_DATA = "_extra_state"
 
 # The member names for each key in one layer
@@ -100,6 +109,7 @@ LAYER_EXTRA_DATA = "extra"
 LAYER_IS_LAYERNORM = "is_layernorm"
 LAYER_IS_FP8 = "fp8"
 LAYER_FP8_IGNORE_TP = "fp8_ignore_tp"
+LAYER_IS_DIRECT_NAME = "is_direct_name"
 
 class CommonCheckpoint(AbstractCheckpoint):
     """
@@ -107,6 +117,7 @@ class CommonCheckpoint(AbstractCheckpoint):
     """
     def __init__(self, c_config):
         super().__init__(c_config)
+        self.other_args = {}
         self.model_dict = {}
 
     @staticmethod

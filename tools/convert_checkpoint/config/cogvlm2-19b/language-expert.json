@@ -10,37 +10,10 @@
             "max_position_embeddings": 8192,
             "vocab_size": 128256
         },
-        "huggingface": {
-            "architectures": [
-            "CogVLMForCausalLM"
-            ],
-            "auto_map": {
-                "AutoConfig": "configuration_cogvlm.CogVLMConfig",
-                "AutoModelForCausalLM": "modeling_cogvlm.CogVLMForCausalLM"
-            },
-            "intermediate_size": 14336,
-            "rms_norm_eps": 1e-05,
-            "template_version": "chat",
-            "initializer_range": 0.02,
-            "bos_token_id": 128000,
-            "eos_token_id": [128001, 128009],
-            "pad_token_id": 128002,
-            "num_hidden_layers": 32,
-            "hidden_act": "silu",
-            "use_cache": true,
-            "rotary_base": 500000
-        },
         "mcore": {
             "untie_embeddings_and_output_weights": true,
-            "num_layers_per_virtual_pipeline_stage": null,
-            "virtual_pipeline_model_parallel_size": null,
-            "tensor_model_parallel_size": 1,
-            "pipeline_model_parallel_size": 1,
-            "data_parallel_size": 1,
             "use_rotary_position_embeddings": true,
             "add_embedding_padding": true,
-            "use_distributed_optimizer": false,
-            "make_vocab_size_divisible_by": 128,
             "transpose_mlp_dense": true,
             "transpose_query_key_value": true,
             "rotary_base": 500000
@@ -68,27 +41,34 @@
             "word_embeddings": "language_model.embedding.word_embeddings",
             "transformer": "model",
             "layer_prefix": "language_model.decoder.layers",
-            "input_layernorm": "input_layernorm",
-            "attention.query_key_value": "self_attention.linear_qkv.language_linear",
-            "attention.dense": "self_attention.linear_proj.language_linear",
-            "post_attention_layernorm": "pre_mlp_layernorm",
-            "mlp.dense_h_to_4h": "mlp.linear_fc1.language_linear",
-            "mlp.dense_4h_to_h": "mlp.linear_fc2.language_linear",
+            "input_layernorm": {
+                "name": "self_attention.linear_qkv.language_linear",
+                "is_layernorm": true
+            },
+            "attention.query_key_value": {
+                "name": "self_attention.linear_qkv.language_linear",
+                "extra": true
+            },
+            "attention.dense": {
+                "name": "self_attention.linear_proj.language_linear",
+                "extra": true
+            },
+            "post_attention_layernorm": {
+                "name": "mlp.linear_fc1.language_linear",
+                "is_layernorm": true
+            },
+            "mlp.dense_h_to_4h": {
+                "name": "mlp.linear_fc1.language_linear",
+                "extra": true
+            },
+            "mlp.dense_4h_to_h": {
+                "name": "mlp.linear_fc2.language_linear",
+                "extra": true
+            },
             "final_layernorm": "language_model.decoder.final_layernorm",
             "word_embeddings_for_head": "language_model.output_layer",
             "transformer_tpl": "model%d"
         }
     },
-    "tensor_parallel_dim": {
-        "word_embeddings.weight": 0,
-        "attention.query_key_value.weight": 0,
-        "attention.query_key_value.bias": 0,
-        "attention.dense.weight": 1,
-        "mlp.dense_h_to_4h.weight": 0,
-        "mlp.dense_h_to_4h.bias": 0,
-        "mlp.dense_4h_to_h.weight": 1,
-        "word_embeddings_for_head.weight": 0
-    },
-    "torch_dtype": "bfloat16",
-    "transformers_version": "4.23.1"
+    "torch_dtype": "bfloat16"
 }

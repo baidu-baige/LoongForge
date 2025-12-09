@@ -18,25 +18,14 @@ from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
 from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 
-from convert_checkpoint.utils import (
+from convert_checkpoint.utils.utils import (
     get_done_keys,
     touch_file,
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER,
-    LAYER_PREFIX,
-
-    WORD_EMBEDDINGS, WORD_POSITION_EMBEDDINGS, WORD_BLOCK_POSITION_EMBEDDINGS,
-    INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FREQ, ATTENTION_QUERY_KEY_VALUE,
-    ATTENTION_Q_DOWN, ATTENTION_Q_UP, ATTENTION_Q_UP_LAYERNORM, ATTENTION_KV_DOWN,
-    ATTENTION_KV_UP, ATTENTION_KV_UP_LAYERNORM, ATTENTION_DENSE,
-    POST_ATTENTION_LAYERNORM, ATTENTION_QNORM, ATTENTION_KNORM,
-    POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE,
-    MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H,
-    MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD,
-    FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD, MOE_EXPERT, MOE_SHARED_EXPERT
-
+    TRANSFORMER, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT,
+    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES
 )
 
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
@@ -53,28 +42,22 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
 
     filenames_in_the_layer = set()
     if 0 in layer_ids or num_layers - 1 in layer_ids:
-        if WORD_EMBEDDINGS in name_map:
-            name = name_map[WORD_EMBEDDINGS] + ".weight"
-            if name in weight_map:
-                filenames_in_the_layer.add(weight_map[name])
-        if WORD_POSITION_EMBEDDINGS in name_map:
-            name = name_map[WORD_POSITION_EMBEDDINGS] + ".weight"
-            if name in weight_map:
-                filenames_in_the_layer.add(weight_map[name])
-        if WORD_BLOCK_POSITION_EMBEDDINGS in name_map:
-            name = name_map[WORD_BLOCK_POSITION_EMBEDDINGS] + ".weight"
-            if name in weight_map:
-                filenames_in_the_layer.add(weight_map[name])
+        for c_name in FIRST_LAYER_NAMES:
+            if c_name in name_map:
+                if name_map[c_name] is None:
+                    continue
+                name = name_map[c_name] + ".weight"
+                if name in weight_map:
+                    filenames_in_the_layer.add(weight_map[name])
 
     if (num_layers - 1) in layer_ids:
-        if FINAL_LAYERNORM in name_map:
-            name = name_map[FINAL_LAYERNORM] + ".weight"
-            if name in weight_map:
-                filenames_in_the_layer.add(weight_map[name])
-        if WORD_EMBEDDINGS_FOR_HEAD in name_map:
-            name = name_map[WORD_EMBEDDINGS_FOR_HEAD] + ".weight"
-            if name in weight_map:
-                filenames_in_the_layer.add(weight_map[name])
+        for c_name in LAST_LAYER_NAMES:
+            if c_name in name_map:
+                if name_map[c_name] is None:
+                    continue
+                name = name_map[c_name] + ".weight"
+                if name in weight_map:
+                    filenames_in_the_layer.add(weight_map[name])
 
     transformer = name_map[TRANSFORMER]
     layer_prefix = name_map[LAYER_PREFIX]
@@ -198,71 +181,42 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             return
 
         if 0 in layer_ids:
-            self.h_base.common_to_hf(WORD_EMBEDDINGS, c_ckpt, self.state_dict)
-            self.h_base.common_to_hf(WORD_POSITION_EMBEDDINGS, c_ckpt, self.state_dict)
-            self.h_base.common_to_hf(WORD_BLOCK_POSITION_EMBEDDINGS, c_ckpt, self.state_dict)
+            for c_name in FIRST_LAYER_NAMES:
+                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            # ====transformer layer begin
-            self.h_base.common_to_hf(INPUT_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_ROTARY_EMB_INV_FREQ, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ROTARY_EMB_INV_FREQ, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====attention qkv
-            self.h_base.common_to_hf(ATTENTION_QUERY_KEY_VALUE, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====attention mla begin
-            self.h_base.common_to_hf(ATTENTION_Q_DOWN, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_Q_UP, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_Q_UP_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_KV_DOWN, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_KV_UP, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_KV_UP_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====attention mla end
-            self.h_base.common_to_hf(ATTENTION_DENSE, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(POST_ATTENTION_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_QNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(ATTENTION_KNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====mlp
-            self.h_base.common_to_hf(POST_MLP_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(POST_MLP_LAYERSCALE, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====mlp dense
-            self.h_base.common_to_hf(MLP_DENSE_H_TO_4H, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.common_to_hf(MLP_DENSE_4H_TO_H, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====moe gate
-            self.h_base.common_to_hf(MOE_GATE, c_ckpt, self.state_dict, layer_id=layer_id)
+            for c_name in BASE_NAMES:
+                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
             # ====moe shared_expert
-            self.h_base.common_to_hf(MOE_EXPERT_H_TO_4H, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
-            self.h_base.common_to_hf(MOE_EXPERT_4H_TO_H, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
+            for c_name in MOE_EXPERT_PROJS:
+                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
 
             # EXPERT
             if expert_dict is not None:
                 for ep_id, expert_ids in expert_dict.items():
                     for expert_id in expert_ids:
-                        self.h_moe.common_e_to_hf(MOE_EXPERT, MOE_EXPERT_H_TO_4H, c_ckpt, self.state_dict, \
-                                                  layer_id=layer_id, expert_id=expert_id)
-                        self.h_moe.common_e_to_hf(MOE_EXPERT, MOE_EXPERT_4H_TO_H, c_ckpt, self.state_dict, \
-                                                  layer_id=layer_id, expert_id=expert_id)
-
+                        for c_name in MOE_EXPERT_PROJS:
+                            self.h_moe.common_e_to_hf(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
+                                                      layer_id=layer_id, expert_id=expert_id)
             # MTP
             if layer_id >= num_layers:
-                self.h_base.common_to_hf(MTP_WORD_EMBEDDING, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.common_to_hf(MTP_ENORM, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.common_to_hf(MTP_HNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.common_to_hf(MTP_EH_PROJ, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.common_to_hf(MTP_SHARED_HEAD_NORM, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.common_to_hf(MTP_SHARED_HEAD_HEAD, c_ckpt, self.state_dict, layer_id=layer_id)
+                for c_name in MTP_NAMES:
+                    self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
 
         if num_layers - 1 in layer_ids:
-            self.h_base.common_to_hf(FINAL_LAYERNORM, c_ckpt, self.state_dict)
-            self.h_base.common_to_hf(WORD_EMBEDDINGS_FOR_HEAD, c_ckpt, self.state_dict)
+            for c_name in LAST_LAYER_NAMES:
+                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         done_dir = os.path.join(save_path, "dones")
         if ep_ids is None or len(ep_ids) == 0:
             self.save(f"{save_path}/sub_checkpoint/{p}", None)
             touch_file(done_dir=done_dir, p=p)
+            logging.info(f"touch file: {done_dir=}, {p=}")
         else:
             self.save(f"{save_path}/sub_checkpoint/{p * 1000 + ep_ids[0]}", None)
             for ep_id in ep_ids:
                 touch_file(done_dir=done_dir, p=p, ep_id=ep_id)
+                logging.info(f"touch file: {done_dir=}, {p=}, {ep_id=}")
 
 
     def convert_to_common(self, layer_dict, expert_dict=None):
@@ -281,62 +235,32 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         layer_ids = layer_dict[p]
 
         if 0 in layer_ids:
-            self.h_base.hf_to_common(WORD_EMBEDDINGS, c_ckpt, self.state_dict)
-            self.h_base.hf_to_common(WORD_POSITION_EMBEDDINGS, c_ckpt, self.state_dict)
-            self.h_base.hf_to_common(WORD_BLOCK_POSITION_EMBEDDINGS, c_ckpt, self.state_dict)
+            for c_name in FIRST_LAYER_NAMES:
+                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            # ====transformer layer begin
-            self.h_base.hf_to_common(INPUT_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_ROTARY_EMB_INV_FREQ, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ROTARY_EMB_INV_FREQ, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====attention qkv
-            self.h_base.hf_to_common(ATTENTION_QUERY_KEY_VALUE, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====attention mla begin
-            self.h_base.hf_to_common(ATTENTION_Q_DOWN, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_Q_UP, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_Q_UP_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_KV_DOWN, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_KV_UP, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_KV_UP_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====attention mla end
-            self.h_base.hf_to_common(ATTENTION_DENSE, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(POST_ATTENTION_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_QNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(ATTENTION_KNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====mlp
-            self.h_base.hf_to_common(POST_MLP_LAYERNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(POST_MLP_LAYERSCALE, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====mlp dense
-            self.h_base.hf_to_common(MLP_DENSE_H_TO_4H, c_ckpt, self.state_dict, layer_id=layer_id)
-            self.h_base.hf_to_common(MLP_DENSE_4H_TO_H, c_ckpt, self.state_dict, layer_id=layer_id)
-            # ====moe gate
-            self.h_base.hf_to_common(MOE_GATE, c_ckpt, self.state_dict, layer_id=layer_id)
+            for c_name in BASE_NAMES:
+                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
             # ====moe shared_expert
-            self.h_base.hf_to_common(MOE_EXPERT_H_TO_4H, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
-            self.h_base.hf_to_common(MOE_EXPERT_4H_TO_H, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
+            for c_name in MOE_EXPERT_PROJS:
+                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
 
             # EXPERT
             if expert_dict is not None:
                 for ep_id, expert_ids in expert_dict.items():
                     for expert_id in expert_ids:
-                        self.h_moe.hf_e_to_common(MOE_EXPERT, MOE_EXPERT_H_TO_4H, c_ckpt, self.state_dict, \
-                                                  layer_id=layer_id, expert_id=expert_id)
-                        self.h_moe.hf_e_to_common(MOE_EXPERT, MOE_EXPERT_4H_TO_H, c_ckpt, self.state_dict, \
-                                                  layer_id=layer_id, expert_id=expert_id)
+                        for c_name in MOE_EXPERT_PROJS:
+                            self.h_moe.hf_e_to_common(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
+                                                      layer_id=layer_id, expert_id=expert_id)
 
             # MTP
             if layer_id >= num_layers:
-                self.h_base.hf_to_common(MTP_WORD_EMBEDDING, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.hf_to_common(MTP_ENORM, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.hf_to_common(MTP_HNORM, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.hf_to_common(MTP_EH_PROJ, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.hf_to_common(MTP_SHARED_HEAD_NORM, c_ckpt, self.state_dict, layer_id=layer_id)
-                self.h_base.hf_to_common(MTP_SHARED_HEAD_HEAD, c_ckpt, self.state_dict, layer_id=layer_id)
+                for c_name in MTP_NAMES:
+                    self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
 
         if num_layers - 1 in layer_ids:
-            self.h_base.hf_to_common(FINAL_LAYERNORM, c_ckpt, self.state_dict)
-            self.h_base.hf_to_common(WORD_EMBEDDINGS_FOR_HEAD, c_ckpt, self.state_dict)
+            for c_name in LAST_LAYER_NAMES:
+                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
 
         return c_ckpt
 

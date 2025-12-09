@@ -29,7 +29,7 @@ class McoreMoe(McoreBase):
         self.args = parse_args()
 
     def common_e_to_mcore(self, expert_name, name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, ep_id=None, expert_id=None, layer_prefix=None):
-        if name not in self.name_map:
+        if name not in self.name_map or expert_name not in self.name_map:
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
@@ -48,14 +48,16 @@ class McoreMoe(McoreBase):
         etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None else None
         if self.etp is None:
             weight_list, bias_list = self.get_chunked_weight(
-                    name, common_key, self.tp, weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
+                    name, self.tp, mcore_weight_path, mcore_bias_path,
+                    weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
             self.update_mcore_expert_weight(
                     m_dict, t_name, mcore_weight_path, mcore_bias_path, weight_list,
                     m_tp=self.tp, has_extra=mcore_extra, mcore_extra_path=mcore_extra_path,
                     bias_list=bias_list)
         else:
             weight_list, bias_list = self.get_chunked_weight(
-                    name, common_key, self.etp, weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
+                    name, self.etp, mcore_weight_path, mcore_bias_path,
+                    weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
             self.update_mcore_expert_weight(
                     m_dict, t_name, mcore_weight_path, mcore_bias_path, weight_list, 
                     m_tp=self.etp, has_extra=mcore_extra, mcore_extra_path=mcore_extra_path,
@@ -82,7 +84,7 @@ class McoreMoe(McoreBase):
 
     # =====mcore to common====
     def mcore_e_to_common(self, expert_name, name, c_ckpt, e_m_dict, t_name, layer_id, m_layer_id, expert_id=None, layer_prefix=None):
-        if name not in self.name_map:
+        if name not in self.name_map or expert_name not in self.name_map:
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)

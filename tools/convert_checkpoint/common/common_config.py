@@ -8,6 +8,8 @@
 
 import torch
 import json
+from omegaconf import OmegaConf
+from omegaconf.dictconfig import DictConfig
 
 from convert_checkpoint.common.abstact_config import AbstractConfig
 
@@ -41,7 +43,11 @@ class CommonConfig(AbstractConfig):
         """ update args for platform """
         res = {k: v for k, v in args.items() if v is not None}
         self.get("args").setdefault(platform, {})
+        if isinstance(self.get("args"), DictConfig):
+            OmegaConf.set_struct(self.get("args"), False)
         self.get("args").get(platform).update(res)
+        if isinstance(self.get("args").get(platform), DictConfig):
+            OmegaConf.set_struct(self.get("args").get(platform), False)
         if res.get("torch_dtype") is not None:
             self.update({"torch_dtype": res.get("torch_dtype")})
 
@@ -71,4 +77,4 @@ class CommonConfig(AbstractConfig):
             self.data = json.loads(f.read())
 
     def load_convert_data(self, convert_data):
-            self.data = convert_data
+        self.data = convert_data

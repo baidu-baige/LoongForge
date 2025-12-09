@@ -3,7 +3,7 @@
 #     - file://configs/
 
 defaults:
-  - ../../models/image_encoder@model.image_encoder:  intern_vit_6b
+  - ../../models/image_encoder@model.image_encoder:  intern_vit_0.3b
   - ../../models/image_projector@model.image_projector: intern_mlp_adapter
   - ../../models/qwen3@model.foundation: qwen3_30b_a3b
   - _self_
