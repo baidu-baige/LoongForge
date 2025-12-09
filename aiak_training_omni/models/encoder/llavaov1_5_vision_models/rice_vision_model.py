@@ -51,7 +51,7 @@ class RiceViTModel(Qwen2VisionModel):
     ) -> None:
         if config.model_spec is None:
             config.model_spec = [
-                "aiak_training_omni.models.encoder.llavaov_vision_models.llavaov_1_5_layer_spec",
+                "aiak_training_omni.models.encoder.llavaov1_5_vision_models.llavaov_1_5_layer_spec",
                 "get_vision_layer_with_spec",
             ]
         super().__init__(config, spatial_merge_size)
