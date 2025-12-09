@@ -96,8 +96,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov_1_5/llava_ov_1_5_4b.yaml
-
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov1.5/llavaov_1_5_4b.yaml
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path "$TOKENIZER_PATH"
