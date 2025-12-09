@@ -239,6 +239,52 @@ class OmniEncoderModel(torch.nn.Module):
         else:
             self.audio_projector = None
 
+    def _aggregate_deepstack_embeds(
+        self,
+        images_mask: Optional[bool],
+        videos_mask: Optional[bool],
+        deepstack_image_embeds: Optional[List[torch.Tensor]],
+        deepstack_video_embeds: Optional[List[torch.Tensor]],
+    ) -> Tuple[Optional[torch.Tensor], Optional[List[torch.Tensor]]]:
+        """Aggregates deepstack embeddings and position masks from image and video modalities."""
+        visual_pos_masks = None
+        deepstack_visual_embeds = None
+        
+        if (
+            deepstack_image_embeds is not None 
+            or deepstack_video_embeds is not None
+        ):
+            if images_mask is not None and videos_mask is not None:
+                images_mask = images_mask[..., 0]
+                videos_mask = videos_mask[..., 0]
+                visual_pos_masks = images_mask | videos_mask
+                
+                deepstack_visual_embeds = []
+                images_mask_joint = images_mask[visual_pos_masks]
+                videos_mask_joint = videos_mask[visual_pos_masks]
+                
+                for img_embed, vid_embed in zip(deepstack_image_embeds, deepstack_video_embeds):
+                    # 创建一个零张量来容纳联合嵌入，大小为 (N_visual_tokens, Hidden_size)
+                    embed_joint = img_embed.new_zeros(
+                        visual_pos_masks.sum().item(), 
+                        img_embed.shape[-1]
+                    ).to(img_embed.device)
+                    embed_joint[images_mask_joint, :] = img_embed
+                    embed_joint[videos_mask_joint, :] = vid_embed
+                    deepstack_visual_embeds.append(embed_joint)
+                    
+            elif images_mask is not None:
+                images_mask = images_mask[..., 0]
+                visual_pos_masks = images_mask
+                deepstack_visual_embeds = deepstack_image_embeds
+                
+            elif videos_mask is not None:
+                videos_mask = videos_mask[..., 0]
+                visual_pos_masks = videos_mask
+                deepstack_visual_embeds = deepstack_video_embeds
+
+        return visual_pos_masks, deepstack_visual_embeds
+
     def set_input_tensor(self, input_tensor) -> None:
         """Set the input tensor for the encoder.
         Args:
@@ -266,7 +312,7 @@ class OmniEncoderModel(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for image encoding."""
-        image_embeddings, window_index = self.image_encoder(
+        image_embeddings, window_index, deepstack_image_embeds = self.image_encoder(
             images, image_grid_thw=image_grid_thw
         )
         if self.image_projector is not None:
@@ -297,7 +343,7 @@ class OmniEncoderModel(torch.nn.Module):
         image_embeddings = image_embeddings.to(input_embeds.device, input_embeds.dtype)
         combined_embeddings = input_embeds.masked_scatter(images_mask, image_embeddings)
 
-        return combined_embeddings
+        return combined_embeddings, images_mask, deepstack_image_embeds
 
     def video_forward(
         self,
@@ -310,11 +356,11 @@ class OmniEncoderModel(torch.nn.Module):
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for video encoding."""
         if self.mix_used_vision_encoder:
-            video_embeddings, window_index  = self.image_encoder(pixel_values_videos, 
+            video_embeddings, window_index, deepstack_video_embeds = self.image_encoder(pixel_values_videos, 
                                                                  image_grid_thw=video_grid_thw)
             video_token_id = self.image_encoder.config.video_token_id
         else:
-            video_embeddings, window_index = self.video_encoder(
+            video_embeddings, window_index, deepstack_video_embeds = self.video_encoder(
                 pixel_values_videos, image_grid_thw=video_grid_thw
             )
             video_token_id = self.video_encoder.config.video_token_id
@@ -347,7 +393,7 @@ class OmniEncoderModel(torch.nn.Module):
         video_embeddings = video_embeddings.to(input_embeds.device, input_embeds.dtype)
         combined_embeddings = input_embeds.masked_scatter(videos_mask, video_embeddings)
 
-        return combined_embeddings
+        return combined_embeddings, videos_mask, deepstack_video_embeds
 
     def audio_forward(self, inputs_embeds: torch.Tensor, decoder_inputs, **kwargs):
         """Forward function for audio encoding."""
@@ -396,6 +442,9 @@ class OmniEncoderModel(torch.nn.Module):
         decoder_inputs: Dict[str, torch.Tensor] = {}
         for modality in self.encoder_modality:
             self.encoder_modality[modality] = False
+        
+        images_mask, videos_mask = None, None
+        deepstack_image_embeds, deepstack_video_embeds = None, None
         # Process image modality
         if "image" in self.encoder_modality:
             if image_inputs is None and not self.encoder_modality["image"]:
@@ -403,7 +452,7 @@ class OmniEncoderModel(torch.nn.Module):
                     input_embeds, self.image_encoder, self.image_projector
                 )
             else:
-                input_embeds = self.image_forward(
+                input_embeds, images_mask, deepstack_image_embeds = self.image_forward(
                     input_ids=input_ids,
                     input_embeds=input_embeds,
                     inference_params=inference_params,
@@ -434,14 +483,22 @@ class OmniEncoderModel(torch.nn.Module):
                         input_embeds, self.video_encoder, self.video_projector
                     )
             else:
-                input_embeds = self.video_forward(
+                input_embeds, videos_mask, deepstack_video_embeds = self.video_forward(
                     input_ids=input_ids,
                     input_embeds=input_embeds,
                     inference_params=inference_params,
                     **video_inputs,
                 )
             self.encoder_modality["video"] = True
-        return input_embeds, decoder_inputs
+        
+        visual_pos_masks, deepstack_visual_embeds = self._aggregate_deepstack_embeds(
+            images_mask=images_mask,
+            videos_mask=videos_mask,
+            deepstack_image_embeds=deepstack_image_embeds,
+            deepstack_video_embeds=deepstack_video_embeds,
+        )
+                 
+        return input_embeds, decoder_inputs, visual_pos_masks, deepstack_visual_embeds
 
     def encoder_dummy_forward(self, input_embeds, encoder_model, projector_model):
         """Helper method to handle empty inputs"""

@@ -21,10 +21,12 @@ class Adapter(BaseMegatronModule):
         input_size: int,
         output_size: int,
         spatial_merge_size: int = 2,
+        use_postshuffle_norm: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(config=config)
         self.hidden_size = input_size * (spatial_merge_size**2)
+        self.use_postshuffle_norm = use_postshuffle_norm
         if self.config.model_spec is None:
             model_spec = [
                 "aiak_training_omni.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
@@ -36,7 +38,7 @@ class Adapter(BaseMegatronModule):
         self.layernorm = build_module(
             submodules.layernorm,
             config=self.config,
-            hidden_size=input_size,
+            hidden_size=self.hidden_size if self.use_postshuffle_norm else input_size,
             eps=self.config.layernorm_epsilon,
         )
 
@@ -72,7 +74,11 @@ class Adapter(BaseMegatronModule):
         self, x: torch.Tensor, window_index: torch.LongTensor = None
     ) -> torch.Tensor:
         """Forward pass."""
-        x = self.layernorm(x).view(-1, self.hidden_size)
+        x = self.layernorm(
+            x.view(-1, self.hidden_size)
+            if self.use_postshuffle_norm
+            else x
+        ).view(-1, self.hidden_size)
         x, _ = self.linear_fc1(x)
         x = self.activation_func(x)
         x, _ = self.linear_fc2(x)

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 from .omni_encoder_model import OmniEncoderModel
 from .omni_decoder_model import OmniDecoderModel
 from .utils import get_inputs_on_this_cp_rank
@@ -166,6 +167,8 @@ class OmniCombinationModel(BaseMegatronModule):
         packed_seq_params=None,
         labels: Optional[torch.LongTensor] = None,
         inference_params: InferenceParams = None,
+        visual_pos_masks: Optional[list[Tensor]] = None,
+        deepstack_visual_embeds: Optional[list[Tensor]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Forward pass supporting multiple execution paths.
@@ -183,7 +186,7 @@ class OmniCombinationModel(BaseMegatronModule):
         if use_inference_kv_cache:
             vision_embeddings = None
         elif self.add_encoder:
-            combined_embeddings, decode_input = self.encoder_model(
+            combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = self.encoder_model(
                 input_ids=input_ids,
                 position_ids=position_ids,
                 image_inputs=image_inputs,
@@ -210,6 +213,8 @@ class OmniCombinationModel(BaseMegatronModule):
             # rotary_pos_emb=rotary_pos_emb,
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
+            visual_pos_masks=visual_pos_masks,
+            deepstack_visual_embeds=deepstack_visual_embeds,
             extra_block_kwargs={},
         )
 
