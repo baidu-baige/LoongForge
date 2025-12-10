@@ -174,12 +174,10 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens,):
     Returns:
         Tensor: The input tensor after applying RoPE
     """
-    # t [84, 1, 32, 128]
-    # freq [1, 1, 84, 128]
     rot_dim = freq.shape[-1]
     
     # ideally t_pass is empty so rotary pos embedding is applied to all tensor t
-    t = t.permute(1, 2, 0, 3).contiguous()
+    freq = freq.permute(2, 1, 0, 3).contiguous()
     t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
 
     # first part is cosine component
@@ -187,10 +185,9 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens,):
     cos_ = torch.cos(freq).to(t.dtype) # [1, 1, 84, 128]
     sin_ = torch.sin(freq).to(t.dtype) # [1, 1, 84, 128]
 
-    # t [84, 1, 32, 128] -> [1, 32, 84, 128]
     t = (t * cos_) + (_rotate_half(t) * sin_)
 
-    t = torch.cat((t, t_pass), dim=-1).permute(2, 0, 1, 3).contiguous()
+    t = torch.cat((t, t_pass), dim=-1)
     return t
     
 
