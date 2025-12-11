@@ -364,8 +364,9 @@ class Qwen3Model(BaseMegatronLanuageModule):
         self.rotary_pos_emb_cache = {}
         
         model_config = get_model_config()
+        self.is_qwen3_vl = model_config.model_type == "qwen3_vl"
         TransformerBlock = MegatronTransformerBlock
-        if self.config.model_type == "qwen3_vit":
+        if self.is_qwen3_vl:
             TransformerBlock = Qwen3VLTransformerBlock
         # Transformer.
         self.decoder = TransformerBlock(
@@ -508,15 +509,28 @@ class Qwen3Model(BaseMegatronLanuageModule):
             )
 
         # Run decoder.
-        hidden_states = self.decoder(
+        if self.is_qwen3_vl:
+            hidden_states = self.decoder(
             hidden_states=decoder_input,
             attention_mask=attention_mask,
             attn_mask_type=attn_mask_type,
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=packed_seq_params,
+            visual_pos_masks=visual_pos_masks,
+            deepstack_visual_embeds=deepstack_visual_embeds,
             **(extra_block_kwargs or {}),
         )
+        else:
+            hidden_states = self.decoder(
+                hidden_states=decoder_input,
+                attention_mask=attention_mask,
+                attn_mask_type=attn_mask_type,
+                inference_params=inference_params,
+                rotary_pos_emb=rotary_pos_emb,
+                packed_seq_params=packed_seq_params,
+                **(extra_block_kwargs or {}),
+            )
 
         if not self.post_process:
             return hidden_states

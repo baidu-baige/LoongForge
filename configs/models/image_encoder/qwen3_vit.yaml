@@ -9,7 +9,7 @@ patch_size: 16
 num_attention_heads: 16
 num_query_groups: 16
 image_size: [1344, 1344]
-activation_func: ${act:gelu}
+activation_func: ${act:gelu_tanh}
 normalization: "LayerNorm"
 add_bias_linear: true
 add_qkv_bias: true
@@ -20,5 +20,6 @@ position_embedding_type: "none"
 bias_activation_fusion: False
 deepstack_visual_indexes: [8, 16, 24]
 num_position_embeddings: 2304
+attention_dropout: 0.0
 
 model_type: "qwen3_vit"

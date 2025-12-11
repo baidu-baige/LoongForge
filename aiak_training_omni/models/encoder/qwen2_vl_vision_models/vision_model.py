@@ -21,6 +21,7 @@ class PatchEmbed(torch.nn.Module):
         temporal_patch_size: int = 2,
         in_channels: int = 3,
         embed_dim: int = 1152,
+        bias: bool = False,
     ) -> None:
         super().__init__()
         self.patch_size = patch_size
@@ -34,7 +35,7 @@ class PatchEmbed(torch.nn.Module):
             embed_dim,
             kernel_size=kernel_size,
             stride=kernel_size,
-            bias=False,
+            bias=bias,
         )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:

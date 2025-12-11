@@ -4,6 +4,8 @@ import os
 from copy import deepcopy
 
 import torch.nn.functional as F
+import functools
+
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from megatron.training.arguments import add_megatron_arguments, moe_freq_type
@@ -37,6 +39,7 @@ def register_custom_resolvers():
         "relu": F.relu,
         "gelu": F.gelu,
         "silu": F.silu,
+        "gelu_tanh": functools.partial(F.gelu, approximate="tanh"),
     }
     POSITION_IDX_FUNC_MAP = {
         "position_ids": get_position_ids,

@@ -48,10 +48,13 @@ def get_qwen3_vl_vision_model_layer_with_te_spec(config: TransformerConfig) -> M
                     linear_qkv=TELayerNormColumnParallelLinear,
                     core_attention=TEDotProductAttention,
                     linear_proj=TERowParallelLinear,
+                    q_layernorm=IdentityOp,
+                    k_layernorm=IdentityOp,
                     apply_rotary_fn=apply_rotary_pos_emb_vision,
                 ),
             ),
             self_attn_bda=get_bias_dropout_add,
+            pre_mlp_layernorm=IdentityOp,
             mlp=ModuleSpec(
                 module=MLP,
                 submodules=MLPSubmodules(

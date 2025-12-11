@@ -15,7 +15,7 @@ from aiak_training_omni.utils import get_model_config
 
 from .vision_transformer_block import TransformerBlock
 from .qwen3_vl_config import Qwen3VisionModelConfig 
-from ..qwen2_vl_vision_models.vision_model import Qwen2VisionModel
+from ..qwen2_vl_vision_models.vision_model import Qwen2VisionModel, PatchEmbed
 from ..qwen2_vl_vision_models.adapter import Adapter
 
 
@@ -28,6 +28,12 @@ class Qwen3VisionModel(Qwen2VisionModel):
         config: TransformerConfig,
     ) -> None:
         super().__init__(config)
+        self.patch_embed = PatchEmbed(
+            patch_size=config.patch_size,
+            in_channels=config.in_channels,
+            embed_dim=config.hidden_size,
+            bias=True,
+        )
         self.pos_embed = torch.nn.Embedding(config.num_position_embeddings, config.hidden_size)
         self.num_grid_per_side = int(config.num_position_embeddings**0.5)
         
@@ -122,10 +128,10 @@ class Qwen3VisionModel(Qwen2VisionModel):
         pos_embeds = self.fast_pos_embed_interpolate(image_grid_thw)
         x = x + pos_embeds
 
-        rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
-
         seq_len, _ = x.size()
         x = x.reshape(seq_len, -1)
+
+        rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (emb.cos(), emb.sin())

@@ -251,8 +251,8 @@ class OmniEncoderModel(torch.nn.Module):
         deepstack_visual_embeds = None
         
         if (
-            deepstack_image_embeds is not None 
-            or deepstack_video_embeds is not None
+            len(deepstack_image_embeds) != 0 
+            or len(deepstack_video_embeds) != 0
         ):
             if images_mask is not None and videos_mask is not None:
                 images_mask = images_mask[..., 0]
@@ -444,7 +444,7 @@ class OmniEncoderModel(torch.nn.Module):
             self.encoder_modality[modality] = False
         
         images_mask, videos_mask = None, None
-        deepstack_image_embeds, deepstack_video_embeds = None, None
+        deepstack_image_embeds, deepstack_video_embeds = [], []
         # Process image modality
         if "image" in self.encoder_modality:
             if image_inputs is None and not self.encoder_modality["image"]:
