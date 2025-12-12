@@ -26,4 +26,4 @@ moe_ffn_hidden_size: 1536
 rotary_emb_func: "RotaryEmbedding"
 rotary_base: 1000000
 model_type: "qwen"
-# variable_seq_lengths: true
+variable_seq_lengths: true

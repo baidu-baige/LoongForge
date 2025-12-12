@@ -60,7 +60,8 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         self.loss_reduction = args.loss_reduction
         self.seq_length = args.seq_length
         self.strict_mode = args.strict_mode
-        self.max_item_length = 0
+        self.max_item_length = args.max_packed_tokens if self.strict_mode else 0
+
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> MixQATaskSample:
         """Encode multi_mix_qa sample."""
@@ -80,33 +81,22 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         else:
             ret = self.preproc.pure_text_get_item(data_item)
 
+        sample_args = {
+            "__key__": sample.__key__,
+            "__restore_key__": sample.__restore_key__,
+            "__subflavors__": sample.__subflavors__,
+            "tokens": ret["input_ids"],
+            "labels": ret["labels"],
+            "attn_mask": ret["attention_mask"],
+            "position_ids": ret["position_ids"],
+            "imgs": ret["pixel_values"],
+            "total_len": len(ret["input_ids"]),
+            "image_flags": ret["image_flags"],
+        }
         if _ENERGON_NEEDS_SUBFLAVOR:
-            return MixQATaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                tokens=ret["input_ids"],
-                labels=ret["labels"],
-                attn_mask=ret["attention_mask"],
-                position_ids=ret["position_ids"],
-                imgs=ret["pixel_values"],
-                total_len=len(ret["input_ids"]),
-                image_flags=ret["image_flags"],
-            )
-        else:
-            return MixQATaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                tokens=ret["input_ids"],
-                labels=ret["labels"],
-                attn_mask=ret["attention_mask"],
-                position_ids=ret["position_ids"],
-                imgs=ret["pixel_values"],
-                total_len=len(ret["input_ids"]),
-                image_flags=ret["image_flags"],
-            )
+            sample_args["__subflavor__"] = None
+
+        return MixQATaskSample(**sample_args)
 
     @override
     @stateless
@@ -179,56 +169,49 @@ class InternVLTaskEncoder(BaseTaskEncoder):
         curr_loss_weight = torch.where(
             packed_labels == IGNORE_TOKEN_ID, 0, curr_loss_weight
         )
+
+        sample_kwargs = {
+            "__key__": ",".join([s.__key__ for s in samples]),
+            "__restore_key__": (),
+            "__subflavors__": samples[0].__subflavors__,
+            "tokens": packed_tokens,
+            "labels": packed_labels,
+            "attn_mask": cu_lengths,
+            "position_ids": packed_pos_ids,
+            "imgs": packed_pixel_values,
+            "cu_lengths": cu_lengths,
+            "loss_weight": curr_loss_weight,
+            "image_flags": packed_image_flags,
+            "max_length": max_length,
+        }
+
         if _ENERGON_NEEDS_SUBFLAVOR:
-            return MixQATaskPackedSample(
-                __key__=",".join([s.__key__ for s in samples]),
-                __restore_key__=(),
-                __subflavor__=None,
-                __subflavors__=samples[0].__subflavors__,
-                tokens=packed_tokens,
-                labels=packed_labels,
-                attn_mask=cu_lengths,
-                position_ids=packed_pos_ids,
-                imgs=packed_pixel_values,
-                cu_lengths=cu_lengths,
-                loss_weight=curr_loss_weight,
-                image_flags=packed_image_flags,
-                max_length=max_length,
-            )
-        else:
-            return MixQATaskPackedSample(
-                __key__=",".join([s.__key__ for s in samples]),
-                __restore_key__=(),
-                __subflavors__=samples[0].__subflavors__,
-                tokens=packed_tokens,
-                labels=packed_labels,
-                attn_mask=cu_lengths,
-                position_ids=packed_pos_ids,
-                imgs=packed_pixel_values,
-                cu_lengths=cu_lengths,
-                loss_weight=curr_loss_weight,
-                image_flags=packed_image_flags,
-                max_length=max_length,
-            )
+            sample_kwargs["__subflavor__"] = None
+
+        return MixQATaskPackedSample(**sample_kwargs)
 
     @override
     def batch(
         self, samples: List[Union[MixQATaskSample, MixQATaskPackedSample]]
     ) -> MixQATaskBatchPackedSample:
         """Batch samples together"""
+        batch_lens = [feat.tokens.shape for feat in samples]
+        max_item_length = self.max_item_length or max(batch_lens)[0]
+
         # pad imgs
         if self.strict_mode:
-            samples = [
-                self.preproc.pad_imgs(s, self.num_images_expected) for s in samples
-            ]
+            for s in samples:
+                self.preproc.pad_imgs(s, self.num_images_expected)
+                if s.cu_lengths[-1] != max_item_length:
+                    last = torch.tensor([max_item_length], dtype=s.cu_lengths.dtype)
+                    s.cu_lengths = torch.cat([s.cu_lengths, last])
 
         features = [asdict(f) for f in samples]
+        # align with llm
+        pad_id = self.tokenizer.pad_token_id if isinstance(samples[0], MixQATaskSample) else 0
 
-        pad_id = self.tokenizer.pad_token_id
         # pad logic, pad all batches to the same length
         first = features[0]
-        batch_lens = [feat["tokens"].shape for feat in features]
-        max_item_length = self.max_item_length or max(batch_lens)[0]
 
         for idx in range(len(features)):
             feat = features[idx]
@@ -244,7 +227,7 @@ class InternVLTaskEncoder(BaseTaskEncoder):
                 assert (
                     feat["cu_lengths"] is not None
                 ), f'pack mask error: {feat["cu_lengths"]}'
-                feat["attention_mask"] = feat["cu_lengths"]
+                feat["attn_mask"] = feat["cu_lengths"]
 
             if "position_ids" in feat:
                 temp_position_ids = torch.LongTensor([pad_id] * max_item_length)
