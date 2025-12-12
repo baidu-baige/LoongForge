@@ -16,7 +16,7 @@ model:
   foundation: 
     rotary_emb_func: "Qwen3VLRotaryEmbedding"
     mrope_section: [24, 20, 20]
-    vocab_size_in_config_file: 152064
+    rotary_base: 1000000
     model_spec: ["aiak_training_omni.models.foundation.qwen3.qwen_layer_spec", "get_qwen3_vl_layer_with_te_spec"]
   image_encoder:
     model_spec: ["aiak_training_omni.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec", 

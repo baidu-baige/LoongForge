@@ -39,33 +39,31 @@ DATA_ARGS=(
     --split 100,0,0
     --num-workers 16
     --chat-template qwen2-vl
-    # --packing-batch-size 500
-    # --packing-sft-data
 )
 
 TRAINING_ARGS=(
-    --norm-epsilon 1e-6
     --training-phase sft
-    # --trainable-modules language_model adapter
     --seq-length 32768
     --max-position-embeddings 32768
-    --init-method-std 0.02
+    --init-method-std 0.006
     --micro-batch-size 1
     --global-batch-size 32
-    --lr 0.0002
-    --min-lr 1.0e-5
+    --lr 6.0e-5
+    --min-lr 6.0e-5
     --clip-grad 1.0
-    --weight-decay 0.01
+    --weight-decay 0.1
     --optimizer adam
     --adam-beta1 0.9
     --adam-beta2 0.95
-    --adam-eps 1e-05
+    --adam-eps 1e-08
     --norm-epsilon 1e-6
     --train-iters 50000
     --lr-decay-iters 50000
     --lr-decay-style cosine
-    --lr-warmup-fraction 0.002
-    --initial-loss-scale 65536
+    --lr-warmup-iters 50
+    # --lr-warmup-fraction 0.002
+    # --initial-loss-scale 65536
+    
     --bf16
     #--load $CHECKPOINT_PATH
     #--save $CHECKPOINT_PATH
@@ -78,9 +76,11 @@ MOE_ARGS=(
     --moe-router-load-balancing-type aux_loss
     --moe-router-topk 8
     --moe-aux-loss-coeff 1e-3
-    #--moe-grouped-gemm
+    --moe-grouped-gemm
     --moe-router-dtype fp32
     --empty-unused-memory-level 2
+    --moe-router-score-function sigmoid
+    --moe-token-dispatcher-type alltoall
 )
 
 MODEL_PARALLEL_ARGS=(
@@ -88,7 +88,6 @@ MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 8
-    --moe-token-dispatcher-type alltoall
     --use-distributed-optimizer
     # --sequence-parallel
     --overlap-grad-reduce

@@ -21,5 +21,6 @@ bias_activation_fusion: False
 deepstack_visual_indexes: [8, 16, 24]
 num_position_embeddings: 2304
 attention_dropout: 0.0
+hidden_dropout: 0.0
 
 model_type: "qwen3_vit"

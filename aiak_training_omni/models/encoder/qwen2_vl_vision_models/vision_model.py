@@ -164,7 +164,7 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
             attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
-        return x, None, None
+        return x, None, []
 
 
 class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
@@ -293,4 +293,4 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 
-        return x, window_index, None
+        return x, window_index, []
