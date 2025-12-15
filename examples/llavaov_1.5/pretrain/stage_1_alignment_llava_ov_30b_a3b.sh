@@ -105,6 +105,7 @@ DATA_ARGS=(
     --split 100,0,0
     --num-workers 16
     --chat-template qwen2-vl
+    --task-encoder LLavaOv15TaskEncoder
 )
 
 TRAINING_ARGS=(

@@ -191,6 +191,13 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
         "--padded-vocab-size", type=int, default=None, help="Specify padded vocab size."
     )
 
+    group.add_argument(
+        "--task-encoder",
+        type=str,
+        default=None,
+        help="Task encoder class name for multimodal data pipeline "
+        "(e.g., VLMTaskEncoder, InternVLTaskEncoder).",
+    )
     return parser
 
 
