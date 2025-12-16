@@ -1,0 +1,46 @@
+
+# 数据路径配置
+data:
+  # webdataset数据样本目录
+  wds_dir: "/mnt/cluster/yxc/filter_4w_CC3M/images"
+  # 文本字段名
+  template_text_key: "messages"
+  # template_text_key: "texts"
+  # 存储中间结果是json目录
+  packed_json_dir: "/mnt/cluster/yxc/test_packing/test_vqa_16k_json/"
+  # packed 后的 wds 数据集
+  packed_wds_dir: "/mnt/cluster/yxc/test_packing/test_vqa_16k_packed_wds/"
+
+model:
+  model_type: "qwenvl"
+  processor_kwargs:
+    pretrained_model_name_or_path: "/mnt/cluster/models/Qwen3-VL-30B-A3B-Instruct"
+    min_pixels: 3136   # 4*28*28
+    max_pixels: 4014080 # 5120*28*28(4014080,8192)
+    trust_remote_code: True
+    use_fast: False
+
+# 媒体文件预处理配置，可选的的预处理函数在media_preprocess_utils.py中定义
+media_preprocess:
+  image: custom_image_preprocess
+
+sample:
+  # 训练数据的最大长度
+  max_token_len: 16384
+  # 决定解析方式
+  sample_type: packed_vqa
+
+# 并行处理参数
+process:
+  # 每个进程处理的样本块大小
+  chunk_size: 5000
+  # 归并参数（排序)的batch_size
+  merge_batch_size: 20
+  # 超时设置（根据数据量定，1M数据按 45分钟(2700s)估算）
+  time_out: 2000
+
+# 日志与临时文件
+log:
+  # 日志级别（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+  level: "INFO"
+  # 日志文件路径

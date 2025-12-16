@@ -53,6 +53,44 @@ def stream_samples_caption(src_dir: Path) -> Iterator[dict]:
         }
 
 
+def stream_samples_packed_multi_mix_qa(src_dir: Path) -> Iterator[dict]:
+    """Stream packed multi-mix qa entries with cooker-ready fields."""
+    if not src_dir.exists():
+        raise FileNotFoundError(f"Packed json directory not found: {src_dir}")
+
+    for json_path in sorted(src_dir.glob("*.json")):
+        sample_id = json_path.stem
+        with json_path.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+
+        texts = raw.get("texts", {})
+        prompts = raw.get("prompts") or texts.get("prompts") or []
+        captions = raw.get("captions") or texts.get("captions") or []
+        media_files = raw.get("media_files") or []
+        media_type = (raw.get("media_type") or raw.get("media") or "").lower()
+
+        if media_type not in {"image", "video"}:
+            raise ValueError(
+                f"[{sample_id}] unsupported media_type='{media_type}', expected 'image' or 'video'"
+            )
+        if len(prompts) != len(captions):
+            raise ValueError(
+                f"[{sample_id}] prompts/captions length mismatch: {len(prompts)} vs {len(captions)}"
+            )
+        if len(media_files) != len(prompts):
+            raise ValueError(
+                f"[{sample_id}] media_files length mismatch: {len(media_files)} vs {len(prompts)} prompts"
+            )
+
+        yield {
+            "id": sample_id,
+            "prompts": prompts,
+            "captions": captions,
+            "media_files": media_files,
+            "media_type": media_type,
+        }
+
+
 def _candidate_media_paths(raw_path: str, sample_id: str) -> List[Path]:
     """
     Build a list of possible on-disk paths for a media entry.
@@ -136,21 +174,94 @@ def _resolve_media_path(
 
 def construct_sample(entry, image_roots: Optional[Sequence[Path]] = None):
     """Pack the entire sample"""
-    sample = {"__key__": entry["id"]}
+    sample_id = entry["id"]
+    sample = {"__key__": sample_id, "__restore_key__": sample_id}
     roots = _dedup_paths(image_roots or [])
-    for img_path in entry["images"]:
+    normalized_images = []
+    for idx, img_path in enumerate(entry["images"]):
         resolved_path = _resolve_media_path(img_path, roots, entry["id"])
-        target_name = resolved_path.name
-        if "." in target_name:
-            _, suffix = target_name.split(".", 1)
-            target_name = suffix
+        suffix = resolved_path.suffix or Path(img_path).suffix or ".jpg"
+        target_name = f"img{idx}{suffix}"
+        normalized_images.append(target_name)
         with resolved_path.open("rb") as f:
             sample[target_name] = f.read()
 
     payload = {
         "prompts": entry["prompts"],
         "captions": entry["captions"],
-        "images": entry["images"]
+        "images": normalized_images,
+    }
+    sample["json"] = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    return sample
+
+
+def _normalize_media_name(name: str, sample_id: str) -> str:
+    """Preserve media filename for storage while ensuring it is a string."""
+    return str(name)
+
+
+def _normalize_media_files(media_files, sample_id: str):
+    """Apply _normalize_media_name to every media entry while preserving structure."""
+    normalized = []
+    for item in media_files:
+        if isinstance(item, (list, tuple)):
+            normalized.append(_normalize_media_files(item, sample_id))
+        else:
+            normalized.append(_normalize_media_name(str(item), sample_id))
+    return normalized
+
+
+def _log_json_presence(sample_id: str, sample: dict, index: int, log_every: int = 2000) -> None:
+    """
+    Log whether the packed sample contains json bytes.
+
+    Emits a warning if json is missing or not bytes; otherwise logs basic info
+    for the first few samples and then periodically.
+    """
+    json_blob = sample.get("json")
+    media_keys = [k for k in sample.keys() if k not in {"__key__", "__restore_key__", "json"}]
+    if not isinstance(json_blob, (bytes, bytearray)):
+        LOG.warning(
+            "Sample '%s' missing json payload or wrong type (got %s). Keys=%s",
+            sample_id,
+            type(json_blob).__name__,
+            media_keys,
+        )
+        return
+
+    if index < 3 or (log_every and index % log_every == 0):
+        LOG.info(
+            "Sample '%s' json bytes=%d, media keys=%s",
+            sample_id,
+            len(json_blob),
+            media_keys,
+        )
+
+
+def construct_sample_packed_multi_mix_qa(entry, media_roots: Optional[Sequence[Path]] = None):
+    """Pack multi-mix qa sample using cooker-aligned json layout."""
+    sample_id = entry["id"]
+    roots = _dedup_paths(media_roots or [])
+
+    normalized_media_files = _normalize_media_files(entry["media_files"], sample_id)
+    flat_raw = _flatten_media_paths(entry["media_files"])
+    flat_norm = _flatten_media_paths(normalized_media_files)
+    if len(flat_raw) != len(flat_norm):
+        raise ValueError(f"[{sample_id}] media flatten mismatch: {len(flat_raw)} vs {len(flat_norm)}")
+
+    sample = {"__key__": sample_id, "__restore_key__": sample_id}
+    for raw_name, target_name in zip(flat_raw, flat_norm):
+        resolved_path = _resolve_media_path(raw_name, roots, sample_id)
+        with resolved_path.open("rb") as f:
+            sample[target_name] = f.read()
+
+    payload = {
+        "texts": {
+            "captions": entry["captions"],
+            "prompts": entry["prompts"],
+        },
+        "media_files": normalized_media_files,
+        "media_type": entry["media_type"],
     }
     sample["json"] = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     return sample
@@ -224,7 +335,7 @@ def build_runtime_config(cfg: dict) -> PackedWDSConfig:
     sample_cfg = cfg.get("sample", {})
     sample_type = sample_cfg.get("sample_type", "packed_captioning")
 
-    image_search_dirs = _dedup_paths([image_dir, raw_wds_dir])
+    image_search_dirs = _dedup_paths([image_dir, video_dir, raw_wds_dir])
 
     return PackedWDSConfig(
         output_dir=output_dir,
@@ -249,9 +360,17 @@ def convert_to_wds(cfg: PackedWDSConfig):
     if cfg.mode != "caption_pack":
         raise ValueError(f"Unsupported mode '{cfg.mode}' in config-driven workflow.")
 
+    if cfg.sample_type == "packed_multi_mix_qa":
+        stream_fn = stream_samples_packed_multi_mix_qa
+        construct_fn = construct_sample_packed_multi_mix_qa
+    else:
+        stream_fn = stream_samples_caption
+        construct_fn = lambda entry, roots: construct_sample(entry, roots)
+
     with wds.ShardWriter(str(tar_pattern), maxcount=cfg.maxcount, maxsize=cfg.maxsize) as sink:
-        for entry in tqdm(stream_samples_caption(cfg.json_dir)):
-            sample = construct_sample(entry, cfg.image_search_dirs)
+        for idx, entry in enumerate(tqdm(stream_fn(cfg.json_dir))):
+            sample = construct_fn(entry, cfg.image_search_dirs)
+            _log_json_presence(entry.get("id", "unknown"), sample, idx)
             sink.write(sample)
 
     write_config(
@@ -288,6 +407,10 @@ def write_config(path: EPath, media=None, sample_type=None):
 def main():
     """main function"""
     args = parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
     cfg = get_cfg(args.config)
     runtime_cfg = build_runtime_config(cfg)
     convert_to_wds(runtime_cfg)

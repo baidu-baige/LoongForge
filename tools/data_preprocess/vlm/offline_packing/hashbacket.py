@@ -383,7 +383,7 @@ class HashBucketProcessor:
                 left_keys = [k for k in self.hb2_keys if k in self.hash_buckets and len(self.hash_buckets[k])>0]
                 print(f"Remaining keys and their element counts: (keys, counts):({left_keys},{left_elems})")
                 if len(set(left_elems)) == 1:
-                    self._logger.info(f"Change packing strategy to break the cycle ♻️")
+                    self._logger.info(f"Change packing strategy to break the cycle")
                     b_succeed=False
                     # todo ...... Packing without considering diversity
                     current_box2 = []
@@ -1318,8 +1318,8 @@ class HashBucketProcessor:
         # Strategy information
         self._logger.info(f"Seed strategy: {seed_strategy}")
         self._logger.info(f"Strategy parameters: {seed_params}")
-        self._logger.info(f"  🌱 Seed keys(max): {large_keys[-1]}")
-        self._logger.info(f"  🔧 Filler keys count: {len(small_keys)}")
+        self._logger.info(f"  Seed keys(max): {large_keys[-1]}")
+        self._logger.info(f"  Filler keys count: {len(small_keys)}")
         
         if not large_keys:
             self._logger.warning(f"Strategy {seed_strategy} did not generate any seeds")
