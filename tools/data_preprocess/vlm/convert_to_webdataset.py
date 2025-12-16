@@ -21,7 +21,11 @@ def construct_sample(args, vision, paths, index, entry):
     vision_data = {}
     vision_name = []
 
-    for i, path in enumerate(iterable=paths[0]):
+    # paths can be ["a/b.mp4", "c/d.mp4"] or [["a/b.mp4", "c/d.mp4"]].
+    # Without flattening the nested list, a single string would be iterated char-by-char,
+    if len(paths) == 1 and isinstance(paths[0], (list, tuple)):
+        paths = paths[0]
+    for i, path in enumerate(iterable=paths):
         with open(os.path.join(directory, path), "rb") as vision_file:
             vision_data.update({str(i) + '_' + os.path.basename(path) : vision_file.read()})
             vision_name.append(str(i) + '_' + os.path.basename(path))
