@@ -40,10 +40,28 @@ MEDIA_PREPROCESS = {}
 
 # will be set by the main function from the config file
 TEMPLATE_TEXT_KEY = ""
+SAMPLE_TYPE = ""
 GLOBAL_PROCESSED_SAMPLE_COUNT = multiprocessing.Value("i", 0)
 
 
 # ----------------- Utility Functions -----------------
+def setup_logging(log_file: Union[str, Path], log_level: str):
+    """Configure logging for both the main process and worker processes."""
+    log_file = Path(log_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
+        force=True,  # ensure reconfiguration in child processes
+    )
+
+
+def init_worker_logging(log_file: Union[str, Path], log_level: str):
+    """Initializer passed to multiprocessing.Pool so workers log correctly."""
+    setup_logging(log_file, log_level)
+
+
 def get_chat_template(sample_type: str, model_type: str) -> Template:
     """
     Retrieve a chat template string and wrap it as a Template object.
@@ -121,6 +139,144 @@ def fetch_media_data(media_paths: List[Tuple[str, str]]) -> Dict[str, list]:
         process_func: Callable[[Path], any] = MEDIA_PREPROCESS[media_type]
         media_inputs[media_type + "s"].append(process_func(media_path_obj))
     return media_inputs
+
+
+def resolve_media_paths(
+    sample_name: str, json_data: dict, main_dir: Path, sample_type: str
+) -> List[Tuple[str, str]]:
+    """
+    Build media path list for a sample.
+
+    Priority:
+    1) Use explicit media_files/name fields if present.
+    2) Otherwise, fall back to files sharing the same stem as the JSON
+       (e.g., 000000014.json → 000000014.jpg).
+    """
+    declared_media_type = json_data.get("media") or json_data.get("media_type")
+    media_fields = json_data.get("media_files") or json_data.get("name") or []
+    if isinstance(media_fields, (str, Path)):
+        media_fields = [str(media_fields)]
+
+    # In packed_multi_mix_qa, media type must come from JSON `media`/`media_type`.
+    base_media_type: Optional[str] = None
+    if SAMPLE_TYPE == "packed_multi_mix_qa":
+        if declared_media_type not in VALID_MEDIA_EXT:
+            raise ValueError(
+                f"[{sample_name}] packed_multi_mix_qa requires media declared as one of {list(VALID_MEDIA_EXT)}; "
+                f"got '{declared_media_type}'"
+            )
+        base_media_type = declared_media_type
+
+    media_paths: List[Tuple[str, str]] = []
+
+    def infer_media_type(media_name: str) -> Optional[str]:
+        ext = Path(media_name).suffix.lower()
+        for m_type, ext_list in VALID_MEDIA_EXT.items():
+            if ext in ext_list:
+                return m_type
+        return None
+
+    if declared_media_type and declared_media_type not in VALID_MEDIA_EXT:
+        logger.warning(
+            "Unsupported declared media type '%s' in %s; falling back to extension inference",
+            declared_media_type,
+            sample_name,
+        )
+
+    def _pick_existing_path(media_name: str) -> Optional[Path]:
+        candidates = []
+        as_path = Path(media_name)
+        if as_path.is_absolute():
+            candidates.append(as_path)
+        candidates.extend(
+            [
+                main_dir / media_name,  # relative path beside json
+                main_dir / f"{sample_name}.{media_name}",  # prefixed with stem
+            ]
+        )
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
+    for media_name in media_fields:
+        if base_media_type:
+            media_type = base_media_type
+        else:
+            media_type = None
+            if declared_media_type in VALID_MEDIA_EXT:
+                media_type = declared_media_type
+            if media_type is None:
+                media_type = infer_media_type(media_name)
+
+        if media_type is None:
+            logger.warning(
+                f"Skipping media '{media_name}' in {sample_name}: unable to infer media type"
+            )
+            continue
+
+        resolved_path = _pick_existing_path(media_name)
+        if not resolved_path:
+            logger.warning(
+                f"Media file not found for {sample_name}: {media_name} (searched beside JSON)"
+            )
+            continue
+
+        media_paths.append((media_type, str(resolved_path)))
+
+    # Decide fallback strategy by sample_type:
+    # - packed_multi_mix_qa: must rely on JSON-declared media files only.
+    # - packed_vqa / packed_captioning: allow stem-based inference (e.g., 0001.jpg).
+    single_media_types = {"packed_vqa", "packed_captioning"}
+
+    if sample_type == "packed_multi_mix_qa":
+        if not media_paths:
+            logger.warning(
+                f"packed_multi_mix_qa requires media files in JSON; none resolved for {sample_name}"
+            )
+    elif not media_paths and sample_type in single_media_types:
+        for media_type, ext_list in VALID_MEDIA_EXT.items():
+            if media_type not in MEDIA_PREPROCESS:
+                continue
+            for ext in ext_list:
+                candidate = main_dir / f"{sample_name}{ext}"
+                if candidate.exists():
+                    media_paths.append((media_type, str(candidate)))
+
+    if not media_paths and declared_media_type:
+        logger.warning(
+            f"No media located for {sample_name} (declared media type '{declared_media_type}')"
+        )
+
+    return media_paths
+
+
+def normalize_messages_schema(text_data: Union[list, dict, None]) -> Union[list, dict, None]:
+    """
+    Normalize message dict keys so templates that expect `from`/`value` work with
+    data that uses `role`/`content` (common in raw JSON dumps).
+    """
+    if not isinstance(text_data, list):
+        return text_data
+
+    normalized = []
+    for message in text_data:
+        if not isinstance(message, dict):
+            normalized.append(message)
+            continue
+
+        if "from" in message and "value" in message:
+            normalized.append(message)
+            continue
+
+        merged = dict(message)
+        if "from" not in merged and "role" in message:
+            merged["from"] = message["role"]
+        if "value" not in merged and "content" in message:
+            merged["value"] = message["content"]
+        normalized.append(merged)
+
+    return normalized
 
 
 def find_sample_names(webdataset_dir: Union[str, Path]) -> List[str]:
@@ -306,28 +462,27 @@ def process_sample(
 
         # --- Step 2: Render text input ---
         # @ref convert_to_webdataset.construct_sample_for_wds
-        text_data = json_data.get(TEMPLATE_TEXT_KEY)
+        text_data = normalize_messages_schema(json_data.get(TEMPLATE_TEXT_KEY))
+        json_data[TEMPLATE_TEXT_KEY] = text_data
+        logger.debug(msg=f"[{sample_name}] normalized text_data keys: {text_data}")
         if not text_data:
             raise ValueError(
                 f"Missing '{TEMPLATE_TEXT_KEY}' field in {json_path}"
             )
-        text_input = chat_template.render(**{TEMPLATE_TEXT_KEY: text_data})
-
+        # Allow templates to reference either the configured key or a default "messages".
+        # This keeps existing templates (which hardcode `messages`) working when config uses another key (e.g., `texts`).
+        render_payload = {TEMPLATE_TEXT_KEY: text_data}
+        if TEMPLATE_TEXT_KEY != "messages":
+            render_payload["messages"] = text_data
+        text_input = chat_template.render(**render_payload)
+        logger.debug(f"[{sample_name}] rendered text_input: {text_input}")
         # --- Step 3: Collect media paths ---
-        media_names = json_data.get("name", [])
-        main_dir = json_path.parent
-        media_paths = []
-
-        for media_name in media_names:
-            media_type = media_name.split("_")[0]
-            if media_type not in MEDIA_PREPROCESS:
-                logger.warning(
-                    f"Skipping unsupported media type '{media_type}' in {sample_name}"
-                )
-                continue
-
-            media_path = main_dir / f"{sample_name}.{media_name}"
-            media_paths.append((media_type, str(media_path)))
+        media_paths = resolve_media_paths(
+            sample_name=sample_name,
+            json_data=json_data,
+            main_dir=json_path.parent,
+            sample_type=SAMPLE_TYPE,
+        )
 
         # --- Step 4: Load and process media data ---
         media_inputs = fetch_media_data(media_paths) if media_paths else {}
@@ -337,8 +492,15 @@ def process_sample(
         )
 
         token_len = int(model_inputs["input_ids"].shape[1])
+        media_summary = (
+            ", ".join(f"{k}:{len(v)}" for k, v in media_inputs.items())
+            if media_inputs
+            else "no media"
+        )
+        logger.info(
+            f"[sample:{sample_name}] token_len={token_len}, text_chars={len(text_input)}, media={media_summary}"
+        )
         logger.debug(f"model_inputs = {model_inputs}")
-        logger.debug(f"Processed sample {sample_name}: {token_len} tokens")
 
         return token_len, sample_name
 
@@ -642,6 +804,8 @@ def main():
     # sample_config
     max_token_len = config["sample"]["max_token_len"]
     sample_type = config["sample"]["sample_type"]
+    global SAMPLE_TYPE
+    SAMPLE_TYPE = sample_type
 
     # data_config
     wds_dir = Path(config["data"]["wds_dir"])
@@ -676,11 +840,7 @@ def main():
         MEDIA_PREPROCESS[media_type] = preprocess_func
 
     # ======== Setup logging ========
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-    )
+    setup_logging(log_file, log_level)
 
     # ======== Initialize variables ========
     ready_to_batch_merge_files = []
@@ -747,7 +907,11 @@ def main():
         ]
 
         # 4.3 Start multiprocessing pool
-        with Pool(processes=n_processes) as process_pool:
+        with Pool(
+            processes=n_processes,
+            initializer=init_worker_logging,
+            initargs=(log_file, log_level),
+        ) as process_pool:
             async_result = process_pool.starmap_async(process_chunk, chunk_process_args)
             try:
                 ready_to_batch_merge_files = async_result.get(timeout=time_out)
