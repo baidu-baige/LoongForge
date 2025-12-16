@@ -624,20 +624,38 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        return VLMTaskSample(
-            __key__=sample.__key__,
-            __restore_key__=sample.__restore_key__,
-            __subflavors__=sample.__subflavors__,
-            imgs=imgs,
-            image_grid_thw=image_grid_thw,
-            pixel_values_videos=pixel_values_videos,
-            video_grid_thw=video_grid_thw,
-            num_tiles=num_tiles,
-            tokens=input_ids,
-            labels=target,
-            attn_mask=attn_mask,
-            total_len=len(input_ids),
-        )
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return VLMTaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavor__=None,
+                __subflavors__=sample.__subflavors__,
+                imgs=imgs,
+                image_grid_thw=image_grid_thw,
+                pixel_values_videos=pixel_values_videos,
+                video_grid_thw=video_grid_thw,
+                num_tiles=num_tiles,
+                tokens=input_ids,
+                labels=target,
+                attn_mask=attn_mask,
+                total_len=len(input_ids),
+            )
+        else:
+            return VLMTaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavors__=sample.__subflavors__,
+                imgs=imgs,
+                image_grid_thw=image_grid_thw,
+                pixel_values_videos=pixel_values_videos,
+                video_grid_thw=video_grid_thw,
+                num_tiles=num_tiles,
+                tokens=input_ids,
+                labels=target,
+                attn_mask=attn_mask,
+                total_len=len(input_ids),
+            )
+    
 
     def encode_vqa4packing(self, sample: VQASample) -> BaseTaskSample:
         """Encode VQASample in Qwen2VL style."""
