@@ -30,7 +30,7 @@ from aiak_training_omni.data.multimodal.dataloader_provider import (
     get_train_loader,
     VLMPretrainCollator,
 )
-from aiak_training_omni.data.multimodal.vlm_task_encoder import VLMTaskEncoder
+from aiak_training_omni.data.multimodal import build_task_encoder
 from datasets import load_from_disk
 
 from megatron.core import parallel_state
@@ -224,7 +224,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
         return train_data_iterator, None, None
 
     else:
-        task_encoder = VLMTaskEncoder(args)
+        task_encoder = build_task_encoder(args)
         train_dataset = get_train_dataset(task_encoder)
 
         try:
