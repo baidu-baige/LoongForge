@@ -493,13 +493,23 @@ class VLMTaskEncoder(BaseTaskEncoder):
         n_orig_sample = len(sample.images)
         l_VLMTaskSample = []
         for idx in range(n_orig_sample):
-            cur_capsample = CaptioningSample(
-                __key__=f"{sample.__key__}.img{idx:03d}_jpg",
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                image=sample.images[idx],
-                caption=sample.captions[idx],
-            )
+            if _ENERGON_NEEDS_SUBFLAVOR:
+                cur_capsample = CaptioningSample(
+                    __key__=f"{sample.__key__}.img{idx:03d}_jpg",
+                    __restore_key__=sample.__restore_key__,
+                    __subflavor__=None,
+                    __subflavors__=sample.__subflavors__,
+                    image=sample.images[idx],
+                    caption=sample.captions[idx],
+                )
+            else:
+                cur_capsample = CaptioningSample(
+                    __key__=f"{sample.__key__}.img{idx:03d}_jpg",
+                    __restore_key__=sample.__restore_key__,
+                    __subflavors__=sample.__subflavors__,
+                    image=sample.images[idx],
+                    caption=sample.captions[idx],
+                )
             l_VLMTaskSample.append(self.encode_captioning(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
         return l_sample_packed
