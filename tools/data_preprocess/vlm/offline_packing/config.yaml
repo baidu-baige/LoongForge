@@ -29,6 +29,10 @@ sample:
   # 决定解析方式
   sample_type: packed_multi_mix_qa
 
+packed_wds:
+  maxsize: 2000000000
+  maxcount: 1000000000
+
 # 并行处理参数
 process:
   # 每个进程处理的样本块大小
