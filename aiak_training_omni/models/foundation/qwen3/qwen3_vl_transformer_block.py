@@ -82,8 +82,6 @@ class TransformerBlock(MegatronTransformerBlock):
                 context, 
                 context_mask, 
                 rotary_pos_emb,
-                visual_pos_masks,
-                *visual_embeds,
             ):
                 if attn_mask_type is not None:
                     attn_mask_type = AttnMaskType(attn_mask_type.item())
@@ -108,33 +106,13 @@ class TransformerBlock(MegatronTransformerBlock):
                             packed_seq_params=packed_seq_params,
                             **kwargs,
                         )
-                    # 这里的 index 对应原 forward 中的 l_no
-                    pp_rank = parallel_state.get_pipeline_model_parallel_rank()
-                    vp_rank = parallel_state.get_virtual_pipeline_model_parallel_rank()
-                    if (
-                        pp_rank == 0 and
-                        len(visual_embeds) > 0 and
-                        index < len(visual_embeds) and
-                        (vp_rank is None or vp_rank == 0)
-                    ):
-                        hidden_states = self._deepstack_process(
-                            hidden_states,
-                            visual_pos_masks,
-                            visual_embeds[index],
-                        )
                     
                 return hidden_states, context
 
             return custom_forward
 
-        def checkpoint_handler(forward_func, end: int):
+        def checkpoint_handler(forward_func):
             """Determines whether to use the `te_checkpoint` or `tensor_parallel.checkpoint`"""
-            # 只有需要将visual_embed嵌入LLM时，才将其传入forward_func
-            use_visual_embeds = (
-                deepstack_visual_embeds is not None
-                and (end - 1) < len(deepstack_visual_embeds)
-            )
-            visual_embeds = tuple(deepstack_visual_embeds) if use_visual_embeds else ()
             
             if self.config.fp8:
                 return te_checkpoint(
@@ -148,8 +126,6 @@ class TransformerBlock(MegatronTransformerBlock):
                     context,
                     context_mask,
                     rotary_pos_emb,
-                    visual_pos_masks,
-                    *visual_embeds,
                     **kwargs,
                 )
             else:
@@ -162,11 +138,9 @@ class TransformerBlock(MegatronTransformerBlock):
                     context,
                     context_mask,
                     rotary_pos_emb,
-                    visual_pos_masks,
-                    *visual_embeds,
                     **kwargs,
                 )
-        assert self.config.recompute_method != 'uniform', "Now only support recompute_method == 'block'"
+        
         if self.config.recompute_method == 'uniform':
             # Uniformly divide the total number of Transformer layers and checkpoint
             # the input activation of each divided chunk.
@@ -177,6 +151,16 @@ class TransformerBlock(MegatronTransformerBlock):
                     custom(layer_idx, layer_idx + self.config.recompute_num_layers),
                     layer_idx + self.config.recompute_num_layers
                 )
+                # only first pipeline stage, and if VP exists, only vp_rank == 0
+                if (
+                    deepstack_visual_embeds is not None and
+                    layer_idx in range(len(deepstack_visual_embeds))
+                ):  
+                    hidden_states = self._deepstack_process(
+                        hidden_states,
+                        visual_pos_masks,
+                        deepstack_visual_embeds[layer_idx],
+                    )
 
                 layer_idx += self.config.recompute_num_layers
 
@@ -195,14 +179,8 @@ class TransformerBlock(MegatronTransformerBlock):
                     layer_idx >= recompute_skip_num_layers
                     and layer_idx < self.config.recompute_num_layers + recompute_skip_num_layers
                 ):
-                    hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1), layer_idx + 1)
+                    hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1))
                 else:
-                    use_visual_embeds = (
-                        deepstack_visual_embeds is not None
-                        and layer_idx < len(deepstack_visual_embeds)
-                    )
-                    visual_embeds = tuple(deepstack_visual_embeds) if use_visual_embeds else ()
-                    
                     hidden_states, context = custom(layer_idx, layer_idx + 1)(
                         hidden_states,
                         attention_mask,
@@ -213,6 +191,16 @@ class TransformerBlock(MegatronTransformerBlock):
                         visual_pos_masks,
                         *visual_embeds,
                         **kwargs,
+                    )
+                # only first pipeline stage, and if VP exists, only vp_rank == 0
+                if (
+                    deepstack_visual_embeds is not None and
+                    layer_idx in range(len(deepstack_visual_embeds))
+                ):  
+                    hidden_states = self._deepstack_process(
+                        hidden_states,
+                        visual_pos_masks,
+                        deepstack_visual_embeds[layer_idx],
                     )
         else:
             raise ValueError("Invalid activation recompute method.")
@@ -370,14 +358,9 @@ class TransformerBlock(MegatronTransformerBlock):
                                 hidden_states, **optional_inputs
                             )
 
-                    pp_rank = parallel_state.get_pipeline_model_parallel_rank()
-                    vp_rank = parallel_state.get_virtual_pipeline_model_parallel_rank()
-                    # only first pipeline stage, and if VP exists, only vp_rank == 0
                     if (
-                        pp_rank == 0 and
                         deepstack_visual_embeds is not None and
-                        l_no in range(len(deepstack_visual_embeds)) and
-                        (vp_rank is None or vp_rank == 0)
+                        l_no in range(len(deepstack_visual_embeds))
                     ):  
                         hidden_states = self._deepstack_process(
                             hidden_states,

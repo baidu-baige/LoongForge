@@ -216,6 +216,10 @@ class TransformerBlock(MegatronTransformerBlock):
         if attn_mask_type is not None:
             attn_mask_type = torch.tensor([attn_mask_type.value], dtype=torch.int)
         
+        if self.config.recompute_method == 'uniform' and self.config.recompute_granularity == 'full':
+            assert self.config.recompute_num_layers == 1, \
+                "If recompute_method is set to uniform, recompute_num_layers must be 1."
+
         # 用于收集所有分块的特征
         deepstack_feature_lists = []
 
@@ -294,6 +298,14 @@ class TransformerBlock(MegatronTransformerBlock):
                     custom(layer_idx, layer_idx + self.config.recompute_num_layers)
                 )
 
+                index = layer_idx + self.config.recompute_num_layers - 1
+                if index in deepstack_visual_indexes:
+                    merger = deepstack_merger_list[deepstack_visual_indexes.index(index)]
+                    # 执行提取
+                    deepstack_feature = merger(hidden_states)
+                    # 添加到当前分块的列表中
+                    deepstack_feature_lists.append(deepstack_feature)
+                    
                 layer_idx += self.config.recompute_num_layers
 
         elif self.config.recompute_method == "block":
@@ -307,25 +319,9 @@ class TransformerBlock(MegatronTransformerBlock):
                 # for re-enterant autograd engine.
                 if self.config.fp8 and not hidden_states.requires_grad:
                     recompute_skip_num_layers += 1
-                if deepstack_visual_indexes is not None and layer_idx in deepstack_visual_indexes:
-                    hidden_states, context = custom(layer_idx, layer_idx + 1)(
-                        hidden_states,
-                        attention_mask,
-                        attn_mask_type,
-                        context,
-                        context_mask,
-                        rotary_pos_emb,
-                        **kwargs,
-                    )
-                    merger = deepstack_merger_list[deepstack_visual_indexes.index(layer_idx)]
-                    # 执行提取
-                    deepstack_feature = merger(hidden_states)
-                    # 添加到当前分块的列表中
-                    deepstack_feature_lists.append(deepstack_feature)
-                elif (
+                if (
                     layer_idx >= recompute_skip_num_layers
-                    and layer_idx
-                    < self.config.recompute_num_layers + recompute_skip_num_layers
+                    and layer_idx < self.config.recompute_num_layers + recompute_skip_num_layers
                 ):
                     hidden_states, context = checkpoint_handler(
                         custom(layer_idx, layer_idx + 1)
@@ -341,6 +337,12 @@ class TransformerBlock(MegatronTransformerBlock):
                         **kwargs,
                     )
 
+                if deepstack_visual_indexes is not None and layer_idx in deepstack_visual_indexes:
+                    merger = deepstack_merger_list[deepstack_visual_indexes.index(layer_idx)]
+                    # 执行提取
+                    deepstack_feature = merger(hidden_states)
+                    # 添加到当前分块的列表中
+                    deepstack_feature_lists.append(deepstack_feature)
         else:
             raise ValueError("Invalid activation recompute method.")
 
