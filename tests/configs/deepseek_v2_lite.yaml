@@ -1,0 +1,89 @@
+model_name: deepseek_v2_lite
+description: $model_name模型自动化
+TOTAL_K8S_NODES: 1
+huggingface_path:
+bos_path:
+
+# 模型参数
+MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
+
+# aiak-training-omni 训练的参数
+HF_CKPT_PATH: $pfs_path/huggingface.co/meta-llama/deepseek_v2_lite-hf
+DATA_PATH: $pfs_path/aiak-training-llm/deepseek2/pile_test/pile-deepseek_text_document
+TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
+CHECKPOINT_PATH: $step1_output_path
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+
+# 训练参数
+TENSOR_MODEL_PARALLER_SIZE: 1
+PIPELINE_MODEL_PARALLER_SIZE: 1
+EXPERT_MODEL_PARALLEL_SIZE: 4
+EXPERT_TENSOR_PARALLEL_SIZE: 2
+log_interval: 1
+global_batch_size: 32
+precision: bf16
+
+scenarios:
+  - function:
+      pretrain:
+        Step2:
+          MODEL_ARGS: '
+            --model-name deepseek-v2-lite
+            --enable-fa-within-mla
+            --norm-epsilon 1e-6
+            --rotary-scaling-factor 40
+            --mscale 0.707
+            --mscale-all-dim 0.707'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $DATA_PATH
+            --split 99990,8,2'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --seq-length 2048
+            --max-position-embeddings 2048
+            --init-method-std 0.01
+            --no-masked-softmax-fusion
+            --micro-batch-size 1
+            --global-batch-size ${global_batch_size}
+            --lr 1e-4
+            --train-iters ${train_iters}
+            --lr-decay-iters 320000
+            --lr-decay-style cosine
+            --min-lr 1.0e-5
+            --weight-decay 0.1
+            --lr-warmup-iters 500
+            --clip-grad 1.0
+            --bf16
+            --save-interval 10000
+            --eval-interval 1000
+            --eval-iters 0
+            --no-load-optim
+            --no-load-rng'
+            # --save ${step1_output_path}
+            #--load $CHECKPOINT_PATH
+          MOE_ARGS: '
+            --moe-router-load-balancing-type aux_loss
+            --moe-router-topk 6
+            --moe-aux-loss-coeff 1e-3
+            --moe-grouped-gemm'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --expert-model-parallel-size ${EXPERT_MODEL_PARALLEL_SIZE}
+            --expert-tensor-parallel-size ${EXPERT_TENSOR_PARALLEL_SIZE}
+            --use-distributed-optimizer
+            --overlap-param-gather
+            --overlap-grad-reduce
+            --sequence-parallel
+            --moe-token-dispatcher-type alltoall
+            --recompute-granularity full
+            --recompute-method block
+            --recompute-num-layers 27'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+tasks:
+  check_correctness_task: True

@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+################################################################################
+#
+# Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
+#
+################################################################################
+
+from tasks.base_task import BaseTask, TaskResut
+from tools.color_logger import create_color_logger
+import os, time
+from copy import deepcopy
+import json, re, yaml
+import subprocess
+import os
+import sys
+import shutil
+import random
+from typing import Dict, List, Any
+
+logger = create_color_logger(name=__name__)
+import json
+import yaml
+import glob
+from datetime import timedelta
+
+class PrecessDataCheckTask(BaseTask):
+    """PrecessDataCheckTask"""
+    def __init__(self,
+                 model_description: Dict[str, Any],
+                 task_description: Dict[str, Any],
+                 model: List[Dict[Any, Any]],
+                 model_configer: object,
+                 args
+                ) -> None:
+        super().__init__(model_description,
+                 task_description,
+                 model,
+                 model_configer,
+                 args,
+                 task_type = "preprocess_data",
+                )
+        self.class_name = self.__class__.__name__
+
+    
+    def deal_output(self, model_config, step_stage):
+        """deal_output"""
+        if step_stage == "llm_pretrain":
+            output_prefix = model_config["output_prefix"]
+            if os.path.isdir(os.path.dirname(output_prefix)):
+                shutil.rmtree(os.path.dirname(output_prefix))
+            os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
+        elif step_stage == "llm_sft":
+            output_prefix = model_config["output_prefix"]
+            if os.path.isdir(output_prefix):
+                shutil.rmtree(output_prefix)
+            os.makedirs(output_prefix, exist_ok=True)
+        elif step_stage == "vlm":
+            output_prefix = model_config["output_prefix"]
+            if os.path.isdir(output_prefix):
+                shutil.rmtree(output_prefix)
+            os.makedirs(output_prefix, exist_ok=True)
+        elif step_stage == "offline_packing":
+            packing_config_path = model_config.get("packing_config_path")
+            if packing_config_path and os.path.exists(packing_config_path):
+                with open(packing_config_path, 'r', encoding='utf-8') as f:
+                    packing_config = yaml.safe_load(f)
+                packed_wds_dir = packing_config.get('data', {}).get('packed_wds_dir')
+                if packed_wds_dir and os.path.isdir(packed_wds_dir):
+                    shutil.rmtree(packed_wds_dir)
+                if packed_wds_dir:
+                    os.makedirs(packed_wds_dir, exist_ok=True)
+        else:
+            logger.error(f"deal_output 不支持 {step_stage} 模式 !!!")
+            sys.exit(1)
+
+    def assert_preprocess_data(self, model_config, step_stage):
+        """assert_preprocess_data"""
+        if step_stage == "llm_pretrain":
+            output_prefix = model_config["output_prefix"]
+            output_dir = os.path.dirname(output_prefix)
+
+            # 搜索路径下的.bin和.idx文件
+            bin_files = glob.glob(os.path.join(output_dir, '*.bin'))
+            idx_files = glob.glob(os.path.join(output_dir, '*.idx'))
+
+            # 使用断言来确保找到了.bin和.idx文件
+            assert len(bin_files) > 0, "No .bin files found in " + output_dir
+            assert len(idx_files) > 0, "No .idx files found in " + output_dir
+            logger.info(f"LLM pretrain preprocess data check passed: found {len(bin_files)} .bin files and {len(idx_files)} .idx files in {output_dir}")
+
+        elif step_stage == "llm_sft":
+            output_dir = model_config["output_prefix"]
+            train_dir = os.path.join(output_dir, 'train')
+            dataset_info_files = glob.glob(os.path.join(train_dir, 'dataset_info.json'))
+            state_files = glob.glob(os.path.join(train_dir, 'state.json'))
+            assert len(dataset_info_files) > 0, "No dataset_info files found in " + train_dir
+            assert len(state_files) > 0, "No state files found in " + train_dir
+            logger.info(f"LLM SFT preprocess data check passed: found dataset_info.json and state.json in {train_dir}")
+        
+        elif step_stage == "vlm":
+            output_dir = model_config["output_prefix"]
+            info_yaml_path = os.path.join(output_dir, '.nv-meta', '.info.yaml')
+            assert os.path.exists(info_yaml_path), f".nv-meta/.info.yaml not found in {output_dir}"
+
+            with open(info_yaml_path, 'r', encoding='utf-8') as f:
+                info_data = yaml.safe_load(f)
+            shard_counts = info_data.get('shard_counts', {})
+            assert len(shard_counts) > 0, f"No shard_counts found in {info_yaml_path}"
+            
+            total_shard_count = sum(shard_counts.values())
+            train_json_file = model_config.get("train_json_file_name")        
+            with open(train_json_file, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            expected_count = len(json_data)  
+            assert total_shard_count == expected_count, \
+                f"Shard count mismatch: .info.yaml has {total_shard_count} samples, but JSON has {expected_count} messages"
+            logger.info(f"VLM preprocess data check passed: {total_shard_count} samples match {expected_count} messages")
+        
+        elif step_stage == "offline_packing":
+            packing_config_path = model_config.get("packing_config_path")
+            assert packing_config_path and os.path.exists(packing_config_path), \
+                f"Packing config file not found: {packing_config_path}"
+            
+            with open(packing_config_path, 'r', encoding='utf-8') as f:
+                packing_config = yaml.safe_load(f)
+            
+            wds_dir = packing_config.get('data', {}).get('wds_dir')
+            assert wds_dir and os.path.exists(wds_dir), f"Original wds_dir not found: {wds_dir}"
+            
+            original_info_yaml_path = os.path.join(wds_dir, '.nv-meta', '.info.yaml')
+            assert os.path.exists(original_info_yaml_path), \
+                f"Original .nv-meta/.info.yaml not found in {wds_dir}"
+            
+            with open(original_info_yaml_path, 'r', encoding='utf-8') as f:
+                original_info_data = yaml.safe_load(f)
+            original_shard_counts = original_info_data.get('shard_counts', {})
+            original_total_count = sum(original_shard_counts.values())
+            
+            packed_wds_dir = model_config.get("packed_wds_dir") or packing_config.get('data', {}).get('packed_wds_dir')
+            assert packed_wds_dir and os.path.exists(packed_wds_dir), \
+                f"Packed wds_dir not found: {packed_wds_dir}"
+            
+            packed_info_yaml_path = os.path.join(packed_wds_dir, '.nv-meta', '.info.yaml')
+            assert os.path.exists(packed_info_yaml_path), \
+                f"Packed .nv-meta/.info.yaml not found in {packed_wds_dir}"
+            
+            with open(packed_info_yaml_path, 'r', encoding='utf-8') as f:
+                packed_info_data = yaml.safe_load(f)
+            packed_shard_counts = packed_info_data.get('shard_counts', {})
+            packed_total_count = sum(packed_shard_counts.values())
+            
+            assert original_total_count == packed_total_count, \
+                f"Shard count mismatch: original wds has {original_total_count} samples, but packed wds has {packed_total_count} samples"
+            
+            logger.info(f"Offline packing check passed: original {original_total_count} samples == packed {packed_total_count} samples")
+        else:
+            logger.error(f"assert_preprocess_data 不支持其他 {step_stage} 模式校验 !!!")
+            sys.exit(1)
+
+
+    def start_aiak_preprocess_data(self, index, step_stage, scenario_name):
+        """start_aiak_preprocess_data"""
+        step_name = "aiak_preprocess_data"
+        logger.info(f"{step_stage} {step_name} Start Running ...")
+
+        model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage)
+
+        # 数据预处理
+        model_name = self.model_name
+        node_nums = self.input_cmd_args.node_nums
+        timeout = self.input_cmd_args.timeout
+        scripts_root_path = model_config["scripts_root_path"]
+        model_lock_file_path = model_config["model_lock_file_path"]
+        training_log_path = model_config["training_log_path"]
+
+        # 将配置文件转成env 环境变量传递给运行脚本
+        env_vars_str = self.__convert_model_config_to_env__(model_config)
+        self.deal_output(model_config, step_stage)
+
+        step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
+        model_lock_file = f'{step_stage_path}/{self.rank_name}_lock.txt'
+
+        script_path = f"{scripts_root_path}/executor/{step_name}/run.sh"
+        new_script_path = f"{training_log_path}/precess_data_{model_name}_{self.rank_name}_run.sh"
+        start_command = f"{env_vars_str} bash {script_path}"
+        self.create_shell_file(model_config, script_path, new_script_path)
+
+        # 打开一个新的文件用来写入脚本的输出
+        training_log_file = f"{training_log_path}/precess_data#{model_name}#nodes_{self.input_cmd_args.node_nums}#{self.rank_name}#run.log"
+
+        start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/run.sh |tee {training_log_file}\""
+        logger.info(f"{step_stage} {step_name} Start: {start_command} .")
+        if os.system(start_command) != 0:
+           raise RuntimeError(f"Start {step_stage} {step_name} error, cmd is {start_command}")
+        
+        # 等待所有pod 完成
+        self.wait_async_pod_complete(
+            model_lock_file,
+            model_name,
+            f"{scenario_name}_{step_name}",
+            is_function=True,
+            function=self.assert_preprocess_data,
+            raise_on_error=True,
+            model_config=model_config,
+            step_stage=step_stage,
+        )
+
+        logger.info(f"{step_stage} End {step_name}")
+
+    def __call__(self) -> TaskResut:
+        if not self.MODEL_RUNNABLE:
+            logger.warn(f"{self.class_name} 当前模型 {self.model_name} 不支持 {self.class_name} 任务，跳过！！！")
+            return TaskResut()
+
+        for index, scenario in enumerate(self.model["scenarios"]):
+            for scenario_name, scenario_data in scenario.items():
+                if scenario_name != "preprocess_data":
+                    continue
+                model_name = self.model_name
+                logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】执行开始 ...")
+                
+                for key, value in self.model["scenarios"][index][scenario_name].items():
+
+                    # pretrain、sft:
+                    step_name = key
+                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】 - 【{step_name}】 执行开始 ...")
+
+                    self.start_aiak_preprocess_data(index, step_name, scenario_name)
+                    step_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step_name, self.master_addr, f"{self.rank_name}_lock.txt")
+                    self.wait_async_pod_complete(step_scenario_lock_file, model_name, f"{scenario_name}_{step_name}")
+
+                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】 - 【{step_name}】完成 \n")
+
+                logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】执行结束 \n")
+    
+        return TaskResut()

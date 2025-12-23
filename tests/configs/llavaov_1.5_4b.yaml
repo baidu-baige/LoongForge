@@ -1,0 +1,169 @@
+model_name: llavaov_1.5_4b
+description: $model_name模型自动化
+huggingface_path: https://huggingface.co/lmms-lab/llava-onevision-qwen2-0.5b-ov
+bos_path: bos:/cce-ai-models/huggingface.co/LLaVA-OneVision-1.5-4B-stage0
+TOTAL_K8S_NODES: 1
+
+MODEL_RUNNABLE: True 
+
+HF_CKPT_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
+DATA_PATH: $pfs_path/aiak-training-omni/dataset/imagenet/CN/part00/part_00_wds
+TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
+CHECKPOINT_PATH: $step1_output_path
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/llavaov1.5/llavaov_1_5_4b.yaml
+BASELINE_PATH: $aiak_training_path/tests/baseline
+
+FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
+IMAGE_ENCODER_CONVERT_FILE: $aiak_training_path/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE: $aiak_training_path/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
+LANGUAGE_MODEL_PATH: $step1_output_path/language-mcore
+VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
+ADAPTER_PATH: $step1_output_path/adapter-mcore
+PATCH_PATH: $step1_output_path/patch-mcore
+ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
+DECODER_TENSOR_MODEL_PARALLER_SIZE: 2
+
+# aiak-training-omni 训练的参数
+TENSOR_MODEL_PARALLER_SIZE: 2
+PIPELINE_MODEL_PARALLER_SIZE: 2
+log_interval: 1
+micro_batch_size: 1
+global_batch_size: 32
+seq_length: 32768
+
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          LANGUAGE_MODEL_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${FOUNDATION_CONVERT_FILE}
+            --tensor_model_parallel_size=${DECODER_TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${LANGUAGE_MODEL_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
+          VISION_MODEL_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${IMAGE_ENCODER_CONVERT_FILE}
+            --tensor_model_parallel_size=${ENCODER_TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${VISION_MODEL_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
+          ADAPTER_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${IMAGE_PROJECTOR_CONVERT_FILE}
+            --tensor_model_parallel_size=${DECODER_TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${ADAPTER_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
+          PATCH_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${IMAGE_ENCODER_CONVERT_FILE}
+            --tensor_model_parallel_size=${ENCODER_TENSOR_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${PATCH_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
+          MERGE_ARGS: '
+            --megatron_path ${megatron_path}
+            --language_model_path ${LANGUAGE_MODEL_PATH}/release
+            --vision_model_path ${VISION_MODEL_PATH}/release
+            --vision_patch ${PATCH_PATH}/release
+            --adapter_path ${ADAPTER_PATH}/release
+            --encoder_tensor_model_parallel_size ${ENCODER_TENSOR_MODEL_PARALLER_SIZE}
+            --decoder_tensor_model_parallel_size ${DECODER_TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --save_ckpt_path ${CHECKPOINT_PATH}/release
+            --config_file ${MODEL_CONFIG_PATH}'
+        Step2:
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $DATA_PATH
+            --dataloader-type external
+            --split 100,0,0
+            --num-workers 16
+            --chat-template qwen2-vl'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --seq-length ${seq_length}
+            --max-position-embeddings 32768
+            --init-method-std 0.02
+            --micro-batch-size 1
+            --global-batch-size ${global_batch_size}
+            --lr 1.0e-4
+            --min-lr 1.0e-6
+            --clip-grad 1.0
+            --weight-decay 0
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.99
+            --adam-eps 1e-05
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 2500
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale 65536
+            --bf16
+            --save-interval 2000
+            --ckpt-format torch
+            --dataloader-save ${CHECKPOINT_PATH}/dataloader
+            --ckpt-fully-parallel-load
+            --recompute-granularity full
+            --recompute-method uniform
+            --recompute-num-layers 4'
+            #--load $CHECKPOINT_PATH
+            # --save ${step1_output_path}
+          MODEL_PARALLEL_ARGS: '
+            --attention-backend flash
+            --pipeline-model-parallel-size 1
+            --tensor-model-parallel-size 1
+            --use-distributed-optimizer
+            --distributed-backend nccl
+            --overlap-grad-reduce
+            --overlap-param-gather'
+          MODEL_CONFIG_ARGS: '
+            --config-file $MODEL_CONFIG_PATH'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+  - preprocess_data:
+      vlm:
+        PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/vlm/convert_to_webdataset.py
+        output_prefix: /workspace/vlm_dataset_demo/$model_name
+        train_json_file_name: '$scripts_root_path/datasets/vlm/mix.json'
+        video_dir: '$scripts_root_path/datasets/vlm/'
+        image_dir: '$scripts_root_path/datasets/vlm/'
+        PREPROCESS_DATA_ARGS: '
+          --output_dir ${output_prefix}
+          --json_file ${train_json_file_name}
+          --video_dir ${video_dir}
+          --image_dir ${image_dir}
+          --media mix 
+          --columns_messages messages
+          --maxsize 10000000
+          --sample_type multi_mix_qa'
+
+tasks:
+  check_correctness_task: True
+  check_precess_data_task: True
