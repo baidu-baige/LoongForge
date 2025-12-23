@@ -19,6 +19,9 @@ def aiak_extra_train_args_provider(parser: argparse.ArgumentParser):
     parser = _add_extra_parallel_args(parser)
     # add args for debug infos;
     parser = _add_log_tensor_args(parser)
+    # add args for rice vl 
+    parser = _add_extra_training_rice_vl_args(parser)
+
     return parser
 
 
@@ -77,6 +80,23 @@ def _add_log_tensor_args(parser):
 
     return parser
 
+def _add_extra_training_rice_vl_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Create a dedicated group for Rice-VL arguments for better organization in the help message."""
+    group = parser.add_argument_group(
+        title='Training Rice-VL',
+        description='Arguments specific to the Rice-VL model training configuration.'
+    )
+
+    group.add_argument(
+        '--training-rice-vl-max-answer-length',
+        type=int,
+        default=4096,
+        help=(
+            "The maximum number of characters allowed in an answer during training. "
+            "Answers longer than this will be truncated."
+        )
+    )
+    return parser
 
 def _add_extra_model_args(parser: argparse.ArgumentParser):
     """Add model arguments"""
