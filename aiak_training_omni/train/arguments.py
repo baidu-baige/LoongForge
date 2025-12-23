@@ -677,6 +677,13 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         choices=["torch", "torch_dist", "zarr"],
         help="Checkpoint format to use. Default: torch",
     )
+    
+    group.add_argument(
+        "--log-memory-stats",
+        action="store_true",
+        default=False,
+        help="Log memory stats (allocated/peak) in training log output. Default: False.",
+    )
 
     return parser
 

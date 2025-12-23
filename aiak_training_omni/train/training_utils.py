@@ -1116,6 +1116,27 @@ def training_log(
         if params_norm is not None:
             log_string += f" params norm: {params_norm:.3f} |"
 
+        if hasattr(args, "log_memory_stats") and args.log_memory_stats:
+            mem_stats = torch.cuda.memory_stats()
+            world_size = torch.distributed.get_world_size()
+            allocated_bytes = torch.tensor(
+                [mem_stats['allocated_bytes.all.current']],
+                dtype=torch.float,
+                device='cuda',
+            )
+            max_allocated_bytes = torch.tensor(
+                [mem_stats['allocated_bytes.all.peak']],
+                dtype=torch.float,
+                device='cuda',
+            )
+            # sum across all ranks
+            torch.distributed.all_reduce(allocated_bytes, op=torch.distributed.ReduceOp.SUM)
+            torch.distributed.all_reduce(max_allocated_bytes, op=torch.distributed.ReduceOp.SUM)
+            avg_allocated_mb = allocated_bytes.item() / world_size / 1024 / 1024
+            avg_max_allocated_mb = max_allocated_bytes.item() / world_size / 1024 / 1024
+            log_string += f" mem-allocated-bytes-avg(MB): {avg_allocated_mb:.2f} |"
+            log_string += f" mem-max-allocated-bytes-avg(MB): {avg_max_allocated_mb:.2f} |"
+
         log_string += " number of skipped iterations: {:3d} |".format(
             total_loss_dict[skipped_iters_key]
         )
