@@ -131,8 +131,19 @@ class Qwen3VisionModel(Qwen2VisionModel):
         seq_len, _ = x.size()
         x = x.reshape(seq_len, -1)
 
+        pad_len = 0
+        if (self.config.fp8) and self.config.fp8_recipe == 'blockwise':
+            pad_len = (16 - seq_len % 16) % 16
+        # Pad x to multiple of 16 when using fp8 blockwise
+        if pad_len > 0:
+            x = F.pad(x, (0, 0, 0, pad_len))
+
         rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
+
+        if pad_len > 0:
+            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, pad_len))
+
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (emb.cos(), emb.sin())
 
@@ -145,6 +156,10 @@ class Qwen3VisionModel(Qwen2VisionModel):
             dtype=image_grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
         )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
+
+        # Update cumulative length to include padding
+        if pad_len > 0:
+            cu_seqlens[-1] += pad_len
         
         x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
         x, deepstack_feature_lists = self.decoder(
@@ -160,6 +175,10 @@ class Qwen3VisionModel(Qwen2VisionModel):
             deepstack_visual_indexes=self.deepstack_visual_indexes,
             deepstack_merger_list=self.deepstack_merger_list
         )
-        x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
+        # x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
+        x = x[:-pad_len if pad_len > 0 else None, 0, :].contiguous()  # [s, 1, h] -> [s, h]
+        if pad_len > 0:
+            for i in range(len(deepstack_feature_lists)):
+                deepstack_feature_lists[i] = deepstack_feature_lists[i][:-(pad_len // 4)]
 
         return x, None, deepstack_feature_lists
