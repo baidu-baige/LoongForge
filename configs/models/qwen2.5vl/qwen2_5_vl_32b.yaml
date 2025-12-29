@@ -13,6 +13,8 @@ model:
   model_type: qwen2_5_vl
   position_idx_func: ${position_func:mrope_ids}
   loss_func: ${loss_func:default}
+  mix_used_vision_encoder: true
+  mix_used_vision_projector: true
   image_encoder:
     ffn_hidden_size: 3456
   foundation: 
