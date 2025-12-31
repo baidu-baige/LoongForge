@@ -1,0 +1,74 @@
+{
+  "pretrain": [
+    {
+      "iteration": 1,
+      "elapsed_time_ms": 7602.5,
+      "throughput": 44.4,
+      "lm_loss": 12.35166,
+      "grad_norm": 190.758
+    },
+    {
+      "iteration": 2,
+      "elapsed_time_ms": 1754.1,
+      "throughput": 192.3,
+      "lm_loss": 12.35165,
+      "grad_norm": 190.758
+    },
+    {
+      "iteration": 3,
+      "elapsed_time_ms": 1712.6,
+      "throughput": 196.6,
+      "lm_loss": 8.753643,
+      "grad_norm": 256.448
+    },
+    {
+      "iteration": 4,
+      "elapsed_time_ms": 1724.1,
+      "throughput": 197.1,
+      "lm_loss": 10.7809,
+      "grad_norm": 45.717
+    },
+    {
+      "iteration": 5,
+      "elapsed_time_ms": 1779.7,
+      "throughput": 191.0,
+      "lm_loss": 7.803252,
+      "grad_norm": 69.207
+    },
+    {
+      "iteration": 6,
+      "elapsed_time_ms": 1772.1,
+      "throughput": 191.8,
+      "lm_loss": 7.402225,
+      "grad_norm": 13.479
+    },
+    {
+      "iteration": 7,
+      "elapsed_time_ms": 1748.8,
+      "throughput": 192.9,
+      "lm_loss": 7.116087,
+      "grad_norm": 57.93
+    },
+    {
+      "iteration": 8,
+      "elapsed_time_ms": 1772.5,
+      "throughput": 190.0,
+      "lm_loss": 6.74634,
+      "grad_norm": 16.28
+    },
+    {
+      "iteration": 9,
+      "elapsed_time_ms": 1716.1,
+      "throughput": 196.2,
+      "lm_loss": 5.909297,
+      "grad_norm": 7.794
+    },
+    {
+      "iteration": 10,
+      "elapsed_time_ms": 1719.0,
+      "throughput": 196.3,
+      "lm_loss": 5.390265,
+      "grad_norm": 6.731
+    }
+  ]
+}

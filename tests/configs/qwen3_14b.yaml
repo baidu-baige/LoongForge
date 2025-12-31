@@ -1,0 +1,98 @@
+model_name: qwen3_14b
+description: $model_name模型自动化
+huggingface_path: https://huggingface.co/Qwen/Qwen3-14B
+bos_path: 
+TOTAL_K8S_NODES: 1
+
+# 模型参数
+MODEL_RUNNABLE: True
+
+# aiak-training-llm 训练的参数
+HF_CKPT_PATH: 
+DATA_PATH: $pfs_path/aiak-training-llm/qwen3/pile_test/pile-qwen_text_document
+TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-14B
+CHECKPOINT_PATH: 
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+
+# 训练参数
+TENSOR_MODEL_PARALLER_SIZE: 2
+PIPELINE_MODEL_PARALLER_SIZE: 4
+log_interval: 1
+initial_loss_scale: 65536
+global_batch_size: 32
+precision: bf16
+
+scenarios:
+  - function:
+      pretrain:
+        Step2:
+          MODEL_ARGS: '
+            --model-name qwen3-14b
+            --rotary-base 1000000
+            --rotary-seq-len-interpolation-factor 1'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --eod-mask-loss
+            --data-path $DATA_PATH
+            --split 99,1,0'
+          TRAINING_ARGS: '
+            --training-phase pretrain 
+            --seq-length 4096
+            --max-position-embeddings 32768
+            --init-method-std 0.006
+            --micro-batch-size 1
+            --global-batch-size ${global_batch_size}
+            --lr 1.0e-5
+            --min-lr 1.0e-6
+            --clip-grad 1.0
+            --weight-decay 0.1
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-08
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 50000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale 65536
+            --bf16
+            --eval-iters 0
+            --no-load-optim
+            --no-load-rng'
+            #--load $CHECKPOINT_PATH
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --use-distributed-optimizer
+            --overlap-grad-reduce
+            --overlap-param-gather
+            --distributed-backend nccl
+            --sequence-parallel
+            --tp-comm-overlap
+            --tp-comm-overlap-bootstrap-backend nccl
+            --overlap-cpu-optimizer-d2h-h2d
+            --recompute-granularity full
+            --recompute-method block
+            --recompute-num-layers 20
+            --empty-unused-memory-level 2'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+          loss_in_value: '[
+              1.494278E+00
+              1.744719E+00
+              1.653718E+00
+              1.595445E+00
+              1.619495E+00
+              1.572784E+00
+              1.509958E+00
+              1.566243E+00
+              1.488530E+00
+              1.390125E+00
+            ]'
+tasks:
+  check_correctness_task: True
+

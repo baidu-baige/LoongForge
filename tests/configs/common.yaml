@@ -1,0 +1,26 @@
+
+
+# pfs_path: /mnt/pfs
+# pfs_path: /mnt/cluster
+pfs_path: /ssd1
+load_hf_ckpt_path_pre: $pfs_path/aiak-training-omni/
+megatron_path: /workspace/AIAK-Megatron
+aiak_training_path: /ssd1/workspace/AIAK-Training-Omni/
+# aiak_training_path: /mnt/cluster/cyw/E2E2/AIAK-Training-Omni
+# aiak_training_path: /workspace/AIAK-Training-Omni
+
+scripts_root_path: $aiak_training_path/tests
+training_log_path: /workspace/logs
+
+convert_checkpoint_path: $aiak_training_path/tools/convert_checkpoint
+
+save_ckpt_path_pre: $load_hf_ckpt_path_pre/save_ckpt
+
+# 判断训练任务各个阶段任务的状态
+model_lock_file_path: $save_ckpt_path_pre/lock_file/$model_name
+
+# Step1: 训练output/ckpt 路径
+step1_output_path: $save_ckpt_path_pre/$model_name
+
+# 轮数
+train_iters: 3

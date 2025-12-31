@@ -1,0 +1,31 @@
+{
+  "sft": [
+    {
+      "iteration": 1,
+      "elapsed_time_ms": 37182.6,
+      "throughput": 1762.5,
+      "lm_loss": 11.62057,
+      "grad_norm": 67.199,
+      "mem_allocated_avg_MB": 15894.81,
+      "mem_max_allocated_avg_MB": 22954.63
+    },
+    {
+      "iteration": 2,
+      "elapsed_time_ms": 21290.0,
+      "throughput": 3078.3,
+      "lm_loss": 11.61741,
+      "grad_norm": 67.09,
+      "mem_allocated_avg_MB": 15891.38,
+      "mem_max_allocated_avg_MB": 29040.17
+    },
+    {
+      "iteration": 3,
+      "elapsed_time_ms": 21184.9,
+      "throughput": 3093.5,
+      "lm_loss": 11.02523,
+      "grad_norm": 307.445,
+      "mem_allocated_avg_MB": 15897.17,
+      "mem_max_allocated_avg_MB": 29040.17
+    }
+  ]
+}
