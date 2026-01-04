@@ -114,7 +114,7 @@ def get_batch(data_iterator):
     elif mpu.is_pipeline_last_stage():
         data_i = tensor_parallel.broadcast_data(["input_ids", "labels", "image_flags"], data, torch.int64)
         if args.packing_sft_data:
-            data_f = tensor_parallel.broadcast_data(["loss_weight"], data, torch.float32)
+            data_l = tensor_parallel.broadcast_data(["loss_weight"], data, torch.float32)
 
     input_ids = data_i["input_ids"] if "input_ids" in data_i else None
     position_ids = data_i["position_ids"] if "position_ids" in data_i else None

@@ -37,6 +37,7 @@ DISTRIBUTED_ARGS=(
 
 MODEL_ARGS=(
   --config-file $MODEL_CONFIG_PATH
+  --rotary-seq-len-interpolation-factor 1
 )
 
 DATA_ARGS=(

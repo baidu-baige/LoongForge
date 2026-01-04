@@ -109,7 +109,8 @@ MODEL_PARALLEL_ARGS=(
 )
 
 MODEL_CONFIG_ARGS=(
-    --config-file $MODEL_CONFIG_PATH
+  --config-file $MODEL_CONFIG_PATH
+  --rope-scaling-factor 2
 )
 
 LOGGING_ARGS=(
