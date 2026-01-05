@@ -1,6 +1,0 @@
-{
-    "vision_model.patch_embedding.class_token": "model.vision.patch_embedding.cls_embedding",
-    "vision_model.patch_embedding.proj.weight": "model.vision.patch_embedding.proj.weight",
-    "vision_model.patch_embedding.proj.bias": "model.vision.patch_embedding.proj.bias",
-    "vision_model.patch_embedding.position_embedding.weight": "model.vision.patch_embedding.position_embedding.weight"
-}
