@@ -35,4 +35,6 @@ class Qwen3Config(BaseModelConfig):
     rotary_base: int = 10000
     rotary_emb_func: str = "RotaryEmbedding"
     mrope_section: List[int] = None
-    model_type = LanguageModelFamilies.QWEN2
+    model_type = LanguageModelFamilies.QWEN3
+    word_embeddings_for_head: str
+
