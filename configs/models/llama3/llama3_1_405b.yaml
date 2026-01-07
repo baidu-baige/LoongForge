@@ -5,7 +5,6 @@ num_layers: 126
 hidden_size: 16384
 ffn_hidden_size: 53248
 num_attention_heads: 128
-vocab_size: 128256
 
 # common default
 group_query_attention: true

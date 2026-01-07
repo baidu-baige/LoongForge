@@ -14,7 +14,7 @@ args:
     ffn_hidden_size: ${module.ffn_hidden_size}
     num_attention_heads: ${module.num_attention_heads}
     num_key_value_heads: ${module.num_query_groups}
-    vocab_size: ${module.vocab_size}
+    vocab_size: 32000
   mcore:
     untie_embeddings_and_output_weights: true
     use_rotary_position_embeddings: true
