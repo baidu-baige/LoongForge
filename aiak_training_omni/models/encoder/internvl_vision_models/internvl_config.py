@@ -50,6 +50,7 @@ class InternVisionConfig(BaseModelConfig):
     ps_version: str = "v2"
     # "drop_path_rate": 0.1,  # TODO
     original_num_attention_heads: int = None
+    original_num_query_groups: int = None
     model_spec = None
     image_token_id: int = field(default_factory=generate_id)
     model_type: str = "intern_vit"
