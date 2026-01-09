@@ -14,7 +14,9 @@ Profiles:
       tools:
         - python: 3.10.10
     build:
-      command: pip3 install -r requirements.txt && python3 -m build
+      command: pip3 install -r requirements.txt && python3 -m build && sh ./build.sh
+    artifacts:
+      release: true
 
   - profile:
     name: publish
@@ -25,3 +27,5 @@ Profiles:
         - python: 3.10.10
     build:
       command: pip3 install -r requirements.txt && python3 -m build && sh ./build.sh
+    artifacts:
+      release: true
