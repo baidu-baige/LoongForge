@@ -9,7 +9,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 ############################################ 模型训练参数 ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/mnt/cluster/cyw/E2E2/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
 DATA_PATH=${DATA_PATH}
 TOKENIZER_PATH=${TOKENIZER_PATH}
 CHECKPOINT_PATH=${CHECKPOINT_PATH}
@@ -70,13 +70,6 @@ SFT_ARGS=(
     ${SFT_ARGS}
 )
 
-# if [[ "${model_name}" =~ "mixtral" ]]; then
-#     MOE_ARGS=(
-#         ${MOE_ARGS}
-#     )
-# fi
-
-
 if [ -n "${WANDB_API_KEY}" ]; then
     LOGGING_ARGS+=(
         --wandb-project ${WANDB_PROJECT}
@@ -103,7 +96,7 @@ command="torchrun ${DISTRIBUTED_ARGS[@]} \
     ${SFT_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${LOGGING_ARGS[@]} \
-    ${MOE_ARGS[@]} \
+    ${MOE_ARGS[@]}
     "
     
 if [[ "${use_nccl}" == "false" ]]; then

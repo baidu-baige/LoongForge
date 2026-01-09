@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ 模型训练参数 ############################################
 
 AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/mnt/cluster/cyw/E2E2/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
 # AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
@@ -95,6 +95,8 @@ else
     commands+=(
         "python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py ${CONVERT_ARGS[*]}"
     )
+    mkdir -p $CHECKPOINT_PATH
+    echo release > $CHECKPOINT_PATH/latest_checkpointed_iteration.txt
 fi
 
 

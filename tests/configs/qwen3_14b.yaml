@@ -1,18 +1,20 @@
 model_name: qwen3_14b
 description: $model_name模型自动化
 huggingface_path: https://huggingface.co/Qwen/Qwen3-14B
-bos_path: 
+bos_path: bos:/ai-data/Qwen/Qwen3-14B
 TOTAL_K8S_NODES: 1
 
 # 模型参数
 MODEL_RUNNABLE: True
 
 # aiak-training-llm 训练的参数
-HF_CKPT_PATH: 
-DATA_PATH: $pfs_path/aiak-training-llm/qwen3/pile_test/pile-qwen_text_document
+HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-14B
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/qwen3/pile_test/pile-qwen_text_document
 TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-14B
-CHECKPOINT_PATH: 
+CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen3/qwen3_14b.yaml
+CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
 
 # 训练参数
 TENSOR_MODEL_PARALLER_SIZE: 2
@@ -25,6 +27,20 @@ precision: bf16
 scenarios:
   - function:
       pretrain:
+        Step1:
+          RUNNABLE_FLAG: False
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
         Step2:
           MODEL_ARGS: '
             --model-name qwen3-14b
@@ -53,6 +69,7 @@ scenarios:
             --adam-eps 1e-08
             --norm-epsilon 1e-6
             --train-iters ${train_iters}
+            --load $CHECKPOINT_PATH
             --lr-decay-iters 50000
             --lr-decay-style cosine
             --lr-warmup-fraction 0.002
@@ -60,8 +77,8 @@ scenarios:
             --bf16
             --eval-iters 0
             --no-load-optim
-            --no-load-rng'
-            #--load $CHECKPOINT_PATH
+            --no-load-rng
+            --log-memory-stats'
           MODEL_PARALLEL_ARGS: '
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
@@ -81,18 +98,6 @@ scenarios:
             --log-interval ${log_interval}
             --tensorboard-dir $TENSORBOARD_PATH
             --log-timers-to-tensorboard'
-          loss_in_value: '[
-              1.494278E+00
-              1.744719E+00
-              1.653718E+00
-              1.595445E+00
-              1.619495E+00
-              1.572784E+00
-              1.509958E+00
-              1.566243E+00
-              1.488530E+00
-              1.390125E+00
-            ]'
 tasks:
   check_correctness_task: True
 

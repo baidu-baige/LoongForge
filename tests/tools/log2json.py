@@ -1,38 +1,135 @@
 import re
 import json
+import sys
+import time
 
-log_path = "/Users/chen/Desktop/model/FT/AIAK-Training-Omni/add.log"
-output_path = "/Users/chen/Desktop/model/FT/AIAK-Training-Omni/tests/baseline/optional/internvl2.5_8b.json"
+# Default paths
+log_path = "/Users/chen/Desktop/commit/baidu/hac-aiacc/AIAK-Training-Omni/tests/tools/output.log"
+output_path = "/Users/chen/Desktop/commit/baidu/hac-aiacc/AIAK-Training-Omni/tests/tools/output.json"
 
-# 需要提取的字段
-iter_pattern = re.compile(
-    r"iteration\s+(\d+)/\s*(\d+).*?elapsed time per iteration \(ms\): ([\d\.]+) \| throughput \(token/sec/GPU\): ([\d\.]+).*?lm loss: ([\d\.E\+\-]+).*?grad norm: ([\d\.E\+\-]+).*?mem-allocated-bytes-avg\(MB\): ([\d\.]+) \| mem-max-allocated-bytes-avg\(MB\): ([\d\.]+)",
-    re.DOTALL
-)
+# Support command line args
+if len(sys.argv) >= 3:
+    log_path = sys.argv[1]
+    output_path = sys.argv[2]
+
+print(f"[{time.strftime('%H:%M:%S')}] Starting log processing...")
+print(f"[{time.strftime('%H:%M:%S')}] Reading from: {log_path}")
+
+# Regex to strip ANSI codes
+ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+def strip_ansi(text):
+    return ansi_escape.sub('', text)
+
+# Flexible patterns for individual fields
+patterns = {
+    "iteration": re.compile(r"iteration\s+(\d+)/\s*(\d+)"),
+    "elapsed_time_ms": re.compile(r"elapsed time per iteration \(ms\):\s*([\d\.]+)"),
+    "throughput": re.compile(r"throughput \(token/sec/GPU\):\s*([\d\.]+)"),
+    "lm_loss": re.compile(r"lm loss:\s*([\d\.E\+\-]+)"),
+    "grad_norm": re.compile(r"grad norm:\s*([\d\.E\+\-]+)"),
+    "mem_allocated_avg_MB": re.compile(r"mem-allocated-bytes-avg\(MB\):\s*([\d\.]+)"),
+    "mem_max_allocated_avg_MB": re.compile(r"mem-max-allocated-bytes-avg\(MB\):\s*([\d\.]+)")
+}
+
 phase_pattern = re.compile(r"training_phase\s*\.*\s*(\w+)")
 
-with open(log_path, "r") as f:
-    content = f.read()
-
-# 提取 training_phase
-phase_match = phase_pattern.search(content)
-phase = phase_match.group(1) if phase_match else "unknown"
-
-# 提取每个 iteration 的信息
+phase = "unknown"
 results = []
-for m in iter_pattern.finditer(content):
-    results.append({
-        "iteration": int(m.group(1)),
-        "elapsed_time_ms": float(m.group(3)),
-        "throughput": float(m.group(4)),
-        "lm_loss": float(m.group(5)),
-        "grad_norm": float(m.group(6)),
-        "mem_allocated_avg_MB": float(m.group(7)),
-        "mem_max_allocated_avg_MB": float(m.group(8)),
-    })
+buffer = ""
+lines_processed = 0
 
-# 组织为目标格式
+def process_buffer(text):
+    if not text:
+        return None
+        
+    # Clean text: strip ANSI, replace newlines
+    text_clean = strip_ansi(text).replace("\n", " ").replace("\r", " ")
+    
+    # Must have iteration to be valid
+    iter_match = patterns["iteration"].search(text_clean)
+    if not iter_match:
+        return None
+
+    try:
+        data = {
+            "iteration": int(iter_match.group(1))
+        }
+        
+        # Extract other fields
+        for key, pattern in patterns.items():
+            if key == "iteration": continue
+            m = pattern.search(text_clean)
+            if m:
+                data[key] = float(m.group(1))
+            else:
+                # If a critical metric is missing, decide whether to skip or keep
+                # For now, we prefer valid records with most data
+                # But 'throughput' and 'loss' are usually essential
+                pass
+        
+        # Simple validation: if we have time or loss, we count it
+        if "elapsed_time_ms" in data or "lm_loss" in data:
+            return data
+            
+    except ValueError:
+        pass
+        
+    return None
+
+try:
+    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+        print(f"[{time.strftime('%H:%M:%S')}] File opened safely. Scanning lines...")
+        
+        for line in f:
+            lines_processed += 1
+            if lines_processed % 2000 == 0:
+                print(f"[{time.strftime('%H:%M:%S')}] Processed {lines_processed} lines... Found {len(results)} records.", end='\r')
+
+            # 1. Phase detection
+            if phase == "unknown":
+                pm = phase_pattern.search(line)
+                if pm:
+                    phase = pm.group(1)
+                    print(f"\n[{time.strftime('%H:%M:%S')}] Detected Training Phase: {phase}")
+
+            # 2. Split logic
+            # Megatron logs usually have "iteration X/Y" clearly
+            # We treat "iteration ... / ..." as a start separator
+            is_start_node = "iteration" in line and "/" in line and any(c.isdigit() for c in line)
+            
+            if is_start_node:
+                # Flush previous buffer
+                if buffer:
+                    res = process_buffer(buffer)
+                    if res:
+                        results.append(res)
+                buffer = line
+            else:
+                buffer += line
+
+        # Final flush
+        if buffer:
+            res = process_buffer(buffer)
+            if res:
+                results.append(res)
+
+    print(f"\n[{time.strftime('%H:%M:%S')}] Finished reading. Total lines: {lines_processed}")
+
+except FileNotFoundError:
+    print(f"Error: Log file not found at {log_path}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error processing: {e}")
+    sys.exit(1)
+
+# Output
+print(f"[{time.strftime('%H:%M:%S')}] Writing {len(results)} records to {output_path}...")
 final = {phase: results}
 
-with open(output_path, "w") as f:
-    json.dump(final, f, indent=2)
+try:
+    with open(output_path, "w") as f:
+        json.dump(final, f, indent=2)
+    print("Done.")
+except Exception as e:
+    print(f"Error saving JSON: {e}")

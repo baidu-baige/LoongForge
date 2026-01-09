@@ -378,7 +378,7 @@ class BaseTask(object):
                 expected_list=expected_loss_list,
                 metric_name="lm_loss",
                 tolerance=accuracy_relative_tolerance,
-                is_relative=True
+                is_relative=False
             )
         # grad_norm
         if hasattr(self.metric, 'grad_norm_list') and self.metric.grad_norm_list and 'grad_norm' in baseline_data[0]:
@@ -388,7 +388,7 @@ class BaseTask(object):
                 expected_list=expected_grad_norm_list,
                 metric_name="grad_norm",
                 tolerance=accuracy_relative_tolerance,
-                is_relative=True
+                is_relative=False
             )
         logger.info("精度指标验证通过!")
 

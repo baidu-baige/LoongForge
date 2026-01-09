@@ -2,20 +2,22 @@ model_name: deepseek_v2_lite
 description: $model_name模型自动化
 TOTAL_K8S_NODES: 1
 huggingface_path:
-bos_path:
+bos_path: bos:/ai-data/deepseek-ai/DeepSeek-V2-Lite
 
 # 模型参数
 MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
 
 # aiak-training-omni 训练的参数
-HF_CKPT_PATH: $pfs_path/huggingface.co/meta-llama/deepseek_v2_lite-hf
-DATA_PATH: $pfs_path/aiak-training-llm/deepseek2/pile_test/pile-deepseek_text_document
+HF_CKPT_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/deepseek_v2_lite/pile_test/pile-deepseek_text_document
 TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/deepseek2/deepseek_v2_lite.yaml
+CONVERT_FILE: $aiak_training_path/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
 # 训练参数
-TENSOR_MODEL_PARALLER_SIZE: 1
+TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 1
 EXPERT_MODEL_PARALLEL_SIZE: 4
 EXPERT_TENSOR_PARALLEL_SIZE: 2
@@ -26,6 +28,27 @@ precision: bf16
 scenarios:
   - function:
       pretrain:
+        Step1:
+          RUNNABLE_FLAG: False
+          CONVERT_ARGS: '
+            --checkpoint-format=model-{i:05d}-of-{num_checkpoints:06d}.safetensors
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --num_experts=64
+            --expert_tensor_parallel_size=2
+            --expert_parallel_size=4
+            --megatron_path=/workspace/AIAK-Megatron
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --no_save_optim
+            --no_load_optim
+            --no-te
+            --moe-grouped-gemm
+            --safetensors'
         Step2:
           MODEL_ARGS: '
             --model-name deepseek-v2-lite
@@ -49,6 +72,7 @@ scenarios:
             --global-batch-size ${global_batch_size}
             --lr 1e-4
             --train-iters ${train_iters}
+            --load ${CHECKPOINT_PATH}
             --lr-decay-iters 320000
             --lr-decay-style cosine
             --min-lr 1.0e-5
@@ -60,9 +84,9 @@ scenarios:
             --eval-interval 1000
             --eval-iters 0
             --no-load-optim
-            --no-load-rng'
+            --no-load-rng
+            --log-memory-stats'
             # --save ${step1_output_path}
-            #--load $CHECKPOINT_PATH
           MOE_ARGS: '
             --moe-router-load-balancing-type aux_loss
             --moe-router-topk 6

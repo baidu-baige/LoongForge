@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ mcore to hf checkpoint convert ############################################
 
 AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/mnt/cluster/cyw/E2E2/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
 export PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
@@ -73,7 +73,10 @@ if is_vlm_model "${model_name}"; then
     # Step 3: vision model mcore -> hf
     # 处理 PP > 1 的情况，需要创建临时目录
     if [[ $PP -gt 1 ]]; then
-        LOAD_PATH=${CHECKPOINT_PATH}/release/tmp/
+        # 允许通过环境变量覆盖加载路径，默认为 release
+        MCORE_LOAD_DIR=${MCORE_LOAD_PATH:-"${CHECKPOINT_PATH}/release"}
+        LOAD_PATH=${MCORE_LOAD_DIR}/tmp/
+
         commands+=(
             "mkdir -p $LOAD_PATH"
         )
@@ -82,7 +85,7 @@ if is_vlm_model "${model_name}"; then
             from=$(printf "mp_rank_%02d_000" $i)
             to=$(printf "mp_rank_%02d" $i)
             commands+=(
-                "cp -r ${CHECKPOINT_PATH}/release/$from $LOAD_PATH/$to"
+                "cp -r ${MCORE_LOAD_DIR}/$from $LOAD_PATH/$to"
             )
         done
         # 更新 vision model 参数中的 load_ckpt_path

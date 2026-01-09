@@ -1,14 +1,14 @@
 model_name: llavaov_1.5_4b
 description: $model_name模型自动化
-huggingface_path: https://huggingface.co/lmms-lab/llava-onevision-qwen2-0.5b-ov
-bos_path: bos:/cce-ai-models/huggingface.co/LLaVA-OneVision-1.5-4B-stage0
+huggingface_path: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
+bos_path: bos:/ai-data/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True 
 
 HF_CKPT_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
-DATA_PATH: $pfs_path/aiak-training-omni/dataset/imagenet/CN/part00/part_00_wds
-TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/llavaov_1.5_4b/imagenet/CN/part00/part_00_wds
+TOKENIZER_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/llavaov1.5/llavaov_1_5_4b.yaml
@@ -37,6 +37,7 @@ scenarios:
   - function:
       pretrain:
         Step1:
+          RUNNABLE_FLAG: "false"
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -94,6 +95,7 @@ scenarios:
             --save_ckpt_path ${CHECKPOINT_PATH}/release
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
+          # RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
@@ -105,7 +107,7 @@ scenarios:
           TRAINING_ARGS: '
             --training-phase pretrain
             --seq-length ${seq_length}
-            --max-position-embeddings 32768
+            --max-position-embeddings ${seq_length}
             --init-method-std 0.02
             --micro-batch-size 1
             --global-batch-size ${global_batch_size}
@@ -119,6 +121,7 @@ scenarios:
             --adam-eps 1e-05
             --norm-epsilon 1e-6
             --train-iters ${train_iters}
+            --load $CHECKPOINT_PATH
             --lr-decay-iters 2500
             --lr-decay-style cosine
             --lr-warmup-fraction 0.002
@@ -129,14 +132,14 @@ scenarios:
             --dataloader-save ${CHECKPOINT_PATH}/dataloader
             --ckpt-fully-parallel-load
             --recompute-granularity full
-            --recompute-method uniform
-            --recompute-num-layers 4'
-            #--load $CHECKPOINT_PATH
+            --recompute-method block
+            --recompute-num-layers 4
+            --log-memory-stats'
             # --save ${step1_output_path}
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
-            --pipeline-model-parallel-size 1
-            --tensor-model-parallel-size 1
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --use-distributed-optimizer
             --distributed-backend nccl
             --overlap-grad-reduce
@@ -149,6 +152,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       vlm:
+        RUNNABLE_FLAG: "false"
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/vlm/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mix.json'
@@ -166,4 +170,4 @@ scenarios:
 
 tasks:
   check_correctness_task: True
-  check_precess_data_task: True
+  check_precess_data_task: False

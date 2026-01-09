@@ -1,7 +1,7 @@
 model_name: llama2_7b
 description: $model_name模型自动化
 huggingface_path: https://huggingface.co/meta-llama/Llama-2-7b-hf
-bos_path: bos:/cce-ai-datasets/huggingface.co/meta-llama/Llama-2-7b-hf
+bos_path: bos:/ai-data/Llama-2-7b-hf-test
 TOTAL_K8S_NODES: 1
 
 # 模型参数
@@ -9,10 +9,12 @@ MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
 
 # aiak-training-llm 训练的参数
 HF_CKPT_PATH: $pfs_path/huggingface.co/meta-llama/Llama-2-7b-hf
-DATA_PATH: $scripts_root_path/datasets/
+DATA_PATH: $scripts_root_path/datasets
 TOKENIZER_PATH: $pfs_path/huggingface.co/meta-llama/Llama-2-7b-hf
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/llama2/llama2_7b.yaml
+CONVERT_FILE: $aiak_training_path/configs/models/llama2/ckpt_convert/llama2_convert.yaml
 
 # 训练参数
 TENSOR_MODEL_PARALLER_SIZE: 1
@@ -25,6 +27,18 @@ precision: fp16
 scenarios:
   - function:
       sft:
+        Step1:
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --no_save_optim
+            --no_load_optim'
         Step2:
           MODEL_ARGS: '
             --model-name llama2-7b'
@@ -59,6 +73,7 @@ scenarios:
             --adam-beta2 0.95
             --adam-eps 1e-05
             --norm-epsilon 1e-6
+            --load $CHECKPOINT_PATH
             --train-iters ${train_iters}
             --lr-decay-iters 5000
             --lr-decay-style cosine
@@ -67,8 +82,8 @@ scenarios:
             --${precision}
             --save-interval 500
             --eval-interval 100
-            --eval-iters 0'
-            #--load $CHECKPOINT_PATH
+            --eval-iters 0
+            --log-memory-stats'
           MODEL_PARALLEL_ARGS: '
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
@@ -82,6 +97,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       llm_sft:
+        RUNNABLE_FLAG: "false"
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/llm/preprocess_sft_data.py
         output_prefix: /workspace/pile_test_sft/$model_name
         train_json_file_name: '${DATA_PATH}/llm/sft_aplaca_zh_data.json'

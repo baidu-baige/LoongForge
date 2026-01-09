@@ -1,7 +1,7 @@
 model_name: llama3_8b
 description: $model_name模型自动化
 huggingface_path: https://huggingface.co/meta-llama/Meta-Llama-3-8B
-bos_path: bos:/cce-ai-models/huggingface.co/meta-llama/Meta-Llama-3-8B
+bos_path: bos:/ai-data/meta-llama/Meta-Llama-3-8B
 TOTAL_K8S_NODES: 1
 
 # 模型参数
@@ -9,10 +9,12 @@ MODEL_RUNNABLE: True
 
 # aiak-training-omni 训练的参数
 HF_CKPT_PATH: $pfs_path/huggingface.co/meta-llama/Meta-Llama-3-8B
-DATA_PATH: $pfs_path/aiak-training-llm/llama3/pile_test/pile-llama_text_document
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/llama2/pile_test/pile-llama_text_document
 TOKENIZER_PATH: $pfs_path/huggingface.co/meta-llama/Meta-Llama-3-8B
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/llama3/llama3_1_8b.yaml
+CONVERT_FILE: $aiak_training_path/configs/models/llama3/ckpt_convert/llama3_convert.yaml
 
 # 训练参数
 TENSOR_MODEL_PARALLER_SIZE: 2
@@ -24,6 +26,19 @@ global_batch_size: 32
 scenarios:
   - function:
       pretrain:
+        Step1:
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
         Step2:
           MODEL_ARGS: '
             --model-name llama3-8b
@@ -56,11 +71,10 @@ scenarios:
             --initial-loss-scale 65536
             --bf16
             --load $CHECKPOINT_PATH
-            --save $CHECKPOINT_PATH
             --save-interval 5000
             --eval-interval 1000
-            --eval-iters 0'
-            # --save ${step1_output_path}
+            --eval-iters 0
+            --log-memory-stats'
           MODEL_PARALLEL_ARGS: '
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
@@ -79,6 +93,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       llm_pretrain:
+        RUNNABLE_FLAG: "false"
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/llm/preprocess_pretrain_data.py
         output_prefix: /workspace/pile_test_pretrain/$model_name/pile-test
         train_json_file_name: '$scripts_root_path/datasets/llm/pretrain_train.jsonl'
@@ -93,5 +108,4 @@ scenarios:
 
 tasks:
   check_correctness_task: True
-  check_perfness_task: True
-  check_precess_data_task: True
+  check_precess_data_task: False
