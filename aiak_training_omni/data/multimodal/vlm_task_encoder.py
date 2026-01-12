@@ -512,6 +512,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 )
             l_VLMTaskSample.append(self.encode_captioning(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
+        self.is_packing_enabled = True
         return l_sample_packed
 
     def encode_packed_vqa(self, sample: PackedVQASample) -> BaseTaskSample:
@@ -530,6 +531,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
             l_VLMTaskSample.append(self.encode_vqa4packing(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
+        self.is_packing_enabled = True
         return l_sample_packed
 
     def encode_packed_multi_mix_qa(
@@ -593,6 +595,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 )
             l_VLMTaskSample.append(self.encode_multi_mix_qa4packing(cur_sample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
+        self.is_packing_enabled = True
         return l_sample_packed
 
     def encode_multi_mix_qa4packing(self, sample: MultiMixQASample) -> BaseTaskSample:
