@@ -1,2 +1,3 @@
-"""aiak training llm"""
+"""aiak training omni"""
+from .wan.wan_config import WanConfig
 

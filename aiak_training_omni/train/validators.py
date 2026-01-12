@@ -20,7 +20,7 @@ def validate_aiak_extra_args(args, config):
     _validate_extra_training_args(args)
     _validate_extra_sft_args(args)
     _validata_extra_multimodal_args(args)
-    _validata_extra_video_args(args)
+    _validata_extra_custom_args(args)
     _validata_extra_parallel_args(args)
 
     # megatron one_logger is not supported in aiak
@@ -191,9 +191,9 @@ def _validata_extra_multimodal_args(args):
         args.packing_batch_size = None
 
 
-def _validata_extra_video_args(args):
+def _validata_extra_custom_args(args):
     """Validate multimodal arguments"""
-    if args.model_family not in constants.VideoLanguageModelFamilies.names():
+    if args.model_family not in constants.CustomModelFamilies.names():
         return
 
     if args.model_family == "wan2_1_i2v":

@@ -14,7 +14,7 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core import InferenceParams, parallel_state, tensor_parallel
-from aiak_training_omni.models.stdit.communications import (
+from aiak_training_omni.models.custom.stdit.communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )
@@ -213,7 +213,6 @@ class WanSelfAttention(SelfAttention):
         query, key, value = self.get_query_key_value_tensors(
             hidden_states, key_value_states
         )
-
         # ===================================================
         # Adjust key, value, and rotary_pos_emb for inference
         # ===================================================
@@ -305,7 +304,7 @@ class WanCrossAttention(CrossAttention):
         layer_number: int,
         attn_mask_type=AttnMaskType.padding,
         cp_comm_type: str = None,
-        **kwargs,
+        **kwargs
     ):
 
         _submodules = deepcopy(submodules)
@@ -316,7 +315,7 @@ class WanCrossAttention(CrossAttention):
             layer_number=layer_number,
             attn_mask_type=attn_mask_type,
             cp_comm_type=cp_comm_type,
-            **kwargs,
+            **kwargs
         )
 
         _config = deepcopy(config)
@@ -343,39 +342,40 @@ class WanCrossAttention(CrossAttention):
                 else 0
             ),
         )
-        _core_attention_img = build_module(
-            submodules.core_attention,
-            config=_config,
-            layer_number=self.layer_number,
-            attn_mask_type=self.attn_mask_type,
-            attention_type=self.attention_type,
-            cp_comm_type=kwargs.get("cp_comm_type"),
-            softmax_scale=self.config.softmax_scale,
-        )
+        if self.config.has_image_input:
+            _core_attention_img = build_module(
+                submodules.core_attention,
+                config=_config,
+                layer_number=self.layer_number,
+                attn_mask_type=self.attn_mask_type,
+                attention_type=self.attention_type,
+                cp_comm_type=kwargs.get("cp_comm_type"),
+                softmax_scale=self.config.softmax_scale,
+            )
 
-        self.core_attention_img = DistributedAttention(
-            _core_attention_img,
-            get_context_parallel_group(check_initialized=False),
-            (
-                self.config.recompute_num_layers
-                if self.config.recompute_num_layers is not None
-                else 0
-            ),
-            pad_kv=True,
-            effective_length=self.config.max_image_length,
-        )
+            self.core_attention_img = DistributedAttention(
+                _core_attention_img,
+                get_context_parallel_group(check_initialized=False),
+                (
+                    self.config.recompute_num_layers
+                    if self.config.recompute_num_layers is not None
+                    else 0
+                ),
+                pad_kv=True,
+                effective_length=self.config.max_image_length,
+            )
 
-        self.linear_kv_img = build_module(
-            submodules.linear_kv,
-            self.config.hidden_size,
-            2 * self.kv_projection_size,
-            config=self.config,
-            init_method=self.config.init_method,
-            gather_output=False,
-            bias=self.config.add_bias_linear,
-            skip_bias_add=False,
-            is_expert=False,
-        )
+            self.linear_kv_img = build_module(
+                submodules.linear_kv,
+                self.config.hidden_size,
+                2 * self.kv_projection_size,
+                config=self.config,
+                init_method=self.config.init_method,
+                gather_output=False,
+                bias=self.config.add_bias_linear,
+                skip_bias_add=False,
+                is_expert=False,
+            )
 
         ##覆盖原有的 q_layernorm 和 k_layernorm
         if submodules.q_layernorm is not None:
@@ -398,7 +398,7 @@ class WanCrossAttention(CrossAttention):
         else:
             self.k_layernorm = None
 
-        if submodules.k_layernorm is not None:
+        if submodules.k_layernorm is not None and self.config.has_image_input:
             self.k_img_layernorm = build_module(
                 submodules.k_layernorm,
                 hidden_size=self.config.hidden_size,
@@ -437,9 +437,14 @@ class WanCrossAttention(CrossAttention):
         # =====================
         # Get the query, key and value tensors based on the type of attention -
         # self or cross attn.
-        query, key, value, key_img, value_img = self.get_query_key_value_tensors(
-            hidden_states, key_value_states
-        )
+        if self.config.has_image_input:
+            query, key, value, key_img, value_img = self.get_query_key_value_tensors(
+                hidden_states, key_value_states
+            )
+        else:
+            query, key, value = self.get_query_key_value_tensors(
+                hidden_states, key_value_states
+            )
 
         # ===================================================
         # Adjust key, value, and rotary_pos_emb for inference
@@ -469,19 +474,20 @@ class WanCrossAttention(CrossAttention):
             packed_seq_params=packed_seq_params,
         )
 
-        core_attention_img_out = self.core_attention_img(
-            query,
-            key_img,
-            value_img,
-            attention_mask,
-            attn_mask_type=attn_mask_type,
-            attention_bias=attention_bias,
-            packed_seq_params=packed_seq_params,
-        )
-        if attention_return_type == 1:
-            return core_attn_out
+        if self.config.has_image_input:
+            core_attention_img_out = self.core_attention_img(
+                query,
+                key_img,
+                value_img,
+                attention_mask,
+                attn_mask_type=attn_mask_type,
+                attention_bias=attention_bias,
+                packed_seq_params=packed_seq_params,
+            )
+            if attention_return_type == 1:
+                return core_attn_out
 
-        core_attn_out = core_attn_out + core_attention_img_out
+            core_attn_out = core_attn_out + core_attention_img_out
 
         # =================
         # Output. [sq, b, h]
@@ -505,17 +511,21 @@ class WanCrossAttention(CrossAttention):
 
         # concat image, text
         cp = self.config.context_parallel_size
-        image_len = math.ceil(self.config.max_image_length / cp)
         text_len = self.config.max_text_length // cp
-        chunk_size = image_len + text_len
 
-        chunks_img, chunks_text = [], []
-        for i in range(self.config.context_parallel_size):
-            chunk = cated[i * chunk_size : (i + 1) * chunk_size]
-            chunks_img.append(chunk[:image_len])
-            chunks_text.append(chunk[image_len:])
-        key_value_states_img = torch.cat(chunks_img, dim=0)
-        key_value_states_ctx = torch.cat(chunks_text, dim=0)
+        if self.config.has_image_input:
+            image_len = math.ceil(self.config.max_image_length / cp)
+            chunk_size = image_len + text_len
+
+            chunks_img, chunks_text = [], []
+            for i in range(self.config.context_parallel_size):
+                chunk = cated[i * chunk_size : (i + 1) * chunk_size]
+                chunks_img.append(chunk[:image_len])
+                chunks_text.append(chunk[image_len:])
+            key_value_states_img = torch.cat(chunks_img, dim=0)
+            key_value_states_ctx = torch.cat(chunks_text, dim=0)
+        else:
+            key_value_states_ctx = cated
 
         # Attention heads [sk, b, h] --> [sk, b, (np * 2 * hn)]
         mixed_kv, _ = self.linear_kv(key_value_states_ctx)
@@ -561,24 +571,6 @@ class WanCrossAttention(CrossAttention):
         # [sk, b, np, 2 * hn] --> 2 [sk, b, np, hn]
         (key, value) = tensor_parallel.split_tensor_along_last_dim(mixed_kv, 2)
 
-        ## image key value
-        ######################################################################
-        mixed_kv_img, _ = self.linear_kv_img(key_value_states_img)
-
-        mixed_kv_img = norm_k(mixed_kv_img, self.k_img_layernorm, clip_padding=True)
-
-        ###RMSNorm mixed_kv_img 中的K
-        new_tensor_shape_img = mixed_kv_img.size()[:-1] + (
-            self.num_attention_heads_per_partition,
-            2 * self.hidden_size_per_attention_head,
-        )
-
-        mixed_kv_img = mixed_kv_img.view(*new_tensor_shape_img)
-        (key_img, value_img) = tensor_parallel.split_tensor_along_last_dim(
-            mixed_kv_img, 2
-        )
-        ######################################################################
-
         # Attention head [sq, b, h] --> [sq, b, hp]
         query, _ = self.linear_q(hidden_states)
         query = gather_forward_split_backward(
@@ -602,11 +594,27 @@ class WanCrossAttention(CrossAttention):
         value = split_forward_gather_backward(
             value, get_context_parallel_group(), dim=0, grad_scale="down"
         )
-        key_img = split_forward_gather_backward(
-            key_img, get_context_parallel_group(), dim=0, grad_scale="down"
-        )
-        value_img = split_forward_gather_backward(
-            value_img, get_context_parallel_group(), dim=0, grad_scale="down"
-        )
+        if self.config.has_image_input:
+            mixed_kv_img, _ = self.linear_kv_img(key_value_states_img)
 
-        return query, key, value, key_img, value_img
+            mixed_kv_img = norm_k(mixed_kv_img, self.k_img_layernorm, clip_padding=True)
+
+            ###RMSNorm mixed_kv_img 中的K
+            new_tensor_shape_img = mixed_kv_img.size()[:-1] + (
+                self.num_attention_heads_per_partition,
+                2 * self.hidden_size_per_attention_head,
+            )
+
+            mixed_kv_img = mixed_kv_img.view(*new_tensor_shape_img)
+            (key_img, value_img) = tensor_parallel.split_tensor_along_last_dim(
+                mixed_kv_img, 2
+            )
+            key_img = split_forward_gather_backward(
+                key_img, get_context_parallel_group(), dim=0, grad_scale="down"
+            )
+            value_img = split_forward_gather_backward(
+                value_img, get_context_parallel_group(), dim=0, grad_scale="down"
+            )
+            return query, key, value, key_img, value_img
+
+        return query, key, value

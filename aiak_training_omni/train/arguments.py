@@ -442,6 +442,8 @@ def _add_extra_video_args(parser):
         help="The minimum timestep boundary for dit, with a value range between 0 and 1.",
     )
 
+    group.add_argument('--dataset-metadata-path', type=str, help='dataset metadata path')
+
     group.add_argument("--stdit-bucket-config", type=str, help="bucket config file")
 
     group.add_argument(

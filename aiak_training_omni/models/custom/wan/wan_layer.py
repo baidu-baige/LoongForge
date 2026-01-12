@@ -2,18 +2,14 @@
 
 """tranformer layer."""
 
-from abc import ABC
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Union
-from einops import rearrange
 
 import torch
 import torch.nn as nn
-from torch.cuda.amp import autocast
 
 from megatron.core import parallel_state
 from megatron.core.utils import make_viewless_tensor
-from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.dist_checkpointing.utils import apply_prefix_mapping
 from megatron.core.transformer.identity_op import IdentityFuncOp, IdentityOp
@@ -23,15 +19,11 @@ from megatron.core.transformer.transformer_layer import (
     get_transformer_layer_offset,
 )
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
-from aiak_training_omni.models.custom.transformer.vision.stdit_model_embedding import (
-    t2i_modulate,
-)
+
 from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
     StditTransformerConfig,
 )
-from megatron.core.parallel_state import (
-    get_context_parallel_world_size,
-)
+
 import math
 
 
@@ -95,11 +87,9 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
         if config.sequence_parallel:
             self.d_t //= parallel_state.get_tensor_model_parallel_world_size()
 
-        #######################################
         dim = config.hidden_size
         ffn_dim = config.ffn_hidden_size
         eps = config.layernorm_epsilon
-        # self.modulation = nn.Parameter(torch.randn(1, 6, dim) / dim**0.5)
         self.modulation = nn.Parameter(torch.randn(6, 1, dim) / dim**0.5)
 
         self.ffn = nn.Sequential(
@@ -111,14 +101,9 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
         self.norm1 = nn.LayerNorm(dim, eps=eps, elementwise_affine=False)
         self.norm2 = nn.LayerNorm(dim, eps=eps, elementwise_affine=False)
         self.norm3 = nn.LayerNorm(dim, eps=eps)
-        # self.self_attn = build_module(
-        #     submodules.self_attention, config=self.config, layer_number=layer_number)
         self.self_attn = build_module(
             submodules.wan_self_attention, config=self.config, layer_number=layer_number
         )
-        # #标准cross attention
-        # self.cross_attn = build_module(
-        #     submodules.cross_attention, config=self.config, layer_number=layer_number)
         # 融了两个 cross attention 最后结果相加再做linear
         self.cross_attn = build_module(
             submodules.wan_cross_attention,
@@ -156,12 +141,15 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
         """hidden_states: [s, b, h]"""
         # hidden_states_shape: [32760/ 2 + 769 + 6 +1]
         cp = self.config.context_parallel_size
-        image_len = math.ceil(self.config.max_image_length / cp) * cp
-        text_legnth = math.ceil(self.config.max_text_length / cp) * cp
-        conext_len = image_len + text_legnth
+        text_length = math.ceil(self.config.max_text_length / cp) * cp
+        if self.config.has_image_input:
+            image_len = math.ceil(self.config.max_image_length / cp) * cp
+            context_len = image_len + text_length
+        else:
+            context_len = text_length
         video_len = self.config.max_video_length
         each_cp_hidden = video_len // cp
-        each_cp_context = math.ceil(conext_len / cp)
+        each_cp_context = math.ceil(context_len / cp)
         x = hidden_states[:each_cp_hidden, :, :].to(torch.bfloat16)
         context = hidden_states[each_cp_hidden : each_cp_hidden + each_cp_context, :, :]
         t_mod = hidden_states[-7:-1, :, :].to(torch.bfloat16)

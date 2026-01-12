@@ -89,8 +89,6 @@ class VideoLanguageModelFamilies(_BaseFamilies):
 
     STDIT = "stdit"
     STDIT3 = "stdit3"
-    WAN2_1_T2V = "wan2_1_t2v"
-    WAN2_1_I2V = "wan2_1_i2v"
 
 
 class VisionLanguageModelFamilies(_BaseFamilies):
@@ -106,3 +104,5 @@ class VisionLanguageModelFamilies(_BaseFamilies):
 class CustomModelFamilies(_BaseFamilies):
     """User defined Custom Vision model families"""
     INTERN_VL = "intern_vl"
+    WAN2_1_I2V = "wan2_1_i2v"
+    WAN2_2_I2V = "wan2_2_i2v"

@@ -22,13 +22,14 @@ from megatron.core.parallel_state import (
     get_context_parallel_rank,
     get_context_parallel_world_size,
 )
-from aiak_training_omni.models.stdit.communications import (
+from aiak_training_omni.models.custom.stdit.communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )
 
 
 def wan_rope_apply(x, freqs, config, cu_seqlens=None, rotary_interleaved=False):
+    """wan rope apply"""
     total_heads = config.num_attention_heads
     heads = x.shape[2]
 

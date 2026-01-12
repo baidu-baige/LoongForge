@@ -190,6 +190,16 @@ MODEL_CONFIG_REGISTRY = {
     "qwen3_vl_30b_a3b": {
         "config_path": "configs/models/qwen3_vl",
         "config_name": "qwen3_vl_30b_a3b",
+    },
+    #wan2.2
+    "wan2_2_i2v": {
+        "config_path": "configs/models/wan",
+        "config_name": "wan2_2_i2v",
+    },
+    #wan2.1
+    "wan2_1_i2v": {
+        "config_path": "configs/models/wan",
+        "config_name": "wan2_1_i2v",
     }
 }
 
