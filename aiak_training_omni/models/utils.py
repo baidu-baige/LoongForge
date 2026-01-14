@@ -2,7 +2,7 @@
 from typing import Tuple
 import torch
 from megatron.core.transformer import TransformerConfig
-from megatron.training.activations import squared_relu
+from megatron.core.activations import squared_relu
 import torch.nn.functional as F
 from aiak_training_omni.utils import constants
 from copy import deepcopy

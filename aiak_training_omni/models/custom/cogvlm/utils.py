@@ -41,7 +41,7 @@ from megatron.training import (
 from megatron.core import DistributedDataParallel as DDP
 from megatron.core import mpu
 from megatron.core.tensor_parallel import param_is_not_tensor_parallel_duplicate
-from megatron.legacy.model import Float16Module
+from megatron.core.transformer.module import Float16Module
 from megatron.legacy.model.module import param_is_not_shared
 
 

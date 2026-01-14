@@ -2,7 +2,7 @@
 
 from ..common.base_model_mixins import (
     BaseMegatronVisionModule,
-    BaseMegatronLanuageModule,
+    BaseMegatronLanguageModule,
     BaseMegatronModule,
 )
 from .omni_encoder_model import OmniEncoderModel
@@ -13,7 +13,7 @@ from .omni_model_provider import omni_model_provider
 __all__ = [
     # Basic Mixins
     "BaseMegatronVisionModule",
-    "BaseMegatronLanuageModule",
+    "BaseMegatronLanguageModule",
     "BaseMegatronModule",
     # Model classes
     "OmniEncoderModel",

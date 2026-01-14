@@ -15,11 +15,11 @@ from .constants import TrainingPhase
 
 
 if TYPE_CHECKING:
-    from megatron.core.datasets.megatron_tokenizer import MegatronTokenizer
+    from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
 
 _GLOBAL_CHAT_TEMPLATE: Optional["ChatTemplate"] = None
-_GLOBAL_AIAK_TOKENIZER: Optional["MegatronTokenizer"] = None
+_GLOBAL_AIAK_TOKENIZER: Optional["MegatronLegacyTokenizer"] = None
 _GLOBAL_MODEL_CONFIG = None
 _GLOBAL_HYDRA_CONFIG = None
 _GLOBAL_DATA_CONFIG = None
@@ -107,7 +107,7 @@ def _build_chat_template(args) -> Optional["ChatTemplate"]:
     return None
 
 
-def _build_tokenizer(args) -> Optional["MegatronTokenizer"]:
+def _build_tokenizer(args) -> Optional["MegatronLegacyTokenizer"]:
     """Initialize tokenizer."""
     global _GLOBAL_AIAK_TOKENIZER
     _ensure_var_is_not_initialized(_GLOBAL_AIAK_TOKENIZER, "aiak-tokenizer")
@@ -115,7 +115,7 @@ def _build_tokenizer(args) -> Optional["MegatronTokenizer"]:
     return _GLOBAL_AIAK_TOKENIZER
 
 
-def get_tokenizer() -> Optional["MegatronTokenizer"]:
+def get_tokenizer() -> Optional["MegatronLegacyTokenizer"]:
     """Return tokenizer."""
     _ensure_var_is_initialized(_GLOBAL_AIAK_TOKENIZER, "aiak-tokenizer")
     return _GLOBAL_AIAK_TOKENIZER

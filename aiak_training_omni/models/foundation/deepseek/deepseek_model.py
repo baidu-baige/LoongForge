@@ -19,16 +19,20 @@ from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEm
 from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
-from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
-
-from aiak_training_omni.models.foundation import DeepseekConfig
-from aiak_training_omni.models.foundation.deepseek.transformer.mtp_transformer_layer import (
-    MultiTokenPredLayerDeepSeek,
+from megatron.core.process_groups_config import ProcessGroupCollection
+from megatron.core.transformer.multi_token_prediction import (
+    MTPLossAutoScaler,
+    MTPLossLoggingHelper,
+    MultiTokenPredictionBlock,
+    roll_tensor,
+    tie_output_layer_state_dict,
+    tie_word_embeddings_state_dict,
 )
+from aiak_training_omni.models.foundation import DeepseekConfig
 from aiak_training_omni.models.utils import import_module
 from aiak_training_omni.models.common.base_model_mixins import (
-    BaseMegatronLanuageModule,
+    BaseMegatronLanguageModule,
 )
 
 
@@ -61,7 +65,7 @@ def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
             incompatible_keys.missing_keys.remove(key)
 
 
-class DeepseekModelWithMTP(BaseMegatronLanuageModule):
+class DeepseekModelWithMTP(BaseMegatronLanguageModule):
     """DeepSeek Transformer language model with MTP module supported..
 
     Args:
@@ -98,10 +102,12 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
         parallel_output: bool = True,
         scatter_embedding_sequence_parallel: bool = True,
         language_embedding: Optional[torch.nn.Module] = None,
+        vp_stage: Optional[int] = None,
+        pg_collection: Optional[ProcessGroupCollection] = None,
         **kwargs,
     ) -> None:
         """Initialize pre-process, transformer block and post-process modules."""
-        super().__init__(config=config, **kwargs)
+        super().__init__(config=config, pg_collection=pg_collection, **kwargs)
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
@@ -127,6 +133,9 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
 
 
         self.transformer_layer_spec, self.mtp_layer_spec = import_module(model_spec, self.config)
+        self.mtp_process = self.mtp_layer_spec is not None
+        self.vp_stage = vp_stage
+
         self.max_sequence_length = self.config.max_position_embeddings
         self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
         self.position_embedding_type = self.config.position_embedding_type
@@ -142,7 +151,7 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
         self.rope_scaling = self.config.use_rope_scaling
         self.rope_scaling_factor = self.config.rope_scaling_factor
 
-        if self.pre_process:
+        if self.pre_process or self.mtp_process:
             if language_embedding is None:
                 self.embedding = LanguageModelEmbedding(
                     config=self.config,
@@ -150,6 +159,7 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
                     max_sequence_length=self.max_sequence_length,
                     position_embedding_type=self.position_embedding_type,
                     scatter_to_sequence_parallel=self.scatter_embedding_sequence_parallel,
+                    tp_group=self.pg_collection.tp,
                 )
             else:
                 self.embedding = language_embedding
@@ -168,6 +178,7 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
                 rope_scaling=self.rope_scaling,
                 rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
+                cp_group=self.pg_collection.cp,
             )
 
         # Cache for RoPE tensors which do not change between iterations.
@@ -179,7 +190,14 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
             spec=self.transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
+            pg_collection=self.pg_collection,
+            vp_stage=vp_stage,
         )
+
+        if self.mtp_process:
+            self.mtp = MultiTokenPredictionBlock(
+                config=self.config, spec=self.mtp_block_spec, vp_stage=vp_stage
+            )
 
         # Output
         if post_process:
@@ -209,56 +227,11 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
                 and self.share_embeddings_and_output_weights,
                 embedding_activation_buffer=self.embedding_activation_buffer,
                 grad_output_buffer=self.grad_output_buffer,
+                tp_group=self.pg_collection.tp,
             )
 
         if self.pre_process or self.post_process:
             self.setup_embeddings_and_output_layer()
-
-        # MTP
-        if self.config.num_nextn_predict_layers > 0:
-            self.share_mtp_embeddings_and_output_weights = (
-                self.config.share_mtp_embeddings_and_output_weights
-            )
-        else:
-            self.share_mtp_embeddings_and_output_weights = False
-            logging.getLogger(__name__).warning(
-                f"`config.num_nextn_predict_layers` is {self.config.num_nextn_predict_layers}, "
-                "`share_mtp_embeddings_and_output_weights` will not take effect, "
-                "fall back to default value of False."
-            )
-
-        # Initialize the MTP layers
-        self.mtp_layers = None
-        if self.config.num_nextn_predict_layers > 0:
-            if post_process and self.training:
-                self.mtp_layers = torch.nn.ModuleList(
-                    [
-                        MultiTokenPredLayerDeepSeek(
-                            self.config,
-                            submodules=self.mtp_layer_spec.submodules,
-                            # Params for MTP embedding layer
-                            vocab_size=self.vocab_size,
-                            max_sequence_length=self.max_sequence_length,
-                            position_embedding_type=self.position_embedding_type,
-                            rotary_percent=self.rotary_percent,
-                            rotary_base=self.rotary_base,
-                            seq_len_interpolation_factor=self.seq_len_interpolation_factor,
-                            # Params for MTP layer
-                            share_mtp_embeddings_and_output_weights=True,
-                            # Params for TransformerLayer
-                            layer_number=len(self.decoder.submodules.layer_specs)
-                            + 1
-                            + i,
-                            # Params for parallel
-                            pre_process=pre_process,
-                            post_process=post_process,
-                        )
-                        for i in range(self.config.num_nextn_predict_layers)
-                    ]
-                )
-            # handle the extra MTP logic.
-            if self.pre_process or self.post_process:
-                self.setup_mtp_embeddings_layer()
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(
@@ -289,181 +262,51 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
         ), "input_tensor should only be length 1 for gpt/bert"
         self.decoder.set_input_tensor(input_tensor[0])
 
-    def setup_mtp_embeddings_layer(self) -> None:
-        """Sets up embedding layer in first stage and MTP module's embedding layer(s) in last stage.
-
-        This function initalizes word embeddings in the final stage when we are
-        using pipeline parallelism and sharing word embeddings, and sets up param
-        attributes on the embedding layers on first and last stage.
-        """
-        # Similar to setup_embeddings_and_output_layer(), setup `is_embedding_or_output_parameter` attribute
-        if self.post_process:
-            for _mtp_layer in self.mtp_layers:
-                # ...weight is not None check is for `skip_weight_param_allocation` is True.
-                if _mtp_layer.embedding.word_embeddings.weight is not None:
-                    _mtp_layer.embedding.word_embeddings.weight.is_embedding_or_output_parameter = (
-                        True
-                    )
-
-        # If the MTP's embeddings and output weights are not shared with the main model.
-        if not self.share_mtp_embeddings_and_output_weights:
-            return
-
-        if all([self.pre_process, self.post_process]):
-            # Zero out wgrad if sharing embeddings between two layers on same
-            # pipeline stage to make sure grad accumulation into main_grad is
-            # correct and does not include garbage values (e.g., from torch.empty).
-            self.shared_embedding_weight().zero_out_wgrad = True
-            return
-
-        if all(
-            [
-                parallel_state.is_pipeline_first_stage(),
-                self.pre_process,
-                not self.post_process,
-            ]
-        ):
-            self.shared_embedding_weight().shared_embedding = True
-
-        if self.post_process and not self.pre_process:
-            assert not parallel_state.is_pipeline_first_stage()
-            for _mtp_layer in self.mtp_layers:
-                # set word_embeddings weights to 0 here, then copy first
-                # stage's weights using all_reduce below.
-                _mtp_layer.embedding.word_embeddings.weight.data.fill_(0)
-                _mtp_layer.embedding.word_embeddings.weight.shared = True
-                _mtp_layer.embedding.word_embeddings.weight.shared_embedding = True
-
-        # Parameters are shared between the word embeddings layers, and the
-        # heads at the end of the model. In a pipelined setup with more than
-        # one stage, the initial embedding layer and the head are on different
-        # workers, so we do the following:
-        # 1. Create a second copy of word_embeddings on the last stage, with
-        #    initial parameters of 0.0.
-        # 2. Do an all-reduce between the first and last stage to ensure that
-        #    the two copies of word_embeddings start off with the same
-        #    parameter values.
-        # 3. In the training loop, before an all-reduce between the grads of
-        #    the two word_embeddings layers to ensure that every applied weight
-        #    update is the same on both stages.
-
-        # Ensure that first and last stages have the same initial parameter
-        # values.
-        if torch.distributed.is_initialized():
-            if parallel_state.is_rank_in_embedding_group():
-                weight = self.shared_embedding_weight()
-                weight.data = weight.data.cuda()
-                torch.distributed.all_reduce(
-                    weight.data, group=parallel_state.get_embedding_group()
-                )
-
-        elif not getattr(LanguageModule, "embedding_warning_printed", False):
-            logging.getLogger(__name__).warning(
-                "Distributed processes aren't initialized, so the output layer "
-                "is not initialized with weights from the word embeddings. "
-                "If you are just manipulating a model this is fine, but "
-                "this needs to be handled manually. If you are training "
-                "something is definitely wrong."
-            )
-            LanguageModule.embedding_warning_printed = True
-
-    def shared_embedding_weight(self) -> Optional[Tensor]:
-        """
-        For MTP involved only. Gets the embedding weight when `share_mtp_embeddings_and_output_weights`
-        is True. Which means the embedding weight is shared between all MTP layers.
-
-        Returns:
-            Tensor: Returns the input embedding weight if in first stage of pipeline(pre_process),
-            or returns the MTP embedding weight if in last stage of pipeline(post_process).
-        """
-        assert self.config.num_nextn_predict_layers > 0
-        if self.pre_process:
-            return self.embedding.word_embeddings.weight
-        elif self.post_process:
-            return self.mtp_layers[0].embedding.word_embeddings.weight
-        else:
-            return None
-
-    def _mtp_forward(
+    def _preprocess(
         self,
-        decoder_input: Tensor,
-        ori_input_ids: Tensor,
-        ori_labels: Tensor,
+        input_ids: Tensor,
         position_ids: Tensor,
-        hidden_states: Tensor,
-        attention_mask: Tensor,
-        attn_mask_type: Optional[AttnMaskType] = None,
-        rotary_pos_emb: Tensor = None,
-        loss: Tensor = None,
+        decoder_input: Tensor = None,
+        #inference_context: BaseInferenceContext = None,
         inference_params: InferenceParams = None,
         packed_seq_params: PackedSeqParams = None,
-    ) -> Tensor:
-        """compute the forward path of each MTP layer"""
-        # Prepare the embeddings and output weights in MTP
-        # If embeddings and output weights are not tied, and MTP's output weights
-        # are shared with main model.
-        if (
-            not self.share_embeddings_and_output_weights
-            and self.share_mtp_embeddings_and_output_weights
-        ):
-            output_weight = self.output_layer.weight.detach()
-            output_weight.zero_out_wgrad = True
+    ):
+        """Preprocesses inputs for the transformer decoder.
 
-        # If MTP's embedding weights are shared with main model.
-        if self.share_mtp_embeddings_and_output_weights:
-            embed_weight = self.shared_embedding_weight()
+        Applies embeddings to input tokens, or uses `decoder_input` from a previous
+        pipeline stage. Also sets up rotary positional embeddings.
+        """
+        # If decoder_input is provided (not None), then input_ids and position_ids are ignored.
+        # Otherwise, apply embedding layer on input_ids and position_ids to get decoder_input.
+        # Decoder embedding.
+        if decoder_input is not None:
+            pass
+        elif self.pre_process:
+            decoder_input = self.embedding(input_ids=input_ids, position_ids=position_ids)
         else:
-            embed_weight = None
+            # intermediate stage of pipeline
+            # decoder will get hidden_states from encoder.input_tensor
+            decoder_input = None
 
-        for mtp_i, mtp_layer in enumerate(self.mtp_layers):
-
-            # Shift right by `mtp_depth` and pad back to regular length
-            mtp_input_ids = torch.nn.functional.pad(
-                ori_input_ids[:, mtp_i + 1 :],  # [b, s-mtp_depth]
-                (0, mtp_i + 1),
-                "constant",
-                0,  # [b, s]
-            ).contiguous()
-
-            mtp_labels = torch.nn.functional.pad(
-                ori_labels[:, mtp_i + 1 :],  # [b, s-mtp_depth]
-                (0, mtp_i + 1),
-                "constant",
-                0,  # [b, s]
-            ).contiguous()
-
-            if self.pre_process and self.post_process:
-                decoder_input = torch.nn.functional.pad(
-                    decoder_input[mtp_i + 1 :, ...],  # [s-mtp_depth, b, h]
-                    (0, 0, 0, 0, 0, mtp_i + 1),
-                    "constant",
-                    0,  # [s, b, h]
-                ).contiguous()
-
-            hidden_states, mtp_loss = mtp_layer(
-                hidden_states=hidden_states,
-                input_ids=mtp_input_ids,
-                decoder_input=decoder_input,
-                labels=mtp_labels,
-                attention_mask=attention_mask,
-                attn_mask_type=attn_mask_type,
-                rotary_pos_emb=rotary_pos_emb,
-                position_ids=position_ids,
-                inference_params=inference_params,
-                packed_seq_params=packed_seq_params,
-                embed_weight=embed_weight,
-                output_weight=output_weight,
+        # Rotary positional embeddings (embedding is None for PP intermediate devices)
+        rotary_pos_emb = None
+        if self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
+            rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
+                inference_params, self.decoder, decoder_input, self.config, packed_seq_params
+            )
+            rotary_pos_emb = self.rotary_pos_emb(
+                rotary_seq_len,
+                packed_seq=packed_seq_params is not None and packed_seq_params.qkv_format == 'thd',
             )
 
-            mtp_loss[:, -(mtp_i + 1) :] = 0.0
-            loss += (
-                mtp_loss
-                * self.config.mtp_loss_coef
-                / self.config.num_nextn_predict_layers
-            )  # [b, s]
+        preproc_output = (
+            decoder_input,
+            rotary_pos_emb,
+        )
 
-        return loss
-
+        return preproc_output
+    
+    
     def forward(
         self,
         input_ids: Tensor,
@@ -476,6 +319,7 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
         packed_seq_params: PackedSeqParams = None,
         extra_block_kwargs: dict = None,
         runtime_gather_output: Optional[bool] = None,
+        loss_mask: Optional[Tensor] = None,
     ) -> Tensor:
         """Forward function of the GPT Model This function passes the input tensors
         through the embedding layer, and then the decoeder and finally into the post
@@ -487,45 +331,18 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
             runtime_gather_output (bool): Gather output at runtime. Default None means
                 `parallel_output` arg in the constructor will be used.
         """
-        if self.mtp_layers is not None:
-            ori_input_ids = input_ids.detach()  # [b, s]
-            ori_labels = labels.detach()  # [b, s]
-            # TODO: Truncate the input_ids and labels to support MTP.
-            # input_ids = input_ids[:, :-self.config.num_nextn_predict_layers]
-            # labels = labels[:, :-self.config.num_nextn_predict_layers]
 
-        # If decoder_input is provided (not None), then input_ids and position_ids are ignored.
-        # Otherwise, apply embedding layer on input_ids and position_ids to get decoder_input.
-        # Decoder embedding.
-        if decoder_input is not None:
-            pass
-        elif self.pre_process:
-            decoder_input = self.embedding(
-                input_ids=input_ids, position_ids=position_ids
-            )
-        else:
-            # intermediate stage of pipeline
-            # decoder will get hidden_states from encoder.input_tensor
-            decoder_input = None
+        preproc_output = self._preprocess(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            decoder_input=decoder_input,
+            inference_params=inference_params,
+            packed_seq_params=packed_seq_params,
+        )
 
-        # Rotary positional embeddings (embedding is None for PP intermediate devices)
-        rotary_pos_emb = None
-        if (
-            self.position_embedding_type == "rope"
-            and not self.config.multi_latent_attention
-        ):
-            rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
-                inference_params,
-                self.decoder,
-                decoder_input,
-                self.config,
-                packed_seq_params,
-            )
-            rotary_pos_emb = self.rotary_pos_emb(
-                rotary_seq_len,
-                packed_seq=packed_seq_params is not None
-                and packed_seq_params.qkv_format == "thd",
-            )
+        (decoder_input, rotary_pos_emb) = (
+            preproc_output[:2]
+        )
 
         # Run decoder.
         hidden_states = self.decoder(
@@ -538,13 +355,106 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
             **(extra_block_kwargs or {}),
         )
 
-        if not self.post_process:
-            return hidden_states
+        return self._postprocess(
+            hidden_states=hidden_states,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            labels=labels,
+            rotary_pos_emb=rotary_pos_emb,
+            mtp_in_postprocess=self.mtp_process,
+            loss_mask=loss_mask,
+            decoder_input=decoder_input,
+            attention_mask=attention_mask,
+            inference_params=inference_params,
+            packed_seq_params=packed_seq_params,
+            runtime_gather_output=runtime_gather_output,
+            extra_block_kwargs=extra_block_kwargs,
+        )
+
+    def _postprocess(
+        self,
+        hidden_states,
+        input_ids,
+        position_ids,
+        labels,
+        rotary_pos_emb,
+        mtp_in_postprocess=None,
+        loss_mask=None,
+        decoder_input=None,
+        attention_mask=None,
+        inference_params=None,
+        packed_seq_params=None,
+        runtime_gather_output=None,
+        extra_block_kwargs=None,
+    ):
+        """Postprocesses decoder hidden states to generate logits or compute loss.
+
+        Applies Multi-Token Prediction if enabled, generates output logits through
+        the output layer, and computes language model loss when labels are provided.
+        """
 
         # logits and loss
         output_weight = None
+        mtp_loss = None
+
         if self.share_embeddings_and_output_weights:
             output_weight = self.shared_embedding_or_output_weight()
+
+        if mtp_in_postprocess:
+            hidden_states = self.mtp(
+                input_ids=input_ids,
+                position_ids=position_ids,
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                inference_params=inference_params,
+                rotary_pos_emb=rotary_pos_emb,
+                packed_seq_params=packed_seq_params,
+                embedding=self.embedding,
+                **(extra_block_kwargs or {}),
+            )
+
+        if not self.post_process:
+            return hidden_states
+        
+        if self.mtp_process:
+            mtp_labels = labels.clone()
+            hidden_states_list = torch.chunk(hidden_states, 1 + self.config.mtp_num_layers, dim=0)
+            hidden_states = hidden_states_list[0]
+            if loss_mask is None:
+                # if loss_mask is not provided, use all ones as loss_mask
+                loss_mask = torch.ones_like(mtp_labels)
+            for mtp_layer_number in range(self.config.mtp_num_layers):
+                # output
+                mtp_logits, _ = self.output_layer(
+                    hidden_states_list[mtp_layer_number + 1],
+                    weight=output_weight,
+                    runtime_gather_output=runtime_gather_output,
+                )
+                # Calc loss for the current Multi-Token Prediction (MTP) layers.
+                mtp_labels, _ = roll_tensor(mtp_labels, shifts=-1, dims=-1, cp_group=self.cp_group)
+                loss_mask, num_tokens = roll_tensor(
+                    loss_mask, shifts=-1, dims=-1, cp_group=self.cp_group
+                )
+                mtp_loss = self.compute_language_model_loss(mtp_labels, mtp_logits)
+                mtp_loss = loss_mask * mtp_loss
+                if self.training:
+                    MTPLossLoggingHelper.save_loss_to_tracker(
+                        torch.sum(mtp_loss) / num_tokens,
+                        mtp_layer_number,
+                        self.config.mtp_num_layers,
+                        avg_group=parallel_state.get_data_parallel_group(
+                            with_context_parallel=True
+                        ),
+                    )
+                mtp_loss_scale = self.config.mtp_loss_scaling_factor / self.config.mtp_num_layers
+                if self.config.calculate_per_token_loss:
+                    hidden_states = MTPLossAutoScaler.apply(
+                        hidden_states, mtp_loss_scale * mtp_loss
+                    )
+                else:
+                    hidden_states = MTPLossAutoScaler.apply(
+                        hidden_states, mtp_loss_scale * mtp_loss / num_tokens
+                    )
 
         logits, _ = self.output_layer(
             hidden_states,
@@ -571,32 +481,40 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
         # compute main model loss
         loss = self.compute_language_model_loss(labels, logits)
 
-        # compute mtp loss
-        if self.mtp_layers is not None and self.training:
-            loss = self._mtp_forward(
-                decoder_input=decoder_input,
-                ori_input_ids=ori_input_ids,
-                ori_labels=ori_labels,
-                position_ids=position_ids,
-                hidden_states=hidden_states,
-                attention_mask=attention_mask,
-                attn_mask_type=attn_mask_type,
-                rotary_pos_emb=rotary_pos_emb,
-                loss=loss,
-                inference_params=inference_params,
-                packed_seq_params=packed_seq_params,
-            )
-
         return loss
 
+    def shared_embedding_or_output_weight(self) -> Tensor:
+        """Gets the embedding weight or output logit weights when share input embedding and
+        output weights set to True or when use Multi-Token Prediction (MTP) feature.
+
+        Returns:
+            Tensor: During pre processing or MTP process it returns the input embeddings weight.
+            Otherwise, during post processing it returns the final output layers weight.
+        """
+        if self.pre_process or self.mtp_process:
+            # Multi-Token Prediction (MTP) need both embedding layer and output layer.
+            # So there will be both embedding layer and output layer in the mtp process stage.
+            # In this case, if share_embeddings_and_output_weights is True, the shared weights
+            # will be stored in embedding layer, and output layer will not have any weight.
+            assert hasattr(
+                self, 'embedding'
+            ), f"embedding is needed in this pipeline stage, but it is not initialized."
+            return self.embedding.word_embeddings.weight
+        elif self.post_process:
+            return self.output_layer.weight
+        return None
+    
+    
     def sharded_state_dict(
         self,
         prefix: str = "",
         sharded_offsets: tuple = (),
         metadata: Optional[Dict] = None,
     ) -> ShardedStateDict:
-        """Sharded state dict implementation for GPTModel backward-compatibility
-        (removing extra state).
+        """Sharded state dict implementation for GPTModel backward-compatibility.
+
+        Removing extra state.
+        Tie word embeddings and output layer in mtp process stage.
 
         Args:
             prefix (str): Module name prefix.
@@ -606,17 +524,38 @@ class DeepseekModelWithMTP(BaseMegatronLanuageModule):
         Returns:
             ShardedStateDict: sharded state dict for the GPTModel
         """
-        sharded_state_dict = super().sharded_state_dict(
-            prefix, sharded_offsets, metadata
-        )
-        output_layer_extra_state_key = f"{prefix}output_layer._extra_state"
+        sharded_state_dict = super().sharded_state_dict(prefix, sharded_offsets, metadata)
+        output_layer_extra_state_key = f'{prefix}output_layer._extra_state'
 
         # Old GPT checkpoints only stored the output layer weight key. So we remove the
         # _extra_state key but check that it doesn't contain any data anyway
         output_extra_state = sharded_state_dict.pop(output_layer_extra_state_key, None)
         assert not (
             output_extra_state and output_extra_state.data
-        ), f"Expected output layer extra state to be empty, got: {output_extra_state}"
+        ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
+
+        # Multi-Token Prediction (MTP) need both embedding layer and output layer in
+        # mtp process stage.
+        # If MTP is not placed in the pre processing stage, we need to maintain a copy of
+        # embedding layer in the mtp process stage and tie it to the embedding in the pre
+        # processing stage.
+        # Also, if MTP is not placed in the post processing stage, we need to maintain a copy
+        # of output layer in the mtp process stage and tie it to the output layer in the post
+        # processing stage.
+        if self.mtp_process and not self.pre_process:
+            emb_weight_key = f'{prefix}embedding.word_embeddings.weight'
+            emb_weight = self.embedding.word_embeddings.weight
+            tie_word_embeddings_state_dict(sharded_state_dict, emb_weight, emb_weight_key)
+        if self.mtp_process and not self.post_process:
+            # We only need to tie the output layer weight if share_embeddings_and_output_weights
+            # is False. Because if share_embeddings_and_output_weights is True, the shared weight
+            # will be stored in embedding layer, and output layer will not have any weight.
+            if not self.share_embeddings_and_output_weights:
+                output_layer_weight_key = f'{prefix}output_layer.weight'
+                output_layer_weight = self.output_layer.weight
+                tie_output_layer_state_dict(
+                    sharded_state_dict, output_layer_weight, output_layer_weight_key
+                )
 
         return sharded_state_dict
 

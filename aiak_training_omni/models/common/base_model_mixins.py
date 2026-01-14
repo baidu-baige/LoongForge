@@ -17,15 +17,16 @@ logger = logging.getLogger(__name__)
 from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.transformer.module import MegatronModule
+from megatron.core.process_groups_config import ProcessGroupCollection
 import torch.nn.functional as F
 from copy import deepcopy
 
 
-class BaseMegatronLanuageModule(LanguageModule):
+class BaseMegatronLanguageModule(LanguageModule):
     """Unified Base Class for Language Models"""
 
-    def __init__(self, config: AutoConfig, **kwargs):
-        super().__init__(config=config, **kwargs)
+    def __init__(self, config: AutoConfig, pg_collection: Optional[ProcessGroupCollection] = None, **kwargs):
+        super().__init__(config=config, pg_collection=pg_collection, **kwargs)
     
     def freeze(self):
         """Freeze model parameters during training to prevent them from being updated.

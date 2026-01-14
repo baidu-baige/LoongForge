@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from megatron.core.datasets.megatron_tokenizer import MegatronTokenizer
+from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
 from megatron.training.tokenizer.tokenizer import _vocab_size_with_padding
 
@@ -73,7 +73,7 @@ def _update_tokenizer_with_template(
 
 def build_tokenizer(
     args, chat_template: Optional["ChatTemplate"] = None
-) -> Optional[MegatronTokenizer]:
+) -> Optional[MegatronLegacyTokenizer]:
     """Build tokenizer and chat template if needed."""
     if args.tokenizer_type == "HFTokenizer":
         print_rank_0(f"> AIAK building {args.tokenizer_type} tokenizer ...", args.rank)

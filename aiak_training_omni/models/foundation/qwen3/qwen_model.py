@@ -14,7 +14,7 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
 )
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 from aiak_training_omni.models.common.base_model_mixins import (
-    BaseMegatronLanuageModule,
+    BaseMegatronLanguageModule,
 )
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
@@ -220,7 +220,7 @@ class Qwen3VLRotaryEmbedding(Qwen2VLRotaryEmbedding):
         return emb
 
 
-class Qwen3Model(BaseMegatronLanuageModule):
+class Qwen3Model(BaseMegatronLanguageModule):
     """Qwen3 Transformer language model.
 
     Args:
