@@ -12,10 +12,7 @@ from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.rerun_state_machine import get_rerun_state_machine
 
 from megatron.training import get_timers
-from megatron.training.utils import (
-    get_batch_on_this_cp_rank,
-    average_losses_across_data_parallel_group,
-)
+from megatron.training.utils import average_losses_across_data_parallel_group
 
 from aiak_training_omni.utils import (
     constants,
@@ -38,6 +35,7 @@ from aiak_training_omni.train.trainer_builder import register_model_trainer
 
 from .utils import (
     get_batch_on_this_tp_rank,
+    get_batch_on_this_cp_rank,
     get_dataset_blend_from_list,
     build_sft_cyclic_iterators,
     build_sft_data_collator,
