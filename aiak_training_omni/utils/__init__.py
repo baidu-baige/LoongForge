@@ -7,6 +7,7 @@ from .utils import (
     is_te_min_version,
     is_torch_min_version,
     get_device_arch_version,
+    convert_custom_pipeline_to_layout,
 )
 
 from .global_vars import (
