@@ -161,7 +161,6 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
             x,
             rotary_pos_emb=rotary_pos_emb,
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
         return x, None, []
@@ -289,7 +288,6 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
             ],
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 

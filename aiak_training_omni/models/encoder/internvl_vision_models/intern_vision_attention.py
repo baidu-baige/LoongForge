@@ -244,7 +244,6 @@ class InternSelfAttention(Attention):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         key_value_states=None,
         inference_params=None,
         rotary_pos_emb=None,
@@ -314,7 +313,6 @@ class InternSelfAttention(Attention):
             rotary_pos_emb,
             rotary_pos_cos,
             rotary_pos_sin,
-            attn_mask_type,
             sequence_len_offset,
         )
 

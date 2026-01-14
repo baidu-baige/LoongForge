@@ -140,7 +140,6 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
         s_attn_mask=None,
         t_attn_mask=None,
         attention_mask=None,
-        attn_mask_type=None,
         context=None,
         context_mask=None,
         rotary_pos_emb=None,

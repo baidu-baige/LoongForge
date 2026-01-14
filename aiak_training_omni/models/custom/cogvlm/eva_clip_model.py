@@ -149,7 +149,7 @@ class EVA2CLIPModel(VisionModule):
             x.contiguous()
         )  # contiguous() call required as `permute` can sparsify the tensor and this breaks pipelining
 
-        x = self.decoder(x, attention_mask=None, attn_mask_type=AttnMaskType.no_mask)
+        x = self.decoder(x, attention_mask=None)
         x = x.permute(1, 0, 2)  # [s, b, h] -> [b, s, h]
         x = x.contiguous()
 

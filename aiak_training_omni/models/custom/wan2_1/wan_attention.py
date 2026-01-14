@@ -181,7 +181,6 @@ class WanSelfAttention(SelfAttention):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         key_value_states=None,
         inference_params=None,
         rotary_pos_emb=None,
@@ -227,7 +226,6 @@ class WanSelfAttention(SelfAttention):
                 rotary_pos_emb,
                 rotary_pos_cos,
                 rotary_pos_sin,
-                attn_mask_type,
                 sequence_len_offset,
             )
         )
@@ -412,7 +410,6 @@ class WanCrossAttention(CrossAttention):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         key_value_states=None,
         inference_params=None,
         rotary_pos_emb=None,
@@ -454,7 +451,6 @@ class WanCrossAttention(CrossAttention):
                 rotary_pos_emb,
                 rotary_pos_cos,
                 rotary_pos_sin,
-                attn_mask_type,
                 sequence_len_offset,
             )
         )

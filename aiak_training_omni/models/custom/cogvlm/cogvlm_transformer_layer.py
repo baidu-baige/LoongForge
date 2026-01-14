@@ -92,7 +92,6 @@ class TransformerLayerCogvlm(TransformerLayer):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         context=None,
         context_mask=None,
         rotary_pos_emb=None,
@@ -119,7 +118,6 @@ class TransformerLayerCogvlm(TransformerLayer):
         attention_output_with_bias = self.self_attention(
             input_layernorm_output,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=packed_seq_params,
@@ -153,7 +151,6 @@ class TransformerLayerCogvlm(TransformerLayer):
         attention_output_with_bias = self.cross_attention(
             pre_cross_attn_layernorm_output,
             attention_mask=context_mask,
-            attn_mask_type=attn_mask_type,
             key_value_states=context,
             inference_params=inference_params,
             **kwargs,

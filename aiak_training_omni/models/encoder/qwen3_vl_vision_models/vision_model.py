@@ -171,7 +171,6 @@ class Qwen3VisionModel(Qwen2VisionModel):
             ) for i in range(self.config.num_layers)],
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
             deepstack_visual_indexes=self.deepstack_visual_indexes,
             deepstack_merger_list=self.deepstack_merger_list
         )

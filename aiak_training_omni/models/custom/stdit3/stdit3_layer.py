@@ -161,7 +161,6 @@ class STDiT3Block(MegatronModule):
         T,
         S,
         attention_mask=None,
-        attn_mask_type=None,
         context=None,
         context_mask=None,
         timestep=None,
@@ -192,9 +191,6 @@ class STDiT3Block(MegatronModule):
         attention_output, attention_bias = self.self_attention(
             hidden_states,
             attention_mask=attention_mask,
-            attn_mask_type=(
-                AttnMaskType.padding if attention_mask.any() else AttnMaskType.no_mask
-            ),
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=packed_seq_params,
@@ -220,11 +216,6 @@ class STDiT3Block(MegatronModule):
         attention_output_with_bias = self.cross_attention(
             hidden_states,
             attention_mask=context_mask,
-            attn_mask_type=(
-                AttnMaskType.padding
-                if context_mask[0].any() or context_mask[1].any()
-                else AttnMaskType.no_mask
-            ),
             key_value_states=context,
             inference_params=inference_params,
         )

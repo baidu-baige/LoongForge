@@ -84,7 +84,6 @@ class TransformerLayerIntern(TransformerLayer):
             self,
             hidden_states,
             attention_mask=None,
-            attn_mask_type=None,
             context=None,
             context_mask=None,
             rotary_pos_emb=None,
@@ -113,7 +112,6 @@ class TransformerLayerIntern(TransformerLayer):
         attention_output, attention_bias = self.self_attention(
             input_layernorm_output,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             rotary_pos_cos=rotary_pos_cos,
@@ -148,7 +146,6 @@ class TransformerLayerIntern(TransformerLayer):
         attention_output_with_bias = self.cross_attention(
             pre_cross_attn_layernorm_output,
             attention_mask=context_mask,
-            attn_mask_type=attn_mask_type,
             key_value_states=context,
             inference_params=inference_params,
         )

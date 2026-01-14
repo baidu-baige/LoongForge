@@ -37,7 +37,6 @@ class TransformerBlock(MegatronTransformerBlock):
         self,
         hidden_states: Tensor,
         attention_mask: Tensor,
-        attn_mask_type: AttnMaskType = None,
         context: Tensor = None,
         context_mask: Tensor = None,
         rotary_pos_emb: Tensor = None,
@@ -97,7 +96,6 @@ class TransformerBlock(MegatronTransformerBlock):
                 hidden_states = self._checkpointed_forward(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
-                    attn_mask_type=attn_mask_type,
                     context=context,
                     context_mask=context_mask,
                     rotary_pos_emb=rotary_pos_emb,
@@ -118,7 +116,6 @@ class TransformerBlock(MegatronTransformerBlock):
                             hidden_states, context = layer(
                                 hidden_states=hidden_states,
                                 attention_mask=attention_mask,
-                                attn_mask_type=attn_mask_type,
                                 context=context,
                                 context_mask=context_mask,
                                 rotary_pos_emb=rotary_pos_emb,
@@ -178,7 +175,6 @@ class TransformerBlock(MegatronTransformerBlock):
         self,
         hidden_states: Tensor,
         attention_mask: Tensor,
-        attn_mask_type: AttnMaskType,
         context: Tensor,
         context_mask: Tensor,
         rotary_pos_emb: Tensor,
@@ -188,21 +184,14 @@ class TransformerBlock(MegatronTransformerBlock):
         **kwargs,
     ):
         """Forward method with activation checkpointing."""
-        if attn_mask_type is not None:
-            attn_mask_type = torch.tensor([attn_mask_type.value], dtype=torch.int)
-
         def custom(start: int, end: int):
             def custom_forward(
                 hidden_states,
                 attention_mask,
-                attn_mask_type,
                 context,
                 context_mask,
                 rotary_pos_emb,
             ):
-                if attn_mask_type is not None:
-                    attn_mask_type = AttnMaskType(attn_mask_type.item())
-
                 for index in range(start, end):
                     layer = self._get_layer(index)
                     inner_fp8_context = (
@@ -214,7 +203,6 @@ class TransformerBlock(MegatronTransformerBlock):
                         hidden_states, context = layer(
                             hidden_states=hidden_states,
                             attention_mask=attention_mask,
-                            attn_mask_type=attn_mask_type,
                             context=context,
                             context_mask=context_mask,
                             rotary_pos_emb=rotary_pos_emb,
@@ -239,7 +227,6 @@ class TransformerBlock(MegatronTransformerBlock):
                     parallel_state.get_tensor_model_parallel_group(),
                     hidden_states,
                     attention_mask,
-                    attn_mask_type,
                     context,
                     context_mask,
                     rotary_pos_emb,
@@ -251,7 +238,6 @@ class TransformerBlock(MegatronTransformerBlock):
                     self.config.distribute_saved_activations,
                     hidden_states,
                     attention_mask,
-                    attn_mask_type,
                     context,
                     context_mask,
                     rotary_pos_emb,
@@ -293,7 +279,6 @@ class TransformerBlock(MegatronTransformerBlock):
                     hidden_states, context = custom(layer_idx, layer_idx + 1)(
                         hidden_states,
                         attention_mask,
-                        attn_mask_type,
                         context,
                         context_mask,
                         rotary_pos_emb,

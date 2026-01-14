@@ -164,7 +164,6 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         s_attn_mask,
         t_attn_mask,
         attention_mask=None,
-        attn_mask_type=None,
         context=None,
         context_mask=None,
         timestep=None,
@@ -195,9 +194,6 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         spatial_attention_output, spatial_attention_bias = self.spatial_self_attention(
             hidden_states,
             attention_mask=s_attn_mask,
-            attn_mask_type=(
-                AttnMaskType.padding if s_attn_mask.any() else AttnMaskType.no_mask
-            ),
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
         )
@@ -233,9 +229,6 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
             self.temporal_self_attention(
                 pos_embed_hidden_states,
                 attention_mask=t_attn_mask,
-                attn_mask_type=(
-                    AttnMaskType.padding if t_attn_mask.any() else AttnMaskType.no_mask
-                ),
                 inference_params=inference_params,
                 packed_seq_params=packed_seq_params,
             )
@@ -261,11 +254,6 @@ class STDiTLayer(MegatronModule, BaseTransformerLayer):
         attention_output_with_bias = self.cross_attention(
             hidden_states,
             attention_mask=context_mask,
-            attn_mask_type=(
-                AttnMaskType.padding
-                if context_mask[0].any() or context_mask[1].any()
-                else AttnMaskType.no_mask
-            ),
             key_value_states=context,
             inference_params=inference_params,
         )

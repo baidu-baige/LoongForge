@@ -197,17 +197,16 @@ class InternVisionModel(BaseMegatronVisionModule):
             hidden_states = hidden_states.transpose(0, 1).contiguous()  # [b, s, h] -> [s, b, h]
 
         attention_mask = None
-        attn_mask_type = AttnMaskType.no_mask
 
         if self.config.sequence_parallel:
             hidden_states = tensor_parallel.scatter_to_sequence_parallel_region(hidden_states)
             #hidden_states = hidden_states.transpose(0, 1).contiguous()  # [b, s, h] -> [s, b, h]
-            hidden_states = self.encoder(hidden_states, attention_mask=attention_mask, attn_mask_type=attn_mask_type)
+            hidden_states = self.encoder(hidden_states, attention_mask=attention_mask)
             #hidden_states = hidden_states.transpose(0, 1).contiguous()
             hidden_states = tensor_parallel.gather_from_sequence_parallel_region(hidden_states)
             hidden_states = hidden_states.transpose(0, 1).contiguous()
         else:
-            hidden_states = self.encoder(hidden_states, attention_mask=attention_mask, attn_mask_type=attn_mask_type)
+            hidden_states = self.encoder(hidden_states, attention_mask=attention_mask)
         hidden_states = hidden_states.transpose(0, 1).contiguous()  # [s, b, h] -> [b, s, h]
 
         last_hidden_state = hidden_states

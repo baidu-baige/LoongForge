@@ -200,7 +200,6 @@ class LLaMAModel(BaseMegatronLanuageModule):
         input_ids: Tensor,
         position_ids: Tensor,
         attention_mask: Tensor,
-        attn_mask_type: Optional[AttnMaskType] = None,
         decoder_input: Tensor = None,
         labels: Tensor = None,
         inference_params: InferenceParams = None,
@@ -256,7 +255,6 @@ class LLaMAModel(BaseMegatronLanuageModule):
         hidden_states = self.decoder(
             hidden_states=decoder_input,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=packed_seq_params,

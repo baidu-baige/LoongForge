@@ -61,7 +61,6 @@ def get_batch_on_this_tp_rank(data_iterator):
     max_lengths = tensor_parallel.broadcast_data(["max_lengths"], data, torch.int32)["max_lengths"]
     position_ids = tensor_parallel.broadcast_data(["position_ids"], data, torch.int64)["position_ids"]
     loss_mask = tensor_parallel.broadcast_data(["loss_mask"], data, torch.int64)["loss_mask"]
-    attn_mask_type_id = tensor_parallel.broadcast_data(["attn_mask_type_id"], data, torch.int64)["attn_mask_type_id"]
     attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)["attn_mask"]
 
     has_video = bool((tokens == VIDEO_TOKEN_ID).any())
@@ -83,7 +82,6 @@ def get_batch_on_this_tp_rank(data_iterator):
         video_grid_thw = tensor_parallel.broadcast_data(
             ["video_grid_thw"], data, torch.int32
         )["video_grid_thw"]
-    attn_mask_type = AttnMaskType(int(attn_mask_type_id.item()))
 
     tokens = tokens.cuda(non_blocking=True)
     labels = labels.cuda(non_blocking=True)
@@ -128,7 +126,6 @@ def get_batch_on_this_tp_rank(data_iterator):
         "max_lengths": max_lengths,
         "position_ids": position_ids,
         "loss_mask": loss_mask,
-        "attn_mask_type": attn_mask_type,
         "packed_seq_params": packed_seq_params,
     }
 
@@ -176,7 +173,6 @@ def forward_step(data_iterator, model):
             max_lengths,
             position_ids,
             loss_mask,
-            attn_mask_type,
             packed_seq_params,
         ) = get_batch(data_iterator)
 
@@ -196,7 +192,6 @@ def forward_step(data_iterator, model):
             input_ids=tokens,
             position_ids=position_ids,
             attention_mask=attn_mask,
-            attn_mask_type=attn_mask_type,
             labels=labels,
             packed_seq_params=packed_seq_params,
         )

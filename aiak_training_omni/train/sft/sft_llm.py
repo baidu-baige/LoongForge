@@ -53,9 +53,6 @@ def get_batch(data_iterator):
     # get batches based on the TP rank you are on
     batch = get_batch_on_this_tp_rank(data_iterator)
 
-    # get_batch_on_this_cp_rank only support tensor type, pop first
-    attn_mask_type = batch.pop("attn_mask_type")
-
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
 
@@ -65,7 +62,6 @@ def get_batch(data_iterator):
         batch["loss_mask"],
         batch["position_ids"],
         batch["attention_mask"],
-        attn_mask_type,
         batch["packed_seq_params"],
     )
 
@@ -185,7 +181,6 @@ def forward_step(data_iterator, model):
             loss_mask,
             position_ids,
             attention_mask,
-            attn_mask_type,
             packed_seq_params,
         ) = get_batch(data_iterator)
 
@@ -196,7 +191,6 @@ def forward_step(data_iterator, model):
             input_ids=tokens,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             labels=labels,
             packed_seq_params=packed_seq_params,
         )

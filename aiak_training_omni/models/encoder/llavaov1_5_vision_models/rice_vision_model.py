@@ -159,7 +159,6 @@ class RiceViTModel(Qwen2VisionModel):
             ],
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:-pad_len if pad_len > 0 else None, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 
