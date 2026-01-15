@@ -811,4 +811,14 @@ def _add_extra_parallel_args(parser):
         action="store_true",
         help="Use the parallel configuration in the model configuration file.",
     )
+    # NOTE: --custom-pipeline-layers and --custom-virtual-pipeline-layers will be deprecated in the future.
+    group.add_argument('--custom-pipeline-layers', type=str, default=None,
+                       help='DEPRECATED. Use --pipeline-model-parallel-layout.'
+                       'Add by aiak for pp layer imbalance.'
+                       'For example 19,20,20,21. 19 for stage0 layers, 20 for stage1 layers...')
+    group.add_argument('--custom-virtual-pipeline-layers', type=str, default=None,
+                       help='DEPRECATED. Use --pipeline-model-parallel-layout.'
+                       'Add by aiak for virtual pipeline layer imbalance.'
+                       'For example 19,20,20,21. If we have two virtual chunks in one pp stage, '
+                       '19 for stage0 virtual chunk0 layers, 20 for stage1 virtual chunk0 layers...')
     return parser

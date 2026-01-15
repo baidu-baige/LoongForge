@@ -9,7 +9,7 @@ from megatron.core.transformer.enums import AttnBackend
 
 from aiak_training_omni.tokenizer import get_default_tokenizer
 from aiak_training_omni.utils import (constants, get_device_arch_version,
-                                      is_torch_min_version, print_rank_0)
+                                      is_torch_min_version, print_rank_0, convert_custom_pipeline_to_layout)
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
 
 
@@ -258,6 +258,77 @@ def _validata_extra_parallel_args(args):
                 "Disabling tp comm overlap since fp16 is not supported on GPU",
                 args.rank,
             )
+    
+    # Uneven virtual pipeline parallelism
+    assert not (
+        args.custom_pipeline_layers is not None
+        and args.pipeline_model_parallel_layout is not None
+    ), 'custom_pipeline_layers and pipeline_model_parallel_layout cannot be set at the same time'
+
+    # convert custom_pipeline_layers to pipeline_model_parallel_layout
+    if args.custom_pipeline_layers is not None:
+        assert args.decoder_first_pipeline_num_layers is None and args.decoder_last_pipeline_num_layers is None, \
+            'The layer partition mode conflicts.'
+
+        pp_splits = []
+        if args.custom_pipeline_layers.find(',') != -1:
+            pp_splits = [int(s) for s in args.custom_pipeline_layers.split(',')]
+
+        assert len(pp_splits) == args.pipeline_model_parallel_size, (
+            f"the number of elements in --custom-pipeline-layers must be equal to "
+            f"pipeline size {args.pipeline_model_parallel_size}")
+
+        assert args.num_layers == sum(pp_splits), \
+            f"the sum of --custom-pipeline-layers must be equal to {args.num_layers}"
+
+        if args.num_virtual_stages_per_pipeline_rank is not None:
+            assert all(x >= args.num_virtual_stages_per_pipeline_rank for x in pp_splits), \
+                f"when num_virtual_stages_per_pipeline_rank is {args.num_virtual_stages_per_pipeline_rank}, \
+                each element in custom_pipeline_layers must be >= num_virtual_stages_per_pipeline_rank"
+
+        args.pipeline_model_parallel_layout = convert_custom_pipeline_to_layout(
+            custom_pipeline_layers=args.custom_pipeline_layers,
+            num_virtual_stages_per_pipeline_rank=args.num_virtual_stages_per_pipeline_rank,
+            mtp_num_layers=args.mtp_num_layers,
+        )
+
+        # To pass the megatron validation
+        if args.num_virtual_stages_per_pipeline_rank is not None:
+            args.num_virtual_stages_per_pipeline_rank = None
+
+    # add aiak for custom virtual pipeline layers check
+    if args.custom_virtual_pipeline_layers is not None:
+        assert args.pipeline_model_parallel_size > 1, \
+            "custom_virtual_pipeline_layers is only supported when pipeline_model_parallel_size > 1"
+        assert args.num_virtual_stages_per_pipeline_rank is not None, \
+                "num_virtual_stages_per_pipeline_rank should be set when custom_virtual_pipeline_layers is set"
+        assert args.custom_pipeline_layers is None, \
+                "custom_pipeline_layers should not be set when custom_virtual_pipeline_layers is set"
+        
+        custom_vpp_splits = []
+        if args.custom_virtual_pipeline_layers.find(',') != -1:
+            custom_vpp_splits = [int(s) for s in args.custom_virtual_pipeline_layers.split(',') if s.strip()]
+        
+        assert sum(custom_vpp_splits) == args.num_layers, (
+            f"the sum of --custom-virtual-pipeline-layers must be equal to {args.num_layers}"
+        )
+        
+        assert len(custom_vpp_splits) == args.pipeline_model_parallel_size * \
+            args.num_virtual_stages_per_pipeline_rank, (
+            f"the number of elements in --custom-virtual-pipeline-layers must be equal to "
+            f"pipeline size {args.pipeline_model_parallel_size} * num_virtual_stages_per_pipeline_rank "
+            f"{args.num_virtual_stages_per_pipeline_rank}"
+        )
+
+        args.pipeline_model_parallel_layout = convert_custom_pipeline_to_layout(
+            custom_virtual_pipeline_layers=args.custom_virtual_pipeline_layers,
+            num_virtual_stages_per_pipeline_rank=args.num_virtual_stages_per_pipeline_rank,
+            mtp_num_layers=args.mtp_num_layers,
+        )
+
+        # To pass the megatron validation
+        if args.num_virtual_stages_per_pipeline_rank is not None:
+            args.num_virtual_stages_per_pipeline_rank = None
 
 
 def _check_arg_is_not_none(args, arg):
