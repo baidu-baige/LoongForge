@@ -31,23 +31,25 @@ class HuggingfaceMoe(HuggingfaceBase):
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
         weight, bias, weight_scale = c_ckpt.get(common_key)
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose = self.get_hf_name_and_args(self.name_map[name])
         if name == MOE_EXPERT_H_TO_4H:
-            if expert_id is None:
+            if expert_id is None or is_dict_for_expert:
                 hf_prefix_path = f"{self.transformer}.{layer_prefix}.{layer_id}.{self.name_map[expert_name]}"
             else:
                 hf_prefix_path = f"{self.transformer}.{layer_prefix}.{layer_id}.{self.name_map[expert_name]}.{expert_id}"
-            self.update_h_to_4h(h_dict, name, hf_prefix_path, weight, bias, weight_scale)
+            self.update_h_to_4h(h_dict, name, hf_prefix_path, weight, bias, weight_scale, expert_id=expert_id)
         else:
             # MOE_EXPERT_4H_TO_H
-            if expert_id is None:
+            weight = weight.t() if weight is not None and need_transpose else weight
+            if expert_id is None or is_dict_for_expert:
                 hf_path = f"{self.transformer}.{layer_prefix}.{layer_id}."\
-                        f"{self.name_map[expert_name]}{self.name_map[name]}"
+                        f"{self.name_map[expert_name]}{hf_name}"
             else:
                 hf_path = f"{self.transformer}.{layer_prefix}.{layer_id}."\
-                        f"{self.name_map[expert_name]}.{expert_id}.{self.name_map[name]}"
-            hf_weight_path = f"{hf_path}.{WEIGHT}"
+                        f"{self.name_map[expert_name]}.{expert_id}.{hf_name}"
+            hf_weight_path = f"{hf_path}.{WEIGHT}" if not is_direct_name else hf_path
             bias_name = f"{name}.{BIAS}"
-            if expert_id is None:
+            if expert_id is None or is_dict_for_expert:
                 hf_bias_path = f"{self.transformer}.{layer_prefix}.{layer_id}."\
                         f"{self.name_map[expert_name]}.{self.name_map[bias_name]}" \
                         if bias_name in self.name_map else f"{hf_path}.{BIAS}"
@@ -57,7 +59,23 @@ class HuggingfaceMoe(HuggingfaceBase):
                         if bias_name in self.name_map else f"{hf_path}.{BIAS}"
             hf_weight_scale_path = f"{hf_path}.{WEIGHT_SCALE}"
             self.update_tensor(h_dict, hf_weight_path, weight, hf_bias_path=hf_bias_path, bias=bias,
-                    hf_weight_scale_path=hf_weight_scale_path, weight_scale=weight_scale)
+                    hf_weight_scale_path=hf_weight_scale_path, weight_scale=weight_scale,
+                    expert_id=expert_id, is_dict_for_expert=is_dict_for_expert)
+
+    def update_tensor(self, h_dict, hf_weight_path, weight, hf_bias_path=None, bias=None,
+                      hf_weight_scale_path=None, weight_scale=None, expert_id=None, is_dict_for_expert=False):
+        if weight is None:
+            return
+        if is_dict_for_expert:
+            assert expert_id is not None, "expert_id must be specified when is_dict_for_expert"
+            h_dict[hf_weight_path] = {} if hf_weight_path not in h_dict else h_dict[hf_weight_path]
+            h_dict[hf_weight_path][expert_id] = weight
+        else:
+            h_dict[hf_weight_path] = weight
+        if bias is not None and hf_bias_path is not None:
+            h_dict[hf_bias_path] = bias
+        if weight_scale is not None and hf_weight_scale_path is not None:
+            h_dict[hf_weight_scale_path] = weight_scale
 
     # ====== from hf to common ========
 
@@ -66,23 +84,24 @@ class HuggingfaceMoe(HuggingfaceBase):
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose = self.get_hf_name_and_args(self.name_map[name])
         if name == MOE_EXPERT_H_TO_4H:
-            if expert_id is None:
+            if expert_id is None or is_dict_for_expert:
                 hf_prefix_path = f"{self.transformer}.{layer_prefix}.{layer_id}.{self.name_map[expert_name]}"
             else:
                 hf_prefix_path = f"{self.transformer}.{layer_prefix}.{layer_id}.{self.name_map[expert_name]}.{expert_id}"
-            weight, bias, weight_scale = self.get_h_to_4h_from_state_dict(name, h_dict, hf_prefix_path)
+            weight, bias, weight_scale = self.get_h_to_4h_from_state_dict(name, h_dict, hf_prefix_path, expert_id=expert_id)
         else:
             # MOE_EXPERT_4H_TO_H
-            if expert_id is None:
+            if expert_id is None or is_dict_for_expert:
                 hf_path = f"{self.transformer}.{layer_prefix}.{layer_id}."\
-                        f"{self.name_map[expert_name]}.{self.name_map[name]}"
+                        f"{self.name_map[expert_name]}.{hf_name}"
             else:
                 hf_path = f"{self.transformer}.{layer_prefix}.{layer_id}."\
-                        f"{self.name_map[expert_name]}.{expert_id}.{self.name_map[name]}"
-            hf_weight_path = f"{hf_path}.{WEIGHT}"
+                        f"{self.name_map[expert_name]}.{expert_id}.{hf_name}"
+            hf_weight_path = f"{hf_path}.{WEIGHT}" if not is_direct_name else hf_path
             bias_name = f"{name}.{BIAS}"
-            if expert_id is None:
+            if expert_id is None or is_dict_for_expert:
                 hf_bias_path = f"{self.transformer}.{layer_prefix}.{layer_id}."\
                         f"{self.name_map[expert_name]}.{self.name_map[bias_name]}" \
                         if bias_name in self.name_map else f"{hf_path}.{BIAS}"
@@ -92,5 +111,18 @@ class HuggingfaceMoe(HuggingfaceBase):
                         if bias_name in self.name_map else f"{hf_path}.{BIAS}"
             hf_weight_scale_path = f"{hf_path}.{WEIGHT_SCALE}"
             weight, bias, weight_scale = self.get_common_from_state_dict(
-                    h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
+                    h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path,
+                    expert_id=expert_id, is_dict_for_expert=is_dict_for_expert)
+            weight = weight.t() if weight is not None and need_transpose else weight
         c_ckpt.set(common_key, weight, bias, weight_scale)
+
+    def get_common_from_state_dict(self, h_dict, hf_weight_path, hf_bias_path=None, hf_weight_scale_path=None,
+                                   expert_id=None, is_dict_for_expert=False):
+        if is_dict_for_expert:
+            assert expert_id is not None, "expert_id must be specified when is_dict_for_expert"
+            weight = h_dict[hf_weight_path][expert_id] if hf_weight_path in h_dict else None
+        else:
+            weight = h_dict[hf_weight_path] if hf_weight_path in h_dict else None
+        bias = h_dict[hf_bias_path] if hf_bias_path in h_dict else None
+        weight_scale = h_dict[hf_weight_scale_path] if hf_weight_scale_path in h_dict else None
+        return weight, bias, weight_scale

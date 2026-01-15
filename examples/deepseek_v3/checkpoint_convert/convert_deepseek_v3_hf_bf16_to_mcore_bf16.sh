@@ -20,7 +20,6 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --convert_file $CONVERT_FILE \
     --tensor_model_parallel_size=8 \
     --pipeline_model_parallel_size=8 \
-    --num_experts=256 \
     --expert_parallel_size=32 \
     --expert_tensor_parallel_size=1 \
     --megatron_path=$MEGATRON_PATH \

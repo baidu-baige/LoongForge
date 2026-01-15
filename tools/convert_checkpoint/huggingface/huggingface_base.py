@@ -30,7 +30,9 @@ from convert_checkpoint.common.common_checkpoint import (
     LAYER_PREFIX,
     MOE_SHARED_EXPERT,
     LAYER_NAME,
-    LAYER_IS_DIRECT_NAME
+    LAYER_IS_DIRECT_NAME,
+    LAYER_IS_DICT_FOR_EXPERT,
+    LAYER_NEED_TRANSPOSE
 )
 
 
@@ -67,10 +69,14 @@ class HuggingfaceBase:
         if isinstance(obj, dict) or isinstance(obj, DictConfig):
             hf_name = obj[LAYER_NAME]
             is_direct_name = obj[LAYER_IS_DIRECT_NAME] if LAYER_IS_DIRECT_NAME in obj else False
+            is_dict_for_expert = obj.get(LAYER_IS_DICT_FOR_EXPERT, False)
+            need_transpose = obj.get(LAYER_NEED_TRANSPOSE, False)
         else:
             hf_name = obj
             is_direct_name = False
-        return hf_name, is_direct_name
+            is_dict_for_expert = False
+            need_transpose = False
+        return hf_name, is_direct_name, is_dict_for_expert, need_transpose
 
     #========from commmon to hf===========
     def common_to_hf(self, name, c_ckpt, h_dict, layer_id=None, layer_prefix=None, expert_name=None):
@@ -86,7 +92,7 @@ class HuggingfaceBase:
                     f"mcore args.use_rotary_position_embeddings is required to be set to True \
                     since we capture the rotary_emb op"
 
-        hf_name, is_direct_name = self.get_hf_name_and_args(self.name_map[name])
+        hf_name, is_direct_name, _, _ = self.get_hf_name_and_args(self.name_map[name])
         if layer_id is None:
             if is_direct_name:
                 hf_weight_path = hf_name
@@ -199,10 +205,11 @@ class HuggingfaceBase:
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
 
-    def update_h_to_4h(self, h_dict, name, hf_prefix_path, weight, bias, weight_scale):
+    def update_h_to_4h(self, h_dict, name, hf_prefix_path, weight, bias, weight_scale, expert_id=None):
         if weight is None:
             return
-        hf_name = self.name_map[name]
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose = self.get_hf_name_and_args(self.name_map[name])
+        weight = weight.t() if need_transpose else weight
         names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = torch.chunk(weight, len(names), dim=0)
         bias_list = torch.chunk(bias, len(names), dim=0) if bias is not None else None
@@ -210,7 +217,13 @@ class HuggingfaceBase:
 
         for i in range(len(names)):
             hf_path = f"{hf_prefix_path}.{names[i]}"
-            h_dict[f"{hf_path}.{WEIGHT}"] = weight_list[i] if weight_list is not None else None
+            hf_weight_path = f"{hf_path}.{WEIGHT}" if not is_direct_name else hf_path
+            if is_dict_for_expert:
+                assert expert_id is not None, "expert_id must be specified when is_dict_for_expert"
+                h_dict[hf_weight_path] = {} if hf_weight_path not in h_dict else h_dict[hf_weight_path]
+                h_dict[hf_weight_path][expert_id] = weight_list[i] if weight_list is not None else None
+            else:
+                h_dict[hf_weight_path] = weight_list[i] if weight_list is not None else None
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
             if weight_scale_list is not None:
@@ -225,7 +238,7 @@ class HuggingfaceBase:
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
-            hf_name, is_direct_name = self.get_hf_name_and_args(self.name_map[name])
+            hf_name, is_direct_name, _, _ = self.get_hf_name_and_args(self.name_map[name])
         weight = None
         bias = None
         weight_scale = None
@@ -241,7 +254,7 @@ class HuggingfaceBase:
                 weight, bias, weight_scale = self.get_common_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
             if name == WORD_EMBEDDINGS_FOR_HEAD and weight is None and WORD_EMBEDDINGS in self.name_map:
-                hf_name, _ = self.get_hf_name_and_args(self.name_map[WORD_EMBEDDINGS])
+                hf_name, _, _, _ = self.get_hf_name_and_args(self.name_map[WORD_EMBEDDINGS])
                 hf_weight_path = f"{hf_name}.{WEIGHT}"
                 weight, bias, weight_scale = self.get_common_from_state_dict(h_dict, hf_weight_path)
         else:
@@ -335,26 +348,33 @@ class HuggingfaceBase:
 
         return value
 
-    def get_h_to_4h_from_state_dict(self, name, h_dict, hf_prefix_path):
-        hf_name = self.name_map[name]
+    def get_h_to_4h_from_state_dict(self, name, h_dict, hf_prefix_path, expert_id=None):
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose = self.get_hf_name_and_args(self.name_map[name])
         hf_names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = []
         bias_list = []
         weight_scale_list = []
         for hf_name in hf_names:
             hf_path= f"{hf_prefix_path}.{hf_name}"
-            hf_weight_name = f"{hf_path}.{WEIGHT}"
-            hf_bias_name = f"{hf_path}.{BIAS}"
+            hf_weight_path = f"{hf_path}.{WEIGHT}" if not is_direct_name else hf_path
+            hf_bias_path = f"{hf_path}.{BIAS}"
             if f"{name}.{BIAS}" in self.name_map:
-                hf_bias_name = self.name_map[f"{name}.{BIAS}"]
-            hf_weight_scale_name = f"{hf_path}.{WEIGHT_SCALE}"
-            if hf_weight_name in h_dict:
-                weight_list.append(h_dict[hf_weight_name])
-            if hf_bias_name in h_dict:
-                bias_list.append(h_dict[hf_bias_name])
-            if hf_weight_scale_name in h_dict:
-                weight_scale_list.append(h_dict[hf_weight_scale_name])
+                hf_bias_path = self.name_map[f"{name}.{BIAS}"]
+            hf_weight_scale_path = f"{hf_path}.{WEIGHT_SCALE}"
+            if hf_weight_path in h_dict:
+                if is_dict_for_expert:
+                    assert expert_id is not None, "expert_id must be specified when is_dict_for_expert is True"
+                    weight = h_dict[hf_weight_path][expert_id]
+                else:
+                    weight = h_dict[hf_weight_path]
+                weight_list.append(weight)
+            if hf_bias_path in h_dict:
+                bias_list.append(h_dict[hf_bias_path])
+            if hf_weight_scale_path in h_dict:
+                weight_scale_list.append(h_dict[hf_weight_scale_path])
         weight = torch.cat(weight_list, dim=0) if len(weight_list) > 0 else None
+        if need_transpose and weight is not None:
+            weight = weight.t()
         bias = torch.cat(bias_list, dim=0) if len(bias_list) > 0 else None
         weight_scale = torch.cat(weight_scale_list, dim=0) if len(weight_scale_list) > 0 else None
         return weight, bias, weight_scale

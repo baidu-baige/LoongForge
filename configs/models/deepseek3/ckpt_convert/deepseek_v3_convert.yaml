@@ -16,6 +16,8 @@ args:
     num_key_value_heads: ${module.num_query_groups}
     vocab_size: ${module.vocab_size_in_config_file}
     num_experts: ${module.num_experts}
+    num_nextn_predict_layers: ${module.num_nextn_predict_layers}
+
   mcore:
     untie_embeddings_and_output_weights: true
     add_embedding_padding: true

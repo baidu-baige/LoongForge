@@ -45,7 +45,6 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --convert_file $FOUNDATION_CONVERT_FILE \
     --tensor_model_parallel_size=$DTP \
     --pipeline_model_parallel_size=$PP \
-    --num_experts=128 \
     --expert_parallel_size=$EP \
     --expert_tensor_parallel_size=$Expert_TP \
     --load_ckpt_path=$LOAD \

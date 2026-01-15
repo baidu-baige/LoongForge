@@ -7,6 +7,7 @@ ffn_hidden_size: 18432
 num_attention_heads: 128
 num_query_groups: 128
 num_experts: 256
+num_nextn_predict_layers: 1
 moe_ffn_hidden_size: 2048
 moe_shared_expert_intermediate_size: 2048
 q_lora_rank: 1536

@@ -110,6 +110,8 @@ LAYER_IS_LAYERNORM = "is_layernorm"
 LAYER_IS_FP8 = "fp8"
 LAYER_FP8_IGNORE_TP = "fp8_ignore_tp"
 LAYER_IS_DIRECT_NAME = "is_direct_name"
+LAYER_IS_DICT_FOR_EXPERT = "is_dict_for_expert"
+LAYER_NEED_TRANSPOSE = "need_transpose"
 
 class CommonCheckpoint(AbstractCheckpoint):
     """
