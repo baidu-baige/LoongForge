@@ -21,9 +21,9 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX,
+    TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX, WORD_EMBEDDINGS,
     FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES,
-    MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT
+    MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT, MTP_NAME_PREFIX_FOR_LAYER
 )
 
 
@@ -57,6 +57,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         self.num_stages = stage or 1
         self.name_map = self.c_config.get("name_map")["mcore"]
         self.optim_state_dict = None
+        self.name_prefix_for_layer = self.name_map[MTP_NAME_PREFIX_FOR_LAYER] if MTP_NAME_PREFIX_FOR_LAYER in self.name_map else None
 
 
     @staticmethod
@@ -109,12 +110,13 @@ class McoreCheckpoint(AbstractCheckpoint):
 
         name_map = self.c_config.get("name_map")["mcore"]
         cargs = self.c_config.get_args("common")
-        hargs = self.c_config.get_args("huggingface")
+        margs = self.c_config.get_args("mcore")
 
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
+        mtp_has_word_embeddings = cargs.get("mtp_has_word_embeddings", False)
 
-        num_nextn_predict_layers = hargs.get("num_nextn_predict_layers", 0)
+        num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers
@@ -172,28 +174,35 @@ class McoreCheckpoint(AbstractCheckpoint):
                     layer_id = cur_layer_id + mcore_layer_offset
                     if layer_id >= num_layers:
                         m_layer_id = layer_id - num_layers
-                        mtp_layer_prefix = name_map[MTP_LAYER_PREFIX]
+                        layer_prefix = name_map[MTP_LAYER_PREFIX]
+                        name_prefix = self.name_prefix_for_layer if layer_prefix is not None else None
                     else:
-                        mtp_layer_prefix = None
                         m_layer_id = cur_layer_id
+                        layer_prefix = None
+                        name_prefix = None
                     for c_name in BASE_NAMES:
-                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
+                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                                                    layer_prefix=layer_prefix, ep_id=ep_id, name_prefix=name_prefix)
                     # ====moe shared_expert
                     for c_name in MOE_EXPERT_PROJS:
-                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id, expert_name=MOE_SHARED_EXPERT)
+                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix,
+                                                    ep_id=ep_id, expert_name=MOE_SHARED_EXPERT, name_prefix=name_prefix)
 
                     # EXPERT
                     if expert_dict is not None:
                         for expert_id in expert_dict[ep_id]:
                             for c_name in MOE_EXPERT_PROJS:
-                                self.m_moe.common_e_to_mcore(MOE_EXPERT, c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, ep_id, expert_id, layer_prefix=mtp_layer_prefix)
+                                self.m_moe.common_e_to_mcore(MOE_EXPERT, c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                                                                ep_id, expert_id, layer_prefix=layer_prefix, name_prefix=name_prefix)
 
                     # MTP
                     if layer_id >= num_layers:
                         for c_name in MTP_NAMES:
                             if c_name == MTP_SHARED_HEAD_HEAD:
                                 continue
-                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix, ep_id=ep_id)
+                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix, ep_id=ep_id)
+                        if mtp_has_word_embeddings:
+                            self.m_base.common_to_mcore(WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
 
                     # final pp
                     if layer_id == num_layers - 1:
@@ -333,7 +342,7 @@ class McoreCheckpoint(AbstractCheckpoint):
 
         name_map = self.c_config.get("name_map")["mcore"]
         cargs = self.c_config.get_args("common")
-        hargs = self.c_config.get_args("huggingface")
+        margs = self.c_config.get_args("mcore")
 
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
@@ -370,15 +379,20 @@ class McoreCheckpoint(AbstractCheckpoint):
                     layer_id = cur_layer_id + mcore_layer_offset
                     if layer_id >= num_layers:
                         m_layer_id = layer_id - num_layers
-                        mtp_layer_prefix = name_map[MTP_LAYER_PREFIX]
+                        layer_prefix = name_map[MTP_LAYER_PREFIX]
+                        name_prefix = self.name_prefix_for_layer if layer_prefix is not None else None
                     else:
-                        mtp_layer_prefix = None
+                        layer_prefix = None
                         m_layer_id = cur_layer_id
+                        name_prefix = None
+
                     for c_name in BASE_NAMES:
-                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=mtp_layer_prefix)
+                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
+                                                    layer_prefix=layer_prefix, name_prefix=name_prefix)
                     # ====moe shared_expert
                     for c_name in MOE_EXPERT_PROJS:
-                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, expert_name=MOE_SHARED_EXPERT, layer_prefix=mtp_layer_prefix)
+                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
+                                                    expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix, name_prefix=name_prefix)
 
                     # EXPERT
                     if expert_dict is not None:
@@ -387,13 +401,12 @@ class McoreCheckpoint(AbstractCheckpoint):
                         for expert_id in expert_ids:
                             for c_name in MOE_EXPERT_PROJS:
                                 self.m_moe.mcore_e_to_common(MOE_EXPERT, c_name, c_ckpt, e_m_dict, t_name,
-                                                             layer_id, m_layer_id, expert_id, layer_prefix=mtp_layer_prefix)
+                                                            layer_id, m_layer_id, expert_id, layer_prefix=layer_prefix, name_prefix=name_prefix)
 
                     # MTP
                     if layer_id >= num_layers:
                         for c_name in MTP_NAMES:
-                            self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                                        layer_prefix=mtp_layer_prefix)                                                                                                
+                            self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix)                                                                                                
 
                     # final pp
                     if layer_id == num_layers - 1:

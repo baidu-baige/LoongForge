@@ -69,9 +69,7 @@ elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
             target[k1] = source[k2]
             print(f" > {k1}")
     for k in ['adapter.linear_fc1._extra_state', 'adapter.linear_fc2._extra_state']:
-        extra_state = io.BytesIO()
-        torch.save(None, extra_state)
-        target[k] = extra_state
+        target[k] = None
     state_dict = [{'model': deepcopy(target)} for i in range(tp)]
     save_megatron_checkpoint(state_dict, os.path.join(args.save_ckpt_path, 'release'))
 

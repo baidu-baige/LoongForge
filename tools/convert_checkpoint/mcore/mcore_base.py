@@ -23,12 +23,14 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    WEIGHT, BIAS, WEIGHT_SCALE, LAYERNORM_WEIGHT, LAYERNORM_BIAS,
-    WORD_EMBEDDINGS, WORD_EMBEDDINGS_FOR_HEAD, MTP_SHARED_HEAD_HEAD, MLP_DENSE_H_TO_4H,
-    MLP_DENSE_4H_TO_H, MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING,
-    LAYER_PREFIX, EXTRA_DATA, LAYER_NAME, LAYER_EXTRA_DATA,
-    LAYER_IS_LAYERNORM, LAYER_IS_FP8, LAYER_FP8_IGNORE_TP
+    WEIGHT, BIAS, WEIGHT_SCALE, LAYERNORM_WEIGHT, LAYERNORM_BIAS, MIXER_ATT_IN_PROJ_QKVZ, MIXER_ATT_IN_PROJ_BA,
+    ATTENTION_QUERY_GATE_KEY_VALUE, WORD_EMBEDDINGS, WORD_EMBEDDINGS_FOR_HEAD, MTP_SHARED_HEAD_HEAD, MLP_DENSE_H_TO_4H,
+    MLP_DENSE_4H_TO_H, MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
+    LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER, EXTRA_DATA, LAYER_NAME, LAYER_EXTRA_DATA,
+    LAYER_IS_LAYERNORM, LAYER_IS_FP8, LAYER_FP8_IGNORE_TP, LAYER_IGNORE_TP
 )
+
+from convert_checkpoint.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
 
 TENSOR_PARALLEL_DIM = {
     "word_embeddings.weight": 0,
@@ -40,6 +42,11 @@ TENSOR_PARALLEL_DIM = {
     "attention.kv_up.weight": 0,
     "attention.q.weight": 0,
     "attention.dense.weight" : 1,
+    "attention.query_gate_key_value.weight": 0,
+    "mixer_att.log.weight": 0,
+    "mixer_att.dt_bias.weight": 0,
+    "mixer_att.conv1d.weight": 0,
+    "mixer_att.out_proj.weight": 1,
     "mlp.dense_h_to_4h.weight": 0,
     "mlp.dense_h_to_4h.bias": 0,
     "mlp.dense_4h_to_h.weight": 1,
@@ -63,6 +70,8 @@ class McoreBase:
         margs = c_config.get_args("mcore")
         self.cargs = self.c_config.get_args("common")
         self.name_map = self.c_config.get("name_map")["mcore"]
+        self.mcore_mixer_attn_converter = McoreMixerAttnConverter(c_config)
+        self.mcore_attn_gqkv_converter = McoreAttnGateQkvConverter(c_config)
 
         self.tp = self.args.tensor_model_parallel_size
         self.pp = self.args.pipeline_model_parallel_size
@@ -78,6 +87,7 @@ class McoreBase:
                 if k not in TENSOR_PARALLEL_DIM or (k in TENSOR_PARALLEL_DIM and TENSOR_PARALLEL_DIM[k] != v):
                     self.tensor_parallel_dim[k] = v
         self.layer_prefix = self.name_map[LAYER_PREFIX]
+        self.name_prefix_for_layer = self.name_map[MTP_NAME_PREFIX_FOR_LAYER] if MTP_NAME_PREFIX_FOR_LAYER in self.name_map else None
         self.add_embed_padding = margs.get("add_embedding_padding", False)
         self.untie_embeddings_and_output_weights = margs.get("untie_embeddings_and_output_weights", False)
 
@@ -100,32 +110,42 @@ class McoreBase:
             is_layernorm = obj[LAYER_IS_LAYERNORM] if LAYER_IS_LAYERNORM in obj else False
             is_fp8 = obj[LAYER_IS_FP8] if LAYER_IS_FP8 in obj else False
             fp8_ignore_tp = obj[LAYER_FP8_IGNORE_TP] if LAYER_FP8_IGNORE_TP in obj else False
+            is_direct_name = obj[LAYER_IS_DIRECT_NAME] if LAYER_IS_DIRECT_NAME in obj else False
+            ignore_tp = obj[LAYER_IGNORE_TP] if LAYER_IGNORE_TP in obj else False
         else:
             mcore_name = obj
             has_extra = False
             is_layernorm = False
             is_fp8 = False
             fp8_ignore_tp = False
-        return mcore_name, has_extra, is_layernorm, is_fp8, fp8_ignore_tp
+            is_direct_name = False
+            ignore_tp = False
+        return (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp)
 
     #========to mcore===========
-    def common_to_mcore(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None, layer_prefix=None, ep_id=None, expert_name=None):
+    def common_to_mcore(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None,
+                        layer_prefix=None, ep_id=None, expert_name=None, name_prefix=None):
         if name not in self.name_map:
             return
         if name == WORD_EMBEDDINGS_FOR_HEAD and (not self.untie_embeddings_and_output_weights and self.pp == 1):
             return
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
-        mcore_name, has_extra, is_layernorm, is_fp8, fp8_ignore_tp = self.get_mcore_name_and_extra(self.name_map[name])
+        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
         if layer_id is None:
             mcore_path = mcore_name
         elif expert_name is not None:
             if expert_name not in self.name_map:
                 return
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[expert_name]}.{mcore_name}"
+            m_name_prefix = self.name_map[expert_name] if name_prefix is None \
+                    else f"{name_prefix}.{self.name_map[expert_name]}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
         else:
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{mcore_name}"
-        if is_layernorm:
+            m_name_prefix = mcore_name if name_prefix is None else f"{name_prefix}.{mcore_name}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}"
+        if is_direct_name:
+            mcore_weight_path = mcore_path
+        elif is_layernorm:
             mcore_weight_path = f"{mcore_path}.{LAYERNORM_WEIGHT}"
         else:
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
@@ -144,7 +164,8 @@ class McoreBase:
         if self.add_embed_padding and name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD]:
             weight = add_embedding_padding(weight, self.divisible_by, self.vocab_size, self.tp, self.padded_vocab_size)
         weight_list, bias_list = self.get_chunked_weight(
-                name, self.tp, mcore_weight_path, mcore_bias_path, weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
+                name, self.tp, mcore_weight_path, mcore_bias_path, weight, bias, weight_scale,
+                is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
         etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None else None
         self.update_mcore_weight(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path, has_extra_path,
@@ -173,9 +194,7 @@ class McoreBase:
             if mcore_bias_path is not None and bias_list is not None:
                 m_dict[mt][t_name][mcore_bias_path] = bias_list[t]
             if has_extra:
-                extra_data = io.BytesIO()
-                torch.save(None, extra_data)
-                m_dict[mt][t_name][has_extra_path] = extra_data
+                m_dict[mt][t_name][has_extra_path] = None
 
     def get_tp_chunk_list(self, name, m_tp, chunk_dim, source, need_transpose=False):
         if source is None:
@@ -191,7 +210,8 @@ class McoreBase:
         return source_list
 
     def get_chunked_weight(self, name, m_tp, weight_path, bias_path, weight, bias=None,
-                           weight_scale=None, is_fp8=False, fp8_ignore_tp=False):
+                           weight_scale=None, is_fp8=False, fp8_ignore_tp=False, log_flag=True,
+                           ignore_tp=False):
         if weight is None:
             return None, None
         need_transpose = (m_tp > 1 and self.transpose_mlp_dense and \
@@ -199,7 +219,10 @@ class McoreBase:
         chunk_dim = self.tensor_parallel_dim.get(f"{name}.{WEIGHT}", None)
 
         if weight_scale is None:
-            weight_list = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose)
+            if ignore_tp:
+                weight_list = [weight] * m_tp
+            else:
+                weight_list = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose)
         bias_list = None
         if bias is not None:
             bias_chunk_dim = self.tensor_parallel_dim.get(f"{name}.{BIAS}", None)
@@ -208,7 +231,7 @@ class McoreBase:
             # fp8 chunk
             if (self.args.fp8_force_no_requant \
                     or is_power_of_two(weight_scale) == self.args.force_pow_2_scales):
-                if fp8_ignore_tp:
+                if fp8_ignore_tp or ignore_tp:
                     weight_s = [weight] * m_tp
                     weight_scale_s = [weight_scale] * m_tp
                 else:
@@ -218,7 +241,7 @@ class McoreBase:
             else:
                 # First do dequantization then re-quantize back to FP8
                 weight_bf16 = per_block_dequant_from_fp8(weight, weight_scale, dtype=torch.float32)
-                if fp8_ignore_tp:
+                if fp8_ignore_tp or ignore_tp:
                     weight_bf16_s = [weight_bf16] * m_tp
                 else:
                     weight_bf16_s = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight_bf16, need_transpose=need_transpose)
@@ -235,14 +258,17 @@ class McoreBase:
                 weight_list.append(get_quantizer_with_weight_scale_inv(w, w_scale, self.dtype, amax_epsilon=self.args.amax_epsilon))
 
         weight_shapes = [obj.shape for obj in weight_list]
-        logging.info(f"Chunk weight({name=}) {weight_path}, {m_tp=}, {chunk_dim=}, ori_weight: {weight.shape}, {weight_shapes=}")
+        if log_flag:
+            logging.info(f"Chunk weight({name=}) {weight_path}, {m_tp=}, {chunk_dim=}, ori_weight: {weight.shape}, {weight_shapes=}")
         if bias is not None:
             bias_shapes = [obj.shape for obj in bias_list]
-            logging.info(f"Chunk bias {bias_path}, {m_tp=}, {bias_shapes=}")
+            if log_flag:
+                logging.info(f"Chunk bias {bias_path}, {m_tp=}, {bias_shapes=}")
         return weight_list, bias_list
 
     #========from mcore===========
-    def mcore_to_common(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None, layer_prefix=None, expert_name=None):
+    def mcore_to_common(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None,
+                        layer_prefix=None, expert_name=None, name_prefix=None):
         # m_dict: t->dict
         # ep_mcore_state_dict: 
         #   etp is None: ep_id->t->dict
@@ -258,11 +284,11 @@ class McoreBase:
         if name == MTP_SHARED_HEAD_HEAD:
             assert WORD_EMBEDDINGS_FOR_HEAD in self.name_map, \
                     f"{WORD_EMBEDDINGS_FOR_HEAD} is needed in name_map"
-            mcore_name, has_extra, is_layernorm, is_fp8, fp8_ignore_tp = self.get_mcore_name_and_extra(self.name_map[WORD_EMBEDDINGS_FOR_HEAD])
+            (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[WORD_EMBEDDINGS_FOR_HEAD])
             mcore_path = mcore_name
             need_cut_padding = True
         else:
-            mcore_name, has_extra, is_layernorm, is_fp8, fp8_ignore_tp = self.get_mcore_name_and_extra(self.name_map[name])
+            (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
             mcore_path = None
             
         if mcore_path is not None:
@@ -272,10 +298,15 @@ class McoreBase:
         elif expert_name is not None:
             if expert_name not in self.name_map:
                 return
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[expert_name]}.{mcore_name}"
+            m_name_prefix = self.name_map[expert_name] if name_prefix is None \
+                    else f"{name_prefix}.{self.name_map[expert_name]}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
         else:
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{mcore_name}"
-        if is_layernorm:
+            m_name_prefix = mcore_name if name_prefix is None else f"{name_prefix}.{mcore_name}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}"
+        if is_direct_name:
+            mcore_weight_path = mcore_path
+        elif is_layernorm:
             mcore_weight_path = f"{mcore_path}.{LAYERNORM_WEIGHT}"
         else:
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
@@ -290,7 +321,8 @@ class McoreBase:
         weight_list, bias_list, weight_scale_list = self.get_mcore_weight_list(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path)
 
-        weight, bias, weight_scale = self.get_cat_weight(name, self.tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp)
+        weight, bias, weight_scale = self.get_cat_weight(
+            name, self.tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
 
         if need_cut_padding:
             weight = cut_embedding_padding(weight, self.vocab_size)
@@ -345,11 +377,11 @@ class McoreBase:
         source = transpose_shape0(source, m_tp, 2) if need_transpose else source
         return source
 
-    def get_cat_weight(self, name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp):
+    def get_cat_weight(self, name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=False):
         need_transpose = (m_tp > 1 and self.transpose_mlp_dense and \
                 name in [MLP_DENSE_H_TO_4H, MOE_EXPERT_H_TO_4H])
         chunk_dim = self.tensor_parallel_dim.get(f"{name}.{WEIGHT}", None)
-        if chunk_dim is None or m_tp == 1:
+        if chunk_dim is None or m_tp == 1 or ignore_tp:
             # need not chunk
             weight = weight_list[0] if weight_list is not None else None
             weight_scale = weight_scale_list[0] if weight_scale_list is not None else None
@@ -360,7 +392,7 @@ class McoreBase:
         elif weight_scale_list is not None and (self.args.fp8_force_no_requant \
                 or is_power_of_two(weight_scale_list[0]) == self.args.force_pow_2_scales):
             # fp8 and no quantization
-            if is_fp8 and fp8_ignore_tp:
+            if (is_fp8 and fp8_ignore_tp) or ignore_tp:
                 weight = weight_list[0] if weight_list is not None else None
                 weight_scale = weight_scale_list[0] if weight_scale_list is not None else None
             else:

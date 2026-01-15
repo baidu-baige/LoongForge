@@ -21,6 +21,7 @@ WORD_BLOCK_POSITION_EMBEDDINGS = "word_block_position_embeddings"
 LAYER_PREFIX = "layer_prefix"
 MTP_LAYER_PREFIX = "mtp_layer_prefix"
 TRANSFORMER = "transformer"
+MTP_TRANSFORMER = "mtp_transformer"
 INPUT_LAYERNORM = "input_layernorm"
 ROTARY_EMB_INV_FREQ = "rotary_emb.inv_freq"
 ATTENTION_ROTARY_EMB_INV_FREQ = "attention.rotary_emb.inv_freq"
@@ -41,6 +42,16 @@ ATTENTION_LIGHTHING_INDEXER_WQ_B = "attention.lightning_indexer.wq_b"
 # MLA end
 
 ATTENTION_QUERY_KEY_VALUE = "attention.query_key_value"
+ATTENTION_QUERY_GATE_KEY_VALUE = "attention.query_gate_key_value"
+MIXER_ATT_LOG = "mixer_att.log"
+MIXER_ATT_DT = "mixer_att.dt_bias"
+MIXER_ATT_CONV1D = "mixer_att.conv1d"
+MIXER_ATT_NORM = "mixer_att.norm"
+MIXER_ATT_OUT_PROJ = "mixer_att.out_proj"
+MIXER_ATT_IN_PROJ = "mixer_att.in_proj"
+MIXER_ATT_IN_PROJ_QKVZ = "mixer_att.in_proj_qkvz"
+MIXER_ATT_IN_PROJ_BA = "mixer_att.in_proj_ba"
+MIXER_INPUT_LAYERNORM = "mixer_input_layernorm"
 
 ATTENTION_DENSE = "attention.dense"
 ATTENTION_QNORM = "attention.q_a_layernorm"
@@ -66,6 +77,7 @@ MOE_EXPERT_4H_TO_H = "moe.expert_4h_to_h"
 
 # shared expert
 MOE_SHARED_EXPERT = "moe.shared_expert"
+MOE_SHARED_EXPERT_GATE = "moe.shared_expert_gate"
 # ====MOE end====
 
 FINAL_LAYERNORM = "final_layernorm"
@@ -83,17 +95,23 @@ MTP_EH_PROJ = "mtp_eh_proj"
 MTP_SHARED_HEAD_NORM = "mtp_shared_head_norm"
 MTP_SHARED_HEAD_HEAD = "mtp_shared_head_head"
 
+MTP_FINAM_LAYERNORM = "mtp_final_layernorm"
+MTP_NAME_PREFIX_FOR_LAYER = "mtp_name_prefix_for_layer"
+
+
 FIRST_LAYER_NAMES = [WORD_EMBEDDINGS, WORD_POSITION_EMBEDDINGS, WORD_BLOCK_POSITION_EMBEDDINGS] # in the first layer
 BASE_NAMES = [INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FREQ, ATTENTION_QUERY_KEY_VALUE,
+            ATTENTION_QUERY_GATE_KEY_VALUE, MIXER_ATT_LOG, MIXER_ATT_DT, MIXER_INPUT_LAYERNORM, MIXER_ATT_CONV1D,
+            MIXER_ATT_NORM, MIXER_ATT_OUT_PROJ, MIXER_ATT_IN_PROJ, MIXER_ATT_IN_PROJ_QKVZ, MIXER_ATT_IN_PROJ_BA,
             ATTENTION_Q_DOWN, ATTENTION_Q_UP, ATTENTION_Q_UP_LAYERNORM, ATTENTION_KV_DOWN, ATTENTION_KV_UP,
             ATTENTION_KV_UP_LAYERNORM, ATTENTION_Q, ATTENTION_DENSE,
             ATTENTION_LIGHTNING_INDEXER_K_NORM, ATTENTION_LIGHTNING_INDEXER_WEIGHTS_PROJ,
-            ATTENTION_LIGHTHING_INDEXER_WK, ATTENTION_LIGHTHING_INDEXER_WQ_B,
+            ATTENTION_LIGHTHING_INDEXER_WK, ATTENTION_LIGHTHING_INDEXER_WQ_B, MOE_SHARED_EXPERT_GATE,
             POST_ATTENTION_LAYERNORM, POST_ATTENTION_LAYERSCALE, ATTENTION_QNORM, ATTENTION_KNORM,
             POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE]
 MOE_EXPERT_PROJS = [MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H]
 LAST_LAYER_NAMES = [FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD] # in the last layer
-MTP_NAMES = [MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD]
+MTP_NAMES = [MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD, MTP_FINAM_LAYERNORM]
 
 
 WEIGHT = "weight"
@@ -109,7 +127,10 @@ LAYER_EXTRA_DATA = "extra"
 LAYER_IS_LAYERNORM = "is_layernorm"
 LAYER_IS_FP8 = "fp8"
 LAYER_FP8_IGNORE_TP = "fp8_ignore_tp"
+LAYER_IGNORE_TP = "ignore_tp"
 LAYER_IS_DIRECT_NAME = "is_direct_name"
+LAYER_NO_LAYER_ID = "no_layer_id"
+LAYER_DEPEND_ON_KEY = "depend_on_key"
 LAYER_IS_DICT_FOR_EXPERT = "is_dict_for_expert"
 LAYER_NEED_TRANSPOSE = "need_transpose"
 
@@ -143,24 +164,31 @@ class CommonCheckpoint(AbstractCheckpoint):
 
     @staticmethod
     def get_key(name, layer_id=None, expert_id=None):
-        key = name
-        if layer_id is not None:
-            key += f".{LAYER_PREFIX}.{layer_id}"
+        if layer_id is None:
+            key = name
+        else:
             if expert_id is not None:
-                key += f".{MOE_EXPERT}.{expert_id}"
+                key = f"{LAYER_PREFIX}.{layer_id}.{MOE_EXPERT}.{expert_id}.{name}"
+            else:
+                name = "moe.shared_expert_h_to_4h" if name == MOE_EXPERT_H_TO_4H else name
+                name = "moe.shared_expert_4h_to_h" if name == MOE_EXPERT_4H_TO_H else name
+                key = f"{LAYER_PREFIX}.{layer_id}.{name}"
         return key
 
-    def set(self, common_key, weight, bias=None, weight_scale=None):
+    def set(self, common_key, weight, bias=None, weight_scale=None, log_flag=True):
         if weight is not None:
             self.model_dict[f"{common_key}.{WEIGHT}"] = weight
-            logging.info(f"> common set {common_key}, weight shape: {weight.shape}")
+            if log_flag:
+                logging.info(f"> common set {common_key}, weight shape: {weight.shape}")
 
         # bias
         if bias is not None:
             self.model_dict[f"{common_key}.{BIAS}"] = bias
-            logging.info(f"> common set {common_key}, bias shape: {bias.shape}")
+            if log_flag:
+                logging.info(f"> common set {common_key}, bias shape: {bias.shape}")
 
         # weight scale inv for fp8
         if weight_scale is not None:
             self.model_dict[f"{common_key}.{WEIGHT_SCALE}"] = weight_scale
-            logging.info(f"> common set {common_key}, weight_scale, shape: {weight_scale.shape}")
+            if log_flag:
+                logging.info(f"> common set {common_key}, weight_scale, shape: {weight_scale.shape}")

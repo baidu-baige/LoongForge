@@ -28,39 +28,47 @@ class McoreMoe(McoreBase):
         super().__init__(c_config)
         self.args = parse_args()
 
-    def common_e_to_mcore(self, expert_name, name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, ep_id=None, expert_id=None, layer_prefix=None):
+    def common_e_to_mcore(self, expert_name, name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                          ep_id=None, expert_id=None, layer_prefix=None, name_prefix=None):
         if name not in self.name_map or expert_name not in self.name_map:
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
-        mcore_name, mcore_extra, _, is_fp8, fp8_ignore_tp = self.get_mcore_name_and_extra(self.name_map[name])
+        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
         weight, bias, weight_scale = c_ckpt.get(common_key)
         local_eid = self.expert_local_mapping[expert_id]
         if self.args.moe_grouped_gemm:
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[MOE_GROUPED_GEMM_EXPERT]}.{mcore_name}"
+            m_name_prefix = self.name_map[MOE_GROUPED_GEMM_EXPERT] if name_prefix is None \
+                    else f"{name_prefix}.{self.name_map[MOE_GROUPED_GEMM_EXPERT]}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
             mcore_weight_path = f"{mcore_path}.{WEIGHT}{local_eid}"
             mcore_bias_path = f"{mcore_path}.{BIAS}{local_eid}"
         else:
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[MOE_EXPERT]}.{local_eid}.{mcore_name}"
+            m_name_prefix = self.name_map[MOE_EXPERT] if name_prefix is None \
+                    else f"{name_prefix}.{self.name_map[MOE_EXPERT]}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{local_eid}.{mcore_name}"
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
             mcore_bias_path = f"{mcore_path}.{BIAS}"
         mcore_extra_path=f"{mcore_path}.{EXTRA_DATA}"
         etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None else None
+        log_flag = (expert_id is None or expert_id == 0)
         if self.etp is None:
             weight_list, bias_list = self.get_chunked_weight(
                     name, self.tp, mcore_weight_path, mcore_bias_path,
-                    weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
+                    weight, bias, weight_scale, is_fp8, fp8_ignore_tp, log_flag=log_flag,
+                    ignore_tp=ignore_tp)
             self.update_mcore_expert_weight(
                     m_dict, t_name, mcore_weight_path, mcore_bias_path, weight_list,
-                    m_tp=self.tp, has_extra=mcore_extra, mcore_extra_path=mcore_extra_path,
+                    m_tp=self.tp, has_extra=has_extra, mcore_extra_path=mcore_extra_path,
                     bias_list=bias_list)
         else:
             weight_list, bias_list = self.get_chunked_weight(
                     name, self.etp, mcore_weight_path, mcore_bias_path,
-                    weight, bias, weight_scale, is_fp8, fp8_ignore_tp)
+                    weight, bias, weight_scale, is_fp8, fp8_ignore_tp, log_flag=log_flag,
+                    ignore_tp=ignore_tp)
             self.update_mcore_expert_weight(
                     m_dict, t_name, mcore_weight_path, mcore_bias_path, weight_list, 
-                    m_tp=self.etp, has_extra=mcore_extra, mcore_extra_path=mcore_extra_path,
+                    m_tp=self.etp, has_extra=has_extra, mcore_extra_path=mcore_extra_path,
                     bias_list=bias_list, etp_to_tp=etp_to_tp)
 
     def update_mcore_expert_weight(
@@ -78,25 +86,28 @@ class McoreMoe(McoreBase):
             if bias_list is not None:
                 m_dict[mt][t_name][f"{mcore_bias_path}"] = bias_list[mt]
             if has_extra:
-                extra_data = io.BytesIO()
-                torch.save(None, extra_data)
-                m_dict[mt][t_name][f"{mcore_extra_path}"] = extra_data
+                m_dict[mt][t_name][f"{mcore_extra_path}"] = None
 
     # =====mcore to common====
-    def mcore_e_to_common(self, expert_name, name, c_ckpt, e_m_dict, t_name, layer_id, m_layer_id, expert_id=None, layer_prefix=None):
+    def mcore_e_to_common(self, expert_name, name, c_ckpt, e_m_dict, t_name, layer_id,
+                          m_layer_id, expert_id=None, layer_prefix=None, name_prefix=None):
         if name not in self.name_map or expert_name not in self.name_map:
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
-        mcore_name, mcore_extra, _, is_fp8, fp8_ignore_tp = self.get_mcore_name_and_extra(self.name_map[name])
+        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
         weight, bias, weight_scale = c_ckpt.get(common_key)
         local_eid = self.expert_local_mapping[expert_id]
         if self.args.moe_grouped_gemm:
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[MOE_GROUPED_GEMM_EXPERT]}.{mcore_name}"
+            m_name_prefix = self.name_map[MOE_GROUPED_GEMM_EXPERT] if name_prefix is None \
+                    else f"{name_prefix}.{self.name_map[MOE_GROUPED_GEMM_EXPERT]}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
             mcore_weight_path = f"{mcore_path}.{WEIGHT}{local_eid}"
             mcore_bias_path = f"{mcore_path}.{BIAS}{local_eid}"
         else:
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[MOE_EXPERT]}.{local_eid}.{mcore_name}"
+            m_name_prefix = self.name_map[MOE_EXPERT] if name_prefix is None \
+                    else f"{name_prefix}.{self.name_map[MOE_EXPERT]}"
+            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{local_eid}.{mcore_name}"
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
             mcore_bias_path = f"{mcore_path}.{BIAS}"
         weight_list, bias_list, weight_scale_list = self.get_mcore_e_weight_list(
@@ -104,9 +115,10 @@ class McoreMoe(McoreBase):
 
         m_tp = self.etp if self.etp is not None else self.tp
         weight, bias, weight_scale = self.get_cat_weight(
-                name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp)
+                name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
 
-        c_ckpt.set(common_key, weight, bias=bias, weight_scale=weight_scale)
+        log_flag = (expert_id is None or expert_id == 0)
+        c_ckpt.set(common_key, weight, bias=bias, weight_scale=weight_scale, log_flag=log_flag)
 
     def get_mcore_e_weight_list(self, e_m_dict, t_name, mcore_weight_path, mcore_bias_path):
         # e_m_dict: 

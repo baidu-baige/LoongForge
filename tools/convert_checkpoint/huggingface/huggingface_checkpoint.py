@@ -24,7 +24,7 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT, LAYER_IS_DICT_FOR_EXPERT,
+    TRANSFORMER, MTP_TRANSFORMER, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT, WORD_EMBEDDINGS, LAYER_IS_DICT_FOR_EXPERT,
     FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES
 )
 
@@ -44,8 +44,6 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
     if 0 in layer_ids or num_layers - 1 in layer_ids:
         for c_name in FIRST_LAYER_NAMES:
             if c_name in name_map:
-                if name_map[c_name] is None:
-                    continue
                 name = name_map[c_name] + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
@@ -53,9 +51,15 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
     if (num_layers - 1) in layer_ids:
         for c_name in LAST_LAYER_NAMES:
             if c_name in name_map:
-                if name_map[c_name] is None:
-                    continue
                 name = name_map[c_name] + ".weight"
+                if name in weight_map:
+                    filenames_in_the_layer.add(weight_map[name])
+        for c_name in MTP_NAMES:
+            if c_name in name_map:
+                hf_name, _, no_layer_id, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                if not no_layer_id:
+                    continue
+                name = hf_name + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
 
@@ -169,8 +173,12 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         logging.info("==================== Common -> HuggingFace ====================")
 
         cargs = self.c_config.get_args("common")
+        hargs = self.c_config.get_args("huggingface")
         args = parse_args()
         num_layers = cargs["num_layers"]
+        mtp_reset_layer_id = hargs.get("mtp_reset_layer_id", False)
+        name_map = self.c_config.get("name_map")["huggingface"]
+        mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
 
         p = list(layer_dict.keys())[0]
         layer_ids = layer_dict[p]
@@ -185,24 +193,28 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
+            hf_layer_id = layer_id - num_layers if (layer_id >= num_layers and mtp_reset_layer_id) else layer_id
+            transformer = mtp_transformer if (layer_id >= num_layers and mtp_reset_layer_id) else None
             for c_name in BASE_NAMES:
-                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
+                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                                         hf_layer_id=hf_layer_id, transformer=transformer)
             # ====moe shared_expert
             for c_name in MOE_EXPERT_PROJS:
-                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
+                self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                                         hf_layer_id=hf_layer_id, expert_name=MOE_SHARED_EXPERT, transformer=transformer)
 
             # EXPERT
             if expert_dict is not None:
                 for ep_id, expert_ids in expert_dict.items():
                     for expert_id in expert_ids:
                         for c_name in MOE_EXPERT_PROJS:
-                            self.h_moe.common_e_to_hf(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
-                                                      layer_id=layer_id, expert_id=expert_id)
+                            self.h_moe.common_e_to_hf(MOE_EXPERT, c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                                                      hf_layer_id=hf_layer_id, expert_id=expert_id, transformer=transformer)
             self.merge_dict_tensor(self.state_dict)
             # MTP
             if layer_id >= num_layers:
                 for c_name in MTP_NAMES:
-                    self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
+                    self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id, hf_layer_id=hf_layer_id, transformer=transformer)
 
         if num_layers - 1 in layer_ids:
             for c_name in LAST_LAYER_NAMES:
@@ -228,9 +240,14 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         logging.info("==================== HuggingFace -> Common ====================")
 
         cargs = self.c_config.get_args("common")
+        hargs = self.c_config.get_args("huggingface")
         self.args = parse_args()
         c_ckpt = CommonCheckpoint(self.c_config)
         num_layers = cargs["num_layers"]
+        mtp_reset_layer_id = hargs.get("mtp_reset_layer_id", False)
+        name_map = self.c_config.get("name_map")["huggingface"]
+        mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
+        mtp_has_word_embeddings = cargs.get("mtp_has_word_embeddings", False)
 
         p = list(layer_dict.keys())[0]
         layer_ids = layer_dict[p]
@@ -240,11 +257,15 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
+            hf_layer_id = layer_id - num_layers if (layer_id >= num_layers and mtp_reset_layer_id) else layer_id
+            transformer = mtp_transformer if (layer_id >= num_layers and mtp_reset_layer_id) else None
             for c_name in BASE_NAMES:
-                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
+                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                                         hf_layer_id=hf_layer_id, transformer=transformer)
             # ====moe shared_expert
             for c_name in MOE_EXPERT_PROJS:
-                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id, expert_name=MOE_SHARED_EXPERT)
+                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id, hf_layer_id=hf_layer_id,
+                                         transformer=transformer, expert_name=MOE_SHARED_EXPERT)
 
             # EXPERT
             if expert_dict is not None:
@@ -252,12 +273,16 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     for expert_id in expert_ids:
                         for c_name in MOE_EXPERT_PROJS:
                             self.h_moe.hf_e_to_common(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
-                                                      layer_id=layer_id, expert_id=expert_id)
+                                                      layer_id=layer_id, hf_layer_id=hf_layer_id,
+                                                      transformer=transformer, expert_id=expert_id)
 
             # MTP
             if layer_id >= num_layers:
                 for c_name in MTP_NAMES:
-                    self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id)
+                    self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                                             hf_layer_id=hf_layer_id, transformer=transformer)
+                if mtp_has_word_embeddings:
+                    self.h_base.hf_to_common(WORD_EMBEDDINGS, c_ckpt, self.state_dict)
 
         if num_layers - 1 in layer_ids:
             for c_name in LAST_LAYER_NAMES:

@@ -12,6 +12,7 @@ import os
 import re
 import json
 import torch
+from typing import List
 from bisect import bisect_left
 from math import floor, ceil
 
@@ -440,13 +441,12 @@ def get_num_layers_in_vp_map(stage, num_layers, pp,
         assert num_layers_in_first_pipeline_stage is None and num_layers_in_last_pipeline_stage is None, \
             "custom_pipeline_layers need not num_layers_in_first_pipeline_stage or in_last_pipeline_stage"
         num_layers_in_vp, _ = custom_partition_imbalanced(num_layers, pp * stage, custom_pipeline_layers)
-        num_layers_in_vp[-1] += num_nextn_predict_layers
     elif num_layers_in_first_pipeline_stage is not None or num_layers_in_last_pipeline_stage is not None:
         num_layers_in_vp = uneven_vpp_partition(
-            num_layers + num_nextn_predict_layers, pp, stage, num_layers_in_first_pipeline_stage, num_layers_in_last_pipeline_stage)
-        num_layers_in_vp[-1] += num_nextn_predict_layers
+            num_layers, pp, stage, num_layers_in_first_pipeline_stage, num_layers_in_last_pipeline_stage)
     else:
-        num_layers_in_vp, _ = partition_balanced(num_layers + num_nextn_predict_layers, pp * stage)
+        num_layers_in_vp, _ = partition_balanced(num_layers, pp * stage)
+    num_layers_in_vp[-1] += num_nextn_predict_layers
     return num_layers_in_vp
 
 def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
@@ -468,7 +468,7 @@ def get_layer_ids(c_config, args, p):
     num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
     num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     if num_layers_per_stage:
-        stage = (num_layers + num_nextn_predict_layers) // pp // num_layers_per_stage
+        stage = num_layers // pp // num_layers_per_stage
     else:
         stage = args.num_virtual_stages_per_pipeline_rank or 1
     dualpipev = args.vpp_scheduler == 'dualpipev'
