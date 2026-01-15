@@ -89,7 +89,6 @@ def create_parallel_state(module_name, tp_size=0):
         tensor_model_parallel_size=tp_size,
         pipeline_model_parallel_size=1,
         virtual_pipeline_model_parallel_size=None,
-        pipeline_model_parallel_split_rank=None,
         use_sharp=False,
         context_parallel_size=1,
         expert_model_parallel_size=1,

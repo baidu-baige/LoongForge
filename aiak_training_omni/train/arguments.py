@@ -674,7 +674,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     group.add_argument(
         "--ckpt-format",
         default="torch",
-        choices=["torch", "torch_dist", "zarr"],
+        choices=["torch", "torch_dist", "zarr", "fsdp_dtensor"],
         help="Checkpoint format to use. Default: torch",
     )
     

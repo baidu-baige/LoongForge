@@ -52,8 +52,7 @@ def omni_model_provider(
     # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
-    if args.encoder_pipeline_model_parallel_size in [0, None]:
-        add_encoder = mpu.is_pipeline_first_stage()
+    add_encoder = mpu.is_pipeline_first_stage()
 
     # temporary fix for omni model config
     for name in ["image_encoder", "image_projector"]:

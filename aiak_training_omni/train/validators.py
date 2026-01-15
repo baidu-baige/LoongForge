@@ -167,6 +167,13 @@ def _validate_extra_sft_args(args):
 def _validate_extra_training_args(args):
     """Validate training arguments"""
 
+    if args.num_experts is None and args.moe_token_dispatcher_type in ['allgather', 'alltoall_seq']:
+            args.moe_token_dispatcher_type = 'alltoall'
+            warnings.warn(
+                f"Since num_experts is {args.num_experts}, moe_token_dispatcher_type argument is not applicable. "
+                f"Setting it to 'alltoall' to pass transformer config validation."
+            )
+
     # check ema
     if args.enable_ema:
         assert args.model_family in [
@@ -339,8 +346,6 @@ def _check_arg_is_not_none(args, arg):
 # Adapted from megatron/training/arguments.py
 def _validate_custom_model_args(name, args, defaults={}):
     """Validate non foundational model arguments"""
-    if args.custom_virtual_layers_first_pipeline:
-        args.custom_virtual_layers_first_pipeline = None
     if args.custom_pipeline_recompute_layers is not None:
         assert args.recompute_granularity == "full", \
             "recompute-granularity should be full, when custom-pipeline-recompute-layers is set."
@@ -411,19 +416,12 @@ def _validate_custom_model_args(name, args, defaults={}):
             "legacy model format only supports the 'torch' checkpoint format."
     args.use_dist_ckpt = args.ckpt_format != "torch"
 
-    encoder_model_size = (args.encoder_tensor_model_parallel_size *
-                          args.encoder_pipeline_model_parallel_size *
-                          args.context_parallel_size)
 
-    decoder_model_size = (args.tensor_model_parallel_size *
-                          args.pipeline_model_parallel_size *
-                          args.context_parallel_size)
-    total_model_size = encoder_model_size + decoder_model_size
+    total_model_size = args.tensor_model_parallel_size * args.pipeline_model_parallel_size * args.context_parallel_size
 
     # Total model size.
     assert args.world_size % total_model_size == 0, (
-        f"world size ({args.world_size}) is not divisible by total_model_size "
-        f"({encoder_model_size=} + {decoder_model_size=})"
+        f"world size ({args.world_size}) is not divisible by total_model_size ({total_model_size=})"
     )
 
     if args.attention_backend == AttnBackend.local:
@@ -439,16 +437,12 @@ def _validate_custom_model_args(name, args, defaults={}):
               'context-parallel size: {}, '
               'hierarchical context-parallel sizes: {}'
               'tensor-model-parallel size: {}, '
-              'encoder-tensor-model-parallel size: {}, '
-              'pipeline-model-parallel size: {}, '
-              'encoder-pipeline-model-parallel size: {}'.format(
+              'pipeline-model-parallel size: {}, '.format(
                   args.world_size, args.data_parallel_size,
                   args.context_parallel_size,
                   args.hierarchical_context_parallel_sizes,
                   args.tensor_model_parallel_size,
-                  args.encoder_tensor_model_parallel_size,
-                  args.pipeline_model_parallel_size,
-                  args.encoder_pipeline_model_parallel_size), flush=True)
+                  args.pipeline_model_parallel_size, flush=True))
 
     if args.hierarchical_context_parallel_sizes:
         from numpy import prod
@@ -579,13 +573,6 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.data_parallel_sharding_strategy == "optim_grads":
         args.overlap_grad_reduce = True
 
-    if args.vpp_scheduler == "dualpipev":
-        assert args.virtual_pipeline_model_parallel_size is not None , \
-            'virtual pipeline parallel size must be specified for dualpipev scheduler'
-        assert args.virtual_pipeline_model_parallel_size == 2, \
-         ('number of layers per pipeline stage must be twice the number of layers per virtual pipeline stage for '
-          'dualpipev scheduler')
-
     if args.overlap_param_gather:
         assert args.use_distributed_optimizer, \
             '--overlap-param-gather only supported with distributed optimizer'
@@ -638,14 +625,17 @@ def _validate_custom_model_args(name, args, defaults={}):
         assert args.use_distributed_optimizer or args.use_torch_fsdp2, \
             '--fp8-param-gather only supported with distributed optimizer or torch fsdp2'
 
-    if args.use_custom_fsdp:
-        assert args.use_distributed_optimizer, \
-            '--use-custom-fsdp only supported with distributed optimizer'
+    if args.use_megatron_fsdp:
+        # NOTE: The flag `use_custom_fsdp` is deprecated and will be removed in future versions.
+        #       Please use `use_megatron_fsdp` instead, as all functionality will be migrated there.
+        #       Future updates will drop support for `use_custom_fsdp` to avoid confusion.
+        args.use_custom_fsdp = True
 
         if args.data_parallel_sharding_strategy in ["optim_grads_params", "optim_grads"]:
-            warnings.warn('Please make sure your TransformerEngine support FSDP + gradient accumulation fusion')
-            assert args.gradient_accumulation_fusion is False, \
-                "optim_grads_params optim_grads are not supported with gradient accumulation fusion"
+            warn_rank_0(
+                'Please make sure your TransformerEngine support FSDP + gradient accumulation fusion',
+                args.rank,
+            )
 
         if args.data_parallel_sharding_strategy == "optim_grads_params":
             assert args.check_weight_hash_across_dp_replicas_interval is None, \
@@ -653,6 +643,9 @@ def _validate_custom_model_args(name, args, defaults={}):
 
         assert os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') != "1", \
             'FSDP always requires CUDA_DEVICE_MAX_CONNECTIONS value large than one'
+
+        assert args.ckpt_format == "fsdp_dtensor", \
+            "Megatron FSDP only supports fsdp_dtensor checkpoint format"
 
     # Parameters dtype.
     args.params_dtype = torch.float

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import transformer_engine as te
 from typing import Union
 from megatron.core.transformer.module import MegatronModule
-from megatron.core.transformer.mlp import ActivationFuncModule
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from .internvl_config import InternMLPAdapterConfig
 from aiak_training_omni.models.common import BaseMegatronModule
@@ -57,7 +56,8 @@ class InternAdapter(BaseMegatronModule):
             bias=config.add_bias_linear,
         )
 
-        self.activation_func = ActivationFuncModule(self.config, submodules)
+        # ActivationFuncModule is removed in newer Megatron versions; use config activation directly.
+        self.activation_func = self.config.activation_func
         self.linear_fc2 = build_module(
             submodules.linear_fc2,
             config.ffn_hidden_size,
@@ -76,7 +76,7 @@ class InternAdapter(BaseMegatronModule):
         intermediate_parallel = self.linear_fc1(hidden_states)
 
         # activation function
-        intermediate_parallel = self.activation_func(intermediate_parallel, torch.tensor(0))
+        intermediate_parallel = self.activation_func(intermediate_parallel)
 
         # [s, b, h]
         output = self.linear_fc2(intermediate_parallel)
