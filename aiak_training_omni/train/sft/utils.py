@@ -2,7 +2,7 @@
 
 import logging
 
-from typing import TYPE_CHECKING, List, Optional, Union, Any, Type
+from typing import TYPE_CHECKING, List, Optional, Union, Any, Type, Dict
 from dataclasses import dataclass
 
 import torch
@@ -11,7 +11,7 @@ from transformers.utils import PaddingStrategy
 
 from datasets.distributed import split_dataset_by_node
 
-from megatron.core import mpu, tensor_parallel
+from megatron.core import mpu, tensor_parallel, parallel_state
 from megatron.core.packed_seq_params import PackedSeqParams
 
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
@@ -391,5 +391,46 @@ def get_batch_on_this_tp_rank(data_iterator):
         "attention_mask": attention_mask,
         "packed_seq_params": packed_seq_params,
     }
+
+    return batch
+
+
+def get_batch_on_this_cp_rank(batch: Dict[str, Any]):
+    """Slice batch input along sequence dimension into multiple chunks,
+    which are parallelized across GPUs in a context parallel group.
+    """
+    cp_size = parallel_state.get_context_parallel_world_size()
+    if cp_size > 1:
+        packed_seq_params = batch.get('packed_seq_params', None)
+        cp_rank = parallel_state.get_context_parallel_rank()
+        for key, val in batch.items():
+            if val is not None:
+                if key == 'packed_seq_params':
+                    batch[key] = val
+                    continue
+          
+                seq_dim = 1 if key != 'attention_mask' else 2
+                if packed_seq_params is not None and packed_seq_params.qkv_format == 'thd':
+                    #assert get_accelerator_backend() == "NvidiaGpu", "Only NvidiaGPU supports packed_seq_params."
+                    import transformer_engine_torch as tex
+                    # assume cu_seqlens_q == cu_seqlens_kv
+                    cu_seqlens_q = packed_seq_params.cu_seqlens_q
+                    seq_idx_val = tex.thd_get_partitioned_indices(
+                        cu_seqlens_q, val.shape[seq_dim], cp_size, cp_rank
+                    )
+                    batch[key] = val.index_select(seq_dim, seq_idx_val)
+                else:
+                    val = val.view(
+                        *val.shape[0:seq_dim],
+                        2 * cp_size,
+                        val.shape[seq_dim] // (2 * cp_size),
+                        *val.shape[(seq_dim + 1) :],
+                    )
+                    index = torch.tensor(
+                        [cp_rank, (2 * cp_size - cp_rank - 1)], device="cpu", pin_memory=True
+                    ).cuda(non_blocking=True)
+                    val = val.index_select(seq_dim, index)
+                    val = val.view(*val.shape[0:seq_dim], -1, *val.shape[(seq_dim + 2) :])
+                    batch[key] = val
 
     return batch
