@@ -107,6 +107,7 @@ def initialize_aiak_megatron(
     skip_mpu_initialization=False,
     get_embedding_ranks=None,
     get_position_embedding_ranks=None,
+    store=None,
 ):
     """Set global variables, initialize distributed, and
     set autoresume and random seeds.
@@ -161,7 +162,7 @@ def initialize_aiak_megatron(
         """torch.distributed initialization"""
 
         # Pytorch distributed.
-        _initialize_distributed(get_embedding_ranks, get_position_embedding_ranks)
+        _initialize_distributed(get_embedding_ranks, get_position_embedding_ranks, store)
 
         save_parallel_state('text_decoder')
         global _DecoderTensorParallelSize

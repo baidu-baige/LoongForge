@@ -4,6 +4,8 @@ Modified from Megatron-LM/megatron/training.py, https://github.com/NVIDIA/Megatr
 """
 
 import os
+import copy
+from typing import Any
 import dataclasses
 import gc
 from datetime import datetime
@@ -34,9 +36,7 @@ from megatron.core.num_microbatches_calculator import (
     get_current_running_global_batch_size,
 )
 
-from megatron.core.distributed.custom_fsdp import (
-    FullyShardedDataParallel as custom_FSDP,
-)
+from megatron.core.distributed.fsdp import FullyShardedDataParallel as custom_FSDP
 
 try:
     from megatron.core.distributed import TorchFullyShardedDataParallel as torch_FSDP
@@ -103,6 +103,7 @@ from megatron.training.training import (
     post_training_step_callbacks,
     checkpoint_and_decide_exit,
 )
+from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelper
 
 from aiak_training_omni.utils import get_args
 from .initialize import initialize_aiak_megatron
@@ -184,6 +185,7 @@ def pretrain(
     get_embedding_ranks=None,
     get_position_embedding_ranks=None,
     non_loss_data_func=None,
+    store=None,
 ):
     """Main training program.
 
@@ -215,6 +217,7 @@ def pretrain(
         args=train_args,
         get_embedding_ranks=get_embedding_ranks,
         get_position_embedding_ranks=get_position_embedding_ranks,
+        store=store,
     )
 
     args = get_args()
@@ -1003,17 +1006,34 @@ def training_log(
             )
     if args.num_experts is not None:
         moe_loss_scale = 1 / get_num_microbatches()
+        track_names = []
+        if "aux_loss" in args.moe_router_load_balancing_type:
+            track_names.append("load_balancing_loss")
+        if "seq_aux_loss" in args.moe_router_load_balancing_type:
+            track_names.append("seq_load_balancing_loss")
+        if "global_aux_loss" in args.moe_router_load_balancing_type:
+            track_names.append("global_load_balancing_loss")
+        if args.moe_z_loss_coeff is not None:
+            track_names.append("z_loss")
         track_moe_metrics(
-            moe_loss_scale,
-            iteration,
-            writer,
-            wandb_writer,
-            total_loss_dict,
-            args.moe_per_layer_logging,
+            loss_scale=moe_loss_scale,
+            iteration=iteration,
+            writer=writer,
+            wandb_writer=wandb_writer,
+            total_loss_dict=total_loss_dict,
+            per_layer_logging=args.moe_per_layer_logging,
+            force_initialize=True,
+            track_names=track_names,
+            num_layers=args.num_layers,
+            moe_layer_freq=args.moe_layer_freq,
+            mtp_num_layers=args.mtp_num_layers,
+        )
+    if args.mtp_num_layers is not None:
+        mtp_loss_scale = 1 / get_num_microbatches()
+        MTPLossLoggingHelper.track_mtp_metrics(
+            mtp_loss_scale, iteration, writer, wandb_writer, total_loss_dict
         )
 
-    # dualpipev use rank 0 to log
-    dualpipev = args.vpp_scheduler == "dualpipev"
     if iteration % args.log_interval == 0:
         if args.record_memory_history and is_last_rank():
             snapshot = torch.cuda.memory._snapshot()
@@ -1147,10 +1167,8 @@ def training_log(
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0
         total_loss_dict[nan_iters_key] = 0
-        if dualpipev:
-            print_rank_0(log_string)
-        else:
-            print_rank_last(log_string)
+        
+        print_rank_last(log_string)
 
         if report_memory_flag:
             # Report memory after optimizer state has been initialized.
@@ -1164,10 +1182,10 @@ def training_log(
 
     if args.timing_log_level < 1 and iteration % args.detail_log_interval == 0:
         # Only the time for one iteration is recorded, so the normalizer is set to 1.
-        timers.log(timers_to_log, rank=0 if dualpipev else None, normalizer=1)
+        timers.log(timers_to_log, None, normalizer=1)
     elif iteration % args.log_interval == 0:
         timers.log(
-            timers_to_log, rank=0 if dualpipev else None, normalizer=args.log_interval
+            timers_to_log, None, normalizer=args.log_interval
         )
 
     return report_memory_flag

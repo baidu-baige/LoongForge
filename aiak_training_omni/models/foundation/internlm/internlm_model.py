@@ -19,7 +19,7 @@ from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
 
 from aiak_training_omni.models.common.base_model_mixins import (
-    BaseMegatronLanuageModule,
+    BaseMegatronLanguageModule,
 )
 from aiak_training_omni.models.utils import import_module
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
@@ -95,7 +95,7 @@ class DynamicRotaryEmbedding(RotaryEmbedding):
         return super().forward(max_seq_len, offset, packed_seq)
 
 
-class InternLMModel(BaseMegatronLanuageModule):
+class InternLMModel(BaseMegatronLanguageModule):
     """InternLM Transformer language model.
 
     Args:

@@ -4,10 +4,10 @@ from typing import Dict, List, Union, Optional
 
 from transformers import AutoTokenizer
 
-from megatron.core.datasets.megatron_tokenizer import MegatronTokenizer
+from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
 
-class AutoTokenizerFromHF(MegatronTokenizer):
+class AutoTokenizerFromHF(MegatronLegacyTokenizer):
     """
     这里我们采用封装 HF Tokenizer 并继承 MegatronTokenizer 的方式实现, 这种做法的目的：
     1、使用体验和用户使用 HF 一致，方便使用 HuggingFace Tokenizer 提供的功能，后续如果有需要，可继续扩展接口；

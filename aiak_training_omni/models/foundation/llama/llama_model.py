@@ -20,12 +20,12 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
 from aiak_training_omni.models.common import (
-    BaseMegatronLanuageModule,
+    BaseMegatronLanguageModule,
 )
 from aiak_training_omni.models.utils import import_module
 
 
-class LLaMAModel(BaseMegatronLanuageModule):
+class LLaMAModel(BaseMegatronLanguageModule):
     """LLaMA Transformer language model.
 
     Args:
