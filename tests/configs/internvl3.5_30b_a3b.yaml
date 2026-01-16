@@ -1,19 +1,21 @@
 model_name: internvl3.5_30b_a3b
 description: $model_name模型自动化
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL3_5-30B-A3B
-bos_path: bos:/cce-ai-models/models/InternVL3_5-30B-A3B
+bos_path: bos:/ai-data/OpenGVLab/InternVL3_5-30B-A3B
 TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
 
 # aiak-training-omni 训练的参数
 
-HF_CKPT_PATH: $pfs_path/models/InternVL3_5-30B-A3B/
-DATA_PATH: $pfs_path/aiak-training-omni/dataset/internvl/webdataset_video
-TOKENIZER_PATH: $pfs_path/models/InternVL3_5-30B-A3B/
+HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-30B-A3B/
+# DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl3.5_30b_a3b/webdataset_video
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl2.5_8b/webdataset_image
+TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-30B-A3B/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
+SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.json
 
 # ckpt convert 相关配置
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
@@ -29,19 +31,20 @@ ADAPTER_PATH: $step1_output_path/adapter-mcore
 PATCH_PATH: $step1_output_path/patch-mcore
 
 # 训练参数
-TENSOR_MODEL_PARALLER_SIZE: 4
+TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 2
 NUM_EXPERTS: 128
 log_interval: 1
 micro_batch_size: 1
 global_batch_size: 32
-seq_length: 16384
+seq_length: 4096
 
 
 scenarios:
   - function:
       sft:
         Step1:
+          # RUNNABLE_FLAG: "False"
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -56,7 +59,8 @@ scenarios:
             --save_ckpt_path=${LANGUAGE_MODEL_PATH}
             --safetensors
             --no_save_optim
-            --no_load_optim'
+            --no_load_optim
+            --moe-grouped-gemm'
           VISION_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -103,6 +107,7 @@ scenarios:
             --save_ckpt_path ${CHECKPOINT_PATH}/release
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
+          # RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
@@ -111,12 +116,12 @@ scenarios:
             --chat-template empty'
           TRAINING_ARGS: '
             --training-phase sft
-            --seq-length 16384
+            --seq-length ${seq_length}
             --max-position-embeddings 40960
-            --max-packed-tokens 16384
+            --max-packed-tokens ${seq_length}
             --init-method-std 0.01
             --micro-batch-size 1
-            --global-batch-size 32
+            --global-batch-size ${global_batch_size}
             --lr 1e-5
             --min-lr 0.0
             --clip-grad 1.0
@@ -129,6 +134,7 @@ scenarios:
             --attention-dropout 0
             --hidden-dropout 0
             --train-iters ${train_iters}
+            --load $CHECKPOINT_PATH
             --lr-decay-style cosine
             --lr-warmup-fraction 0.03
             --bf16
@@ -160,10 +166,10 @@ scenarios:
             --conv-style internvl2_5
             --max-dynamic-patch 12
             --packing-sft-data
-            --packing-batch-size 200
+            --packing-batch-size 20
             --energon-pack-algo sequential_max_images
-            --allow-missing-adapter-checkpoint'
-            #--load $CHECKPOINT_PATH
+            --allow-missing-adapter-checkpoint
+            --log-memory-stats'
             # --save ${step1_output_path}
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
@@ -175,10 +181,9 @@ scenarios:
             --use-distributed-optimizer
             --context-parallel-size 1
             --distributed-backend nccl
-            --optimizer-cpu-offload
-            --use-precision-aware-optimizer
-            --optimizer-offload-fraction 0.2
-            --overlap-cpu-optimizer-d2h-h2d'
+            --use-precision-aware-optimizer'
+            #--optimizer-cpu-offload
+            #--optimizer-offload-fraction 0.05'
           MOE_ARGS: '
             --moe-router-load-balancing-type aux_loss
             --moe-router-topk 8
@@ -193,7 +198,7 @@ scenarios:
             --tensorboard-dir $TENSORBOARD_PATH
             --log-timers-to-tensorboard'
           SFT_ARGS: '
-            --sft-dataset-config $aiak_training_path/configs/data/sft_dataset_config.json'
+            --sft-dataset-config $SFT_DATASET_CONFIG'
 
 tasks:
   check_correctness_task: True

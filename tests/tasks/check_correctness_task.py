@@ -38,7 +38,7 @@ class CorrectnessCheckTask(BaseTask):
                  model_configer,
                  args
                 )
-        self.__init_ckpt_file__()
+        # self.__init_ckpt_file__()
 
 
     def __call__(self) -> TaskResut:
@@ -58,13 +58,14 @@ class CorrectnessCheckTask(BaseTask):
                     
                     # Step1:
                     step1_name = "Step1"
-                    if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step1_name] or \
-                            ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step1_name] and \
-                                self.model["scenarios"][index][scenario_name][training_type_name][step1_name]["RUNNABLE_FLAG"] == "true"):
-                        self.start_aiak_convert_ckpt(index, step1_name, scenario_name, training_type_name)
-                        step1_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step1_name, self.master_addr, f"{self.rank_name}_lock.txt")
-                        self.wait_async_pod_complete(step1_scenario_lock_file, model_name, f"{scenario_name}_{step1_name}")
-                        logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】 - 【{step1_name}】完成 \n")
+                    if step1_name in self.model["scenarios"][index][scenario_name][training_type_name]:
+                        if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step1_name] or \
+                                ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step1_name] and \
+                                    self.model["scenarios"][index][scenario_name][training_type_name][step1_name]["RUNNABLE_FLAG"] == "true"):
+                            self.start_aiak_convert_ckpt(index, step1_name, scenario_name, training_type_name)
+                            step1_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step1_name, self.master_addr, f"{self.rank_name}_lock.txt")
+                            self.wait_async_pod_complete(step1_scenario_lock_file, model_name, f"{scenario_name}_{step1_name}")
+                            logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】 - 【{step1_name}】完成 \n")
                     
                     # Step1.5: mcore to hf reverse convert and check
                     step1_5_name = "Step1.5"
@@ -79,18 +80,24 @@ class CorrectnessCheckTask(BaseTask):
                     
                     # Step2:
                     step2_name = "Step2"
-                    self.start_aiak_training_omni(index, step2_name, scenario_name, training_type_name)
-                    step2_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step2_name, self.master_addr, f"{self.rank_name}_lock.txt")
-                    self.wait_async_pod_complete(step2_scenario_lock_file, model_name, f"{scenario_name}_{step2_name}")
-                    logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】  - 【{training_type_name}】 - 【{step2_name}】完成 \n")
-
+                    if step2_name in self.model["scenarios"][index][scenario_name][training_type_name]:
+                        if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step2_name] or \
+                                ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step2_name] and \
+                                    self.model["scenarios"][index][scenario_name][training_type_name][step2_name]["RUNNABLE_FLAG"] == "true"):
+                            self.start_aiak_training_omni(index, step2_name, scenario_name, training_type_name)
+                            step2_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step2_name, self.master_addr, f"{self.rank_name}_lock.txt")
+                            self.wait_async_pod_complete(step2_scenario_lock_file, model_name, f"{scenario_name}_{step2_name}")
+                            logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】  - 【{training_type_name}】 - 【{step2_name}】完成 \n")
                     # Step3:
                     step3_name = "Step3"
-                    if step3_name in self.model["scenarios"][index][scenario_name]:
-                        self.start_aiak_training_omni(index, step3_name, scenario_name, training_type_name)
-                        step3_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step3_name, self.master_addr, f"{self.rank_name}_lock.txt")
-                        self.wait_async_pod_complete(step3_scenario_lock_file, model_name, f"{scenario_name}_{step3_name}")
-                        logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】 - 【{step3_name}】完成 \n")
+                    if step3_name in self.model["scenarios"][index][scenario_name][training_type_name]:
+                        if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step3_name] or \
+                                ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step3_name] and \
+                                    self.model["scenarios"][index][scenario_name][training_type_name][step3_name]["RUNNABLE_FLAG"] == "true"):
+                            self.start_aiak_training_omni(index, step3_name, scenario_name, training_type_name)
+                            step3_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step3_name, self.master_addr, f"{self.rank_name}_lock.txt")
+                            self.wait_async_pod_complete(step3_scenario_lock_file, model_name, f"{scenario_name}_{step3_name}")
+                            logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】 - 【{step3_name}】完成 \n")
 
                     logger.info(f"CorrectnessCheckTask 模型【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】执行结束 \n")
         

@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ 预处理数据集参数 ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/mnt/cluster/cyw/E2E2/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
 PREPROCESS_DATA_PATH="${PREPROCESS_DATA_PATH}"
 
 PREPROCESS_DATA_ARGS=(

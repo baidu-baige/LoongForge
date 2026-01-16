@@ -1,14 +1,14 @@
 model_name: internvl2.5_8b
 description: $model_name模型自动化
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL2_5-8B
-bos_path: bos:/cce-ai-models/huggingface.co/internvl/InternVL2_5-8B
+bos_path: bos:/ai-data/InternVL2_5-8B
 TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True 
 
 # aiak-training-omni 训练的参数
 HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL2_5-8B/
-DATA_PATH: $pfs_path/aiak-training-omni/dataset/internvl/webdataset_image
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl2.5_8b/webdataset_image
 TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL2_5-8B/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
@@ -42,7 +42,6 @@ scenarios:
   - function:
       sft:
         Step1:
-          RUNNABLE_FLAG: "false"
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -103,6 +102,7 @@ scenarios:
             --num_virtual_stages_per_pipeline_rank=${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
+          # RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
@@ -111,12 +111,12 @@ scenarios:
             --chat-template empty'
           TRAINING_ARGS: '
             --training-phase sft
-            --seq-length 16384
-            --max-position-embeddings 32768
-            --max-packed-tokens 16384
+            --seq-length ${seq_length}
+            --max-position-embeddings ${seq_length}
+            --max-packed-tokens ${seq_length}
             --init-method-std 0.01
             --micro-batch-size 1
-            --global-batch-size 32
+            --global-batch-size ${global_batch_size}
             --lr 1e-5
             --min-lr 0.0
             --clip-grad 1.0
@@ -129,6 +129,7 @@ scenarios:
             --attention-dropout 0
             --hidden-dropout 0
             --train-iters ${train_iters}
+            --load $CHECKPOINT_PATH
             --lr-decay-style cosine
             --lr-warmup-fraction 0.03
             --bf16
@@ -162,13 +163,14 @@ scenarios:
             --packing-sft-data
             --packing-batch-size 20
             --energon-pack-algo sequential_max_images
-            --allow-missing-adapter-checkpoint'
-            #--load $CHECKPOINT_PATH
+            --allow-missing-adapter-checkpoint
+            --log-memory-stats'
             # --save ${step1_output_path}
           MODEL_PARALLEL_ARGS: '
+            --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --num-virtual-stages-per-pipeline-rank 2
+            --num-virtual-stages-per-pipeline-rank ${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --tp-comm-overlap
             --overlap-cpu-optimizer-d2h-h2d
             --use-precision-aware-optimizer

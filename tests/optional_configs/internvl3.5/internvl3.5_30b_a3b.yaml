@@ -177,8 +177,7 @@ scenarios:
             --distributed-backend nccl
             --optimizer-cpu-offload
             --use-precision-aware-optimizer
-            --optimizer-offload-fraction 0.2
-            --overlap-cpu-optimizer-d2h-h2d'
+            --optimizer-offload-fraction 0.2'
           MOE_ARGS: '
             --moe-router-load-balancing-type aux_loss
             --moe-router-topk 8

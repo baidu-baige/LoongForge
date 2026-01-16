@@ -14,10 +14,17 @@ gpu_nums=8
 
 # 模型选择配置 - 选择以下方式之一，注释掉其他方式
 # 方式1: 运行 configs/ 目录下的单个或多个模型
+# model_names="deepseek_v2_lite"
+# model_names="llama2_7b"
+# model_names="llama3_8b"
+# model_names="qwen3_14b"
+# model_names="qwen2.5_vl_7b"
+# model_names="llavaov_1.5_4b"
 # model_names="internvl2.5_8b"
+model_names="internvl3.5_30b_a3b"
 # model_names="qwen2.5_vl_7b llama3_8b"  # 多个模型用空格分隔
 # optional_subdir=""
-# include_optional=false
+include_optional=false
 
 # 方式2: 同时运行 configs/ 和 optional_configs/ 下的模型（混合）
 # model_names="internvl2.5_8b internvl2.5/internvl2.5_8b"
