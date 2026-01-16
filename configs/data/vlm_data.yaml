@@ -1,11 +1,13 @@
 _target_: aiak_training_omni.data.base_dataset_config.DataConfig
 
 #data:
-tokenizer_type: 
+tokenizer_type: HFTokenizer
 
-hf_tokenizer_path: 
+task_encoder: VLMTaskEncoder
 
-data_path:
+hf_tokenizer_path: /mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/
+
+data_path: /mnt/cluster/aiak-training-llm/dataset/mllm/demo/wds/
 
 dataloader_type: external
 

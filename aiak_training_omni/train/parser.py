@@ -1,6 +1,7 @@
 """Parser arguments."""
 import argparse
 import os
+import sys
 from copy import deepcopy
 
 import torch.nn.functional as F
@@ -8,11 +9,14 @@ import functools
 
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
+from hydra.utils import instantiate
 from megatron.training.arguments import add_megatron_arguments, moe_freq_type
 from megatron.training.arguments import validate_args as validate_megatron_args
 from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
+from dataclasses import fields
 
+from aiak_training_omni.data.base_dataset_config import DataConfig
 from aiak_training_omni.models.utils import build_model_config
 from aiak_training_omni.train.arguments import aiak_extra_train_args_provider
 from aiak_training_omni.train.get_loss_func import (default_loss_func,
@@ -27,6 +31,7 @@ from aiak_training_omni.utils import constants
 from aiak_training_omni.utils.config_map import get_config_from_model_name
 from aiak_training_omni.utils.global_vars import (get_hydra_config,
                                                   set_args_dict,
+                                                  set_data_config,
                                                   set_hydra_config,
                                                   set_model_config)
 from aiak_training_omni.utils.utils import get_config_from_file
@@ -87,6 +92,20 @@ def parse_megatron_arguments(extra_args_provider=None, parse_unknown_args=False)
         args, hydra_overrides = parser.parse_known_args()
     else:
         args = parser.parse_args()
+
+    # Track which CLI options were explicitly provided so that they can
+    # override values coming from hydra configs.
+    provided = set()
+    option_to_action = parser._option_string_actions  # type: ignore[attr-defined]
+    for token in sys.argv[1:]:
+        if not token.startswith("-"):
+            continue
+        option = token.split("=", 1)[0]
+        action = option_to_action.get(option)
+        if action is None:
+            continue
+        provided.add(action.dest)
+    args._cli_provided_args = provided
 
     # Args from environment
     # support MPI
@@ -243,8 +262,46 @@ def parse_arguments(
 def parse_args_from_config(args):
     """parse args from config"""
     config = get_hydra_config()
+    data_config = _build_data_config(config)
+    if data_config is not None:
+        _apply_data_config_to_args(args, data_config)
+        set_data_config(data_config)
     model_cfgs = build_model_config(args, config)    
     set_model_config(model_cfgs)
+
+
+def _build_data_config(config):
+    """Build data config if provided."""
+    if config is None or not hasattr(config, "data"):
+        return None
+
+    data_cfg = config.data
+    if data_cfg is None:
+        return None
+
+    if isinstance(data_cfg, DataConfig):
+        return data_cfg
+
+    try:
+        return instantiate(data_cfg)
+    except Exception:
+        # Fallback to manual construction when instantiate is not applicable
+        try:
+            return DataConfig(**OmegaConf.to_container(data_cfg, resolve=True))
+        except Exception:
+            return None
+
+
+def _apply_data_config_to_args(args, data_config: DataConfig):
+    """Override args with values from data config when present."""
+    provided = getattr(args, "_cli_provided_args", set())
+    for f in fields(DataConfig):
+        if f.name in provided:
+            continue
+        value = getattr(data_config, f.name, None)
+        if value is None:
+            continue
+        setattr(args, f.name, value)
 
 
 def parse_train_args(args_defaults={}):
@@ -256,5 +313,7 @@ def parse_train_args(args_defaults={}):
         parse_unknown_args=True,
     )
     set_hydra_config(hydra_cfg)
+    # Apply data/model config to args early so downstream init sees hydrated values
+    parse_args_from_config(args)
 
     return args

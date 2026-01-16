@@ -9,6 +9,7 @@ class DataConfig:
     """config for common dataset"""
 
     tokenizer_type: Literal["NullTokenizer", "HFTokenizer"] = "HFTokenizer"
+    task_encoder: Optional[str] = "VLMTaskEncoder"
     hf_tokenizer_path: Optional[str] = None
     data_path: str = None
     dataloader_type: str = None
