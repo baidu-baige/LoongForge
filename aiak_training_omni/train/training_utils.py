@@ -49,7 +49,9 @@ from megatron.core.distributed import (
     DistributedDataParallel as DDP,
     finalize_model_grads,
 )
-
+from megatron.core.distributed.fsdp.mcore_fsdp_adapter import (
+    FullyShardedDataParallel as megatron_FSDP
+)
 from megatron.core.pipeline_parallel import get_forward_backward_func
 from megatron.core.optimizer import get_megatron_optimizer, OptimizerConfig
 from megatron.core.rerun_state_machine import get_rerun_state_machine
@@ -1235,7 +1237,7 @@ def train(
     # Setup some training config params
     config.grad_scale_func = optimizer.scale_loss
     config.timers = timers
-    if isinstance(model[0], (custom_FSDP, DDP)) and args.overlap_grad_reduce:
+    if isinstance(model[0], (megatron_FSDP, DDP)) and args.overlap_grad_reduce:
         assert config.no_sync_func is None, (
             "When overlap_grad_reduce is True, config.no_sync_func must be None; "
             "a custom no_sync_func is not supported when overlapping grad-reduce"
