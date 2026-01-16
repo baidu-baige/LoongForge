@@ -196,7 +196,8 @@ def parse_arguments(
         )
 
     if hasattr(hydra_cfg, "model_type") and hydra_cfg.model_type in \
-            constants.LanguageModelFamilies.names():
+            (set(constants.LanguageModelFamilies.names()) |
+            set(constants.CustomModelFamilies.names())):
         model_config = hydra_cfg
         model_type = hydra_cfg.model_type
     else:
@@ -208,8 +209,7 @@ def parse_arguments(
     # TODO: remove this in the future
     args.model_family = model_type
     
-    if model_type in constants.VisionLanguageModelFamilies.names() or  \
-        model_type in constants.CustomModelFamilies.names():
+    if model_type in constants.VisionLanguageModelFamilies.names():
         args_dict = {}
         for name, config_values in model_config.items():
             # exclude those non-iterable config values
@@ -242,7 +242,8 @@ def parse_arguments(
         # set global args dict
         set_args_dict(args_dict)
 
-    elif model_type in constants.LanguageModelFamilies.names():
+    elif model_type in (set(constants.LanguageModelFamilies.names()) |
+            set(constants.CustomModelFamilies.names())):
         # Validate arguments.
         if validate_extra_args_provider is not None:
             validate_extra_args_provider(args, hydra_cfg)

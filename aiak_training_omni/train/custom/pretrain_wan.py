@@ -12,12 +12,12 @@ from megatron.training import get_timers
 from megatron.training.utils import average_losses_across_data_parallel_group
 
 from aiak_training_omni.utils import get_args, print_rank_0
-from aiak_training_omni.utils.constants import TrainingPhase, VideoLanguageModelFamilies
+from aiak_training_omni.utils.constants import TrainingPhase, CustomModelFamilies
 
 from aiak_training_omni.data.video.latent_dataset import TensorDataset
 
 from aiak_training_omni.models import get_model_provider, get_model_family
-from aiak_training_omni.models.wan2_1.wan_flow_match import FlowMatchScheduler
+from aiak_training_omni.models.custom.wan.wan_flow_match import FlowMatchScheduler
 
 from aiak_training_omni.train.megatron_trainer import MegatronTrainer
 from aiak_training_omni.train.trainer_builder import register_model_trainer
@@ -26,7 +26,7 @@ from megatron.core import parallel_state
 import numpy as np
 import math
 
-from aiak_training_omni.models.stdit.gaussian_diffusion import (
+from aiak_training_omni.models.custom.stdit.gaussian_diffusion import (
     ModelMeanType,
     ModelVarType,
     LossType,
@@ -34,18 +34,19 @@ from aiak_training_omni.models.stdit.gaussian_diffusion import (
     get_named_beta_schedule,
 )
 
-from aiak_training_omni.models.wan2_1.wan_utils import (
+from aiak_training_omni.models.custom.wan.wan_utils import (
     broadcast_on_tp_group,
     broadcast_on_cp_group,
 )
+from aiak_training_omni.models.custom.wan.wan_provider import wan2_1_i2v_model_provider, wan2_2_i2v_model_provider
 
 SUPPORTED_MODELS = [
-    VideoLanguageModelFamilies.WAN2_1_I2V,
+    CustomModelFamilies.WAN2_1_I2V,
+    CustomModelFamilies.WAN2_2_I2V
 ]
 
 
 stimer = StragglerDetector()
-
 
 def model_provider(pre_process=True, post_process=True):
     """Builds the model.
@@ -59,15 +60,19 @@ def model_provider(pre_process=True, post_process=True):
     """
     args = get_args()
     cp = args.context_parallel_ulysses_degree
-    image_len = math.ceil(args.max_image_length / cp) * cp
-    text_legnth = math.ceil(args.max_text_length / cp) * cp
-    args.seq_length = args.max_video_length + image_len + text_legnth + (6 + 1) * cp
+    text_length = math.ceil(args.max_text_length / cp) * cp
+    if args.model_name == "wan2_1_i2v":
+        image_len = math.ceil(args.max_image_length / cp) * cp
+        args.seq_length = args.max_video_length + image_len + text_length + (6 + 1) * cp
+    if args.model_name == "wan2_2_i2v":
+        args.seq_length = args.max_video_length + text_length + (6 + 1) * cp
     args.max_position_embeddings = args.seq_length
     print_rank_0(f"> calculated seq_length:  {args.seq_length}")
 
-    model_family = get_model_family(args.model_name)
-    model_provider = get_model_provider(model_family)
-    assert model_provider is not None, f"model provider for {args.model_name} not found"
+    if args.model_name == "wan2_1_i2v":
+        model_provider = wan2_1_i2v_model_provider
+    if args.model_name == "wan2_2_i2v":
+        model_provider = wan2_2_i2v_model_provider
 
     return model_provider(pre_process, post_process)
 
@@ -92,20 +97,22 @@ def gen_time_steps(batch):
 
     """
     # torch.manual_seed(10086)
-    latents = batch["latents"]
-    seed = batch["seed"]
     args = get_args()
+    if args.model_name == "wan2_1_i2v":
+        latents = batch["latents"]
+    if args.model_name == "wan2_2_i2v":
+        latents = batch.pop("input_latents")
+        if latents.size(0) == 1:
+            latents = latents.squeeze(0)
+    seed = batch["seed"]
     max_timestep = args.max_timestep_boundary
     min_timestep = args.min_timestep_boundary
-    assert (
-        max_timestep <= 1 and max_timestep >= 0
-    ), "max_timestep should range from 0 to 1"
-    assert (
-        min_timestep <= 1 and min_timestep >= 0
-    ), "min_timestep should range from 0 to 1"
-    assert (
-        min_timestep <= max_timestep
-    ), f"min_timestep: {min_timestep} should <= max_timestep: {max_timestep}"
+    assert max_timestep <= 1 and max_timestep >= 0, \
+        "max_timestep should range from 0 to 1"
+    assert min_timestep <= 1 and min_timestep >= 0, \
+        "min_timestep should range from 0 to 1"
+    assert min_timestep <= max_timestep, \
+        f"min_timestep: {min_timestep} should <= max_timestep: {max_timestep}"
     max_timestep_boundary = int(max_timestep * scheduler.num_train_timesteps)
     min_timestep_boundary = int(min_timestep * scheduler.num_train_timesteps)
 
@@ -128,14 +135,14 @@ def gen_time_steps(batch):
 def get_batch(data_iterator):
     """Generate a batch"""
     # TODO: this is pretty hacky, find a better way
+    args = get_args()
     if data_iterator is not None and mpu.get_context_parallel_rank() == 0:
         batch = next(data_iterator)
-        (
-            batch["timestep"],
-            batch["latents"],
-            batch["training_target"],
-            batch["scale"],
-        ) = gen_time_steps(batch)
+        batch["timestep"], batch["latents"], batch["training_target"], \
+            batch["scale"] = gen_time_steps(batch)
+        if args.model_name == "wan2_2_i2v":
+            batch.setdefault("prompt_emb", {})["context"] = batch.pop("context")
+            batch.setdefault("image_emb", {})["y"] = batch.pop("y")
     else:
         batch = None
 
@@ -166,7 +173,6 @@ def get_batch(data_iterator):
     if "y" in image_emb:
         image_emb["y"] = image_emb["y"][0].cuda()
     return video, timestep, text, image_emb, training_target, scale
-
 
 def gaussian_diffusion():
     """Build a diffusion."""
@@ -233,7 +239,7 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples):
     args = get_args()
 
     dataset = TensorDataset(
-        args.data_path[0], args.train_iters * args.global_batch_size
+        args.dataset_metadata_path, args.train_iters * args.global_batch_size
     )
 
     dp_rank = parallel_state.get_data_parallel_rank()
@@ -253,7 +259,6 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples):
     print_rank_0(f"> finished creating {args.model_name} datasets ...")
 
     return iter(dataloader), None, None
-
 
 # 设置随机数种子
 @register_model_trainer(
