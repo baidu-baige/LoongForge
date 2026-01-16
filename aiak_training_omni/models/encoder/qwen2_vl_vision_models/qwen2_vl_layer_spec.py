@@ -37,18 +37,25 @@ def _rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 def apply_rotary_pos_emb_vision(
-    t, freqs, config, cu_seqlens=None, rotary_interleaved=False
+    t,
+    freqs,
+    config,
+    cu_seqlens=None,
+    rotary_interleaved=False,
+    mscale: float = 1.0,
+    cp_group=None,
+    **kwargs,
 ):
     """ " Apply rotation to positional embedding"""
     orig_dtype = t.dtype
     t = t.float()
     if cu_seqlens is not None:
         freqs = freqs.squeeze(1)
-        cos_ = freqs.cos().float().repeat(1, 1, 2)
-        sin_ = freqs.sin().float().repeat(1, 1, 2)
+        cos_ = (freqs.cos() * mscale).float().repeat(1, 1, 2)
+        sin_ = (freqs.sin() * mscale).float().repeat(1, 1, 2)
     else:
-        cos_ = freqs.cos().float().repeat(1, 1, 1, 2)
-        sin_ = freqs.sin().float().repeat(1, 1, 1, 2)
+        cos_ = (freqs.cos() * mscale).float().repeat(1, 1, 1, 2)
+        sin_ = (freqs.sin() * mscale).float().repeat(1, 1, 1, 2)
     t = (t * cos_) + (_rotate_half(t) * sin_)
     return t.to(orig_dtype)
 

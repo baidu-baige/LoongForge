@@ -112,42 +112,20 @@ class TransformerBlock(MegatronTransformerBlock):
                         else nullcontext()
                     )
                     with self.offload_context, inner_fp8_context:
-                        if (len(self.cuda_graphs) == 0) or (not self.training):
-                            hidden_states, context = layer(
-                                hidden_states=hidden_states,
-                                attention_mask=attention_mask,
-                                context=context,
-                                context_mask=context_mask,
-                                rotary_pos_emb=rotary_pos_emb,
-                                inference_params=inference_params,
-                                packed_seq_params=(
-                                    packed_seq_params[l_no]
-                                    if packed_seq_params is not None
-                                    else None
-                                ),
-                                **kwargs,
-                            )
-                            # CUDA graph doesn't output context and is expected to be None
-                            assert (
-                                (context is None)
-                                or (not self.config.enable_cuda_graph)
-                                or (not self.training)
-                            )
-                        else:
-                            # CUDA graph replay for layer `l_no` and microbatch `self.current_microbatch`
-                            # CUDA graph requires positional arguments with the exception of is_first_microbatch.
-                            # Also CUDA graph accepts only Tensor inputs and outputs. Hence, the arg list and
-                            # returned list is limited to `hidden_states`.
-                            assert (len(self.cuda_graphs) > l_no) and (
-                                self.current_microbatch < len(self.cuda_graphs[l_no])
-                            )
-                            hidden_states = self.cuda_graphs[l_no][
-                                self.current_microbatch
-                            ](
-                                hidden_states,
-                                is_first_microbatch=(self.current_microbatch == 0),
-                            )
-
+                        hidden_states, context = layer(
+                            hidden_states=hidden_states,
+                            attention_mask=attention_mask,
+                            context=context,
+                            context_mask=context_mask,
+                            rotary_pos_emb=rotary_pos_emb,
+                            inference_params=inference_params,
+                            packed_seq_params=(
+                                packed_seq_params[l_no]
+                                if packed_seq_params is not None
+                                else None
+                            ),
+                            **kwargs,
+                        )
                     if (
                         torch.is_grad_enabled()
                         and self.config.cpu_offloading
