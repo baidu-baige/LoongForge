@@ -1,0 +1,9 @@
+.wy-nav-content {
+    max-width: 100% !important;  
+    width: auto !important;
+    margin-left: 0 !important;   
+}
+
+.wy-nav-content-wrap {
+    background: #edf0f2 !important;
+}
