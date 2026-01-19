@@ -220,7 +220,7 @@ class HuggingfaceBase:
             hf_weight_path = f"{hf_path}.{WEIGHT}" if not is_direct_name else hf_path
             if is_dict_for_expert:
                 assert expert_id is not None, "expert_id must be specified when is_dict_for_expert"
-                h_dict[hf_weight_path] = {} if hf_weight_path not in h_dict else h_dict[hf_weight_path]
+                h_dict[hf_weight_path] = {LAYER_IS_DICT_FOR_EXPERT: True} if hf_weight_path not in h_dict else h_dict[hf_weight_path]
                 h_dict[hf_weight_path][expert_id] = weight_list[i] if weight_list is not None else None
             else:
                 h_dict[hf_weight_path] = weight_list[i] if weight_list is not None else None

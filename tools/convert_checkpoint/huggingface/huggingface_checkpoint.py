@@ -24,7 +24,7 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT,
+    TRANSFORMER, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT, LAYER_IS_DICT_FOR_EXPERT,
     FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES
 )
 
@@ -198,6 +198,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                         for c_name in MOE_EXPERT_PROJS:
                             self.h_moe.common_e_to_hf(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
                                                       layer_id=layer_id, expert_id=expert_id)
+            self.merge_dict_tensor(self.state_dict)
             # MTP
             if layer_id >= num_layers:
                 for c_name in MTP_NAMES:
@@ -371,3 +372,11 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         if h_config is not None:
             h_config.save(save_path)
+
+    def merge_dict_tensor(self, state_dict):
+        for key, value in state_dict.items():
+            if isinstance(value, dict) and LAYER_IS_DICT_FOR_EXPERT in value and value[LAYER_IS_DICT_FOR_EXPERT]:
+                value.pop(LAYER_IS_DICT_FOR_EXPERT)
+                sorted_items = sorted(value.items())
+                tensors = [tensor for _, tensor in sorted_items]
+                state_dict[key] = torch.stack(tensors, dim=0)
