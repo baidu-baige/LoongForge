@@ -7,7 +7,7 @@ IGNORE_INDEX = -100
 ######### dataset ########
 DEFAULT_DATASET_NAME = "default"
 
-DEFAULT_DATASET_CONFIG = "sft_dataset_config.json"
+DEFAULT_DATASET_CONFIG = "sft_dataset_config.yaml"
 
 SFT_SUPPORT_DATA_TYPE = {
     "arrow": "arrow",

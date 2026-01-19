@@ -1,12 +1,13 @@
 """sft dataset build on huggingface dataset"""
 
 import os
-import json
 import logging
+from pathlib import Path
 
 from dataclasses import dataclass, field
 from typing import Optional, Union, Tuple, List, Any
 
+import yaml
 import torch
 from datasets import Dataset, IterableDataset, DatasetDict, load_dataset
 
@@ -126,7 +127,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
     """The data config in SFT dataset"""
 
     dataset_config_file: str = ""
-    """A path to a json file containing the dataset configuration for each dataset"""
+    """A path to a yaml file containing the dataset configuration for each dataset"""
 
     chat_template: Optional[ChatTemplate] = None
     """Template for the instruction dataset."""
@@ -316,9 +317,21 @@ class SFTDataset(HuggingFaceDataset):
             SFTDataFormat: The format config of the dataset.
         """
         config_file = {}
-        with open(self.config.dataset_config_file, "r") as f:
-            # read the config file
-            config_file = json.load(f)
+        config_path = Path(self.config.dataset_config_file)
+        if not config_path.exists():
+            raise FileNotFoundError(
+                f"Dataset config file not found: {self.config.dataset_config_file}"
+            )
+
+        with open(config_path, "r") as f:
+            # read the config file, support yaml only
+            if config_path.suffix.lower() in [".yaml", ".yml"]:
+                config_file = yaml.safe_load(f) or {}
+            else:
+                raise ValueError(
+                    f"Unsupported dataset config format: {config_path.suffix}. "
+                    "Only .yaml/.yml are supported."
+                )
 
         _dataset_desc = config_file.get(self.dataset_name, None)
 

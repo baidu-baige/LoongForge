@@ -38,14 +38,15 @@ def build_transformer_config(args, config_class=None):
 
 def get_default_sft_dataset_config() -> Optional[str]:
     """get default sft dataset config"""
-    default_config = str(
-        Path(__file__).parent.parent.parent
-        / "configs"
-        / "data"
-        / DEFAULT_DATASET_CONFIG
-    )
-    if os.path.exists(default_config):
-        return default_config
+    config_dir = Path(__file__).parent.parent.parent / "configs" / "data"
+    candidates = [
+        config_dir / DEFAULT_DATASET_CONFIG,
+        config_dir / "sft_dataset_config.yml",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
 
     return None
 
