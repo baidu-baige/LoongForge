@@ -1,11 +1,11 @@
 model_name: deepseek_v2_lite
-description: $model_name model automation
+description: $model_name Model Automation
 TOTAL_K8S_NODES: 1
 huggingface_path:
 bos_path: bos:/ai-data/deepseek-ai/DeepSeek-V2-Lite
 
-# Model parameters
-MODEL_RUNNABLE: True # Indicates whether model supports running, or True / False
+# Model Parameters
+MODEL_RUNNABLE: True # Should be True / False
 
 # aiak-training-omni training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
@@ -16,7 +16,7 @@ TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/deepseek2/deepseek_v2_lite.yaml
 CONVERT_FILE: $aiak_training_path/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
-# Training parameters
+# Training Parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 1
 EXPERT_MODEL_PARALLEL_SIZE: 4

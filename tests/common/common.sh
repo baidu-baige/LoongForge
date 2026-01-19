@@ -1,11 +1,11 @@
 #!/bin/bash
 set -eo pipefail
 
-# 1. Select testcase function: test_function or perf
-# 2. Determine Node count and model classification sets, first level entry for iteration
-# 3. Determine all model lists currently running
-# 4. Based on step 2, determine that each Node count scenario only needs to create container once, new Node count needs to delete previous container and create new container to run (logic may be complex)
-# 5. Check functional/performance correctness
+# 1. Select functionality: testcase, test_function, or perf
+# 2. Determine Node number and model collection, entry point for iteration
+# 3. Determine the list of all models currently running
+# 4. Determine container creation based on Node number from step 2; create once, delete old containers if new Node number required. (Logic might be complex)
+# 5. Check function/performance correctness
 
 SETCOLOR_SUCCESS="echo -en \\E[1;32m"
 SETCOLOR_FAILURE="echo -en \\E[1;31m"
@@ -41,11 +41,11 @@ WARNING_echo_date(){
 }
 
 
-# Create an associative array to store Node count and model categories
+# Create an associative array to store Node quantity and Models classification
 declare -A categories
 
 function save_node_and_model_categories(){
-    # Iterate through all files
+    # Traverse all files
     config_path=${scripts_root_path}/configs
     for file in $(ls $config_path); do
         if [[ $file == "common.yaml" ]]; then
@@ -64,7 +64,7 @@ function save_node_and_model_categories(){
             exit -1
         else
             value=$(echo $TOTAL_K8S_NODES_value | awk -F': ' '{print $2}')
-            # Add model_name to the corresponding category
+            # Add model_name to the corresponding classification
             model_name="${file%.yaml}"
             categories[$value]+="$model_name "
         fi
@@ -75,13 +75,13 @@ function save_node_and_model_categories(){
 function check_env_ready(){
     if ! command -v kubectl &> /dev/null
     then
-        FAILURE_echo_date "kubectl binary not found in environment variables, please check kubectl_path environment configuration in ipipe_start.sh script"
+        FAILURE_echo_date "kubectl binary not found in environment variables. Please check kubectl_path environment configuration in ipipe_start.sh script"
         exit -1
     fi
 
     if ! command -v kubectl-view-allocations &> /dev/null
     then
-        FAILURE_echo_date "kubectl-view-allocations binary not found in environment variables, please check kubectl_view_allocations_path environment configuration in ipipe_start.sh script"
+        FAILURE_echo_date "kubectl-view-allocations binary not found in environment variables. Please check kubectl_view_allocations_path environment configuration in ipipe_start.sh script"
     fi
 }
 
@@ -91,19 +91,19 @@ function check_pytorchjob_finish() {
     local node_nums=$3
     local file_name=$4
 
-    # Counter and maximum wait time (in seconds)
+    # Counter and max wait time (in seconds)
     counter=0
 
     # Initialize last line variable
     last_line_log=""
     
-    # Check maximum time
+    # Check max time
     check_pytorchjob_timeout=${CHECK_PYTORCHJOB_TIMEOUT:-"86400"}
 
     # pod running status flag
     pod_running_flag=false
 
-    # Maximum scheduling duration
+    # Max schedule duration
     schedule_counter=0
     schedule_timeout=${SCHEDULE_TIMEOUT:-"300"}
 
@@ -114,34 +114,34 @@ function check_pytorchjob_finish() {
         # Check pod running status, wait for running
         local pod_running_count=$(kubectl get pods -n ${namespace} |grep $pytorchjob_name |grep Running |wc -l)
 
-        # todo ... add scheduling timeout related check
+        # todo ... Add schedule timeout related checks
         if [[ "$pod_running_flag" == "false" ]] && [[ $pod_running_count -ne $node_nums ]]; then
-            FAILURE_echo_date "pod $pytorchjob_name not running, querying events information"
-            local pytorchjob_event=$(kubectl get event |grep $pytorchjob_name || echo "No event information related to $pytorchjob_name yet")
+            FAILURE_echo_date "pod $pytorchjob_name not running, querying events info"
+            local pytorchjob_event=$(kubectl get event |grep $pytorchjob_name || echo "No event info for $pytorchjob_name currently")
             FAILURE_echo_date "$pytorchjob_event"
-            # Sleep for 1 second
+            # Sleep 1 second
             sleep 1
 
-            # Exceeded maximum scheduling time, exit
+            # Exceed schedule max time, exit
             if [[ $schedule_counter -gt $schedule_timeout ]]; then
-                FAILURE_echo_date "Scheduling failed: task ${pytorchjob_name} exceeded ${schedule_timeout}s and still not Running"
+                FAILURE_echo_date "Schedule failed: Task ${pytorchjob_name} not Running after ${schedule_timeout}s"
 
                 local pytorchjob_desc=`kubectl -n ${namespace} describe pytorchjob ${pytorchjob_name}`
-                WARNING_echo_date "Details and event information for this PytorchJob task are as follows:"
+                WARNING_echo_date "PytorchJob task details and event info as follows:"
                 echo "${pytorchjob_desc}"
 
                 local gpu_resource_info=`kubectl-view-allocations -r gpu`
                 echo ""
-                WARNING_echo_date "Current cluster GPU resource usage is as follows:"
+                WARNING_echo_date "Current cluster GPU resource usage as follows:"
                 echo "${gpu_resource_info}"
 
                 # Delete task
                 stop_pytorchjob ${file_name}
 
-                # Exit with specific status code 110, for outer caller (pipeline) to handle other logic, such as sending scheduling failure notification
+                # Exit with specific status code 110, for external caller (pipeline) to handle other logic, e.g., send schedule failure notification
                 exit 110
             fi
-            # Update counter
+            # Update counters
             counter=$((counter + 1))
             schedule_counter=$((schedule_counter + 1))
             continue
@@ -160,7 +160,7 @@ function check_pytorchjob_finish() {
         fi
 
         select_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $select_pod_name_filter |awk '{print $1}'`
-        pod_logs=`kubectl -n ${namespace} logs $select_pod_name -c pytorch || echo "Pod is still not in Running state, skipping this log query"`
+        pod_logs=`kubectl -n ${namespace} logs $select_pod_name -c pytorch || echo "Pod not in Running state yet, skipping this log query"`
         local latest_log=$(echo "$pod_logs"| tail -n 1)
         # Check if new line is different from last line
         if [ "$latest_log" != "$last_line_log" ]; then
@@ -172,12 +172,12 @@ function check_pytorchjob_finish() {
         # Check if pytorchjob succeeded
         local pytorchjob_status=`kubectl -n ${namespace} get pytorchjob |grep $pytorchjob_name |awk '{print $2}'`
         if [[ "$pytorchjob_status" == "Succeeded" ]] || [[ "$pod_logs" =~ "Finish all jobs run ipipe from main.py" ]]; then
-            SUCCESS_echo_date "Model training completed, view full logs:"
+            SUCCESS_echo_date "Model training completed, view full log:"
             SUCCESS_echo_date "$pod_logs"
 
-            # Do not propagate errors to outer layer
+            # Do not throw execution errors to outer layer
             set +e
-            # Copy performance metrics data from container, log files are in "/workspace/logs" directory
+            # Copy performance metric data from container, log file is in "/workspace/logs" directory
             # cp master logs
             master_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $master_pod_name_filter |awk '{print $1}'`
             kubectl cp $namespace/$master_pod_name:logs ${scripts_root_path}/logs
@@ -194,13 +194,13 @@ function check_pytorchjob_finish() {
         fi
 
         # Check if pytorchjob failed
-        if [[ "$pytorchjob_status" == "Failed" ]] || [[ "$pod_logs" =~ "exception occurred" ]] || [[ "$pod_logs" =~ "Traceback (most recent call last)" ]]; then
+        if [[ "$pytorchjob_status" == "Failed" ]] || [[ "$pod_logs" =~ "出现异常" ]] || [[ "$pod_logs" =~ "Traceback (most recent call last)" ]]; then
             FAILURE_echo_date "Model training failed, PytorchJob status is Failed, failure log:"
             WARNING_echo_date "$pod_logs"
-            # Do not propagate errors to outer layer
+            # Do not throw execution errors to outer layer
             set +e
 
-            # Copy performance metrics data from container, log files are in "/workspace/logs" directory
+            # Copy performance metric data from container, log file is in "/workspace/logs" directory
             # cp master logs
             master_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $master_pod_name_filter |awk '{print $1}'`
             kubectl cp $namespace/$master_pod_name:logs ${scripts_root_path}/logs
@@ -212,23 +212,23 @@ function check_pytorchjob_finish() {
             fi
 
             local pytorchjob_desc=`kubectl -n ${namespace} describe pytorchjob ${pytorchjob_name}`
-            FAILURE_echo_date "PytorchJob event information for this task is as follows:"
+            FAILURE_echo_date "This PytorchJob task event info as follows:"
             WARNING_echo_date "$pytorchjob_desc"
 
             set -e
             exit -1
         fi
 
-        # Sleep for 1 second
+        # Sleep 1 second
         sleep 1
 
         # Update counter
         counter=$((counter + 1))
     done
 
-    # Check if counter exceeded maximum wait time
+    # Check if counter exceeded max wait time
     if [ $counter -eq $check_pytorchjob_timeout ]; then
-        FAILURE_echo_date "Exceeded maximum wait time, model training task did not start or complete normally, view logs:"
+        FAILURE_echo_date "Exceeded max wait time, model training task did not start or complete normally, view log:"
         WARNING_echo_date "$pod_logs"
         exit 1
     fi
@@ -270,7 +270,7 @@ function run_all_ipipe_case(){
         local model_names="${categories[$node_nums]}"
         model_names=$(echo "$model_names" | awk '{$1=$1};1')
 
-        # Determine if only running specified models
+        # Determine if only running specific models;
         if [[ "${specific_model_name}" != "" ]]; then
             # convert the variables into arrays
             IFS=' ' read -r -a model_names_array <<< "$model_names"
@@ -288,11 +288,11 @@ function run_all_ipipe_case(){
 
             # print the intersection
             if [[ ${#new_model_names[@]} -eq 0 ]]; then
-                WARNING_echo_date "Does not contain specified model, entering next loop."
+                WARNING_echo_date "Does not contain specific model, skipping to next loop."
                 continue
             else
                 model_names=${new_model_names[@]}
-                SUCCESS_echo_date "Contains specified model ${model_names}, executing training task."
+                SUCCESS_echo_date "Contains specific model ${model_names} to run, executing training task."
             fi
         fi
         
@@ -331,7 +331,7 @@ function run_all_ipipe_case(){
                 cd /workspace && rm -rf AIAK-Training-Omni
                 wget ${BOS_SYNC_AIAK_TRANSFORMER_ADDR}
                 tar -zxvf AIAK-Training-Omni.tar.gz
-                echo "Download completed aiak_training_omni"
+                echo "Download complete aiak_training_omni"
 
                 cd $aiak_training_omni_folder/tests
                 extra_param="--node_nums ${node_nums} \
@@ -346,7 +346,7 @@ function run_all_ipipe_case(){
                     extra_param="\$extra_param --use_nccl"
                 fi
                 command="python3 main.py \$extra_param"
-                echo "Task started executing: \$command"
+                echo "Task execution started: \$command"
                 eval \$command
 EOF
 )
@@ -354,7 +354,7 @@ EOF
         file_name=pytorchjob_${node_nums}.yaml
         run_pytorchjob $file_name $pytorchjob_yaml_path
 
-        # Determine if created container is in running state, check if container logs meet expectations
+        # Check if created container is in running state, check if container log is as expected
         check_pytorchjob_finish $PYTORCHJOB_NAME $NAMESPACE $node_nums $file_name
 
         # Delete task

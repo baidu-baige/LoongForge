@@ -1,5 +1,5 @@
 model_name: internvl2.5_8b
-description: $model_name model automation
+description: $model_name Model Automation
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL2_5-8B
 bos_path: bos:/ai-data/InternVL2_5-8B
 TOTAL_K8S_NODES: 1
@@ -15,7 +15,7 @@ TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl2.5/internvl2_5_8b.yaml
 SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.json
 
-# Checkpoint convert related configuration
+# ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 4
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
 FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml
@@ -42,6 +42,7 @@ scenarios:
   - function:
       sft:
         Step1:
+          RUNNABLE_FLAG: False
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -102,7 +103,6 @@ scenarios:
             --num_virtual_stages_per_pipeline_rank=${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
-          # RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH

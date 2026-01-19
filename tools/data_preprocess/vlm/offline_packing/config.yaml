@@ -46,4 +46,3 @@ process:
 log:
   # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
   level: "INFO"
-  # 日志文件路径

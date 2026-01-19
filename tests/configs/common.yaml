@@ -1,10 +1,8 @@
-# pfs_path: /mnt/pfs
-# pfs_path: /mnt/cluster
-pfs_path: /ssd1/test
+pfs_path: /workspace
 load_hf_ckpt_path_pre: $pfs_path/huggingface.co/
 save_mcore_ckpt_path_pre: $pfs_path/megatron_checkpoint/
 megatron_path: /workspace/AIAK-Megatron
-aiak_training_path: /ssd1/workspace/AIAK-Training-Omni/
+aiak_training_path: /workspace/AIAK-Training-Omni/
 
 
 scripts_root_path: $aiak_training_path/tests
@@ -19,4 +17,4 @@ model_lock_file_path: $save_mcore_ckpt_path_pre/lock_file/$model_name
 step1_output_path: $save_mcore_ckpt_path_pre/$model_name
 
 # Number of iterations
-train_iters: 3
+train_iters: 20

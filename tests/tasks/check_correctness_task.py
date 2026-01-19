@@ -38,7 +38,7 @@ class CorrectnessCheckTask(BaseTask):
                  model_configer,
                  args
                 )
-        # self.__init_ckpt_file__()
+        self.__init_ckpt_file__()
 
 
     def __call__(self) -> TaskResut:
@@ -54,8 +54,8 @@ class CorrectnessCheckTask(BaseTask):
                     if training_type_name not in self.input_cmd_args.training_type:
                         continue
                     model_name = self.model_name
-                    logger.info(f"CorrectnessCheckTask model【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】 execution starts ...")
-
+                    logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] Execution Start ...")
+                    
                     # Step1:
                     step1_name = "Step1"
                     if step1_name in self.model["scenarios"][index][scenario_name][training_type_name]:
@@ -65,8 +65,8 @@ class CorrectnessCheckTask(BaseTask):
                             self.start_aiak_convert_ckpt(index, step1_name, scenario_name, training_type_name)
                             step1_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step1_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step1_scenario_lock_file, model_name, f"{scenario_name}_{step1_name}")
-                            logger.info(f"CorrectnessCheckTask model【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】 - 【{step1_name}】 completed \n")
-
+                            logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] - [{step1_name}] Completed \n")
+                    
                     # Step1.5: mcore to hf reverse convert and check
                     step1_5_name = "Step1.5"
                     if step1_5_name in self.model["scenarios"][index][scenario_name][training_type_name]:
@@ -76,8 +76,8 @@ class CorrectnessCheckTask(BaseTask):
                             self.start_aiak_reverse_convert_ckpt(index, step1_5_name, scenario_name, training_type_name)
                             step1_5_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step1_5_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step1_5_scenario_lock_file, model_name, f"{scenario_name}_{step1_5_name}")
-                            logger.info(f"CorrectnessCheckTask model【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】 - 【{step1_5_name}】 completed \n")
-
+                            logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] - [{step1_5_name}] Completed \n")
+                    
                     # Step2:
                     step2_name = "Step2"
                     if step2_name in self.model["scenarios"][index][scenario_name][training_type_name]:
@@ -87,7 +87,8 @@ class CorrectnessCheckTask(BaseTask):
                             self.start_aiak_training_omni(index, step2_name, scenario_name, training_type_name)
                             step2_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step2_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step2_scenario_lock_file, model_name, f"{scenario_name}_{step2_name}")
-                            logger.info(f"CorrectnessCheckTask model【{model_name}】 - 【{scenario_name}】  - 【{training_type_name}】 - 【{step2_name}】 completed \n")
+                            logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] - [{step2_name}] Completed \n")
+
                     # Step3:
                     step3_name = "Step3"
                     if step3_name in self.model["scenarios"][index][scenario_name][training_type_name]:
@@ -97,11 +98,11 @@ class CorrectnessCheckTask(BaseTask):
                             self.start_aiak_training_omni(index, step3_name, scenario_name, training_type_name)
                             step3_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step3_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step3_scenario_lock_file, model_name, f"{scenario_name}_{step3_name}")
-                            logger.info(f"CorrectnessCheckTask model【{model_name}】 - 【{scenario_name}】 - 【{step3_name}】 completed \n")
+                            logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{step3_name}] Completed \n")
 
-                    logger.info(f"CorrectnessCheckTask model【{model_name}】 - 【{scenario_name}】 - 【{training_type_name}】 execution ended \n")
-
-        # Clean up ckpt and other files
-        # self.__clean_up__()
+                    logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] Execution End \n")
+        
+        # Clean up ckpt files etc.
+        self.__clean_up__()
 
         return TaskResut()

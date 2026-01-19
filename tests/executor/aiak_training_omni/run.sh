@@ -8,9 +8,10 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export NCCL_ALGO=Ring
 export NVTE_ALLOW_NONDETERMINISTIC_ALGO=0
 export CUDA_DEVICE_MAX_CONNECTIONS=1
+############################################ Model Training Parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
 DATA_PATH=${DATA_PATH}
 TOKENIZER_PATH=${TOKENIZER_PATH}
 CHECKPOINT_PATH=${CHECKPOINT_PATH}
@@ -19,15 +20,10 @@ TENSORBOARD_PATH=${TENSORBOARD_PATH}
 GPUS_PER_NODE=8
 
 # Change for multinode config
-# MASTER_ADDR=${MASTER_ADDR:-"localhost"}
-# MASTER_PORT=${MASTER_PORT:-"6000"}
-# NNODES=${WORLD_SIZE:-"1"}
-# NODE_RANK=${RANK:-"0"}
-
-MASTER_ADDR="localhost"
-MASTER_PORT="6000"
-NNODES="1"
-NODE_RANK="0"
+MASTER_ADDR=${MASTER_ADDR:-"localhost"}
+MASTER_PORT=${MASTER_PORT:-"6000"}
+NNODES=${WORLD_SIZE:-"1"}
+NODE_RANK=${RANK:-"0"}
 
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE
@@ -37,8 +33,8 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
-# Parse parameters from environment variables, environment variables should be space-separated parameter strings
-# Directly expand to array, bash will split by spaces
+# Parse environment variables parameters, environment variables should be space-separated parameter strings
+# Expand directly into array, bash will split by space
 MODEL_ARGS=(
     ${MODEL_ARGS}
 )
@@ -78,13 +74,7 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-# if [[ "${TRANING_MODEL}" != "" ]] && [[ "${TRANING_MODEL}" == "sft" ]]; then
-#     SFT_ARGS=(
-#         ${SFT_ARGS}
-#     )
-# fi
-
-############################################ Model training parameters ############################################
+############################################ Model Training Parameters ############################################
 
 export PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
@@ -105,7 +95,7 @@ if [[ "${use_nccl}" == "false" ]]; then
 fi
 
 echo ""
-echo "Executing command: $command"
+echo "Execute command: $command"
 
 if [[ "${dry_run}" != "true" ]]; then
     eval $command

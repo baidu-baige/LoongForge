@@ -19,61 +19,59 @@ logger = create_color_logger(name=__name__)
 
 
 def prepare_models_list(args):
-    """Prepare final list of models to run"""
-    # Collect all config directories
+    """
+    Determine the list of models to run based on arguments (models, extra_models, optional_subdir, include_optional).
+    Supports running models from default 'configs/' or 'optional_configs/'.
+    For specific running modes, please refer to tests/README.md.
+    """
     extra_dirs = list(args.extra_configs_dirs) if args.extra_configs_dirs else []
-
-    # If --include_optional is specified, add optional_configs directory
-    if args.include_optional:
-        optional_dir = "optional_configs"
-        if optional_dir not in extra_dirs:
-            extra_dirs.append(optional_dir)
-
-    # Update extra_configs_dirs in args
-    args.extra_configs_dirs = extra_dirs
-
-    # If --optional_subdir is specified, load all models from specified subdirectory
-    if args.optional_subdir:
-        # Ensure optional_configs is in extra_dirs
+    need_optional = args.include_optional or args.optional_subdir or args.extra_models
+    if need_optional:
         if "optional_configs" not in extra_dirs:
             extra_dirs.append("optional_configs")
-            args.extra_configs_dirs = extra_dirs
+    args.extra_configs_dirs = extra_dirs
 
-        # Get all models under specified subdirectory
+    # If args.models is None (not specified by user), decide default behavior based on other arguments
+    if args.models is None:
+        if args.optional_subdir or args.extra_models:
+            args.models = []
+        elif args.include_optional:
+            args.models = ConfigManager.get_models_from_dir("optional_configs", recursive=True)
+            logger.info("Running all models from optional_configs (Method 5)...")
+        else:
+            args.models = ConfigManager.get_all_models(args.configs_dir)
+    
+    # If --optional_subdir is specified, load all models in the specified subdirectory
+    if args.optional_subdir:
+        # Get all models under the specified subdirectory
         subdir_models = ConfigManager.get_models_from_subdir(
             "optional_configs",
             args.optional_subdir
         )
 
         if subdir_models:
-            # If models is empty or is default value, use subdirectory's models
-            if not args.models or args.models == ConfigManager.get_all_models(args.configs_dir):
-                args.models = subdir_models
-            else:
-                # Otherwise append subdirectory models to existing model list
-                args.models = list(args.models) + subdir_models
-
-        logger.info(f"Models from optional_subdir '{args.optional_subdir}': {subdir_models}")
-
-    # If --extra_models is specified, append extra models to list
+            args.models = list(args.models) + subdir_models
+            logger.info(f"Models from optional_subdir '{args.optional_subdir}': {subdir_models}")
+    
+    # If --extra_models is specified, append extra models to the list
     if args.extra_models:
-        # Ensure optional_configs is in extra_dirs (because extra_models usually comes from optional_configs)
-        if "optional_configs" not in args.extra_configs_dirs:
-            args.extra_configs_dirs = list(args.extra_configs_dirs) + ["optional_configs"]
-
-        # Append extra_models to models list
+        # Append extra_models to the models list
         args.models = list(args.models) + list(args.extra_models)
         logger.info(f"Extra models added: {args.extra_models}")
+
+    # Deduplicate and sort
+    if args.models:
+        args.models = sorted(list(set(args.models)))
 
 
 def main() -> None:
     args = parse_args()
     
-    # If only listing available models, exit directly (model list already displayed in print_args)
+    # If only listing available models, exit directly (list displayed in print_args)
     if args.list_available_models:
         sys.exit(0)
     
-    #Prepare model list (apply filtering rules)
+    # Prepare model list (apply filtering rules)
     prepare_models_list(args)
 
     model_configer = ConfigManager(args=args)
@@ -83,7 +81,6 @@ def main() -> None:
     scenario_result = []
     error_scenario = []
 
-    # breakpoint()
     # Loop through all models
     for index, model in enumerate(model_configer.all_model_configs):
         model_name = model_configer.get_model_name(model)
@@ -92,6 +89,7 @@ def main() -> None:
 
         # Loop through all supported tasks
         for task_name in model_configer.get_tasks(model):
+
             if task_name not in args.tasks:
                 continue
             task_runner = model_configer.get_task_runner(task_name)
@@ -109,5 +107,5 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-    # Pause for a few seconds, leave buffer for post-collection performance data action
+    # Pause for a few seconds to leave a buffer for the subsequent collection of performance data
     time.sleep(30)

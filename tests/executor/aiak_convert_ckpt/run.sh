@@ -2,11 +2,10 @@
 set -x
 set -eo pipefail
 
-############################################ Model training parameters ############################################
+############################################ Model Training Parameters ############################################
 
 AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
-# AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
 export PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
@@ -17,10 +16,10 @@ CONVERT_ARGS=(
 
 final_task=$((WORLD_SIZE - 1))
 
-# Default command is empty array
+# Default commands array is empty
 commands=()
 
-# VLM model type detection function
+# VLM Model type detection function
 is_vlm_model() {
     local model=$1
     if [[ "${model}" =~ "qwen2.5_vl" ]] || [[ "${model}" =~ "qwen2_vl" ]] || \
@@ -31,7 +30,7 @@ is_vlm_model() {
     return 1
 }
 
-# MoE model type detection function
+# MoE Model type detection function
 is_moe_model() {
     local model=$1
     if [[ "${model}" =~ "a3b" ]] || [[ "${model}" =~ "moe" ]] || \
@@ -41,7 +40,7 @@ is_moe_model() {
     return 1
 }
 
-# If VLM model (qwen2.5_vl, internvl, llavaov, etc.), use new module_convertor approach
+# If VLM model (qwen2.5_vl, internvl, llavaov etc), use new module_convertor method
 if is_vlm_model "${model_name}"; then
     LANGUAGE_MODEL_ARGS=(
         ${LANGUAGE_MODEL_ARGS}
@@ -91,7 +90,7 @@ if is_vlm_model "${model_name}"; then
         "rm -rf ${PATCH_PATH}"
     )
 else
-    # LLM models use default conversion method
+    # LLM model uses default conversion method
     commands+=(
         "python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py ${CONVERT_ARGS[*]}"
     )
@@ -100,14 +99,14 @@ else
 fi
 
 
-# Only run on master or the last worker
+# Determine if it is the only master or the last worker running
 if [[ "${RANK}" != "" ]] && [[ "${RANK}" == "${final_task}" ]] && [[ "${dry_run}" != "true" ]]; then
     echo ""
     # Iterate through command array and execute each command
     for command in "${commands[@]}"; do
-        echo "Executing command: \"$command\""
+        echo "Execute command: \"$command\""
         eval "$command"
     done
 else
-    echo "Skipping task on current node [Only when master or the last worker node performs weight conversion !!!]"
+    echo "Skip current node task [Only if it is a master or last worker node to perform weight conversion !!!]"
 fi

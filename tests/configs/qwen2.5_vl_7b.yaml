@@ -1,10 +1,10 @@
 model_name: qwen2.5_vl_7b
-description: $model_name model automation
+description: $model_name Model Automation
 huggingface_path: https://huggingface.co/Qwen/Qwen2-VL-7B-Instruct
 bos_path: bos:/ai-data/Qwen/Qwen2.5-VL-7B-Instruct
 TOTAL_K8S_NODES: 1
 
-MODEL_RUNNABLE: True # Indicates whether model supports running, or True / False
+MODEL_RUNNABLE: True # Should be True / False
 
 # aiak-training-omni training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
@@ -15,7 +15,7 @@ CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 
-# Checkpoint convert related configuration
+# ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 4
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
 NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK: 2
@@ -43,7 +43,6 @@ scenarios:
   - function:
       pretrain:
         Step1:
-          # RUNNABLE_FLAG: "false"
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -104,7 +103,6 @@ scenarios:
             --num_virtual_stages_per_pipeline_rank=${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --config_file ${MODEL_CONFIG_PATH}'
         Step1.5:
-          RUNNABLE_FLAG: "false"
           # mcore to hf checkpoint convert and check
           # HF checkpoint path after reverse conversion
           REVERSE_HF_CKPT_PATH: $step1_output_path/reverse-hf-ckpt
@@ -183,7 +181,6 @@ scenarios:
             --adapter_path ${REVERSE_ADAPTER_PATH}
             --save_ckpt_path ${REVERSE_HF_CKPT_PATH}'
         Step2:
-          RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
@@ -246,7 +243,6 @@ scenarios:
             --log-timers-to-tensorboard'
       sft:
         Step2:
-          # RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer 
             --hf-tokenizer-path $TOKENIZER_PATH 
@@ -307,7 +303,6 @@ scenarios:
 
   - preprocess_data:
       vlm:
-        RUNNABLE_FLAG: "false"
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/vlm/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mllm_demo.json'
@@ -321,12 +316,12 @@ scenarios:
           --columns_messages messages
           --maxsize 10000000
           --sample_type vqa'
-      offline_packing:
-        PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/vlm/offline_packing/scripts/pack_wds.sh
-        packing_config_path: '$aiak_training_path/tools/data_preprocess/vlm/offline_packing/config.yaml'
-        PREPROCESS_DATA_ARGS: '$packing_config_path'
+      offline_packing: 
+        PREPROCESS_DATA_PATH: ${aiak_training_path}/tests/tools/offline_packing.sh
+        packing_config_path: '${aiak_training_path}/tests/tools/offline_packing.yaml'
+        PREPROCESS_DATA_ARGS: '${packing_config_path}'
 
 tasks:
   check_correctness_task: True
-  check_precess_data_task: False
+  check_precess_data_task: True
   

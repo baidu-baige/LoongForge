@@ -1,10 +1,10 @@
 model_name: qwen3_14b
-description: $model_name model automation
+description: $model_name Model Automation
 huggingface_path: https://huggingface.co/Qwen/Qwen3-14B
 bos_path: bos:/ai-data/Qwen/Qwen3-14B
 TOTAL_K8S_NODES: 1
 
-# Model parameters
+# Model Parameters
 MODEL_RUNNABLE: True
 
 # aiak-training-llm training parameters
@@ -16,7 +16,7 @@ TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen3/qwen3_14b.yaml
 CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
 
-# Training parameters
+# Training Parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 4
 log_interval: 1

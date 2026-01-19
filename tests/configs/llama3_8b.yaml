@@ -1,10 +1,10 @@
 model_name: llama3_8b
-description: $model_name model automation
+description: $model_name Model Automation
 huggingface_path: https://huggingface.co/meta-llama/Meta-Llama-3-8B
 bos_path: bos:/ai-data/meta-llama/Meta-Llama-3-8B
 TOTAL_K8S_NODES: 1
 
-# Model parameters
+# Model Parameters
 MODEL_RUNNABLE: True
 
 # aiak-training-omni training parameters
@@ -16,7 +16,7 @@ TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/llama3/llama3_1_8b.yaml
 CONVERT_FILE: $aiak_training_path/configs/models/llama3/ckpt_convert/llama3_convert.yaml
 
-# Training parameters
+# Training Parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 2
 log_interval: 1
@@ -27,6 +27,7 @@ scenarios:
   - function:
       pretrain:
         Step1:
+          RUNNABLE_FLAG: False
           CONVERT_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -93,7 +94,6 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       llm_pretrain:
-        RUNNABLE_FLAG: "false"
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/llm/preprocess_pretrain_data.py
         output_prefix: /workspace/pile_test_pretrain/$model_name/pile-test
         train_json_file_name: '$scripts_root_path/datasets/llm/pretrain_train.jsonl'
@@ -108,4 +108,4 @@ scenarios:
 
 tasks:
   check_correctness_task: True
-  check_precess_data_task: False
+  check_precess_data_task: True

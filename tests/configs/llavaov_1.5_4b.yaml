@@ -1,5 +1,5 @@
 model_name: llavaov_1.5_4b
-description: $model_name model automation
+description: $model_name Model Automation
 huggingface_path: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 bos_path: bos:/ai-data/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 TOTAL_K8S_NODES: 1
@@ -7,7 +7,7 @@ TOTAL_K8S_NODES: 1
 MODEL_RUNNABLE: True 
 
 HF_CKPT_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
-DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/llavaov_1.5_4b/imagenet/CN/part00/part_00_wds
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/llavaov_1.5_4b/test_packed_wds_4k/
 TOKENIZER_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
@@ -95,7 +95,6 @@ scenarios:
             --save_ckpt_path ${CHECKPOINT_PATH}/release
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
-          # RUNNABLE_FLAG: "false"
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
@@ -152,7 +151,6 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       vlm:
-        RUNNABLE_FLAG: "false"
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/vlm/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mix.json'
@@ -170,4 +168,4 @@ scenarios:
 
 tasks:
   check_correctness_task: True
-  check_precess_data_task: False
+  check_precess_data_task: True

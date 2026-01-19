@@ -1,40 +1,35 @@
 model_name: internvl2.5_8b
-description: $model_name model automation
+description: $model_name Model Automation
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL2_5-8B
-bos_path: bos:/cce-ai-models/huggingface.co/internvl/InternVL2_5-8B
+bos_path: bos:/ai-data/InternVL2_5-8B
 TOTAL_K8S_NODES: 1
 
-MODEL_RUNNABLE: True # Indicates whether the model supports running, or True / False
+MODEL_RUNNABLE: True 
 
 # aiak-training-omni training parameters
-
-HF_CKPT_PATH: $pfs_path/models/huggingface.co/InternVL2_5-8B/
-DATA_PATH: $pfs_path/dataset/internvl/webdataset_image
-TOKENIZER_PATH: $pfs_path/models/huggingface.co/InternVL2_5-8B/
-CHECKPOINT_PATH: $step1_output_path
+HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL2_5-8B/
+DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl2.5_8b/webdataset_image
+TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL2_5-8B/
+CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/internvl2.5/$model_name
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl2.5/internvl2_5_8b.yaml
 SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.json
 
-# Checkpoint convert related configuration
+# ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 4
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
 FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml
 IMAGE_ENCODER_CONVERT_FILE: $aiak_training_path/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
 IMAGE_PROJECTOR_CONVERT_FILE: $aiak_training_path/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
-LANGUAGE_MODEL_PATH: $step1_output_path/language-mcore
-VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
-ADAPTER_PATH: $step1_output_path/adapter-mcore
-PATCH_PATH: $step1_output_path/patch-mcore
+LANGUAGE_MODEL_PATH: $CHECKPOINT_PATH/language-mcore
+VISION_MODEL_PATH: $CHECKPOINT_PATH/vision-model-mcore
+ADAPTER_PATH: $CHECKPOINT_PATH/adapter-mcore
+PATCH_PATH: $CHECKPOINT_PATH/patch-mcore
 
-# Training parameters
+# Training Parameters
 
 TENSOR_MODEL_PARALLER_SIZE: 4
-PIPELINE_MODEL_PARALLER_SIZE: 2
-
-CUSTOM_PIPELINE_LAYERS: 7,9,7,9
-log_interval: 1
-micro_batch_size: 1
+PIPELINE_MODEL_PARALLER_SIZE: 1
 global_batch_size: 32
 seq_length: 16384
 
@@ -43,7 +38,7 @@ scenarios:
   - function:
       sft:
         Step1:
-          RUNNABLE_FLAG: "false"
+          RUNNABLE_FLAG: "False"
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -51,8 +46,6 @@ scenarios:
             --convert_file=${FOUNDATION_CONVERT_FILE}
             --tensor_model_parallel_size=${DECODER_TENSOR_MODEL_PARALLER_SIZE}
             --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
-            --num-virtual-stages-per-pipeline-rank=${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
-            --custom_pipeline_layers=${CUSTOM_PIPELINE_LAYERS}
             --load_ckpt_path=${HF_CKPT_PATH}
             --save_ckpt_path=${LANGUAGE_MODEL_PATH}
             --safetensors
@@ -101,7 +94,6 @@ scenarios:
             --decoder_tensor_model_parallel_size ${DECODER_TENSOR_MODEL_PARALLER_SIZE}
             --pipeline_model_parallel_size ${PIPELINE_MODEL_PARALLER_SIZE}
             --save_ckpt_path ${CHECKPOINT_PATH}/release
-            --num_virtual_stages_per_pipeline_rank=${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
           DATA_ARGS: '
@@ -117,7 +109,7 @@ scenarios:
             --max-packed-tokens 16384
             --init-method-std 0.01
             --micro-batch-size 1
-            --global-batch-size 32
+            --global-batch-size ${global_batch_size}
             --lr 1e-5
             --min-lr 0.0
             --clip-grad 1.0
@@ -135,6 +127,7 @@ scenarios:
             --bf16
             --seed 42
             --no-gradient-accumulation-fusion
+            --load $CHECKPOINT_PATH
             --save-interval 2000
             --exit-interval 500
             --dataloader-type external
@@ -151,8 +144,6 @@ scenarios:
             --num-workers 8
             --dataloader-prefetch-factor 4
             --use-flash-attn
-            --custom-pipeline-layers 14,18
-            --custom-pipeline-recompute-layers 14,18
             --recompute-granularity full
             --recompute-method block
             --recompute-num-layers 12
@@ -163,27 +154,24 @@ scenarios:
             --packing-sft-data
             --packing-batch-size 20
             --energon-pack-algo sequential_max_images
-            --allow-missing-adapter-checkpoint'
-            #--load $CHECKPOINT_PATH
-            # --save ${step1_output_path}
+            --allow-missing-adapter-checkpoint
+            --log-memory-stats'
           MODEL_PARALLEL_ARGS: '
-            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
-            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --overlap-cpu-optimizer-d2h-h2d
-            --use-precision-aware-optimizer
+            --attention-backend flash
+            --tensor-model-parallel-size 4
+            --pipeline-model-parallel-size 1
             --use-distributed-optimizer
             --context-parallel-size 1
-            --attention-backend flash
             --distributed-backend nccl'
           MODEL_CONFIG_ARGS: '
-            --config-file $MODEL_CONFIG_PATH'
+            --config-file $MODEL_CONFIG_PATH
+            --rope-scaling-factor 2'
           LOGGING_ARGS: '
-            --log-interval ${log_interval}
-            --tensorboard-dir $TENSORBOARD_PATH
+            --log-interval 1
+            --tensorboard-dir ${TENSORBOARD_PATH}
             --log-timers-to-tensorboard'
           SFT_ARGS: '
             --sft-dataset-config $SFT_DATASET_CONFIG'
 
 tasks:
   check_correctness_task: True
-  check_perfness_task: False

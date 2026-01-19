@@ -12,7 +12,7 @@ from tools.config_manager import ConfigManager
 
 
 def _print_available_models(args, print_func):
-    """Print list of available models (follows immediately after arguments)"""
+    """Print the list of available models (following the arguments)."""
     config_dir = getattr(args, 'configs_dir', 'configs')
     include_optional = getattr(args, 'include_optional', False)
     extra_configs_dirs = getattr(args, 'extra_configs_dirs', []) or []
@@ -26,7 +26,7 @@ def _print_available_models(args, print_func):
         if optional_dir not in all_dirs:
             all_dirs.append(optional_dir)
     
-    # Get all models under directories
+    # Get models from all directories
     available = ConfigManager.list_all_available_models(
         config_dir,
         extra_configs_dirs=all_dirs[1:] if len(all_dirs) > 1 else None
@@ -37,7 +37,7 @@ def _print_available_models(args, print_func):
     
     total_count = 0
     for directory, models in available.items():
-        # Group by subdirectories
+        # Group by subdirectory
         grouped = {}
         for model in models:
             if "/" in model:
@@ -52,8 +52,8 @@ def _print_available_models(args, print_func):
         
         # Display directory name
         print_func(f'  [{directory}]')
-
-        # Display models in root directory first
+        
+        # Display models in the root directory first
         if "_root_" in grouped:
             for model in sorted(grouped["_root_"]):
                 print_func(f'    • {model}')
@@ -91,7 +91,7 @@ def print_args(args, indents=48, std_out=print, need_endl=False):
 
     custom_print('-------------------- end of arguments ---------------------')
     
-    # Print available models list
+    # Print list of available models
     _print_available_models(args, custom_print)
 
 def parse_args():
@@ -102,7 +102,7 @@ def parse_args():
     optional_config_dir = "optional_configs"
     task_dir = "tasks"
     
-    # Get all available models (including subdirectories under main config directory and optional config directory)
+    # Get all available models (including main config dir and subdirs in optional config dir)
     all_available_models = ConfigManager.get_all_models(
         config_dir, 
         extra_configs_dirs=[optional_config_dir],
@@ -112,7 +112,7 @@ def parse_args():
     parser.add_argument("--models",
                         type=str,
                         nargs='+',
-                        default=ConfigManager.get_all_models(config_dir),
+                        default=None,
                         help=f"The model we need to test. Support formats: 'model_name' or 'subdir/model_name'. Available models: {', '.join(all_available_models[:10])}...")
     parser.add_argument("--tasks",
                         type=str,
@@ -161,7 +161,7 @@ def parse_args():
                         default=600,
                         help="timeout.")
     
-    # Optional configuration related parameters
+    # Optional configuration parameters
     parser.add_argument("--extra_configs_dirs",
                         type=str,
                         nargs='*',
@@ -185,5 +185,4 @@ def parse_args():
 
     args = parser.parse_args()
     print_args(args)
-    # breakpoint()
     return args

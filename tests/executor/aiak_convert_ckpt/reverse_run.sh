@@ -5,12 +5,12 @@ set -eo pipefail
 ############################################ mcore to hf checkpoint convert ############################################
 
 AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
 export PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
-# Parse parameters
+# Parse arguments
 REVERSE_KEY_ARGS=(
     ${REVERSE_KEY_ARGS}
 )
@@ -32,7 +32,7 @@ REVERSE_MERGE_ARGS=(
 
 final_task=$((WORLD_SIZE - 1))
 
-# VLM model type detection function
+# VLM Model type detection function
 is_vlm_model() {
     local model=$1
     if [[ "${model}" =~ "qwen2.5_vl" ]] || [[ "${model}" =~ "qwen2_vl" ]] || \
@@ -43,10 +43,10 @@ is_vlm_model() {
     return 1
 }
 
-# Default command is empty array
+# Default commands array is empty
 commands=()
 
-# Only perform reverse conversion for VLM models
+# Only VLM models undergo reverse conversion
 if is_vlm_model "${model_name}"; then
     # Get parallel parameters
     PP=${PIPELINE_MODEL_PARALLER_SIZE:-2}
@@ -60,7 +60,7 @@ if is_vlm_model "${model_name}"; then
         ADAPTER_SCRIPT="$CONVERT_CHECKPOINT_PATH/module_convertor/adapter.py"
     fi
 
-    # Step 1: key reverser - convert omni format mcore weights to standard mcore format
+    # Step 1: key reverser - Convert omni format mcore weights to standard mcore format
     commands+=(
         "python $CONVERT_CHECKPOINT_PATH/key_mappings/key_reverser.py ${REVERSE_KEY_ARGS[*]}"
     )
@@ -73,7 +73,7 @@ if is_vlm_model "${model_name}"; then
     # Step 3: vision model mcore -> hf
     # Handle PP > 1 case, need to create temporary directory
     if [[ $PP -gt 1 ]]; then
-        # Allow overriding load path via environment variable, default is release
+        # Allow overriding load path via environment variable, defaults to release
         MCORE_LOAD_DIR=${MCORE_LOAD_PATH:-"${CHECKPOINT_PATH}/release"}
         LOAD_PATH=${MCORE_LOAD_DIR}/tmp/
 
@@ -88,7 +88,7 @@ if is_vlm_model "${model_name}"; then
                 "cp -r ${MCORE_LOAD_DIR}/$from $LOAD_PATH/$to"
             )
         done
-        # Update load_ckpt_path in vision model parameters
+        # Update load_ckpt_path in vision model arguments
         REVERSE_VISION_MODEL_ARGS_MODIFIED=$(echo "${REVERSE_VISION_MODEL_ARGS[*]}" | sed "s|--load_ckpt_path=[^ ]*|--load_ckpt_path=$LOAD_PATH|g")
         commands+=(
             "python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py $REVERSE_VISION_MODEL_ARGS_MODIFIED"
@@ -127,14 +127,14 @@ else
 fi
 
 
-# Only run on master or the last worker
+# Determine if it is the only master or the last worker running
 if [[ "${RANK}" != "" ]] && [[ "${RANK}" == "${final_task}" ]] && [[ "${dry_run}" != "true" ]]; then
     echo ""
     # Iterate through command array and execute each command
     for command in "${commands[@]}"; do
-        echo "Executing command: \"$command\""
+        echo "Execute command: \"$command\""
         eval "$command"
     done
 else
-    echo "Skipping task on current node [Only when master or the last worker node performs reverse weight conversion !!!]"
+    echo "Skip current node task [Only if it is a master or last worker node to perform reverse weight conversion !!!]"
 fi

@@ -28,7 +28,7 @@ from metric.metric import Metric
 
 logger = create_color_logger(name=__name__)
 
-# HF checkpoint validation model layer mapping configuration
+# HF checkpoint check model layer mapping configuration
 HF_CHECK_MODEL_MAPPING = {
     "Qwen2.5-VL-7B-Instruct": {
         "llm": ["model.layers.", 28],
@@ -94,7 +94,7 @@ class BaseTask(object):
 
     # Check lock file
     def check_lock_file(self, lock_file_path, task_flag):
-        # Iterate through all files under lock_file_path folder, check if total content equals expected, if equal return True, otherwise return False, then check if all content is task_flag, if yes return True, otherwise return False,
+        # Traverse the total number of file contents under lock_file_path folder to see if it equals expected, if equal True, else False, then check if content is all task_flag, if so True, else False
         count = 0
         flag = True
 
@@ -109,24 +109,23 @@ class BaseTask(object):
 
         return count, (count == self.input_cmd_args.node_nums and flag)
     
-    # Wait for all Pods/phases to complete
     def wait_async_task_complete(self, lock_file_path, task_flag, model_name="", scenarios_name=""):
-        # Check lock file, if all Pods have completed, proceed to next phase
+        # Check lock file, if all Pods are completed, enter next stage
         for _ in range(self.input_cmd_args.timeout // 10):
             if self.check_lock_file(lock_file_path, task_flag):
-                logger.info(f"Model 【{model_name}】{scenarios_name} all Pods have completed")
+                logger.info(f"Model [{model_name}] {scenarios_name} all Pods completed")
                 # if self.is_final_pod:
                 #     parent_path = os.path.dirname(os.path.dirname(lock_file_path))
                 #     shutil.rmtree(parent_path)
                 break
             else:
-                logger.info(f"Model 【{model_name}】{scenarios_name} still has Pods not completed, waiting...")
+                logger.info(f"Model [{model_name}] {scenarios_name} still has pending Pods, waiting...")
                 time.sleep(10)
         else:
-            raise TimeoutError(f"ERROR: Waited for other Pods for more than {self.input_cmd_args.timeout} seconds")
+            raise TimeoutError(f"ERROR: Waited for other Pods more than {self.input_cmd_args.timeout} seconds")
 
-    # lock_file lock file exists and content == MASTER_ADDR, proves this task has been written to file and completed, can continue execution
-    # Otherwise, if not exists, create it and write content MASTER_ADDR
+    # lock_file exists and content == MASTER_ADDR, proving this task has completed writing to file, can continue execution
+    # Otherwise, if not exists then create, and write content MASTER_ADDR
     def initialize_lock_file(self, lock_file, task_flag):
         # Check if directory exists, if not create it
         if not os.path.exists(os.path.dirname(lock_file)):
@@ -141,7 +140,7 @@ class BaseTask(object):
             logger.info(f"initialize_lock_file end")
     
     def wait_async_pod_complete(self, lock_file, model_name="", scenarios_name="", is_function=False, function=None, raise_on_error=False, *args, **kwargs):
-        logger.info(f"Model 【{model_name}】{scenarios_name} waiting for other Pods to complete ...")
+        logger.info(f"Model [{model_name}] {scenarios_name} waiting for other Pods to complete...")
         task_flag = task_finish_flag
 
         try:
@@ -151,7 +150,7 @@ class BaseTask(object):
         except Exception as e:
             logger.warning(f"warning: Failed to create directory, {e}")
             pass
-
+        
         # Step 1: Write corresponding pod data to lock_file
         # Open or create lock file
         with open(lock_file, 'a+') as file:
@@ -159,40 +158,40 @@ class BaseTask(object):
             file.truncate() # Clear file content
             file.write(task_flag)
 
-        # Step 2: Check lock_file, if all Pods have completed, proceed to next phase: 1. All files state are Finish. 2. Total files is node_nums.
+        # Step 2: Check lock_file, if all Pods completed, enter next stage: 1. All file states are Finish. 2. File count is node_nums.
         for _ in range(self.input_cmd_args.timeout // 10):
             finish_count, state = self.check_lock_file(lock_file, task_flag)
             if state:
-                logger.info(f"Model 【{model_name}】{scenarios_name} all Pods have completed, {finish_count} / {self.input_cmd_args.node_nums}")
+                logger.info(f"Model [{model_name}] {scenarios_name} all Pods completed, {finish_count} / {self.input_cmd_args.node_nums}")
 
                 if is_function and self.is_final_pod:
                     if function and callable(function):
                         try:
                             logger.info(f"Executing {function.__name__} method:")
-                            result = function(*args, **kwargs)  # Call function and pass parameters
+                            result = function(*args, **kwargs)  # Call function and pass arguments
                             logger.info(f"Function {function.__name__} execution completed, return value: {result}")
                         except Exception as e:
-                            logger.error(f"Error when executing function {function.__name__}: {e}")
+                            logger.error(f"Error executing function {function.__name__}: {e}")
                             # If raise_on_error parameter is True, raise exception
                             if raise_on_error:
-                                raise Exception(f"Error when executing function {function.__name__}: {e}")
+                                raise Exception(f"Error executing function {function.__name__}: {e}")
                     else:
                         logger.error(f"Provided {function} is not a callable function.")
                 break
             else:
-                logger.info(f"Model 【{model_name}】{scenarios_name} still has Pods not completed, {finish_count} / {self.input_cmd_args.node_nums} waiting...")
+                logger.info(f"Model [{model_name}] {scenarios_name} has pending Pods, {finish_count} / {self.input_cmd_args.node_nums} waiting...")
                 time.sleep(10)
         else:
-            raise TimeoutError(f"ERROR: Waited for other Pods for more than {self.input_cmd_args.timeout} seconds")
+            raise TimeoutError(f"ERROR: Waited for other Pods more than {self.input_cmd_args.timeout} seconds")
     
 
     def __init_ckpt_file__(self) -> None:
-        # Initialize data scenario, need to delete some files on first entry to avoid affecting subsequent tests
+        # Initialize data scenario, first entry needs to delete some files to avoid affecting subsequent tests
         scenario_name = ".init"
         init_lock_path = os.path.join(self.model["model_lock_file_path"], scenario_name, self.master_addr)
         init_lock_file = os.path.join(init_lock_path, f"{self.rank_name}_lock.txt")
 
-        # Wait for all pods to be ready, then delete model's existing ckpt files
+        # Wait for all pods to be ready, then delete existing model ckpt files
         is_function = True
         if self.task_type == "perf":
             is_function = False
@@ -207,17 +206,17 @@ class BaseTask(object):
 
     def __del_ckpt_file__(self):
         step1_output_path = self.model["step1_output_path"]
-        # Delete output files of step1_output_path
+        # Delete step1_output_path output files
         if os.path.exists(step1_output_path):
             shutil.rmtree(step1_output_path)
 
     def __clean_up__(self):
-        # Initialize data scenario, need to delete some files on first entry to avoid affecting subsequent tests
+        # Initialize data scenario, first entry needs to delete some files to avoid affecting subsequent tests
         scenario_name = ".clean_up"
         init_lock_path = os.path.join(self.model["model_lock_file_path"], scenario_name, self.master_addr)
         init_lock_file = os.path.join(init_lock_path, f"{self.rank_name}_lock.txt")
 
-        # Wait for all pods to be ready, then delete model's existing ckpt files
+        # Wait for all pods to be ready, then delete existing model ckpt files
         self.wait_async_pod_complete(
             init_lock_file,
             self.model_name,
@@ -236,9 +235,9 @@ class BaseTask(object):
             # Merge function_step_data and model
             model = {**model, **function_step_data}
 
-            # Normally get data under scenarios_name scenario
+            # Normally get data under scenarios_name
             step_data = self.model["scenarios"][index][scenarios_name][training_type_name][step_name]
-            # Merge function_step_data and model as a json
+            # Merge function_step_data and model into one json
             model = {**model, **step_data}
 
         elif self.task_type == "function":
@@ -250,26 +249,26 @@ class BaseTask(object):
                 function_scenarios_name = "function"
                 # Check if step exists, if not skip
                 if (local_step_name not in self.model["scenarios"][0][function_scenarios_name][training_type_name]):
-                    logger.info(f"local_step_name {local_step_name} currently does not exist, skip ...")
+                    logger.info(f"local_step_name {local_step_name} currently does not exist, skipping...")
                     continue
 
                 function_step_data = self.model["scenarios"][0][function_scenarios_name][training_type_name][local_step_name]
                 # Merge function_step_data and model
                 model = {**model, **function_step_data}
 
-                # Update variable to current step
+                # Update variables to current step
                 if local_step_name == step_name:
                     break
-
-            # Normally get data under scenarios_name scenario
+            
+            # Normally get data under scenarios_name
             step_data = self.model["scenarios"][index][scenarios_name][training_type_name][step_name]
-            # Merge function_step_data and model as a json
+            # Merge function_step_data and model into one json
             model = {**model, **step_data}
-
+        
         elif self.task_type == "preprocess_data":
-            # Normally get data under scenarios_name scenario
+            # Normally get data under scenarios_name
             step_data = self.model["scenarios"][index][scenarios_name][step_name]
-            # Merge function_step_data and model as a json
+            # Merge function_step_data and model into one json
             model = {**model, **step_data}
 
         # Set whether to use nccl
@@ -293,25 +292,25 @@ class BaseTask(object):
         env_vars_str = ""
         new_model_config = deepcopy(model_config)
 
-        # Iterate through dictionary, convert key-value pairs to environment variables
+        # Iterate dictionary, convert key-value pairs to environment variables
         for key, value in new_model_config.items():
             if key == "scenarios":
                 continue
 
             if isinstance(value, str):
-                # For _ARGS type parameters, need special handling:
+                # For _ARGS type parameters, special handling is required:
                 # 1. Remove comment lines (lines starting with #)
                 # 2. Convert newlines to spaces, merge multiple spaces into single space
-                # 3. Remove leading and trailing whitespace
-                # 4. Do not use json.dumps, directly pass original string (bash splits by spaces)
+                # 3. Strip leading and trailing whitespace
+                # 4. Do not use json.dumps, pass raw string directly (bash will split by space)
                 if "_ARGS" in key:
                     # Remove comment lines and empty lines
                     lines = []
                     for line in value.split('\n'):
                         stripped_line = line.strip()
-                        # Skip empty lines and comment lines (including inline comments, e.g., "--arg # comment")
+                        # Skip empty lines and comment lines (including inline comments, e.g. "--arg # comment")
                         if stripped_line and not stripped_line.startswith('#'):
-                            # Process inline comments: remove # and content after it
+                            # Handle inline comments: remove # and content after it
                             if '#' in stripped_line:
                                 # Check if # is inside quotes
                                 in_quotes = False
@@ -328,12 +327,12 @@ class BaseTask(object):
                                         stripped_line = stripped_line[:i].strip()
                                         break
                             lines.append(stripped_line)
-                    # Join all non-comment lines with spaces and normalize spaces
+                    # Join all non-comment lines with spaces, and normalize spaces
                     value = ' '.join(lines)
                     # Replace multiple consecutive spaces with single space
                     import re
                     value = re.sub(r'\s+', ' ', value).strip()
-                    # For _ARGS, need to wrap entire value in quotes to ensure values containing spaces are correctly passed
+                    # For _ARGS, need to wrap the whole value in quotes to ensure values with spaces are passed correctly
                     # Escape quotes in value, then wrap with quotes
                     value = value.replace('"', '\\"')
                     value = f'"{value}"'
@@ -353,19 +352,19 @@ class BaseTask(object):
 
         if not self.is_final_pod:
             return
-        # Collect metric indicators during training
+        # Collect training metric indicators
         self.collect_metrics(training_log_file)
-        # Uniformly verify accuracy and performance indicators
+        # Unified validation of accuracy and performance metrics
         self.validate_metrics(self.model_name, training_type)
         logger.info(f"End assert_aiak_training_omni")
 
     def validate_metrics(self, model_name, training_type=None):
         """
-        Unified verification of training accuracy and performance metrics.
+        Unified validation of training accuracy and performance metrics.
         Accuracy metrics (lm_loss, grad_norm) use relative_tolerance=0.02, performance metrics (elapsed_time_ms, throughput) use relative_tolerance=0.05.
         Args:
             model_name: Model name, used to locate baseline JSON file
-            training_type: Training type (e.g., 'pretrain', 'sft')
+            training_type: Training type (e.g. 'pretrain', 'sft')
         """
         baseline_data = ConfigManager.get_baseline_data(None, self.model, model_name, training_type)
         # Accuracy metrics
@@ -390,13 +389,13 @@ class BaseTask(object):
                 tolerance=accuracy_relative_tolerance,
                 is_relative=False
             )
-        logger.info("Accuracy metrics verification passed!")
+        logger.info("Accuracy metrics validation passed!")
 
         # Performance metrics
         performance_relative_tolerance = self.performance_relative_tolerance
         num_iters = min(len(self.metric.elapsed_time_match), len(baseline_data))
         if num_iters == 0:
-            logger.warning("Insufficient data for performance verification")
+            logger.warning("Not enough data for performance validation")
             return
         # elapsed_time_ms
         if hasattr(self.metric, 'elapsed_time_match') and self.metric.elapsed_time_match and 'elapsed_time_ms' in baseline_data[0]:
@@ -444,15 +443,15 @@ class BaseTask(object):
                 tolerance=performance_relative_tolerance,
                 is_relative=True
             )
-        logger.info("Performance metrics verification passed!")
-
+        logger.info("Performance metrics validation passed!")
+    
     def collect_metrics(self, training_log_file):
         self.metric.model_name = self.model_name
-        # Collect metric indicators during training
+        # Collect training metric indicators
         with open(training_log_file, 'r') as file:
             lines = file.readlines()
 
-        # Clear to prevent mixing after many scenarios
+        # Clear to prevent mixing when there are many scenarios
         self.metric.lm_loss_list = []
         self.metric.grad_norm_list = []
         self.metric.throughput = []
@@ -467,27 +466,27 @@ class BaseTask(object):
             if loss_match:
                 training_lm_loss_str = str(loss_match.group(1)).strip()
                 self.metric.lm_loss_list.append(training_lm_loss_str)
-            # Get value of grad_norm
+            # Get grad_norm value
             grad_norm_match = re.search(r'grad norm: ([\d\.E\+-]+)', line)
             if grad_norm_match:
                 grad_norm_str = str(grad_norm_match.group(1)).strip()
                 self.metric.grad_norm_list.append(grad_norm_str)
-            # Get value of 'throughput \(token/sec/GPU\)'
+            # Get 'throughput (token/sec/GPU)' value
             throughput_match = re.search(r'throughput \(token/sec/GPU\): ([\d\.E\+-]+)', line)
             if throughput_match:
                 throughput_str = str(throughput_match.group(1)).strip()
                 self.metric.throughput.append(throughput_str)
-            # Get value of elapsed time per iteration \(ms\)
+            # Get elapsed time per iteration (ms) value
             elapsed_time_match = re.search(r'elapsed time per iteration \(ms\): ([\d\.E\+-]+)', line)
             if elapsed_time_match:
                 elapsed_time_str = str(elapsed_time_match.group(1)).strip()
                 self.metric.elapsed_time_match.append(elapsed_time_str)
-            # Get mem_allocated_avg_MB \(training log format like: mem-allocated-bytes-avg\(MB\): 15896.39\)
+            # Get mem_allocated_avg_MB (training log format e.g.: mem-allocated-bytes-avg(MB): 15896.39)
             mem_allocated_match = re.search(r'mem-allocated-bytes-avg\(MB\):\s*([\d\.E\+-]+)', line)
             if mem_allocated_match:
                 mem_allocated_str = str(mem_allocated_match.group(1)).strip()
                 self.metric.mem_allocated_avg_MB.append(mem_allocated_str)
-            # Get mem_max_allocated_avg_MB \(training log format like: mem-max-allocated-bytes-avg\(MB\): 29039.47\)
+            # Get mem_max_allocated_avg_MB (training log format e.g.: mem-max-allocated-bytes-avg(MB): 29039.47)
             mem_max_allocated_match = re.search(r'mem-max-allocated-bytes-avg\(MB\):\s*([\d\.E\+-]+)', line)
             if mem_max_allocated_match:
                 mem_max_allocated_str = str(mem_max_allocated_match.group(1)).strip()
@@ -498,14 +497,14 @@ class BaseTask(object):
                 batch_size_str = str(batch_size_match.group(1)).strip()
                 self.metric.global_batch_size.append(batch_size_str)
 
-        assert len(self.metric.lm_loss_list) != 0, "The loss of this task is empty, please check if the training task is working properly!!!"
+        assert len(self.metric.lm_loss_list) != 0, "Loss list for this task is empty, please check if training task is normal!!!"
         # logger.info(f"self.metric dict: {self.metric.obj_to_dict()}")
       
     def _compare_metric(self, actual_list, expected_list, metric_name, tolerance, is_relative=False):
         """
-        Generic metric comparison function, supports absolute error and relative error, allows some iterations to exceed tolerance range
-        :param actual_list: List of actual values
-        :param expected_list: List of expected values
+        Generic metric comparison function, supports absolute and relative error, allows some iterations to exceed tolerance range
+        :param actual_list: Actual value list
+        :param expected_list: Expected value list
         :param metric_name: Metric name
         :param tolerance: Tolerance (absolute or relative)
         :param is_relative: Whether to use relative error
@@ -521,39 +520,39 @@ class BaseTask(object):
                 else:
                     relative_error = abs(actual_value - expected_value) / abs(expected_value)
                 if relative_error <= tolerance:
-                    logger.info(f"Group {index + 1} {metric_name} performance comparison: actual value: {actual_value} vs expected value: {expected_value} relative error: {relative_error*100:.2f}% (tolerance: {tolerance*100:.0f}%), test passed!")
+                    logger.info(f"Group {index + 1} {metric_name} performance comparison: Actual: {actual_value} vs Expected: {expected_value} Relative Error: {relative_error*100:.2f}% (Tolerance: {tolerance*100:.0f}%), Test Passed!")
                     is_close.append(True)
                 else:
-                    logger.warning(f'Group {index + 1} {metric_name} performance comparison: actual value: {actual_value} vs expected value: {expected_value} relative error: {relative_error*100:.2f}% exceeds tolerance range {tolerance*100:.0f}%, test not passed!!!')
+                    logger.warning(f"Group {index + 1} {metric_name} performance comparison: Actual: {actual_value} vs Expected: {expected_value} Relative Error: {relative_error*100:.2f}% Exceeds tolerance {tolerance*100:.0f}%, Test Failed!!!")
                     is_close.append(False)
             else:
                 difference = abs(actual_value - expected_value)
                 if difference <= float(tolerance):
-                    logger.info(f"Group {index + 1} {metric_name} comparison: actual value: {actual_value} vs expected value: {expected_value} difference value expected within {tolerance}, test passed!")
+                    logger.info(f"Group {index + 1} {metric_name} comparison: Actual: {actual_value} vs Expected: {expected_value} Difference within expected {tolerance}, Test Passed!")
                     is_close.append(True)
                 else:
-                    logger.warning(f'Group {index + 1} {metric_name} comparison: actual value: {actual_value} vs expected value: {expected_value} difference value exceeds {tolerance}, actual difference is: {difference}, test not passed!!!')
+                    logger.warning(f"Group {index + 1} {metric_name} comparison: Actual: {actual_value} vs Expected: {expected_value} Difference exceeds {tolerance}, Actual difference is: {difference}, Test Failed!!!")
                     is_close.append(False)
 
         num_failing_steps_allowed = min(max(total_steps_evaluated // 100, 1), 50)
         passing = np.sum(is_close) >= (total_steps_evaluated - num_failing_steps_allowed)
         if not passing:
-            raise ValueError(f"{metric_name} comparison failed: allowed failing steps {num_failing_steps_allowed}, actual passed steps {np.sum(is_close)}, total steps {total_steps_evaluated}")
+            raise ValueError(f"{metric_name} comparison failed: Allowed failing steps {num_failing_steps_allowed}, Actual passed steps {np.sum(is_close)}, Total steps {total_steps_evaluated}")
         else:
-            logger.info(f"{metric_name} comparison passed: allowed failing steps {num_failing_steps_allowed}, actual passed steps {np.sum(is_close)}, total steps {total_steps_evaluated}")
+            logger.info(f"{metric_name} comparison passed: Allowed failing steps {num_failing_steps_allowed}, Actual passed steps {np.sum(is_close)}, Total steps {total_steps_evaluated}")
     
     def _get_hf_layer_state_dict(self, load_path: str, layer_prefix: str, layer_id: int):
         """
-        Get state_dict of specified layer
-
+        Get state_dict for specified layer
+        
         Args:
-            load_path: HF checkpoint path
-            layer_prefix: Layer prefix, e.g., "model.layers."
-            layer_id: Layer id
-
+            load_path: hf checkpoint path
+            layer_prefix: layer prefix, e.g. "model.layers."
+            layer_id: layer id
+            
         Returns:
-            checked_keys: List of checked keys
-            state_dict: Corresponding layer's state_dict
+            checked_keys: list of checked keys
+            state_dict: corresponding layer's state_dict
         """
         from safetensors.torch import load_file
         
@@ -592,57 +591,57 @@ class BaseTask(object):
     def _check_hf_layer(self, src_load_path: str, dst_load_path: str, layer_prefix: str, layer_id: int, module_name: str):
         """
         Check consistency of single layer hf checkpoint
-
+        
         Args:
-            src_load_path: Original HF checkpoint path
-            dst_load_path: Converted HF checkpoint path
+            src_load_path: Source hf checkpoint path
+            dst_load_path: Converted hf checkpoint path
             layer_prefix: Layer prefix
             layer_id: Layer id
             module_name: Module name (llm/vit)
         """
         logger.info(f"Checking {module_name} layer {layer_id} ...")
-
+        
         src_checked_keys, src_state_dict = self._get_hf_layer_state_dict(src_load_path, layer_prefix, layer_id)
         dst_checked_keys, dst_state_dict = self._get_hf_layer_state_dict(dst_load_path, layer_prefix, layer_id)
-
-        # Check if keys are consistent
+        
+        # Check if keys match
         if set(src_checked_keys) != set(dst_checked_keys):
             src_set = set(src_checked_keys)
             dst_set = set(dst_checked_keys)
             diff_src = list(src_set - dst_set)
             diff_dst = list(dst_set - src_set)
-            raise ValueError(f"Keys are inconsistent.\nOriginal has but converted does not have: {diff_src}\nConverted has but original does not have: {diff_dst}")
+            raise ValueError(f"key mismatch.\nPresent in source but not in destination: {diff_src}\nPresent in destination but not in source: {diff_dst}")
 
-        # Check if tensor corresponding to each key is consistent
+        # Check if tensors corresponding to each key match
         for key in src_checked_keys:
             src_data = src_state_dict[key]
             dst_data = dst_state_dict[key]
             
             if src_data.shape != dst_data.shape:
-                raise ValueError(f"{key} shape is inconsistent: src={src_data.shape}, dst={dst_data.shape}")
-
+                raise ValueError(f"{key} shape mismatch: src={src_data.shape}, dst={dst_data.shape}")
+            
             if not torch.equal(src_data, dst_data):
                 diff = (src_data.float() - dst_data.float()).abs().max()
-                logger.warning(f"{key} has value difference, max_diff={diff}")
-                # If difference is too large, throw exception
+                logger.warning(f"{key} value difference, max_diff={diff}")
+                # If difference is too large, raise exception
                 if diff > 1e-5:
-                    raise ValueError(f"{key} value difference is too large: max_diff={diff}")
-
+                    raise ValueError(f"{key} value difference too large: max_diff={diff}")
+        
         logger.info(f"Finished checking {module_name} layer {layer_id}")
 
     def check_hf_checkpoint(self, src_load_path: str, dst_load_path: str, model_name: str):
         """
-        Check consistency of converted HF checkpoint with original HF checkpoint
-
+        Check consistency between converted hf checkpoint and source hf checkpoint
+        
         Args:
-            src_load_path: Original HF checkpoint path
-            dst_load_path: Converted HF checkpoint path
+            src_load_path: Source hf checkpoint path
+            dst_load_path: Converted hf checkpoint path
             model_name: Model name, used to get layer mapping configuration
         """
-        logger.info(f"Starting to check HF checkpoint consistency...")
-        logger.info(f"Original path: {src_load_path}")
+        logger.info(f"Start checking HF checkpoint consistency...")
+        logger.info(f"Source path: {src_load_path}")
         logger.info(f"Converted path: {dst_load_path}")
-
+        
         if model_name not in HF_CHECK_MODEL_MAPPING:
             raise ValueError(f"Unsupported model: {model_name}, please add configuration in HF_CHECK_MODEL_MAPPING")
         
@@ -662,31 +661,33 @@ class BaseTask(object):
 
     def create_shell_file(self, model_config, script_path, new_script_path):
         import re
-        # Environment variable dictionary
         env_vars = {}
-        # print(model_config)
-
         for var, value in model_config.items():
             env_vars[var] = str(value)
 
-        # Read script content
         with open(script_path, "r") as file:
             script = file.read()
         
-        # Continuously replace variables until all are replaced
         while True:
             new_script = script
             for var, value in env_vars.items():
                 new_script = re.sub(f"\\$\\{{{var}\\}}", value, new_script)
-            if new_script == script:  # If no replacement occurred, then end loop
+            if new_script == script:  # If no replacement happened, break the loop
                 break
             script = new_script
 
-        # Save new script
         with open(new_script_path, "w") as file:
             file.write(script)
     
     def start_aiak_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
+        """
+        Start executing ckpt conversion task
+        Args:
+            index: Scenario index
+            step_stage: Step stage name (e.g. Step1, Step2)
+            scenario_name: Scenario name
+            training_type_name: Training type name (e.g. pretrain, sft)
+        """
         step_name = "aiak_convert_ckpt"
         logger.info(f"{step_stage} {step_name} Start Running ...")
 
@@ -700,12 +701,10 @@ class BaseTask(object):
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # Convert config file to env environment variables to pass to running script
+        # Convert config file to env variables passed to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
-
         step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
         model_lock_file = f'{step_stage_path}/{self.rank_name}_lock.txt'
-
         script_path = f"{scripts_root_path}/executor/{step_name}/run.sh"
         new_script_path = f"{training_log_path}/convert_ckpt_{model_name}_{self.rank_name}_run.sh"
         start_command = f"{env_vars_str} bash {script_path}"
@@ -713,7 +712,6 @@ class BaseTask(object):
 
         # Open a new file to write script output
         training_log_file = f"{training_log_path}/convert_ckpt_{model_name}_{self.rank_name}_run.log"
-
         start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/run.sh |tee {training_log_file}\""
         logger.info(f"{step_stage} {step_name} Start: {start_command} .")
         if os.system(start_command) != 0:
@@ -726,11 +724,10 @@ class BaseTask(object):
 
     def start_aiak_reverse_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
         """
-        Execute mcore -> hf reverse conversion and verify consistency of converted HF checkpoint with original HF checkpoint
+        Execute mcore -> hf reverse conversion and verify consistency between converted hf checkpoint and source hf checkpoint
         """
         step_name = "aiak_convert_ckpt"
         logger.info(f"{step_stage} reverse_{step_name} Start Running ...")
-
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
 
         # Get configuration
@@ -739,12 +736,10 @@ class BaseTask(object):
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # Convert config file to env environment variables to pass to running script
+        # Convert config file to env variables passed to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
-
         step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
         model_lock_file = f'{step_stage_path}/{self.rank_name}_lock.txt'
-
         script_path = f"{scripts_root_path}/executor/{step_name}/reverse_run.sh"
         new_script_path = f"{training_log_path}/reverse_convert_ckpt_{model_name}_{self.rank_name}_run.sh"
         start_command = f"{env_vars_str} bash {script_path}"
@@ -752,24 +747,21 @@ class BaseTask(object):
 
         # Open a new file to write script output
         training_log_file = f"{training_log_path}/reverse_convert_ckpt_{model_name}_{self.rank_name}_run.log"
-
         start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/reverse_run.sh |tee {training_log_file}\""
         logger.info(f"{step_stage} reverse_{step_name} Start: {start_command} .")
         if os.system(start_command) != 0:
             raise RuntimeError(f"Start {step_stage} reverse_{step_name} error, cmd is {start_command}")
 
-        # Get hf check related configuration and execute check
+        # Get hf check related config and check
         hf_ckpt_path = model_config.get("HF_CKPT_PATH", "")
         reverse_hf_ckpt_path = model_config.get("REVERSE_HF_CKPT_PATH", "")
         hf_check_model_name = model_config.get("HF_CHECK_MODEL_NAME", "")
-        
         if hf_ckpt_path and reverse_hf_ckpt_path and hf_check_model_name:
-            # Only execute check on last pod
             if self.is_final_pod:
-                logger.info(f"Starting to execute HF checkpoint consistency check...")
+                logger.info(f"Start executing HF checkpoint consistency check...")
                 self.check_hf_checkpoint(hf_ckpt_path, reverse_hf_ckpt_path, hf_check_model_name)
         else:
-            logger.warning(f"Missing HF check configuration, skipping consistency check: HF_CKPT_PATH={hf_ckpt_path}, REVERSE_HF_CKPT_PATH={reverse_hf_ckpt_path}, HF_CHECK_MODEL_NAME={hf_check_model_name}")
+            logger.warning(f"Missing HF check config, skipping consistency check: HF_CKPT_PATH={hf_ckpt_path}, REVERSE_HF_CKPT_PATH={reverse_hf_ckpt_path}, HF_CHECK_MODEL_NAME={hf_check_model_name}")
 
         # Wait for all pods to complete
         self.wait_async_pod_complete(model_lock_file, model_name, f"{scenario_name}_reverse_{step_name}")
@@ -777,6 +769,14 @@ class BaseTask(object):
         logger.info(f"{step_stage} End reverse_{step_name}")
 
     def start_aiak_training_omni(self, index, step_stage, scenario_name, training_type_name):
+        """
+        Start executing training task
+        Args:
+            index: Scenario index
+            step_stage: Step stage name (e.g. Step1, Step2)
+            scenario_name: Scenario name
+            training_type_name: Training type name (e.g. pretrain, sft)
+        """
         step_name = "aiak_training_omni"
         logger.info(f"{step_stage} {step_name} Start Running ...")
 
@@ -790,7 +790,7 @@ class BaseTask(object):
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # Convert config file to env environment variables to pass to running script
+        # Convert config file to env variables passed to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
 
         step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
@@ -809,7 +809,7 @@ class BaseTask(object):
         if os.system(start_command) != 0:
            raise RuntimeError(f"Start {step_stage} {step_name} error, cmd is {start_command}")
         
-        # Wait for all pods to complete and assert on this training result
+        # Wait for all pods to complete and assert this training result
         if self.task_type == "function":
             self.wait_async_pod_complete(
                 model_lock_file,

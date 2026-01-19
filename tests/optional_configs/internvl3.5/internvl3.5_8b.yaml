@@ -1,44 +1,35 @@
-model_name: internvl3.5_30b_a3b
+model_name: internvl3.5_8b
 description: $model_name Model Automation
-huggingface_path: https://huggingface.co/OpenGVLab/InternVL3_5-30B-A3B
-bos_path: bos:/ai-data/OpenGVLab/InternVL3_5-30B-A3B
+huggingface_path: https://huggingface.co/OpenGVLab/InternVL3_5-8B
+bos_path: bos:/ai-data/InternVL3_5-8B
 TOTAL_K8S_NODES: 1
-
-MODEL_RUNNABLE: True # Should be True / False
+MODEL_RUNNABLE: True
 
 # aiak-training-omni training parameters
-
-HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-30B-A3B/
-# DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl3.5_30b_a3b/webdataset_video
+HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-8B/
 DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl2.5_8b/webdataset_image
-TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-30B-A3B/
-CHECKPOINT_PATH: $step1_output_path
+TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-8B/
+CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/internvl3.5/$model_name
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl3.5/internvl3_5_8b.yaml
 SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.json
 
 # ckpt convert configuration
-ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
-DECODER_TENSOR_MODEL_PARALLER_SIZE: 2
-EXPERT_PARALLEL_SIZE: 4
-EXPERT_TENSOR_PARALLEL_SIZE: 1
-FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
+ENCODER_TENSOR_MODEL_PARALLER_SIZE: 4
+DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
+FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
 IMAGE_ENCODER_CONVERT_FILE: $aiak_training_path/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
 IMAGE_PROJECTOR_CONVERT_FILE: $aiak_training_path/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
-LANGUAGE_MODEL_PATH: $step1_output_path/language-mcore
-VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
-ADAPTER_PATH: $step1_output_path/adapter-mcore
-PATCH_PATH: $step1_output_path/patch-mcore
+LANGUAGE_MODEL_PATH: $CHECKPOINT_PATH/language-mcore
+VISION_MODEL_PATH: $CHECKPOINT_PATH/vision-model-mcore
+ADAPTER_PATH: $CHECKPOINT_PATH/adapter-mcore
+PATCH_PATH: $CHECKPOINT_PATH/patch-mcore
 
-# Training parameters
-TENSOR_MODEL_PARALLER_SIZE: 2
-PIPELINE_MODEL_PARALLER_SIZE: 2
-NUM_EXPERTS: 128
-log_interval: 1
-micro_batch_size: 1
+# Training Parameters
+TENSOR_MODEL_PARALLER_SIZE: 4
+PIPELINE_MODEL_PARALLER_SIZE: 1
 global_batch_size: 32
-seq_length: 4096
-
+seq_length: 16384
 
 scenarios:
   - function:
@@ -52,15 +43,11 @@ scenarios:
             --convert_file=${FOUNDATION_CONVERT_FILE}
             --tensor_model_parallel_size=${DECODER_TENSOR_MODEL_PARALLER_SIZE}
             --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
-            --num_experts=${NUM_EXPERTS}
-            --expert_parallel_size=${EXPERT_PARALLEL_SIZE}
-            --expert_tensor_parallel_size=${EXPERT_TENSOR_PARALLEL_SIZE}
             --load_ckpt_path=${HF_CKPT_PATH}
             --save_ckpt_path=${LANGUAGE_MODEL_PATH}
             --safetensors
             --no_save_optim
-            --no_load_optim
-            --moe-grouped-gemm'
+            --no_load_optim'
           VISION_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -103,7 +90,6 @@ scenarios:
             --encoder_tensor_model_parallel_size ${ENCODER_TENSOR_MODEL_PARALLER_SIZE}
             --decoder_tensor_model_parallel_size ${DECODER_TENSOR_MODEL_PARALLER_SIZE}
             --pipeline_model_parallel_size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --expert_parallel_size=${EXPERT_PARALLEL_SIZE}
             --save_ckpt_path ${CHECKPOINT_PATH}/release
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
@@ -132,22 +118,22 @@ scenarios:
             --norm-epsilon 1e-6
             --attention-dropout 0
             --hidden-dropout 0
-            --train-iters ${train_iters}
-            --load $CHECKPOINT_PATH
+            --train-iters 20
             --lr-decay-style cosine
             --lr-warmup-fraction 0.03
             --bf16
             --seed 42
             --no-gradient-accumulation-fusion
+            --load $CHECKPOINT_PATH
+            --save-interval 2000
             --exit-interval 500
             --dataloader-type external
-            --variable-seq-lengths 
+            --variable-seq-lengths
             --min-num-frame 8
             --max-num-frame 32
             --max-buffer-size 20
             --num-images-expected 48
             --loss-reduction square
-            --use-packed-ds
             --use_thumbnail
             --replacement
             --dynamic-image-size
@@ -159,7 +145,7 @@ scenarios:
             --use-flash-attn
             --recompute-granularity full
             --recompute-method block
-            --recompute-num-layers 45
+            --recompute-num-layers 12
             --sequence-parallel
             --strict-mode
             --conv-style internvl2_5
@@ -169,32 +155,19 @@ scenarios:
             --energon-pack-algo sequential_max_images
             --allow-missing-adapter-checkpoint
             --log-memory-stats'
-            # --save ${step1_output_path}
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
-            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
-            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --expert-model-parallel-size ${EXPERT_PARALLEL_SIZE}
-            --expert-tensor-parallel-size ${EXPERT_TENSOR_PARALLEL_SIZE}
-            --moe-token-dispatcher-type alltoall
+            --tensor-model-parallel-size 4
+            --pipeline-model-parallel-size 1
             --use-distributed-optimizer
             --context-parallel-size 1
-            --distributed-backend nccl
-            --use-precision-aware-optimizer'
-            #--optimizer-cpu-offload
-            #--optimizer-offload-fraction 0.05'
-          MOE_ARGS: '
-            --moe-router-load-balancing-type aux_loss
-            --moe-router-topk 8
-            --moe-aux-loss-coeff 1e-2
-            --moe-grouped-gemm
-            --moe-router-dtype fp32
-            --empty-unused-memory-level 2'
+            --distributed-backend nccl'
           MODEL_CONFIG_ARGS: '
-            --config-file $MODEL_CONFIG_PATH'
+            --config-file $MODEL_CONFIG_PATH
+            --rotary-seq-len-interpolation-factor 1'
           LOGGING_ARGS: '
-            --log-interval ${log_interval}
-            --tensorboard-dir $TENSORBOARD_PATH
+            --log-interval 1
+            --tensorboard-dir ${TENSORBOARD_PATH}
             --log-timers-to-tensorboard'
           SFT_ARGS: '
             --sft-dataset-config $SFT_DATASET_CONFIG'

@@ -4,8 +4,8 @@ import sys
 import time
 
 # Default paths
-log_path = "/Users/chen/Desktop/commit/baidu/hac-aiacc/AIAK-Training-Omni/tests/tools/output.log"
-output_path = "/Users/chen/Desktop/commit/baidu/hac-aiacc/AIAK-Training-Omni/tests/tools/output.json"
+log_path = ""
+output_path = ""
 
 # Support command line args
 if len(sys.argv) >= 3:

@@ -44,7 +44,7 @@ class ConfigManager(object):
 
     @staticmethod
     def get_task_runner(task_name):
-        """Get task runner (delayed import to avoid circular dependencies)"""
+        """Get task runner (lazy import to avoid circular dependency)"""
         from tasks import SUPPORTED_TASKS
         return SUPPORTED_TASKS[task_name]
     
@@ -53,7 +53,7 @@ class ConfigManager(object):
         
         for model_name in self.args.models:
             try:
-                # Find the directory and filename where the config file is located
+                # Find config file directory and filename
                 actual_configs_dir, yaml_filename = self.find_config_file(model_name)
                 if actual_configs_dir is None:
                     logger.warning(f"Config file for model '{model_name}' not found in any config directory.")
@@ -67,11 +67,11 @@ class ConfigManager(object):
                         if tasks not in self.args.tasks:
                             tasks.remove(task)
                     
-                    # Add config source information for debugging and distinguishing models with the same name
+                    # Add config source info for debugging and distinguishing models with same name
                     config["_config_source"] = {
                         "dir": actual_configs_dir,
                         "file": yaml_filename,
-                        "model_identifier": model_name  # Original model identifier (may include path prefix)
+                        "model_identifier": model_name  # Original model identifier (possibly with path prefix)
                     }
                     all_model_configs.append(config)
             except Exception as e:
@@ -82,10 +82,10 @@ class ConfigManager(object):
 
     def load_baseline_data_from_json(self, json_path, training_type=None):
         """Load baseline data from JSON file
-
+        
         Args:
             json_path: JSON file path
-            training_type: Training type (e.g., 'pretrain', 'sft'), used to select corresponding data from JSON
+            training_type: Training type (e.g. 'pretrain', 'sft'), used to select data from JSON
         """
         if not os.path.exists(json_path):
             raise FileNotFoundError(f"Baseline data file not found: {json_path}")
@@ -99,15 +99,15 @@ class ConfigManager(object):
                 baseline_data = baseline_data[training_type]
             else:
                 available_keys = list(baseline_data.keys())
-                raise ValueError(f"training_type '{training_type}' is not specified or does not exist in {json_path}, available training_type: {available_keys}")
+                raise ValueError(f"training_type '{training_type}' not specified or not found in {json_path}, available training_types: {available_keys}")
         
-        # Extract required data by iteration order
+        # Extract required data in order of iteration
         lm_loss_list = [item["lm_loss"] for item in baseline_data]
         grad_norm_list = [item["grad_norm"] for item in baseline_data]
         elapsed_time_list = [item["elapsed_time_ms"] for item in baseline_data]
         throughput_list = [item["throughput"] for item in baseline_data]
 
-        # Add new memory metrics (optional)
+        # Add memory metrics (optional)
         mem_allocated_avg_MB_list = [item["mem_allocated_avg_MB"] for item in baseline_data] 
         mem_max_allocated_avg_MB_list = [item["mem_max_allocated_avg_MB"] for item in baseline_data] 
 
@@ -124,14 +124,14 @@ class ConfigManager(object):
     @staticmethod
     def get_baseline_file_path(model_config, model_name):
         """
-        Get baseline file path, select baseline from default or optional directory based on model source directory.
+        Get baseline file path. Select baseline from default or optional directory based on model source directory.
         Args:
             model_config: Model configuration dictionary
             model_name: Model name
         Returns:
-            Full path to baseline file
+            Full path to the baseline file
         """
-        # Prefer getting BASELINE_PATH from model config
+        # Prioritize getting BASELINE_PATH from model configuration
         baseline_path = model_config.get("BASELINE_PATH")
         if baseline_path and os.path.isdir(baseline_path):
             baseline_file = os.path.join(baseline_path, f"{model_name}.json")
@@ -151,42 +151,42 @@ class ConfigManager(object):
 
     @staticmethod
     def get_baseline_data(self_unused, model_config, model_name, training_type=None):
-        """Get baseline data (for base_task to call)
-
+        """Get baseline data (for BaseTask calls)
+        
         Args:
-            self_unused: Placeholder parameter, keep interface consistent (can pass None)
+            self_unused: Placeholder parameter to keep interface consistent (can pass None)
             model_config: Model configuration dictionary
             model_name: Model name
-            training_type: Training type (e.g., 'pretrain', 'sft')
-
+            training_type: Training type (e.g. 'pretrain', 'sft')
+        
         Returns:
-            Baseline data list, each element contains lm_loss, grad_norm, elapsed_time_ms, throughput
+            List of baseline data, where each element contains lm_loss, grad_norm, elapsed_time_ms, throughput
         """
         baseline_file = ConfigManager.get_baseline_file_path(model_config, model_name)
         
         with open(baseline_file, 'r') as f:
             data = json.load(f)
         
-        # If it's a list, return directly
+        # If list, return directly
         if isinstance(data, list):
             return data
         
-        # If it's a dictionary, get corresponding data by training_type
+        # If dict, get corresponding data based on training_type
         if isinstance(data, dict):
             if training_type and training_type in data:
                 return data[training_type]
             else:
                 available_keys = list(data.keys())
-                raise ValueError(f"training_type '{training_type}' is not specified or does not exist in {baseline_file}, available training_type: {available_keys}")
+                raise ValueError(f"training_type '{training_type}' not specified or not found in {baseline_file}, available training_types: {available_keys}")
         
         raise ValueError(f"Invalid JSON structure in {baseline_file}")
 
     def format_baseline_data_for_yaml(self, baseline_data):
-        """Format baseline data into YAML string format"""
+        """Format baseline data as a YAML string"""
         formatted_data = {}
         
         for key, value_list in baseline_data.items():
-            # Format numeric list as string, keep scientific notation format
+            # Format list of numbers as string, keeping scientific notation
             formatted_str = "[\n"
             for item in value_list:
                 formatted_str += f"  {item:.6E}\n"
@@ -196,40 +196,47 @@ class ConfigManager(object):
         return formatted_data
 
     def load_config(self, configs_dir: str, model_file: str) -> Dict[Any, Any]:
-        # Prefer using common.yaml from current directory, fall back to main config directory if not exists
+        # Prioritize using common.yaml in the current directory, if it does not exist, use the one in the main configuration directory
         common_config_file = os.path.join(configs_dir, "common.yaml")
         if not os.path.exists(common_config_file):
-            # Fall back to main config directory's common.yaml
+            # Fallback to common.yaml in the main configuration directory
             common_config_file = os.path.join(self.args.configs_dir, "common.yaml")
         
         model_config_file = os.path.join(configs_dir, model_file)
 
         def recursive_replace(match):
-            key = match.group(1)
+            # Get variable name: prioritize group(1) with braces, otherwise group(2) without braces
+            key = match.group(1) if match.group(1) else match.group(2)
             return str(config.get(key, match.group(0)))
 
         # Load common.yaml
         with open(common_config_file, 'r') as f:
             common_config_str = f.read()
 
-        # Load chatglm-6b.yaml
+        # Load model config file (e.g. chatglm-6b.yaml)
         with open(model_config_file, 'r') as f:
             model_config_str = f.read()
 
-        # Parse content of both config files as dictionaries
+        # Parse the content of the two configuration files into dictionaries
         common_config = yaml.safe_load(common_config_str)
         model_config = yaml.safe_load(model_config_str)
 
         # Merge common_config and model_config
         config = {**common_config, **model_config}
+        
+        # Regular expression: match ${var} or $var
+        # Group 1: match var in {var}
+        # Group 2: match var
+        variable_pattern = r'\$(?:\{([a-z_][a-z0-9_]*)\}|([a-z_][a-z0-9_]*))'
 
         # Recursively replace all placeholders
-        for _ in range(10):  # Set max iterations to 10
-            new_common_config_str = re.sub(r'\$([a-z_][a-z0-9_]*)', recursive_replace, common_config_str)
-            new_model_config_str = re.sub(r'\$([a-z_][a-z0-9_]*)', recursive_replace, model_config_str)
+        for _ in range(10):  # Set maximum iteration count to 10
+            new_common_config_str = re.sub(variable_pattern, recursive_replace, common_config_str)
+            new_model_config_str = re.sub(variable_pattern, recursive_replace, model_config_str)
+
 
             if new_common_config_str == common_config_str and new_model_config_str == model_config_str:
-                # If neither string has changed, end loop early
+                # If both strings have not changed, we can break the loop early
                 break
 
             common_config_str = new_common_config_str
@@ -240,7 +247,7 @@ class ConfigManager(object):
             model_config = yaml.safe_load(model_config_str)
             config = {**common_config, **model_config}
 
-        # Check if there is baseline JSON file path config, if so load data dynamically
+        # Check if there is a baseline JSON file path configuration, if so, dynamically load data
         scenarios = config.get("scenarios", [])
         for scenario in scenarios:
             for scenario_type, scenario_data in scenario.items():
@@ -249,13 +256,14 @@ class ConfigManager(object):
                         for step_name, step_data in training_data.items():
                             baseline_json_path = step_data.get("baseline_json_path")
                             if baseline_json_path and os.path.exists(baseline_json_path):
-                                # Load baseline data from JSON file, pass training_type
+                                # Load baseline data from JSON file, passing training_type
                                 baseline_data = self.load_baseline_data_from_json(baseline_json_path, training_type)
-                                # Format baseline data as YAML format
+                                # Format baseline data into YAML format
                                 formatted_data = self.format_baseline_data_for_yaml(baseline_data)
-                                # Update config data
+                                # Update configuration data
                                 step_data.update(formatted_data)
-                                logger.info(f"Successfully loaded {training_type} baseline data from JSON file {baseline_json_path}")
+                                logger.info(f"Successfully loaded {training_type} baseline data from JSON file {baseline_json_path} dynamically")
+
 
         return config
 
@@ -272,15 +280,15 @@ class ConfigManager(object):
 
     @staticmethod
     def get_models_from_dir(configs_dir: str, recursive: bool = False, base_dir: str = None) -> List[str]:
-        """Get all model names from config directory
-
+        """Get all model names from configuration directory
+        
         Args:
-            configs_dir: Config directory path
+            configs_dir: Configuration directory path
             recursive: Whether to recursively scan subdirectories
-            base_dir: Base directory for calculating relative path (used to generate model names with prefix)
-
+            base_dir: Base directory for calculating relative path (used to generate model names with prefixes)
+        
         Returns:
-            Model name list. If recursively scanning subdirectories, returns in "subdirectory/model_name" format
+            List of model names. If scanning recursively, the return format is "subdirectory/model_name"
         """
         models = []
         if not os.path.exists(configs_dir):
@@ -298,10 +306,10 @@ class ConfigManager(object):
             item_path = os.path.join(configs_dir, item)
             
             if os.path.isfile(item_path):
-                # Handle yaml files
+                # Process yaml file
                 name = os.path.splitext(item)[0]
                 if not name.startswith("common") and item.endswith(".yaml"):
-                    # If in subdirectory, add relative path prefix
+                    # If in a subdirectory, add relative path prefix
                     if configs_dir != base_dir:
                         rel_dir = os.path.relpath(configs_dir, base_dir)
                         models.append(f"{rel_dir}/{name}")
@@ -319,13 +327,13 @@ class ConfigManager(object):
     @staticmethod
     def get_models_from_subdir(base_dir: str, subdir: str) -> List[str]:
         """Get all model names from specified subdirectory
-
+        
         Args:
-            base_dir: Base directory (e.g., "optional_configs")
-            subdir: Subdirectory name (e.g., "internvl3.5")
-
+            base_dir: Base directory (e.g. "optional_configs")
+            subdir: Subdirectory name (e.g. "internvl3.5")
+        
         Returns:
-            Model name list, in "subdirectory/model_name" format
+            List of model names, format: "subdirectory/model_name"
         """
         subdir_path = os.path.join(base_dir, subdir)
         if not os.path.exists(subdir_path) or not os.path.isdir(subdir_path):
@@ -343,22 +351,22 @@ class ConfigManager(object):
     def get_all_models(configs_dir: str,
                        extra_configs_dirs: List[str] = None,
                        recursive_extra: bool = True) -> List[str]:
-        """Get model list from all config directories
-
+        """Get list of models from all configuration directories
+        
         Args:
-            configs_dir: Main config directory (not recursive)
-            extra_configs_dirs: Extra config directories list (default recursive scan)
-            recursive_extra: Whether to recursively scan extra config directories
-
+            configs_dir: Main configuration directory (non-recursive)
+            extra_configs_dirs: List of extra configuration directories (recursive by default)
+            recursive_extra: Whether to recursively scan extra configuration directories
+        
         Returns:
-            Model name list
+            List of model names
         """
         all_models = set()
         
-        # Get models from main config directory (not recursive)
+        # Get models from main configuration directory (non-recursive)
         all_models.update(ConfigManager.get_models_from_dir(configs_dir, recursive=False))
         
-        # Get models from extra config directories (default recursive)
+        # Get models from extra configuration directories (recursive by default)
         if extra_configs_dirs:
             for extra_dir in extra_configs_dirs:
                 all_models.update(ConfigManager.get_models_from_dir(
@@ -370,22 +378,22 @@ class ConfigManager(object):
     @staticmethod
     def list_all_available_models(configs_dir: str, extra_configs_dirs: List[str] = None) -> Dict[str, List[str]]:
         """List all available models and their source directories
-
+        
         Args:
-            configs_dir: Main config directory
-            extra_configs_dirs: Extra config directories list
-
+            configs_dir: Main configuration directory
+            extra_configs_dirs: List of extra configuration directories
+        
         Returns:
-            Dictionary with directory name as key and model list in that directory as value
+            Dictionary where key is directory name, value is list of models in that directory
         """
         result = {}
         
-        # Main config directory (not recursive)
+        # Main configuration directory (non-recursive)
         models = ConfigManager.get_models_from_dir(configs_dir, recursive=False)
         if models:
             result[configs_dir] = sorted(models)
         
-        # Extra config directories (recursive scan)
+        # Extra configuration directories (recursive scan)
         if extra_configs_dirs:
             for extra_dir in extra_configs_dirs:
                 models = ConfigManager.get_models_from_dir(extra_dir, recursive=True, base_dir=extra_dir)
@@ -395,23 +403,23 @@ class ConfigManager(object):
         return result
 
     def find_config_file(self, model_name: str) -> Tuple[Optional[str], Optional[str]]:
-        """Find the directory and actual filename of model config file
-
+        """Find the directory and actual filename where the model configuration file is located
+        
         Args:
             model_name: Model name, supports formats:
                 - "qwen2.5_vl_7b" - Simple model name
                 - "internvl3.5/internvl3.5_30b_a3b" - Model name with subdirectory prefix
-
+        
         Returns:
-            Tuple (configs_dir, yaml_filename), return (None, None) if not found
+            Tuple (configs_dir, yaml_filename), returns (None, None) if not found
         """
-        # Parse model name, check if it contains subdirectory path
+        # Parse model name, determine if it contains subdirectory path
         if "/" in model_name:
-            # Model name with path prefix, like "internvl3.5/internvl3.5_30b_a3b"
+            # Model name with path prefix, e.g. "internvl3.5/internvl3.5_30b_a3b"
             sub_path, actual_model_name = model_name.rsplit("/", 1)
             yaml_filename = f"{actual_model_name}.yaml"
             
-            # Search in subdirectories of extra config directories
+            # Search in subdirectories of extra configuration directories
             extra_dirs = getattr(self.args, 'extra_configs_dirs', []) or []
             for extra_dir in extra_dirs:
                 config_file = os.path.join(extra_dir, sub_path, yaml_filename)
@@ -420,13 +428,13 @@ class ConfigManager(object):
         else:
             # Simple model name
             yaml_filename = f"{model_name}.yaml"
-
-            # First search in main config directory
+            
+            # First search in main configuration directory
             config_file = os.path.join(self.args.configs_dir, yaml_filename)
             if os.path.exists(config_file):
                 return self.args.configs_dir, yaml_filename
             
-            # Then search in extra config directories (including subdirectories)
+            # Then search in extra configuration directories (including subdirectories)
             extra_dirs = getattr(self.args, 'extra_configs_dirs', []) or []
             for extra_dir in extra_dirs:
                 # First search in root directory
@@ -444,13 +452,13 @@ class ConfigManager(object):
     @staticmethod
     def _find_yaml_in_subdir(base_dir: str, yaml_filename: str) -> Optional[Tuple[str, str]]:
         """Recursively find yaml file in subdirectories
-
+        
         Args:
             base_dir: Base directory
-            yaml_filename: yaml file name
-
+            yaml_filename: yaml filename
+        
         Returns:
-            Tuple (directory path, filename), return None if not found
+            Tuple (directory path, filename), returns None if not found
         """
         if not os.path.exists(base_dir):
             return None
@@ -461,14 +469,14 @@ class ConfigManager(object):
                 config_file = os.path.join(item_path, yaml_filename)
                 if os.path.exists(config_file):
                     return item_path, yaml_filename
-                # Continue recursively
+                # Continue recursion
                 found = ConfigManager._find_yaml_in_subdir(item_path, yaml_filename)
                 if found:
                     return found
         return None
 
     def get_scenarios_num(self) -> int:
-        # Model count + scenario count. Not considering task count for now
+        # Model count + Scenario count. Task count is not considered for now
         # tasks = ConfigManager.get_tasks(config)
         num = 0
         for models in self.all_model_configs:

@@ -48,18 +48,18 @@ for match in matches:
 comment = comment.replace('"', "")
 comment = comment.replace('\\n', ' ')
 
-info = '#### Repository \`%s\` pipeline \`%s\` training job task scheduling notification' % ('$module','$PIPELINE_NAME')
+info = '#### Codebase \`%s\` Pipeline \`%s\` Training Job Schedule Notification' % ('$module','$PIPELINE_NAME')
 info += '\\\n #### Details'
-info += '\\\n> **Commit description:** %s' % (comment)
-info += '\\\n> **Branch name:** %s' % ('$pipeline_version')
-info += '\\\n> **Triggered by:** %s' % ('$e2e_trigger_user')
-info += '\\\n> **Cluster environment:** %s' % ('$cluster_info')
-info += '\\\n> **Job status:** <font color=\\\"red\\\">**Job scheduling failed**</font>'
-info += '\\\n> **Failure reason:** %s' % ('${schedule_fail_reason}. Possible reasons: no schedulable resources/cluster scheduling job exception. Check the scheduling log for current cluster GPU resource usage. 👇👇👇') 
-info += '\\\n> **Scheduling log:** %s' % ('${training_log_file_bos_addr}') 
-info += '\\\n>- Suggestion 1: %s' % ('To run normally, please contact the person occupying resources on the cluster to clean up non-urgent job tasks, and re-run the training job in the pipeline') 
-info += '\\\n>- Suggestion 2: %s' % ('To skip this blocking task, re-run pipeline and select the option [skip_test] to true to skip this stage task') 
-info += '\\\n> **Pipeline address:** %s' % ('$pipeline_addr')
+info += '\\\n> **Commit Description:** %s' % (comment)
+info += '\\\n> **Branch Name:** %s' % ('$pipeline_version')
+info += '\\\n> **Triggered By:** %s' % ('$e2e_trigger_user')
+info += '\\\n> **Cluster Environment:** %s' % ('$cluster_info')
+info += '\\\n> **Job Status:** <font color=\\\"red\\\">**Job Schedule Failed**</font>'
+info += '\\\n> **Failure Reason:** %s' % ('${schedule_fail_reason}. Possible reasons: no available resources / cluster scheduling anomaly. Please check GPU resource usage in scheduling logs. 👇👇👇') 
+info += '\\\n> **Schedule Log:** %s' % ('${training_log_file_bos_addr}') 
+info += '\\\n>- Suggestion 1: %s' % ('For normal execution, please contact colleagues occupying resources to clean up non-urgent tasks, then rerun the training job in pipeline') 
+info += '\\\n>- Suggestion 2: %s' % ('To skip this blocking task, rerun pipeline - select option [skip_test] as true to skip this stage') 
+info += '\\\n> **Pipeline Address:** %s' % ('$pipeline_addr')
 
 HiRobotApi.pushInfo(info, toid='$hi_group', Hi_Robot_Access_Token='$robot_token')
 HiRobotApi.pushATInfo("👆👆👆", toid='$hi_group', Hi_Robot_Access_Token='$robot_token', atuserid='$e2e_trigger_user')

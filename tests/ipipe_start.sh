@@ -5,7 +5,7 @@ root_path=$(dirname "$(readlink -f "$0")")
 export scripts_root_path=${root_path}
 source ${scripts_root_path}/common/common.sh
 
-# If using other machines, need to configure kubeconfig and kubectl, kubectl_view_allocations_path directory address
+# If running on other machines, you need to configure kubeconfig and the directory paths for kubectl and kubectl_view_allocations_path
 kubectl_path="/usr/local/bin"
 kubectl_view_allocations_path="/usr/local/bin"
 
@@ -20,18 +20,18 @@ export KUBECONFIG="$kubeconfig_path"
 export GPU_RESOURCE="$gpu_resource"
 export GPU_NUMS="$gpu_nums"
 
-# K8S cluster method exists in pfs data root directory
+# The root directory where PFS data exists in K8S cluster mode
 export TRAIN_DATA_DIR="/mnt/pfs/leoli"
 export IMAGE=${IMAGE:-"registry.baidubce.com/hac_test/aiak-transformer:dev_20240204_130244"}
-# export SPECIFIC_PYTORCHJOB_COMMAND="sleep 1d" # Available for single machine debugging
+# export SPECIFIC_PYTORCHJOB_COMMAND="sleep 1d" # Can be used for single-machine debugging
 export TIMEOUT=${TIMEOUT:-"7200"}
 export SCHEDULE_TIMEOUT=${SCHEDULE_TIMEOUT:-"600"}
 export CHECK_PYTORCHJOB_TIMEOUT=${CHECK_PYTORCHJOB_TIMEOUT:-"86400"} # Distributed training, default 1 day
-# export specific_model_name="llama-2-7b" # Run specified model
+# export specific_model_name="llama-2-7b" # Run specific model
 # export NAME_PREFIX_AGILE="a800-test-lijipeng-aiak-transformer"
 export accuracy_relative_tolerance=${accuracy_relative_tolerance:-"0.02"}
 export performance_relative_tolerance=${performance_relative_tolerance:-"0.05"}
-# check_correctness_task、check_perfness_task
+# check_correctness_task, check_perfness_task
 export tasks=${tasks:-"check_perfness_task"}
 export use_nccl=${use_nccl:-"false"}
 export training_type=${training_type:-"pretrain sft"}
