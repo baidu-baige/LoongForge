@@ -1,11 +1,1 @@
-# Overview
-
-# News
-
-# Featrues
-
-# Benchmark
-
-# Quick Start
-
-# Support Models
+../../../README.md

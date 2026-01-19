@@ -1,0 +1,242 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4.5 FP8 Training &mdash; AIAK-Training-Omni  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=0d572974" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="MOE All2All Overlap" href="moe_all2all_overlap.html" />
+    <link rel="prev" title="Heterogeneous TP Parallel" href="heterogeneous_tp_parallel.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            AIAK-Training-Omni
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../readme/index.html">README</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/index.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Features</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="4_1_model_combination.html">4.1 model_combination.md</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_offline_data_packing.html">4.2 Data Offline Packing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">4.5 FP8 Training</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#supported-models">1. Supported Models</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fp8-low-precision-training-guide">2. FP8 Low-Precision Training Guide</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#globally-enable-fp8-training">2.1 Globally Enable FP8 Training</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#partially-enable-fp8-training">2.2 Partially Enable FP8 Training</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../advance/index.html">Advance</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">AIAK-Training-Omni</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Features</a></li>
+      <li class="breadcrumb-item active">4.5 FP8 Training</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/features/4_5_fp8_training.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="fp8-training">
+<h1>4.5 FP8 Training<a class="headerlink" href="#fp8-training" title="Link to this heading"></a></h1>
+<p>AIAK-Training-Omni provides FP8 low-precision training support for various models. By modifying the corresponding YAML configuration files, you can independently enable or disable FP8 for the vision/audio encoder (Encoder) and the language foundation model (Foundation) to achieve optimal training efficiency.</p>
+<section id="supported-models">
+<h2>1. Supported Models<a class="headerlink" href="#supported-models" title="Link to this heading"></a></h2>
+<p>The following models have been verified to support FP8 training:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model Family</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="fp8-low-precision-training-guide">
+<h2>2. FP8 Low-Precision Training Guide<a class="headerlink" href="#fp8-low-precision-training-guide" title="Link to this heading"></a></h2>
+<p>Below we use <strong>qwen3vl-30b</strong> as an example to demonstrate how to enable FP8 training.</p>
+<section id="globally-enable-fp8-training">
+<h3>2.1 Globally Enable FP8 Training<a class="headerlink" href="#globally-enable-fp8-training" title="Link to this heading"></a></h3>
+<p>Add FP8-related launch flags in <code class="docutils literal notranslate"><span class="pre">examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">TRAINING_ARGS</span><span class="o">=(</span>
+<span class="w">    </span>--training-phase<span class="w"> </span>pretrain<span class="w">        </span><span class="c1"># options: pretrain, sft</span>
+<span class="w">    </span>--seq-length<span class="w"> </span><span class="m">32768</span>
+<span class="w">    </span>--max-position-embeddings<span class="w"> </span><span class="m">32768</span>
+<span class="w">    </span>--init-method-std<span class="w"> </span><span class="m">0</span>.02
+<span class="w">    </span>--micro-batch-size<span class="w"> </span><span class="m">1</span>
+<span class="w">    </span>--global-batch-size<span class="w"> </span><span class="m">32</span>
+<span class="w">    </span>--lr<span class="w"> </span><span class="m">0</span>.0002
+<span class="w">    </span>--min-lr<span class="w"> </span><span class="m">1</span>.0e-5
+<span class="w">    </span>--clip-grad<span class="w"> </span><span class="m">1</span>.0
+<span class="w">    </span>--weight-decay<span class="w"> </span><span class="m">0</span>.01
+<span class="w">    </span>--optimizer<span class="w"> </span>adam
+<span class="w">    </span>--adam-beta1<span class="w"> </span><span class="m">0</span>.9
+<span class="w">    </span>--adam-beta2<span class="w"> </span><span class="m">0</span>.95
+<span class="w">    </span>--adam-eps<span class="w"> </span>1e-05
+<span class="w">    </span>--norm-epsilon<span class="w"> </span>1e-6
+<span class="w">    </span>--train-iters<span class="w"> </span><span class="m">50000</span>
+<span class="w">    </span>--lr-decay-iters<span class="w"> </span><span class="m">50000</span>
+<span class="w">    </span>--lr-decay-style<span class="w"> </span>cosine
+<span class="w">    </span>--lr-warmup-fraction<span class="w"> </span><span class="m">0</span>.002
+<span class="w">    </span>--initial-loss-scale<span class="w"> </span><span class="m">65536</span>
+<span class="w">    </span>--bf16
+<span class="w">    </span><span class="c1">#--load $CHECKPOINT_PATH</span>
+<span class="w">    </span><span class="c1">#--save $CHECKPOINT_PATH</span>
+<span class="w">    </span>--save-interval<span class="w"> </span><span class="m">10000000</span>
+<span class="w">    </span>--ckpt-format<span class="w"> </span>torch
+<span class="w">    </span>--dataloader-save<span class="w"> </span><span class="si">${</span><span class="nv">CHECKPOINT_PATH</span><span class="si">}</span>/dataloader
+<span class="w">    </span><span class="c1"># &lt;-- blockwise FP8 GEMM &amp; weight --&gt;</span>
+<span class="w">    </span>--fp8-format<span class="w"> </span>e4m3
+<span class="w">    </span>--fp8-recipe<span class="w"> </span>blockwise
+<span class="w">    </span>--fp8-param-gather
+<span class="o">)</span>
+</pre></div>
+</div>
+<p>Launch the job with the <code class="docutils literal notranslate"><span class="pre">--fp8-format</span></code> flags above to enable <strong>global</strong> FP8 training for qwen3vl.</p>
+</section>
+<section id="partially-enable-fp8-training">
+<h3>2.2 Partially Enable FP8 Training<a class="headerlink" href="#partially-enable-fp8-training" title="Link to this heading"></a></h3>
+<p>To control FP8 independently for the Encoder or Foundation model, modify the YAML configuration and toggle the FP8 switches.</p>
+<p>Edit <code class="docutils literal notranslate"><span class="pre">configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml</span></code>:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># hydra:</span>
+<span class="c1">#   searchpath:</span>
+<span class="c1">#     - file://configs/</span>
+
+<span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_encoder@model.image_encoder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3_vit</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_projector@model.image_projector</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen_mlp_adapter</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/qwen3@model.foundation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3_30b_a3b</span>
+<span class="w">  </span><span class="c1">#- ../../data@data: vlm_data</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+
+<span class="nt">model</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">model_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3_vl</span>
+<span class="w">  </span><span class="nt">position_idx_func</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${position_func:rope_ids_qwen3vl}</span>
+<span class="w">  </span><span class="nt">loss_func</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${loss_func:default}</span>
+<span class="w">  </span><span class="nt">foundation</span><span class="p">:</span><span class="w"> </span>
+<span class="w">    </span><span class="nt">rotary_emb_func</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Qwen3VLRotaryEmbedding&quot;</span>
+<span class="w">    </span><span class="nt">mrope_section</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">24</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">20</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">20</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">rotary_base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000</span>
+<span class="w">    </span><span class="nt">model_spec</span><span class="p">:</span><span class="w"> </span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;aiak_training_omni.models.foundation.qwen3.qwen_layer_spec&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;get_qwen3_vl_layer_with_te_spec&quot;</span>
+<span class="w">    </span><span class="c1"># &lt;-- blockwise FP8 GEMM &amp; weight --&gt;</span>
+<span class="w">    </span><span class="nt">fp8</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;e4m3&quot;</span>
+<span class="w">    </span><span class="nt">fp8_recipe</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;blockwise&quot;</span>
+<span class="w">    </span><span class="nt">fp8_param</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">True</span>
+<span class="w">  </span><span class="nt">image_encoder</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">model_spec</span><span class="p">:</span><span class="w"> </span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;aiak_training_omni.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;get_qwen3_vl_vision_model_layer_with_te_spec&quot;</span>
+<span class="w">    </span><span class="c1"># &lt;-- blockwise FP8 GEMM &amp; weight --&gt;</span>
+<span class="w">    </span><span class="nt">fp8</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;e4m3&quot;</span>
+<span class="w">    </span><span class="nt">fp8_recipe</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;blockwise&quot;</span>
+<span class="w">    </span><span class="nt">fp8_param</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">True</span>
+<span class="w">  </span><span class="nt">image_projector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">activation_func</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${act:gelu}</span>
+<span class="w">    </span><span class="nt">normalization</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;LayerNorm&quot;</span>
+</pre></div>
+</div>
+<p>With the above changes:</p>
+<ul class="simple">
+<li><p>The <strong>Foundation</strong> (language model) will run in FP8 when you launch training.</p></li>
+<li><p>The <strong>image_encoder</strong> will also run in FP8.</p></li>
+<li><p>The <strong>image_projector</strong> remains in the original precision (no FP8 keys).</p></li>
+</ul>
+<p>You can mix and match these flags to suit your accuracy/performance requirements.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="heterogeneous_tp_parallel.html" class="btn btn-neutral float-left" title="Heterogeneous TP Parallel" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="moe_all2all_overlap.html" class="btn btn-neutral float-right" title="MOE All2All Overlap" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Baidu.</p>
+  </div>
+
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

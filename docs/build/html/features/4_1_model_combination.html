@@ -1,0 +1,294 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4.1 model_combination.md &mdash; AIAK-Training-Omni  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=0d572974" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="4.2 Data Offline Packing" href="4_2_offline_data_packing.html" />
+    <link rel="prev" title="Features" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            AIAK-Training-Omni
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../readme/index.html">README</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/index.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Features</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">4.1 model_combination.md</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#core-components">1. Core Components</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#omniencodermodel">1.1 OmniEncoderModel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#omnicombinationmodel">1.2 OmniCombinationModel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#omnimodelprovider">1.3 OmniModelProvider</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#how-to-use">2. How to Use</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_offline_data_packing.html">4.2 Data Offline Packing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_5_fp8_training.html">4.5 FP8 Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../advance/index.html">Advance</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">AIAK-Training-Omni</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Features</a></li>
+      <li class="breadcrumb-item active">4.1 model_combination.md</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/features/4_1_model_combination.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="model-combination-md">
+<h1>4.1 model_combination.md<a class="headerlink" href="#model-combination-md" title="Link to this heading"></a></h1>
+<p>One of the core features of the AIAK-Training-Omni framework is its native support for <strong>flexible model combination</strong>. This feature allows users to freely combine visual/audio encoders (Encoder), modality alignment projection layers (Projector), and language model bases (Foundation) through configuration files (YAML), thereby quickly building customized multimodal large models. Based on this framework, users only need to modify the model configuration YAML files in the <code class="docutils literal notranslate"><span class="pre">../configs/models</span></code> directory to restructure and switch the model architecture.</p>
+<p>For example, different visual encoders (such as <strong>Qwen2.5-ViT, Qwen3-ViT, LLaVA-OV-1.5-ViT, InternViT</strong>, etc.) can be flexibly concatenated with different large language model bases (such as <strong>LLaMA series, DeepSeek series, Qwen series</strong>, etc.). This <strong>configuration-driven model assembly approach</strong> significantly reduces the cost of exploring and customizing multimodal model architectures, allowing users to build models without modifying any code, achieving <strong>zero-code</strong> model combination.</p>
+<section id="core-components">
+<h2>1. Core Components<a class="headerlink" href="#core-components" title="Link to this heading"></a></h2>
+<section id="omniencodermodel">
+<h3>1.1 OmniEncoderModel<a class="headerlink" href="#omniencodermodel" title="Link to this heading"></a></h3>
+<p>The core abstraction of the Encoder component, which is responsible for converting modal data such as images, videos, and audio into Embeddings understandable by LLMs.</p>
+<ul class="simple">
+<li><p><strong>Abstract Definition</strong>: Encapsulates Vision/Audio Encoder and Projector, and manages Text Embeddings uniformly.</p></li>
+<li><p><strong>Core Implementation</strong>:</p>
+<ul>
+<li><p><strong>Multimodal Compatibility</strong>: Uniformly manages Encoders of different modalities. Adding a new modality only requires adding a branch.</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># aiak_training_omni/models/omni_models/omni_encoder_model.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OmniEncoderModel</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+        <span class="c1"># Text modality</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_encoder</span> <span class="o">=</span> <span class="n">LanguageModelEmbedding</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+        
+        <span class="c1"># Image modality</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;image_encoder&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">image_encoder</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">image_encoder</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+        
+        <span class="c1"># Video modality (very easy to extend)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;video_encoder&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">video_encoder</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">video_encoder</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>* **Heterogeneous Tensor Parallel**: Implements heterogeneous parallelism for **Encoder Tensor Parallel** through Hook mechanisms.
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Automatically register Hook to switch Parallel State before and after Forward</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">image_encoder</span><span class="o">.</span><span class="n">register_forward_pre_hook</span><span class="p">(</span>
+    <span class="n">make_encoder_forward_pre_hook</span><span class="p">(</span><span class="s2">&quot;image_encoder&quot;</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">image_encoder</span><span class="o">.</span><span class="n">register_forward_hook</span><span class="p">(</span>
+    <span class="n">make_encoder_forward_hook</span><span class="p">(</span><span class="s2">&quot;text_decoder&quot;</span><span class="p">)</span> <span class="c1"># Switch back to Decoder state</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="omnicombinationmodel">
+<h3>1.2 OmniCombinationModel<a class="headerlink" href="#omnicombinationmodel" title="Link to this heading"></a></h3>
+<p>The core component of multimodal combination models, defining the concatenation and interaction timing of data flow between different modality components. This component does not contain specific computational logic. Key features:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>* **Logical Decoupling**: Dynamically decides whether to load Encoder or Foundation model based on external configuration, achieving component-level decoupling.
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># aiak_training_omni/models/omni_models/omni_combination_model.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OmniCombinationModel</span><span class="p">(</span><span class="n">BaseMegatronModule</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+        <span class="c1"># 1. Dynamically initialize Encoder Model</span>
+        <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">image_encoder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">add_encoder</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encoder_model</span> <span class="o">=</span> <span class="n">OmniEncoderModel</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+        
+        <span class="c1"># 2. Dynamically initialize LLM</span>
+        <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">foundation</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">add_decoder</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">foundation_model</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">foundation</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="omnimodelprovider">
+<h3>1.3 OmniModelProvider<a class="headerlink" href="#omnimodelprovider" title="Link to this heading"></a></h3>
+<p>Responsible for parsing global parameters, handling the initialization logic of distributed environments (such as Pipeline Parallel splitting), and ultimately instantiating OmniCombinationModel.</p>
+<p>Core functionalities:</p>
+<ul class="simple">
+<li><p>Distributed Pipeline Parallel: Determines the current Pipeline Parallel Stage of the model, and loads Encoder model and Foundation model as needed to support cross-GPU pipeline parallel deployment.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># aiak_training_omni/models/omni_models/omni_model_provider.py</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">omni_model_provider</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="c1"># Automatically determines whether the current stage is the first stage of the pipeline, deciding whether to load the Encoder</span>
+    <span class="c1"># This is crucial for placing the Encoder and Decoder on different GPUs for pipeline parallelism</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">encoder_pipeline_model_parallel_size</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="n">add_encoder</span> <span class="o">=</span> <span class="n">mpu</span><span class="o">.</span><span class="n">is_pipeline_first_stage</span><span class="p">()</span>
+    
+    <span class="c1"># Finally builds the model, injecting environment-aware parameters</span>
+    <span class="k">return</span> <span class="n">OmniCombinationModel</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">add_encoder</span><span class="o">=</span><span class="n">add_encoder</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Parameter Bridging and Adaptation</strong>: Simultaneously obtains global training parameters (args) and model structure configuration (model_config). Passes model_config to the model for building submodules, while extracting key hyperparameters related to training (such as language_vocab_size, language_max_sequence_length) from args and injecting them into the model initialization process to ensure consistency between model configuration and training environment.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">args</span> <span class="o">=</span> <span class="n">get_args</span><span class="p">()</span>
+<span class="n">model_config</span> <span class="o">=</span> <span class="n">get_model_config</span><span class="p">()</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">OmniCombinationModel</span><span class="p">(</span>
+    <span class="n">model_config</span><span class="p">,</span>
+    <span class="n">language_vocab_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">padded_vocab_size</span><span class="p">,</span>       
+    <span class="n">language_max_sequence_length</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">max_position_embeddings</span><span class="p">,</span> 
+    <span class="n">fp16_lm_cross_entropy</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">fp16_lm_cross_entropy</span><span class="p">,</span>  
+    <span class="o">...</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="how-to-use">
+<h2>2. How to Use<a class="headerlink" href="#how-to-use" title="Link to this heading"></a></h2>
+<p>We have adopted a configuration system based on Hydra, combining configurations of different components through the defaults list. Take <code class="docutils literal notranslate"><span class="pre">configs/models/internvl2.5/internvl2_5_8b.yaml</span></code> as an example:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># 1. Select image encoder (Vit)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_encoder@model.image_encoder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vit_0.3b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 2. Select image projector (Projector)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_projector@model.image_projector</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_mlp_adapter</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 3. Select foundation language model (LLM)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/internlm2.5@model.foundation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internlm2_5_8b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+
+<span class="nt">model</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">model_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vl</span>
+<span class="w">  </span><span class="c1"># ... Other global parameters</span>
+</pre></div>
+</div>
+<p>If you want to build a new VLM, for example, using <strong>Qwen2.5-7B</strong> as the base and <strong>InternViT</strong> as the encoder to create a new <strong>InternViT-Qwen2.5-7B model</strong>:</p>
+<ol class="arabic simple">
+<li><p><strong>Define Component Configurations</strong>: Ensure that there are configurations for Qwen2.5 under <code class="docutils literal notranslate"><span class="pre">configs/models/</span></code> and configurations for <strong>InternViT</strong> under <code class="docutils literal notranslate"><span class="pre">configs/models/image_encoder/</span></code>.</p></li>
+<li><p><strong>Create Combination Configuration</strong>: Create a new YAML file and combine them through defaults.</p></li>
+</ol>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># 1. Select image encoder (Image Encoder)</span>
+<span class="w">  </span><span class="c1"># &#39;intern_vit_0.3b&#39; corresponds to configs/models/image_encoder/intern_vit_0.3b.yaml (same below)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_encoder@model.image_encoder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vit_0.3b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 2. Select image projector (Projector)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_projector@model.image_projector</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_mlp_adapter</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 3. Select foundation language model (LLM Foundation)</span>
+<span class="w">  </span><span class="c1"># &#39;internlm2_5_8b&#39; corresponds to configs/models/internlm2.5/internlm2_5_8b.yaml</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/internlm2.5@model.foundation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internlm2_5_8b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+
+<span class="nt">model</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Specify the type of multimodal model</span>
+<span class="w">  </span><span class="nt">model_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vl</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># Specify the loss function of the Foundation model</span>
+<span class="w">  </span><span class="nt">loss_func</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${loss_func:loss_func_internvl}</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># Explicitly specify the output dimension of the Projector, which must be consistent with the hidden_size of the LLM</span>
+<span class="w">  </span><span class="nt">image_projector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">hidden_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+<span class="w">    </span><span class="nt">ffn_hidden_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># Configure LLM-specific settings</span>
+<span class="w">  </span><span class="nt">foundation</span><span class="p">:</span><span class="w"> </span>
+<span class="w">    </span><span class="nt">rotary_emb_func</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;DynamicRotaryEmbedding&quot;</span>
+<span class="w">    </span><span class="nt">rotary_base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="c1"># Specify Megatron layer construction, supporting Transformer Engine acceleration</span>
+<span class="w">    </span><span class="nt">model_spec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;aiak_training_omni.models.foundation.internlm.internlm_layer_spec&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;get_internlm_layer_with_te_spec&quot;</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+<p>The current directory structure of <code class="docutils literal notranslate"><span class="pre">configs/models</span></code> in the framework corresponds to the library of combinable components:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">image_encoder/</span></code>: Stores configurations for various visual encoders.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">image_projector/</span></code>: Stores configurations for various projection layers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">llama3/</span></code>, <code class="docutils literal notranslate"><span class="pre">qwen2/</span></code>, <code class="docutils literal notranslate"><span class="pre">deepseek2/</span></code>, etc.: Store configurations for various LLM bases.</p></li>
+</ul>
+<p>With this approach, you can flexibly build multimodal large models like building with blocks.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Features" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="4_2_offline_data_packing.html" class="btn btn-neutral float-right" title="4.2 Data Offline Packing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Baidu.</p>
+  </div>
+
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
