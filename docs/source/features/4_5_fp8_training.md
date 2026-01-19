@@ -2,7 +2,7 @@
 
 AIAK-Training-Omni provides FP8 low-precision training support for various models. By modifying the corresponding YAML configuration files, you can independently enable or disable FP8 for the vision/audio encoder (Encoder) and the language foundation model (Foundation) to achieve optimal training efficiency.
 
-# 1. Supported Models
+## 1. Supported Models
 The following models have been verified to support FP8 training:
 
 | Model Family | Notes |
@@ -10,11 +10,11 @@ The following models have been verified to support FP8 training:
 |              |       |
 |              |       |
 
-# 2. FP8 Low-Precision Training Guide
+## 2. FP8 Low-Precision Training Guide
 
 Below we use **qwen3vl-30b** as an example to demonstrate how to enable FP8 training.
 
-## 2.1 Globally Enable FP8 Training
+### 2.1 Globally Enable FP8 Training
 Add FP8-related launch flags in `examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh`:
 
 ```bash
@@ -54,7 +54,7 @@ TRAINING_ARGS=(
 
 Launch the job with the `--fp8-format` flags above to enable **global** FP8 training for qwen3vl.
 
-## 2.2 Partially Enable FP8 Training
+### 2.2 Partially Enable FP8 Training
 To control FP8 independently for the Encoder or Foundation model, modify the YAML configuration and toggle the FP8 switches.
 
 Edit `configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml`:

@@ -12,7 +12,7 @@
   <div>&nbsp;</div>
 </div>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://docs.nvidia.com/Megatron-Core/developer-guide/latest/index.html)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://github.com/baidu-baige/AIAK-Training-Omni/docs/build/html/index.html)
 [![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master)
 [![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/LICENSE)
 [![stars](https://img.shields.io/github/stars/baidu-baige/AIAK-Training-Omni=social)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master)

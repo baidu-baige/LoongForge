@@ -4,7 +4,7 @@ This directory provides an "offline sequence packing" pipeline: it takes a data 
 
 The script entry point is `tools/data_preprocess/vlm/offline_packing/scripts/pack_wds.sh` (4 steps detailed below).
 
-# 1. Supported Packing Scenarios (`sample.sample_type`)
+## 1. Supported Packing Scenarios (`sample.sample_type`)
 
 | Data Scenario | `sample_type` | Description |
 |---------------|---------------|-------------|
@@ -12,7 +12,7 @@ The script entry point is `tools/data_preprocess/vlm/offline_packing/scripts/pac
 | Offline packed single-image QA | `packed_vqa` | Same as above |
 | Offline packed mixed media (image/video) QA | `packed_multi_mix_qa` | Same as above (requires input JSON to declare media types and file lists) |
 
-# 2. Input Data Requirements (`data.wds_dir`)
+## 2. Input Data Requirements (`data.wds_dir`)
 The current implementation **does not directly read tar shards** but reads a "random-accessible sample file directory":
 
 - The directory contains many `*.json` files (each representing a sample/WDS entry's json payload).
@@ -32,7 +32,7 @@ Notes:
 - For `packed_vqa` / `packed_captioning`: if there is no explicit `media_files/name` field in the JSON, it will attempt to infer the media file by matching the stem (e.g., `0001.json` corresponds to `0001.jpg`).
 - For `packed_multi_mix_qa`: the JSON must declare `media`/`media_type` (`image` or `video`) and provide a `name`/`media_files` list (supports nested lists).
 
-# 3. Quick Start
+## 3. Quick Start
 
 ```bash
 cd tools/data_preprocess/vlm/offline_packing
@@ -47,9 +47,9 @@ To switch to another configuration file:
 - Method 1: Overwrite/copy the target configuration to `config.yaml`.
 - Method 2: Manually execute each script and pass `--config your.yaml` (see the next section "Pipeline Step-by-Step Explanation").
 
-# 4. Pipeline Step-by-Step Explanation (aligned with `pack_wds.sh`)
+## 4. Pipeline Step-by-Step Explanation (aligned with `pack_wds.sh`)
 
-## Step 1: Calculate Token Length for Each Sample (`get_sample_len.py`)
+### Step 1: Calculate Token Length for Each Sample (`get_sample_len.py`)
 - **Input**: `*.json` + corresponding media files under `data.wds_dir`.
 - **Processing**: Based on `sample.sample_type` + `model.model_type`, select a template from `utils.TEMPLATES`, use `AutoProcessor` to tokenize text + visual inputs, and obtain the token length for each sample.
 - **Output**: `{data.wds_dir}/.temp/sample_len_report.txt` (formatted as `sample_id: token_len`).
@@ -60,7 +60,7 @@ Manual execution:
 python get_sample_len.py --config config.yaml
 ```
 
-## Step 2: Bucketing by Length and Packing Grouping (`do_hashbacket.py`)
+### Step 2: Bucketing by Length and Packing Grouping (`do_hashbacket.py`)
 - **Input**: `sample_len_report.txt`.
 - **Processing**: Construct hash buckets and group/pack samples based on `sample.max_token_len` (heuristic packing).
 - **Output**: `{data.packed_json_dir}/bins_boxs.pkl` (each "box" contains a group of original sample IDs that will be packed into a single packed sample).
@@ -71,7 +71,7 @@ Manual execution:
 python do_hashbacket.py --config config.yaml
 ```
 
-## Step 3: Generate Packed Intermediate JSON (`prepare_raw_samples.py`)
+### Step 3: Generate Packed Intermediate JSON (`prepare_raw_samples.py`)
 - **Input**: `bins_boxs.pkl` + original `*.json`/media files.
 - **Processing**: Aggregate multiple samples for each box and generate the packed sample's JSON (e.g., fields like `prompts`, `captions`, `media_files`, `media_type`, etc.).
 - **Output**: `{data.packed_json_dir}/row_packing_jsons/*.json`.
@@ -82,7 +82,7 @@ Manual execution:
 python prepare_raw_samples.py --config config.yaml
 ```
 
-## Step 4: Write Packed JSON Back to WebDataset (`packed_to_wds.py`)
+### Step 4: Write Packed JSON Back to WebDataset (`packed_to_wds.py`)
 - **Input**: `row_packing_jsons/*.json` + media files (default search paths include `{data.wds_dir}` and `{data.packed_json_dir}/row_packing_images`).
 - **Output**: `data.packed_wds_dir/pretrain-*.tar` (falls back to `{data.packed_json_dir}/packed_wds` if not configured) + Energon metadata (`dataset.yaml` + index).
 
@@ -92,7 +92,7 @@ Manual execution:
 python packed_to_wds.py --config config.yaml
 ```
 
-# 5. Configuration Explanation (`config.yaml`)
+## 5. Configuration Explanation (`config.yaml`)
 Key fields:
 
 - `data.wds_dir`: Input sample directory (`*.json` + media files).
@@ -105,7 +105,7 @@ Key fields:
 - `model.processor_kwargs.*`: HF processor parameters for tokenization/image processing (passed to `transformers.AutoProcessor.from_pretrained`).
 - `packed_wds.maxcount/maxsize`: Splitting strategy for writing tar shards.
 
-# 6. Switching Models / Adjusting Image Processing
+## 6. Switching Models / Adjusting Image Processing
 The token statistics in offline packing (Step 1) depend on the actual processing logic of `AutoProcessor`, so you can switch models and adjust image processing parameters through configuration:
 
 - **Switching Models**: Modify `model.processor_kwargs.pretrained_model_name_or_path` to point to the desired HF model/processor; update `model.model_type` if necessary.
