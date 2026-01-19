@@ -165,7 +165,7 @@ def _rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-def _apply_mrope_bshd(t, freq, config, cu_seqlens,):
+def _apply_mrope_bshd(t, freq, config, cu_seqlens, mscale: float = 1.0):
     """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors
     Args:
         t (Tensor): Input tensor T is of shape [seq_length, ... , dim]
@@ -182,8 +182,8 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens,):
 
     # first part is cosine component
     # second part is sine component, need to change signs with _rotate_half method
-    cos_ = torch.cos(freq).to(t.dtype) # [1, 1, 84, 128]
-    sin_ = torch.sin(freq).to(t.dtype) # [1, 1, 84, 128]
+    cos_ = (torch.cos(freq) * mscale).to(t.dtype) # [1, 1, 84, 128]
+    sin_ = (torch.sin(freq) * mscale).to(t.dtype) # [1, 1, 84, 128]
 
     t = (t * cos_) + (_rotate_half(t) * sin_)
 
@@ -191,10 +191,10 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens,):
     return t
     
 
-def apply_mrope(t, freq, config, cu_seqlens=None):
+def apply_mrope(t, freq, config, cu_seqlens=None, mscale: float = 1.0, cp_group=None):
     """ mrope """
     if cu_seqlens is not None:
-        cp_size = parallel_state.get_context_parallel_world_size()
+        cp_size = cp_group.size() if cp_group is not None else parallel_state.get_context_parallel_world_size()
         cp_rank = parallel_state.get_context_parallel_rank()
         cu_seqlens = cu_seqlens // cp_size
         seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
@@ -206,12 +206,13 @@ def apply_mrope(t, freq, config, cu_seqlens=None):
                     freq[int(cu_seqlens[i]) : int(cu_seqlens[i]) + x.size(0)],
                     config,
                     cu_seqlens,
+                    mscale,
                 )
                 for i, x in enumerate(torch.split(t, seqlens))
             ]
         ).squeeze(1)
     else:
-        return _apply_mrope_bshd(t, freq, config, cu_seqlens)
+        return _apply_mrope_bshd(t, freq, config, cu_seqlens, mscale)
 
 
 def get_qwen3_vl_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:

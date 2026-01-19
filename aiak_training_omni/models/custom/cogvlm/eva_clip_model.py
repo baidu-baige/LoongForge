@@ -82,6 +82,7 @@ class EVA2CLIPModel(VisionModule):
         self,
         config: TransformerConfig,
         transformer_layer_spec: ModuleSpec,
+        vp_stage: Optional[int] = None,
     ) -> None:
         super().__init__(config=config)
 
@@ -119,6 +120,7 @@ class EVA2CLIPModel(VisionModule):
             spec=transformer_layer_spec,
             pre_process=True,
             post_process=False,
+            vp_stage=vp_stage,
         )
 
     def set_input_tensor(self, input_tensor: torch.Tensor) -> None:

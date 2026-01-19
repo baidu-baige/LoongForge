@@ -25,6 +25,8 @@ def cogvlm_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
+    vp_stage: int = None,
+    config=None,
 ) -> CogVLMModel:
     """Builds the CogVlm model.
 
@@ -40,7 +42,8 @@ def cogvlm_model_provider(
 
     print_rank_0("building CovVLM model ...")
 
-    config = build_transformer_config(args)
+    if config is None:
+        config = build_transformer_config(args)
 
     language_config = deepcopy(config)
     vision_config = deepcopy(config)
@@ -83,6 +86,7 @@ def cogvlm_model_provider(
         language_rotary_base=args.rotary_base,
         language_rotary_dtype=torch.float32 if args.rope_in_fp32 else args.params_dtype,
         seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
+        vp_stage=vp_stage,
     )
 
     if args.trainable_modules != ["all"]:

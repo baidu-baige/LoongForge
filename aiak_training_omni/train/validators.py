@@ -168,11 +168,11 @@ def _validate_extra_training_args(args):
     """Validate training arguments"""
 
     if args.num_experts is None and args.moe_token_dispatcher_type in ['allgather', 'alltoall_seq']:
-            args.moe_token_dispatcher_type = 'alltoall'
-            warnings.warn(
-                f"Since num_experts is {args.num_experts}, moe_token_dispatcher_type argument is not applicable. "
-                f"Setting it to 'alltoall' to pass transformer config validation."
-            )
+        args.moe_token_dispatcher_type = 'alltoall'
+        warnings.warn(
+            f"Since num_experts is {args.num_experts}, moe_token_dispatcher_type argument is not applicable. "
+            f"Setting it to 'alltoall' to pass transformer config validation."
+        )
 
     # check ema
     if args.enable_ema:

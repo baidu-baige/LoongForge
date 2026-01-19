@@ -43,7 +43,7 @@ SUPPORTED_MODELS = [
 stimer = StragglerDetector()
 
 
-def model_provider(pre_process=True, post_process=True):
+def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     """Builds the model.
 
     Args:
@@ -58,7 +58,7 @@ def model_provider(pre_process=True, post_process=True):
     model_provider = get_model_provider(model_family)
     assert model_provider is not None, f"model provider for {args.model_name} not found"
 
-    return model_provider(pre_process, post_process)
+    return model_provider(pre_process, post_process, vp_stage)
 
 
 def get_batch(data_iterator):

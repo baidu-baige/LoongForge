@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from typing import Optional
 
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.models.common.vision_module.vision_module import VisionModule
@@ -26,8 +27,9 @@ class Qwen3VisionModel(Qwen2VisionModel):
 
     def __init__(self,
         config: TransformerConfig,
+        vp_stage: Optional[int] = None,
     ) -> None:
-        super().__init__(config)
+        super().__init__(config, vp_stage=vp_stage)
         self.patch_embed = PatchEmbed(
             patch_size=config.patch_size,
             in_channels=config.in_channels,

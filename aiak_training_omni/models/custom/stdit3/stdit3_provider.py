@@ -19,6 +19,8 @@ def stdit3_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
+    vp_stage: int = None,
+    config=None,
 ) -> STDiT3Model:
     """Builds the STDiT3 model.
 
@@ -34,7 +36,8 @@ def stdit3_model_provider(
 
     print_rank_0("building STDiT3 model ...")
 
-    config = build_transformer_config(args, config_class=StditTransformerConfig)
+    if config is None:
+        config = build_transformer_config(args, config_class=StditTransformerConfig)
 
     if args.use_legacy_models:
         raise ValueError("Classic Megatron-LM models are not supported.")
@@ -60,6 +63,7 @@ def stdit3_model_provider(
         share_embeddings_and_output_weights=not args.untie_embeddings_and_output_weights,
         position_embedding_type=args.position_embedding_type,
         rotary_percent=args.rotary_percent,
+        vp_stage=vp_stage,
     )
 
     for param in model.y_embedder.parameters():

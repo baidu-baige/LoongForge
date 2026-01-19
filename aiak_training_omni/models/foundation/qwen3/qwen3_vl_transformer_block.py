@@ -305,46 +305,20 @@ class TransformerBlock(MegatronTransformerBlock):
                     )
                     
                     with self.offload_context, inner_fp8_context:
-                        layer.use_cudagraph = True
-                        if (len(self.cuda_graphs) == 0) or (not self.training):
-                            hidden_states, context = layer(
-                                hidden_states=hidden_states,
-                                attention_mask=attention_mask,
-                                context=context,
-                                context_mask=context_mask,
-                                rotary_pos_emb=rotary_pos_emb,
-                                rotary_pos_cos=rotary_pos_cos,
-                                rotary_pos_sin=rotary_pos_sin,
-                                attention_bias=attention_bias,
-                                inference_params=inference_params,
-                                packed_seq_params=packed_seq_params,
-                                sequence_len_offset=sequence_len_offset,
-                                **kwargs,
-                            )
-                        else:
-                            # CUDA graph replay for layer `l_no` and microbatch
-                            # `self.current_microbatch`. TransformerEngine versions>=1.10
-                            # allow keyword arguments with CUDA graph. However, CUDA graph
-                            # acccepts only Tensor inputs and Tensor outputs. Hence,
-                            # `inference_params` and `packed_seq_params` are excluded from
-                            # input list while output is limited to `hidden_states`.
-                            cg_index = self.current_microbatch % len(self.cuda_graphs[l_no])
-                            assert not any([inference_params, packed_seq_params]), \
-                                "CUDA graph accepts only Tensor inputs."
-                            
-                            optional_inputs = self.get_cuda_graph_optional_args(
-                                attention_mask,
-                                context,
-                                context_mask,
-                                rotary_pos_emb,
-                                attention_bias,
-                                inference_params,
-                                packed_seq_params,
-                            )
-                            hidden_states = self.cuda_graphs[l_no][cg_index](
-                                hidden_states, **optional_inputs
-                            )
-
+                        hidden_states, context = layer(
+                            hidden_states=hidden_states,
+                            attention_mask=attention_mask,
+                            context=context,
+                            context_mask=context_mask,
+                            rotary_pos_emb=rotary_pos_emb,
+                            rotary_pos_cos=rotary_pos_cos,
+                            rotary_pos_sin=rotary_pos_sin,
+                            attention_bias=attention_bias,
+                            inference_params=inference_params,
+                            packed_seq_params=packed_seq_params,
+                            sequence_len_offset=sequence_len_offset,
+                            **kwargs,
+                        )
                     if (
                         deepstack_visual_embeds is not None and
                         l_no in range(len(deepstack_visual_embeds))

@@ -30,9 +30,10 @@ def default_loss_func(
         valid_mask = False
     else:
         valid_mask = True
-    losses = output_tensor.float()
+    
+    losses = output_tensor.view(-1).float()
     loss_mask = loss_mask.view(-1).float()
-    total_tokens = loss_mask.sum()
+
     if loss_weight is not None:
         shift_weights = loss_weight.view(-1)
         shift_weights_sum = shift_weights.sum()
@@ -47,36 +48,31 @@ def default_loss_func(
             shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
                 with_context_parallel=True
             )
-        loss = torch.cat(
-            [
-                torch.sum(losses.view(-1) * shift_weights)
-                / (shift_weights_sum if valid_mask else 1.0).view(1),
-                total_tokens.view(1),
-            ]
-        )
+        loss = torch.sum(losses * shift_weights)
     else:
-        loss = torch.cat(
-            [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
-        )
-
-    if args.context_parallel_size > 1:
-        torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
+        loss = torch.sum(losses * loss_mask)
 
     # Check individual rank losses are not NaN prior to DP all-reduce.
     if args.check_for_nan_in_loss_and_grad:
         global_rank = torch.distributed.get_rank()
-        assert not loss[0].isnan(), (
+        assert not loss.isnan(), (
             f"Rank {global_rank}: found NaN in local forward loss calculation. "
             f"Device: {torch.cuda.current_device()}, node: {os.uname()[1]}"
         )
 
+    if valid_mask:
+        if loss_weight is not None:
+            num_tokens = shift_weights_sum.clone().detach().to(torch.int)
+        else:
+            num_tokens = loss_mask.sum().clone().detach().to(torch.int)
+    else:
+        num_tokens = 1
+
     # Reduce loss for logging.
-    reporting_loss = loss.clone().detach()
-    torch.distributed.all_reduce(reporting_loss, group=mpu.get_data_parallel_group())
+    reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
 
-    local_num_tokens = loss[1].clone().detach().to(torch.int)
-
-    loss_reduced_dict = {"lm loss": (reporting_loss[0], reporting_loss[1])}
+    loss_reduced_dict = {'lm loss': reporting_loss if not args.legacy_reporting_loss_reduction
+                         else reporting_loss[0] / num_tokens}
 
     if args.variable_seq_lengths:
         # for variable seq length, we need to calculate the number of tokens on fly
@@ -88,10 +84,10 @@ def default_loss_func(
         # sum across all dp ranks
         torch.distributed.all_reduce(input_tokens, group=mpu.get_data_parallel_group())
         loss_reduced_dict["total_inputs"] = (
-            input_tokens.item() * args.context_parallel_size
+            input_tokens * args.context_parallel_size
         )
 
-    return (loss[0] * args.context_parallel_size, local_num_tokens, loss_reduced_dict)
+    return (loss, num_tokens, loss_reduced_dict)
 
 
 def loss_func_internvl(
@@ -115,7 +111,7 @@ def loss_func_internvl(
         valid_mask = False
         output_tensor = output_tensor * 0.0  # skip update current microbatch
 
-    losses = output_tensor.float()  # [B, s]
+    losses = output_tensor.view(-1).float()  # [B, s]
     loss_mask = loss_mask.view(-1).float()  # [B * s]
 
     if loss_weight is not None:
@@ -130,19 +126,10 @@ def loss_func_internvl(
             shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
                 with_context_parallel=True
             )
-        loss = torch.sum(losses.view(-1) * shift_weights) / (
-            shift_weights_sum if valid_mask else 1.0
-        )  # avoid divide 0
+        loss = torch.sum(losses * shift_weights)
     else:
-        loss = torch.sum(losses.view(-1) * loss_mask) / (
-            loss_mask.sum() if valid_mask else 1.0
-        )
+        loss = torch.sum(losses * loss_mask)
 
-    if args.context_parallel_size > 1:
-        cp_group = mpu.get_context_parallel_group()
-        cp_size = torch.distributed.get_world_size(cp_group)
-        torch.distributed.all_reduce(loss, group=cp_group)
-        loss = loss / cp_size
     # Check individual rank losses are not NaN prior to DP all-reduce.
     if args.check_for_nan_in_loss_and_grad:
         global_rank = torch.distributed.get_rank()
@@ -152,8 +139,18 @@ def loss_func_internvl(
         )
 
     # reduce loss for logging.
-    averaged_loss = average_losses_across_data_parallel_group([loss])
-    loss_reduced_dict = {"lm loss": averaged_loss[0]}
+    if valid_mask:
+        if loss_weight is not None:
+            num_tokens = shift_weights_sum.clone().detach().to(torch.int)
+        else:
+            num_tokens = loss_mask.sum().clone().detach().to(torch.int)
+    else:
+        num_tokens = 1
+
+    reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
+
+    loss_reduced_dict = {'lm loss': reporting_loss if not args.legacy_reporting_loss_reduction
+                         else reporting_loss[0] / num_tokens}
 
     if args.variable_seq_lengths:
         # for variable seq length, we need to calculate the number of tokens on fly
@@ -165,7 +162,7 @@ def loss_func_internvl(
         # sum across all dp ranks
         torch.distributed.all_reduce(input_tokens, group=mpu.get_data_parallel_group())
         loss_reduced_dict["total_inputs"] = (
-            input_tokens.item() * args.context_parallel_size
+            input_tokens * args.context_parallel_size
         )
 
-    return (loss, loss_reduced_dict)
+    return loss, num_tokens, loss_reduced_dict

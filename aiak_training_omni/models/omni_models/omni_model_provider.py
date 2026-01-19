@@ -25,7 +25,7 @@ def omni_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
-    # model_config: BaseModelConfig = None,
+    vp_stage: Optional[int] = None,
 ) -> OmniCombinationModel:
     """
     Construct and return an Omni combination model instance.
@@ -52,7 +52,7 @@ def omni_model_provider(
     # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
-    add_encoder = mpu.is_pipeline_first_stage()
+    add_encoder = mpu.is_pipeline_first_stage(ignore_virtual=False, vp_stage=vp_stage)
 
     # temporary fix for omni model config
     for name in ["image_encoder", "image_projector"]:
@@ -81,6 +81,7 @@ def omni_model_provider(
         language_rotary_dtype=torch.float32,  # if args.rope_in_fp32 else args.params_dtype,
         seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
         allow_missing_adapter_checkpoint=args.allow_missing_adapter_checkpoint,
+        vp_stage=vp_stage,
     )
 
     return model

@@ -42,6 +42,7 @@ class OmniCombinationModel(BaseMegatronModule):
         share_embeddings_and_output_weights: bool = True,
         seq_len_interpolation_factor: float = None,
         scatter_embedding_sequence_parallel=False,
+        vp_stage: Optional[int] = None,
     ) -> None:
         super().__init__(config.foundation)
         self.pre_process = pre_process
@@ -57,6 +58,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 position_embedding_type=language_position_embedding_type,
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
                 allow_missing_adapter_checkpoint=allow_missing_adapter_checkpoint,
+                vp_stage=vp_stage,
             )
         else:
             self.encoder_model = None
@@ -81,6 +83,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
                 language_embedding=self.encoder_model.text_encoder if add_encoder else True,
                 rotary_dtype=language_rotary_dtype,
+                vp_stage=vp_stage,
             )
         else:
             raise ValueError(

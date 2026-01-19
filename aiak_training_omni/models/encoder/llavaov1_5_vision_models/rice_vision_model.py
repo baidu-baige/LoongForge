@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
 from .llavaov_1_5_config import RiceVisionConfig
@@ -47,14 +48,14 @@ class RiceViTModel(Qwen2VisionModel):
     config_class = RiceVisionConfig
 
     def __init__(
-        self, config: RiceVisionConfig, spatial_merge_size: int = 2, **kwargs
+        self, config: RiceVisionConfig, spatial_merge_size: int = 2, vp_stage: Optional[int] = None, **kwargs
     ) -> None:
         if config.model_spec is None:
             config.model_spec = [
                 "aiak_training_omni.models.encoder.llavaov1_5_vision_models.llavaov_1_5_layer_spec",
                 "get_vision_layer_with_spec",
             ]
-        super().__init__(config, spatial_merge_size)
+        super().__init__(config, spatial_merge_size, vp_stage=vp_stage)
         self.patch_size = config.patch_size
         self.fullatt_block_indexes = list(range(config.num_layers))
         self.spatial_merge_unit = self.spatial_merge_size * self.spatial_merge_size

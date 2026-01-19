@@ -19,6 +19,7 @@ from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
+from megatron.core.process_groups_config import ProcessGroupCollection
 from aiak_training_omni.models.common import (
     BaseMegatronLanguageModule,
 )
@@ -59,9 +60,11 @@ class LLaMAModel(BaseMegatronLanguageModule):
         parallel_output: bool = True,
         scatter_embedding_sequence_parallel: bool = True,
         language_embedding: Optional[torch.nn.Module] = None,
+        pg_collection: Optional[ProcessGroupCollection] = None,
+        vp_stage: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config=config, **kwargs)
+        super().__init__(config=config, pg_collection=pg_collection, **kwargs)
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
@@ -85,6 +88,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
         self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
         self.position_embedding_type = self.config.position_embedding_type
         self.seq_len_interpolation_factor = self.config.rotary_seq_len_interpolation_factor
+        self.vp_stage = vp_stage
 
         # TODO: remove this dependency ?
         self.rotary_dtype = torch.float32
@@ -108,6 +112,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
                     max_sequence_length=self.max_sequence_length,
                     position_embedding_type=self.position_embedding_type,
                     scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                    tp_group=self.pg_collection.tp,
                 )
             else:
                 self.embedding = language_embedding
@@ -126,6 +131,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
                 rope_scaling=self.rope_scaling,
                 rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
+                cp_group=self.pg_collection.cp,
             )
 
         # Cache for RoPE tensors which do not change between iterations.
@@ -137,6 +143,8 @@ class LLaMAModel(BaseMegatronLanguageModule):
             spec=self.transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
+            pg_collection=self.pg_collection,
+            vp_stage=vp_stage,
         )
 
         # Output
@@ -167,6 +175,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
                 and self.share_embeddings_and_output_weights,
                 embedding_activation_buffer=self.embedding_activation_buffer,
                 grad_output_buffer=self.grad_output_buffer,
+                tp_group=self.pg_collection.tp,
             )
 
         if self.pre_process or self.post_process:
@@ -209,6 +218,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
         runtime_gather_output: Optional[bool] = None,
         visual_pos_masks: Optional[list[Tensor]] = None,
         deepstack_visual_embeds: Optional[list[Tensor]] = None,
+        loss_mask: Optional[Tensor] = None,
         **kwargs,
     ) -> Tensor:
         """Forward function of the GPT Model This function passes the input tensors

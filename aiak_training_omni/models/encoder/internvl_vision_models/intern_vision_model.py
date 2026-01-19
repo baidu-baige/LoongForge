@@ -93,6 +93,7 @@ class InternVisionModel(BaseMegatronVisionModule):
     def __init__(
         self,
         config: InternVisionConfig,
+        vp_stage: Optional[int] = None,
         # transformer_layer_spec: ModuleSpec,
         **kwargs,
     ) -> None:
@@ -117,6 +118,7 @@ class InternVisionModel(BaseMegatronVisionModule):
             spec=self.transformer_layer_spec,
             pre_process=True,
             post_process=False,  # no final layer norm
+            vp_stage=vp_stage,
         )
         self.select_layer = self.config.select_layer
         self.ps_version = self.config.ps_version

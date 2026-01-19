@@ -16,7 +16,6 @@ def llm_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
-    config: Optional[object] = None,
 ):
     """Generic LLM model provider.
     

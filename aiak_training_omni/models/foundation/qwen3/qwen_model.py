@@ -21,6 +21,7 @@ from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock as MegatronTransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
+from megatron.core.process_groups_config import ProcessGroupCollection
 
 from aiak_training_omni.utils import get_model_config
 from aiak_training_omni.models.utils import import_module
@@ -82,17 +83,19 @@ class DynamicRotaryEmbedding(RotaryEmbedding):
         rope_scaling_factor: float = 8.0,
         use_cpu_initialization: bool = False,
         max_position_embeddings: int = 4096,
+        cp_group: Optional[torch.distributed.ProcessGroup] = None,
     ) -> None:
         super().__init__(
-            kv_channels,
-            rotary_percent,
-            rotary_interleaved,
-            seq_len_interpolation_factor,
-            rotary_base,
-            dtype,
-            rope_scaling,
-            rope_scaling_factor,
-            use_cpu_initialization,
+            kv_channels=kv_channels,
+            rotary_percent=rotary_percent,
+            rotary_interleaved=rotary_interleaved,
+            seq_len_interpolation_factor=seq_len_interpolation_factor,
+            rotary_base=rotary_base,
+            dtype=dtype,
+            rope_scaling=rope_scaling,
+            rope_scaling_factor=rope_scaling_factor,
+            use_cpu_initialization=use_cpu_initialization,
+            cp_group=cp_group,
         )
         self.dim = kv_channels
         self.rotary_base = rotary_base
@@ -255,9 +258,11 @@ class Qwen3Model(BaseMegatronLanguageModule):
         scatter_embedding_sequence_parallel: bool = True,
         language_embedding: Optional[torch.nn.Module] = None,
         rotary_dtype: torch.dtype = torch.float32,
+        pg_collection: Optional[ProcessGroupCollection] = None,
+        vp_stage: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config=config, **kwargs)
+        super().__init__(config=config, pg_collection=pg_collection, **kwargs)
 
         if has_config_logger_enabled(self.config):
             log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
@@ -277,6 +282,7 @@ class Qwen3Model(BaseMegatronLanguageModule):
         self.parallel_output = parallel_output
         self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
         self.position_embedding_type = self.config.position_embedding_type
+        self.vp_stage = vp_stage
 
         # megatron core pipelining currently depends on model type
         # TODO: remove this dependency ?
@@ -302,6 +308,7 @@ class Qwen3Model(BaseMegatronLanguageModule):
                     max_sequence_length=self.max_sequence_length,
                     position_embedding_type=self.position_embedding_type,
                     scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                    tp_group=self.pg_collection.tp,
                 )
             else:
                 self.embedding = language_embedding
@@ -330,6 +337,7 @@ class Qwen3Model(BaseMegatronLanguageModule):
                 rope_scaling=self.rope_scaling,
                 rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
+                cp_group=self.pg_collection.cp,
             )
         elif (
             self.config.rotary_emb_func == "RotaryEmbedding"
@@ -345,6 +353,7 @@ class Qwen3Model(BaseMegatronLanguageModule):
                 rope_scaling=self.rope_scaling,
                 rope_scaling_factor=self.rope_scaling_factor,
                 use_cpu_initialization=self.config.use_cpu_initialization,
+                cp_group=self.pg_collection.cp,
             )
         elif (
             self.config.rotary_emb_func == "Qwen3VLRotaryEmbedding"
@@ -374,6 +383,8 @@ class Qwen3Model(BaseMegatronLanguageModule):
             spec=self.transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
+            pg_collection=self.pg_collection,
+            vp_stage=vp_stage,
         )
 
         # Output
@@ -404,6 +415,7 @@ class Qwen3Model(BaseMegatronLanguageModule):
                 and self.share_embeddings_and_output_weights,
                 embedding_activation_buffer=self.embedding_activation_buffer,
                 grad_output_buffer=self.grad_output_buffer,
+                tp_group=self.pg_collection.tp,
             )
 
         if self.pre_process or self.post_process:
@@ -452,6 +464,7 @@ class Qwen3Model(BaseMegatronLanguageModule):
         runtime_gather_output: Optional[bool] = None,
         visual_pos_masks: Optional[list[Tensor]] = None,
         deepstack_visual_embeds: Optional[list[Tensor]] = None, 
+        loss_mask: Optional[Tensor] = None,
         **kwargs,
     ) -> Tensor:
         """Forward function of the GPT Model This function passes the input tensors

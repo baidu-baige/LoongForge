@@ -103,6 +103,7 @@ class STDiT3Model(VisionModule):
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         seq_len_interpolation_factor: Optional[float] = None,
+        vp_stage: Optional[int] = None,
     ) -> None:
         super().__init__(config=config)
 
@@ -166,6 +167,7 @@ class STDiT3Model(VisionModule):
             pre_process=self.pre_process,
             post_process=self.post_process,
             post_layer_norm=False,
+            vp_stage=vp_stage,
         )
 
         # Output

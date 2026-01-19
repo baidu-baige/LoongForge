@@ -111,6 +111,7 @@ class CogVLMModel(MegatronModule):
         fp16_lm_cross_entropy: bool = False,
         share_embeddings_and_output_weights: bool = True,
         seq_len_interpolation_factor: float = None,
+        vp_stage: Optional[int] = None,
     ) -> None:
         super().__init__(config=language_config)
 
@@ -135,6 +136,7 @@ class CogVLMModel(MegatronModule):
             self.vision_model = EVA2CLIPModel(
                 vision_config,
                 vision_layer_spec,
+                vp_stage=vp_stage,
             )
             self.vision_model.register_load_state_dict_post_hook(
                 _load_state_dict_hook_ignore_extra_state
@@ -175,6 +177,7 @@ class CogVLMModel(MegatronModule):
                 rotary_base=language_rotary_base,
                 rotary_dtype=language_rotary_dtype,
                 share_embeddings_and_output_weights=share_embeddings_and_output_weights,
+                vp_stage=vp_stage,
             )
             self.share_embeddings_and_output_weights = (
                 self.language_model.share_embeddings_and_output_weights

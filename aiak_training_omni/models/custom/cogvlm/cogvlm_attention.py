@@ -64,7 +64,7 @@ class CogvlmSelfAttention(SelfAttention):
         # ===================================================
         # Adjust key, value, and rotary_pos_emb for inference
         # ===================================================
-        query, key, value, rotary_pos_emb, attn_mask_type = (
+        query, key, value, rotary_pos_emb, attn_mask_type, _ = (
             self._adjust_key_value_for_inference(
                 inference_params,
                 query,

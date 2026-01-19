@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.transformer_config import TransformerConfig
@@ -77,7 +78,7 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
     config_class = Qwen2VisionModelConfig
 
     def __init__(
-        self, config: Qwen2VisionModelConfig, spatial_merge_size: int = 2, **kwargs
+        self, config: Qwen2VisionModelConfig, spatial_merge_size: int = 2, vp_stage: Optional[int] = None, **kwargs
     ) -> None:
         super().__init__(config)
         if self.config.model_spec is None:
@@ -106,6 +107,7 @@ class Qwen2VisionModel(BaseMegatronVisionModule):
             spec=self.transformer_layer_spec,
             pre_process=True,
             post_process=False,
+            vp_stage=vp_stage,
         )
         if hasattr(config, 'freeze') and config.freeze:
             self.freeze()
@@ -177,9 +179,10 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
         spatial_merge_size: int = 2,
         fullatt_block_indexes: list = [7, 15, 23, 31],
         window_size: int = 112,
+        vp_stage: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config, spatial_merge_size=spatial_merge_size)
+        super().__init__(config, spatial_merge_size=spatial_merge_size, vp_stage=vp_stage)
         self.patch_size = config.patch_size
         self.fullatt_block_indexes = fullatt_block_indexes
         self.window_size = window_size
