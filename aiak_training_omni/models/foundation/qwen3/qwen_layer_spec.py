@@ -33,7 +33,6 @@ def _get_mlp_module_spec(
             submodules=MLPSubmodules(
                 linear_fc1=multiacc_modules.TELayerNormColumnParallelLinear,
                 linear_fc2=multiacc_modules.TERowParallelLinear,
-                bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
             ),
         )
 
@@ -58,7 +57,6 @@ def _get_mlp_module_spec(
                 submodules=MLPSubmodules(
                     linear_fc1=linear_fc1,
                     linear_fc2=linear_fc2,
-                    bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
                 ),
             )
         ),
