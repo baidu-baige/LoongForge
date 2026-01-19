@@ -212,7 +212,7 @@ class TransformerBlock(MegatronTransformerBlock):
             assert self.config.recompute_num_layers == 1, \
                 "If recompute_method is set to uniform, recompute_num_layers must be 1."
 
-        # 用于收集所有分块的特征
+        # Used to collect features of all chunks
         deepstack_feature_lists = []
 
         def custom(start: int, end: int):
@@ -299,9 +299,9 @@ class TransformerBlock(MegatronTransformerBlock):
                 index = layer_idx + self.config.recompute_num_layers - 1
                 if index in deepstack_visual_indexes:
                     merger = deepstack_merger_list[deepstack_visual_indexes.index(index)]
-                    # 执行提取
+                    # Execute extraction
                     deepstack_feature = merger(hidden_states)
-                    # 添加到当前分块的列表中
+                    # Add to current chunk's list
                     deepstack_feature_lists.append(deepstack_feature)
                     
                 layer_idx += self.config.recompute_num_layers
@@ -337,9 +337,9 @@ class TransformerBlock(MegatronTransformerBlock):
 
                 if deepstack_visual_indexes is not None and layer_idx in deepstack_visual_indexes:
                     merger = deepstack_merger_list[deepstack_visual_indexes.index(layer_idx)]
-                    # 执行提取
+                    # Execute extraction
                     deepstack_feature = merger(hidden_states)
-                    # 添加到当前分块的列表中
+                    # Add to current chunk's list
                     deepstack_feature_lists.append(deepstack_feature)
         else:
             raise ValueError("Invalid activation recompute method.")

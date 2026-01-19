@@ -10,9 +10,9 @@ T_sample = TypeVar("T_sample")
 
 class LengthPoolSortDataset(SavableDataset[T_sample]):
     """
-    局部池化长度排序:
-      - 累积 pool_size 个样本，按 key_fn(sample) 排序后依次输出
-      - 剩余不足 pool_size 的尾部再排序输出
+    Global pool length sorting:
+      - Accumulate pool_size samples, sort by key_fn(sample) and output in order
+      - Output remaining samples that are less than pool_size sorted
     """
 
     def __init__(
@@ -24,7 +24,7 @@ class LengthPoolSortDataset(SavableDataset[T_sample]):
         ascending: bool,
         worker_config: WorkerConfig,
         tail_shuffle: bool = True,
-        shuffle_seed: Optional[int] = None,  # 若 None 使用 worker_config.global_seed
+        shuffle_seed: Optional[int] = None,  # If None use worker_config.global_seed
     ):
         super().__init__(worker_config=worker_config)
         assert pool_size > 0
@@ -38,7 +38,7 @@ class LengthPoolSortDataset(SavableDataset[T_sample]):
             if shuffle_seed is not None
             else getattr(worker_config, "global_seed", 1234)
         )
-        # 独立 RNG, 不污染全局
+        # Independent RNG, does not pollute global
         self._rng = random.Random(base_seed)
 
     def __len__(self):
@@ -58,13 +58,13 @@ class LengthPoolSortDataset(SavableDataset[T_sample]):
         if pool:
             pool.sort(key=self.key_fn, reverse=not self.ascending)
             if self.tail_shuffle:
-                # 仅对尾池可复现打乱
+                # Only shuffle tail pool for reproducibility
                 self._rng.shuffle(pool)
             for s in pool:
                 yield s
             pool.clear()
 
-    # ---- 抽象方法实现委托 ----
+    # ---- Abstract method implementation delegation ----
     def worker_has_samples(self) -> bool:
         """worker_has_samples"""
         return self.dataset.worker_has_samples()

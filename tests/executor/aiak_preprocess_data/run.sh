@@ -2,7 +2,7 @@
 set -x
 set -eo pipefail
 
-############################################ 预处理数据集参数 ############################################
+############################################ Preprocess dataset parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
@@ -14,17 +14,17 @@ PREPROCESS_DATA_ARGS=(
 
 export PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
-# 根据脚本类型选择执行方式
+# Select execution method based on script type
 if [[ "${PREPROCESS_DATA_PATH}" == *.sh ]]; then
-    # shell 脚本（如 offline_packing）
+    # shell script (e.g., offline_packing)
     command="bash $PREPROCESS_DATA_PATH ${PREPROCESS_DATA_ARGS[@]}"
 else
-    # python 脚本
+    # python script
     command="python $PREPROCESS_DATA_PATH ${PREPROCESS_DATA_ARGS[@]}"
 fi
 
 echo ""
-echo "执行命令: $command"
+echo "Executing command: $command"
 if [[ "${dry_run}" != "true" ]]; then
     eval $command
 fi

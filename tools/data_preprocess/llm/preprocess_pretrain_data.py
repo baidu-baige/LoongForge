@@ -403,9 +403,9 @@ def main():
         processes.append(p)
 
     for p in processes:
-        p.join()  # 等待子进程结束
-        if p.exitcode != 0:  # 如果子进程的退出码不为 0
-            sys.exit(1)  # 让主进程以非零码退出
+        p.join()  # Wait for child processes to end
+        if p.exitcode != 0:  # If child process exit code is not 0
+            sys.exit(1)  # Let main process exit with non-zero code
 
     if args.partitions == 1:
         return

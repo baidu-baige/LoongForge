@@ -24,31 +24,29 @@ from torch.cuda.amp import autocast as autocast
 
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
     """
-    对输入张量x进行调制。
+    Modulate input tensor x.
 
     Args:
-        x (torch.Tensor): 输入张量。
-        shift (torch.Tensor): 平移参数。
-        scale (torch.Tensor): 缩放参数。
+        x (torch.Tensor): Input tensor.
+        shift (torch.Tensor): Shift parameter.
+        scale (torch.Tensor): Scale parameter.
 
     Returns:
-        torch.Tensor: 调制后的张量。
-
+        torch.Tensor: Modulated tensor.
     """
     return x * (1 + scale) + shift
 
 
 def sinusoidal_embedding_1d(dim, position):
     """
-    计算一维正弦嵌入表示。
+    Calculate one-dimensional sinusoidal embedding representation.
 
     Args:
-        dim (int): 嵌入的维度。
-        position (torch.Tensor): 位置索引，大小为 (N,)。
+        dim (int): Embedding dimension.
+        position (torch.Tensor): Position index, size is (N,).
 
     Returns:
-        torch.Tensor: 一维正弦嵌入表示，大小为 (N, dim)。
-
+        torch.Tensor: One-dimensional sinusoidal embedding representation, size is (N, dim).
     """
     sinusoid = torch.outer(
         position.type(torch.float64),
@@ -65,9 +63,9 @@ def sinusoidal_embedding_1d(dim, position):
 
 def precompute_freqs_cis_3d(dim: int, end: int = 1024, theta: float = 10000.0):
     """
-    3d rope计算
+    3D rope calculation
     """
-    # 3d rope precompute
+    # 3D rope precompute
     f_freqs_cis = precompute_freqs_cis(dim - 2 * (dim // 3), end, theta)
     h_freqs_cis = precompute_freqs_cis(dim // 3, end, theta)
     w_freqs_cis = precompute_freqs_cis(dim // 3, end, theta)
@@ -88,7 +86,7 @@ def precompute_freqs_cis(dim: int, end: int = 1024, theta: float = 10000.0):
 
 def rope_apply(x, freqs, num_heads):
     """
-    计算 rope
+    Calculate rope
 
     """
     x = rearrange(x, "b s (n d) -> b s n d", n=num_heads)
@@ -101,12 +99,12 @@ def rope_apply(x, freqs, num_heads):
 
 class MLP(torch.nn.Module):
     """
-    MLP class 定义
+    MLP class definition
     """
 
     def __init__(self, in_dim, out_dim, has_pos_emb=False):
         """
-        初始化方法
+        Initialization method
         """
         super().__init__()
         self.proj = torch.nn.Sequential(
@@ -122,7 +120,7 @@ class MLP(torch.nn.Module):
 
     def forward(self, x):
         """
-        前向函数
+        Forward function
         """
         if self.has_pos_emb:
             x = x + self.emb_pos.to(dtype=x.dtype, device=x.device)
@@ -138,7 +136,7 @@ class Head(nn.Module):
         self, dim: int, out_dim: int, patch_size: Tuple[int, int, int], eps: float
     ):
         """
-        初始化函数
+        Initialization function
         """
         super().__init__()
         self.dim = dim
@@ -149,7 +147,7 @@ class Head(nn.Module):
 
     def forward(self, x, t_mod):
         """
-        前向函数
+        Forward function
         """
         shift, scale = (
             self.modulation.to(dtype=t_mod.dtype, device=t_mod.device) + t_mod
@@ -247,7 +245,7 @@ class WanModel(VisionModule):
 
     def patchify(self, x: torch.Tensor):
         """
-        将输入张量进行patchify操作。
+        Perform patchify operation on input tensor.
         """
         x = self.patch_embedding(x)
         grid_size = x.shape[2:]
@@ -256,7 +254,7 @@ class WanModel(VisionModule):
 
     def unpatchify(self, x: torch.Tensor, grid_size: torch.Tensor):
         """
-        将分块张量重新组合成完整的张量。
+        Reassemble chunked tensors into complete tensor.
         """
 
         return rearrange(
@@ -318,7 +316,7 @@ class WanModel(VisionModule):
         **kwargs,
     ):
         """
-        wan 的前向
+        Wan forward
         """
         if self.args.model_name == "wan2_1_i2v":
             f, h, w = (21, 30, 52)
@@ -360,12 +358,12 @@ class WanModel(VisionModule):
             x = rearrange(x, f"B S C ->S B C").contiguous()
             timestep = rearrange(timestep, f"B S C ->S B C").contiguous()
             context = rearrange(context, f"B S C ->S B C").contiguous().to(torch.float32)
-            # 拼接context
+            # Concatenate context
             if self.has_image_input:
                 x = self.reorganize_x(x, context, timestep, t_s, clip_embdding)
             else:
                 x = self.reorganize_x(x, context, timestep, t_s)
-            ## context 并行
+            ## Context parallel
             if self.config.context_parallel_size > 1:
                 x = split_forward_gather_backward(
                     x, get_context_parallel_group(), dim=0, grad_scale="down"

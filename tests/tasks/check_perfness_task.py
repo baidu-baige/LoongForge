@@ -45,7 +45,7 @@ class PerfnessCheckTask(BaseTask):
 
     def __call__(self) -> TaskResut:
         if not self.MODEL_RUNNABLE:
-            logger.warn(f"{self.class_name} 当前模型 {self.model_name} 不支持 {self.class_name} 任务，跳过！！！")
+            logger.warn(f"{self.class_name} current model {self.model_name} does not support {self.class_name} task, skipping!!!")
             return TaskResut()
 
         for index, scenario_data_list in enumerate(self.model["scenarios"]):
@@ -56,15 +56,15 @@ class PerfnessCheckTask(BaseTask):
                     if training_type_name not in self.input_cmd_args.training_type:
                         continue
                     model_name = self.model_name
-                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】 执行开始 ...")
+                    logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】 execution starts ...")
 
                     # Step2:
                     step2_name = "Step2"
                     self.start_aiak_training_omni(index, step2_name, scenario_name, training_type_name)
                     step2_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step2_name, self.master_addr, f"{self.rank_name}_lock.txt")
                     self.wait_async_pod_complete(step2_scenario_lock_file, model_name, f"{scenario_name}_{step2_name}")
-                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】 - 【{step2_name}】完成 \n")
+                    logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】 - 【{step2_name}】 completed \n")
 
-                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】执行结束 \n")
+                    logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】 execution ended \n")
 
         return TaskResut()

@@ -70,7 +70,7 @@ class WanSelfAttention(SelfAttention):
             scatter_idx=ulysses_scatter_idx,
         )
 
-        ##因精度问题使用自定义RMSNorm覆盖原有的 q_layernorm 和 k_layernorm
+        ## Use custom RMSNorm to override original q_layernorm and k_layernorm due to precision issues
         if submodules.q_layernorm is not None:
             self.q_layernorm = build_module(
                 submodules.q_layernorm,
@@ -96,7 +96,7 @@ class WanSelfAttention(SelfAttention):
         """
         # Attention heads [sq, b, h] --> [sq, b, ng * (np/ng + 2) * hn)]
         mixed_qkv, _ = self.linear_qkv(hidden_states)
-        #### q k layernorm, 原有形状qkvqkvqkv..., 每隔qkv_last_size取  self.hidden_size_per_attention_head
+        # q k layernorm, original shape qkv, qkv, qkv..., every qkv_last_size take  self.hidden_size_per_attention_head
         full_mixed_qkv = gather_forward_split_backward(
             mixed_qkv, get_context_parallel_group(), dim=0, grad_scale="up"
         )
@@ -120,7 +120,7 @@ class WanSelfAttention(SelfAttention):
         q_all = self.q_layernorm(q_all_norm_in).reshape(v_all.shape)
         k_all = self.k_layernorm(k_all_norm_in).reshape(v_all.shape)
 
-        # 重组回原始形状
+        # Reorganize back to original shape
         merged = (
             torch.cat([q_all, k_all, v_all], dim=-1)
             .flatten()
@@ -377,7 +377,7 @@ class WanCrossAttention(CrossAttention):
                 is_expert=False,
             )
 
-        ##覆盖原有的 q_layernorm 和 k_layernorm
+        ## Override original q_layernorm and k_layernorm
         if submodules.q_layernorm is not None:
             self.q_layernorm = build_module(
                 submodules.q_layernorm,
@@ -497,14 +497,14 @@ class WanCrossAttention(CrossAttention):
 
         return output
 
-    # 获取query, key(context + image), value(context + image)
+    # Get query, key(context + image), value(context + image)
     def get_query_key_value_tensors(self, hidden_states, key_value_states):
         """
         Derives `query` tensor from `hidden_states`, and `key`/`value` tensors
         from `key_value_states`.
         """
         # img = y[:, :257],ctx = y[:, 257:]
-        ### S B C, S维度拆分成2部分，一部分是context，一部分是image
+        # ### S B C, S dimension split into 2 parts, one part is context, one part is image
         cated = gather_forward_split_backward(
             key_value_states, get_context_parallel_group(), dim=0, grad_scale="up"
         )
@@ -529,9 +529,9 @@ class WanCrossAttention(CrossAttention):
 
         # Attention heads [sk, b, h] --> [sk, b, (np * 2 * hn)]
         mixed_kv, _ = self.linear_kv(key_value_states_ctx)
-        ###RMSNorm mixed_kv 中的k
+        # RMSNorm K in mixed_kv
 
-        #### q k layernorm, 原有形状qkvqkvqkv..., 每隔qkv_last_size取  self.hidden_size_per_attention_head
+        # q k layernorm, original shape qkv, qkv, qkv..., every qkv_last_size take  self.hidden_size_per_attention_head
         def norm_k(mixed_kv, norm_func, clip_padding=False):
             full_kv = mixed_kv
             num_segments = self.config.num_attention_heads
@@ -555,7 +555,7 @@ class WanCrossAttention(CrossAttention):
             else:
                 k_all_norm_in = norm_func(k_all_norm_in)
             k_all = k_all_norm_in.reshape(v_all.shape)
-            # 重组回原始形状
+            # Reorganize back to original shape
             merged = torch.cat([k_all, v_all], dim=-1).flatten().view(full_kv.shape)
             return merged
 
@@ -599,7 +599,7 @@ class WanCrossAttention(CrossAttention):
 
             mixed_kv_img = norm_k(mixed_kv_img, self.k_img_layernorm, clip_padding=True)
 
-            ###RMSNorm mixed_kv_img 中的K
+            # ###RMSNorm K in mixed_kv_img
             new_tensor_shape_img = mixed_kv_img.size()[:-1] + (
                 self.num_attention_heads_per_partition,
                 2 * self.hidden_size_per_attention_head,

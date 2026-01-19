@@ -559,7 +559,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         for idx in range(n_orig_sample):
             context = sample.contexts[idx]  # str
-            media_group = media_list[idx]  # List[Tensor] 或 List[AVData]
+            media_group = media_list[idx]  # List[Tensor] or List[AVData]
             answer_group = sample.answers[idx] if sample.answers else []  # List[str]
 
             if isinstance(answer_group, list):

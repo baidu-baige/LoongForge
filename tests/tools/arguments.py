@@ -12,12 +12,12 @@ from tools.config_manager import ConfigManager
 
 
 def _print_available_models(args, print_func):
-    """打印可用模型列表（紧跟在 arguments 后面）"""
+    """Print list of available models (follows immediately after arguments)"""
     config_dir = getattr(args, 'configs_dir', 'configs')
     include_optional = getattr(args, 'include_optional', False)
     extra_configs_dirs = getattr(args, 'extra_configs_dirs', []) or []
     
-    # 收集所有配置目录
+    # Collect all configuration directories
     all_dirs = [config_dir]
     if extra_configs_dirs:
         all_dirs.extend(extra_configs_dirs)
@@ -26,7 +26,7 @@ def _print_available_models(args, print_func):
         if optional_dir not in all_dirs:
             all_dirs.append(optional_dir)
     
-    # 获取所有目录下的模型
+    # Get all models under directories
     available = ConfigManager.list_all_available_models(
         config_dir,
         extra_configs_dirs=all_dirs[1:] if len(all_dirs) > 1 else None
@@ -37,7 +37,7 @@ def _print_available_models(args, print_func):
     
     total_count = 0
     for directory, models in available.items():
-        # 按子目录分组
+        # Group by subdirectories
         grouped = {}
         for model in models:
             if "/" in model:
@@ -50,16 +50,16 @@ def _print_available_models(args, print_func):
                     grouped["_root_"] = []
                 grouped["_root_"].append(model)
         
-        # 显示目录名
+        # Display directory name
         print_func(f'  [{directory}]')
-        
-        # 先显示根目录的模型
+
+        # Display models in root directory first
         if "_root_" in grouped:
             for model in sorted(grouped["_root_"]):
                 print_func(f'    • {model}')
             del grouped["_root_"]
         
-        # 显示子目录的模型（缩进显示）
+        # Display models in subdirectories (indented)
         for subdir in sorted(grouped.keys()):
             print_func(f'    [{subdir}/]')
             for model in sorted(grouped[subdir]):
@@ -91,7 +91,7 @@ def print_args(args, indents=48, std_out=print, need_endl=False):
 
     custom_print('-------------------- end of arguments ---------------------')
     
-    # 打印可用模型列表
+    # Print available models list
     _print_available_models(args, custom_print)
 
 def parse_args():
@@ -102,7 +102,7 @@ def parse_args():
     optional_config_dir = "optional_configs"
     task_dir = "tasks"
     
-    # 获取所有可用模型（包括主配置目录和可选配置目录的子目录）
+    # Get all available models (including subdirectories under main config directory and optional config directory)
     all_available_models = ConfigManager.get_all_models(
         config_dir, 
         extra_configs_dirs=[optional_config_dir],
@@ -161,7 +161,7 @@ def parse_args():
                         default=600,
                         help="timeout.")
     
-    # 可选配置相关参数
+    # Optional configuration related parameters
     parser.add_argument("--extra_configs_dirs",
                         type=str,
                         nargs='*',

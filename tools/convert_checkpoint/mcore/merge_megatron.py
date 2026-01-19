@@ -102,10 +102,10 @@ if pp_size == 1:
     for module in [vision_model, adapter, patch]:
         # Each module has etp_size shards
         for etp_rank in range(etp_size):
-            # 修改为交错分配Encoder组
+            # Modify to staggered allocation for Encoder groups
             dtp_start = etp_rank
             dtp_end = dtp_size
-            step = etp_size  # 步长为etp_size
+            step = etp_size  # Step size is etp_size
             
             # Merge encoder components into language model
             for dtp_rank in range(dtp_start, dtp_end, step):
@@ -122,10 +122,10 @@ if pp_size == 1:
 else:
     for module in [vision_model, adapter, patch]:
         for etp_rank in range(etp_size):
-            # 修改为交错分配Encoder组
+            # Modify to staggered allocation for Encoder groups
             dtp_start = etp_rank
             dtp_end = dtp_size
-            step = etp_size  # 步长为etp_size
+            step = etp_size  # Step size is etp_size
             
             # Merge encoder components into language model
             for dtp_rank in range(dtp_start, dtp_end, step):

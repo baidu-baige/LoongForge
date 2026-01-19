@@ -104,9 +104,9 @@ class RiceViTModel(Qwen2VisionModel):
         # Pad x to multiple of 16 when using fp8 blockwise
         if (self.config.fp8) and self.config.fp8_recipe == 'blockwise':
             pad_len = (16 - seq_len % 16) % 16
-        if pad_len > 0:
-            x = F.pad(x, (0, 0, 0, pad_len))  # 在序列维度(第0维)末尾填充pad_len个0
-
+        if pad_len > 0: # Pad pad_len zeros at the end of sequence dimension (0th dimension)
+            x = F.pad(x, (0, 0, 0, pad_len)) 
+ 
         new_rotary_pos_emb = []
         start_idx = 0
         for i in range(batch_size):
@@ -119,12 +119,11 @@ class RiceViTModel(Qwen2VisionModel):
         rotary_pos_emb = torch.cat(new_rotary_pos_emb, dim=0)
 
         # Pad rotary_pos_emb to multiple of 16
-        if pad_len > 0:
-            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, pad_len))  # 在序列维度(第0维)末尾填充pad_len个0
-
+        if pad_len > 0: # Pad pad_len zeros at the end of sequence dimension (0th dimension)
+            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, pad_len))  
         cu_seqlens = []
         cumulative_length = 0
-        cu_seqlens.append(cumulative_length)  # 起始为0
+        cu_seqlens.append(cumulative_length)  # Starts from 0
         for length in tokens_per_sample:
 
             cumulative_length += int(length + 1)
@@ -169,5 +168,5 @@ class RiceViTModel(Qwen2VisionModel):
             start_idx += 1
             patch_output.append(x[start_idx : start_idx + tokens_per_sample[i]])
             start_idx += tokens_per_sample[i]
-        patch_output = torch.cat(patch_output, dim=0)  # [原始seq_len, hidden_size]
+        patch_output = torch.cat(patch_output, dim=0)  # [original_seq_len, hidden_size]
         return patch_output, None, []

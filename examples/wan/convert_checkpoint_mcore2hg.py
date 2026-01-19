@@ -131,9 +131,9 @@ def load_huggingface_chekckpoints(path, num_checkpoints):
 
 
 state_dict = load_huggingface_chekckpoints(args.checkpoint_path, args.num_checkpoints)
-# """megatron 格式转 HuggingFace state_dict""
+# """Convert megatron format to HuggingFace state_dict"""
 
-# 模型第一部分
+# Model first part
 base_first_part_list = [
     "patch_embedding.weight",
     "patch_embedding.bias",
@@ -162,7 +162,7 @@ extra_first_part_dict = {
     "wan2_2_i2v": []
 }
 first_part_list = base_first_part_list + extra_first_part_dict.get(model_name, [])
-# 第二部分全部权重对应关系
+# All weight correspondence for second part
 second_part_dict = {
     "decoder.layers.0.ffn.0.weight": "blocks.0.ffn.0.weight",
     "decoder.layers.0.ffn.0.bias": "blocks.0.ffn.0.bias",
@@ -170,7 +170,7 @@ second_part_dict = {
     "decoder.layers.0.ffn.2.bias": "blocks.0.ffn.2.bias",
     "decoder.layers.0.norm3.weight": "blocks.0.norm3.weight",
     "decoder.layers.0.norm3.bias": "blocks.0.norm3.bias",
-    "decoder.layers.0.modulation": "blocks.0.modulation",  # 需要transpose
+    "decoder.layers.0.modulation": "blocks.0.modulation",  # Need to transpose
     "decoder.layers.0.self_attn.linear_proj.weight": "blocks.0.self_attn.o.weight",
     "decoder.layers.0.self_attn.linear_proj.bias": "blocks.0.self_attn.o.bias",
     "decoder.layers.0.self_attn.linear_qkv.weight": [
@@ -210,7 +210,7 @@ if model_name == "wan2_1_i2v":
         "blocks.0.cross_attn.v_img.bias",
     ]
     second_part_dict["decoder.layers.0.cross_attn.k_img_layernorm.weight"] = "blocks.0.cross_attn.norm_k_img.weight"
-# 内部不需要transpose的部分
+# Parts that do not need transpose inside
 inside_blk_replace_dict = {
     "blocks.0.ffn.0.weight": "decoder.layers.0.ffn.0.weight",
     "blocks.0.ffn.0.bias": "decoder.layers.0.ffn.0.bias",
@@ -225,7 +225,7 @@ inside_blk_replace_dict = {
 }
 if model_name == "wan2_1_i2v":
     inside_blk_replace_dict["blocks.0.cross_attn.norm_k_img.weight"] = "decoder.layers.0.cross_attn.k_img_layernorm.weight"
-# 模型第最后一部分
+# Model last part
 third_part_dict = {
     "head.modulation",
     "head.head.weight",
@@ -242,7 +242,7 @@ for i in range(num_layers):
     shift = i % layers_in_each_stage
     print(f"layer_idx: {i}, pp_idx: {pp_idx}, shift: {shift}")
 
-    ## self_attention qkv拆分
+    ## self_attention qkv split
     mcore_dict = cp_pp[pp_idx][0]["model"]
     src_qkv_weight = mcore_dict[
         "decoder.layers." + str(shift) + ".self_attn.linear_qkv.weight"
@@ -264,7 +264,7 @@ for i in range(num_layers):
     new_state_dict["blocks." + str(i) + ".self_attn.k.bias"] = k_bias
     new_state_dict["blocks." + str(i) + ".self_attn.v.bias"] = v_bias
 
-    # 转 o
+    # Convert to o
     linear_proj_weight = mcore_dict[
         "decoder.layers." + str(shift) + ".self_attn.linear_proj.weight"
     ]
@@ -355,7 +355,7 @@ for i in range(num_layers):
     modulation = rearrange(modulation, "D M L -> M D L")
     new_state_dict["blocks." + str(i) + ".modulation"] = modulation
 
-    ## 一般性替换
+    ## General replacement
     for key, value in inside_blk_replace_dict.items():
         key = key.replace("blocks.0", "blocks." + str(i))
         value = value.replace("decoder.layers.0", "decoder.layers." + str(shift))

@@ -43,7 +43,7 @@ class Qwen3VisionModel(Qwen2VisionModel):
         else:
             self.deepstack_visual_indexes = [8, 16, 24]  # Default Qwen3-VL layers
         
-        # 在vision_model中创建deepstack_merger_list
+        # Create deepstack_merger_list in vision_model
         model_config = get_model_config()
         self.deepstack_merger_list = torch.nn.ModuleList(
             [

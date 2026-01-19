@@ -307,7 +307,7 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
         dataset = self.build_cook_crude_sample(dataset, worker_config=worker_config)
         dataset = self.build_encode_sample(dataset, worker_config=worker_config)
 
-        # 在进入 BatchDataset 之前插入池化排序
+        # Insert pool sorting before entering BatchDataset
         if (
             getattr(self.args, "length_sort_pool_size", 0)
             and self.args.length_sort_pool_size > 0

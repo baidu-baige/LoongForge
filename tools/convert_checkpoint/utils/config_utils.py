@@ -42,13 +42,13 @@ def load_config(config_path, config_name=None, hydra_overrides=None):
 
 def parse_at_configs(yaml_lines):
     """
-    解析YAML中带@符号的配置行，提取键值对
-    
-    参数:
-        yaml_lines (list): YAML文件内容行列表
-        
-    返回:
-        dict: 包含配置值的字典，格式为:
+    Parse configuration lines with @ symbol in YAML to extract key-value pairs.
+
+    Args:
+        yaml_lines (list): List of YAML file content lines
+
+    Returns:
+        dict: Dictionary containing configuration values in format:
             {
                 'image_encoder': 'qwen_vit_rmsnorm_test',
                 'image_projector': 'mlp_adapter_test',
@@ -59,13 +59,13 @@ def parse_at_configs(yaml_lines):
     for line in yaml_lines:
         line = line.strip()
         if line.startswith('- ') and '@' in line and ':' in line:
-            # 移除行首的"- "
+            # Remove the leading "- "
             config_str = line[2:].strip()
-            # 分割键和值
+            # Split key and value
             key_part, value = config_str.split(':', 1)
             key_part = key_part.strip()
             value = value.strip()
-            # 提取@前面的部分作为键
+            # Extract the part before @ as the key
             if '@' in key_part:
                 config_key = key_part.split('@')[0].split('/')[-1]
                 result[config_key.strip()] = value
@@ -73,14 +73,14 @@ def parse_at_configs(yaml_lines):
 
 def parallel_param_parser(args, model_cfg, parallel_param, module_type):
     parallel_param_name = 'model.'+module_type + '.' + parallel_param
-    if OmegaConf.select(model_cfg, parallel_param_name): # 若不存在则为None
+    if OmegaConf.select(model_cfg, parallel_param_name): # Returns None if not exists
         parallel_size = model_cfg.model[module_type][parallel_param]
         setattr(args, parallel_param, parallel_size)
     elif hasattr(args, parallel_param):
         parallel_size = getattr(args, parallel_param)
     else:
         raise ValueError(f"Please provide {parallel_param} either in yaml or args")
-    
+
     return parallel_size
 
 def update_overwrite(model_cfg, module_cfg, module_type):

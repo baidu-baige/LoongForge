@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e  # 任何命令失败立即退出
+set -e  # Exit immediately if any command fails
 
 CONFIG="config.yaml"
 

@@ -1,5 +1,5 @@
 model_name: llavaov_1.5_4b
-description: $model_name模型自动化
+description: $model_name model automation
 huggingface_path: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 bos_path: bos:/ai-data/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 TOTAL_K8S_NODES: 1
@@ -24,7 +24,7 @@ PATCH_PATH: $step1_output_path/patch-mcore
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 2
 
-# aiak-training-omni 训练的参数
+# aiak-training-omni training parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 2
 log_interval: 1

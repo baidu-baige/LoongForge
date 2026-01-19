@@ -285,7 +285,7 @@ def verl_convert_mcore_to_hf_v3(v3_params, args):
                 try:
                     os.remove(file_path)
                 except Exception as e:
-                    logging.info(f"删除失败 {file_path}: {str(e)}")
+                    logging.info(f"Failed to delete {file_path}: {str(e)}")
     p_keys = set(v3_params.keys())
     utils.LOADED_STATE_DICT = {}
     for p in p_keys:

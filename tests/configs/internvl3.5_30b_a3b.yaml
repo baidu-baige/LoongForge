@@ -1,12 +1,12 @@
 model_name: internvl3.5_30b_a3b
-description: $model_name模型自动化
+description: $model_name model automation
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL3_5-30B-A3B
 bos_path: bos:/ai-data/OpenGVLab/InternVL3_5-30B-A3B
 TOTAL_K8S_NODES: 1
 
-MODEL_RUNNABLE: True # 表示模型是否支持运行, 或者 True / False
+MODEL_RUNNABLE: True # Indicates whether model supports running, or True / False
 
-# aiak-training-omni 训练的参数
+# aiak-training-omni training parameters
 
 HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-30B-A3B/
 # DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/internvl3.5_30b_a3b/webdataset_video
@@ -17,7 +17,7 @@ TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
 SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.json
 
-# ckpt convert 相关配置
+# Checkpoint convert related configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 2
 EXPERT_PARALLEL_SIZE: 4
@@ -30,7 +30,7 @@ VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
 ADAPTER_PATH: $step1_output_path/adapter-mcore
 PATCH_PATH: $step1_output_path/patch-mcore
 
-# 训练参数
+# Training parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 2
 NUM_EXPERTS: 128

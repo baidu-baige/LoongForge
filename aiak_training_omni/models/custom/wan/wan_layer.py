@@ -104,7 +104,7 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
         self.self_attn = build_module(
             submodules.wan_self_attention, config=self.config, layer_number=layer_number
         )
-        # 融了两个 cross attention 最后结果相加再做linear
+        # Fuse two cross attention, add final results then do linear
         self.cross_attn = build_module(
             submodules.wan_cross_attention,
             config=self.config,

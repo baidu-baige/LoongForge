@@ -5,7 +5,7 @@ import torch
 
 class FlowMatchScheduler(object):
     """
-    噪声生成控制类
+    Noise generation control class
     """
 
     def __init__(
@@ -20,7 +20,7 @@ class FlowMatchScheduler(object):
         reverse_sigmas=False,
     ):
         """
-        初始化函数。
+        Initialization function.
         """
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
@@ -39,7 +39,7 @@ class FlowMatchScheduler(object):
         shift=None,
     ):
         """
-        设置时间步长。
+        Set time step length.
         """
         if shift is not None:
             self.shift = shift
@@ -91,15 +91,15 @@ class FlowMatchScheduler(object):
 
     def add_noise(self, original_samples, noise, timestep):
         """
-        给原始样本添加噪声。
+        Add noise to original samples.
 
         Args:
-            original_samples (torch.Tensor): 原始样本，形状为 (batch_size, ..., channels)
-            noise (torch.Tensor): 噪声样本，形状为 (batch_size, ..., channels)
-            timestep (torch.Tensor): 时间步长，形状为 (batch_size,)
+            original_samples (torch.Tensor): Original samples, shape (batch_size, ..., channels)
+            noise (torch.Tensor): Noise samples, shape (batch_size, ..., channels)
+            timestep (torch.Tensor): Timestep, shape (batch_size,)
 
         Returns:
-            torch.Tensor: 添加噪声后的样本，形状为 (batch_size, ..., channels)
+            torch.Tensor: Samples after adding noise, shape (batch_size, ..., channels)
 
         """
         if isinstance(timestep, torch.Tensor):
