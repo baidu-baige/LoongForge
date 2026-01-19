@@ -207,6 +207,9 @@ class LLaMAModel(BaseMegatronLanguageModule):
         extra_block_kwargs: dict = None,
         rotary_pos_emb: Tensor = None,
         runtime_gather_output: Optional[bool] = None,
+        visual_pos_masks: Optional[list[Tensor]] = None,
+        deepstack_visual_embeds: Optional[list[Tensor]] = None,
+        **kwargs,
     ) -> Tensor:
         """Forward function of the GPT Model This function passes the input tensors
         through the embedding layer, and then the decoeder and finally into the post
