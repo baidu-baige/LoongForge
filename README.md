@@ -1,5 +1,22 @@
-# AIAK-Training-Omni README
-![alt text](Image_20260117_204343.jpg)
+<div align="center">
+  <img src="docs/source/images/Image_20260117_204343.jpg" width="450"/>
+  <div>&nbsp;</div>
+  <div align="center">
+    <b><font size="5">AIAK-Training-Omni: A High-Performance Multimodal Model Training Framework</font></b>
+    <sup>
+      <a href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master">
+        <i><font size="4">TRY IT NOW</font></i>
+      </a>
+    </sup>
+  </div>
+  <div>&nbsp;</div>
+</div>
+
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://docs.nvidia.com/Megatron-Core/developer-guide/latest/index.html)
+[![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master)
+[![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/LICENSE)
+[![stars](https://img.shields.io/github/stars/baidu-baige/AIAK-Training-Omni=social)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master)
+[![open issues](https://img.shields.io/github/issues-raw/baidu-baige/AIAK-Training-Omni)](https://github.com/baidu-baige/AIAK-Training-Omni/issues)
 ## Overview
 The AIAK-Omni framework is a multimodal training framework based on Megatron, supporting large-scale training of various models and scenarios, with training performance reaching SOTA.
 
@@ -12,37 +29,13 @@ The AIAK-Omni framework is a multimodal training framework based on Megatron, su
 [2026/01/31] 🔥We have released the AIAK-Training-Omni framework! A brand-new multimodal large model training framework.
 
 ## Features
-* Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See [model_combination.md](xxx.html) for details.
+* Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See [model_combination.md](docs/source/features/4_1_model_combination.md) for details.
 * Heterogeneous TP, supporting different TP size splitting for different components in VLM to cope with various model sizes, see [heterogeneous_tp_parallel.md](xxx.html) for details.
 * DP data balance, optimizing the data parallel load imbalance problem introduced by data packing, see [data_parallel_balance.md](xxx.html) for details.
-* Offline data packing, supporting offline data packing to reduce the number of padding tokens during training, see [offline_data_packing.md](xxx.html) for details.
-* FP8 training, supporting FP8 precision training, see [fp8_training.md](xxx.html) for details.
+* Offline data packing, supporting offline data packing to reduce the number of padding tokens during training, see [offline_data_packing.md](docs/source/features/4_2_offline_data_packing.md) for details.
+* FP8 training, supporting FP8 precision training, see [fp8_training.md](docs/source/features/4_5_fp8_training.md) for details.
 * MOE optimization, the framework optimizes the training performance of MOE models, see [moe_all2all_overlap.md](xxx.html) for details.
 
-## Benchmark
-|**Model**|**Pai-Megatron-Patch**|**Veomni**|**Ours**|
-|-|-|-|-|
-|Qwen3-VL-30B|*4004（MFU:39.45%）*|3144 (MFU: 30.73%)|4241（**MFU:41.79%**）|
-
-## Quick Start
-
-### Quick Start for Qwen3
-#### Installation
-
-#### Prepare Data
-
-#### Checkpoint conversion
-
-#### Quick Start Qwen3-8b sft
-
-### Quick Start for VLM Model Training
-Refer to the [Quick Start for VLM Model Training](xxxx.html) document for details.
-
-### Quick Start for LLM Model Training
-Refer to the [Quick Start for LLM Model Training](xxxx.html) document for details.
-
-### Quick Start for WAN Model Training
-Refer to the [Quick Start for WAN Model Training](xxxx.html) document for details.
 
 ## Support Model
 |**Model Type**|**Model Category**|**Model**|**Pretrain**|**SFT**|
@@ -110,6 +103,26 @@ Refer to the [Quick Start for WAN Model Training](xxxx.html) document for detail
 |||internvl3.5_241b_a28b||✅([example](examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh))|
 |Wan|Wan2.1|wan2.1_i2v_14b||✅([example](examples/wan/pretrain_wan2.1_i2v_14b_480p.sh))|
 ||Wan2.2|wan2.2_i2v_a14b||✅([example](examples/wan/pretrain_wan2.2_i2v_a14b.sh))|
+
+## Quick Start
+
+### Quick Start for Qwen3
+#### Installation
+
+#### Prepare Data
+
+#### Checkpoint conversion
+
+#### Quick Start Qwen3-8b sft
+
+### Quick Start for VLM Model Training
+Refer to the [Quick Start for VLM Model Training](docs/source/examples/quick_start_vlm_training.md) document for details.
+
+### Quick Start for LLM Model Training
+Refer to the [Quick Start for LLM Model Training](xxxx.html) document for details.
+
+### Quick Start for WAN Model Training
+Refer to the [Quick Start for WAN Model Training](xxxx.html) document for details.
 
 ## Citation
 If you use this work, please consider citing:
