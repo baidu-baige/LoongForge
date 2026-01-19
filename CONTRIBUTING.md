@@ -79,7 +79,7 @@ Before submitting a pull request, please make sure that:
 ## License
 By contributing to AIAK-Training-Omni.
 you agree that your contributions will be licensed under the
-[Apache License 2.0](https://github.com/baidu/aiak-training-omni/blob/master/LICENSE.txt).
+[Apache License 2.0](https://github.com/baidu/aiak-training-omni/blob/master/LICENSE).
 
 ### Submitting Pull Requests
 All pull requests will be reviewed by the maintainers. Automated checks and tests

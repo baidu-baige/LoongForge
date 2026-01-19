@@ -4,8 +4,8 @@ One of the core features of the AIAK-Training-Omni framework is its native suppo
 
 For example, different visual encoders (such as **Qwen2.5-ViT, Qwen3-ViT, LLaVA-OV-1.5-ViT, InternViT**, etc.) can be flexibly concatenated with different large language model bases (such as **LLaMA series, DeepSeek series, Qwen series**, etc.). This **configuration-driven model assembly approach** significantly reduces the cost of exploring and customizing multimodal model architectures, allowing users to build models without modifying any code, achieving **zero-code** model combination.
 
-# 1. Core Components
-## 1.1 OmniEncoderModel
+## 1. Core Components
+### 1.1 OmniEncoderModel
 The core abstraction of the Encoder component, which is responsible for converting modal data such as images, videos, and audio into Embeddings understandable by LLMs.
 
 * **Abstract Definition**: Encapsulates Vision/Audio Encoder and Projector, and manages Text Embeddings uniformly.
@@ -39,7 +39,7 @@ self.image_encoder.register_forward_hook(
 )
 ```
 
-## 1.2 OmniCombinationModel
+### 1.2 OmniCombinationModel
 The core component of multimodal combination models, defining the concatenation and interaction timing of data flow between different modality components. This component does not contain specific computational logic. Key features:
 
     * **Logical Decoupling**: Dynamically decides whether to load Encoder or Foundation model based on external configuration, achieving component-level decoupling.
@@ -57,7 +57,7 @@ class OmniCombinationModel(BaseMegatronModule):
             self.foundation_model = AutoModel.from_config(config.foundation, ...)
 ```
 
-## 1.3 OmniModelProvider
+### 1.3 OmniModelProvider
 Responsible for parsing global parameters, handling the initialization logic of distributed environments (such as Pipeline Parallel splitting), and ultimately instantiating OmniCombinationModel.
 
 Core functionalities:
@@ -90,7 +90,7 @@ model = OmniCombinationModel(
 )
 ```
 
-# 2. How to Use
+## 2. How to Use
 We have adopted a configuration system based on Hydra, combining configurations of different components through the defaults list. Take `configs/models/internvl2.5/internvl2_5_8b.yaml` as an example:
 
 ```yaml
