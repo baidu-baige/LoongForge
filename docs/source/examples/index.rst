@@ -5,5 +5,5 @@ Examples
    :maxdepth: 2
    
    llm_quickstart
-   vlm_quickstart
-   wan_example
+   quick_start_vlm_training
+   quick_start_wan_training
