@@ -8,9 +8,9 @@ The process of supporting a new model is mainly divided into three steps:
 2. **Create Combination Configuration**: Write the top-level YAML configuration file for the VLM.
 3. **Register Model Name**: Register the new model in `config_map.py`.
 
-# Step 1: Prepare Component Configurations
+## Step 1: Prepare Component Configurations
 
-## 1. Foundation Model (LLM)
+### 1. Foundation Model (LLM)
 If your LLM is a new specification of an existing architecture (e.g., from Llama3-8B to Llama3-16B), simply create a new YAML file.
 
 * **Path**: `configs/models/<model_family>/<model_name>.yaml` (Example: `configs/models/llama3/llama3_custom_16b.yaml`):
@@ -28,7 +28,7 @@ max_sequence_length: 8192
 # ... other parameters
 ```
 
-## 2. Visual/Audio Encoder
+### 2. Visual/Audio Encoder
 Define the parameters for the Vision Transformer.
 
 * **Path**: `configs/models/image_encoder/<encoder_name>.yaml` (Example: `configs/models/image_encoder/llava_vit.yaml`):
@@ -47,7 +47,7 @@ kv_channels: 64
 # ... other parameters
 ```
 
-## 3. Projector
+### 3. Projector
 The projector layer binds the implementation of OmniEncoder with the Foundation model. Each VLM model has a corresponding Projector implementation.
 
 (Usually, you only need to select the type, and the dimensions are specified in the combination configuration).
@@ -64,7 +64,7 @@ add_bias_linear: True
 model_type: "qwen2_5_vl_adapter"
 ```
 
-# Step 2: Create Combination Configuration
+## Step 2: Create Combination Configuration
 This step is crucial for defining the VLM model. You need to create a YAML file that "assembles" the components together and sets key alignment parameters.
 
 * **Suggested Path**: `configs/models/<vlm_family>/<my_new_vlm>.yaml`, content structure:
@@ -102,7 +102,7 @@ model:
     activation_func: ${act:gelu}
 ```
 
-# Step 3: Model Registration
+## Step 3: Model Registration
 To enable the training script to find your configuration file via the `--model-name` parameter, you need to register it in `aiak_training_omni/utils/config_map.py`. Open `aiak_training_omni/utils/config_map.py` and add an entry to the `MODEL_CONFIG_REGISTRY` dictionary:
 
 ```python
@@ -117,7 +117,7 @@ MODEL_CONFIG_REGISTRY = {
 }
 ```
 
-# Verification
+## Verification
 After completing the above three steps, you can start training with the new model:
 
 ```bash
