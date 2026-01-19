@@ -127,13 +127,13 @@ class HuggingfaceBase:
         else:
             if name == ATTENTION_QUERY_KEY_VALUE:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
-                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, self.hf_attn_converter.split_attn_qkv)
+                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, weight_scale, self.hf_attn_converter.split_attn_qkv)
             elif name == ATTENTION_QUERY_GATE_KEY_VALUE:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
-                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, self.hf_attn_gate_converter.split_attn_qgkv)
+                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, weight_scale, self.hf_attn_gate_converter.split_attn_qgkv)
             elif name == MIXER_ATT_IN_PROJ:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
-                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, self.hf_mixer_attn_converter.split_mixer_in_proj)
+                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, weight_scale, self.hf_mixer_attn_converter.split_mixer_in_proj)
             elif name == MLP_DENSE_H_TO_4H:
                 hf_prefix_path= f"{transformer}.{layer_prefix}.{hf_layer_id}"
                 self.update_h_to_4h(h_dict, name, hf_prefix_path, weight, bias, weight_scale)
@@ -175,13 +175,14 @@ class HuggingfaceBase:
         if weight_scale is not None and hf_weight_scale_path is not None:
             h_dict[hf_weight_scale_path] = weight_scale
 
-    def update_list_to_hf(self, h_dict, name, hf_prefix_path, weight, bias, func):
+    def update_list_to_hf(self, h_dict, name, hf_prefix_path, weight, bias, weight_scale, func):
         if weight is None:
             return
         hf_name = self.name_map[name]
         tag_names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = func(tag_names, weight) if weight is not None else None
         bias_list = func(tag_names, bias) if bias is not None else None
+        weight_scale_list = func(tag_names, weight_scale) if weight_scale is not None else None
         for i in range(len(tag_names)):
             tag_name = tag_names[i]
             hf_path= f"{hf_prefix_path}.{tag_name}"
@@ -189,6 +190,8 @@ class HuggingfaceBase:
                 h_dict[f"{hf_path}.{WEIGHT}"] = weight_list[i]
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
+            if weight_scale_list is not None:
+                h_dict[f"{hf_path}.{WEIGHT_SCALE}"] = weight_scale_list[i]
 
     def update_h_to_4h(self, h_dict, name, hf_prefix_path, weight, bias, weight_scale, expert_id=None):
         if weight is None:
@@ -266,13 +269,13 @@ class HuggingfaceBase:
                         since we capture the rotary_emb op"
             if name == ATTENTION_QUERY_KEY_VALUE:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
-                weight, bias = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_attn_converter.cat_attn_qkv)
+                weight, bias, weight_scale = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_attn_converter.cat_attn_qkv)
             elif name == ATTENTION_QUERY_GATE_KEY_VALUE:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
-                weight, bias = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_attn_gate_converter.cat_attn_qgkv)
+                weight, bias, weight_scale = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_attn_gate_converter.cat_attn_qgkv)
             elif name == MIXER_ATT_IN_PROJ:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
-                weight, bias = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_mixer_attn_converter.cat_mixer_in_proj)
+                weight, bias, weight_scale = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_mixer_attn_converter.cat_mixer_in_proj)
             elif name == MLP_DENSE_H_TO_4H:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
                 weight, bias, weight_scale = self.get_h_to_4h_from_state_dict(name, h_dict, hf_prefix_path)
@@ -314,15 +317,19 @@ class HuggingfaceBase:
         tag_names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = []
         bias_list = []
+        weight_scale_list = []
         for tag_name in tag_names:
             hf_path= f"{hf_prefix_path}.{tag_name}"
             if f"{hf_path}.{WEIGHT}" in h_dict:
                 weight_list.append(h_dict[f"{hf_path}.{WEIGHT}"])
             if f"{hf_path}.{BIAS}" in h_dict:
                 bias_list.append(h_dict[f"{hf_path}.{BIAS}"])
+            if f"{hf_path}.{WEIGHT_SCALE}" in h_dict:
+                weight_scale_list.append(h_dict[f"{hf_path}.{WEIGHT_SCALE}"])
         weight = func(weight_list) if len(weight_list) > 0 else None
         bias = func(bias_list) if len(bias_list) > 0 else None
-        return weight, bias
+        weight_scale = func(weight_scale_list) if len(weight_scale_list) > 0 else None
+        return weight, bias, weight_scale
 
     def get_h_to_4h_from_state_dict(self, name, h_dict, hf_prefix_path, expert_id=None):
         hf_name, is_direct_name, is_dict_for_expert, need_transpose, _, _ = self.get_hf_name_and_args(self.name_map[name])
