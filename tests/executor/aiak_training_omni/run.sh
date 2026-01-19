@@ -2,11 +2,12 @@
 set -x
 set -eo pipefail
 
+############################################ Model training parameters ############################################
+
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export NCCL_ALGO=Ring
 export NVTE_ALLOW_NONDETERMINISTIC_ALGO=0
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-############################################ 模型训练参数 ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${aiak_training_path:-"/ssd1/workspace/AIAK-Training-Omni"}
@@ -36,8 +37,8 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
-# 解析环境变量中的参数，环境变量应该是空格分隔的参数字符串
-# 直接展开到数组，bash 会按空格分割
+# Parse parameters from environment variables, environment variables should be space-separated parameter strings
+# Directly expand to array, bash will split by spaces
 MODEL_ARGS=(
     ${MODEL_ARGS}
 )
@@ -83,7 +84,7 @@ fi
 #     )
 # fi
 
-############################################ 模型训练参数 ############################################
+############################################ Model training parameters ############################################
 
 export PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
@@ -104,7 +105,7 @@ if [[ "${use_nccl}" == "false" ]]; then
 fi
 
 echo ""
-echo "执行命令: $command"
+echo "Executing command: $command"
 
 if [[ "${dry_run}" != "true" ]]; then
     eval $command

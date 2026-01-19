@@ -12,11 +12,11 @@ training_log_path: /workspace/logs
 
 convert_checkpoint_path: $aiak_training_path/tools/convert_checkpoint
 
-# 判断训练任务各个阶段任务的状态
+# Determine the status of each stage of the training task
 model_lock_file_path: $save_mcore_ckpt_path_pre/lock_file/$model_name
 
-# Step1: 训练output/ckpt 路径
+# Step1: Training output/ckpt path
 step1_output_path: $save_mcore_ckpt_path_pre/$model_name
 
-# 轮数
+# Number of iterations
 train_iters: 3

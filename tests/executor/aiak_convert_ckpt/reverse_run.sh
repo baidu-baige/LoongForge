@@ -10,7 +10,7 @@ CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/co
 
 export PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
-# 解析参数
+# Parse parameters
 REVERSE_KEY_ARGS=(
     ${REVERSE_KEY_ARGS}
 )
@@ -32,7 +32,7 @@ REVERSE_MERGE_ARGS=(
 
 final_task=$((WORLD_SIZE - 1))
 
-# VLM 模型类型检测函数
+# VLM model type detection function
 is_vlm_model() {
     local model=$1
     if [[ "${model}" =~ "qwen2.5_vl" ]] || [[ "${model}" =~ "qwen2_vl" ]] || \
@@ -43,24 +43,24 @@ is_vlm_model() {
     return 1
 }
 
-# 默认命令为空数组
+# Default command is empty array
 commands=()
 
-# 只有 VLM 模型才进行逆向转换
+# Only perform reverse conversion for VLM models
 if is_vlm_model "${model_name}"; then
-    # 获取并行参数
+    # Get parallel parameters
     PP=${PIPELINE_MODEL_PARALLER_SIZE:-2}
     ETP=${ENCODER_TENSOR_MODEL_PARALLER_SIZE:-2}
     DTP=${DECODER_TENSOR_MODEL_PARALLER_SIZE:-2}
     
-    # 根据模型类型选择 adapter 转换脚本
+    # Select adapter conversion script based on model type
     if [[ "${model_name}" =~ "internvl" ]]; then
         ADAPTER_SCRIPT="$CONVERT_CHECKPOINT_PATH/module_convertor/adapter_internvl.py"
     else
         ADAPTER_SCRIPT="$CONVERT_CHECKPOINT_PATH/module_convertor/adapter.py"
     fi
 
-    # Step 1: key reverser - 将omni格式的mcore权重转为标准mcore格式
+    # Step 1: key reverser - convert omni format mcore weights to standard mcore format
     commands+=(
         "python $CONVERT_CHECKPOINT_PATH/key_mappings/key_reverser.py ${REVERSE_KEY_ARGS[*]}"
     )
@@ -71,16 +71,16 @@ if is_vlm_model "${model_name}"; then
     )
     
     # Step 3: vision model mcore -> hf
-    # 处理 PP > 1 的情况，需要创建临时目录
+    # Handle PP > 1 case, need to create temporary directory
     if [[ $PP -gt 1 ]]; then
-        # 允许通过环境变量覆盖加载路径，默认为 release
+        # Allow overriding load path via environment variable, default is release
         MCORE_LOAD_DIR=${MCORE_LOAD_PATH:-"${CHECKPOINT_PATH}/release"}
         LOAD_PATH=${MCORE_LOAD_DIR}/tmp/
 
         commands+=(
             "mkdir -p $LOAD_PATH"
         )
-        # 复制 vision model 相关的文件
+        # Copy vision model related files
         for ((i=0;i<$ETP;i++)); do
             from=$(printf "mp_rank_%02d_000" $i)
             to=$(printf "mp_rank_%02d" $i)
@@ -88,7 +88,7 @@ if is_vlm_model "${model_name}"; then
                 "cp -r ${MCORE_LOAD_DIR}/$from $LOAD_PATH/$to"
             )
         done
-        # 更新 vision model 参数中的 load_ckpt_path
+        # Update load_ckpt_path in vision model parameters
         REVERSE_VISION_MODEL_ARGS_MODIFIED=$(echo "${REVERSE_VISION_MODEL_ARGS[*]}" | sed "s|--load_ckpt_path=[^ ]*|--load_ckpt_path=$LOAD_PATH|g")
         commands+=(
             "python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py $REVERSE_VISION_MODEL_ARGS_MODIFIED"
@@ -123,18 +123,18 @@ if is_vlm_model "${model_name}"; then
         "rm -rf ${REVERSE_PATCH_PATH}"
     )
 else
-    echo "当前模型 ${model_name} 不是 VLM 模型，跳过逆向转换"
+    echo "Current model ${model_name} is not a VLM model, skipping reverse conversion"
 fi
 
 
-# 判断只能是一个master或者最后一个worker 运行
+# Only run on master or the last worker
 if [[ "${RANK}" != "" ]] && [[ "${RANK}" == "${final_task}" ]] && [[ "${dry_run}" != "true" ]]; then
     echo ""
-    # 遍历命令数组并执行每个命令
+    # Iterate through command array and execute each command
     for command in "${commands[@]}"; do
-        echo "执行命令: \"$command\""
+        echo "Executing command: \"$command\""
         eval "$command"
     done
 else
-    echo "跳过当前节点的任务【当且仅当只有 是一个master 或者最后一个 worker 节点进行逆向权重转化 !!!】"
+    echo "Skipping task on current node [Only when master or the last worker node performs reverse weight conversion !!!]"
 fi

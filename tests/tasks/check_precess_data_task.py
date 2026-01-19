@@ -71,7 +71,7 @@ class PrecessDataCheckTask(BaseTask):
                 if packed_wds_dir:
                     os.makedirs(packed_wds_dir, exist_ok=True)
         else:
-            logger.error(f"deal_output 不支持 {step_stage} 模式 !!!")
+            logger.error(f"deal_output does not support {step_stage} mode !!!")
             sys.exit(1)
 
     def assert_preprocess_data(self, model_config, step_stage):
@@ -80,11 +80,11 @@ class PrecessDataCheckTask(BaseTask):
             output_prefix = model_config["output_prefix"]
             output_dir = os.path.dirname(output_prefix)
 
-            # 搜索路径下的.bin和.idx文件
+            # Search for .bin and .idx files under the path
             bin_files = glob.glob(os.path.join(output_dir, '*.bin'))
             idx_files = glob.glob(os.path.join(output_dir, '*.idx'))
 
-            # 使用断言来确保找到了.bin和.idx文件
+            # Use assertions to ensure .bin and .idx files are found
             assert len(bin_files) > 0, "No .bin files found in " + output_dir
             assert len(idx_files) > 0, "No .idx files found in " + output_dir
             logger.info(f"LLM pretrain preprocess data check passed: found {len(bin_files)} .bin files and {len(idx_files)} .idx files in {output_dir}")
@@ -155,7 +155,7 @@ class PrecessDataCheckTask(BaseTask):
             
             logger.info(f"Offline packing check passed: original {original_total_count} samples == packed {packed_total_count} samples")
         else:
-            logger.error(f"assert_preprocess_data 不支持其他 {step_stage} 模式校验 !!!")
+            logger.error(f"assert_preprocess_data does not support other {step_stage} mode validation !!!")
             sys.exit(1)
 
 
@@ -166,7 +166,7 @@ class PrecessDataCheckTask(BaseTask):
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage)
 
-        # 数据预处理
+        # Data preprocessing
         model_name = self.model_name
         node_nums = self.input_cmd_args.node_nums
         timeout = self.input_cmd_args.timeout
@@ -174,7 +174,7 @@ class PrecessDataCheckTask(BaseTask):
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # 将配置文件转成env 环境变量传递给运行脚本
+        # Convert config file to env environment variables to pass to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
         self.deal_output(model_config, step_stage)
 
@@ -186,15 +186,15 @@ class PrecessDataCheckTask(BaseTask):
         start_command = f"{env_vars_str} bash {script_path}"
         self.create_shell_file(model_config, script_path, new_script_path)
 
-        # 打开一个新的文件用来写入脚本的输出
+        # Open a new file to write script output
         training_log_file = f"{training_log_path}/precess_data#{model_name}#nodes_{self.input_cmd_args.node_nums}#{self.rank_name}#run.log"
 
         start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/run.sh |tee {training_log_file}\""
         logger.info(f"{step_stage} {step_name} Start: {start_command} .")
         if os.system(start_command) != 0:
            raise RuntimeError(f"Start {step_stage} {step_name} error, cmd is {start_command}")
-        
-        # 等待所有pod 完成
+
+        # Wait for all pods to complete
         self.wait_async_pod_complete(
             model_lock_file,
             model_name,
@@ -210,7 +210,7 @@ class PrecessDataCheckTask(BaseTask):
 
     def __call__(self) -> TaskResut:
         if not self.MODEL_RUNNABLE:
-            logger.warn(f"{self.class_name} 当前模型 {self.model_name} 不支持 {self.class_name} 任务，跳过！！！")
+            logger.warn(f"{self.class_name} current model {self.model_name} does not support {self.class_name} task, skipping!!!")
             return TaskResut()
 
         for index, scenario in enumerate(self.model["scenarios"]):
@@ -218,20 +218,20 @@ class PrecessDataCheckTask(BaseTask):
                 if scenario_name != "preprocess_data":
                     continue
                 model_name = self.model_name
-                logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】执行开始 ...")
-                
+                logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】execution starts ...")
+
                 for key, value in self.model["scenarios"][index][scenario_name].items():
 
-                    # pretrain、sft:
+                    # pretrain, sft:
                     step_name = key
-                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】 - 【{step_name}】 执行开始 ...")
+                    logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】 - 【{step_name}】 execution starts ...")
 
                     self.start_aiak_preprocess_data(index, step_name, scenario_name)
                     step_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step_name, self.master_addr, f"{self.rank_name}_lock.txt")
                     self.wait_async_pod_complete(step_scenario_lock_file, model_name, f"{scenario_name}_{step_name}")
 
-                    logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】 - 【{step_name}】完成 \n")
+                    logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】 - 【{step_name}】 completed \n")
 
-                logger.info(f"{self.class_name} 模型【{model_name}】 - 【{scenario_name}】执行结束 \n")
+                logger.info(f"{self.class_name} model【{model_name}】 - 【{scenario_name}】 execution ended \n")
     
         return TaskResut()

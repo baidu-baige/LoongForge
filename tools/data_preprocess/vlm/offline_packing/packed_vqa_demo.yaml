@@ -1,14 +1,14 @@
 
-# 数据路径配置
+# Data path configuration
 data:
-  # webdataset数据样本目录
+  # Webdataset data sample directory
   wds_dir: "/mnt/cluster/yxc/filter_4w_CC3M/images"
-  # 文本字段名
+  # Text field name
   template_text_key: "messages"
   # template_text_key: "texts"
-  # 存储中间结果是json目录
+  # Directory for storing intermediate results as JSON
   packed_json_dir: "/mnt/cluster/yxc/test_packing/test_vqa_16k_json/"
-  # packed 后的 wds 数据集
+  # Packed wds dataset
   packed_wds_dir: "/mnt/cluster/yxc/test_packing/test_vqa_16k_packed_wds/"
 
 model:
@@ -20,27 +20,27 @@ model:
     trust_remote_code: True
     use_fast: False
 
-# 媒体文件预处理配置，可选的的预处理函数在media_preprocess_utils.py中定义
+# Media file preprocessing configuration, optional preprocessing functions are defined in media_preprocess_utils.py
 media_preprocess:
   image: custom_image_preprocess
 
 sample:
-  # 训练数据的最大长度
+  # Max length of training data tokens
   max_token_len: 16384
-  # 决定解析方式
+  # Determine parsing method
   sample_type: packed_vqa
 
-# 并行处理参数
+# Parallel processing parameters
 process:
-  # 每个进程处理的样本块大小
+  # Chunk size for samples processed by each process
   chunk_size: 5000
-  # 归并参数（排序)的batch_size
+  # Batch size for merge parameters (sorting)
   merge_batch_size: 20
-  # 超时设置（根据数据量定，1M数据按 45分钟(2700s)估算）
+  # Timeout setting (estimated based on data volume, 1M data ~ 45 minutes / 2700s)
   time_out: 2000
 
-# 日志与临时文件
+# Logging and temporary files
 log:
-  # 日志级别（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
   level: "INFO"
   # 日志文件路径

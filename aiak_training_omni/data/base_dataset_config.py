@@ -25,7 +25,7 @@ class DataConfig:
     is_tokenized_data = True
 
     def __init__(self, **kwargs):
-        # 1. 只保留类里声明过的字段
+        # 1. Only keep fields declared in the class
         names = {f.name for f in fields(self)}
         for k, v in kwargs.items():
             if k in names:

@@ -1089,9 +1089,9 @@ class HashBucketProcessor:
         # Sort by potential, only process high-potential seeds
         seed_candidates.sort(key=lambda x: x[1], reverse=True)
         potential_threshold = 0.2  # Only process seeds with potential > 0.2
-        # high_potential_seeds = [seed for seed, potential in seed极速andidates if potential > potential_threshold]
+        # high_potential_seeds = [seed for seed, potential in seed_candidates if potential > potential_threshold]
         # Fix: Correctly handle screening logic
-        high_potential_candidates = [(seed, potential) for seed, potential in seed_candidates 
+        high_potential_candidates = [(seed, potential) for seed, potential in seed_candidates
                                 if potential > potential_threshold]
 
         # Final fallback: keep at least top 50% of seeds

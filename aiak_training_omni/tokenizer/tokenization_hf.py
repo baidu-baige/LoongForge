@@ -9,9 +9,13 @@ from megatron.core.datasets.megatron_tokenizer import MegatronTokenizer
 
 class AutoTokenizerFromHF(MegatronTokenizer):
     """
-    这里我们采用封装 HF Tokenizer 并继承 MegatronTokenizer 的方式实现, 这种做法的目的：
-    1、使用体验和用户使用 HF 一致，方便使用 HuggingFace Tokenizer 提供的功能，后续如果有需要，可继续扩展接口；
-    2、可满足 MegatronTokenizer 的接口定义, 避免出现与 Megatron 接口不兼容问题;
+    Here we adopt the approach of wrapping HF Tokenizer and inheriting from MegatronTokenizer. 
+	The purpose of this approach is:
+    1. User experience is consistent with using HF, 
+	   convenient to use the functions provided by HuggingFace Tokenizer, 
+       and interfaces can be extended if needed;
+    2. Meets the interface definition of MegatronTokenizer, 
+       avoiding incompatibility issues with Megatron interfaces;
     """
 
     def __init__(

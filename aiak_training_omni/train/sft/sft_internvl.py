@@ -206,7 +206,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
 
-    # 禁用 wandb，如果它导致问题
+    # Disable wandb if it causes issues
     if not hasattr(args, 'wandb_project') or args.wandb_project is None:
         print("Warning: Disabling wandb logging as wandb_project is not set")
         args.wandb_project = ""

@@ -247,7 +247,7 @@ def default_vlm_pretrain_trainer(train_args):
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_dataset_provider,
         model_provider=omni_model_provider,
-        model_type=ModelType.encoder_or_decoder,  # TODO: 异构tp/pp暂不支持
+        model_type=ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
         forward_step_func=forward_step,
     )
 

@@ -5,7 +5,7 @@ root_path=$(dirname "$(readlink -f "$0")")
 export scripts_root_path=${root_path}
 source ${scripts_root_path}/common/common.sh
 
-# 如若使用其他机器使用，则需要配置kubeconfig和kubectl、kubectl_view_allocations_path目录地址
+# If using other machines, need to configure kubeconfig and kubectl, kubectl_view_allocations_path directory address
 kubectl_path="/usr/local/bin"
 kubectl_view_allocations_path="/usr/local/bin"
 
@@ -20,14 +20,14 @@ export KUBECONFIG="$kubeconfig_path"
 export GPU_RESOURCE="$gpu_resource"
 export GPU_NUMS="$gpu_nums"
 
-# K8S 集群方式存在于pfs 数据的根目录
+# K8S cluster method exists in pfs data root directory
 export TRAIN_DATA_DIR="/mnt/pfs/leoli"
 export IMAGE=${IMAGE:-"registry.baidubce.com/hac_test/aiak-transformer:dev_20240204_130244"}
-# export SPECIFIC_PYTORCHJOB_COMMAND="sleep 1d" # 可用于单机调试
+# export SPECIFIC_PYTORCHJOB_COMMAND="sleep 1d" # Available for single machine debugging
 export TIMEOUT=${TIMEOUT:-"7200"}
 export SCHEDULE_TIMEOUT=${SCHEDULE_TIMEOUT:-"600"}
-export CHECK_PYTORCHJOB_TIMEOUT=${CHECK_PYTORCHJOB_TIMEOUT:-"86400"} # 分布式训练，默认1天
-# export specific_model_name="llama-2-7b" # 运行指定模型
+export CHECK_PYTORCHJOB_TIMEOUT=${CHECK_PYTORCHJOB_TIMEOUT:-"86400"} # Distributed training, default 1 day
+# export specific_model_name="llama-2-7b" # Run specified model
 # export NAME_PREFIX_AGILE="a800-test-lijipeng-aiak-transformer"
 export accuracy_relative_tolerance=${accuracy_relative_tolerance:-"0.02"}
 export performance_relative_tolerance=${performance_relative_tolerance:-"0.05"}

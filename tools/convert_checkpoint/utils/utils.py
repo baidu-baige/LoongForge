@@ -310,12 +310,12 @@ def get_done_keys(done_dir, p, cur_ep_ids=None):
 
 
 def make_hf_sub_checkpoints(base_path):
-    # 初始化全局计数器
+    # Initialize global counter
     global_file_count = 0
     sum_sub_count = 0
 
     path = f'{base_path}/sub_checkpoint/'
-    # 假设文件列表是已知的，这里用一个列表模拟
+    # Assume file list is known, use a list to simulate
     temp_paths = []
     for sub_dir_name in os.listdir(path):
         if sub_dir_name.isdigit():
@@ -323,7 +323,7 @@ def make_hf_sub_checkpoints(base_path):
     sorted_path_list = sorted(temp_paths, key=int)
 
     for index in sorted_path_list:
-        if index.isdigit():  # 检查是否为数字目录
+        if index.isdigit():  # Check if it is a numeric directory
             subdir_path = os.path.join(path, index)
             if os.path.isdir(subdir_path):
                 for filename in os.listdir(subdir_path):
@@ -331,21 +331,21 @@ def make_hf_sub_checkpoints(base_path):
                         parts = filename.split('-of-')
                         if len(parts) == 2:
                             global_file_count += 1
-    # 遍历所有子目录
+    # Iterate through all subdirectories
     all_dict = {}
     for index in sorted_path_list:
-        if index.isdigit():  # 检查是否为数字目录
+        if index.isdigit():  # Check if it is a numeric directory
             subdir_path = os.path.join(path, index)
             if os.path.isdir(subdir_path):
-                # 初始化子目录计数器
+                # Initialize subdirectory counter
                 local_file_count = 0
 
-                # 遍历子目录中的所有文件
+                # Iterate through all files in subdirectory
                 one_dict = {}
                 logging.info(f"{subdir_path=}")
                 for filename in os.listdir(subdir_path):
                     if filename.startswith('model-') and filename.endswith('.safetensors'):
-                        # 解析文件名，提取 i 和 sub_count
+                        # Parse filename, extract i and sub_count
                         parts = filename.split('-of-')
                         if len(parts) == 2:
                             file_base, file_count = parts
@@ -354,64 +354,64 @@ def make_hf_sub_checkpoints(base_path):
                             i = int(i_str)
                             sub_count = int(sub_count_str)
 
-                            # 更新全局计数器
+                            # Update global counter
                             local_file_count += 1
 
-                            # 计算新的文件名
+                            # Calculate new filename
                             new_i = sum_sub_count + i
                             new_filename = f'model-{new_i:05d}-of-{global_file_count:05d}.safetensors'
 
-                            # 重命名文件
+                            # Rename file
                             old_filepath = os.path.join(subdir_path, filename)
                             new_filepath = os.path.join(subdir_path, new_filename)
                             one_dict[filename] = new_filename
                 all_dict[subdir_path] = one_dict
 
-                # 更新累计子文件个数
+                # Update cumulative sub-file count
                 sum_sub_count += local_file_count
 
 
-    # 用于存储合并后的metadata和weight_map
+    # Used to store merged metadata and weight_map
     merged_metadata = {"total_size": 0}
     merged_weight_map = {}
 
-    # 遍历文件列表，合并metadata和weight_map
+    # Iterate through file list, merge metadata and weight_map
     for index in sorted_path_list:
-        if index.isdigit():  # 检查是否为数字目录
+        if index.isdigit():  # Check if it is a numeric directory
             subdir_path = os.path.join(path, index)
             if os.path.isdir(subdir_path):
                 file_name = f"{subdir_path}/model.safetensors.index.json"
                 with open(file_name, 'r') as f:
                     file_content = json.load(f)
-                # 合并metadata
+                # Merge metadata
                 merged_metadata["total_size"] += file_content["metadata"]["total_size"]
-                # 合并weight_map，并使用one_dict进行替换
+                # Merge weight_map, and use one_dict for replacement
                 subdir_path = os.path.join(path, index)
                 one_dict = all_dict[subdir_path]
                 for key, value in file_content["weight_map"].items():
 #                    logging.info(f"{key=}, {value=}, {one_dict=}")
 #                    logging.info(f"{one_dict[value]=}")
                     if value in one_dict:
-                        # 替换成one_dict中对应的值
+                        # Replace with corresponding value in one_dict
                         merged_weight_map[key] = one_dict[value]
                     else:
-                        # 如果没有找到替换项，则保留原值（这里可以根据需求调整）
-                        # 注意：这里保留原值可能没有意义，因为通常我们不会想要保留文件名作为权重名
-                        # 但为了保持示例的完整性，我保留了这一行
-                        # 在实际应用中，你可能想要抛出一个错误或者记录一个警告
-                        merged_weight_map[key] = value  # 这通常不是期望的行为，仅用于示例
+                        # If no replacement item found, keep original value (can be adjusted as needed)
+                        # Note: Keeping original value here may not have meaning, as typically we don't want to keep filename as weight name
+                        # But for completeness of the example, I kept this line
+                        # In actual application, you may want to throw an error or log a warning
+                        merged_weight_map[key] = value  # This is usually not expected behavior, only for example
 
-    # 构建新的dict
+    # Build new dict
     new_dict = {
         "metadata": merged_metadata,
         "weight_map": merged_weight_map
     }
 
-    # 将新的dict写回到model.safetensors.index.json文件中
+    # Write new dict back to model.safetensors.index.json file
     with open(f'{base_path}/model.safetensors.index.json', 'w') as f:
         json.dump(new_dict, f, indent=4)
     for index in sorted_path_list:
-        if index.isdigit():  # 检查是否为数字目录
+        if index.isdigit():  # Check if it is a numeric directory
             subdir_path = os.path.join(path, index)
             if os.path.isdir(subdir_path):
                 one_dict = all_dict[subdir_path]
@@ -421,7 +421,7 @@ def make_hf_sub_checkpoints(base_path):
                     os.rename(old_filepath, new_filepath)
                     logging.info(f'Renamed: {old_filepath} -> {new_filepath}')
 
-    logging.info(f"合并和替换完成，新的model.safetensors.index.json文件已生成。"
+    logging.info(f"Merge and replace completed, new model.safetensors.index.json file generated. "
           f"{base_path}/model.safetensors.index.json")
     old_filepath = f"{base_path}/model-00001-of-00001.safetensors"
     if os.path.exists(old_filepath):

@@ -1,15 +1,15 @@
 #!/bin/bash
 
 ##########################################
-# 精简版：仅保留AIAK-Training-Omni基础环境安装
-# 去除所有外部库（AIAK-Megatron/TransformerEngine/BCCL等）依赖，后续需求说是用 patch 方式，暂不清楚怎么操作
+# Simplified version: Only keep AIAK-Training-Omni basic environment installation
+# Remove all external library dependencies (AIAK-Megatron/TransformerEngine/BCCL, etc.), subsequent requirement says to use patch method, operation method is unclear yet
 ##########################################
 set -exuo pipefail
 
-############################################################# 基础环境开始 ###########################################################
+############################################################# Basic environment start ###########################################################
 
 function install_pip_config() {
-    # 仅保留pip源配置（如果不需要可注释）
+    # Only keep pip source configuration (can comment out if not needed)
     cp pip.conf /etc/pip.conf
     cp pip.conf /usr/pip.conf
     mkdir -p /root/.pip && cp pip.conf /root/.pip/pip.conf
@@ -21,24 +21,24 @@ function install_base_env() {
     read COMPILE_ENV<<< $*
 
     cd ${CURRENT_DIR}
-    # 清理pip配置
+    # Clean pip configuration
     rm -rf /opt/conda/pip.conf /root/.config/pip/pip.conf /root/.pip/pip.conf /etc/pip.conf /etc/xdg/pip/pip.conf /usr/pip.conf
 
-    # 安装基础依赖
+    # Install basic dependencies
     install_requirements
 
-    # pip config（可选，不需要可注释）
+    # pip config (optional, can comment out if not needed)
     mkdir -p /tmp && chmod -R 777 /tmp
     install_pip_config
 
-    # 设置系统源和时区（基础环境，保留）
+    # Set system source and timezone (basic environment, keep)
     rm -rf /etc/apt/sources.list && cp /workspace/AIAK-Training-Omni/docker/sources.list /etc/apt/sources.list
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install tzdata && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
     apt-get install bc tree pwgen nodejs iproute2 -y
 }
 
 function install_requirements() {
-    # 移除镜像中的constraints，以便升级库
+    # Remove constraints from image to upgrade libraries
     source_file="/etc/pip/constraint.txt"
     if [ -f "$source_file" ]; then
         backup_file="${source_file%.*}_backup.${source_file##*.}"
@@ -46,7 +46,7 @@ function install_requirements() {
         > "$source_file"
     fi
 
-    # 仅保留AIAK-Training-Omni自身的requirements
+    # Only keep AIAK-Training-Omni's own requirements
     requirements_file="/workspace/AIAK-Training-Omni/requirements.txt"
     if [[ "$COMPILE_ENV" == "p800" ]];then
         requirements_file="/workspace/AIAK-Training-Omni/requirements_xpu.txt"
@@ -54,21 +54,21 @@ function install_requirements() {
         echo "source /etc/profile.d/alias.sh" >> ~/.bashrc
     fi
 
-    # 安装基础pip包（仅保留必要的）
+    # Install basic pip packages (only keep necessary ones)
     pip install wandb -i http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
     pip install swanlab==0.6.1 -i http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com 
     
-    # ======================== 核心修复：-e . 路径问题 ========================
+    # ======================== Core fix: -e . path issue ========================
     local original_pwd=$(pwd)
     cd /workspace/AIAK-Training-Omni/
     pip install -r ${requirements_file} -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com
     cd ${original_pwd}
 
-    # 临时卸载nvidia-modelopt（保留，避免兼容性告警）
+    # Temporarily uninstall nvidia-modelopt (keep, avoid compatibility warnings)
     echo "y" | pip uninstall nvidia-modelopt || true
 }
 
-# 注释/删除所有依赖外部库的函数（encrypt_code/TransformerEngine/BCCL等）
+# Comment/delete all functions that depend on external libraries (encrypt_code/TransformerEngine/BCCL, etc.)
 # function encrypt_code() { ... }
 # function install_transformerEngine() { ... }
 # function install_AIAK_ACCELERATOR() { ... }
@@ -83,7 +83,7 @@ function install_requirements() {
 # function download_xpytorch() { ... }
 
 function clear_unused_file() {
-    # 仅清理AIAK-Training-Omni自身的无用文件，删除外部库清理逻辑
+    # Only clean up unused files from AIAK-Training-Omni, remove external library cleanup logic
     rm -rf /tmp/* ~/.bash_history
     rm -rf /workspace/AIAK-Training-Omni/.git
     rm -rf /workspace/AIAK-Training-Omni/build.sh
@@ -92,13 +92,13 @@ function clear_unused_file() {
 }
 
 function install_aihclite_jupyter() {
-    # 简化jupyter配置（仅创建目录，避免依赖外部脚本）
+    # Simplify jupyter configuration (only create directory, avoid external script dependencies)
     mkdir -p /root/.jupyter
     touch /root/.jupyter/enterpoint.sh
     chmod +x /root/.jupyter/enterpoint.sh
 }
 
-# ======================== 参数解析（精简版） ========================
+# ======================== Parameter parsing (simplified version) ========================
 COMPILE_ENV=$1
 BINARY_REPLACE=$2
 ENCRYPT_FLAG=$3
@@ -123,34 +123,34 @@ CURRENT_DIR=$(cd `dirname $0`; pwd)
 BCCL_VERSION=${BCCL_VERSION-"1.2.7.2"}
 IREPO_TOKEN=${BCCL_IREPO_TOKEN-"1bebc022-2d71-41a7-896c-53b32131285f"}
 
-# ======================== 核心流程（仅保留基础环境） ========================
-# 跳过p800环境的xpytorch下载（依赖外部包）
+# ======================== Core process (only keep basic environment) ========================
+# Skip p800 environment xpytorch download (depends on external packages)
 # if [[ "$COMPILE_ENV" == "p800" ]];then ... fi
 
-# 仅安装基础环境，跳过二进制替换/加密/BCCL/TransformerEngine等
+# Only install basic environment, skip binary replacement/encryption/BCCL/TransformerEngine etc.
 if  [[ "$BINARY_REPLACE" == "false" ]];then
     install_base_env $COMPILE_ENV
 fi
 
-# 跳过加密（依赖AIAK-Megatron，目录不存在）
+# Skip encryption (depends on AIAK-Megatron, directory does not exist)
 # if  [[ "$ENCRYPT_FLAG" == "true" ]];then encrypt_code; fi
 
-# 跳过BCCL安装
+# Skip BCCL installation
 # if  [[ "$INSTALL_BCCL_FLAG" == "true" ]];then install_bccl_env "$BCCL_DOWNLOAD_ADDR"; fi
 
-# 跳过TransformerEngine安装
+# Skip TransformerEngine installation
 # if  [[ "$INSTALL_TransformerEngine_FLAG" == "true" ]];then install_transformerEngine; fi
 
-# 跳过AIAK-ACCELERATOR安装
+# Skip AIAK-ACCELERATOR installation
 # if  [[ "$INSTALL_AIAK_ACCELERATOR_FLAG" == "true" ]];then install_AIAK_ACCELERATOR; fi
 
-# 跳过Megatron安装（无论community/aiak）
+# Skip Megatron installation (whether community/aiak)
 # if  [[ "$MEGATRON_TYPE" == "community" ]];then install_community_megatron; else install_aiak_training_llm; fi
 
-# 简化jupyter安装
+# Simplify jupyter installation
 install_aihclite_jupyter
 
-# 清理无用文件
+# Clean up unused files
 clear_unused_file
 
-############################################################# 基础环境结束 ###########################################################
+############################################################# Basic environment end ###########################################################

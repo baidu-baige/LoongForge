@@ -264,7 +264,7 @@ class OmniEncoderModel(torch.nn.Module):
                 videos_mask_joint = videos_mask[visual_pos_masks]
                 
                 for img_embed, vid_embed in zip(deepstack_image_embeds, deepstack_video_embeds):
-                    # 创建一个零张量来容纳联合嵌入，大小为 (N_visual_tokens, Hidden_size)
+                    # Create a zero tensor to hold joint embeddings, size is (N_visual_tokens, Hidden_size)
                     embed_joint = img_embed.new_zeros(
                         visual_pos_masks.sum().item(), 
                         img_embed.shape[-1]

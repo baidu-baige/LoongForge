@@ -2,7 +2,7 @@
 # The script needs to be run on at least 1 nodes.
 source /root/.bashrc
 
-#清除残留的共享内存数据
+# Clear remaining shared memory data
 ipcs -m | awk '$4 == 666 {print $2}' | while read shmid; do
 ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"

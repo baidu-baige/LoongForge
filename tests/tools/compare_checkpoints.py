@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-比较两个 Megatron checkpoint 目录的差异
-用法: python compare_checkpoints.py <ckpt_dir1> <ckpt_dir2>
+Compare differences between two Megatron checkpoint directories
+Usage: python compare_checkpoints.py <ckpt_dir1> <ckpt_dir2>
 """
 
 import argparse
@@ -13,7 +13,7 @@ import torch
 
 
 def compare_values(v1, v2):
-    """比较两个值，处理 Tensor 类型"""
+    """Compare two values, handle Tensor types"""
     if isinstance(v1, torch.Tensor) and isinstance(v2, torch.Tensor):
         if v1.shape != v2.shape:
             return False, f"shape mismatch: {v1.shape} vs {v2.shape}"
@@ -35,13 +35,13 @@ def compare_values(v1, v2):
 
 
 def compare_model_dict(model1: dict, model2: dict, name: str = "model", ignore_extra_state: bool = False):
-    """比较模型权重字典"""
+    """Compare model weight dictionaries"""
     print(f"\n[{name} Weights Comparison]")
     
     keys1 = set(model1.keys())
     keys2 = set(model2.keys())
     
-    # 如果忽略 _extra_state，从 keys 中过滤掉
+    # If ignoring _extra_state, filter out from keys
     if ignore_extra_state:
         keys1 = {k for k in keys1 if '_extra_state' not in k}
         keys2 = {k for k in keys2 if '_extra_state' not in k}
@@ -87,14 +87,14 @@ def compare_model_dict(model1: dict, model2: dict, name: str = "model", ignore_e
 
 
 def compare_checkpoint_files(file1: str, file2: str, verbose: bool = False, ignore_extra_state: bool = False):
-    """比较两个 checkpoint 文件"""
+    """Compare two checkpoint files"""
     print(f"\n{'='*60}")
     print(f"Comparing:")
     print(f"  File1: {file1}")
     print(f"  File2: {file2}")
     print('='*60)
 
-    # 检查文件大小
+    # Check file size
     size1 = os.path.getsize(file1)
     size2 = os.path.getsize(file2)
     print(f"\n[File Size]")
@@ -102,12 +102,12 @@ def compare_checkpoint_files(file1: str, file2: str, verbose: bool = False, igno
     print(f"  File2: {size2:,} bytes")
     print(f"  Diff:  {size2 - size1:,} bytes")
 
-    # 加载 checkpoint
+    # Load checkpoint
     print(f"\n[Loading checkpoints...]")
     ckpt1 = torch.load(file1, map_location='cpu', weights_only=False)
     ckpt2 = torch.load(file2, map_location='cpu', weights_only=False)
 
-    # 比较顶层 keys
+    # Compare top-level keys
     print(f"\n[Top-level Keys]")
     keys1 = set(ckpt1.keys())
     keys2 = set(ckpt2.keys())
@@ -118,13 +118,13 @@ def compare_checkpoint_files(file1: str, file2: str, verbose: bool = False, igno
         print(f"  Only in File1: {keys1 - keys2}")
         print(f"  Only in File2: {keys2 - keys1}")
 
-    # 比较 args 中的差异
+    # Compare differences in args
     if 'args' in ckpt1 and 'args' in ckpt2:
         print(f"\n[Args Differences]")
         args1 = ckpt1['args']
         args2 = ckpt2['args']
         
-        # 转换为字典
+        # Convert to dictionary
         if hasattr(args1, '__dict__'):
             args1 = vars(args1)
         if hasattr(args2, '__dict__'):
@@ -146,12 +146,12 @@ def compare_checkpoint_files(file1: str, file2: str, verbose: bool = False, igno
         else:
             print(f"\n  Total args differences: {diff_count}")
 
-    # 比较模型权重 (支持 model, model0, model1, ... 等多模型字段)
+    # Compare model weights (support model, model0, model1, ... and other multi-model fields)
     model_keys = [k for k in (keys1 & keys2) if k.startswith('model')]
     for model_key in sorted(model_keys):
         compare_model_dict(ckpt1[model_key], ckpt2[model_key], model_key, ignore_extra_state)
 
-    # 比较其他字段
+    # Compare other fields
     other_keys = (keys1 & keys2) - {'args'} - set(model_keys)
     if other_keys:
         print(f"\n[Other Fields]")
@@ -169,12 +169,12 @@ def compare_checkpoint_files(file1: str, file2: str, verbose: bool = False, igno
 
 
 def compare_checkpoint_dirs(dir1: str, dir2: str, verbose: bool = False, ignore_extra_state: bool = False):
-    """比较两个 checkpoint 目录"""
+    """Compare two checkpoint directories"""
     print(f"Comparing checkpoint directories:")
     print(f"  Dir1: {dir1}")
     print(f"  Dir2: {dir2}")
     
-    # 找到所有 .pt 文件
+    # Find all .pt files
     pt_files1 = set()
     pt_files2 = set()
     
@@ -198,7 +198,7 @@ def compare_checkpoint_dirs(dir1: str, dir2: str, verbose: bool = False, ignore_
         print(f"  Only in Dir1: {pt_files1 - pt_files2}")
         print(f"  Only in Dir2: {pt_files2 - pt_files1}")
     
-    # 比较共同的文件
+    # Compare common files
     common_files = sorted(pt_files1 & pt_files2)
     print(f"\n  Comparing {len(common_files)} common files...")
     
@@ -223,7 +223,7 @@ def main():
     path1 = args.path1
     path2 = args.path2
     
-    # 如果指定了 rank，调整路径
+    # If rank is specified, adjust path
     if args.rank:
         path1 = os.path.join(path1, f'mp_rank_{args.rank}', 'model_optim_rng.pt')
         path2 = os.path.join(path2, f'mp_rank_{args.rank}', 'model_optim_rng.pt')

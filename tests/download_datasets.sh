@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ################################################################################################################################################################################
-# 完整的数据集下载地址参考: https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/AOhtOwLQrY/YCzcl7yVzd/6D6r9-PcDwNKfq#anchor-908b35c0-ffd6-11ed-b80d-c3136fa9d017
-# 
-# 依赖数据集的下载位置：
+# Complete dataset download address reference: https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/AOhtOwLQrY/YCzcl7yVzd/6D6r9-PcDwNKfq#anchor-908b35c0-ffd6-11ed-b80d-c3136fa9d017
+#
+# Download location for dependent datasets:
 # checkpoint dir：${PFS_DIR}/megatron_checkpoint
 # tokenizers dir：${PFS_DIR}/tokenizers
 # datasets dir：${PFS_DIR}/datasets

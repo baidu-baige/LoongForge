@@ -652,7 +652,7 @@ def merge_by_batch(
                     buffer.append(file_path)
                     queue_to_merge.task_done()
                     logger.debug(
-                        f"merge_by_batch 接收文件{Path(file_path)}, 当前缓冲区: {len(buffer)}/{merge_batch_size}"
+                        f"merge_by_batch received file {Path(file_path)}, current buffer: {len(buffer)}/{merge_batch_size}"
                     )
 
                     # Start merging when the number of files in the buffer reaches batch_size
@@ -712,13 +712,13 @@ def merge_by_batch(
         # Final check to ensure buffer is empty (to prevent omissions)
         if buffer:
             logger.error(
-                f"merge_by_batch线程推出时缓冲区仍有 {len(buffer)} 个文件未处理！数据丢失"
+                f"merge_by_batch thread exited with {len(buffer)} files still unprocessed in buffer! Data loss"
             )
     except Exception as e:
-        logger.error(f"merge_by_batch线程异常退出: {str(e)}", exc_info=True)
+        logger.error(f"merge_by_batch thread exited abnormally: {str(e)}", exc_info=True)
     finally:
         logger.info(
-            f"merge_by_batch线程退出，共生成 {len(merged_outputs_per_batch)} 个文件"
+            f"merge_by_batch thread exited, generated {len(merged_outputs_per_batch)} files"
         )
 
 

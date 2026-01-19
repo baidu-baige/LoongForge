@@ -1,11 +1,11 @@
 #!/bin/bash
 set -eo pipefail
 
-# 1、选择 testcase 的功能、test_function 还是 perf
-# 2、确定 Node 数量和模型的分类集合，做遍历迭代的第一层入口
-# 3、确定当前跑的所有模型列表
-# 4、根据步骤2 确定每个Node 数量场景只需要创建一次容器, 新的Node 数量需要将以前的容器删除，创建新的容器来运行. (可能逻辑复杂点)
-# 5、check 功能/性能正确性
+# 1. Select testcase function: test_function or perf
+# 2. Determine Node count and model classification sets, first level entry for iteration
+# 3. Determine all model lists currently running
+# 4. Based on step 2, determine that each Node count scenario only needs to create container once, new Node count needs to delete previous container and create new container to run (logic may be complex)
+# 5. Check functional/performance correctness
 
 SETCOLOR_SUCCESS="echo -en \\E[1;32m"
 SETCOLOR_FAILURE="echo -en \\E[1;31m"
@@ -41,11 +41,11 @@ WARNING_echo_date(){
 }
 
 
-# 创建一个关联数组来存储 Node数量与Models 分类
+# Create an associative array to store Node count and model categories
 declare -A categories
 
 function save_node_and_model_categories(){
-    # 遍历所有文件
+    # Iterate through all files
     config_path=${scripts_root_path}/configs
     for file in $(ls $config_path); do
         if [[ $file == "common.yaml" ]]; then
@@ -58,13 +58,13 @@ function save_node_and_model_categories(){
             TOTAL_K8S_NODES_value=$(grep "TOTAL_K8S_NODES" "${config_path}/$file"| head -n 1)
         fi
 
-        # 检查是否找到了TOTAL_K8S_NODES
+        # Check if TOTAL_K8S_NODES was found
         if [[ -z "$TOTAL_K8S_NODES_value" ]]; then
-            FAILURE_echo_date "未找到 TOTAL_K8S_NODES 在文件 $file 中"
+            FAILURE_echo_date "TOTAL_K8S_NODES not found in file $file"
             exit -1
         else
             value=$(echo $TOTAL_K8S_NODES_value | awk -F': ' '{print $2}')
-            # 将model_name添加到相应的分类中
+            # Add model_name to the corresponding category
             model_name="${file%.yaml}"
             categories[$value]+="$model_name "
         fi
@@ -75,13 +75,13 @@ function save_node_and_model_categories(){
 function check_env_ready(){
     if ! command -v kubectl &> /dev/null
     then
-        FAILURE_echo_date "kubectl 二进制未在环境变量中找到, 请在 ipipe_start.sh 脚本中检查 kubectl_path 环境配置是否正确"
+        FAILURE_echo_date "kubectl binary not found in environment variables, please check kubectl_path environment configuration in ipipe_start.sh script"
         exit -1
     fi
 
     if ! command -v kubectl-view-allocations &> /dev/null
     then
-        FAILURE_echo_date "kubectl-view-allocations 二进制未在环境变量中找到, 请在 ipipe_start.sh 脚本中检查 kubectl_view_allocations_path 环境配置是否正确"
+        FAILURE_echo_date "kubectl-view-allocations binary not found in environment variables, please check kubectl_view_allocations_path environment configuration in ipipe_start.sh script"
     fi
 }
 
@@ -91,57 +91,57 @@ function check_pytorchjob_finish() {
     local node_nums=$3
     local file_name=$4
 
-    # 计数器和最长等待时间（以秒为单位）
+    # Counter and maximum wait time (in seconds)
     counter=0
 
-    # 初始化最后一行变量
+    # Initialize last line variable
     last_line_log=""
     
-    # 检查最长时间
+    # Check maximum time
     check_pytorchjob_timeout=${CHECK_PYTORCHJOB_TIMEOUT:-"86400"}
 
-    # pod running 状态flag
+    # pod running status flag
     pod_running_flag=false
 
-    # 调度的最大时长
+    # Maximum scheduling duration
     schedule_counter=0
     schedule_timeout=${SCHEDULE_TIMEOUT:-"300"}
 
     pod_logs=""
 
-    # 循环检查文件内容
+    # Loop to check file content
     while [ $counter -lt $check_pytorchjob_timeout ]; do
-        # 检查pod running状态，等待running
+        # Check pod running status, wait for running
         local pod_running_count=$(kubectl get pods -n ${namespace} |grep $pytorchjob_name |grep Running |wc -l)
 
-        # todo ... 增加调度超时相关的检查
+        # todo ... add scheduling timeout related check
         if [[ "$pod_running_flag" == "false" ]] && [[ $pod_running_count -ne $node_nums ]]; then
-            FAILURE_echo_date "pod $pytorchjob_name not running, 查询 events 事件信息"
-            local pytorchjob_event=$(kubectl get event |grep $pytorchjob_name || echo "暂时没有 $pytorchjob_name 相关的事件信息")
+            FAILURE_echo_date "pod $pytorchjob_name not running, querying events information"
+            local pytorchjob_event=$(kubectl get event |grep $pytorchjob_name || echo "No event information related to $pytorchjob_name yet")
             FAILURE_echo_date "$pytorchjob_event"
-            # 休眠 1 秒
+            # Sleep for 1 second
             sleep 1
 
-            # 超过调度最大时间，并退出
+            # Exceeded maximum scheduling time, exit
             if [[ $schedule_counter -gt $schedule_timeout ]]; then
-                FAILURE_echo_date "调度失败: 任务 ${pytorchjob_name} 超过 ${schedule_timeout}s 仍未 Running"
+                FAILURE_echo_date "Scheduling failed: task ${pytorchjob_name} exceeded ${schedule_timeout}s and still not Running"
 
                 local pytorchjob_desc=`kubectl -n ${namespace} describe pytorchjob ${pytorchjob_name}`
-                WARNING_echo_date "该 PytorchJob 任务详情和事件信息如下:"
+                WARNING_echo_date "Details and event information for this PytorchJob task are as follows:"
                 echo "${pytorchjob_desc}"
 
                 local gpu_resource_info=`kubectl-view-allocations -r gpu`
                 echo ""
-                WARNING_echo_date "当前集群 GPU 资源占用情况如下:"
+                WARNING_echo_date "Current cluster GPU resource usage is as follows:"
                 echo "${gpu_resource_info}"
 
-                # 删除任务
+                # Delete task
                 stop_pytorchjob ${file_name}
 
-                # 退出指定的 110 状态码, 提供给外层调用方(流水线)处理其他逻辑, 比如发出调度失败通知等
+                # Exit with specific status code 110, for outer caller (pipeline) to handle other logic, such as sending scheduling failure notification
                 exit 110
             fi
-            # 更新计数器
+            # Update counter
             counter=$((counter + 1))
             schedule_counter=$((schedule_counter + 1))
             continue
@@ -160,29 +160,29 @@ function check_pytorchjob_finish() {
         fi
 
         select_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $select_pod_name_filter |awk '{print $1}'`
-        pod_logs=`kubectl -n ${namespace} logs $select_pod_name -c pytorch || echo "Pod 仍未处于 Running 状态, 跳过此次查询log操作"`
+        pod_logs=`kubectl -n ${namespace} logs $select_pod_name -c pytorch || echo "Pod is still not in Running state, skipping this log query"`
         local latest_log=$(echo "$pod_logs"| tail -n 1)
-        # 检查新行是否和最后一行不同
+        # Check if new line is different from last line
         if [ "$latest_log" != "$last_line_log" ]; then
-            # 如果不同，打印新行并更新最后一行
-            SUCCESS_echo_date "启动中, 最新[1]行日志: $latest_log"
+            # If different, print new line and update last line
+            SUCCESS_echo_date "Starting, latest [1] line log: $latest_log"
             last_line_log=$latest_log
         fi
 
-        # 检查pytorchjob 是否成功
+        # Check if pytorchjob succeeded
         local pytorchjob_status=`kubectl -n ${namespace} get pytorchjob |grep $pytorchjob_name |awk '{print $2}'`
         if [[ "$pytorchjob_status" == "Succeeded" ]] || [[ "$pod_logs" =~ "Finish all jobs run ipipe from main.py" ]]; then
-            SUCCESS_echo_date "模型训练完成, 查看完整日志:"
+            SUCCESS_echo_date "Model training completed, view full logs:"
             SUCCESS_echo_date "$pod_logs"
 
-            # 执行错误不吐给外层
+            # Do not propagate errors to outer layer
             set +e
-            # 将性能指标数据从容器中cp出来, 日志文件在"/workspace/logs" 目录下
-            # cp master 的日志
+            # Copy performance metrics data from container, log files are in "/workspace/logs" directory
+            # cp master logs
             master_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $master_pod_name_filter |awk '{print $1}'`
             kubectl cp $namespace/$master_pod_name:logs ${scripts_root_path}/logs
 
-            # cp worker 的日志
+            # cp worker logs
             if [[ $node_nums -gt 1 ]];then
                 worker_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $worker_pod_name_filter |awk '{print $1}'`
                 kubectl cp $namespace/$worker_pod_name:logs ${scripts_root_path}/logs
@@ -193,42 +193,42 @@ function check_pytorchjob_finish() {
             break
         fi
 
-        # 检查pytorchjob 是否失败
-        if [[ "$pytorchjob_status" == "Failed" ]] || [[ "$pod_logs" =~ "出现异常" ]] || [[ "$pod_logs" =~ "Traceback (most recent call last)" ]]; then
-            FAILURE_echo_date "模型训练失败, PytorchJob 状态为Failed, 失败日志:"
+        # Check if pytorchjob failed
+        if [[ "$pytorchjob_status" == "Failed" ]] || [[ "$pod_logs" =~ "exception occurred" ]] || [[ "$pod_logs" =~ "Traceback (most recent call last)" ]]; then
+            FAILURE_echo_date "Model training failed, PytorchJob status is Failed, failure log:"
             WARNING_echo_date "$pod_logs"
-            # 执行错误不吐给外层
+            # Do not propagate errors to outer layer
             set +e
 
-            # 将性能指标数据从容器中cp出来, 日志文件在"/workspace/logs" 目录下
-            # cp master 的日志
+            # Copy performance metrics data from container, log files are in "/workspace/logs" directory
+            # cp master logs
             master_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $master_pod_name_filter |awk '{print $1}'`
             kubectl cp $namespace/$master_pod_name:logs ${scripts_root_path}/logs
 
-            # cp worker 的日志
+            # cp worker logs
             if [[ $node_nums -gt 1 ]];then
                 worker_pod_name=`kubectl get pod -n ${namespace} |grep $pytorchjob_name |grep $worker_pod_name_filter |awk '{print $1}'`
                 kubectl cp $namespace/$worker_pod_name:logs ${scripts_root_path}/logs
             fi
 
             local pytorchjob_desc=`kubectl -n ${namespace} describe pytorchjob ${pytorchjob_name}`
-            FAILURE_echo_date "该 PytorchJob 任务事件信息如下:"
+            FAILURE_echo_date "PytorchJob event information for this task is as follows:"
             WARNING_echo_date "$pytorchjob_desc"
 
             set -e
             exit -1
         fi
 
-        # 休眠 1 秒
+        # Sleep for 1 second
         sleep 1
 
-        # 更新计数器
+        # Update counter
         counter=$((counter + 1))
     done
 
-    # 检查计数器是否超过了最长等待时间
+    # Check if counter exceeded maximum wait time
     if [ $counter -eq $check_pytorchjob_timeout ]; then
-        FAILURE_echo_date "超过最长等待时间, 模型训练任务没有正常启动或完成, 查看日志:"
+        FAILURE_echo_date "Exceeded maximum wait time, model training task did not start or complete normally, view logs:"
         WARNING_echo_date "$pod_logs"
         exit 1
     fi
@@ -237,17 +237,17 @@ function check_pytorchjob_finish() {
 function run_pytorchjob() {
     local file_name=$1
     local pytorchjob_yaml_path=$2
-    # 替换变量生成新的文件
+    # Replace variables to generate new file
     new_pytorcjob_yaml_path=${scripts_root_path}/${file_name}
     envsubst < ${pytorchjob_yaml_path} > ${new_pytorcjob_yaml_path}
 
-    # 创建新的任务
+    # Create new task
     kubectl create -f ${new_pytorcjob_yaml_path}
 }
 
 function stop_pytorchjob() {
     local file_name=$1
-    # 替换变量生成新的文件
+    # Replace variables to generate new file
     new_pytorcjob_yaml_path=${scripts_root_path}/${file_name}
     kubectl delete -f ${new_pytorcjob_yaml_path}
 
@@ -261,7 +261,7 @@ function run_all_ipipe_case(){
 
     save_node_and_model_categories ${scripts_root_path}
 
-    # 遍历所有模型列表
+    # Iterate through all model lists
     for node_nums in "${!categories[@]}";
     do
         SUCCESS_echo_date "node_nums: $node_nums"
@@ -270,7 +270,7 @@ function run_all_ipipe_case(){
         local model_names="${categories[$node_nums]}"
         model_names=$(echo "$model_names" | awk '{$1=$1};1')
 
-        # 判断只运行指定的模型；
+        # Determine if only running specified models
         if [[ "${specific_model_name}" != "" ]]; then
             # convert the variables into arrays
             IFS=' ' read -r -a model_names_array <<< "$model_names"
@@ -288,18 +288,18 @@ function run_all_ipipe_case(){
 
             # print the intersection
             if [[ ${#new_model_names[@]} -eq 0 ]]; then
-                WARNING_echo_date "不包含指定模型, 进入下一次循环."
+                WARNING_echo_date "Does not contain specified model, entering next loop."
                 continue
             else
                 model_names=${new_model_names[@]}
-                SUCCESS_echo_date "包含运行指定模型 ${model_names}, 执行训练任务."
+                SUCCESS_echo_date "Contains specified model ${model_names}, executing training task."
             fi
         fi
         
         pytorchjob_yaml_path=${scripts_root_path}/yaml_template/pytorchjob_standalone.yaml
         aiak_training_omni_folder="/workspace/AIAK-Training-Omni"
 
-        # 透传变量给 run_pytorchjob 来生成yaml 文件使用, 使用方式：envsubst < ${pytorchjob_yaml_path} > ${new_pytorcjob_yaml_path}
+        # Pass variables to run_pytorchjob to generate yaml file, usage: envsubst < ${pytorchjob_yaml_path} > ${new_pytorcjob_yaml_path}
         NAME_PREFIX=${NAME_PREFIX_AGILE:-"agile-aiak-transformer-run"}
         export NAMESPACE="default"
         export PYTORCHJOB_NAME=${NAME_PREFIX}-`date +%s`
@@ -320,18 +320,18 @@ function run_all_ipipe_case(){
             pytorchjob_yaml_path=${scripts_root_path}/yaml_template/pytorchjob_distributed.yaml
         fi
 
-        # 运行 pytorchjob 任务
+        # Run pytorchjob task
         default_command=$(cat << EOF
 
                 #! /bin/bash
                 set -euo pipefail
                 mkdir -p /workspace/logs
                 
-                echo "开始下载 aiak_training_omni"
+                echo "Start downloading aiak_training_omni"
                 cd /workspace && rm -rf AIAK-Training-Omni
                 wget ${BOS_SYNC_AIAK_TRANSFORMER_ADDR}
                 tar -zxvf AIAK-Training-Omni.tar.gz
-                echo "下载完成 aiak_training_omni"
+                echo "Download completed aiak_training_omni"
 
                 cd $aiak_training_omni_folder/tests
                 extra_param="--node_nums ${node_nums} \
@@ -346,7 +346,7 @@ function run_all_ipipe_case(){
                     extra_param="\$extra_param --use_nccl"
                 fi
                 command="python3 main.py \$extra_param"
-                echo "任务开始执行: \$command"
+                echo "Task started executing: \$command"
                 eval \$command
 EOF
 )
@@ -354,10 +354,10 @@ EOF
         file_name=pytorchjob_${node_nums}.yaml
         run_pytorchjob $file_name $pytorchjob_yaml_path
 
-        # 判断创建的容器是否处于running状态, 查看容器日志是否符合预期
+        # Determine if created container is in running state, check if container logs meet expectations
         check_pytorchjob_finish $PYTORCHJOB_NAME $NAMESPACE $node_nums $file_name
 
-        # 删除任务
+        # Delete task
         stop_pytorchjob $file_name
 
     done

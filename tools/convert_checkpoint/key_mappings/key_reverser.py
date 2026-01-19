@@ -154,7 +154,7 @@ def parse_args(title=None):
     parser.add_argument("--load_omni_ckpt_path", type=str, help="Path to load the omni checkpoint.")
     parser.add_argument("--save_original_ckpt_path", type=str, help="Path to save the original checkpoint.")
     # parser.add_argument("--encoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for encoder.")
-    parser.add_argument("--decoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for decoder.") # 用这个当tp
+    parser.add_argument("--decoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for decoder.") # Use this as tp
     parser.add_argument("--pipeline_model_parallel_size", type=int, default=1, help="Pipeline parallel size.")
     parser.add_argument("--num_virtual_stages_per_pipeline_rank", type=int, default=None, help="Number of virtual pipeline stages per pipeline parallelism rank")
     parser.add_argument('--config_file', type=str, help="Config file for model configuration.")
@@ -168,7 +168,7 @@ def main():
 
     model_cfg = load_config(args.config_file)
 
-    # 异构情况下，也只需要根据dtp的size
+    # In heterogeneous case, only need to use dtp size
     # etp_size = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', 'image_encoder')
     if hasattr(args, 'decoder_tensor_model_parallel_size'):
         dtp_size = args.decoder_tensor_model_parallel_size

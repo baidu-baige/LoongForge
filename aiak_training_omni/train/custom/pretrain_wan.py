@@ -83,17 +83,17 @@ scheduler.set_timesteps(1000, training=True)
 
 def gen_time_steps(batch):
     """
-    生成时间序列。
+    Generate time sequence.
 
     Args:
-        latents (torch.Tensor): 输入的隐变量，形状为 (batch_size, dim)。
+        latents (torch.Tensor): Input latent variables, shape (batch_size, dim).
 
     Returns:
-        tuple: 包含三个元素的元组，分别为时间序列的索引、加入噪声后的隐变量和训练目标。
+        tuple: A tuple containing three elements: time sequence index, latents with noise added, and training target.
 
-        - timestep (torch.Tensor): 时间序列的索引，形状为 (1,)。
-        - noisy_latents (torch.Tensor): 加入噪声后的隐变量，形状与输入一致。
-        - training_target (torch.Tensor): 训练目标，形状与输入一致。
+        - timestep (torch.Tensor): Time sequence index, shape (1,).
+        - noisy_latents (torch.Tensor): Latents with noise added, same shape as input.
+        - training_target (torch.Tensor): Training target, same shape as input.
 
     """
     # torch.manual_seed(10086)
@@ -260,7 +260,7 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples):
 
     return iter(dataloader), None, None
 
-# 设置随机数种子
+# Set random number seed
 @register_model_trainer(
     model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN
 )

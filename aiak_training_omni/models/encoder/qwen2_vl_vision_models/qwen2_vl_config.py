@@ -14,7 +14,7 @@ from aiak_training_omni.utils.constants import VisionLanguageModelFamilies
 class Qwen2VisionModelConfig(BaseModelConfig):
     """configuration for vision model"""
 
-    # ------- 无默认值字段 先写 -------
+    # ------- Fields without default values, write first -------
 
     num_layers: int
     hidden_size: int
@@ -24,7 +24,7 @@ class Qwen2VisionModelConfig(BaseModelConfig):
     image_size: tuple[int] = (1344, 1344)
     kv_channels: int = 80
 
-    # ------- 有默认值字段 后写 -------
+    # ------- Fields with default values, write later -------
     normalization: str = "LayerNorm"
     swiglu: bool = False
     class_token_len: int = 0

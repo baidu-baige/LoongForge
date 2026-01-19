@@ -161,7 +161,7 @@ def get_pos_emb_on_this_cp_rank(pos_emb: Tensor, seq_dim: int, packed_seq_params
 
 def get_batch_on_this_cp_rank(batch: Dict):
     """slice batch along sequence dimension for context parallelism"""
-    # TODO 目前这里只切分labels和loss_mask, 后续可能会切分其他参数
+    # TODO: Currently only split labels and loss_mask, may split other parameters in the future
     args = get_args()
 
     if args.context_parallel_size > 1:

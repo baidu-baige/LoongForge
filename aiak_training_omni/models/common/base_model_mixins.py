@@ -112,7 +112,7 @@ class BaseMegatronVisionModule(VisionModule):
                 torch.tensor([[1, 2, 2]], dtype=torch.int32, device=device))
 
 class BaseDecoderModelMixin(PreTrainedModel, ABC):
-    """统一decoder模型混入类。"""
+    """Unified decoder model mixin class."""
 
     @abstractmethod
     def forward_loss(
@@ -121,5 +121,5 @@ class BaseDecoderModelMixin(PreTrainedModel, ABC):
         foundation_outputs: torch.Tensor,
         **kwargs: Any,
     ) -> Dict[str, torch.Tensor]:
-        """计算decoder损失函数 ，用于训练阶段。"""
+        """Calculate decoder loss function, for training stage."""
         raise NotImplementedError

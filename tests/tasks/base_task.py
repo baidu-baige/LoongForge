@@ -28,7 +28,7 @@ from metric.metric import Metric
 
 logger = create_color_logger(name=__name__)
 
-# HF checkpoint 检查的模型层映射配置
+# HF checkpoint validation model layer mapping configuration
 HF_CHECK_MODEL_MAPPING = {
     "Qwen2.5-VL-7B-Instruct": {
         "llm": ["model.layers.", 28],
@@ -83,18 +83,18 @@ class BaseTask(object):
 
         self.metric = Metric()
 
-    # 更新锁文件
+    # Update lock file
     def update_lock_file(self, lock_file_path, task_flag):
         with open(lock_file_path, "a") as file:
             logger.info(f"update_lock_file {task_flag} start ...")
-            file.seek(0) # 重置文件指针到开头
-            file.truncate() # 清空文件内容
+            file.seek(0) # Reset file pointer to beginning
+            file.truncate() # Clear file content
             file.write(task_flag)
             logger.info(f"update_lock_file {task_flag} end")
 
-    # 检查锁文件
+    # Check lock file
     def check_lock_file(self, lock_file_path, task_flag):
-        # 遍历 lock_file_path 文件夹下所有文件的内容总数是否等于预期，相等True，否则返回 False，再判断内容都是 task_flag，是则返回 True，否则返回 False，
+        # Iterate through all files under lock_file_path folder, check if total content equals expected, if equal return True, otherwise return False, then check if all content is task_flag, if yes return True, otherwise return False,
         count = 0
         flag = True
 
@@ -109,90 +109,90 @@ class BaseTask(object):
 
         return count, (count == self.input_cmd_args.node_nums and flag)
     
-    # 等待所有的 Pod/阶段 都完成
+    # Wait for all Pods/phases to complete
     def wait_async_task_complete(self, lock_file_path, task_flag, model_name="", scenarios_name=""):
-        # 检查锁文件，如果所有的 Pod 都已经完成，就进入下一阶段
+        # Check lock file, if all Pods have completed, proceed to next phase
         for _ in range(self.input_cmd_args.timeout // 10):
             if self.check_lock_file(lock_file_path, task_flag):
-                logger.info(f"模型 【{model_name}】{scenarios_name} 所有的 Pod 都已经完成")
+                logger.info(f"Model 【{model_name}】{scenarios_name} all Pods have completed")
                 # if self.is_final_pod:
                 #     parent_path = os.path.dirname(os.path.dirname(lock_file_path))
                 #     shutil.rmtree(parent_path)
                 break
             else:
-                logger.info(f"模型 【{model_name}】{scenarios_name} 还有 Pod 没有完成，等待...")
+                logger.info(f"Model 【{model_name}】{scenarios_name} still has Pods not completed, waiting...")
                 time.sleep(10)
         else:
-            raise TimeoutError(f"ERROR: 等待其他 Pod 已超过{self.input_cmd_args.timeout} 秒")
+            raise TimeoutError(f"ERROR: Waited for other Pods for more than {self.input_cmd_args.timeout} seconds")
 
-    # lock_file 锁文件存在，并且内容 == MASTER_ADDR，证明此次任务已经写入文件完成，可以继续执行
-    # 否则，不存在就创建，并写入内容 MASTER_ADDR
+    # lock_file lock file exists and content == MASTER_ADDR, proves this task has been written to file and completed, can continue execution
+    # Otherwise, if not exists, create it and write content MASTER_ADDR
     def initialize_lock_file(self, lock_file, task_flag):
-        # 检查目录是否存在，如果不存在则创建
+        # Check if directory exists, if not create it
         if not os.path.exists(os.path.dirname(lock_file)):
             os.makedirs(os.path.dirname(lock_file))
 
-        # 打开或创建锁文件
+        # Open or create lock file
         with open(lock_file, 'a+') as file:
             logger.info(f"initialize_lock_file start ...")
-            file.seek(0) # 重置文件指针到开头
-            file.truncate() # 清空文件内容
+            file.seek(0) # Reset file pointer to beginning
+            file.truncate() # Clear file content
             file.write(task_flag)
             logger.info(f"initialize_lock_file end")
     
     def wait_async_pod_complete(self, lock_file, model_name="", scenarios_name="", is_function=False, function=None, raise_on_error=False, *args, **kwargs):
-        logger.info(f"模型 【{model_name}】{scenarios_name} 等待其他 Pod 完成 ...")
+        logger.info(f"Model 【{model_name}】{scenarios_name} waiting for other Pods to complete ...")
         task_flag = task_finish_flag
 
         try:
-            # 检查目录是否存在，如果不存在则创建
+            # Check if directory exists, if not create it
             if not os.path.exists(os.path.dirname(lock_file)):
                 os.makedirs(os.path.dirname(lock_file))
         except Exception as e:
-            logger.warning(f"warning: 创建目录失败，{e}")
+            logger.warning(f"warning: Failed to create directory, {e}")
             pass
-        
-        # 第一步：将对应的pod的数据写入到 lock_file 文件
-        # 打开或创建锁文件
+
+        # Step 1: Write corresponding pod data to lock_file
+        # Open or create lock file
         with open(lock_file, 'a+') as file:
-            file.seek(0) # 重置文件指针到开头
-            file.truncate() # 清空文件内容
+            file.seek(0) # Reset file pointer to beginning
+            file.truncate() # Clear file content
             file.write(task_flag)
 
-        # 第二步：检查 lock_file 文件，如果所有的 Pod 都已经完成，就进入下一阶段：1、所有文件状态都是Finish。2、文件总数是 node_nums。
+        # Step 2: Check lock_file, if all Pods have completed, proceed to next phase: 1. All files state are Finish. 2. Total files is node_nums.
         for _ in range(self.input_cmd_args.timeout // 10):
             finish_count, state = self.check_lock_file(lock_file, task_flag)
             if state:
-                logger.info(f"模型 【{model_name}】{scenarios_name} 所有的 Pod 都已经完成, {finish_count} / {self.input_cmd_args.node_nums}")
+                logger.info(f"Model 【{model_name}】{scenarios_name} all Pods have completed, {finish_count} / {self.input_cmd_args.node_nums}")
 
                 if is_function and self.is_final_pod:
                     if function and callable(function):
                         try:
-                            logger.info(f"执行 {function.__name__} 方法:")
-                            result = function(*args, **kwargs)  # 调用函数并传入参数
-                            logger.info(f"函数 {function.__name__} 执行完成，返回值: {result}")
+                            logger.info(f"Executing {function.__name__} method:")
+                            result = function(*args, **kwargs)  # Call function and pass parameters
+                            logger.info(f"Function {function.__name__} execution completed, return value: {result}")
                         except Exception as e:
-                            logger.error(f"执行函数 {function.__name__} 时出错: {e}")
-                            # 如果 raise_on_error 参数为 True，则抛出异常
+                            logger.error(f"Error when executing function {function.__name__}: {e}")
+                            # If raise_on_error parameter is True, raise exception
                             if raise_on_error:
-                                raise Exception(f"执行函数 {function.__name__} 时出错: {e}")
+                                raise Exception(f"Error when executing function {function.__name__}: {e}")
                     else:
-                        logger.error(f"提供的 {function} 不是可调用的函数。")
+                        logger.error(f"Provided {function} is not a callable function.")
                 break
             else:
-                logger.info(f"模型 【{model_name}】{scenarios_name} 还有 Pod 没有完成，{finish_count} / {self.input_cmd_args.node_nums} 等待...")
+                logger.info(f"Model 【{model_name}】{scenarios_name} still has Pods not completed, {finish_count} / {self.input_cmd_args.node_nums} waiting...")
                 time.sleep(10)
         else:
-            raise TimeoutError(f"ERROR: 等待其他 Pod 已超过{self.input_cmd_args.timeout} 秒")
+            raise TimeoutError(f"ERROR: Waited for other Pods for more than {self.input_cmd_args.timeout} seconds")
     
 
     def __init_ckpt_file__(self) -> None:
-        # 初始化数据场景，首次进入需要删除一些文件，避免影响后续测试
+        # Initialize data scenario, need to delete some files on first entry to avoid affecting subsequent tests
         scenario_name = ".init"
         init_lock_path = os.path.join(self.model["model_lock_file_path"], scenario_name, self.master_addr)
         init_lock_file = os.path.join(init_lock_path, f"{self.rank_name}_lock.txt")
 
-        # 等待所有pod就绪后，删除模型已经存在的 ckpt 文件
+        # Wait for all pods to be ready, then delete model's existing ckpt files
         is_function = True
         if self.task_type == "perf":
             is_function = False
@@ -207,17 +207,17 @@ class BaseTask(object):
 
     def __del_ckpt_file__(self):
         step1_output_path = self.model["step1_output_path"]
-        # 删除 step1_output_path 的输出文件
+        # Delete output files of step1_output_path
         if os.path.exists(step1_output_path):
             shutil.rmtree(step1_output_path)
-    
+
     def __clean_up__(self):
-        # 初始化数据场景，首次进入需要删除一些文件，避免影响后续测试
+        # Initialize data scenario, need to delete some files on first entry to avoid affecting subsequent tests
         scenario_name = ".clean_up"
         init_lock_path = os.path.join(self.model["model_lock_file_path"], scenario_name, self.master_addr)
         init_lock_file = os.path.join(init_lock_path, f"{self.rank_name}_lock.txt")
 
-        # 等待所有pod就绪后，删除模型已经存在的 ckpt 文件
+        # Wait for all pods to be ready, then delete model's existing ckpt files
         self.wait_async_pod_complete(
             init_lock_file,
             self.model_name,
@@ -233,46 +233,46 @@ class BaseTask(object):
         if self.task_type == "perf":
             function_scenarios_name = "function"
             function_step_data = self.model["scenarios"][0][function_scenarios_name][training_type_name][step_name]
-            # 合并 function_step_data 和 model
+            # Merge function_step_data and model
             model = {**model, **function_step_data}
 
-            # 正常获取scenarios_name场景下的数据
+            # Normally get data under scenarios_name scenario
             step_data = self.model["scenarios"][index][scenarios_name][training_type_name][step_name]
-            # 合并 function_step_data 和 model 为一个json
+            # Merge function_step_data and model as a json
             model = {**model, **step_data}
-        
+
         elif self.task_type == "function":
-            # 迭代获取之前的变量以及替换最新的变量
+            # Iterate to get previous variables and replace with latest variables
             for i, scenario in enumerate(self.model["scenarios"]):
                 local_index = i + 1
                 local_step_name = f"Step{local_index}"
 
                 function_scenarios_name = "function"
-                # 检查步骤是否存在，如果不存在则跳过
+                # Check if step exists, if not skip
                 if (local_step_name not in self.model["scenarios"][0][function_scenarios_name][training_type_name]):
-                    logger.info(f"local_step_name {local_step_name} 当前不存在，跳过 ...")
+                    logger.info(f"local_step_name {local_step_name} currently does not exist, skip ...")
                     continue
-  
+
                 function_step_data = self.model["scenarios"][0][function_scenarios_name][training_type_name][local_step_name]
-                # 合并 function_step_data 和 model
+                # Merge function_step_data and model
                 model = {**model, **function_step_data}
 
-                # 更新变量到当前的步骤
+                # Update variable to current step
                 if local_step_name == step_name:
                     break
-            
-            # 正常获取scenarios_name场景下的数据
+
+            # Normally get data under scenarios_name scenario
             step_data = self.model["scenarios"][index][scenarios_name][training_type_name][step_name]
-            # 合并 function_step_data 和 model 为一个json
-            model = {**model, **step_data}
-        
-        elif self.task_type == "preprocess_data":
-            # 正常获取scenarios_name场景下的数据
-            step_data = self.model["scenarios"][index][scenarios_name][step_name]
-            # 合并 function_step_data 和 model 为一个json
+            # Merge function_step_data and model as a json
             model = {**model, **step_data}
 
-        # 设置是否使用nccl
+        elif self.task_type == "preprocess_data":
+            # Normally get data under scenarios_name scenario
+            step_data = self.model["scenarios"][index][scenarios_name][step_name]
+            # Merge function_step_data and model as a json
+            model = {**model, **step_data}
+
+        # Set whether to use nccl
         use_nccl = "false"
         if self.input_cmd_args.use_nccl:
             use_nccl = "true"
@@ -289,31 +289,31 @@ class BaseTask(object):
 
 
     def __convert_model_config_to_env__(self, model_config: Dict[Any, Any]) -> str:
-        # 初始化一个空的环境变量字符串
+        # Initialize an empty environment variable string
         env_vars_str = ""
         new_model_config = deepcopy(model_config)
 
-        # 遍历字典，将键值对转换为环境变量
+        # Iterate through dictionary, convert key-value pairs to environment variables
         for key, value in new_model_config.items():
             if key == "scenarios":
                 continue
 
             if isinstance(value, str):
-                # 对于 _ARGS 类型的参数，需要特殊处理：
-                # 1. 去除注释行（以 # 开头的行)
-                # 2. 将换行符转换为空格，多个空格合并为单个空格
-                # 3. 去除首尾空白
-                # 4. 不使用 json.dumps，直接传递原始字符串（bash 会按空格分割)
+                # For _ARGS type parameters, need special handling:
+                # 1. Remove comment lines (lines starting with #)
+                # 2. Convert newlines to spaces, merge multiple spaces into single space
+                # 3. Remove leading and trailing whitespace
+                # 4. Do not use json.dumps, directly pass original string (bash splits by spaces)
                 if "_ARGS" in key:
-                    # 去除注释行和空行
+                    # Remove comment lines and empty lines
                     lines = []
                     for line in value.split('\n'):
                         stripped_line = line.strip()
-                        # 跳过空行和注释行（包括行内注释，如 "--arg # comment")
+                        # Skip empty lines and comment lines (including inline comments, e.g., "--arg # comment")
                         if stripped_line and not stripped_line.startswith('#'):
-                            # 处理行内注释：移除 # 及其后面的内容
+                            # Process inline comments: remove # and content after it
                             if '#' in stripped_line:
-                                # 检查 # 是否在引号内
+                                # Check if # is inside quotes
                                 in_quotes = False
                                 quote_char = None
                                 for i, char in enumerate(stripped_line):
@@ -328,13 +328,13 @@ class BaseTask(object):
                                         stripped_line = stripped_line[:i].strip()
                                         break
                             lines.append(stripped_line)
-                    # 用空格连接所有非注释行，并规范化空格
+                    # Join all non-comment lines with spaces and normalize spaces
                     value = ' '.join(lines)
-                    # 将多个连续空格替换为单个空格
+                    # Replace multiple consecutive spaces with single space
                     import re
                     value = re.sub(r'\s+', ' ', value).strip()
-                    # 对于 _ARGS，需要用引号包裹整个值，以确保包含空格的值被正确传递
-                    # 转义值中的引号，然后用引号包裹
+                    # For _ARGS, need to wrap entire value in quotes to ensure values containing spaces are correctly passed
+                    # Escape quotes in value, then wrap with quotes
                     value = value.replace('"', '\\"')
                     value = f'"{value}"'
                 elif key == "paramters" or "loss_in_value" in key:
@@ -353,22 +353,22 @@ class BaseTask(object):
 
         if not self.is_final_pod:
             return
-        # 收集训练过程中metric 指标
+        # Collect metric indicators during training
         self.collect_metrics(training_log_file)
-        # 统一校验精度和性能指标
+        # Uniformly verify accuracy and performance indicators
         self.validate_metrics(self.model_name, training_type)
         logger.info(f"End assert_aiak_training_omni")
 
     def validate_metrics(self, model_name, training_type=None):
         """
-        统一验证训练的精度和性能指标。
-        精度指标(lm_loss, grad_norm)使用relative_tolerance=0.02，性能指标(elapsed_time_ms, throughput)使用relative_tolerance=0.05。
+        Unified verification of training accuracy and performance metrics.
+        Accuracy metrics (lm_loss, grad_norm) use relative_tolerance=0.02, performance metrics (elapsed_time_ms, throughput) use relative_tolerance=0.05.
         Args:
-            model_name: 模型名称，用于定位 baseline JSON 文件
-            training_type: 训练类型（如 'pretrain', 'sft')
+            model_name: Model name, used to locate baseline JSON file
+            training_type: Training type (e.g., 'pretrain', 'sft')
         """
         baseline_data = ConfigManager.get_baseline_data(None, self.model, model_name, training_type)
-        # 精度指标
+        # Accuracy metrics
         accuracy_relative_tolerance = self.accuracy_relative_tolerance
         # lm_loss
         if hasattr(self.metric, 'lm_loss_list') and self.metric.lm_loss_list and 'lm_loss' in baseline_data[0]:
@@ -390,13 +390,13 @@ class BaseTask(object):
                 tolerance=accuracy_relative_tolerance,
                 is_relative=False
             )
-        logger.info("精度指标验证通过!")
+        logger.info("Accuracy metrics verification passed!")
 
-        # 性能指标
+        # Performance metrics
         performance_relative_tolerance = self.performance_relative_tolerance
         num_iters = min(len(self.metric.elapsed_time_match), len(baseline_data))
         if num_iters == 0:
-            logger.warning("没有足够的数据进行性能验证")
+            logger.warning("Insufficient data for performance verification")
             return
         # elapsed_time_ms
         if hasattr(self.metric, 'elapsed_time_match') and self.metric.elapsed_time_match and 'elapsed_time_ms' in baseline_data[0]:
@@ -421,7 +421,7 @@ class BaseTask(object):
                 is_relative=True
             )
 
-        # 显存指标
+        # Memory metrics
         # mem_allocated_avg_MB
         if hasattr(self.metric, 'mem_allocated_avg_MB') and self.metric.mem_allocated_avg_MB and 'mem_allocated_avg_MB' in baseline_data[0]:
             expected_mem_allocated = [item['mem_allocated_avg_MB'] for item in baseline_data[:num_iters]]
@@ -444,15 +444,15 @@ class BaseTask(object):
                 tolerance=performance_relative_tolerance,
                 is_relative=True
             )
-        logger.info("性能指标验证通过!")
-    
+        logger.info("Performance metrics verification passed!")
+
     def collect_metrics(self, training_log_file):
         self.metric.model_name = self.model_name
-        # 收集训练过程中metric 指标
+        # Collect metric indicators during training
         with open(training_log_file, 'r') as file:
             lines = file.readlines()
 
-        # 清空，防止场景较多后混入
+        # Clear to prevent mixing after many scenarios
         self.metric.lm_loss_list = []
         self.metric.grad_norm_list = []
         self.metric.throughput = []
@@ -460,55 +460,55 @@ class BaseTask(object):
         self.metric.mem_allocated_avg_MB = []
         self.metric.mem_max_allocated_avg_MB = []
 
-        # 添加 loss value
+        # Add loss value
         for i in range(len(lines)):
             line = lines[i]
             loss_match = re.search(r'lm loss: ([\d\.E\+-]+)', line)
             if loss_match:
                 training_lm_loss_str = str(loss_match.group(1)).strip()
                 self.metric.lm_loss_list.append(training_lm_loss_str)
-            # 获取 grad_norm 的值
+            # Get value of grad_norm
             grad_norm_match = re.search(r'grad norm: ([\d\.E\+-]+)', line)
             if grad_norm_match:
                 grad_norm_str = str(grad_norm_match.group(1)).strip()
                 self.metric.grad_norm_list.append(grad_norm_str)
-            # 获取'throughput (token/sec/GPU)'的值
+            # Get value of 'throughput \(token/sec/GPU\)'
             throughput_match = re.search(r'throughput \(token/sec/GPU\): ([\d\.E\+-]+)', line)
             if throughput_match:
                 throughput_str = str(throughput_match.group(1)).strip()
                 self.metric.throughput.append(throughput_str)
-            # 获取 elapsed time per iteration (ms) 的值
+            # Get value of elapsed time per iteration \(ms\)
             elapsed_time_match = re.search(r'elapsed time per iteration \(ms\): ([\d\.E\+-]+)', line)
             if elapsed_time_match:
                 elapsed_time_str = str(elapsed_time_match.group(1)).strip()
                 self.metric.elapsed_time_match.append(elapsed_time_str)
-            # 获取 mem_allocated_avg_MB（训练日志格式如: mem-allocated-bytes-avg(MB): 15896.39）
+            # Get mem_allocated_avg_MB \(training log format like: mem-allocated-bytes-avg\(MB\): 15896.39\)
             mem_allocated_match = re.search(r'mem-allocated-bytes-avg\(MB\):\s*([\d\.E\+-]+)', line)
             if mem_allocated_match:
                 mem_allocated_str = str(mem_allocated_match.group(1)).strip()
                 self.metric.mem_allocated_avg_MB.append(mem_allocated_str)
-            # 获取 mem_max_allocated_avg_MB（训练日志格式如: mem-max-allocated-bytes-avg(MB): 29039.47）
+            # Get mem_max_allocated_avg_MB \(training log format like: mem-max-allocated-bytes-avg\(MB\): 29039.47\)
             mem_max_allocated_match = re.search(r'mem-max-allocated-bytes-avg\(MB\):\s*([\d\.E\+-]+)', line)
             if mem_max_allocated_match:
                 mem_max_allocated_str = str(mem_max_allocated_match.group(1)).strip()
                 self.metric.mem_max_allocated_avg_MB.append(mem_max_allocated_str)
-            # 获取 global batch size
+            # Get global batch size
             batch_size_match = re.search(r'global batch size:\s*(\d+)', line)
             if batch_size_match:
                 batch_size_str = str(batch_size_match.group(1)).strip()
                 self.metric.global_batch_size.append(batch_size_str)
 
-        assert len(self.metric.lm_loss_list) != 0, "此次任务的loss 为空，需要查看训练任务是否正常！！！"
+        assert len(self.metric.lm_loss_list) != 0, "The loss of this task is empty, please check if the training task is working properly!!!"
         # logger.info(f"self.metric dict: {self.metric.obj_to_dict()}")
       
     def _compare_metric(self, actual_list, expected_list, metric_name, tolerance, is_relative=False):
         """
-        通用指标对比函数，支持绝对误差和相对误差，允许部分iteration超出容忍范围
-        :param actual_list: 实际值列表
-        :param expected_list: 期望值列表
-        :param metric_name: 指标名
-        :param tolerance: 容忍度（绝对或相对）
-        :param is_relative: 是否用相对误差
+        Generic metric comparison function, supports absolute error and relative error, allows some iterations to exceed tolerance range
+        :param actual_list: List of actual values
+        :param expected_list: List of expected values
+        :param metric_name: Metric name
+        :param tolerance: Tolerance (absolute or relative)
+        :param is_relative: Whether to use relative error
         """
         is_close = []
         total_steps_evaluated = min(len(actual_list), len(expected_list))
@@ -521,45 +521,45 @@ class BaseTask(object):
                 else:
                     relative_error = abs(actual_value - expected_value) / abs(expected_value)
                 if relative_error <= tolerance:
-                    logger.info(f"第 {index + 1} 组 {metric_name} 性能对比: 实际值: {actual_value} vs 预期值: {expected_value} 相对误差: {relative_error*100:.2f}% (容忍: {tolerance*100:.0f}%), 测试通过!")
+                    logger.info(f"Group {index + 1} {metric_name} performance comparison: actual value: {actual_value} vs expected value: {expected_value} relative error: {relative_error*100:.2f}% (tolerance: {tolerance*100:.0f}%), test passed!")
                     is_close.append(True)
                 else:
-                    logger.warning(f'第 {index + 1} 组 {metric_name} 性能对比: 实际值: {actual_value} vs 预期值: {expected_value} 相对误差: {relative_error*100:.2f}% 超过容忍范围 {tolerance*100:.0f}%, 测试不通过!!!')
+                    logger.warning(f'Group {index + 1} {metric_name} performance comparison: actual value: {actual_value} vs expected value: {expected_value} relative error: {relative_error*100:.2f}% exceeds tolerance range {tolerance*100:.0f}%, test not passed!!!')
                     is_close.append(False)
             else:
                 difference = abs(actual_value - expected_value)
                 if difference <= float(tolerance):
-                    logger.info(f"第 {index + 1} 组 {metric_name} 对比: 实际值: {actual_value} vs 预期值: {expected_value} 差异值预期在 {tolerance} 以内, 测试通过!")
+                    logger.info(f"Group {index + 1} {metric_name} comparison: actual value: {actual_value} vs expected value: {expected_value} difference value expected within {tolerance}, test passed!")
                     is_close.append(True)
                 else:
-                    logger.warning(f'第 {index + 1} 组 {metric_name} 对比: 实际值: {actual_value} vs 预期值: {expected_value} 差异值超出 {tolerance}, 实际差值是: {difference}, 测试不通过!!!')
+                    logger.warning(f'Group {index + 1} {metric_name} comparison: actual value: {actual_value} vs expected value: {expected_value} difference value exceeds {tolerance}, actual difference is: {difference}, test not passed!!!')
                     is_close.append(False)
 
         num_failing_steps_allowed = min(max(total_steps_evaluated // 100, 1), 50)
         passing = np.sum(is_close) >= (total_steps_evaluated - num_failing_steps_allowed)
         if not passing:
-            raise ValueError(f"{metric_name} 对比未通过: 允许失败步数 {num_failing_steps_allowed}, 实际通过步数 {np.sum(is_close)}, 总步数 {total_steps_evaluated}")
+            raise ValueError(f"{metric_name} comparison failed: allowed failing steps {num_failing_steps_allowed}, actual passed steps {np.sum(is_close)}, total steps {total_steps_evaluated}")
         else:
-            logger.info(f"{metric_name} 对比通过: 允许失败步数 {num_failing_steps_allowed}, 实际通过步数 {np.sum(is_close)}, 总步数 {total_steps_evaluated}")
+            logger.info(f"{metric_name} comparison passed: allowed failing steps {num_failing_steps_allowed}, actual passed steps {np.sum(is_close)}, total steps {total_steps_evaluated}")
     
     def _get_hf_layer_state_dict(self, load_path: str, layer_prefix: str, layer_id: int):
         """
-        获取指定层的 state_dict
-        
+        Get state_dict of specified layer
+
         Args:
-            load_path: hf checkpoint 路径
-            layer_prefix: 层前缀，如 "model.layers."
-            layer_id: 层 id
-            
+            load_path: HF checkpoint path
+            layer_prefix: Layer prefix, e.g., "model.layers."
+            layer_id: Layer id
+
         Returns:
-            checked_keys: 检查的 key 列表
-            state_dict: 对应层的 state_dict
+            checked_keys: List of checked keys
+            state_dict: Corresponding layer's state_dict
         """
         from safetensors.torch import load_file
         
         meta_file_name = f"{load_path}/model.safetensors.index.json"
         if not os.path.exists(meta_file_name):
-            # 单个 safetensors 文件
+            # Single safetensors file
             filename = f"{load_path}/model.safetensors"
             state_dict = {}
             checked_keys = []
@@ -570,7 +570,7 @@ class BaseTask(object):
                     state_dict[key] = value
             return checked_keys, state_dict
 
-        # 多个 safetensors 文件
+        # Multiple safetensors files
         checked_keys = []
         need_files = []
         with open(meta_file_name, 'r') as f:
@@ -591,98 +591,98 @@ class BaseTask(object):
 
     def _check_hf_layer(self, src_load_path: str, dst_load_path: str, layer_prefix: str, layer_id: int, module_name: str):
         """
-        检查单层 hf checkpoint 的一致性
-        
+        Check consistency of single layer hf checkpoint
+
         Args:
-            src_load_path: 原始 hf checkpoint 路径
-            dst_load_path: 转换后的 hf checkpoint 路径
-            layer_prefix: 层前缀
-            layer_id: 层 id
-            module_name: 模块名称（llm/vit）
+            src_load_path: Original HF checkpoint path
+            dst_load_path: Converted HF checkpoint path
+            layer_prefix: Layer prefix
+            layer_id: Layer id
+            module_name: Module name (llm/vit)
         """
-        logger.info(f"检查 {module_name} layer {layer_id} ...")
-        
+        logger.info(f"Checking {module_name} layer {layer_id} ...")
+
         src_checked_keys, src_state_dict = self._get_hf_layer_state_dict(src_load_path, layer_prefix, layer_id)
         dst_checked_keys, dst_state_dict = self._get_hf_layer_state_dict(dst_load_path, layer_prefix, layer_id)
-        
-        # 检查 key 是否一致
+
+        # Check if keys are consistent
         if set(src_checked_keys) != set(dst_checked_keys):
             src_set = set(src_checked_keys)
             dst_set = set(dst_checked_keys)
             diff_src = list(src_set - dst_set)
             diff_dst = list(dst_set - src_set)
-            raise ValueError(f"key 不一致.\n原始有但转换后没有: {diff_src}\n转换后有但原始没有: {diff_dst}")
+            raise ValueError(f"Keys are inconsistent.\nOriginal has but converted does not have: {diff_src}\nConverted has but original does not have: {diff_dst}")
 
-        # 检查每个 key 对应的 tensor 是否一致
+        # Check if tensor corresponding to each key is consistent
         for key in src_checked_keys:
             src_data = src_state_dict[key]
             dst_data = dst_state_dict[key]
             
             if src_data.shape != dst_data.shape:
-                raise ValueError(f"{key} shape 不一致: src={src_data.shape}, dst={dst_data.shape}")
-            
+                raise ValueError(f"{key} shape is inconsistent: src={src_data.shape}, dst={dst_data.shape}")
+
             if not torch.equal(src_data, dst_data):
                 diff = (src_data.float() - dst_data.float()).abs().max()
-                logger.warning(f"{key} 数值有差异, max_diff={diff}")
-                # 如果差异过大，抛出异常
+                logger.warning(f"{key} has value difference, max_diff={diff}")
+                # If difference is too large, throw exception
                 if diff > 1e-5:
-                    raise ValueError(f"{key} 数值差异过大: max_diff={diff}")
-        
-        logger.info(f"完成检查 {module_name} layer {layer_id}")
+                    raise ValueError(f"{key} value difference is too large: max_diff={diff}")
+
+        logger.info(f"Finished checking {module_name} layer {layer_id}")
 
     def check_hf_checkpoint(self, src_load_path: str, dst_load_path: str, model_name: str):
         """
-        检查转换后的 hf checkpoint 与原始 hf checkpoint 的一致性
-        
+        Check consistency of converted HF checkpoint with original HF checkpoint
+
         Args:
-            src_load_path: 原始 hf checkpoint 路径
-            dst_load_path: 转换后的 hf checkpoint 路径  
-            model_name: 模型名称，用于获取层映射配置
+            src_load_path: Original HF checkpoint path
+            dst_load_path: Converted HF checkpoint path
+            model_name: Model name, used to get layer mapping configuration
         """
-        logger.info(f"开始检查 HF checkpoint 一致性...")
-        logger.info(f"原始路径: {src_load_path}")
-        logger.info(f"转换后路径: {dst_load_path}")
-        
+        logger.info(f"Starting to check HF checkpoint consistency...")
+        logger.info(f"Original path: {src_load_path}")
+        logger.info(f"Converted path: {dst_load_path}")
+
         if model_name not in HF_CHECK_MODEL_MAPPING:
-            raise ValueError(f"不支持的模型: {model_name}，请在 HF_CHECK_MODEL_MAPPING 中添加配置")
+            raise ValueError(f"Unsupported model: {model_name}, please add configuration in HF_CHECK_MODEL_MAPPING")
         
         mapping = HF_CHECK_MODEL_MAPPING[model_name]
         
-        # 检查 LLM 层
+        # Check LLM layers
         llm_prefix, llm_num_layers = mapping["llm"]
         for layer_id in range(llm_num_layers):
             self._check_hf_layer(src_load_path, dst_load_path, llm_prefix, layer_id, "llm")
         
-        # 检查 ViT 层
+        # Check ViT layers
         vit_prefix, vit_num_layers = mapping["vit"]
         for layer_id in range(vit_num_layers):
             self._check_hf_layer(src_load_path, dst_load_path, vit_prefix, layer_id, "vit")
         
-        logger.info(f"HF checkpoint 一致性检查通过!")
+        logger.info(f"HF checkpoint consistency check passed!")
 
     def create_shell_file(self, model_config, script_path, new_script_path):
         import re
-        # 环境变量字典
+        # Environment variable dictionary
         env_vars = {}
         # print(model_config)
 
         for var, value in model_config.items():
             env_vars[var] = str(value)
 
-        # 读取脚本内容
+        # Read script content
         with open(script_path, "r") as file:
             script = file.read()
         
-        # 不断替换变量，直到所有的变量都被替换掉
+        # Continuously replace variables until all are replaced
         while True:
             new_script = script
             for var, value in env_vars.items():
                 new_script = re.sub(f"\\$\\{{{var}\\}}", value, new_script)
-            if new_script == script:  # 如果没有发生任何替换，那么就结束循环
+            if new_script == script:  # If no replacement occurred, then end loop
                 break
             script = new_script
 
-        # 保存新的脚本
+        # Save new script
         with open(new_script_path, "w") as file:
             file.write(script)
     
@@ -692,7 +692,7 @@ class BaseTask(object):
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
 
-        # ckpt 权重转化
+        # ckpt weight conversion
         model_name = self.model_name
         node_nums = self.input_cmd_args.node_nums
         timeout = self.input_cmd_args.timeout
@@ -700,7 +700,7 @@ class BaseTask(object):
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # 将配置文件转成env 环境变量传递给运行脚本
+        # Convert config file to env environment variables to pass to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
 
         step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
@@ -711,7 +711,7 @@ class BaseTask(object):
         start_command = f"{env_vars_str} bash {script_path}"
         self.create_shell_file(model_config, script_path, new_script_path)
 
-        # 打开一个新的文件用来写入脚本的输出
+        # Open a new file to write script output
         training_log_file = f"{training_log_path}/convert_ckpt_{model_name}_{self.rank_name}_run.log"
 
         start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/run.sh |tee {training_log_file}\""
@@ -719,27 +719,27 @@ class BaseTask(object):
         if os.system(start_command) != 0:
             raise RuntimeError(f"Start {step_stage} {step_name} error, cmd is {start_command}")
 
-        # 等待所有pod 完成
+        # Wait for all pods to complete
         self.wait_async_pod_complete(model_lock_file, model_name, f"{scenario_name}_{step_name}")
 
         logger.info(f"{step_stage} End {step_name}")
 
     def start_aiak_reverse_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
         """
-        执行 mcore -> hf 逆向转换并验证转换后的 hf checkpoint 与原始 hf checkpoint 的一致性
+        Execute mcore -> hf reverse conversion and verify consistency of converted HF checkpoint with original HF checkpoint
         """
         step_name = "aiak_convert_ckpt"
         logger.info(f"{step_stage} reverse_{step_name} Start Running ...")
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
 
-        # 获取配置
+        # Get configuration
         model_name = self.model_name
         scripts_root_path = model_config["scripts_root_path"]
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # 将配置文件转成env 环境变量传递给运行脚本
+        # Convert config file to env environment variables to pass to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
 
         step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
@@ -750,7 +750,7 @@ class BaseTask(object):
         start_command = f"{env_vars_str} bash {script_path}"
         self.create_shell_file(model_config, script_path, new_script_path)
 
-        # 打开一个新的文件用来写入脚本的输出
+        # Open a new file to write script output
         training_log_file = f"{training_log_path}/reverse_convert_ckpt_{model_name}_{self.rank_name}_run.log"
 
         start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/reverse_run.sh |tee {training_log_file}\""
@@ -758,20 +758,20 @@ class BaseTask(object):
         if os.system(start_command) != 0:
             raise RuntimeError(f"Start {step_stage} reverse_{step_name} error, cmd is {start_command}")
 
-        # 获取 hf check 相关配置并执行检查
+        # Get hf check related configuration and execute check
         hf_ckpt_path = model_config.get("HF_CKPT_PATH", "")
         reverse_hf_ckpt_path = model_config.get("REVERSE_HF_CKPT_PATH", "")
         hf_check_model_name = model_config.get("HF_CHECK_MODEL_NAME", "")
         
         if hf_ckpt_path and reverse_hf_ckpt_path and hf_check_model_name:
-            # 只在最后一个 pod 执行 check
+            # Only execute check on last pod
             if self.is_final_pod:
-                logger.info(f"开始执行 HF checkpoint 一致性检查...")
+                logger.info(f"Starting to execute HF checkpoint consistency check...")
                 self.check_hf_checkpoint(hf_ckpt_path, reverse_hf_ckpt_path, hf_check_model_name)
         else:
-            logger.warning(f"缺少 HF check 配置，跳过一致性检查: HF_CKPT_PATH={hf_ckpt_path}, REVERSE_HF_CKPT_PATH={reverse_hf_ckpt_path}, HF_CHECK_MODEL_NAME={hf_check_model_name}")
+            logger.warning(f"Missing HF check configuration, skipping consistency check: HF_CKPT_PATH={hf_ckpt_path}, REVERSE_HF_CKPT_PATH={reverse_hf_ckpt_path}, HF_CHECK_MODEL_NAME={hf_check_model_name}")
 
-        # 等待所有pod 完成
+        # Wait for all pods to complete
         self.wait_async_pod_complete(model_lock_file, model_name, f"{scenario_name}_reverse_{step_name}")
 
         logger.info(f"{step_stage} End reverse_{step_name}")
@@ -782,7 +782,7 @@ class BaseTask(object):
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
 
-        # ckpt 权重转化
+        # ckpt weight conversion
         model_name = self.model_name
         node_nums = self.input_cmd_args.node_nums
         timeout = self.input_cmd_args.timeout
@@ -790,7 +790,7 @@ class BaseTask(object):
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
 
-        # 将配置文件转成env 环境变量传递给运行脚本
+        # Convert config file to env environment variables to pass to running script
         env_vars_str = self.__convert_model_config_to_env__(model_config)
 
         step_stage_path = f'{model_lock_file_path}/{step_stage}/{self.master_addr}'
@@ -801,7 +801,7 @@ class BaseTask(object):
         start_command = f"{env_vars_str} bash {script_path}"
         self.create_shell_file(model_config, script_path, new_script_path)
 
-        # 打开一个新的文件用来写入脚本的输出
+        # Open a new file to write script output
         training_log_file = f"{training_log_path}/training#{model_name}#{training_type_name}#nodes_{self.input_cmd_args.node_nums}#{self.rank_name}#run.log"
 
         start_command = f"{env_vars_str} bash -c \"set -o pipefail; bash {scripts_root_path}/executor/{step_name}/run.sh |tee {training_log_file}\""
@@ -809,7 +809,7 @@ class BaseTask(object):
         if os.system(start_command) != 0:
            raise RuntimeError(f"Start {step_stage} {step_name} error, cmd is {start_command}")
         
-        # 等待所有pod 完成并针对此次训练结果断言
+        # Wait for all pods to complete and assert on this training result
         if self.task_type == "function":
             self.wait_async_pod_complete(
                 model_lock_file,

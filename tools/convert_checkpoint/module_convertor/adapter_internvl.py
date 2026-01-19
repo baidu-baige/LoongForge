@@ -57,7 +57,7 @@ elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
     """ huggingface to megatron """
     print(" ====== convert adapter from HuggingFace to Megatron Core ======")
     pp = parallel_param_parser(args, model_cfg, 'pipeline_model_parallel_size', module_type)
-    tp = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', 'image_encoder') # 没写错
+    tp = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', 'image_encoder') # Not a typo
     source = load_huggingface_checkpoint(args.load_ckpt_path)
     target = {}
     for k1, k2 in name_map.items():
