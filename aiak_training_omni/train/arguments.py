@@ -685,6 +685,12 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         help="Log memory stats (allocated/peak) in training log output. Default: False.",
     )
 
+    group.add_argument(
+        "--legacy-reporting-loss-reduction",
+        action="store_true",
+        help="Use legacy reporting loss reduction method. Default is False.",
+    )
+
     return parser
 
 

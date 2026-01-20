@@ -191,7 +191,14 @@ def initialize_aiak_megatron(
             args.data_parallel_random_init,
             args.te_rng_tracker,
             args.inference_rng_tracker,
+            use_cudagraphable_rng=args.cuda_graph_impl != "none",
         )
+
+        # Setup MoE aux loss scale value.
+        if args.num_experts is not None:
+            from megatron.core.transformer.moe.router import MoEAuxLossAutoScaler
+
+            MoEAuxLossAutoScaler.set_loss_scale(torch.ones(1, device=torch.cuda.current_device()))
 
     if skip_mpu_initialization:
         return None
@@ -217,6 +224,7 @@ def initialize_aiak_megatron(
         _compile_dependencies()
 
         if args.tp_comm_overlap:
+            # TODO: Should this be activated with just decoder-tp-comm-overlap too?
             _initialize_tp_communicators()
 
         # No continuation function
