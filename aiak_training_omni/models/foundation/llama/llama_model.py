@@ -62,6 +62,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
         language_embedding: Optional[torch.nn.Module] = None,
         pg_collection: Optional[ProcessGroupCollection] = None,
         vp_stage: Optional[int] = None,
+        rotary_dtype: torch.dtype = torch.float32,
         **kwargs,
     ) -> None:
         super().__init__(config=config, pg_collection=pg_collection, **kwargs)
@@ -90,8 +91,7 @@ class LLaMAModel(BaseMegatronLanguageModule):
         self.seq_len_interpolation_factor = self.config.rotary_seq_len_interpolation_factor
         self.vp_stage = vp_stage
 
-        # TODO: remove this dependency ?
-        self.rotary_dtype = torch.float32
+        self.rotary_dtype = rotary_dtype
 
         # megatron core pipelining currently depends on model type
         # TODO: remove this dependency ?
@@ -216,8 +216,6 @@ class LLaMAModel(BaseMegatronLanguageModule):
         extra_block_kwargs: dict = None,
         rotary_pos_emb: Tensor = None,
         runtime_gather_output: Optional[bool] = None,
-        visual_pos_masks: Optional[list[Tensor]] = None,
-        deepstack_visual_embeds: Optional[list[Tensor]] = None,
         loss_mask: Optional[Tensor] = None,
         **kwargs,
     ) -> Tensor:
