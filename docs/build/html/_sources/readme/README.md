@@ -1,18 +1,5 @@
 # AIAK-Training-Omni README
-<div align="center">
-  <img src="docs/source/images/Image_20260117_204343.jpg" width="450"/>
-  <div>&nbsp;</div>
-  <div align="center">
-    <b><font size="5">AIAK-Training-Omni: A High-Performance Multimodal Model Training Framework</font></b>
-    <sup>
-      <a href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master">
-        <i><font size="4">TRY IT NOW</font></i>
-      </a>
-    </sup>
-  </div>
-  <div>&nbsp;</div>
-</div>
-
+![AIAK-Training-Omni Logo](_images/Image_20260117_204343.jpg)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://github.com/baidu-baige/AIAK-Training-Omni/docs/build/html/index.html)
 [![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master)
 [![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/LICENSE)
@@ -108,22 +95,79 @@ The AIAK-Omni framework is a multimodal training framework based on Megatron, su
 ## Quick Start
 
 ### Quick Start for Qwen3
-#### Installation
 
-#### Prepare Data
 
-#### Checkpoint conversion
+#### Installation  
+*(content to be added)*
 
-#### Quick Start Qwen3-8b sft
+#### Prepare the dataset  
+Convert your corpus into JSON format.  
+Each sample should contain three fields: `instruction`, `input`, and `output`.
+
+**Example file: `sft_alpaca_zh_data.json`**
+```json
+[
+  {
+    "instruction": "Identify and explain the two scientific theories in the given list: cell theory and heliocentric theory.",
+    "input": "",
+    "output": "Cell theory is a fundamental biological theory stating that all living organisms are composed of cells, the basic unit of life. Proposed by Schleiden, Schwann, and Virchow in 1839, it asserts that all organisms are made of one or more cells, and cells only arise from pre-existing cells through division.\n\nHeliocentric theory posits that the Sun is the center of the solar system, with planets orbiting around it. This theory overturned the geocentric view. Nicolaus Copernicus introduced it in the early 16th century in his work 'De revolutionibus orbium coelestium', laying the groundwork for modern astronomy."
+  },
+  {
+    "instruction": "Enter the names of three basketball teams and generate an appropriate slogan.",
+    "input": "Oklahoma City Thunder, Chicago Bulls, Brooklyn Nets",
+    "output": "\"Thunder, Bulls and Nets: each shows its prowess, battling for supremacy!\""
+  },
+  {
+    "instruction": "Compare the two famous figures below using a list of characteristics and provide the output in sentences.",
+    "input": "Person 1: Albert Einstein\nPerson 2: Stephen Hawking\nCharacteristics: intelligence, education, impact on the world",
+    "output": "Both Albert Einstein and Stephen Hawking possessed extraordinary intelligence. They achieved top educational accomplishments and profoundly advanced science. Einstein is renowned for relativity and the mass-energy equivalence E=mc², while Hawking is celebrated for his discoveries about black holes and cosmology. Their remarkable contributions have influenced the world deeply."
+  },
+  {
+    "instruction": "Please construct a question that needs to be answered based on the following article.",
+    "input": "",
+    "output": "I'm sorry, you haven't provided any article or information for me to construct a question. Please supply the corresponding article or information so that I can help you formulate a question."
+  }
+]
+```
+
+Point the environment variable to your file (or use the built-in test set):
+```bash
+export DATA_PATH=/your/dataset/path
+# use test set: export DATA_PATH=mtests/datasets/llm/sft_alpaca_zh_data.json
+```
+
+#### Checkpoint conversion  
+1. Download Hugging Face weights: [https://huggingface.co/Qwen/Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B)  
+2. Convert to Megatron-Core format:
+
+```bash
+cd $AIAK_TRAINING_PATH/examples/qwen3/checkpoint_convert
+
+# edit LOAD (HF path) and SAVE (MCore output path)
+vim convert_qwen3_8b_hf_to_mcore.sh
+
+bash convert_qwen3_8b_hf_to_mcore.sh
+
+export CHECKPOINT_PATH=/path/to/mcore/ckpt
+```
+
+#### Launch Qwen3-8B SFT  
+```bash
+bash examples/qwen3/finetuning/sft_qwen3_8b.sh
+```
 
 ### Quick Start for VLM Model Training
 Refer to the [Quick Start for VLM Model Training](docs/source/examples/quick_start_vlm_training.md) document for details.
 
 ### Quick Start for LLM Model Training
-Refer to the [Quick Start for LLM Model Training](xxxx.html) document for details.
+Refer to the [Quick Start for LLM Model Training](docs/source/examples/quick_start_llm_training.md) document for details.
 
 ### Quick Start for WAN Model Training
-Refer to the [Quick Start for WAN Model Training](xxxx.html) document for details.
+Refer to the [Quick Start for WAN Model Training](docs/source/examples/quick_start_wan_training.md) document for details.
+
+## References
+- [qianfan-vl](https://github.com/baidubce/Qianfan-VL) – is a general-purpose multimodal model enhanced for enterprise-level multimodal applications.   
+- [llava-ov-1.5](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5) – is a family of fully open-source large multimodal models (LMMs) that operate on native-resolution images, achieve state-of-the-art performance, and require comparatively lower training costs.
 
 ## Citation
 If you use this work, please consider citing:

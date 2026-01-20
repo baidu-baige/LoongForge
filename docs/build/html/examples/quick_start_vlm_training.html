@@ -38,14 +38,14 @@
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
     <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'examples/quick_start_vlm_training';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="quick start wan training" href="quick_start_wan_training.html" />
-    <link rel="prev" title="LLM Quick Start" href="llm_quickstart.html" />
+    <link rel="next" title="Quick Start: Wan Model Training" href="quick_start_wan_training.html" />
+    <link rel="prev" title="Quick Start: LLM Model Training" href="quick_start_llm_training.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -160,9 +160,9 @@
 </ul>
 </details></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Examples</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="llm_quickstart.html">LLM Quick Start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">Quick Start: VLM Model Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quick_start_wan_training.html">quick start wan training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../features/index.html">Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -396,7 +396,7 @@ pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </s
 You need to download them first and then convert to Megatron-Core format.</p>
 <section id="download-hf-checkpoint">
 <h3>2.1 Download HF checkpoint<a class="headerlink" href="#download-hf-checkpoint" title="Link to this heading">#</a></h3>
-<p>Take <strong>InternVL2.5-8B</strong> as an example—download it from Hugging Face.</p>
+<p>Take <strong>QwenVL2.5-7B</strong> as an example—download it from Hugging Face.</p>
 </section>
 <section id="convert-to-mcore">
 <h3>2.2 Convert to MCore<a class="headerlink" href="#convert-to-mcore" title="Link to this heading">#</a></h3>
@@ -435,7 +435,7 @@ bash<span class="w"> </span>convert_qwen2.5_vl_7b_mcore_to_hf.sh
 <h3>3.2 Convert to WebDataset<a class="headerlink" href="#convert-to-webdataset" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>Tool: <code class="docutils literal notranslate"><span class="pre">tools/data_preprocess/vlm/convert_to_webdataset.py</span></code></p></li>
-<li><p>See the <a class="reference internal" href="#./dataset_convert.md"><span class="xref myst">VLM data-preprocessing doc</span></a> for details.</p></li>
+<li><p>See the <a class="reference internal" href="../usage/vlm_dataset_conversion.html"><span class="std std-doc">VLM data-preprocessing doc</span></a> for details.</p></li>
 </ul>
 <p>After conversion the <code class="docutils literal notranslate"><span class="pre">output_dir</span></code> path is what you will assign to <code class="docutils literal notranslate"><span class="pre">DATA_PATH</span></code> in the training script.</p>
 </section>
@@ -500,12 +500,12 @@ bash<span class="w"> </span>sft_internvl2_5_8b.sh
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="llm_quickstart.html"
+       href="quick_start_llm_training.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">LLM Quick Start</p>
+        <p class="prev-next-title">Quick Start: LLM Model Training</p>
       </div>
     </a>
     <a class="right-next"
@@ -513,7 +513,7 @@ bash<span class="w"> </span>sft_internvl2_5_8b.sh
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quick start wan training</p>
+        <p class="prev-next-title">Quick Start: Wan Model Training</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

@@ -35,7 +35,7 @@ Training starts from open-source Hugging-Face checkpoints.
 You need to download them first and then convert to Megatron-Core format.
 
 ### 2.1 Download HF checkpoint
-Take **InternVL2.5-8B** as an example—download it from Hugging Face.
+Take **QwenVL2.5-7B** as an example—download it from Hugging Face.
 
 ### 2.2 Convert to MCore
 Use the conversion script inside `examples/`:
@@ -72,7 +72,7 @@ We recommend JSON with image paths and multi-turn conversations:
 
 ### 3.2 Convert to WebDataset
 * Tool: `tools/data_preprocess/vlm/convert_to_webdataset.py`  
-* See the [VLM data-preprocessing doc](./dataset_convert.md) for details.
+* See the [VLM data-preprocessing doc](../usage/vlm_dataset_conversion.md) for details.
 
 After conversion the `output_dir` path is what you will assign to `DATA_PATH` in the training script.
 

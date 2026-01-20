@@ -38,8 +38,8 @@
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
     <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'readme/README';</script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -160,9 +160,9 @@
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../examples/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../examples/llm_quickstart.html">LLM Quick Start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_wan_training.html">quick start wan training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../features/index.html">Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -334,9 +334,9 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick Start</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-qwen3">Quick Start for Qwen3</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#prepare-data">Prepare Data</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#prepare-the-dataset">Prepare the dataset</a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#checkpoint-conversion">Checkpoint conversion</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-qwen3-8b-sft">Quick Start Qwen3-8b sft</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-qwen3-8b-sft">Launch Qwen3-8B SFT</a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vlm-model-training">Quick Start for VLM Model Training</a></li>
@@ -344,6 +344,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-wan-model-training">Quick Start for WAN Model Training</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#citation">Citation</a></li>
 </ul>
             </nav>
@@ -358,20 +359,8 @@ document.write(`
                   
   <section class="tex2jax_ignore mathjax_ignore" id="aiak-training-omni-readme">
 <h1>AIAK-Training-Omni README<a class="headerlink" href="#aiak-training-omni-readme" title="Link to this heading">#</a></h1>
-<div align="center">
-  <img src="docs/source/images/Image_20260117_204343.jpg" width="450"/>
-  <div>&nbsp;</div>
-  <div align="center">
-    <b><font size="5">AIAK-Training-Omni: A High-Performance Multimodal Model Training Framework</font></b>
-    <sup>
-      <a href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master">
-        <i><font size="4">TRY IT NOW</font></i>
-      </a>
-    </sup>
-  </div>
-  <div>&nbsp;</div>
-</div>
-<p><a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/docs/build/html/index.html"><img alt="Documentation" src="https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat" /></a>
+<p><img alt="AIAK-Training-Omni Logo" src="../_images/Image_20260117_204343.jpg" />
+<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/docs/build/html/index.html"><img alt="Documentation" src="https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat" /></a>
 <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master"><img alt="arxive" src="https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&amp;logoColor=B31C1C" /></a>
 <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/LICENSE"><img alt="license" src="https://img.shields.io/github/license/open-mmlab/mmdeploy.svg" /></a>
 <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master"><img alt="stars" src="https://img.shields.io/github/stars/baidu-baige/AIAK-Training-Omni=social" /></a>
@@ -416,380 +405,380 @@ document.write(`
 <tr class="row-even"><td><p>LLM</p></td>
 <td><p>DeepSeek-V2</p></td>
 <td><p>deepseek_v2_group</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/c0d8946d8dd0aba6c4d5dbc7f34b5abb/pretrain_deepseek_v2_group.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/ee02cc0b1614f48756d71477a7450797/sft_deepseek_v2_group.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>deepseek_v2_lite_group</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/5bbed8bd00e926b7e3740d8f86207491/pretrain_deepseek_v2_lite_group.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/0d2654e64f6dee6861c2b4ed1447569c/sft_deepseek_v2_lite_group.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>DeepSeek-V3</p></td>
 <td><p>deepseek_v3_group_bf16</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/2e576c1f2edad8cc2ffbb28a9a8b8ca6/pretrain_deepseek_v3_group_bf16.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/c140d4fa819ae6baf3824ea5c408ee66/sft_deepseek_v3_group_bf16.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>deepseek_v3_group_fp8</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/5e2a0c976810b0428de4cea4d9d5dbb6/pretrain_deepseek_v3_group_fp8.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/0c7cb26755d5224ce81773b19652e262/sft_deepseek_v3_group_fp8.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Llama2</p></td>
 <td><p>llama2_7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama2/pretrain/pretrain_llama2_7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama2/finetuning/sft_llama2_7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/a2cf45fc1a1367a0881936f8a63f7ce9/pretrain_llama2_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/e0dd9de3d30e705e3ca4c5d3aabceb78/sft_llama2_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama2_13b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama2/pretrain/pretrain_llama2_13b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama2/finetuning/sft_llama2_13b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/a158fc4fdea731d98a158a9c91de0fad/pretrain_llama2_13b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/01aedc732fbb24aaf61c5964afc66075/sft_llama2_13b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama2_70b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama2/pretrain/pretrain_llama2_70b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama2/finetuning/sft_llama2_70b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/4fdea64debd72224765421ed0aeb501d/pretrain_llama2_70b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/4f05d61c30ee3276c7f92a2609c0bcd6/sft_llama2_70b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Llama3</p></td>
 <td><p>llama3_8b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3/pretrain/pretrain_llama3_8b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3/finetuning/sft_llama3_8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/6ff73656308754b29c9fa6b85ae9a70f/pretrain_llama3_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/3e78fef493d4b9963b746919c566c478/sft_llama3_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama3_70b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3/pretrain/pretrain_llama3_70b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3/finetuning/sft_llama3_70b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/2b070e6b3bed9383014f488f1ef0ba01/pretrain_llama3_70b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/dc0c68693dd0d265c4c2879dc5a65c51/sft_llama3_70b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Llama3.1</p></td>
 <td><p>llama3.1_8b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3.1/pretrain/pretrain_llama3.1_8b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3.1/finetuning/sft_llama3.1_8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/0f45d6d1c48911031beceb445c58fa8d/pretrain_llama3.1_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/b8441b8653cfbc79d790c54b23b8a104/sft_llama3.1_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama3.1_70b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3.1/pretrain/pretrain_llama3.1_70b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3.1/finetuning/sft_llama3.1_70b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/a136e8ce84a5b0f7a261f92bfe479d76/pretrain_llama3.1_70b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/03255626e76c7862bc9954ed4a1b2400/sft_llama3.1_70b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama3.1_405b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3.1/pretrain/pretrain_llama3.1_405b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llama3.1/finetuning/sft_llama3.1_405b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/903d7c9d703b1ea40fc8aafe493e2010/pretrain_llama3.1_405b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/07a1ef518f0f7a8cb2c900d687d6f8c3/sft_llama3.1_405b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen</p></td>
 <td><p>qwen_1.8b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/pretrain/pretrain_qwen_1.8b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/finetuning/sft_qwen_1.8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/991f80e8e94cd8e56c3c14f7a4925171/pretrain_qwen_1.8b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/8d15fa1bda086099b61c03b8938ae3f5/sft_qwen_1.8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen_7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/pretrain/pretrain_qwen_7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/finetuning/sft_qwen_7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/32d756699925a778d591ce0dbd63ee7c/pretrain_qwen_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/57da2cd3a9febbf75ac90179ebaca658/sft_qwen_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen_14b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/pretrain/pretrain_qwen_14b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/finetuning/sft_qwen_14b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/c822719d203d1115b5c5b15647c64a3b/pretrain_qwen_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/3af4376719ff850136f51553f5bb9be9/sft_qwen_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen_72b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/pretrain/pretrain_qwen_72b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen/finetuning/sft_qwen_72b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/1f5949fe729859432b22588444297c38/pretrain_qwen_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/8af6d64415dc5998cae6cf809c2a4187/sft_qwen_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen1.5</p></td>
 <td><p>qwen1.5_0.5b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_0.5b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_0.5b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/3d798f6ff3d1814a140b85e4ac4dee3c/pretrain_qwen1.5_0.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/462131de18a0978def374d184588af00/sft_qwen1.5_0.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_1.8b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_1.8b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_1.8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/bb0506c909841d7e5fc866c88e008d1b/pretrain_qwen1.5_1.8b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/9d699a52041b874f4cac492dd91a9372/sft_qwen1.5_1.8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_4b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_4b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_4b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/e2afd5448b3306d6d8a799471ab9689d/pretrain_qwen1.5_4b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/7ba18ebc3d343344e6b0e34aba3ae8a4/sft_qwen1.5_4b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/c0b9730d9ad1d407cd896d41251409c4/pretrain_qwen1.5_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f7dd8c4ea56b0fa9cce83ffb52e46d24/sft_qwen1.5_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_14b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_14b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_14b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/ab7df1180ab8989f04f662c57ce70ee8/pretrain_qwen1.5_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/94259e865158da4d13b52cdf00f547c7/sft_qwen1.5_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_32b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_32b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_32b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f1d46f39ed8936de863228d7fdf2bd84/pretrain_qwen1.5_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/d9800b429a1e6a58db122bb6d5ed3ec6/sft_qwen1.5_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_72b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/pretrain/pretrain_qwen1.5_72b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen1.5/finetuning/sft_qwen1.5_72b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f39e1c514db0cc84fe6c0afb004c9366/pretrain_qwen1.5_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/0efae2b12343452c5427ad80b7b6c590/sft_qwen1.5_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Qwen2</p></td>
 <td><p>qwen2_0.5b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/pretrain/pretrain_qwen2_0.5b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/finetuning/sft_qwen2_0.5b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/0efc92e6924adea49612ec4f916cda15/pretrain_qwen2_0.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/6aed49af697cda1bd8eec53dd2b4e195/sft_qwen2_0.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2_1.5b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/pretrain/pretrain_qwen2_1.5b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/finetuning/sft_qwen2_1.5b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/8882cf5a3905b81a357703cf6fe5e1b3/pretrain_qwen2_1.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/97dd86bd9221591d7ac4de59d9e09b6b/sft_qwen2_1.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2_7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/pretrain/pretrain_qwen2_7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/finetuning/sft_qwen2_7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/c0f2a04743393557e1b6d9482f3b0d2a/pretrain_qwen2_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/9c770685eef1f8240fb2f659fcf02ebd/sft_qwen2_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2_72b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/pretrain/pretrain_qwen2_72b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2/finetuning/sft_qwen2_72b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/883151d2e2365c002261a2dc7becdc97/pretrain_qwen2_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/b5e573831c300e7d6fbd3b621b35a75a/sft_qwen2_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Qwen2.5</p></td>
 <td><p>qwen2.5_0.5b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_0.5b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_0.5b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/e36c9e7857ee0b873a43dd2182927fbb/pretrain_qwen2.5_0.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/00aa7b0fbfb992a239d9a452ca8d7ca8/sft_qwen2.5_0.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_1.5b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_1.5b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_1.5b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/5b9c5529a9495c7a5078bedf437af7c1/pretrain_qwen2.5_1.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/900dffa0a381d69cb38ab24d8bb506cd/sft_qwen2.5_1.5b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_3b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_3b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/e96ce27891f94559e9aaa3b2437620fc/pretrain_qwen2.5_3b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/6ee80aea077e66ecae38f35fe6fb753b/sft_qwen2.5_3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f67670ae4a8d5429e67dd2aafb917447/pretrain_qwen2.5_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/3464038d3699c422bc3331d80b94c030/sft_qwen2.5_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_14b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_14b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_14b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/8cd1092cafb03ebf524bd5c9169af28a/pretrain_qwen2.5_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/80e41f0c8f957cbf0b620ede739842a6/sft_qwen2.5_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_32b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_32b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_32b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/3296961da04e8d6e132c580704352176/pretrain_qwen2.5_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/6f54fc3a11022f958b86b46c14389e06/sft_qwen2.5_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_72b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/pretrain/pretrain_qwen2.5_72b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5/finetuning/sft_qwen2.5_72b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f4c901f0de557f1ffec6796e75734836/pretrain_qwen2.5_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/458614143c9693daec897d0660340352/sft_qwen2.5_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen3</p></td>
 <td><p>qwen3_0.6b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_0.6b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_0.6b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/7458b9a88b0326de8a80941462051623/pretrain_qwen3_0.6b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/4b94bafc8a68d682ac0fce9652d38c53/sft_qwen3_0.6b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_1.7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_1.7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_1.7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/e9399fd7505b9f6b6697393212a1a1bd/pretrain_qwen3_1.7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/62aa4d6b76c733c724e09397f6625824/sft_qwen3_1.7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_4b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_4b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_4b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/19567c6943b101d10fa19c1e7f435cee/pretrain_qwen3_4b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f52728dd1f422984f3c4da88a5a21500/sft_qwen3_4b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_8b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_8b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f05ca22e530568e3fef5818084a83231/pretrain_qwen3_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/1d8c230843eaf8eb693cfc1581c76323/sft_qwen3_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_14b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_14b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_14b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/9c32953f9deee19c228418d707db8b8a/pretrain_qwen3_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/a99e19c2bf2a7fc12d0ac2c2fb9a4f91/sft_qwen3_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_32b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_32b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_32b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/400529b28479fd9804e075731f6ba560/pretrain_qwen3_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/db8b2d6029147f04cc0b630721fe35f1/sft_qwen3_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_30b_a3b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/7f7cf63d6b42eeb9c5d3c80ce77f05fd/pretrain_qwen3_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/49aaf8782b7a246ed8659f1bf2752d53/sft_qwen3_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_235b_a22b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_235b_a22b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_235b_a22b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/165d9ef13d0985267411dd9d128d8fae/pretrain_qwen3_235b_a22b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/455b781ac15bc37e04fcb03f38030889/sft_qwen3_235b_a22b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_480b_a35b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_480b_a35b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_480b_a35b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/bf9fd81b16ed73dae2b183bcd49a0ff2/pretrain_qwen3_480b_a35b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/d36dc4d0dd34c94badc3f2401004f890/sft_qwen3_480b_a35b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_coder_30b_a3b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/pretrain/pretrain_qwen3_coder_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3/finetuning/sft_qwen3_coder_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/08f517742c848f10b507c1ea8505b3a7/pretrain_qwen3_coder_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/c734d862a1e3a726c6b99682232da039/sft_qwen3_coder_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p>VLM</p></td>
 <td><p>Qwen2.5-VL</p></td>
 <td><p>qwen2.5_vl_3b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_3b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/sft/sft_qwen2_5_vl_3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/b866b474ddae9ea3b85f3a0610d6c312/pretrain_qwen2_5_vl_3b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/9cee86fd432e08919bbe4ad0817e29ad/sft_qwen2_5_vl_3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_vl_7b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_7b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/sft/sft_qwen2_5_vl_7b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/dc65d48f835496c8efad94e9f61138f1/pretrain_qwen2_5_vl_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/b169acaa7f94cfbc849ab527f78a4552/sft_qwen2_5_vl_7b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_vl_32b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_32b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/sft/sft_qwen2_5_vl_32b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/37f8c9a549c3e275d2fb0e006de71c13/pretrain_qwen2_5_vl_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/718c4338a030d686253e111116d56ba2/sft_qwen2_5_vl_32b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_vl_72b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_72b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen2.5_vl/sft/sft_qwen2_5_vl_72b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/73656f44bd83e356e5a73664c6144a6c/pretrain_qwen2_5_vl_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/b121c7344ff0c84bcf473fd79b97e5e1/sft_qwen2_5_vl_72b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen3-VL</p></td>
 <td><p>qwen3_vl_30b_a3b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3_vl/sft/sft_qwen3_vl_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/58e7aa47b082f46b9d4c94295681699d/pretrain_qwen3_vl_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/7c8c126b16836ab1c09f09fb5ddc6086/sft_qwen3_vl_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_vl_235b_a22b</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3_vl/pretrain/pretrain_qwen3_vl_235b_a22b.sh"><span class="xref myst">example</span></a>)</p></td>
-<td><p>✅(<a class="reference internal" href="#examples/qwen3_vl/sft/sft_qwen3_vl_235b_a22b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/363e58ee0628758e1f30cfcc30dc5ec9/pretrain_qwen3_vl_235b_a22b.sh"><span class="xref download myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/7a81e8daf830a4f464c8efc58a836c99/sft_qwen3_vl_235b_a22b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>LLava-OV-1.5</p></td>
 <td><p>llava_ov_4b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_4b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/347c1c736fce53fb8ae88a6786714d1c/stage_1_alignment_llava_ov_4b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>llava_ov_30b_a3b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/2d6a7cb289b601821968a9875bee1ff6/stage_1_alignment_llava_ov_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>InternVL-2.5</p></td>
 <td><p>internvl2.5_8b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl2.5/sft_internvl2_5_8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/45304ee2c8d307ebf48f8ebb40d5e8c2/sft_internvl2_5_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl2.5_26b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl2.5/sft_internvl2_5_26b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/037f6c09f7b458fec09e65d814dd8fb6/sft_internvl2_5_26b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl2.5_38b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl2.5/sft_internvl2_5_38b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/53b22023925b4873cd4cb7c1559c723a/sft_internvl2_5_38b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl2.5_78b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl2.5/sft_internvl2_5_78b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/941b556e7db1f9a004f6f92ca4fceea9/sft_internvl2_5_78b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>InternVL-3.5</p></td>
 <td><p>internvl3.5_8b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl3.5/finetuning/sft_internvl3_5_8b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/57547753982fae025630de457cafea4a/sft_internvl3_5_8b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_14b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl3.5/finetuning/sft_internvl3_5_14b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/b7f03edbb2a969c4e6af21ad6fd94ae7/sft_internvl3_5_14b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_38b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl3.5/finetuning/sft_internvl3_5_38b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/e00af76629628596105e5739323aebbd/sft_internvl3_5_38b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_30b_a3b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl3.5/finetuning/sft_internvl3_5_30b_a3b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/7ebdf5eb6747c163a4590102261da32f/sft_internvl3_5_30b_a3b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_241b_a28b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/f776d0ae9c0c98460bff54a374f8637d/sft_internvl3_5_241b_a28b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p>Wan</p></td>
 <td><p>Wan2.1</p></td>
 <td><p>wan2.1_i2v_14b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/wan/pretrain_wan2.1_i2v_14b_480p.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/92af46c75502e532c912c4a3a1dfef3f/pretrain_wan2.1_i2v_14b_480p.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Wan2.2</p></td>
 <td><p>wan2.2_i2v_a14b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference internal" href="#examples/wan/pretrain_wan2.2_i2v_a14b.sh"><span class="xref myst">example</span></a>)</p></td>
+<td><p>✅(<a class="reference download internal" download="" href="../_downloads/161f617f3e6725c1d58213a85e68d105/pretrain_wan2.2_i2v_a14b.sh"><span class="xref download myst">example</span></a>)</p></td>
 </tr>
 </tbody>
 </table>
@@ -801,15 +790,65 @@ document.write(`
 <h3>Quick Start for Qwen3<a class="headerlink" href="#quick-start-for-qwen3" title="Link to this heading">#</a></h3>
 <section id="installation">
 <h4>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h4>
+<p><em>(content to be added)</em></p>
 </section>
-<section id="prepare-data">
-<h4>Prepare Data<a class="headerlink" href="#prepare-data" title="Link to this heading">#</a></h4>
+<section id="prepare-the-dataset">
+<h4>Prepare the dataset<a class="headerlink" href="#prepare-the-dataset" title="Link to this heading">#</a></h4>
+<p>Convert your corpus into JSON format.<br />
+Each sample should contain three fields: <code class="docutils literal notranslate"><span class="pre">instruction</span></code>, <code class="docutils literal notranslate"><span class="pre">input</span></code>, and <code class="docutils literal notranslate"><span class="pre">output</span></code>.</p>
+<p><strong>Example file: <code class="docutils literal notranslate"><span class="pre">sft_alpaca_zh_data.json</span></code></strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;instruction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Identify and explain the two scientific theories in the given list: cell theory and heliocentric theory.&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;input&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Cell theory is a fundamental biological theory stating that all living organisms are composed of cells, the basic unit of life. Proposed by Schleiden, Schwann, and Virchow in 1839, it asserts that all organisms are made of one or more cells, and cells only arise from pre-existing cells through division.\n\nHeliocentric theory posits that the Sun is the center of the solar system, with planets orbiting around it. This theory overturned the geocentric view. Nicolaus Copernicus introduced it in the early 16th century in his work &#39;De revolutionibus orbium coelestium&#39;, laying the groundwork for modern astronomy.&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;instruction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Enter the names of three basketball teams and generate an appropriate slogan.&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;input&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Oklahoma City Thunder, Chicago Bulls, Brooklyn Nets&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;\&quot;Thunder, Bulls and Nets: each shows its prowess, battling for supremacy!\&quot;&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;instruction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Compare the two famous figures below using a list of characteristics and provide the output in sentences.&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;input&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Person 1: Albert Einstein\nPerson 2: Stephen Hawking\nCharacteristics: intelligence, education, impact on the world&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Both Albert Einstein and Stephen Hawking possessed extraordinary intelligence. They achieved top educational accomplishments and profoundly advanced science. Einstein is renowned for relativity and the mass-energy equivalence E=mc², while Hawking is celebrated for his discoveries about black holes and cosmology. Their remarkable contributions have influenced the world deeply.&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;instruction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Please construct a question that needs to be answered based on the following article.&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;input&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;I&#39;m sorry, you haven&#39;t provided any article or information for me to construct a question. Please supply the corresponding article or information so that I can help you formulate a question.&quot;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>Point the environment variable to your file (or use the built-in test set):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">DATA_PATH</span><span class="o">=</span>/your/dataset/path
+<span class="c1"># use test set: export DATA_PATH=mtests/datasets/llm/sft_alpaca_zh_data.json</span>
+</pre></div>
+</div>
 </section>
 <section id="checkpoint-conversion">
 <h4>Checkpoint conversion<a class="headerlink" href="#checkpoint-conversion" title="Link to this heading">#</a></h4>
+<ol class="arabic simple">
+<li><p>Download Hugging Face weights: <a class="reference external" href="https://huggingface.co/Qwen/Qwen3-8B">https://huggingface.co/Qwen/Qwen3-8B</a></p></li>
+<li><p>Convert to Megatron-Core format:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span><span class="nv">$AIAK_TRAINING_PATH</span>/examples/qwen3/checkpoint_convert
+
+<span class="c1"># edit LOAD (HF path) and SAVE (MCore output path)</span>
+vim<span class="w"> </span>convert_qwen3_8b_hf_to_mcore.sh
+
+bash<span class="w"> </span>convert_qwen3_8b_hf_to_mcore.sh
+
+<span class="nb">export</span><span class="w"> </span><span class="nv">CHECKPOINT_PATH</span><span class="o">=</span>/path/to/mcore/ckpt
+</pre></div>
+</div>
 </section>
-<section id="quick-start-qwen3-8b-sft">
-<h4>Quick Start Qwen3-8b sft<a class="headerlink" href="#quick-start-qwen3-8b-sft" title="Link to this heading">#</a></h4>
+<section id="launch-qwen3-8b-sft">
+<h4>Launch Qwen3-8B SFT<a class="headerlink" href="#launch-qwen3-8b-sft" title="Link to this heading">#</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>examples/qwen3/finetuning/sft_qwen3_8b.sh
+</pre></div>
+</div>
 </section>
 </section>
 <section id="quick-start-for-vlm-model-training">
@@ -818,12 +857,19 @@ document.write(`
 </section>
 <section id="quick-start-for-llm-model-training">
 <h3>Quick Start for LLM Model Training<a class="headerlink" href="#quick-start-for-llm-model-training" title="Link to this heading">#</a></h3>
-<p>Refer to the <a class="reference internal" href="#xxxx.html"><span class="xref myst">Quick Start for LLM Model Training</span></a> document for details.</p>
+<p>Refer to the <a class="reference internal" href="#docs/source/examples/quick_start_llm_training.md"><span class="xref myst">Quick Start for LLM Model Training</span></a> document for details.</p>
 </section>
 <section id="quick-start-for-wan-model-training">
 <h3>Quick Start for WAN Model Training<a class="headerlink" href="#quick-start-for-wan-model-training" title="Link to this heading">#</a></h3>
-<p>Refer to the <a class="reference internal" href="#xxxx.html"><span class="xref myst">Quick Start for WAN Model Training</span></a> document for details.</p>
+<p>Refer to the <a class="reference internal" href="#docs/source/examples/quick_start_wan_training.md"><span class="xref myst">Quick Start for WAN Model Training</span></a> document for details.</p>
 </section>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/baidubce/Qianfan-VL">qianfan-vl</a> – is a general-purpose multimodal model enhanced for enterprise-level multimodal applications.</p></li>
+<li><p><a class="reference external" href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5">llava-ov-1.5</a> – is a family of fully open-source large multimodal models (LMMs) that operate on native-resolution images, achieve state-of-the-art performance, and require comparatively lower training costs.</p></li>
+</ul>
 </section>
 <section id="citation">
 <h2>Citation<a class="headerlink" href="#citation" title="Link to this heading">#</a></h2>
@@ -894,9 +940,9 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick Start</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-qwen3">Quick Start for Qwen3</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#prepare-data">Prepare Data</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#prepare-the-dataset">Prepare the dataset</a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#checkpoint-conversion">Checkpoint conversion</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-qwen3-8b-sft">Quick Start Qwen3-8b sft</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-qwen3-8b-sft">Launch Qwen3-8B SFT</a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vlm-model-training">Quick Start for VLM Model Training</a></li>
@@ -904,6 +950,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-wan-model-training">Quick Start for WAN Model Training</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#citation">Citation</a></li>
 </ul>
   </nav></div>

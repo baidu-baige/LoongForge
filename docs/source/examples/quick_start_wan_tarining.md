@@ -1,1 +1,0 @@
-# quick start wan training
