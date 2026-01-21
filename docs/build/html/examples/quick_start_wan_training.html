@@ -345,9 +345,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1. Data Pre-processing</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">2. Checkpoint Conversion (HF → Megatron)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#training-launch">3. Training Launch</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. Checkpoint Export (Megatron → HF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. Checkpoint Export (Megatron → HF)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. Argument Reference</a></li>
 </ul>
 </li>
@@ -603,14 +601,14 @@ torchrun<span class="w"> </span>--nproc_per_node<span class="w"> </span><span cl
 <p><strong>Parallel tuning</strong>:<br />
 Long sequences → attention dominates. Use higher CP (<code class="docutils literal notranslate"><span class="pre">--context-parallel-ulysses-degree</span></code>) to speed up.</p>
 </section>
-</section>
 <hr class="docutils" />
 <section id="id4">
-<h2>4. Checkpoint Export (Megatron → HF)<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<h3>4. Checkpoint Export (Megatron → HF)<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>examples/wan/convert_wan2.1.sh<span class="w"> </span>mcore2hg
 </pre></div>
 </div>
 <p>Same parameter meanings as <code class="docutils literal notranslate"><span class="pre">hg2mcore</span></code>; <code class="docutils literal notranslate"><span class="pre">--num_layers</span> <span class="pre">40</span></code> required.</p>
+</section>
 <hr class="docutils" />
 <section id="id5">
 <h3>5. Argument Reference<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
@@ -687,9 +685,7 @@ Extra Wan2.1 flags:</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1. Data Pre-processing</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">2. Checkpoint Conversion (HF → Megatron)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#training-launch">3. Training Launch</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. Checkpoint Export (Megatron → HF)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">4. Checkpoint Export (Megatron → HF)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">5. Argument Reference</a></li>
 </ul>
 </li>

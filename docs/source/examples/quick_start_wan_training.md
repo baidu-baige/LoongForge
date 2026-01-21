@@ -232,7 +232,7 @@ Long sequences → attention dominates. Use higher CP (`--context-parallel-ulyss
 
 ---
 
-## 4. Checkpoint Export (Megatron → HF)
+### 4. Checkpoint Export (Megatron → HF)
 
 ```bash
 bash examples/wan/convert_wan2.1.sh mcore2hg
