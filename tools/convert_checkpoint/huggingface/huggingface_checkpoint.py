@@ -36,9 +36,9 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
     name_map = c_config.get("name_map")["huggingface"]
     cargs = c_config.get_args("common")
     hargs = c_config.get_args("huggingface")
-    num_nextn_predict_layers = hargs.get("num_nextn_predict_layers", 0)
+    mtp_num_layers = hargs.get("mtp_num_layers", 0)
     ori_num_layers = cargs["num_layers"]
-    num_layers = ori_num_layers + num_nextn_predict_layers
+    num_layers = ori_num_layers + mtp_num_layers
 
     filenames_in_the_layer = set()
     if 0 in layer_ids or num_layers - 1 in layer_ids:

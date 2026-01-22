@@ -114,7 +114,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
 
-        num_nextn_predict_layers = hargs.get("num_nextn_predict_layers", 0)
+        mtp_num_layers = hargs.get("mtp_num_layers", 0)
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers
@@ -123,7 +123,7 @@ class McoreCheckpoint(AbstractCheckpoint):
             assert self.args.num_virtual_stages_per_pipeline_rank is not None, "num_virtual_stages_per_pipeline_rank is required"
 
         num_layers_in_vp = get_num_layers_in_vp_map(
-            stage, num_layers, self.pp, num_nextn_predict_layers=num_nextn_predict_layers,
+            stage, num_layers, self.pp, mtp_num_layers=mtp_num_layers,
             custom_pipeline_layers=custom_pipeline_layers,
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)
@@ -338,7 +338,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
 
-        num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
+        mtp_num_layers = cargs.get("mtp_num_layers", 0)
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers
@@ -349,7 +349,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         c_ckpt = CommonCheckpoint(self.c_config)
 
         num_layers_in_vp = get_num_layers_in_vp_map(
-            stage, num_layers, self.pp, num_nextn_predict_layers=num_nextn_predict_layers,
+            stage, num_layers, self.pp, mtp_num_layers=mtp_num_layers,
             custom_pipeline_layers=custom_pipeline_layers,
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)

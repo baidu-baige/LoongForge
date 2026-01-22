@@ -38,5 +38,5 @@ class DeepseekConfig(BaseModelMLAConfig):
     apply_rope_fusion: bool = True
     multi_latent_attention: bool = True
     # MTP hyperparameters
-    num_nextn_predict_layers: int = 0
+    mtp_num_layers: int = 0
     mtp_loss_coef: float = 0.1
