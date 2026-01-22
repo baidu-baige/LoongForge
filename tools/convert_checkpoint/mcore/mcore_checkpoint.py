@@ -114,7 +114,6 @@ class McoreCheckpoint(AbstractCheckpoint):
 
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
-        mtp_has_word_embeddings = cargs.get("mtp_has_word_embeddings", False)
 
         num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
         num_layers = cargs["num_layers"]
@@ -201,8 +200,6 @@ class McoreCheckpoint(AbstractCheckpoint):
                             if c_name == MTP_SHARED_HEAD_HEAD:
                                 continue
                             self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix, ep_id=ep_id)
-                        if mtp_has_word_embeddings:
-                            self.m_base.common_to_mcore(WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
 
                     # final pp
                     if layer_id == num_layers - 1:

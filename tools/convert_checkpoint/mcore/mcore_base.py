@@ -55,7 +55,8 @@ TENSOR_PARALLEL_DIM = {
     "moe.expert_4h_to_h.weight": 1,
     "word_embeddings_for_head.weight": 0,
     "mtp_word_embeddings.weight": 0,
-    "mtp_shared_head_head.weight": 0
+    "mtp_shared_head_head.weight": 0,
+    "mtp_eh_proj.weight": 0
 }
 
 
@@ -98,6 +99,7 @@ class McoreBase:
 
         num_experts = self.cargs.get("num_experts", None)
         self.dtype = c_config.get_dtype()
+        self.aiak_version = self.cargs.get("aiak_version", 0)
 
         self.expert_local_mapping, _, _ = get_ep_map(num_experts, self.ep)
         self.etp_to_tp_mapping, _ = get_etp_map(self.tp, self.ep, self.etp)
@@ -129,6 +131,8 @@ class McoreBase:
             return
         if name == WORD_EMBEDDINGS_FOR_HEAD and (not self.untie_embeddings_and_output_weights and self.pp == 1):
             return
+        if name == MTP_WORD_EMBEDDING and self.aiak_version > 0.14:
+            layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
@@ -155,7 +159,9 @@ class McoreBase:
             mcore_bias_path = f"{mcore_path}.{BIAS}"
         bias_name = f"{name}.{BIAS}"
         if bias_name in self.name_map:
-            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[bias_name]}"
+            mcore_bias_name = self.name_map[bias_name]
+            m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
+            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}"
         has_extra_path = f"{mcore_path}.{EXTRA_DATA}"
 
         weight, bias, weight_scale = c_ckpt.get(common_key)
@@ -275,6 +281,8 @@ class McoreBase:
         #   etp is not None: ep_id->et->dict
         if name not in self.name_map:
             return
+        if name == MTP_WORD_EMBEDDING and self.aiak_version > 0.14:
+            layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if name == WORD_EMBEDDINGS_FOR_HEAD and not self.untie_embeddings_and_output_weights and self.pp == 1:
             name = WORD_EMBEDDINGS
@@ -316,7 +324,9 @@ class McoreBase:
             mcore_bias_path = f"{mcore_path}.{BIAS}"
         bias_name = f"{name}.{BIAS}"
         if bias_name in self.name_map:
-            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{self.name_map[bias_name]}"
+            mcore_bias_name = self.name_map[bias_name]
+            m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
+            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}"
 
         weight_list, bias_list, weight_scale_list = self.get_mcore_weight_list(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path)
