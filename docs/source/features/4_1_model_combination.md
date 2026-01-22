@@ -1,4 +1,4 @@
-# 4.1 model_combination.md
+# 4.1 Model Combination.md
 
 One of the core features of the AIAK-Training-Omni framework is its native support for **flexible model combination**. This feature allows users to freely combine visual/audio encoders (Encoder), modality alignment projection layers (Projector), and language model bases (Foundation) through configuration files (YAML), thereby quickly building customized multimodal large models. Based on this framework, users only need to modify the model configuration YAML files in the `../configs/models` directory to restructure and switch the model architecture.
 

@@ -44,8 +44,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/4_2_offline_data_packing';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Data Parallel Balancing" href="data_parallel_balancing.html" />
-    <link rel="prev" title="4.1 model_combination.md" href="4_1_model_combination.html" />
+    <link rel="next" title="4.3 Data Parallel Balancing" href="4_3_data_parallel_balancing.html" />
+    <link rel="prev" title="4.1 Model Combination.md" href="4_1_model_combination.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -151,34 +151,36 @@
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="../readme/README.html">AIAK-Training-Omni README</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../usage/index.html">Usage</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../usage/vlm_dataset_conversion.html">Dataset Conversion for VLM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Checkpoint Conversion</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../usage/installation.html">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../usage/configuration_parameters.html">Configuration &amp; Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../readme/README.html">AIAK-Training-Omni Introduction</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../quick_start/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../usage/index.html">Usage</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_1_installation.html">2.1 Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_2_checkpoint_conversion.html">2.2 Model Checkpoint Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_3_dataset_conversion.html">2.3 Dataset Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_4_start_training.html">2.4 start_training</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Features</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="4_1_model_combination.html">4.1 model_combination.md</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_1_model_combination.html">4.1 Model Combination.md</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">4.2 Data Offline Packing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_3_data_parallel_balancing.html">4.3 Data Parallel Balancing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_4_heterogeneous_tp_parallel.html">4.4 Heterogeneous TP Parallel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_5_fp8_training.html">4.5 FP8 Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_6_moe_all2all_overlap.html">4.6 MOE All2All Overlap</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../advance/index.html">Advance</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../advance/new_data_format_support.html">New Data Format Support</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_model.html">5.2 support_new_model.md</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/5_1_support_new_model.html">5.1 Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/5_2_new_data_format_support.html">5.2 New Data Format Support</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Welcome to contributr to AIAK-Training-Omni</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
 </ul>
 
     </div>
@@ -521,15 +523,15 @@ bash<span class="w"> </span>scripts/pack_wds.sh
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">4.1 model_combination.md</p>
+        <p class="prev-next-title">4.1 Model Combination.md</p>
       </div>
     </a>
     <a class="right-next"
-       href="data_parallel_balancing.html"
+       href="4_3_data_parallel_balancing.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Data Parallel Balancing</p>
+        <p class="prev-next-title">4.3 Data Parallel Balancing</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

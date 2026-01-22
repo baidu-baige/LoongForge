@@ -11,8 +11,10 @@ AIAK-Omni Documentation
    :caption: Contents
 
    readme/index
+   quick_start/index
    usage/index
-   examples/index
    features/index
    advance/index
+   CONTRIBUTING
+   faqs
 

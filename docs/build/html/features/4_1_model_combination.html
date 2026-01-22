@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>4.1 model_combination.md &#8212; AIAK-Training-Omni  documentation</title>
+    <title>4.1 Model Combination.md &#8212; AIAK-Training-Omni  documentation</title>
   
   
   
@@ -151,34 +151,36 @@
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="../readme/README.html">AIAK-Training-Omni README</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../usage/index.html">Usage</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../usage/vlm_dataset_conversion.html">Dataset Conversion for VLM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Checkpoint Conversion</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../usage/installation.html">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../usage/configuration_parameters.html">Configuration &amp; Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../readme/README.html">AIAK-Training-Omni Introduction</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../quick_start/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../usage/index.html">Usage</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_1_installation.html">2.1 Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_2_checkpoint_conversion.html">2.2 Model Checkpoint Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_3_dataset_conversion.html">2.3 Dataset Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/2_4_start_training.html">2.4 start_training</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Features</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">4.1 model_combination.md</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">4.1 Model Combination.md</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_2_offline_data_packing.html">4.2 Data Offline Packing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_3_data_parallel_balancing.html">4.3 Data Parallel Balancing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_4_heterogeneous_tp_parallel.html">4.4 Heterogeneous TP Parallel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_5_fp8_training.html">4.5 FP8 Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_6_moe_all2all_overlap.html">4.6 MOE All2All Overlap</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../advance/index.html">Advance</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../advance/new_data_format_support.html">New Data Format Support</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_model.html">5.2 support_new_model.md</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/5_1_support_new_model.html">5.1 Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/5_2_new_data_format_support.html">5.2 New Data Format Support</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Welcome to contributr to AIAK-Training-Omni</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
 </ul>
 
     </div>
@@ -317,7 +319,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>4.1 model_combination.md</h1>
+    <h1>4.1 Model Combination.md</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -346,7 +348,7 @@ document.write(`
                 <article class="bd-article">
                   
   <section class="tex2jax_ignore mathjax_ignore" id="model-combination-md">
-<h1>4.1 model_combination.md<a class="headerlink" href="#model-combination-md" title="Link to this heading">#</a></h1>
+<h1>4.1 Model <a class="reference external" href="http://Combination.md">Combination.md</a><a class="headerlink" href="#model-combination-md" title="Link to this heading">#</a></h1>
 <p>One of the core features of the AIAK-Training-Omni framework is its native support for <strong>flexible model combination</strong>. This feature allows users to freely combine visual/audio encoders (Encoder), modality alignment projection layers (Projector), and language model bases (Foundation) through configuration files (YAML), thereby quickly building customized multimodal large models. Based on this framework, users only need to modify the model configuration YAML files in the <code class="docutils literal notranslate"><span class="pre">../configs/models</span></code> directory to restructure and switch the model architecture.</p>
 <p>For example, different visual encoders (such as <strong>Qwen2.5-ViT, Qwen3-ViT, LLaVA-OV-1.5-ViT, InternViT</strong>, etc.) can be flexibly concatenated with different large language model bases (such as <strong>LLaMA series, DeepSeek series, Qwen series</strong>, etc.). This <strong>configuration-driven model assembly approach</strong> significantly reduces the cost of exploring and customizing multimodal model architectures, allowing users to build models without modifying any code, achieving <strong>zero-code</strong> model combination.</p>
 <section id="core-components">

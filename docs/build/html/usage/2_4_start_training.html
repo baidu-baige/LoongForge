@@ -1,0 +1,1252 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>2.4 start_training &#8212; AIAK-Training-Omni  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=0d572974" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'usage/2_4_start_training';</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Features" href="../features/index.html" />
+    <link rel="prev" title="2.3 Dataset Conversion" href="2_3_dataset_conversion.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">AIAK-Training-Omni  documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../readme/README.html">AIAK-Training-Omni Introduction</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../quick_start/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_llm_training.html">Quick Start: LLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quick_start/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Usage</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="2_1_installation.html">2.1 Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2_2_checkpoint_conversion.html">2.2 Model Checkpoint Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2_3_dataset_conversion.html">2.3 Dataset Conversion</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">2.4 start_training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../features/index.html">Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../features/4_1_model_combination.html">4.1 Model Combination.md</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../features/4_2_offline_data_packing.html">4.2 Data Offline Packing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../features/4_3_data_parallel_balancing.html">4.3 Data Parallel Balancing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../features/4_4_heterogeneous_tp_parallel.html">4.4 Heterogeneous TP Parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../features/4_5_fp8_training.html">4.5 FP8 Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../features/4_6_moe_all2all_overlap.html">4.6 MOE All2All Overlap</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../advance/index.html">Advance</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../advance/5_1_support_new_model.html">5.1 Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/5_2_new_data_format_support.html">5.2 New Data Format Support</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Welcome to contributr to AIAK-Training-Omni</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/usage/2_4_start_training.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>2.4 start_training</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#training-scripts">Training Scripts</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#parameter-management">Parameter Management</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#arguments">Arguments</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hydra-config">Hydra Config</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#customising-vlm-modules">Customising VLM Modules</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-training">Launch Training</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <p>Below is the full English Markdown translation of your “start_training” section.</p>
+<hr class="docutils" />
+<section class="tex2jax_ignore mathjax_ignore" id="start-training">
+<h1>2.4 start_training<a class="headerlink" href="#start-training" title="Link to this heading">#</a></h1>
+<section id="training-scripts">
+<h2>Training Scripts<a class="headerlink" href="#training-scripts" title="Link to this heading">#</a></h2>
+<p>The framework supports a wide range of LLM, VLM, VLA and Diffusion models and ships ready-to-use training scripts for every model–task combination.<br />
+Simply pick the script that matches your model and job type—see the matrix below.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>Model Type</strong></p></th>
+<th class="head"><p><strong>Model Category</strong></p></th>
+<th class="head"><p><strong>Model</strong></p></th>
+<th class="head"><p><strong>Pretrain</strong></p></th>
+<th class="head"><p><strong>SFT</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>LLM</p></td>
+<td><p>DeepSeek-V2</p></td>
+<td><p>deepseek_v2_group</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>deepseek_v2_lite_group</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>DeepSeek-V3</p></td>
+<td><p>deepseek_v3_group_bf16</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>deepseek_v3_group_fp8</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Llama2</p></td>
+<td><p>llama2_7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>llama2_13b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_13b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_13b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>llama2_70b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_70b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Llama3</p></td>
+<td><p>llama3_8b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/pretrain/pretrain_llama3_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/finetuning/sft_llama3_8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>llama3_70b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/pretrain/pretrain_llama3_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/finetuning/sft_llama3_70b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Llama3.1</p></td>
+<td><p>llama3.1_8b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>llama3.1_70b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_70b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>llama3.1_405b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_405b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_405b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen</p></td>
+<td><p>qwen_1.8b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_1.8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_1.8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen_7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen_14b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_14b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen_72b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_72b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen1.5</p></td>
+<td><p>qwen1.5_0.5b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_0.5b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen1.5_1.8b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_1.8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_1.8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen1.5_4b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_4b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen1.5_7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen1.5_14b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_14b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen1.5_32b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_32b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen1.5_72b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_72b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen2</p></td>
+<td><p>qwen2_0.5b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_0.5b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2_1.5b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_1.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_1.5b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2_7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2_72b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_72b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p>Qwen2.5</p></td>
+<td><p>qwen2.5_0.5b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_0.5b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_1.5b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_1.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_1.5b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_3b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_14b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_14b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_32b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_32b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_72b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_72b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3</p></td>
+<td><p>qwen3_0.6b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_0.6b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_0.6b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_1.7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_1.7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_1.7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_4b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_4b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_8b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_14b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_14b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_32b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_32b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_30b_a3b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_30b_a3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_235b_a22b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_235b_a22b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_235b_a22b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_480b_a35b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_480b_a35b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_480b_a35b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_coder_30b_a3b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_coder_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_coder_30b_a3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p>VLM</p></td>
+<td><p>Qwen2.5-VL</p></td>
+<td><p>qwen2.5_vl_3b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_vl_7b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_7b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_vl_32b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_32b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen2.5_vl_72b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_72b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Qwen3-VL</p></td>
+<td><p>qwen3_vl_30b_a3b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_30b_a3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>qwen3_vl_235b_a22b</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_235b_a22b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_235b_a22b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>LLava-OV-1.5</p></td>
+<td><p>llava_ov_4b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_4b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>llava_ov_30b_a3b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_30b_a3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>InternVL-2.5</p></td>
+<td><p>internvl2.5_8b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl2.5_26b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_26b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl2.5_38b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_38b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl2.5_78b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_78b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>InternVL-3.5</p></td>
+<td><p>internvl3.5_8b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_8b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl3.5_14b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_14b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl3.5_38b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_38b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl3.5_30b_a3b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_30b_a3b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p>internvl3.5_241b_a28b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh">example</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Wan</p></td>
+<td><p>Wan2.1</p></td>
+<td><p>wan2.1_i2v_14b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.1_i2v_14b_480p.sh">example</a>)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p>Wan2.2</p></td>
+<td><p>wan2.2_i2v_a14b</p></td>
+<td><p></p></td>
+<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.2_i2v_a14b.sh">example</a>)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Each model directory under <code class="docutils literal notranslate"><span class="pre">examples/</span></code> usually contains both training (pre-train / fine-tune) and checkpoint-conversion scripts—ready to use out-of-the-box.</p>
+</section>
+<hr class="docutils" />
+<section id="parameter-management">
+<h2>Parameter Management<a class="headerlink" href="#parameter-management" title="Link to this heading">#</a></h2>
+<p>The framework combines Megatron-LM arguments with Hydra configs, keeping full CLI compatibility while enabling fine-grained module-level control for multimodal models.</p>
+<section id="arguments">
+<h3>Arguments<a class="headerlink" href="#arguments" title="Link to this heading">#</a></h3>
+<p>All native Megatron flags are supported:</p>
+<ul class="simple">
+<li><p><strong>Parallelism</strong>: <code class="docutils literal notranslate"><span class="pre">--tensor-model-parallel-size</span></code>, <code class="docutils literal notranslate"><span class="pre">--pipeline-model-parallel-size</span></code>, <code class="docutils literal notranslate"><span class="pre">--context-parallel-size</span></code>, etc.<br />
+Reference: <a class="reference external" href="https://github.com/NVIDIA/Megatron-LM/blob/main/docs/user-guide/parallelism-guide.md">NVIDIA Megatron parallelism guide</a></p></li>
+<li><p><strong>Training</strong>: <code class="docutils literal notranslate"><span class="pre">--lr</span></code>, <code class="docutils literal notranslate"><span class="pre">--data-path</span></code>, <code class="docutils literal notranslate"><span class="pre">--fp16</span></code>, optimizer settings, dataset paths, precision, etc.<br />
+Reference: <a class="reference external" href="https://github.com/NVIDIA/Megatron-LM/blob/main/docs/user-guide/training-examples.md">Megatron training examples</a></p></li>
+</ul>
+<p><strong>AIAK-Omni specific extras</strong>:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Category</p></th>
+<th class="head"><p>Argument</p></th>
+<th class="head"><p>Purpose</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>model_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--model-name</span></code></p></td>
+<td><p>Select model</p></td>
+<td><p>Family name (e.g. <em>llama2</em>) or exact arch (e.g. <em>llama2-7b</em>). Family → you must specify all hyper-params; arch → AIAK auto-fills them to match open-source checkpoints.</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--config-path</span></code></p></td>
+<td><p>Model config file</p></td>
+<td><p>Path to YAML/JSON config</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--specify-overwrite-model</span></code></p></td>
+<td><p>Override policy</p></td>
+<td><p>Controls whether external config overwrites built-in defaults. Default: <em>foundation_model</em></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--mtp-loss-coef</span></code></p></td>
+<td><p>DeepSeek-V3</p></td>
+<td><p>MTP auxiliary loss coefficient (float, default 0.1)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--enable-fa-within-mla</span></code></p></td>
+<td><p>MLA</p></td>
+<td><p>Deprecated; use <code class="docutils literal notranslate"><span class="pre">--attention-backend=flash</span></code> instead. When enabled, pads Q/K/V to allow FlashAttention inside MLA.</p></td>
+</tr>
+<tr class="row-odd"><td><p>tokenizer_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--tokenizer-type</span></code></p></td>
+<td><p>Tokenizer class</p></td>
+<td><p><em>NullTokenizer</em>, <em>HFTokenizer</em>; auto-inferred if empty</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--hf-tokenizer-path</span></code></p></td>
+<td><p>HF model id or local path</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--use-fast-tokenizer</span></code></p></td>
+<td><p>Speed-up</p></td>
+<td><p>Enable fast Rust tokenizer (default False)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--split-special-tokens</span></code></p></td>
+<td><p>Splitting rule</p></td>
+<td><p>Whether to split special tokens (default False)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--padding-side</span></code></p></td>
+<td><p>Pad direction</p></td>
+<td><p><em>left</em> or <em>right</em> (default right)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--additional-special-tokens</span></code></p></td>
+<td><p>User-defined specials</p></td>
+<td><p>Comma list, e.g. <code class="docutils literal notranslate"><span class="pre">[TOK1,TOK2]</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--vocab-size-in-config-file</span></code></p></td>
+<td><p>Vocab from HF config</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--padded-vocab-size</span></code></p></td>
+<td><p>Manually padded size</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>sft_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--chat-template</span></code></p></td>
+<td><p>Chat template</p></td>
+<td><p>Pick from <code class="docutils literal notranslate"><span class="pre">get_support_templates()</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-dataset-config</span></code></p></td>
+<td><p>Dataset config JSON</p></td>
+<td><p>Default: <code class="docutils literal notranslate"><span class="pre">configs/dataset_config.json</span></code>. <strong>Required for SFT</strong>; if omitted the framework still tries to load the default file.</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-dataset</span></code></p></td>
+<td><p>Unified dataset list</p></td>
+<td><p>Space-separated names matching <code class="docutils literal notranslate"><span class="pre">--data-path</span></code> order; mutually exclusive with separate <code class="docutils literal notranslate"><span class="pre">--sft-*-dataset</span></code> flags.</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-train-dataset</span></code></p></td>
+<td><p>Stand-alone train set</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-valid-dataset</span></code></p></td>
+<td><p>Stand-alone valid set</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-test-dataset</span></code></p></td>
+<td><p>Stand-alone test set</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-sort-batch</span></code></p></td>
+<td><p>Sort samples</p></td>
+<td><p>Ascending length sort after packing (default False)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-data-streaming</span></code></p></td>
+<td><p>Streaming loader</p></td>
+<td><p>Default False</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--streaming-buffer-size</span></code></p></td>
+<td><p>Buffer size</p></td>
+<td><p>Default 16384</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-data-mix-strategy</span></code></p></td>
+<td><p>Mixing policy</p></td>
+<td><p><em>concat</em>, <em>interleave_under</em>, <em>interleave_over</em> (default concat)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--sft-num-preprocess-workers</span></code></p></td>
+<td><p>CPU workers</p></td>
+<td><p>Used in non-streaming mode</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--train-on-prompt</span></code></p></td>
+<td><p>Loss on prompt</p></td>
+<td><p>Compute loss/grad on prompt tokens too (default False)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--history-mask-loss</span></code></p></td>
+<td><p>Last-turn only</p></td>
+<td><p>Mask loss to the final assistant response (default False)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--is-tokenized-data</span></code></p></td>
+<td><p>Pre-tokenized inputs</p></td>
+<td><p>Skip tokenization (default False)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--packing-sft-data</span></code></p></td>
+<td><p>Pack samples</p></td>
+<td><p>Fit multiple samples into one sequence (default False)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--enable-discard-sample</span></code></p></td>
+<td><p>Drop long samples</p></td>
+<td><p>Discard if &gt; <code class="docutils literal notranslate"><span class="pre">--seq-length</span></code> (default False)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--packing-batch-size</span></code></p></td>
+<td><p>Pack buffer</p></td>
+<td><p>Default 10 000</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--use-fixed-seq-lengths</span></code></p></td>
+<td><p>Fixed length</p></td>
+<td><p>Pad every sample to <code class="docutils literal notranslate"><span class="pre">--seq-length</span></code>. <strong>LLM only</strong>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>training_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--training-phase</span></code></p></td>
+<td><p>Stage</p></td>
+<td><p><em>pretrain</em> or <em>sft</em> (default pretrain)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--no-detail-log</span></code></p></td>
+<td><p>Verbose log</p></td>
+<td><p>Disable detail-log-interval (default True)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--detail-log-interval</span></code></p></td>
+<td><p>Log frequency</p></td>
+<td><p>Iterations between detailed logs (default 20)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--variable-seq-lengths</span></code></p></td>
+<td><p></p></td>
+<td><p>Deprecated</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--enable-ema</span></code></p></td>
+<td><p>EMA</p></td>
+<td><p>Enable exponential moving average</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--ema-decay</span></code></p></td>
+<td><p></p></td>
+<td><p>Decay factor (default 0.9999)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--save-ema</span></code></p></td>
+<td><p></p></td>
+<td><p>Directory to save EMA checkpoints</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--load-ema</span></code></p></td>
+<td><p></p></td>
+<td><p>Directory to load EMA checkpoints</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--ckpt-format</span></code></p></td>
+<td><p>Checkpoint format</p></td>
+<td><p><em>torch</em> or <em>torch_dist</em> (default torch)</p></td>
+</tr>
+<tr class="row-even"><td><p>multimodal_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--language-model-type</span></code></p></td>
+<td><p>MM config</p></td>
+<td><p>Language model family</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--trainable-modules</span></code></p></td>
+<td><p>Freeze policy</p></td>
+<td><p><em>all</em>, <em>language_model</em>, <em>adapter</em>, <em>vision_model</em>, … (default all)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--dataloader-save</span></code></p></td>
+<td><p>Energon state</p></td>
+<td><p>Path to save dataloader state</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--packing-pretrain-data</span></code></p></td>
+<td><p>Pack pretrain</p></td>
+<td><p>Enable packing for multimodal pre-training</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--add-question-in-pretrain</span></code></p></td>
+<td><p>Data aug</p></td>
+<td><p>Append question to VQASample</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--image-resolution</span></code></p></td>
+<td><p>Qwen2-VL</p></td>
+<td><p>Input image resolution</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--min-pixels</span></code></p></td>
+<td><p></p></td>
+<td><p>Min pixels, default 4×28×28</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--max-pixels</span></code></p></td>
+<td><p></p></td>
+<td><p>Max pixels, default 16384×28×28</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--frame-min-pixels</span></code></p></td>
+<td><p>Video</p></td>
+<td><p>Per-frame min, default 128×28×28</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--frame-max-pixels</span></code></p></td>
+<td><p></p></td>
+<td><p>Per-frame max, default 768×28×28</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--video-max-pixels</span></code></p></td>
+<td><p></p></td>
+<td><p>Whole-video max, default 65536×28×28</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--fps</span></code></p></td>
+<td><p></p></td>
+<td><p>Frames per second, default 2.0</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--fps-min-frames</span></code></p></td>
+<td><p></p></td>
+<td><p>Min frames, default 4</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--fps-max-frames</span></code></p></td>
+<td><p></p></td>
+<td><p>Max frames, default 768</p></td>
+</tr>
+<tr class="row-even"><td><p>parallel_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--context-parallel-ulysses-degree</span></code></p></td>
+<td><p>Ulysses CP</p></td>
+<td><p>Degree of Ulysses attention context parallelism (default 1)</p></td>
+</tr>
+<tr class="row-odd"><td><p>log_tensor_args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--enable-log-tensor</span></code></p></td>
+<td><p>LLM-inspector</p></td>
+<td><p>Enable tensor tracing</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--log-tensor-name-pattern</span></code></p></td>
+<td><p></p></td>
+<td><p>Module name regex (default None → all grad tensors)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--log-tensor-stage</span></code></p></td>
+<td><p></p></td>
+<td><p>Stage to trace: <em>init</em>, <em>forward</em>, <em>backward</em></p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--log-tensor-iter-pattern</span></code></p></td>
+<td><p></p></td>
+<td><p>Iterations to trace (default None)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--log-tensor-mbs-pattern</span></code></p></td>
+<td><p></p></td>
+<td><p>Micro-batch indices (default None)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--log-tensor-layer-pattern</span></code></p></td>
+<td><p></p></td>
+<td><p>Layer indices (default None)</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--log-tensor-rank</span></code></p></td>
+<td><p></p></td>
+<td><p>TP/PP rank to trace (default 0)</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--save-tensor</span></code></p></td>
+<td><p></p></td>
+<td><p>Dump tensors to disk</p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--save-tensor-dir</span></code></p></td>
+<td><p></p></td>
+<td><p>Output directory</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<hr class="docutils" />
+<section id="hydra-config">
+<h3>Hydra Config<a class="headerlink" href="#hydra-config" title="Link to this heading">#</a></h3>
+<p>Model-specific Hydra configs live in <code class="docutils literal notranslate"><span class="pre">configs/</span></code>.<br />
+Every model inherits from Megatron-Core’s <a class="reference external" href="https://github.com/NVIDIA/Megatron-LM/blob/bcdd405f1cc31904cce6434110d4724b3119e0a5/megatron/core/transformer/transformer_config.py#L34">TransformerConfig</a>, letting you override any submodule with fine-grained control.<br />
+Typical CLI usage:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>+model.image_encoder.freeze<span class="o">=</span>True
++model.foundation.recompute_num_layers<span class="o">=</span><span class="m">28</span>
+</pre></div>
+</div>
+<section id="customising-vlm-modules">
+<h4>Customising VLM Modules<a class="headerlink" href="#customising-vlm-modules" title="Link to this heading">#</a></h4>
+<p>The framework decomposes VLMs into:</p>
+<ul class="simple">
+<li><p><strong>image_encoder</strong> – vision transformer that extracts image features</p></li>
+<li><p><strong>image_projector</strong> – adapter mapping visual features to text embedding dim</p></li>
+<li><p><strong>foundation</strong> – the LLM backbone</p></li>
+</ul>
+<p>You can freeze or reconfigure each part independently:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># partial activation checkpointing</span>
++model.image_encoder.recompute_num_layers<span class="o">=</span><span class="m">10</span>
++model.foundation.recompute_num_layers<span class="o">=</span><span class="m">28</span>
+
+<span class="c1"># freeze vision components</span>
++model.image_encoder.freeze<span class="o">=</span>True
++model.image_projector.freeze<span class="o">=</span>True
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="launch-training">
+<h2>Launch Training<a class="headerlink" href="#launch-training" title="Link to this heading">#</a></h2>
+<p>Pick the script and run, e.g. pre-train Qwen3-VL-30B-A3B:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sh<span class="w"> </span>examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh
+</pre></div>
+</div>
+<p>The same pattern applies to all other models—just replace the script path.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="2_3_dataset_conversion.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">2.3 Dataset Conversion</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../features/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Features</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#training-scripts">Training Scripts</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#parameter-management">Parameter Management</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#arguments">Arguments</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#hydra-config">Hydra Config</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#customising-vlm-modules">Customising VLM Modules</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-training">Launch Training</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Baidu
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Baidu.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

@@ -6,7 +6,7 @@ Features
    
    4_1_model_combination
    4_2_offline_data_packing
-   data_parallel_balancing
-   heterogeneous_tp_parallel
+   4_3_data_parallel_balancing
+   4_4_heterogeneous_tp_parallel
    4_5_fp8_training
-   moe_all2all_overlap
+   4_6_moe_all2all_overlap
