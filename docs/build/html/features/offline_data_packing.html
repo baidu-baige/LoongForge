@@ -1,0 +1,633 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Data Offline Packing &#8212; AIAK-Training-Omni  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=0d572974" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/offline_data_packing';</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="VLA Training Tutorial" href="../vla_tutorial/index.html" />
+    <link rel="prev" title="Data Parallel Balancing" href="data_parallel_balancing.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">AIAK-Training-Omni  documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../get_started/index.html">Get Started</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/README.html">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/support_model.html">Support Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/benchmark.html">Performence Benchmark</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../llm_tutorial/index.html">LLM Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../llm_tutorial/quick_start_llm_pretrain_training.html">Quick Start: LLM Model Pretrain Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../llm_tutorial/quick_start_llm_sft_training.html">Quick Start: LLM Model SFT Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../llm_tutorial/features_index.html">Advanced Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="fp8_training.html">FP8 Training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../vlm_tutorial/index.html">VLM Training Tutorial</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../vlm_tutorial/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../vlm_tutorial/dataset_conversion.html">Dataset Conversion for VLM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
+<li class="toctree-l2 current active has-children"><a class="reference internal" href="../vlm_tutorial/features_index.html">Advanced Features</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="model_combination.html">Model Combination</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fp8_training.html">FP8 Training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
+<li class="toctree-l3 current active"><a class="current reference internal" href="#">Data Offline Packing</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../vla_tutorial/index.html">VLA Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../vla_tutorial/quick_start_vla_training.html">Quick Start: VLA Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../wan_tutorial/index.html">Diffusion Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/features/offline_data_packing.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Data Offline Packing</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-packing-scenarios-sample-sample-type">1. Supported Packing Scenarios (<code class="docutils literal notranslate"><span class="pre">sample.sample_type</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#input-data-requirements-data-wds-dir">2. Input Data Requirements (<code class="docutils literal notranslate"><span class="pre">data.wds_dir</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">3. Quick Start</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pipeline-step-by-step-explanation-aligned-with-pack-wds-sh">4. Pipeline Step-by-Step Explanation (aligned with <code class="docutils literal notranslate"><span class="pre">pack_wds.sh</span></code>)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-calculate-token-length-for-each-sample-get-sample-len-py">Step 1: Calculate Token Length for Each Sample (<code class="docutils literal notranslate"><span class="pre">get_sample_len.py</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-bucketing-by-length-and-packing-grouping-do-hashbacket-py">Step 2: Bucketing by Length and Packing Grouping (<code class="docutils literal notranslate"><span class="pre">do_hashbacket.py</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-generate-packed-intermediate-json-prepare-raw-samples-py">Step 3: Generate Packed Intermediate JSON (<code class="docutils literal notranslate"><span class="pre">prepare_raw_samples.py</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-write-packed-json-back-to-webdataset-packed-to-wds-py">Step 4: Write Packed JSON Back to WebDataset (<code class="docutils literal notranslate"><span class="pre">packed_to_wds.py</span></code>)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#configuration-explanation-config-yaml">5. Configuration Explanation (<code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#switching-models-adjusting-image-processing">6. Switching Models / Adjusting Image Processing</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="data-offline-packing">
+<h1>Data Offline Packing<a class="headerlink" href="#data-offline-packing" title="Link to this heading">#</a></h1>
+<p>This directory provides an “offline sequence packing” pipeline: it takes a data directory with <strong>sample-level</strong> data (each sample as a <code class="docutils literal notranslate"><span class="pre">json</span></code> file + media files) and groups/reorders them based on <code class="docutils literal notranslate"><span class="pre">max_token_len</span></code> to generate <strong>packed WebDataset</strong> (<code class="docutils literal notranslate"><span class="pre">pretrain-*.tar</span></code> + Energon metadata) to improve training throughput and reduce padding.</p>
+<p>The script entry point is <code class="docutils literal notranslate"><span class="pre">tools/data_preprocess/vlm/offline_packing/scripts/pack_wds.sh</span></code> (4 steps detailed below).</p>
+<section id="supported-packing-scenarios-sample-sample-type">
+<h2>1. Supported Packing Scenarios (<code class="docutils literal notranslate"><span class="pre">sample.sample_type</span></code>)<a class="headerlink" href="#supported-packing-scenarios-sample-sample-type" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Data Scenario</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">sample_type</span></code></p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Offline packed captioning</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">packed_captioning</span></code></p></td>
+<td><p>Output is <code class="docutils literal notranslate"><span class="pre">CrudeWebdataset</span></code>, parsed downstream by this <code class="docutils literal notranslate"><span class="pre">sample_type</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Offline packed single-image QA</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">packed_vqa</span></code></p></td>
+<td><p>Same as above</p></td>
+</tr>
+<tr class="row-even"><td><p>Offline packed mixed media (image/video) QA</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">packed_multi_mix_qa</span></code></p></td>
+<td><p>Same as above (requires input JSON to declare media types and file lists)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="input-data-requirements-data-wds-dir">
+<h2>2. Input Data Requirements (<code class="docutils literal notranslate"><span class="pre">data.wds_dir</span></code>)<a class="headerlink" href="#input-data-requirements-data-wds-dir" title="Link to this heading">#</a></h2>
+<p>The current implementation <strong>does not directly read tar shards</strong> but reads a “random-accessible sample file directory”:</p>
+<ul class="simple">
+<li><p>The directory contains many <code class="docutils literal notranslate"><span class="pre">*.json</span></code> files (each representing a sample/WDS entry’s json payload).</p></li>
+<li><p>The corresponding image/video files for the samples exist in the same directory (or the JSON provides a relative path resolvable to this directory).</p></li>
+</ul>
+<p>If your data is already in <code class="docutils literal notranslate"><span class="pre">pretrain-*.tar</span></code> generated by <code class="docutils literal notranslate"><span class="pre">convert_to_webdataset.py</span></code>, you need to unpack it into a directory before offline packing, for example:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>/path/to/wds_flat
+<span class="k">for</span><span class="w"> </span>t<span class="w"> </span><span class="k">in</span><span class="w"> </span>/path/to/wds/pretrain-*.tar<span class="p">;</span><span class="w"> </span><span class="k">do</span><span class="w"> </span>tar<span class="w"> </span>-xf<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$t</span><span class="s2">&quot;</span><span class="w"> </span>-C<span class="w"> </span>/path/to/wds_flat<span class="p">;</span><span class="w"> </span><span class="k">done</span>
+</pre></div>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">get_sample_len.py</span></code> reads the message list from the field specified by <code class="docutils literal notranslate"><span class="pre">data.template_text_key</span></code>; it also supports the common keys <code class="docutils literal notranslate"><span class="pre">messages</span></code> and <code class="docutils literal notranslate"><span class="pre">texts</span></code>.</p></li>
+<li><p>If your input JSON comes from <code class="docutils literal notranslate"><span class="pre">tools/data_preprocess/vlm/convert_to_webdataset.py</span></code> (where <code class="docutils literal notranslate"><span class="pre">multi_*</span></code> scenarios default to writing to the <code class="docutils literal notranslate"><span class="pre">texts</span></code> field), you typically need to set <code class="docutils literal notranslate"><span class="pre">data.template_text_key</span></code> to <code class="docutils literal notranslate"><span class="pre">texts</span></code>.</p></li>
+<li><p>For <code class="docutils literal notranslate"><span class="pre">packed_vqa</span></code> / <code class="docutils literal notranslate"><span class="pre">packed_captioning</span></code>: if there is no explicit <code class="docutils literal notranslate"><span class="pre">media_files/name</span></code> field in the JSON, it will attempt to infer the media file by matching the stem (e.g., <code class="docutils literal notranslate"><span class="pre">0001.json</span></code> corresponds to <code class="docutils literal notranslate"><span class="pre">0001.jpg</span></code>).</p></li>
+<li><p>For <code class="docutils literal notranslate"><span class="pre">packed_multi_mix_qa</span></code>: the JSON must declare <code class="docutils literal notranslate"><span class="pre">media</span></code>/<code class="docutils literal notranslate"><span class="pre">media_type</span></code> (<code class="docutils literal notranslate"><span class="pre">image</span></code> or <code class="docutils literal notranslate"><span class="pre">video</span></code>) and provide a <code class="docutils literal notranslate"><span class="pre">name</span></code>/<code class="docutils literal notranslate"><span class="pre">media_files</span></code> list (supports nested lists).</p></li>
+</ul>
+</section>
+<section id="quick-start">
+<h2>3. Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>tools/data_preprocess/vlm/offline_packing
+
+<span class="c1"># 1) Modify config.yaml (or refer to packed_vqa_demo.yaml)</span>
+<span class="c1"># 2) Execute the four-step pipeline (default reads config.yaml)</span>
+bash<span class="w"> </span>scripts/pack_wds.sh
+</pre></div>
+</div>
+<p>To switch to another configuration file:</p>
+<ul class="simple">
+<li><p>Method 1: Overwrite/copy the target configuration to <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>.</p></li>
+<li><p>Method 2: Manually execute each script and pass <code class="docutils literal notranslate"><span class="pre">--config</span> <span class="pre">your.yaml</span></code> (see the next section “Pipeline Step-by-Step Explanation”).</p></li>
+</ul>
+</section>
+<section id="pipeline-step-by-step-explanation-aligned-with-pack-wds-sh">
+<h2>4. Pipeline Step-by-Step Explanation (aligned with <code class="docutils literal notranslate"><span class="pre">pack_wds.sh</span></code>)<a class="headerlink" href="#pipeline-step-by-step-explanation-aligned-with-pack-wds-sh" title="Link to this heading">#</a></h2>
+<section id="step-1-calculate-token-length-for-each-sample-get-sample-len-py">
+<h3>Step 1: Calculate Token Length for Each Sample (<code class="docutils literal notranslate"><span class="pre">get_sample_len.py</span></code>)<a class="headerlink" href="#step-1-calculate-token-length-for-each-sample-get-sample-len-py" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Input</strong>: <code class="docutils literal notranslate"><span class="pre">*.json</span></code> + corresponding media files under <code class="docutils literal notranslate"><span class="pre">data.wds_dir</span></code>.</p></li>
+<li><p><strong>Processing</strong>: Based on <code class="docutils literal notranslate"><span class="pre">sample.sample_type</span></code> + <code class="docutils literal notranslate"><span class="pre">model.model_type</span></code>, select a template from <code class="docutils literal notranslate"><span class="pre">utils.TEMPLATES</span></code>, use <code class="docutils literal notranslate"><span class="pre">AutoProcessor</span></code> to tokenize text + visual inputs, and obtain the token length for each sample.</p></li>
+<li><p><strong>Output</strong>: <code class="docutils literal notranslate"><span class="pre">{data.wds_dir}/.temp/sample_len_report.txt</span></code> (formatted as <code class="docutils literal notranslate"><span class="pre">sample_id:</span> <span class="pre">token_len</span></code>).</p></li>
+</ul>
+<p>Manual execution:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>get_sample_len.py<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</pre></div>
+</div>
+</section>
+<section id="step-2-bucketing-by-length-and-packing-grouping-do-hashbacket-py">
+<h3>Step 2: Bucketing by Length and Packing Grouping (<code class="docutils literal notranslate"><span class="pre">do_hashbacket.py</span></code>)<a class="headerlink" href="#step-2-bucketing-by-length-and-packing-grouping-do-hashbacket-py" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Input</strong>: <code class="docutils literal notranslate"><span class="pre">sample_len_report.txt</span></code>.</p></li>
+<li><p><strong>Processing</strong>: Construct hash buckets and group/pack samples based on <code class="docutils literal notranslate"><span class="pre">sample.max_token_len</span></code> (heuristic packing).</p></li>
+<li><p><strong>Output</strong>: <code class="docutils literal notranslate"><span class="pre">{data.packed_json_dir}/bins_boxs.pkl</span></code> (each “box” contains a group of original sample IDs that will be packed into a single packed sample).</p></li>
+</ul>
+<p>Manual execution:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>do_hashbacket.py<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</pre></div>
+</div>
+</section>
+<section id="step-3-generate-packed-intermediate-json-prepare-raw-samples-py">
+<h3>Step 3: Generate Packed Intermediate JSON (<code class="docutils literal notranslate"><span class="pre">prepare_raw_samples.py</span></code>)<a class="headerlink" href="#step-3-generate-packed-intermediate-json-prepare-raw-samples-py" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Input</strong>: <code class="docutils literal notranslate"><span class="pre">bins_boxs.pkl</span></code> + original <code class="docutils literal notranslate"><span class="pre">*.json</span></code>/media files.</p></li>
+<li><p><strong>Processing</strong>: Aggregate multiple samples for each box and generate the packed sample’s JSON (e.g., fields like <code class="docutils literal notranslate"><span class="pre">prompts</span></code>, <code class="docutils literal notranslate"><span class="pre">captions</span></code>, <code class="docutils literal notranslate"><span class="pre">media_files</span></code>, <code class="docutils literal notranslate"><span class="pre">media_type</span></code>, etc.).</p></li>
+<li><p><strong>Output</strong>: <code class="docutils literal notranslate"><span class="pre">{data.packed_json_dir}/row_packing_jsons/*.json</span></code>.</p></li>
+</ul>
+<p>Manual execution:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>prepare_raw_samples.py<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</pre></div>
+</div>
+</section>
+<section id="step-4-write-packed-json-back-to-webdataset-packed-to-wds-py">
+<h3>Step 4: Write Packed JSON Back to WebDataset (<code class="docutils literal notranslate"><span class="pre">packed_to_wds.py</span></code>)<a class="headerlink" href="#step-4-write-packed-json-back-to-webdataset-packed-to-wds-py" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Input</strong>: <code class="docutils literal notranslate"><span class="pre">row_packing_jsons/*.json</span></code> + media files (default search paths include <code class="docutils literal notranslate"><span class="pre">{data.wds_dir}</span></code> and <code class="docutils literal notranslate"><span class="pre">{data.packed_json_dir}/row_packing_images</span></code>).</p></li>
+<li><p><strong>Output</strong>: <code class="docutils literal notranslate"><span class="pre">data.packed_wds_dir/pretrain-*.tar</span></code> (falls back to <code class="docutils literal notranslate"><span class="pre">{data.packed_json_dir}/packed_wds</span></code> if not configured) + Energon metadata (<code class="docutils literal notranslate"><span class="pre">dataset.yaml</span></code> + index).</p></li>
+</ul>
+<p>Manual execution:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>packed_to_wds.py<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</pre></div>
+</div>
+</section>
+</section>
+<section id="configuration-explanation-config-yaml">
+<h2>5. Configuration Explanation (<code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>)<a class="headerlink" href="#configuration-explanation-config-yaml" title="Link to this heading">#</a></h2>
+<p>Key fields:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">data.wds_dir</span></code>: Input sample directory (<code class="docutils literal notranslate"><span class="pre">*.json</span></code> + media files).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">data.template_text_key</span></code>: JSON field name for messages (commonly <code class="docutils literal notranslate"><span class="pre">messages</span></code> or <code class="docutils literal notranslate"><span class="pre">texts</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">data.packed_json_dir</span></code>: Intermediate directory for offline packing (pkl/json).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">data.packed_wds_dir</span></code>: Final output directory for packed WDS.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sample.max_token_len</span></code>: Packing target length (e.g., <code class="docutils literal notranslate"><span class="pre">8192/16384</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sample.sample_type</span></code>: See Section 1.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model.model_type</span></code>: Model identifier for template selection (affects the choice in <code class="docutils literal notranslate"><span class="pre">utils.TEMPLATES</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model.processor_kwargs.*</span></code>: HF processor parameters for tokenization/image processing (passed to <code class="docutils literal notranslate"><span class="pre">transformers.AutoProcessor.from_pretrained</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">packed_wds.maxcount/maxsize</span></code>: Splitting strategy for writing tar shards.</p></li>
+</ul>
+</section>
+<section id="switching-models-adjusting-image-processing">
+<h2>6. Switching Models / Adjusting Image Processing<a class="headerlink" href="#switching-models-adjusting-image-processing" title="Link to this heading">#</a></h2>
+<p>The token statistics in offline packing (Step 1) depend on the actual processing logic of <code class="docutils literal notranslate"><span class="pre">AutoProcessor</span></code>, so you can switch models and adjust image processing parameters through configuration:</p>
+<ul class="simple">
+<li><p><strong>Switching Models</strong>: Modify <code class="docutils literal notranslate"><span class="pre">model.processor_kwargs.pretrained_model_name_or_path</span></code> to point to the desired HF model/processor; update <code class="docutils literal notranslate"><span class="pre">model.model_type</span></code> if necessary.</p></li>
+<li><p><strong>Adjusting Image Token Budget/Resolution</strong>: Set parameters supported by the processor in <code class="docutils literal notranslate"><span class="pre">model.processor_kwargs</span></code> (e.g., <code class="docutils literal notranslate"><span class="pre">min_pixels/max_pixels</span></code> commonly used in Qwen-VL series).</p></li>
+<li><p><strong>Template Alignment</strong>: If you add a new <code class="docutils literal notranslate"><span class="pre">model.model_type</span></code>, ensure that <code class="docutils literal notranslate"><span class="pre">tools/data_preprocess/vlm/offline_packing/utils.py</span></code> contains the corresponding template in <code class="docutils literal notranslate"><span class="pre">TEMPLATES[sample_type][model_type]</span></code>; otherwise, Step 1 will report “No template found for model_type …”.</p></li>
+<li><p><strong>Media Preprocessing</strong>: Under <code class="docutils literal notranslate"><span class="pre">media_preprocess</span></code>, you can configure preprocessing function names by modality (implementations are in <code class="docutils literal notranslate"><span class="pre">tools/data_preprocess/vlm/offline_packing/media_preprocess_utils.py</span></code>) to control image resizing/cropping/frame extraction, etc.</p></li>
+</ul>
+<p>Example (excerpt, full fields see <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>):</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">wds_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/mnt/cluster/.../wds_flat/&quot;</span>
+<span class="w">  </span><span class="nt">template_text_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;messages&quot;</span>
+<span class="w">  </span><span class="nt">packed_json_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/mnt/cluster/.../packed_json/&quot;</span>
+<span class="w">  </span><span class="nt">packed_wds_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/mnt/cluster/.../packed_wds/&quot;</span>
+
+<span class="nt">sample</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">max_token_len</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8192</span>
+<span class="w">  </span><span class="nt">sample_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">packed_multi_mix_qa</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="data_parallel_balancing.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Data Parallel Balancing</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../vla_tutorial/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">VLA Training Tutorial</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-packing-scenarios-sample-sample-type">1. Supported Packing Scenarios (<code class="docutils literal notranslate"><span class="pre">sample.sample_type</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#input-data-requirements-data-wds-dir">2. Input Data Requirements (<code class="docutils literal notranslate"><span class="pre">data.wds_dir</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">3. Quick Start</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pipeline-step-by-step-explanation-aligned-with-pack-wds-sh">4. Pipeline Step-by-Step Explanation (aligned with <code class="docutils literal notranslate"><span class="pre">pack_wds.sh</span></code>)</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-calculate-token-length-for-each-sample-get-sample-len-py">Step 1: Calculate Token Length for Each Sample (<code class="docutils literal notranslate"><span class="pre">get_sample_len.py</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-bucketing-by-length-and-packing-grouping-do-hashbacket-py">Step 2: Bucketing by Length and Packing Grouping (<code class="docutils literal notranslate"><span class="pre">do_hashbacket.py</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-generate-packed-intermediate-json-prepare-raw-samples-py">Step 3: Generate Packed Intermediate JSON (<code class="docutils literal notranslate"><span class="pre">prepare_raw_samples.py</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-write-packed-json-back-to-webdataset-packed-to-wds-py">Step 4: Write Packed JSON Back to WebDataset (<code class="docutils literal notranslate"><span class="pre">packed_to_wds.py</span></code>)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#configuration-explanation-config-yaml">5. Configuration Explanation (<code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#switching-models-adjusting-image-processing">6. Switching Models / Adjusting Image Processing</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Baidu
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Baidu.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,626 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Dataset Conversion for VLM &#8212; AIAK-Training-Omni  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=0d572974" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'vlm_tutorial/dataset_conversion';</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Advanced Features" href="features_index.html" />
+    <link rel="prev" title="Quick Start: VLM Model Training" href="quick_start_vlm_training.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">AIAK-Training-Omni  documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../get_started/index.html">Get Started</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/README.html">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/support_model.html">Support Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/benchmark.html">Performence Benchmark</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../llm_tutorial/index.html">LLM Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../llm_tutorial/quick_start_llm_pretrain_training.html">Quick Start: LLM Model Pretrain Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../llm_tutorial/quick_start_llm_sft_training.html">Quick Start: LLM Model SFT Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../llm_tutorial/features_index.html">Advanced Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">VLM Training Tutorial</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Dataset Conversion for VLM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="features_index.html">Advanced Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../features/model_combination.html">Model Combination</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../vla_tutorial/index.html">VLA Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../vla_tutorial/quick_start_vla_training.html">Quick Start: VLA Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../wan_tutorial/index.html">Diffusion Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/vlm_tutorial/dataset_conversion.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Dataset Conversion for VLM</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data-format-processing">1.Data Format &amp; Processing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-sample-types-sample-type">2.Supported Sample Types (<code class="docutils literal notranslate"><span class="pre">--sample_type</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#conversion-script-usage">3.Conversion Script Usage</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#input-json-convention-common-fields">4.Input JSON Convention (common fields)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-packing-data-processing">5.Offline Packing Data Processing</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="dataset-conversion-for-vlm">
+<h1>Dataset Conversion for VLM<a class="headerlink" href="#dataset-conversion-for-vlm" title="Link to this heading">#</a></h1>
+<section id="data-format-processing">
+<h2>1.Data Format &amp; Processing<a class="headerlink" href="#data-format-processing" title="Link to this heading">#</a></h2>
+<p>To accommodate the diversity of multimodal datasets, this project uses the <strong>Energon loader</strong> for high-performance data handling.<br />
+Energon requires datasets to be stored in standard <strong>WebDataset</strong> format. WebDataset keeps files in their native formats (jpg, mp4, …), so almost any multimodal dataset can be converted by simply archiving the files, which Energon can then read directly.</p>
+<p>Reference docs</p>
+<ul class="simple">
+<li><p>Energon: <a class="reference external" href="https://nvidia.github.io/Megatron-Energon/">https://nvidia.github.io/Megatron-Energon/</a></p></li>
+<li><p>WebDataset: <a class="reference external" href="https://huggingface.co/docs/hub/datasets-webdataset">https://huggingface.co/docs/hub/datasets-webdataset</a></p></li>
+</ul>
+<p>We provide <code class="docutils literal notranslate"><span class="pre">tools/data_preprocess/vlm/convert_to_webdataset.py</span></code> to turn a <code class="docutils literal notranslate"><span class="pre">.json/.jsonl</span></code> annotation file plus raw media (images/videos) into an Energon-ready WebDataset directory (including the required index and <code class="docutils literal notranslate"><span class="pre">dataset.yaml</span></code>).</p>
+</section>
+<section id="supported-sample-types-sample-type">
+<h2>2.Supported Sample Types (<code class="docutils literal notranslate"><span class="pre">--sample_type</span></code>)<a class="headerlink" href="#supported-sample-types-sample-type" title="Link to this heading">#</a></h2>
+<p>The script writes different <code class="docutils literal notranslate"><span class="pre">dataset.yaml</span></code> files and organizes the tar-internal fields according to <code class="docutils literal notranslate"><span class="pre">--sample_type</span></code>:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>sample_type</p></th>
+<th class="head"><p>Scenario</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vqa</span></code></p></td>
+<td><p>single-image VQA</p></td>
+<td><p>Creates <code class="docutils literal notranslate"><span class="pre">VQASample</span></code> map; image field is <code class="docutils literal notranslate"><span class="pre">jpg</span></code>, text read from <code class="docutils literal notranslate"><span class="pre">json[…]</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">caption</span></code></p></td>
+<td><p>single-image captioning</p></td>
+<td><p>Creates <code class="docutils literal notranslate"><span class="pre">CaptioningSample</span></code> map; image field is <code class="docutils literal notranslate"><span class="pre">jpg</span></code>, text from <code class="docutils literal notranslate"><span class="pre">json[…]</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">multi_mix_qa</span></code></p></td>
+<td><p>multi-image / mixed-media QA</p></td>
+<td><p>Uses <code class="docutils literal notranslate"><span class="pre">CrudeWebdataset</span></code>; downstream cooker parses via <code class="docutils literal notranslate"><span class="pre">subflavors.sample_type</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">multi_vid_vqa</span></code></p></td>
+<td><p>multi-video VQA</p></td>
+<td><p>Same as above</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">packed_captioning</span></code> / <code class="docutils literal notranslate"><span class="pre">packed_vqa</span></code> / <code class="docutils literal notranslate"><span class="pre">packed_multi_mix_qa</span></code></p></td>
+<td><p>offline-packed data</p></td>
+<td><p>Usually produced by the <code class="docutils literal notranslate"><span class="pre">offline_packing</span></code> pipeline (see Sec. 2)</p></td>
+</tr>
+<tr class="row-odd"><td><p>other string</p></td>
+<td><p>custom scenario</p></td>
+<td><p>Still writes <code class="docutils literal notranslate"><span class="pre">CrudeWebdataset</span></code>, but you must implement the corresponding <code class="docutils literal notranslate"><span class="pre">sample_type</span></code> parser downstream</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Notes</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--media</span></code> is <strong>only</strong> written into dataset metadata to distinguish image/video/mix. Whether a sample actually contains images/videos is determined by the presence of <code class="docutils literal notranslate"><span class="pre">image(s)</span></code> / <code class="docutils literal notranslate"><span class="pre">video(s)</span></code> in each entry.</p></li>
+<li><p>If an entry has <strong>neither</strong> <code class="docutils literal notranslate"><span class="pre">image(s)</span></code> <strong>nor</strong> <code class="docutils literal notranslate"><span class="pre">video(s)</span></code>, it is stored as a text-only sample (only <code class="docutils literal notranslate"><span class="pre">json</span></code>).</p></li>
+</ul>
+</section>
+<section id="conversion-script-usage">
+<h2>3.Conversion Script Usage<a class="headerlink" href="#conversion-script-usage" title="Link to this heading">#</a></h2>
+<p>Accepted inputs</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--json_file</span></code>: <code class="docutils literal notranslate"><span class="pre">.json</span></code> (list[dict]) or <code class="docutils literal notranslate"><span class="pre">.jsonl</span></code> (one dict per line)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--image_dir</span></code> / <code class="docutils literal notranslate"><span class="pre">--video_dir</span></code>: root directories for media (entries store relative paths)</p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>tools/data_preprocess/vlm/convert_to_webdataset.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output_dir<span class="w"> </span>/tmp/vlm/wds<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--json_file<span class="w"> </span>/tmp/vlm/data.jsonl<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--image_dir<span class="w"> </span>/tmp/vlm/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--video_dir<span class="w"> </span>/tmp/vlm/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--media<span class="w"> </span>mix<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--columns_messages<span class="w"> </span>messages<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--maxcount<span class="w"> </span><span class="m">10000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--maxsize<span class="w"> </span><span class="m">3000000000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--sample_type<span class="w"> </span>multi_mix_qa
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Argument</p></th>
+<th class="head"><p>Required</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--output_dir</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>–</p></td>
+<td><p>Output folder (<code class="docutils literal notranslate"><span class="pre">pretrain-*.tar</span></code> + Energon meta)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--json_file</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>–</p></td>
+<td><p>Input <code class="docutils literal notranslate"><span class="pre">.json/.jsonl</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--image_dir</span></code></p></td>
+<td><p>no</p></td>
+<td><p>–</p></td>
+<td><p>Image root (needed when entries contain <code class="docutils literal notranslate"><span class="pre">image(s)</span></code> or <code class="docutils literal notranslate"><span class="pre">sample_type=vqa/caption</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--video_dir</span></code></p></td>
+<td><p>no</p></td>
+<td><p>–</p></td>
+<td><p>Video root (needed when entries contain <code class="docutils literal notranslate"><span class="pre">video(s)</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--media</span></code></p></td>
+<td><p>no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">image</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">image</span></code> / <code class="docutils literal notranslate"><span class="pre">video</span></code> / <code class="docutils literal notranslate"><span class="pre">mix</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--columns_messages</span></code></p></td>
+<td><p>no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">messages</span></code></p></td>
+<td><p>Key for dialogue/text field in each entry</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--maxcount</span></code></p></td>
+<td><p>no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">10000</span></code></p></td>
+<td><p>Max samples per shard (tar)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--maxsize</span></code></p></td>
+<td><p>no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3000000000</span></code></p></td>
+<td><p>Max bytes per shard (tar)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--sample_type</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>–</p></td>
+<td><p>Data type (see table above)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Outputs</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pretrain-0.tar</span></code>, <code class="docutils literal notranslate"><span class="pre">pretrain-1.tar</span></code>, … (each tar stores files under <code class="docutils literal notranslate"><span class="pre">__key__</span></code> per WebDataset spec, e.g. <code class="docutils literal notranslate"><span class="pre">xxx.jpg</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx.json</span></code>, <code class="docutils literal notranslate"><span class="pre">xxx.0_a.mp4</span></code>, …).</p></li>
+<li><p>Energon meta folder (usually <code class="docutils literal notranslate"><span class="pre">.wds/</span></code>) containing <code class="docutils literal notranslate"><span class="pre">dataset.yaml</span></code> and index files.<br />
+Point <code class="docutils literal notranslate"><span class="pre">--data-path</span></code> to <code class="docutils literal notranslate"><span class="pre">--output_dir</span></code> during training.</p></li>
+</ul>
+</section>
+<section id="input-json-convention-common-fields">
+<h2>4.Input JSON Convention (common fields)<a class="headerlink" href="#input-json-convention-common-fields" title="Link to this heading">#</a></h2>
+<p>Each entry may contain (all paths relative, joined with <code class="docutils literal notranslate"><span class="pre">--image_dir</span></code>/<code class="docutils literal notranslate"><span class="pre">--video_dir</span></code> at runtime):</p>
+<ul class="simple">
+<li><p>Image: <code class="docutils literal notranslate"><span class="pre">image:</span> <span class="pre">&quot;a/b.jpg&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">images:</span> <span class="pre">[&quot;a/b.jpg&quot;,</span> <span class="pre">&quot;c/d.jpg&quot;]</span></code></p></li>
+<li><p>Video: <code class="docutils literal notranslate"><span class="pre">video:</span> <span class="pre">&quot;a/b.mp4&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">videos:</span> <span class="pre">[&quot;a/b.mp4&quot;,</span> <span class="pre">&quot;c/d.mp4&quot;]</span></code></p></li>
+<li><p>Text/chat: read from <code class="docutils literal notranslate"><span class="pre">messages</span></code> by default (change with <code class="docutils literal notranslate"><span class="pre">--columns_messages</span></code>)</p></li>
+</ul>
+<p>Text field requirements for different <code class="docutils literal notranslate"><span class="pre">sample_type</span></code> (aligned with generated <code class="docutils literal notranslate"><span class="pre">dataset.yaml</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">vqa</span></code>: <code class="docutils literal notranslate"><span class="pre">messages</span></code> must satisfy reading <code class="docutils literal notranslate"><span class="pre">json[0][content]</span></code> and <code class="docutils literal notranslate"><span class="pre">json[1][content]</span></code> (usually a list of length ≥ 2 with <code class="docutils literal notranslate"><span class="pre">content</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">caption</span></code>: <code class="docutils literal notranslate"><span class="pre">messages</span></code> must satisfy reading <code class="docutils literal notranslate"><span class="pre">json[captions][0][content]</span></code> (e.g. dict contains <code class="docutils literal notranslate"><span class="pre">captions:</span> <span class="pre">[{content:</span> <span class="pre">...}]</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">multi_mix_qa</span></code> / <code class="docutils literal notranslate"><span class="pre">multi_vid_vqa</span></code>, etc.: script writes a structured <code class="docutils literal notranslate"><span class="pre">json</span></code> (<code class="docutils literal notranslate"><span class="pre">texts/media/name</span></code>); downstream cooker parses according to the corresponding <code class="docutils literal notranslate"><span class="pre">sample_type</span></code>.</p></li>
+</ul>
+</section>
+<section id="offline-packing-data-processing">
+<h2>5.Offline Packing Data Processing<a class="headerlink" href="#offline-packing-data-processing" title="Link to this heading">#</a></h2>
+<p>See <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/blob/master/docs/source/features/4_2_offline_data_packing.md">Offline Data Packing Guide</a> for details.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="quick_start_vlm_training.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Quick Start: VLM Model Training</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="features_index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Advanced Features</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data-format-processing">1.Data Format &amp; Processing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-sample-types-sample-type">2.Supported Sample Types (<code class="docutils literal notranslate"><span class="pre">--sample_type</span></code>)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#conversion-script-usage">3.Conversion Script Usage</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#input-json-convention-common-fields">4.Input JSON Convention (common fields)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-packing-data-processing">5.Offline Packing Data Processing</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Baidu
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Baidu.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

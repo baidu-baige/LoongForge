@@ -1,4 +1,4 @@
-# Welcome to contributr to AIAK-Training-Omni
+# Contribute
 👍🎉 First off, thanks for taking the time to contribute! 🎉👍
 
 Please check out the [Apache Code of Conduct](https://www.apache.org/foundation/policies/conduct.html) first.

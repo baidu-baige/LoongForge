@@ -1,0 +1,638 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Model Combination &#8212; AIAK-Training-Omni  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=0d572974" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'features/model_combination';</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Heterogeneous TP Parallel" href="heterogeneous_tp_parallel.html" />
+    <link rel="prev" title="Advanced Features" href="../vlm_tutorial/features_index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">AIAK-Training-Omni  documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../get_started/index.html">Get Started</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/README.html">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/support_model.html">Support Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../get_started/benchmark.html">Performence Benchmark</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../llm_tutorial/index.html">LLM Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../llm_tutorial/quick_start_llm_pretrain_training.html">Quick Start: LLM Model Pretrain Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../llm_tutorial/quick_start_llm_sft_training.html">Quick Start: LLM Model SFT Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../llm_tutorial/features_index.html">Advanced Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="fp8_training.html">FP8 Training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../vlm_tutorial/index.html">VLM Training Tutorial</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../vlm_tutorial/quick_start_vlm_training.html">Quick Start: VLM Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../vlm_tutorial/dataset_conversion.html">Dataset Conversion for VLM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
+<li class="toctree-l2 current active has-children"><a class="reference internal" href="../vlm_tutorial/features_index.html">Advanced Features</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l3 current active"><a class="current reference internal" href="#">Model Combination</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fp8_training.html">FP8 Training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="offline_data_packing.html">Data Offline Packing</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../vla_tutorial/index.html">VLA Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../vla_tutorial/quick_start_vla_training.html">Quick Start: VLA Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../wan_tutorial/index.html">Diffusion Training Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/features/model_combination.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Model Combination</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#core-components">1. Core Components</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#omniencodermodel">1.1 OmniEncoderModel</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#omnicombinationmodel">1.2 OmniCombinationModel</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#omnimodelprovider">1.3 OmniModelProvider</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-use">2. How to Use</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="model-combination">
+<h1>Model Combination<a class="headerlink" href="#model-combination" title="Link to this heading">#</a></h1>
+<p>One of the core features of the AIAK-Training-Omni framework is its native support for <strong>flexible model combination</strong>. This feature allows users to freely combine visual/audio encoders (Encoder), modality alignment projection layers (Projector), and language model bases (Foundation) through configuration files (YAML), thereby quickly building customized multimodal large models. Based on this framework, users only need to modify the model configuration YAML files in the <code class="docutils literal notranslate"><span class="pre">../configs/models</span></code> directory to restructure and switch the model architecture.</p>
+<p>For example, different visual encoders (such as <strong>Qwen2.5-ViT, Qwen3-ViT, LLaVA-OV-1.5-ViT, InternViT</strong>, etc.) can be flexibly concatenated with different large language model bases (such as <strong>LLaMA series, DeepSeek series, Qwen series</strong>, etc.). This <strong>configuration-driven model assembly approach</strong> significantly reduces the cost of exploring and customizing multimodal model architectures, allowing users to build models without modifying any code, achieving <strong>zero-code</strong> model combination.</p>
+<section id="core-components">
+<h2>1. Core Components<a class="headerlink" href="#core-components" title="Link to this heading">#</a></h2>
+<section id="omniencodermodel">
+<h3>1.1 OmniEncoderModel<a class="headerlink" href="#omniencodermodel" title="Link to this heading">#</a></h3>
+<p>The core abstraction of the Encoder component, which is responsible for converting modal data such as images, videos, and audio into Embeddings understandable by LLMs.</p>
+<ul class="simple">
+<li><p><strong>Abstract Definition</strong>: Encapsulates Vision/Audio Encoder and Projector, and manages Text Embeddings uniformly.</p></li>
+<li><p><strong>Core Implementation</strong>:</p>
+<ul>
+<li><p><strong>Multimodal Compatibility</strong>: Uniformly manages Encoders of different modalities. Adding a new modality only requires adding a branch.</p></li>
+</ul>
+</li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># aiak_training_omni/models/omni_models/omni_encoder_model.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OmniEncoderModel</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+        <span class="c1"># Text modality</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_encoder</span> <span class="o">=</span> <span class="n">LanguageModelEmbedding</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+        
+        <span class="c1"># Image modality</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;image_encoder&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">image_encoder</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">image_encoder</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+        
+        <span class="c1"># Video modality (very easy to extend)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;video_encoder&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">video_encoder</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">video_encoder</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>* **Heterogeneous Tensor Parallel**: Implements heterogeneous parallelism for **Encoder Tensor Parallel** through Hook mechanisms.
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Automatically register Hook to switch Parallel State before and after Forward</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">image_encoder</span><span class="o">.</span><span class="n">register_forward_pre_hook</span><span class="p">(</span>
+    <span class="n">make_encoder_forward_pre_hook</span><span class="p">(</span><span class="s2">&quot;image_encoder&quot;</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">image_encoder</span><span class="o">.</span><span class="n">register_forward_hook</span><span class="p">(</span>
+    <span class="n">make_encoder_forward_hook</span><span class="p">(</span><span class="s2">&quot;text_decoder&quot;</span><span class="p">)</span> <span class="c1"># Switch back to Decoder state</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="omnicombinationmodel">
+<h3>1.2 OmniCombinationModel<a class="headerlink" href="#omnicombinationmodel" title="Link to this heading">#</a></h3>
+<p>The core component of multimodal combination models, defining the concatenation and interaction timing of data flow between different modality components. This component does not contain specific computational logic. Key features:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>* **Logical Decoupling**: Dynamically decides whether to load Encoder or Foundation model based on external configuration, achieving component-level decoupling.
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># aiak_training_omni/models/omni_models/omni_combination_model.py</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OmniCombinationModel</span><span class="p">(</span><span class="n">BaseMegatronModule</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+        <span class="c1"># 1. Dynamically initialize Encoder Model</span>
+        <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">image_encoder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">add_encoder</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encoder_model</span> <span class="o">=</span> <span class="n">OmniEncoderModel</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+        
+        <span class="c1"># 2. Dynamically initialize LLM</span>
+        <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">foundation</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">add_decoder</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">foundation_model</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">foundation</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="omnimodelprovider">
+<h3>1.3 OmniModelProvider<a class="headerlink" href="#omnimodelprovider" title="Link to this heading">#</a></h3>
+<p>Responsible for parsing global parameters, handling the initialization logic of distributed environments (such as Pipeline Parallel splitting), and ultimately instantiating OmniCombinationModel.</p>
+<p>Core functionalities:</p>
+<ul class="simple">
+<li><p>Distributed Pipeline Parallel: Determines the current Pipeline Parallel Stage of the model, and loads Encoder model and Foundation model as needed to support cross-GPU pipeline parallel deployment.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># aiak_training_omni/models/omni_models/omni_model_provider.py</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">omni_model_provider</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="c1"># Automatically determines whether the current stage is the first stage of the pipeline, deciding whether to load the Encoder</span>
+    <span class="c1"># This is crucial for placing the Encoder and Decoder on different GPUs for pipeline parallelism</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">encoder_pipeline_model_parallel_size</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="n">add_encoder</span> <span class="o">=</span> <span class="n">mpu</span><span class="o">.</span><span class="n">is_pipeline_first_stage</span><span class="p">()</span>
+    
+    <span class="c1"># Finally builds the model, injecting environment-aware parameters</span>
+    <span class="k">return</span> <span class="n">OmniCombinationModel</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">add_encoder</span><span class="o">=</span><span class="n">add_encoder</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Parameter Bridging and Adaptation</strong>: Simultaneously obtains global training parameters (args) and model structure configuration (model_config). Passes model_config to the model for building submodules, while extracting key hyperparameters related to training (such as language_vocab_size, language_max_sequence_length) from args and injecting them into the model initialization process to ensure consistency between model configuration and training environment.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">args</span> <span class="o">=</span> <span class="n">get_args</span><span class="p">()</span>
+<span class="n">model_config</span> <span class="o">=</span> <span class="n">get_model_config</span><span class="p">()</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">OmniCombinationModel</span><span class="p">(</span>
+    <span class="n">model_config</span><span class="p">,</span>
+    <span class="n">language_vocab_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">padded_vocab_size</span><span class="p">,</span>       
+    <span class="n">language_max_sequence_length</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">max_position_embeddings</span><span class="p">,</span> 
+    <span class="n">fp16_lm_cross_entropy</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">fp16_lm_cross_entropy</span><span class="p">,</span>  
+    <span class="o">...</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="how-to-use">
+<h2>2. How to Use<a class="headerlink" href="#how-to-use" title="Link to this heading">#</a></h2>
+<p>We have adopted a configuration system based on Hydra, combining configurations of different components through the defaults list. Take <code class="docutils literal notranslate"><span class="pre">configs/models/internvl2.5/internvl2_5_8b.yaml</span></code> as an example:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># 1. Select image encoder (Vit)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_encoder@model.image_encoder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vit_0.3b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 2. Select image projector (Projector)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_projector@model.image_projector</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_mlp_adapter</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 3. Select foundation language model (LLM)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/internlm2.5@model.foundation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internlm2_5_8b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+
+<span class="nt">model</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">model_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vl</span>
+<span class="w">  </span><span class="c1"># ... Other global parameters</span>
+</pre></div>
+</div>
+<p>If you want to build a new VLM, for example, using <strong>Qwen2.5-7B</strong> as the base and <strong>InternViT</strong> as the encoder to create a new <strong>InternViT-Qwen2.5-7B model</strong>:</p>
+<ol class="arabic simple">
+<li><p><strong>Define Component Configurations</strong>: Ensure that there are configurations for Qwen2.5 under <code class="docutils literal notranslate"><span class="pre">configs/models/</span></code> and configurations for <strong>InternViT</strong> under <code class="docutils literal notranslate"><span class="pre">configs/models/image_encoder/</span></code>.</p></li>
+<li><p><strong>Create Combination Configuration</strong>: Create a new YAML file and combine them through defaults.</p></li>
+</ol>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># 1. Select image encoder (Image Encoder)</span>
+<span class="w">  </span><span class="c1"># &#39;intern_vit_0.3b&#39; corresponds to configs/models/image_encoder/intern_vit_0.3b.yaml (same below)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_encoder@model.image_encoder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vit_0.3b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 2. Select image projector (Projector)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/image_projector@model.image_projector</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_mlp_adapter</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># 3. Select foundation language model (LLM Foundation)</span>
+<span class="w">  </span><span class="c1"># &#39;internlm2_5_8b&#39; corresponds to configs/models/internlm2.5/internlm2_5_8b.yaml</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">../../models/internlm2.5@model.foundation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internlm2_5_8b</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+
+<span class="nt">model</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Specify the type of multimodal model</span>
+<span class="w">  </span><span class="nt">model_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intern_vl</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># Specify the loss function of the Foundation model</span>
+<span class="w">  </span><span class="nt">loss_func</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${loss_func:loss_func_internvl}</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># Explicitly specify the output dimension of the Projector, which must be consistent with the hidden_size of the LLM</span>
+<span class="w">  </span><span class="nt">image_projector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">hidden_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+<span class="w">    </span><span class="nt">ffn_hidden_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4096</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="c1"># Configure LLM-specific settings</span>
+<span class="w">  </span><span class="nt">foundation</span><span class="p">:</span><span class="w"> </span>
+<span class="w">    </span><span class="nt">rotary_emb_func</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;DynamicRotaryEmbedding&quot;</span>
+<span class="w">    </span><span class="nt">rotary_base</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="c1"># Specify Megatron layer construction, supporting Transformer Engine acceleration</span>
+<span class="w">    </span><span class="nt">model_spec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;aiak_training_omni.models.foundation.internlm.internlm_layer_spec&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;get_internlm_layer_with_te_spec&quot;</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+<p>The current directory structure of <code class="docutils literal notranslate"><span class="pre">configs/models</span></code> in the framework corresponds to the library of combinable components:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">image_encoder/</span></code>: Stores configurations for various visual encoders.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">image_projector/</span></code>: Stores configurations for various projection layers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">llama3/</span></code>, <code class="docutils literal notranslate"><span class="pre">qwen2/</span></code>, <code class="docutils literal notranslate"><span class="pre">deepseek2/</span></code>, etc.: Store configurations for various LLM bases.</p></li>
+</ul>
+<p>With this approach, you can flexibly build multimodal large models like building with blocks.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../vlm_tutorial/features_index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Advanced Features</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="heterogeneous_tp_parallel.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Heterogeneous TP Parallel</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#core-components">1. Core Components</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#omniencodermodel">1.1 OmniEncoderModel</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#omnicombinationmodel">1.2 OmniCombinationModel</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#omnimodelprovider">1.3 OmniModelProvider</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-use">2. How to Use</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Baidu
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Baidu.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

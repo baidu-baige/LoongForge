@@ -10,11 +10,11 @@ AIAK-Omni Documentation
    :maxdepth: 2
    :caption: Contents
 
-   readme/index
-   quick_start/index
-   usage/index
-   features/index
-   advance/index
+   get_started/index
+   llm_tutorial/index
+   vlm_tutorial/index
+   vla_tutorial/index
+   wan_tutorial/index
    CONTRIBUTING
    faqs
 
