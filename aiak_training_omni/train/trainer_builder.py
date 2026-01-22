@@ -56,7 +56,8 @@ def build_model_trainer(args):
     config = get_hydra_config()
     
     if hasattr(config, "model_type") and config.model_type in \
-            constants.LanguageModelFamilies.names():
+            (set(constants.LanguageModelFamilies.names()) |
+             set(constants.VisionLanguageActionModelFamilies.names())):
         model_family = config.model_type
     else:
         if not hasattr(config, 'model'):

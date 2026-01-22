@@ -106,3 +106,10 @@ class VisionLanguageModelFamilies(_BaseFamilies):
 class CustomModelFamilies(_BaseFamilies):
     """User defined Custom Vision model families"""
     INTERN_VL = "intern_vl"
+
+
+class VisionLanguageActionModelFamilies(_BaseFamilies):
+    """Vision language action model families"""
+    PI05 = "pi05"
+
+

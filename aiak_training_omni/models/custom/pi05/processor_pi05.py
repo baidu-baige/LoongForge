@@ -1,19 +1,35 @@
-"""
-Data processor for LeRobot PI0.5 policy.
+#!/usr/bin/env python
 
-Copied from lerobot/src/lerobot/policies/pi05/processor_pi05.py
-"""
+"""Processor construction for PI05 policy pre- and post-processing."""
+
+# Copyright 2025 Physical Intelligence and The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from copy import deepcopy
 from dataclasses import dataclass
+from inspect import signature
 from typing import Any
 
 import numpy as np
 import torch
+from transformers import AutoTokenizer
 
 from lerobot.configs.types import PipelineFeatureType, PolicyFeature
-from lerobot.policies.pi05.configuration_pi05 import PI05Config
-from lerobot.policies.pi05.modeling_pi05 import pad_vector
+
+# Depend on the local pi05 config and pad helper to avoid missing symbols in the lerobot release.
+from aiak_training_omni.models.custom.pi05.configuration_pi05 import PI05Config
+from aiak_training_omni.models.custom.pi05.modeling_pi05 import pad_vector
 from lerobot.processor import (
     AddBatchDimensionProcessorStep,
     DeviceProcessorStep,
@@ -26,7 +42,6 @@ from lerobot.processor import (
     TokenizerProcessorStep,
     UnnormalizerProcessorStep,
 )
-from lerobot.processor.rename_processor import rename_stats
 from lerobot.processor.converters import policy_action_to_transition, transition_to_policy_action
 from lerobot.processor.core import EnvTransition, TransitionKey
 from lerobot.utils.constants import (
@@ -36,7 +51,7 @@ from lerobot.utils.constants import (
 )
 
 
-@ProcessorStepRegistry.register(name="aiak_pi05_prepare_state_tokenizer_step")
+@ProcessorStepRegistry.register(name="pi05_megatron_prepare_state_tokenizer_processor_step")
 @dataclass
 class Pi05PrepareStateTokenizerProcessorStep(ProcessorStep):
     """
@@ -47,6 +62,7 @@ class Pi05PrepareStateTokenizerProcessorStep(ProcessorStep):
     task_key: str = "task"
 
     def __call__(self, transition: EnvTransition) -> EnvTransition:
+        """Pad and discretize state, then build language prompts for tokenizer."""
         transition = transition.copy()
 
         state = transition.get(TransitionKey.OBSERVATION, {}).get(OBS_STATE)
@@ -120,59 +136,49 @@ def make_pi05_pre_post_processors(
         A tuple containing the configured pre-processor and post-processor pipelines.
     """
 
-    # Map dataset camera keys onto the model's expected image feature names so the
-    # downstream PI05 model sees at least one image entry (e.g., map
-    # observation.images.image -> observation.images.base_0_rgb).
-    rename_map: dict[str, str] = {}
-    dataset_image_keys: list[str] = []
-    config_image_keys: list[str] = []
-    if dataset_stats:
-        dataset_image_keys = sorted(
-            key for key in dataset_stats.keys() if key.startswith("observation.images.")
-        )
-        config_image_keys = list(config.image_features.keys())
-        for src, dst in zip(dataset_image_keys, config_image_keys):
-            if src != dst:
-                rename_map[src] = dst
-        # Debug output to surface dataset/config camera key alignment for quick inspection.
-        print(
-            f"[aiak_pi05] dataset image keys (sorted): {dataset_image_keys}; "
-            f"config image keys (ordered): {config_image_keys}; rename_map: {rename_map}"
-        )
-    renamed_stats = rename_stats(dataset_stats, rename_map) if dataset_stats is not None else dataset_stats
-
     # Add remaining processors
     input_steps: list[ProcessorStep] = [
-        RenameObservationsProcessorStep(rename_map=rename_map),  # To mimic the same processor as pretrained one
+        RenameObservationsProcessorStep(rename_map={}),  # To mimic the same processor as pretrained one
         AddBatchDimensionProcessorStep(),
         # NOTE: NormalizerProcessorStep MUST come before Pi05PrepareStateTokenizerProcessorStep
         # because the tokenizer step expects normalized state in [-1, 1] range for discretization
         NormalizerProcessorStep(
             features={**config.input_features, **config.output_features},
             norm_map=config.normalization_mapping,
-            stats=renamed_stats,
+            stats=dataset_stats,
         ),
         Pi05PrepareStateTokenizerProcessorStep(max_state_dim=config.max_state_dim),
-        # TokenizerProcessorStep requires PaliGemma which is gated - comment out for testing
-        TokenizerProcessorStep(
-            tokenizer_name="/workspace/paligemma-3b-pt-224",
-            max_length=config.tokenizer_max_length,
-            padding_side="right",
-            padding="max_length",
-        ),
-        DeviceProcessorStep(device=config.device),
     ]
 
     output_steps: list[ProcessorStep] = [
         UnnormalizerProcessorStep(
-            features=config.output_features, norm_map=config.normalization_mapping, stats=renamed_stats
+            features=config.output_features, norm_map=config.normalization_mapping, stats=dataset_stats
         ),
         DeviceProcessorStep(device="cpu"),
     ]
 
+    tokenizer_kwargs = {"local_files_only": config.tokenizer_local_files_only}
+    tokenizer_processor_sig = signature(TokenizerProcessorStep.__init__).parameters
+    tokenizer_step = (
+        TokenizerProcessorStep(
+            tokenizer_name=config.tokenizer_name,
+            max_length=config.tokenizer_max_length,
+            padding_side="right",
+            padding="max_length",
+            tokenizer_kwargs=tokenizer_kwargs,
+        )
+        if "tokenizer_kwargs" in tokenizer_processor_sig
+        else TokenizerProcessorStep(
+            tokenizer=AutoTokenizer.from_pretrained(config.tokenizer_name, **tokenizer_kwargs),
+            max_length=config.tokenizer_max_length,
+            padding_side="right",
+            padding="max_length",
+        )
+    )
+
     return (
         PolicyProcessorPipeline[dict[str, Any], dict[str, Any]](
-            steps=input_steps,
+            steps=[*input_steps, tokenizer_step, DeviceProcessorStep(device=config.device)],
             name=POLICY_PREPROCESSOR_DEFAULT_NAME,
         ),
         PolicyProcessorPipeline[PolicyAction, PolicyAction](

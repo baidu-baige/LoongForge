@@ -190,6 +190,12 @@ MODEL_CONFIG_REGISTRY = {
     "qwen3_vl_30b_a3b": {
         "config_path": "configs/models/qwen3_vl",
         "config_name": "qwen3_vl_30b_a3b",
+    },
+
+    "pi05": {
+        # Hydra expects the directory, config name selects the file.
+        "config_path": "configs/models/pi05",
+        "config_name": "pi05",
     }
 }
 
