@@ -78,8 +78,8 @@ def _add_arguments(parser: argparse.ArgumentParser):
                        help="Whether to discard sample when its length is greater than seq-length.")
 
     group.add_argument('--sft-dataset-config', type=str, default=None,
-                       help="A json file that contains the dataset configuration."
-                            "default: configs/dataset_config.jsoin")
+                       help="A yaml file that contains the dataset configuration."
+                            "default: configs/data/sft_dataset_config.yaml")
 
     group.add_argument('--sft-dataset', type=str, default="default",
                        help='the dataset name should be defined in the dataset config file (--sft-dataset-config)')

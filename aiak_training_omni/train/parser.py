@@ -296,7 +296,7 @@ def _build_data_config(config):
 def _apply_data_config_to_args(args, data_config: DataConfig):
     """Override args with values from data config when present."""
     provided = getattr(args, "_cli_provided_args", set())
-    for f in fields(DataConfig):
+    for f in fields(data_config):
         if f.name in provided:
             continue
         value = getattr(data_config, f.name, None)

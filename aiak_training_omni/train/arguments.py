@@ -236,8 +236,8 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
         "--sft-dataset-config",
         type=str,
         default=None,
-        help="A json file that contains the dataset configuration."
-        "default: configs/dataset_config.jsoin",
+        help="A yaml file that contains the dataset configuration."
+        "default: configs/data/sft_dataset_config.yaml",
     )
 
     group.add_argument(
