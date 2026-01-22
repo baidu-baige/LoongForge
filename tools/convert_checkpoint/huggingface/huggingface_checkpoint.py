@@ -25,7 +25,7 @@ from convert_checkpoint.utils.utils import (
 
 from convert_checkpoint.common.common_checkpoint import (
     TRANSFORMER, MTP_TRANSFORMER, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT, WORD_EMBEDDINGS, LAYER_IS_DICT_FOR_EXPERT,
-    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES
+    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES, MTP_WORD_EMBEDDING
 )
 
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
@@ -54,14 +54,15 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
                 name = name_map[c_name] + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
-        for c_name in MTP_NAMES:
-            if c_name in name_map:
-                hf_name, _, no_layer_id, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
-                if not no_layer_id:
-                    continue
-                name = hf_name + ".weight"
-                if name in weight_map:
-                    filenames_in_the_layer.add(weight_map[name])
+        if num_nextn_predict_layers > 0:
+            for c_name in MTP_NAMES:
+                if c_name in name_map:
+                    hf_name, _, no_layer_id, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                    if not no_layer_id:
+                        continue
+                    name = hf_name + ".weight"
+                    if name in weight_map:
+                        filenames_in_the_layer.add(weight_map[name])
 
     transformer = name_map[TRANSFORMER]
     layer_prefix = name_map[LAYER_PREFIX]
@@ -247,7 +248,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         mtp_reset_layer_id = hargs.get("mtp_reset_layer_id", False)
         name_map = self.c_config.get("name_map")["huggingface"]
         mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
-        mtp_has_word_embeddings = cargs.get("mtp_has_word_embeddings", False)
 
         p = list(layer_dict.keys())[0]
         layer_ids = layer_dict[p]
@@ -281,8 +281,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 for c_name in MTP_NAMES:
                     self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
                                              hf_layer_id=hf_layer_id, transformer=transformer)
-                if mtp_has_word_embeddings:
-                    self.h_base.hf_to_common(WORD_EMBEDDINGS, c_ckpt, self.state_dict)
+                
 
         if num_layers - 1 in layer_ids:
             for c_name in LAST_LAYER_NAMES:
@@ -327,8 +326,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
     def print_memory_usage(self, desc):
         import psutil
         process = psutil.Process(os.getpid())
-        mem = process.memory_info().rss / 1024**2  # Convert to MB
-        logging.info(f"{desc} Memory usage: {mem:.2f} MB")
+        mem = process.memory_info().rss / 1024**2  # 转为 MB
+        logging.info(f"{desc}内存占用: {mem:.2f} MB")
 
     def save(self, save_path, h_config=None, save_optim=False):
         """ save ckpt """

@@ -29,6 +29,7 @@ from convert_checkpoint.common.common_checkpoint import (
     MLP_DENSE_H_TO_4H,
     WORD_EMBEDDINGS_FOR_HEAD,
     WORD_EMBEDDINGS,
+    MTP_WORD_EMBEDDING,
     TRANSFORMER,
     LAYER_PREFIX,
     MOE_SHARED_EXPERT,
@@ -103,6 +104,8 @@ class HuggingfaceBase:
         is_valid_name = name in self.name_map and self.name_map[name] is not None
         if not is_valid_name:
             return
+        if name == MTP_WORD_EMBEDDING:
+            layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         weight, bias, weight_scale = c_ckpt.get(common_key)
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
@@ -114,7 +117,7 @@ class HuggingfaceBase:
                     since we capture the rotary_emb op"
         hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key = \
                 self.get_hf_name_and_args(self.name_map[name])
-        if layer_id is None or no_layer_id:
+        if hf_layer_id is None or no_layer_id:
             if is_direct_name:
                 hf_weight_path = hf_name
             else:
@@ -225,8 +228,10 @@ class HuggingfaceBase:
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         transformer = self.transformer if transformer is None else transformer
         is_valid_name = name in self.name_map and self.name_map[name] is not None
-        if name != WORD_EMBEDDINGS_FOR_HEAD and not is_valid_name:
+        if name != WORD_EMBEDDINGS_FOR_HEAD and name != MTP_WORD_EMBEDDING and not is_valid_name:
             return
+        if name in [WORD_EMBEDDINGS_FOR_HEAD, MTP_WORD_EMBEDDING]:
+            layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
             hf_name, is_direct_name, _, _, no_layer_id, depend_on_key = \
@@ -258,7 +263,7 @@ class HuggingfaceBase:
                 hf_weight_scale_path = f"{hf_name}.{WEIGHT_SCALE}"
                 weight, bias, weight_scale = self.get_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
-            if name == WORD_EMBEDDINGS_FOR_HEAD and weight is None and WORD_EMBEDDINGS in self.name_map:
+            if (name == WORD_EMBEDDINGS_FOR_HEAD or name == MTP_WORD_EMBEDDING) and weight is None and WORD_EMBEDDINGS in self.name_map:
                 hf_name, _, _, _, _, _ = self.get_hf_name_and_args(self.name_map[WORD_EMBEDDINGS])
                 hf_weight_path = f"{hf_name}.{WEIGHT}"
                 weight, bias, weight_scale = self.get_from_state_dict(h_dict, hf_weight_path)
