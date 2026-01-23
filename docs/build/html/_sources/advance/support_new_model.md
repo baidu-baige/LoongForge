@@ -1,4 +1,4 @@
-# 5.1 Support New Model
+# Support New Model
 
 This document will guide you on how to add support for a new model in the AIAK-Training-Omni framework. Thanks to the flexible networking design of the framework, in most cases, you only need to add configuration files and complete the registration without modifying the core code.
 

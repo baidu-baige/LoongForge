@@ -75,4 +75,4 @@ Text field requirements for different `sample_type` (aligned with generated `dat
 - `multi_mix_qa` / `multi_vid_vqa`, etc.: script writes a structured `json` (`texts/media/name`); downstream cooker parses according to the corresponding `sample_type`.
 
 ## 5.Offline Packing Data Processing
-See [Offline Data Packing Guide](https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/blob/master/docs/source/features/4_2_offline_data_packing.md) for details.
+See [Offline Data Packing Guide](https://github.com/baidu-baige/AIAK-Training-Omni/blob/master/docs/source/features/4_2_offline_data_packing.md) for details.

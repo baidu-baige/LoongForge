@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>5.1 Support New Model &#8212; AIAK-Training-Omni  documentation</title>
+    <title>Support New Model &#8212; AIAK-Training-Omni  documentation</title>
   
   
   
@@ -41,9 +41,11 @@
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'advance/5_1_support_new_model';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'advance/support_new_model';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Support New Data Format" href="support_new_data_format.html" />
+    <link rel="prev" title="Develope Guide" href="index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -148,7 +150,7 @@
         <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../get_started/index.html">Get Started</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../get_started/README.html">Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../get_started/installation.html">Installation</a></li>
@@ -173,11 +175,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../vlm_tutorial/features_index.html">Advanced Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../features/model_combination.html">Model Combination</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
 </ul>
 </details></li>
 </ul>
@@ -190,7 +192,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Develope Guide</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="support_new_data_format.html">Support New Data Format</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
 </ul>
 
@@ -246,7 +253,7 @@
       
       
       
-      <li><a href="../_sources/advance/5_1_support_new_model.md" target="_blank"
+      <li><a href="../_sources/advance/support_new_model.md" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -330,7 +337,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>5.1 Support New Model</h1>
+    <h1>Support New Model</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -361,7 +368,7 @@ document.write(`
                 <article class="bd-article">
                   
   <section class="tex2jax_ignore mathjax_ignore" id="support-new-model">
-<h1>5.1 Support New Model<a class="headerlink" href="#support-new-model" title="Link to this heading">#</a></h1>
+<h1>Support New Model<a class="headerlink" href="#support-new-model" title="Link to this heading">#</a></h1>
 <p>This document will guide you on how to add support for a new model in the AIAK-Training-Omni framework. Thanks to the flexible networking design of the framework, in most cases, you only need to add configuration files and complete the registration without modifying the core code.</p>
 <p>The process of supporting a new model is mainly divided into three steps:</p>
 <ol class="arabic simple">
@@ -510,6 +517,24 @@ torchrun<span class="w"> </span>...<span class="w"> </span>train.py<span class="
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Develope Guide</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="support_new_data_format.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Support New Data Format</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               

@@ -175,11 +175,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
 <li class="toctree-l2 current active has-children"><a class="current reference internal" href="#">Advanced Features</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../features/model_combination.html">Model Combination</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
 </ul>
 </details></li>
 </ul>
@@ -192,7 +192,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../advance/index.html">Develope Guide</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_model.html">Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_data_format.html">Support New Data Format</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
 </ul>
 
@@ -353,14 +358,6 @@ document.write(`
 <li class="toctree-l2"><a class="reference internal" href="../features/model_combination.html#how-to-use">2. How to Use</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../features/fp8_training.html#supported-models">1. Supported Models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../features/fp8_training.html#fp8-low-precision-training-guide">2. FP8 Low-Precision Training Guide</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../features/heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../features/offline_data_packing.html#supported-packing-scenarios-sample-sample-type">1. Supported Packing Scenarios (<code class="docutils literal notranslate"><span class="pre">sample.sample_type</span></code>)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../features/offline_data_packing.html#input-data-requirements-data-wds-dir">2. Input Data Requirements (<code class="docutils literal notranslate"><span class="pre">data.wds_dir</span></code>)</a></li>
@@ -370,6 +367,14 @@ document.write(`
 <li class="toctree-l2"><a class="reference internal" href="../features/offline_data_packing.html#switching-models-adjusting-image-processing">6. Switching Models / Adjusting Image Processing</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../features/fp8_training.html#supported-models">1. Supported Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../features/fp8_training.html#fp8-low-precision-training-guide">2. FP8 Low-Precision Training Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../features/heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
 </ul>
 </div>
 </section>
