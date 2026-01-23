@@ -14,7 +14,6 @@ from .sft_data_collator import (
     MultiModalDataCollatorForSupervisedDataset,
 )
 
-from .multimodal_dataset import CaptionDataset, ConversationDataset
 
 
 __all__ = [
@@ -27,6 +26,4 @@ __all__ = [
     "MMPlugin",
     "DataCollatorForSupervisedDataset",
     "MultiModalDataCollatorForSupervisedDataset",
-    "CaptionDataset",
-    "ConversationDataset",
 ]

@@ -117,13 +117,6 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         help="The model name to use. This name should match the key in the model config registry.",
     )
 
-    # use for cogvlm2
-    group.add_argument(
-        "--no-rope-in-fp32",
-        action="store_false",
-        dest="rope_in_fp32",
-        help="Disable Rope in FP32",
-    )
 
     # use for deepseek v3
     group.add_argument(
@@ -692,8 +685,6 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
 
 def _add_extra_multimodal_args(parser):
     """Add multimodal arguments"""
-    # FIXME: Currently, multimodal implementation is based on cogvlm, and whether the newly added parameters
-    # are universally applicable needs to be determined subsequently;
 
     group = parser.add_argument_group(title="extra-multimodal")
     group.add_argument(
