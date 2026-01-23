@@ -4,9 +4,7 @@ from megatron.core.transformer.spec_utils import import_module
 
 from aiak_training_omni.utils import get_args, build_transformer_config, print_rank_0
 
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
-    StditTransformerConfig,
-)
+from aiak_training_omni.models.common import BaseModelStditConfig
 
 from .wan_model import WanModel
 from .wan_layer_spec import get_wan_layer_with_te_spec
@@ -32,7 +30,7 @@ def wan2_1_i2v_model_provider(
 
     print_rank_0("building Wan2.1 model ...")
 
-    config = build_transformer_config(args, config_class=StditTransformerConfig)
+    config = build_transformer_config(args, config_class=BaseModelStditConfig)
     config.pipeline_dtype = torch.float32
 
     if args.spec is not None:
@@ -91,7 +89,7 @@ def wan2_2_i2v_model_provider(
 
     print_rank_0("building WAN2_2_I2V model ...")
 
-    config = build_transformer_config(args, config_class=StditTransformerConfig)
+    config = build_transformer_config(args, config_class=BaseModelStditConfig)
     config.pipeline_dtype = torch.float32
 
     if args.spec is not None:

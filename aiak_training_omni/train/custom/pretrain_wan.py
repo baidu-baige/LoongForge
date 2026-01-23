@@ -26,7 +26,7 @@ from megatron.core import parallel_state
 import numpy as np
 import math
 
-from aiak_training_omni.models.custom.stdit.gaussian_diffusion import (
+from aiak_training_omni.models.custom.wan.gaussian_diffusion import (
     ModelMeanType,
     ModelVarType,
     LossType,
