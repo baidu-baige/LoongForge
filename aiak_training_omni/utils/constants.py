@@ -84,13 +84,6 @@ class LanguageModelFamilies(_BaseFamilies):
     INTERNLM2_5 = "internlm2.5"
 
 
-class VideoLanguageModelFamilies(_BaseFamilies):
-    """Video language model families"""
-
-    STDIT = "stdit"
-    STDIT3 = "stdit3"
-
-
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""
 

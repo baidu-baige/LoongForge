@@ -14,7 +14,7 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core import InferenceParams, parallel_state, tensor_parallel
-from aiak_training_omni.models.custom.stdit.communications import (
+from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )

@@ -22,7 +22,7 @@ from megatron.core.parallel_state import (
     get_context_parallel_rank,
     get_context_parallel_world_size,
 )
-from aiak_training_omni.models.custom.stdit.communications import (
+from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )

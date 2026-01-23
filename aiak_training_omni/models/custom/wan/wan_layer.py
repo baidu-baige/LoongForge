@@ -20,9 +20,7 @@ from megatron.core.transformer.transformer_layer import (
 )
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 
-from aiak_training_omni.models.custom.transformer.vision.stdit_transformer_config import (
-    StditTransformerConfig,
-)
+from aiak_training_omni.models.common import BaseModelStditConfig
 
 import math
 
@@ -64,7 +62,7 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
 
     def __init__(
         self,
-        config: StditTransformerConfig,
+        config: BaseModelStditConfig,
         submodules: WanLayerSubmodules,
         layer_number: int = 1,
         hidden_dropout: float = None,

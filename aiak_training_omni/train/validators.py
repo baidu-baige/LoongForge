@@ -17,7 +17,6 @@ def validate_aiak_extra_args(args, config):
     """ "Validate AIAK extra arguments"""
     _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
-    _validate_extra_training_args(args)
     _validate_extra_sft_args(args)
     _validata_extra_multimodal_args(args)
     _validata_extra_custom_args(args)
@@ -162,23 +161,6 @@ def _validate_extra_sft_args(args):
         print_rank_0(
             "WARING: Setting args.padding_side to right when run sft.", args.rank
         )
-
-
-def _validate_extra_training_args(args):
-    """Validate training arguments"""
-
-    # check ema
-    if args.enable_ema:
-        assert args.model_family in [
-            constants.VideoLanguageModelFamilies.STDIT,
-            constants.VideoLanguageModelFamilies.STDIT3,
-        ], f"EMA only supports STDIT models."
-
-        if args.load_ema is None and args.load is not None:
-            args.load_ema = os.path.join(args.load, "ema")
-
-        if args.save_ema is None and args.save is not None:
-            args.save_ema = os.path.join(args.save, "ema")
 
 
 def _validata_extra_multimodal_args(args):

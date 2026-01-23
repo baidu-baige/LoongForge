@@ -12,7 +12,7 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 
 from aiak_training_omni.utils import get_args
-from aiak_training_omni.models.custom.stdit.communications import (
+from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )
