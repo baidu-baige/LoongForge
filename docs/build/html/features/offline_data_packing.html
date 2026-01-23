@@ -44,8 +44,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'features/offline_data_packing';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="VLA Training Tutorial" href="../vla_tutorial/index.html" />
-    <link rel="prev" title="Data Parallel Balancing" href="data_parallel_balancing.html" />
+    <link rel="next" title="Data Parallel Balancing" href="data_parallel_balancing.html" />
+    <link rel="prev" title="Model Combination" href="model_combination.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -175,11 +175,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
 <li class="toctree-l2 current active has-children"><a class="reference internal" href="../vlm_tutorial/features_index.html">Advanced Features</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="model_combination.html">Model Combination</a></li>
+<li class="toctree-l3 current active"><a class="current reference internal" href="#">Data Offline Packing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
 <li class="toctree-l3"><a class="reference internal" href="fp8_training.html">FP8 Training</a></li>
 <li class="toctree-l3"><a class="reference internal" href="moe_all2all_overlap.html">MOE All2All Overlap</a></li>
 <li class="toctree-l3"><a class="reference internal" href="heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
-<li class="toctree-l3"><a class="reference internal" href="data_parallel_balancing.html">Data Parallel Balancing</a></li>
-<li class="toctree-l3 current active"><a class="current reference internal" href="#">Data Offline Packing</a></li>
 </ul>
 </details></li>
 </ul>
@@ -192,7 +192,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../advance/index.html">Develope Guide</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_model.html">Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_data_format.html">Support New Data Format</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
 </ul>
 
@@ -531,20 +536,20 @@ bash<span class="w"> </span>scripts/pack_wds.sh
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="data_parallel_balancing.html"
+       href="model_combination.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Data Parallel Balancing</p>
+        <p class="prev-next-title">Model Combination</p>
       </div>
     </a>
     <a class="right-next"
-       href="../vla_tutorial/index.html"
+       href="data_parallel_balancing.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">VLA Training Tutorial</p>
+        <p class="prev-next-title">Data Parallel Balancing</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

@@ -175,11 +175,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../usage/checkpoint_conversion.html">Model Checkpoint Conversion</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../vlm_tutorial/features_index.html">Advanced Features</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../features/model_combination.html">Model Combination</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/fp8_training.html">FP8 Training</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/moe_all2all_overlap.html">MOE All2All Overlap</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../features/heterogeneous_tp_parallel.html">Heterogeneous TP Parallel</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../features/data_parallel_balancing.html">Data Parallel Balancing</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../features/offline_data_packing.html">Data Offline Packing</a></li>
 </ul>
 </details></li>
 </ul>
@@ -192,7 +192,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../wan_tutorial/quick_start_wan_training.html">Quick Start: Wan Model Training</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute to AIAK-Training-Omni</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../advance/index.html">Develope Guide</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_model.html">Support New Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advance/support_new_data_format.html">Support New Data Format</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../CONTRIBUTING.html">Contribute</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../faqs.html">FAQs</a></li>
 </ul>
 
@@ -345,6 +350,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#latest-news">Latest News</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#roadmap">Roadmap</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#support-model">Support Model</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick Start</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-qwen3">Quick Start for Qwen3</a><ul class="nav section-nav flex-column">
@@ -354,9 +360,10 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-qwen3-8b-sft">Launch Qwen3-8B SFT</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vlm-model-training">Quick Start for VLM Model Training</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-llm-model-training">Quick Start for LLM Model Training</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-wan-model-training">Quick Start for WAN Model Training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vlm-model-training">Quick Start for VLM Model Training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vla-model-training">Quick Start for VLA Model Training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-diffusion-model-training">Quick Start for Diffusion Model Training</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
@@ -378,8 +385,8 @@ document.write(`
 <h1>Overview<a class="headerlink" href="#overview" title="Link to this heading">#</a></h1>
 <p><img alt="AIAK-Training-Omni Logo" src="../_images/Image_20260117_204343.jpg" />
 <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/docs/build/html/index.html"><img alt="Documentation" src="https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat" /></a>
-<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master"><img alt="arxive" src="https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&amp;logoColor=B31C1C" /></a>
-<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/LICENSE"><img alt="license" src="https://img.shields.io/github/license/open-mmlab/mmdeploy.svg" /></a>
+<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni"><img alt="arxive" src="https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&amp;logoColor=B31C1C" /></a>
+<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/blob/master/LICENSE"><img alt="license" src="https://img.shields.io/github/license/open-mmlab/mmdeploy.svg" /></a>
 <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master"><img alt="stars" src="https://img.shields.io/github/stars/baidu-baige/AIAK-Training-Omni=social" /></a>
 <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/issues"><img alt="open issues" src="https://img.shields.io/github/issues-raw/baidu-baige/AIAK-Training-Omni" /></a></p>
 <section id="introduction">
@@ -399,12 +406,21 @@ document.write(`
 <section id="features">
 <h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p>Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/blob/master/docs/source/features/4_1_model_combination.md">model_combination.md</a> for details.</p></li>
+<li><p>Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/model_combination.md">model_combination.md</a> for details.</p></li>
 <li><p>Heterogeneous TP, supporting different TP size splitting for different components in VLM to cope with various model sizes, see <a class="reference internal" href="#xxx.html"><span class="xref myst">heterogeneous_tp_parallel.md</span></a> for details.</p></li>
 <li><p>DP data balance, optimizing the data parallel load imbalance problem introduced by data packing, see <a class="reference internal" href="#xxx.html"><span class="xref myst">data_parallel_balance.md</span></a> for details.</p></li>
-<li><p>Offline data packing, supporting offline data packing to reduce the number of padding tokens during training, see <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/blob/master/docs/source/features/4_2_offline_data_packing.md">offline_data_packing.md</a> for details.</p></li>
-<li><p>FP8 training, supporting FP8 precision training, see <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/blob/master/docs/source/features/4_5_fp8_training.md">fp8_training.md</a> for details.</p></li>
+<li><p>Offline data packing, supporting offline data packing to reduce the number of padding tokens during training, see <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/offline_data_packing.md">offline_data_packing.md</a> for details.</p></li>
+<li><p>FP8 training, supporting FP8 precision training, see <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/fp8_training.md">fp8_training.md</a> for details.</p></li>
 <li><p>MOE optimization, the framework optimizes the training performance of MOE models, see <a class="reference internal" href="#xxx.html"><span class="xref myst">moe_all2all_overlap.md</span></a> for details.</p></li>
+</ul>
+</section>
+<section id="roadmap">
+<h2>Roadmap<a class="headerlink" href="#roadmap" title="Link to this heading">#</a></h2>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Support more models, including Ernie4.5VL, GROOT N1.5, etc.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Support more tasks, including Lora, DPO, Knowledge Distillation, etc.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Support heterogeneous DP for VLM models.</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Support for DP load balancing across adjacent micro-batches.</p></li>
 </ul>
 </section>
 <section id="support-model">
@@ -422,380 +438,380 @@ document.write(`
 <tr class="row-even"><td><p>LLM</p></td>
 <td><p>DeepSeek-V2</p></td>
 <td><p>deepseek_v2_group</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>deepseek_v2_lite_group</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>DeepSeek-V3</p></td>
 <td><p>deepseek_v3_group_bf16</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>deepseek_v3_group_fp8</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Llama2</p></td>
 <td><p>llama2_7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama2_13b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_13b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_13b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_13b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_13b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama2_70b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_70b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_70b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Llama3</p></td>
 <td><p>llama3_8b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/pretrain/pretrain_llama3_8b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/finetuning/sft_llama3_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3/pretrain/pretrain_llama3_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3/finetuning/sft_llama3_8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama3_70b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/pretrain/pretrain_llama3_70b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3/finetuning/sft_llama3_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3/pretrain/pretrain_llama3_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3/finetuning/sft_llama3_70b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Llama3.1</p></td>
 <td><p>llama3.1_8b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_8b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama3.1_70b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_70b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_70b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_70b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>llama3.1_405b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_405b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_405b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_405b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama3.1/finetuning/sft_llama3.1_405b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen</p></td>
 <td><p>qwen_1.8b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_1.8b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_1.8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_1.8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_1.8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen_7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen_14b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_14b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_14b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen_72b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_72b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/pretrain/pretrain_qwen_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen/finetuning/sft_qwen_72b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen1.5</p></td>
 <td><p>qwen1.5_0.5b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_0.5b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_0.5b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_1.8b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_1.8b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_1.8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_1.8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_1.8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_4b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_4b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_4b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_14b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_14b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_14b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_32b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_32b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_32b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen1.5_72b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_72b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_72b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Qwen2</p></td>
 <td><p>qwen2_0.5b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_0.5b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_0.5b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2_1.5b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_1.5b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_1.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_1.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_1.5b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2_7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2_72b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_72b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/pretrain/pretrain_qwen2_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2/finetuning/sft_qwen2_72b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p>Qwen2.5</p></td>
 <td><p>qwen2.5_0.5b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_0.5b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_0.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_0.5b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_1.5b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_1.5b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_1.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_1.5b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_1.5b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_3b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_3b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_14b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_14b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_14b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_32b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_32b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_32b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_72b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_72b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_72b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen3</p></td>
 <td><p>qwen3_0.6b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_0.6b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_0.6b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_0.6b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_0.6b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_1.7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_1.7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_1.7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_1.7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_1.7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_4b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_4b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_4b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_8b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_8b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_14b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_14b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_14b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_32b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_32b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_32b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_30b_a3b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_30b_a3b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_30b_a3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_235b_a22b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_235b_a22b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_235b_a22b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_235b_a22b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_235b_a22b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_480b_a35b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_480b_a35b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_480b_a35b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_480b_a35b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_480b_a35b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_coder_30b_a3b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_coder_30b_a3b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_coder_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/pretrain/pretrain_qwen3_coder_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3/finetuning/sft_qwen3_coder_30b_a3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p>VLM</p></td>
 <td><p>Qwen2.5-VL</p></td>
 <td><p>qwen2.5_vl_3b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_3b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_vl_7b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_7b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_7b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_7b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_vl_32b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_32b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_32b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_32b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen2.5_vl_72b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_72b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_72b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_72b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Qwen3-VL</p></td>
 <td><p>qwen3_vl_30b_a3b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_30b_a3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>qwen3_vl_235b_a22b</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_235b_a22b.sh">example</a>)</p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_235b_a22b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_235b_a22b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_235b_a22b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>LLava-OV-1.5</p></td>
 <td><p>llava_ov_4b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_4b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_4b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>llava_ov_30b_a3b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_30b_a3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>InternVL-2.5</p></td>
 <td><p>internvl2.5_8b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl2.5_26b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_26b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_26b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl2.5_38b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_38b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_38b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl2.5_78b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_78b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl2.5/sft_internvl2_5_78b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>InternVL-3.5</p></td>
 <td><p>internvl3.5_8b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_8b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_8b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_14b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_14b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_38b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_38b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_38b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_30b_a3b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_30b_a3b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_30b_a3b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p></p></td>
 <td><p>internvl3.5_241b_a28b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh">example</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p>Wan</p></td>
 <td><p>Wan2.1</p></td>
 <td><p>wan2.1_i2v_14b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.1_i2v_14b_480p.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.1_i2v_14b_480p.sh">example</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p></p></td>
 <td><p>Wan2.2</p></td>
 <td><p>wan2.2_i2v_a14b</p></td>
 <td><p></p></td>
-<td><p>✅(<a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.2_i2v_a14b.sh">example</a>)</p></td>
+<td><p>✅(<a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.2_i2v_a14b.sh">example</a>)</p></td>
 </tr>
 </tbody>
 </table>
@@ -868,17 +884,21 @@ bash<span class="w"> </span>convert_qwen3_8b_hf_to_mcore.sh
 </div>
 </section>
 </section>
-<section id="quick-start-for-vlm-model-training">
-<h3>Quick Start for VLM Model Training<a class="headerlink" href="#quick-start-for-vlm-model-training" title="Link to this heading">#</a></h3>
-<p>Refer to the <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/docs/source/quick_start/quick_start_vlm_training.md">Quick Start for VLM Model Training</a> document for details.</p>
-</section>
 <section id="quick-start-for-llm-model-training">
 <h3>Quick Start for LLM Model Training<a class="headerlink" href="#quick-start-for-llm-model-training" title="Link to this heading">#</a></h3>
-<p>Refer to the <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/docs/source/quick_start/quick_start_llm_training.md">Quick Start for LLM Model Training</a> document for details.</p>
+<p>Refer to the <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain_training.md">Quick Start for LLM Model Training</a> document for details.</p>
 </section>
-<section id="quick-start-for-wan-model-training">
-<h3>Quick Start for WAN Model Training<a class="headerlink" href="#quick-start-for-wan-model-training" title="Link to this heading">#</a></h3>
-<p>Refer to the <a class="reference external" href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master/docs/source/quick_start/quick_start_wan_training.md">Quick Start for WAN Model Training</a> document for details.</p>
+<section id="quick-start-for-vlm-model-training">
+<h3>Quick Start for VLM Model Training<a class="headerlink" href="#quick-start-for-vlm-model-training" title="Link to this heading">#</a></h3>
+<p>Refer to the <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vlm_tutorial/quick_start_vlm_training.md">Quick Start for VLM Model Training</a> document for details.</p>
+</section>
+<section id="quick-start-for-vla-model-training">
+<h3>Quick Start for VLA Model Training<a class="headerlink" href="#quick-start-for-vla-model-training" title="Link to this heading">#</a></h3>
+<p>Refer to the <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vla_tutorial/quick_start_vla_training.md">Quick Start for VLA Model Training</a> document for details.</p>
+</section>
+<section id="quick-start-for-diffusion-model-training">
+<h3>Quick Start for Diffusion Model Training<a class="headerlink" href="#quick-start-for-diffusion-model-training" title="Link to this heading">#</a></h3>
+<p>Refer to the <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/wan_tutorial/quick_start_wan_training.md">Quick Start for WAN Model Training</a> document for details.</p>
 </section>
 </section>
 <section id="references">
@@ -890,11 +910,11 @@ bash<span class="w"> </span>convert_qwen3_8b_hf_to_mcore.sh
 </section>
 <section id="contributing">
 <h2>Contributing<a class="headerlink" href="#contributing" title="Link to this heading">#</a></h2>
-<p>Please read <a class="reference internal" href="#./CONTRIBUTING.md"><span class="xref myst">CONTRIBUTING.md</span></a> for details on our code of conduct, and the process for submitting pull requests to us.</p>
+<p>Please read <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/CONTRIBUTING.md">CONTRIBUTING.md</a> for details on our code of conduct, and the process for submitting pull requests to us.</p>
 </section>
 <section id="license">
 <h2>License<a class="headerlink" href="#license" title="Link to this heading">#</a></h2>
-<p>This project is licensed under the Apache License - see the <a class="reference internal" href="#./LICENSE"><span class="xref myst">LICENSE</span></a> file for details.</p>
+<p>This project is licensed under the Apache License - see the <a class="reference external" href="https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/LICENSE">LICENSE</a> file for details.</p>
 </section>
 <section id="citation">
 <h2>Citation<a class="headerlink" href="#citation" title="Link to this heading">#</a></h2>
@@ -961,6 +981,7 @@ bash<span class="w"> </span>convert_qwen3_8b_hf_to_mcore.sh
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#latest-news">Latest News</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#roadmap">Roadmap</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#support-model">Support Model</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick Start</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-qwen3">Quick Start for Qwen3</a><ul class="nav section-nav flex-column">
@@ -970,9 +991,10 @@ bash<span class="w"> </span>convert_qwen3_8b_hf_to_mcore.sh
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-qwen3-8b-sft">Launch Qwen3-8B SFT</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vlm-model-training">Quick Start for VLM Model Training</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-llm-model-training">Quick Start for LLM Model Training</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-wan-model-training">Quick Start for WAN Model Training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vlm-model-training">Quick Start for VLM Model Training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-vla-model-training">Quick Start for VLA Model Training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-for-diffusion-model-training">Quick Start for Diffusion Model Training</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>

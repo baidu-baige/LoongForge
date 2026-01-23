@@ -1,4 +1,4 @@
-5.2 New Data Format Support
+Support New Data Format
 -----------------------
 
 Guide for supporting new data formats.
