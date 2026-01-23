@@ -228,10 +228,6 @@ class HuggingfaceBase:
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         transformer = self.transformer if transformer is None else transformer
         is_valid_name = name in self.name_map and self.name_map[name] is not None
-        if name != WORD_EMBEDDINGS_FOR_HEAD and name != MTP_WORD_EMBEDDING and not is_valid_name:
-            return
-        if name in [WORD_EMBEDDINGS_FOR_HEAD, MTP_WORD_EMBEDDING]:
-            layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
             hf_name, is_direct_name, _, _, no_layer_id, depend_on_key = \
@@ -243,6 +239,14 @@ class HuggingfaceBase:
                                                       expert_name, transformer, d_hf_name, is_direct_name_2, no_layer_id_2, True)
                 if depend_weight is None:
                     return
+        else:
+            if name not in [WORD_EMBEDDINGS_FOR_HEAD, MTP_WORD_EMBEDDING]:
+                return
+            else:
+                layer_id = None
+                hf_name = self.name_map[WORD_EMBEDDINGS]
+            is_direct_name = False
+            no_layer_id = False
         weight, bias, weight_scale = self.get_weight(name, h_dict, layer_id, hf_layer_id, layer_prefix,
                                                      expert_name, transformer, hf_name, is_direct_name, no_layer_id, is_valid_name)
         c_ckpt.set(common_key, weight, bias, weight_scale)
