@@ -5,6 +5,21 @@ import sys
 import bisect
 
 
+def _img_count(imgs) -> int:
+    """Return number of images whether stored as tensor or list."""
+    if imgs is None:
+        return 0
+    if hasattr(imgs, "shape"):
+        try:
+            return imgs.shape[0]
+        except Exception:
+            pass
+    try:
+        return len(imgs)
+    except Exception:
+        return 0
+
+
 class Buffer:
     """A buffer to store samples"""
 
@@ -21,14 +36,14 @@ class Buffer:
         satisfy_cap = self.packed_data_len + sample.tokens.shape[0] <= self.capacity
         satisfy_img = True
         if self.img_limit > 0:
-            satisfy_img = self.img_count + sample.imgs.shape[0] <= self.img_limit
+            satisfy_img = self.img_count + _img_count(sample.imgs) <= self.img_limit
         return satisfy_img and satisfy_cap
 
     def insert(self, sample):
         """Insert a sample into the buffer"""
         self.data.append(sample)
         self.packed_data_len += sample.tokens.shape[0]
-        self.img_count += sample.imgs.shape[0]
+        self.img_count += _img_count(sample.imgs)
 
 
 class Packer:
@@ -120,7 +135,7 @@ class Packer:
         """
         lengths = [sample.total_len for sample in samples]
         img_nums = [
-            sample.imgs.shape[0] if sample.imgs is not None else 0 for sample in samples
+            _img_count(sample.imgs) for sample in samples
         ]
         assert len(lengths) == len(
             samples
@@ -217,8 +232,9 @@ class Packer:
             assert (sample.tokens.shape[0] <= buffer_capacity), f"sample token length: \
                 {sample.tokens.shape[0]} > max buffer capacity: {buffer_capacity}, will skip this sample"
             # print(f"sample_len: {sample.total_len}, buffer_capacity: {buffer_capacity}, buffers_num: {buffers_num}")
-            if sample.imgs is not None:
-                assert (sample.imgs.shape[0] <= img_limit), f"sample img_num: {sample.imgs.shape[0]} \
+            img_num = _img_count(sample.imgs)
+            if img_num and img_limit:
+                assert (img_num <= img_limit), f"sample img_num: {img_num} \
                 > self.num_images_expected: {img_limit}, will skip this sample"
 
             packed = False
