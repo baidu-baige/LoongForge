@@ -214,9 +214,10 @@ class OmniCombinationModel(BaseMegatronModule):
             # rotary_pos_emb=rotary_pos_emb,
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
-            visual_pos_masks=visual_pos_masks,
-            deepstack_visual_embeds=deepstack_visual_embeds,
-            extra_block_kwargs={},
+            extra_block_kwargs={
+                "visual_pos_masks": visual_pos_masks,
+                "deepstack_visual_embeds": deepstack_visual_embeds,
+            },
         )
 
         return output
@@ -232,13 +233,12 @@ class OmniCombinationModel(BaseMegatronModule):
         attention_mask: Optional[torch.Tensor] = None,
         packed_seq_params=None,
         labels: Optional[torch.LongTensor] = None,
-        inference_params: InferenceParams = None,
         **kwargs: Any,
     ):
         """Build the schedule plan for the model."""
-        from ..common.fine_grained_schedule import build_model_chunk_schedule_plan
+        from .model_chunk_schedule_plan import TransformerModelChunkSchedulePlan
 
-        return build_model_chunk_schedule_plan(
+        return TransformerModelChunkSchedulePlan(
             self,
             image_inputs=image_inputs,
             video_inputs=video_inputs,
@@ -247,7 +247,6 @@ class OmniCombinationModel(BaseMegatronModule):
             position_ids=position_ids,
             attention_mask=attention_mask,
             labels=labels,
-            inference_params=inference_params,
             packed_seq_params=packed_seq_params,
-            **kwargs
+            **kwargs,
         )

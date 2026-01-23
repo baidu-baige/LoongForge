@@ -58,7 +58,7 @@ def get_batch(data_iterator):
 SPIKY_LOSS_FACTOR = 10
 
 
-def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor, model=None):
+def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     """Loss function.
 
     Args:
@@ -114,13 +114,14 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor, model=None):
     return (loss, num_tokens, {'lm loss': reporting_loss})
 
 
-def forward_step(data_iterator, model):
+def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
 
     Args:
         data_iterator : Input data iterator
         model: Megatron Model
     """
+    args = get_args()
     timers = get_timers()
 
     # Get the batch.
@@ -135,12 +136,17 @@ def forward_step(data_iterator, model):
     timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(
-            input_ids=tokens,
-            position_ids=position_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-        )
+        if return_schedule_plan:
+            assert args.overlap_moe_expert_parallel_comm, \
+                "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
+            schedule_plan = model.build_schedule_plan(
+                tokens, position_ids, attention_mask, labels=labels, loss_mask=loss_mask
+            )
+            return schedule_plan, partial(loss_func, loss_mask)
+        else:
+            output_tensor = model(
+                tokens, position_ids, attention_mask, labels=labels, loss_mask=loss_mask
+            )
 
     return output_tensor, partial(loss_func, loss_mask)
 

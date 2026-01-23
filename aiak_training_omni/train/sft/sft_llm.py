@@ -141,7 +141,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     return loss, num_tokens, loss_reduced_dict
 
 
-def forward_step(data_iterator, model):
+def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
 
     Args:
@@ -153,6 +153,7 @@ def forward_step(data_iterator, model):
         loss_func: Loss function
         num_tokens: Number of tokens
     """
+    args = get_args()
     timers = get_timers()
 
     # Get the batch.
@@ -172,13 +173,27 @@ def forward_step(data_iterator, model):
     timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(
-            input_ids=tokens,
-            position_ids=position_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-            packed_seq_params=packed_seq_params,
-        )
+        if return_schedule_plan:
+            assert args.overlap_moe_expert_parallel_comm, \
+                "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
+            schedule_plan = model.build_schedule_plan(
+                input_ids=tokens,
+                position_ids=position_ids,
+                attention_mask=attention_mask, 
+                labels=labels,
+                packed_seq_params=packed_seq_params,
+                loss_mask=loss_mask,
+            )
+            return schedule_plan, partial(loss_func, loss_mask)
+        else:
+            output_tensor = model(
+                input_ids=tokens,
+                position_ids=position_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                packed_seq_params=packed_seq_params,
+                loss_mask=loss_mask,
+            )
 
     return output_tensor, partial(loss_func, loss_mask)
 

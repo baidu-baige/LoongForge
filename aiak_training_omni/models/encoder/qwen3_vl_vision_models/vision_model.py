@@ -14,13 +14,16 @@ from aiak_training_omni.models.common import BaseMegatronVisionModule
 from aiak_training_omni.models.utils import import_module
 from aiak_training_omni.utils import get_model_config
 
-from .vision_transformer_block import TransformerBlock
-from .qwen3_vl_config import Qwen3VisionModelConfig 
-from ..qwen2_vl_vision_models.vision_model import Qwen2VisionModel, PatchEmbed
+from aiak_training_omni.models.encoder.vision_transformer_block import TransformerBlock
+from aiak_training_omni.models.encoder.base_vision_models.base_vision_model import (
+    BaseVisionModel,
+    PatchEmbed
+)
+from .qwen3_vl_config import Qwen3VisionModelConfig  
 from ..qwen2_vl_vision_models.adapter import Adapter
 
 
-class Qwen3VisionModel(Qwen2VisionModel):
+class Qwen3VisionModel(BaseVisionModel):
     """ VisionModel With LayerNorm (for Qwen3-VL) """
 
     config_class = Qwen3VisionModelConfig

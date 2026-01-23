@@ -6,6 +6,7 @@ import warnings
 import torch
 from megatron.core.rerun_state_machine import RerunStateMachine
 from megatron.core.transformer.enums import AttnBackend
+from megatron.training.utils import warn_rank_0
 
 from aiak_training_omni.tokenizer import get_default_tokenizer
 from aiak_training_omni.utils import (constants, get_device_arch_version,
@@ -823,7 +824,7 @@ def _validate_custom_model_args(name, args, defaults={}):
     # model parallel memory optimization is enabled
     if args.tensor_model_parallel_size > 1 or args.context_parallel_size > 1 and get_device_arch_version() < 10:
         # CUDA_DEVICE_MAX_CONNECTIONS requirement no longer exists since the Blackwell architecture
-        if args.use_torch_fsdp2 or args.use_custom_fsdp:
+        if args.use_torch_fsdp2 or getattr(args, "use_custom_fsdp", False):
             fsdp_impl = "Torch-FSDP2" if args.use_torch_fsdp2 else "Custom-FSDP"
             warnings.warn(
                 f"Using tensor model parallelism or context parallelism with {fsdp_impl} together. "
@@ -831,12 +832,6 @@ def _validate_custom_model_args(name, args, defaults={}):
                 "settings for best performance. sequence parallelism requires setting the "
                 f"environment variable CUDA_DEVICE_MAX_CONNECTIONS to 1 while {fsdp_impl} "
                 "requires not setting CUDA_DEVICE_MAX_CONNECTIONS=1 for better parallelization.")
-        elif args.combined_1f1b:
-            warnings.warn("Try not to use tensor model parallelism or context parallelism with combined_1f1b. "
-                         "Using tensor/context model parallelism requires setting the environment "
-                         "variable CUDA_DEVICE_MAX_CONNECTIONS to 1. "
-                         "While combined_1f1b requires setting a larger CUDA_DEVICE_MAX_CONNECTIONS "
-                         "for better parallelization.")
     if args.preprocess_data_on_cpu is True:
         print("Skipping CUDA_DEVICE_MAX_CONNECTIONS checks because use megatron preprocess data")
     else:

@@ -146,13 +146,14 @@ def get_batch(data_iterator):
 SPIKY_LOSS_FACTOR = 10
 
 
-def forward_step(data_iterator, model):
+def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
 
     Args:
         data_iterator : Input data iterator
         model: Megatron Model
     """
+    args = get_args()
     timers = get_timers()
     model_config = get_model_config()
     # Get the batch.
@@ -178,24 +179,48 @@ def forward_step(data_iterator, model):
 
     timers("batch-generator").stop()
 
+    loss_func = getattr(model_config, "loss_func", default_loss_func)
+
     with stimer:
-        output_tensor = model(
-            dict(
+        if return_schedule_plan:
+            assert args.overlap_moe_expert_parallel_comm, \
+                "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
+            schedule_plan = model.build_schedule_plan(
+                dict(
                 images=images,
                 image_grid_thw=image_grid_thw,
-            ) if images is not None else None,
-            dict(
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-            ) if pixel_values_videos is not None else None,
-            None,
-            input_ids=tokens,
-            position_ids=position_ids,
-            attention_mask=attn_mask,
-            labels=labels,
-            packed_seq_params=packed_seq_params,
-        )
-    loss_func = getattr(model_config, "loss_func", default_loss_func)
+                ) if images is not None else None,
+                dict(
+                    pixel_values_videos=pixel_values_videos,
+                    video_grid_thw=video_grid_thw,
+                ) if pixel_values_videos is not None else None,
+                None,
+                input_ids=tokens,
+                position_ids=position_ids,
+                attention_mask=attn_mask,
+                labels=labels,
+                packed_seq_params=packed_seq_params,
+                loss_mask=loss_mask,
+            )
+            return schedule_plan, partial(loss_func, loss_mask)
+        else:
+            output_tensor = model(
+                dict(
+                    images=images,
+                    image_grid_thw=image_grid_thw,
+                ) if images is not None else None,
+                dict(
+                    pixel_values_videos=pixel_values_videos,
+                    video_grid_thw=video_grid_thw,
+                ) if pixel_values_videos is not None else None,
+                None,
+                input_ids=tokens,
+                position_ids=position_ids,
+                attention_mask=attn_mask,
+                labels=labels,
+                packed_seq_params=packed_seq_params,
+            )
+
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
 

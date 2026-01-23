@@ -13,7 +13,7 @@ from collections.abc import Iterable
 from aiak_training_omni.utils.global_vars import get_args_dict
 
 
-def import_module(module_path: Tuple[str], config: TransformerConfig):
+def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):
     """Import a named object from a module in the context of this function.
 
     TODO: make this importer module more robust, at least make sure there
@@ -25,7 +25,7 @@ def import_module(module_path: Tuple[str], config: TransformerConfig):
     except ImportError as e:
         print(f"couldn't import module due to {e}")
         return None
-    return vars(module)[name](config)
+    return vars(module)[name](config, **kwargs)
 
 
 def convert_megatron_transformer_config_args(megatron_args):
