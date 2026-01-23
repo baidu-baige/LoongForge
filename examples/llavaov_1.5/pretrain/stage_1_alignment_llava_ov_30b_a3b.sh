@@ -13,6 +13,8 @@ CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVisi
 #! /bin/bash
 # The script needs to be run on at least 1 nodes.
 
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
+
 # --- Multi-node configuration ---
 # List of IP addresses for the nodes in the training cluster
 declare -a list_ip=(

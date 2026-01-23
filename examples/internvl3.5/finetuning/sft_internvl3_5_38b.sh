@@ -23,6 +23,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 # To specify the model config file
 MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl3.5/internvl3_5_38b.yaml
 

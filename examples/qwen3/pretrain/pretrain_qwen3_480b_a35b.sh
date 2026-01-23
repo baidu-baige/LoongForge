@@ -1,4 +1,5 @@
 #!/bin/bash
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 echo "================ disk health ================"
 df -h
