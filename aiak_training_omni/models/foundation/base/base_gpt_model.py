@@ -16,6 +16,9 @@ from megatron.core.models.common.embeddings.rotary_pos_embedding import (
     MultimodalRotaryEmbedding,
     RotaryEmbedding,
 )
+from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
+    fine_grained_offloading_init_chunk_handler,
+)
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.quantization.utils import get_quant_config_or_none
@@ -128,6 +131,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         self.parallel_output = parallel_output
         self.share_embeddings_and_output_weights = share_embeddings_and_output_weights
         self.vp_stage = vp_stage
+        self.disable_param_offloading = True
 
         # since we fetch position_embedding_type from config
         self.position_embedding_type = position_embedding_type
@@ -426,6 +430,23 @@ class BaseGPTModel(BaseMegatronLanguageModule):
 
         return preproc_output
 
+
+    def preprocess_for_fine_grained_offloading(self):
+        """Preprocess for fine-grained activation offloading."""
+        fine_grained_offloading_init_chunk_handler(
+            self.vp_stage, self.config.min_offloaded_tensor_size
+        )
+        if self.disable_param_offloading:
+            for param in self.decoder.parameters():
+                param.offloading_activation = False
+            if self.mtp_process:
+                for param in self.mtp.parameters():
+                    param.offloading_activation = False
+            if self.post_process:
+                for param in self.output_layer.parameters():
+                    param.offloading_activation = False
+            self.disable_param_offloading = False
+
     def forward(
         self,
         input_ids: Tensor,
@@ -451,6 +472,8 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             runtime_gather_output (bool): Gather output at runtime. Default None means
                 `parallel_output` arg in the constructor will be used.
         """
+        if self.config.fine_grained_activation_offloading:
+            self.preprocess_for_fine_grained_offloading()
 
         inference_context = deprecate_inference_params(inference_context, inference_params)
 
@@ -726,6 +749,9 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         Returns:
             TransformerModelChunkSchedulePlan: The model chunk schedule plan.
         """
+
+        if self.config.fine_grained_activation_offloading:
+            self.preprocess_for_fine_grained_offloading()
 
         from megatron.core.models.common.model_chunk_schedule_plan import TransformerModelChunkSchedulePlan
 
