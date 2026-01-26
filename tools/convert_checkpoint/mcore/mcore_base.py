@@ -131,9 +131,9 @@ class McoreBase:
             return
         if name == WORD_EMBEDDINGS_FOR_HEAD and (not self.untie_embeddings_and_output_weights and self.pp == 1):
             return
+        common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if name == MTP_WORD_EMBEDDING and self.aiak_version > 0.14:
             layer_id = None
-        common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
         if layer_id is None:
