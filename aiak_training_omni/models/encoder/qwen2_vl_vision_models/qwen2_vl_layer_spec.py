@@ -18,7 +18,7 @@ from megatron.core.extensions.transformer_engine import (
     TERowParallelLinear,
 )
 from megatron.core.transformer.transformer_config import TransformerConfig
-from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
+from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
 
 from dataclasses import dataclass
 

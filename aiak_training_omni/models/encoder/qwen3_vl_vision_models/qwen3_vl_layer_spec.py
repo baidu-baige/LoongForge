@@ -23,7 +23,7 @@ from megatron.core.extensions.transformer_engine import (
     TERowParallelLinear,
 )
 
-from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
+from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
 from ..qwen2_vl_vision_models.qwen2_vl_layer_spec import apply_rotary_pos_emb_vision
 
 
