@@ -222,7 +222,7 @@ class TransformerBlock(MegatronTransformerBlock):
         with rng_context, outer_quantization_context:
             # Forward pass.
             if self.config.recompute_granularity == 'full' and self.training:
-                hidden_states = self._checkpointed_forward(
+                hidden_states, deepstack_feature_lists = self._checkpointed_forward(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
                     context=context,
@@ -327,6 +327,8 @@ class TransformerBlock(MegatronTransformerBlock):
             deepstack_merger_list = kwargs.get('deepstack_merger_list', None)
             assert deepstack_visual_indexes is not None and deepstack_merger_list is not None, \
                 "deepstack_visual_indexes and deepstack_merger_list must be passed when has_deepstack is True"
+            kwargs = {k: v for k, v in kwargs.items()
+                               if k not in ('deepstack_visual_indexes', 'deepstack_merger_list')}
             
             # 如果有DeepStack，使用uniform策略时，recompute_num_layers必须为1，否则可能会跳过DeepStack
             if self.config.recompute_method == 'uniform' and self.config.recompute_granularity == 'full':

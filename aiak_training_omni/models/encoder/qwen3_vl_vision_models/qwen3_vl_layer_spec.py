@@ -21,10 +21,10 @@ from megatron.core.extensions.transformer_engine import (
     TELayerNormColumnParallelLinear,
     TEDotProductAttention,
     TERowParallelLinear,
+    TENorm
 )
 
-from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
-from ..qwen2_vl_vision_models.qwen2_vl_layer_spec import apply_rotary_pos_emb_vision
+from aiak_training_omni.models.encoder.qwen3_vl_vision_models.rope_utils import apply_rotary_pos_emb
 
 
 @dataclass
@@ -50,7 +50,7 @@ def get_qwen3_vl_vision_model_layer_with_te_spec(config: TransformerConfig) -> M
                     linear_proj=TERowParallelLinear,
                     q_layernorm=IdentityOp,
                     k_layernorm=IdentityOp,
-                    apply_rotary_fn=apply_rotary_pos_emb_vision,
+                    apply_rotary_fn=apply_rotary_pos_emb,
                 ),
             ),
             self_attn_bda=get_bias_dropout_add,
@@ -70,7 +70,7 @@ def get_qwen3_vl_vision_model_layer_with_te_spec(config: TransformerConfig) -> M
 def get_adapeter_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """Use this spec for an implementation using transformer, local or multi-accel engine."""
     return AdapterSubmodules(
-        layernorm=LocalNorm,
+        layernorm=TENorm,
         linear_fc1=TELinear,
         linear_fc2=TELinear,
     )

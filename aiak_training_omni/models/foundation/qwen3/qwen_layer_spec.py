@@ -201,7 +201,7 @@ def apply_mrope(t, freq, config, cu_seqlens=None, mscale: float = 1.0, cp_group=
             [
                 _apply_mrope_bshd(
                     x.unsqueeze(1),
-                    freq[int(cu_seqlens[i]) : int(cu_seqlens[i]) + x.size(0)],
+                    freq[:, :, int(cu_seqlens[i]) : int(cu_seqlens[i]) + x.size(0), :],
                     config,
                     cu_seqlens,
                     mscale,
