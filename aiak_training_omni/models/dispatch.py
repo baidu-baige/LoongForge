@@ -57,7 +57,7 @@ def _gpu_backend_transformer_layer_modules() -> MultiAccModules:
     from megatron.core.models.common.embeddings.rotary_pos_embedding import (
         apply_rotary_pos_emb,
     )
-    from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
+    from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
 
     args = get_args()
 

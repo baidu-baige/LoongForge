@@ -12,7 +12,7 @@ from .intern_vision_transformer_layer import TransformerLayerIntern, Transformer
 from .internvl_config import InternVisionConfig
 from aiak_training_omni.models.dispatch import multiacc_modules
 from aiak_training_omni.utils import is_te_min_version
-from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
+from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
 from dataclasses import dataclass
 
 

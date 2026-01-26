@@ -19,7 +19,7 @@ from megatron.core.extensions.transformer_engine import (
     TEDotProductAttention,
     TERowParallelLinear,
 )
-from aiak_training_omni.models.custom.local_layers.local_norm import LocalNorm
+from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
 import torch
 from megatron.core import parallel_state
 from megatron.core.fusions.fused_bias_dropout import get_bias_dropout_add
