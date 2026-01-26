@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 import torch
 
-from lerobot_dataset_config import LeRobotDatasetConfig
+from .lerobot_dataset_config import LeRobotDatasetConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from lerobot.datasets.transforms import ImageTransforms, ImageTransformsConfig

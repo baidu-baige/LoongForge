@@ -93,8 +93,9 @@ def build_model_config(args, config):
 
     model_cfgs = {}
 
-    if hasattr(config, "model_type") and config.model_type in \
-            constants.LanguageModelFamilies.names():
+    if (hasattr(config, "model_type") and config.model_type in
+            (set(constants.LanguageModelFamilies.names()) |
+            set(constants.VisionLanguageActionModelFamilies.names()))):
         model_type = config.model_type
         model_config = config
     else:
@@ -139,6 +140,23 @@ def build_model_config(args, config):
         merged = deepcopy(args_dict)
         merged.update(OmegaConf.to_container(config.model, resolve=True))
         model_cfgs = instantiate(config_values, **merged)
+
+    elif model_type in constants.VisionLanguageActionModelFamilies.names():
+        # Vision-language-action models are self-contained (no Megatron config merge yet)
+        if "_target_" not in model_config:
+            raise ValueError("Model config missing '_target_' field for vla type.\n")
+
+        # Remove dispatcher-only metadata like model_type before instantiation.
+        vla_config = deepcopy(model_config)
+        if isinstance(vla_config, dict) and "model_type" in vla_config:
+            vla_config = deepcopy(vla_config)
+            vla_config.pop("model_type", None)
+        elif "model_type" in getattr(vla_config, "keys", lambda: [])():
+            # DictConfig / OmegaConf path
+            vla_config = OmegaConf.create(OmegaConf.to_container(vla_config, resolve=True))
+            vla_config.pop("model_type", None)
+
+        model_cfgs = instantiate(vla_config)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_cfgs
