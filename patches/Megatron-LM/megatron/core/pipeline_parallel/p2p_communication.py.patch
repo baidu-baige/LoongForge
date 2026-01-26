@@ -1,0 +1,139 @@
+diff --git a/megatron/core/pipeline_parallel/p2p_communication.py b/megatron/core/pipeline_parallel/p2p_communication.py
+index 63ee9d1f5..738b42989 100644
+--- a/megatron/core/pipeline_parallel/p2p_communication.py
++++ b/megatron/core/pipeline_parallel/p2p_communication.py
+@@ -136,6 +136,53 @@ def is_single_shape(x) -> bool:
+     return False
+ 
+ 
++def p2p_comm_tensor_padding(input_tensor: torch.Tensor, fixed_shape: list) -> torch.Tensor:
++    """tensor padding, seq_length is stored in binary form in the last dimension."""
++    if input_tensor is None:
++        return input_tensor
++    assert len(input_tensor.shape) == 3
++
++    assert input_tensor.shape[0] <= fixed_shape[0]
++    assert input_tensor.shape[1] == fixed_shape[1]
++    assert input_tensor.shape[2] == fixed_shape[2]
++    assert input_tensor.shape[2] >= 32
++
++    fixed_length = fixed_shape[0] + 1
++
++    origin_seq_length = input_tensor.shape[0]
++    padding_length = fixed_length - origin_seq_length
++    padding_tensor = torch.zeros(padding_length,
++                                 input_tensor.shape[1],
++                                 input_tensor.shape[2],
++                                 device=input_tensor.device,
++                                 dtype=input_tensor.dtype)
++    output_tensor = torch.cat((input_tensor, padding_tensor), dim=0)
++    binary_str = bin(origin_seq_length)[2:]
++    binary_str = binary_str.zfill(32)
++    for i in range(32):
++        output_tensor[-1, 0, i] = int(binary_str[i])
++
++    return output_tensor
++
++
++def p2p_comm_tensor_remove_padding(input_tensor: torch.Tensor, seq_lengths_per_rank: int) -> torch.Tensor:
++    """remove padding, get the lengths from the last dimension."""
++    if input_tensor is None:
++        return input_tensor
++    assert len(input_tensor.shape) == 3
++    fixed_length = seq_lengths_per_rank + 1
++
++    if input_tensor.shape[0] != fixed_length:
++        return input_tensor
++    binary_str = [""]
++    for i in range(32):
++        binary_str.append(str(int(input_tensor[-1, 0, i])))
++    binary_str = "".join(binary_str)
++    origin_seq_length = int(binary_str, 2)
++    output_tensor = input_tensor[0:origin_seq_length, ..., ...].requires_grad_()
++    return output_tensor
++
++
+ class P2PCommunicator:
+     """P2P (Point-to-Point) Communicator for pipeline parallelism.
+ 
+@@ -214,22 +261,22 @@ class P2PCommunicator:
+             ops = []
+             if send_prev_shape_tensor is not None:
+                 send_prev_op = torch.distributed.P2POp(
+-                    torch.distributed.isend, send_prev_shape_tensor, self.prev_rank
++                    torch.distributed.isend, send_prev_shape_tensor, self.prev_rank, self.pp_group
+                 )
+                 ops.append(send_prev_op)
+             if recv_prev_shape_tensor is not None:
+                 recv_prev_op = torch.distributed.P2POp(
+-                    torch.distributed.irecv, recv_prev_shape_tensor, self.prev_rank
++                    torch.distributed.irecv, recv_prev_shape_tensor, self.prev_rank, self.pp_group
+                 )
+                 ops.append(recv_prev_op)
+             if send_next_shape_tensor is not None:
+                 send_next_op = torch.distributed.P2POp(
+-                    torch.distributed.isend, send_next_shape_tensor, self.next_rank
++                    torch.distributed.isend, send_next_shape_tensor, self.next_rank, self.pp_group
+                 )
+                 ops.append(send_next_op)
+             if recv_next_shape_tensor is not None:
+                 recv_next_op = torch.distributed.P2POp(
+-                    torch.distributed.irecv, recv_next_shape_tensor, self.next_rank
++                    torch.distributed.irecv, recv_next_shape_tensor, self.next_rank, self.pp_group
+                 )
+                 ops.append(recv_next_op)
+             if len(ops) > 0:
+@@ -298,13 +345,30 @@ class P2PCommunicator:
+         tensor_recv_prev_func = None
+         tensor_recv_next_func = None
+ 
+-        if not config.variable_seq_lengths:
+-            recv_prev_shape = tensor_shape
+-            recv_next_shape = tensor_shape
++        # add for reduce_variable_seq_shape_p2p_comm, padding seq_lengths.
++        if config.reduce_variable_seq_shape_p2p_comm:
++            if tensor_shape is None:
++                tensor_shape = (config.p2p_comm_fixed_seq_lengths_per_rank, config.micro_batch_size, config.hidden_size)
++            assert  len(tensor_shape) == 3
++            #The current version only supports the SBH format.
++            if recv_prev:
++                assert tensor_shape is not None
++                recv_prev_shape = (tensor_shape[0] + 1, tensor_shape[1], tensor_shape[2])
++            if recv_next:
++                assert tensor_shape is not None
++                recv_next_shape = (tensor_shape[0] + 1, tensor_shape[1], tensor_shape[2])
++            if tensor_send_next is not None:
++                tensor_send_next = p2p_comm_tensor_padding(tensor_send_next, tensor_shape)
++            if tensor_send_prev is not None:
++                tensor_send_prev = p2p_comm_tensor_padding(tensor_send_prev, tensor_shape)
+         else:
+-            recv_prev_shape, recv_next_shape = self._communicate_shapes(
+-                tensor_send_next, tensor_send_prev, recv_prev, recv_next
+-            )
++            if not config.variable_seq_lengths:
++                recv_prev_shape = tensor_shape
++                recv_next_shape = tensor_shape
++            else:
++                recv_prev_shape, recv_next_shape = self._communicate_shapes(
++                    tensor_send_next, tensor_send_prev, recv_prev, recv_next
++                )
+ 
+         def create_tensor_recv_prev():
+             return torch.empty(
+@@ -397,6 +461,16 @@ class P2PCommunicator:
+             # User should assert that we have a modern enough PyTorch to not need this
+             torch.cuda.synchronize()
+ 
++        # add for config.p2p_comm_fixed_seq_lengths, remove_padding when not pp overlap.
++        if config.reduce_variable_seq_shape_p2p_comm and wait_on_reqs:
++            if tensor_recv_prev is not None:
++                tensor_recv_prev = p2p_comm_tensor_remove_padding(tensor_recv_prev, 
++                                                            config.p2p_comm_fixed_seq_lengths_per_rank)
++            if tensor_recv_next is not None:
++                tensor_recv_next = p2p_comm_tensor_remove_padding(tensor_recv_next, 
++                                                            config.p2p_comm_fixed_seq_lengths_per_rank)
++
++
+         return tensor_recv_prev, tensor_recv_next, reqs
+ 
+     @nvtx_decorator()

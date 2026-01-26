@@ -1,0 +1,14 @@
+diff --git a/xpu_plugin/_hydra/__init__.py b/xpu_plugin/_hydra/__init__.py
+new file mode 100644
+index 0000000..cd2b323
+--- /dev/null
++++ b/xpu_plugin/_hydra/__init__.py
+@@ -0,0 +1,8 @@
++"""
++Reinplementation of linear-related apis via hydra.
++"""
++
++from ._linear import LinearWithGradAccumulationAndAsyncCommunication
++from ._linear_with_frozen_weight import LinearWithFrozenWeight
++
++__all__ = ["LinearWithGradAccumulationAndAsyncCommunication", "LinearWithFrozenWeight"]

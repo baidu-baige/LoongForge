@@ -1,0 +1,58 @@
+diff --git a/transformer_engine/pytorch/csrc/extensions/apply_rope.cpp b/transformer_engine/pytorch/csrc/extensions/apply_rope.cpp
+index 064da8a6..8ca013a3 100644
+--- a/transformer_engine/pytorch/csrc/extensions/apply_rope.cpp
++++ b/transformer_engine/pytorch/csrc/extensions/apply_rope.cpp
+@@ -13,7 +13,7 @@ at::Tensor fused_rope_forward(const at::Tensor &input, const at::Tensor &freqs,
+                               const std::optional<at::Tensor> start_positions,
+                               const NVTE_QKV_Format qkv_format, const bool interleaved,
+                               const std::optional<at::Tensor> cu_seqlens, const int cp_size,
+-                              const int cp_rank) {
++                              const int cp_rank, const float mscale) {
+   TORCH_CHECK(freqs.dim() == 4, "expected 4D tensor");
+   TORCH_CHECK(freqs.size(1) == 1 && freqs.size(2) == 1,
+               "expected the second and third dims of the freqs tensor equal 1");
+@@ -64,7 +64,7 @@ at::Tensor fused_rope_forward(const at::Tensor &input, const at::Tensor &freqs,
+     nvte_fused_rope_forward(input_cu.data(), cu_seqlens_cu.data(), freqs_cu.data(),
+                             start_positions_cu.data(), output_cu.data(), qkv_format, interleaved,
+                             cp_size, cp_rank, max_s, b, h, d, d2, stride_t, /*stride_b=*/0,
+-                            stride_h, stride_d, at::cuda::getCurrentCUDAStream());
++                            stride_h, stride_d, mscale, at::cuda::getCurrentCUDAStream());
+ 
+     return output;
+   }
+@@ -98,7 +98,7 @@ at::Tensor fused_rope_forward(const at::Tensor &input, const at::Tensor &freqs,
+   nvte_fused_rope_forward(input_cu.data(), cu_seqlens_cu.data(), freqs_cu.data(),
+                           start_positions_cu.data(), output_cu.data(), qkv_format, interleaved,
+                           cp_size, cp_rank, s, b, h, d, d2, stride_s, stride_b, stride_h, stride_d,
+-                          at::cuda::getCurrentCUDAStream());
++                          mscale, at::cuda::getCurrentCUDAStream());
+ 
+   return output;
+ }
+@@ -165,7 +165,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> fused_qkv_rope_forward(
+ at::Tensor fused_rope_backward(const at::Tensor &output_grads, const at::Tensor &freqs,
+                                const NVTE_QKV_Format qkv_format, const bool interleaved,
+                                const std::optional<at::Tensor> cu_seqlens, const int cp_size,
+-                               const int cp_rank) {
++                               const int cp_rank, const float mscale) {
+   TORCH_CHECK(freqs.dim() == 4, "expected 4D tensor");
+   TORCH_CHECK(freqs.size(1) == 1 && freqs.size(2) == 1,
+               "expected the second and third dims of the freqs tensor equal 1");
+@@ -210,7 +210,7 @@ at::Tensor fused_rope_backward(const at::Tensor &output_grads, const at::Tensor
+     nvte_fused_rope_backward(output_grads_cu.data(), cu_seqlens_cu.data(), freqs_cu.data(),
+                              input_grads_cu.data(), qkv_format, interleaved, cp_size, cp_rank,
+                              max_s, b, h, d, d2, stride_t,
+-                             /*stride_b=*/0, stride_h, stride_d, at::cuda::getCurrentCUDAStream());
++                             /*stride_b=*/0, stride_h, stride_d, mscale, at::cuda::getCurrentCUDAStream());
+ 
+     return input_grads;
+   }
+@@ -248,7 +248,7 @@ at::Tensor fused_rope_backward(const at::Tensor &output_grads, const at::Tensor
+   nvte_fused_rope_backward(output_grads_cu.data(), cu_seqlens_cu.data(), freqs_cu.data(),
+                            input_grads_cu.data(), qkv_format, interleaved, cp_size, cp_rank, s, b,
+                            h, d, d2, stride_s, stride_b, stride_h, stride_d,
+-                           at::cuda::getCurrentCUDAStream());
++                           mscale, at::cuda::getCurrentCUDAStream());
+ 
+   return input_grads;
+ }

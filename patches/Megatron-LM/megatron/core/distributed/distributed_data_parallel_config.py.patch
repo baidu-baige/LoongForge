@@ -1,0 +1,14 @@
+diff --git a/megatron/core/distributed/distributed_data_parallel_config.py b/megatron/core/distributed/distributed_data_parallel_config.py
+index 6c4cab7d5..8b9592846 100644
+--- a/megatron/core/distributed/distributed_data_parallel_config.py
++++ b/megatron/core/distributed/distributed_data_parallel_config.py
+@@ -135,6 +135,9 @@ class DistributedDataParallelConfig:
+     delay_wgrad_compute: bool = False
+     """Delay the weight gradient computation to improve batch-level communication overlapping"""
+ 
++    force_turn_on_bucketing: bool = False
++    """Force turn on parameter bucketing"""
++
+     def __post_init__(self):
+         import os
+ 

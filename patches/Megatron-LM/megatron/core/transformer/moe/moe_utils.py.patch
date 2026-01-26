@@ -1,0 +1,95 @@
+diff --git a/megatron/core/transformer/moe/moe_utils.py b/megatron/core/transformer/moe/moe_utils.py
+index dc8571298..803663f90 100644
+--- a/megatron/core/transformer/moe/moe_utils.py
++++ b/megatron/core/transformer/moe/moe_utils.py
+@@ -1,5 +1,6 @@
+ # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ 
++import os
+ import math
+ from typing import List, Optional, Union
+ 
+@@ -1028,3 +1029,83 @@ def get_default_pg_collection():
+         with_context_parallel=True
+     )
+     return pg_collection
++
++
++CUDA_MONITOR_UTIL = {}
++MEM_MONITOR_FORCE_PRINT_TOKEN_THRESHOLD = 1000000000
++
++
++def initialize_cuda_monitoring(tp_rank, pp_rank, ep_rank=None, mem_monitor_force_print_token_threshold=None):
++    """initialize cuda monitoring"""
++    rank = torch.distributed.get_rank()
++    if rank in CUDA_MONITOR_UTIL:
++        return
++    CUDA_MONITOR_UTIL[rank] = {}
++    CUDA_MONITOR_UTIL[rank]["tp_rank"] = tp_rank
++    CUDA_MONITOR_UTIL[rank]["pp_rank"] = pp_rank
++    if ep_rank is not None:
++        CUDA_MONITOR_UTIL[rank]["ep_rank"] = ep_rank
++    CUDA_MONITOR_UTIL[rank]["max_dispatcher_tokens"] = 0
++    CUDA_MONITOR_UTIL[rank]["index"] = 0
++    global MEM_MONITOR_FORCE_PRINT_TOKEN_THRESHOLD
++    MEM_MONITOR_FORCE_PRINT_TOKEN_THRESHOLD = mem_monitor_force_print_token_threshold
++
++
++def monitor_max_memory_usage():
++    """reset max memory usage"""
++    rank = torch.distributed.get_rank()
++    CUDA_MONITOR_UTIL[rank]["max_mem_reserved"] = torch.cuda.max_memory_reserved()
++    CUDA_MONITOR_UTIL[rank]["max_mem_allocated"] = torch.cuda.max_memory_allocated()
++
++
++def monitor_max_dispatcher_tokens(tokens_per_expert):
++    """update dispatcher token count"""
++    rank = torch.distributed.get_rank()
++    cur_tokens = tokens_per_expert.sum().item()
++    if cur_tokens > CUDA_MONITOR_UTIL[rank]["max_dispatcher_tokens"]:
++        CUDA_MONITOR_UTIL[rank]["max_dispatcher_tokens"] = cur_tokens
++
++
++def write_monitor_data_to_file(monitor_dir, print_mem_monitor_interval):
++    """print monitor data to file"""
++    rank = torch.distributed.get_rank()
++    data = CUDA_MONITOR_UTIL[rank]
++    CUDA_MONITOR_UTIL[rank]["index"] = CUDA_MONITOR_UTIL[rank]["index"] + 1
++    max_dispatcher_tokens = CUDA_MONITOR_UTIL[rank]["max_dispatcher_tokens"]
++    force_print = False
++    global MEM_MONITOR_FORCE_PRINT_TOKEN_THRESHOLD
++    if max_dispatcher_tokens > MEM_MONITOR_FORCE_PRINT_TOKEN_THRESHOLD:
++        print(f"WARNING: max_dispatcher_tokens({max_dispatcher_tokens}) \
++              exceeds threshold of {MEM_MONITOR_FORCE_PRINT_TOKEN_THRESHOLD}. Printing anyway.")
++        if data["index"] % print_mem_monitor_interval != 1:
++            force_print = True
++    if force_print or data["index"] % print_mem_monitor_interval == 0:
++        os.makedirs(monitor_dir, exist_ok=True)
++        with open(os.path.join(monitor_dir, f"{rank}_temp"), "w", encoding="utf-8") as f:
++            f.write(f"rank: {rank}|t: {data['tp_rank']}|p: {data['pp_rank']}|e: {data['ep_rank']}")
++            f.write(f"|max_mem_reserved: {data['max_mem_reserved']}|max_mem_allocated: {data['max_mem_allocated']}")
++            f.write(f"|max_dispatcher_tokens: {data['max_dispatcher_tokens']}")
++        os.replace(os.path.join(monitor_dir, f"{rank}_temp"), os.path.join(monitor_dir, f"{rank}"))
++    if force_print or (rank == 0 and data["index"] > 1 and data["index"] % print_mem_monitor_interval == 1):
++        process_numeric_files(monitor_dir, os.path.join(monitor_dir, "monitor_data"))
++
++
++def process_numeric_files(input_dir, output_file):
++    """Process a directory containing numeric filenames into one new file"""
++    files = os.listdir(input_dir)
++    
++    numeric_files = []
++    for f in files:
++        full_path = os.path.join(input_dir, f)
++        if os.path.isfile(full_path) and f.isdigit():
++            numeric_files.append((int(f), full_path))
++    
++    numeric_files.sort(key=lambda x: x[0])
++
++    from datetime import datetime
++    formatted_time = datetime.now().strftime("%Y%m%d_%H%M%S")
++    with open(output_file + formatted_time, 'wb') as out_f:
++        for _, filepath in numeric_files:
++            with open(filepath, 'rb') as in_f:
++                out_f.write(in_f.read())
++                out_f.write(b'\n')

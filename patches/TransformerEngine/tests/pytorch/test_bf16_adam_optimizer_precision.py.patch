@@ -1,0 +1,134 @@
+diff --git a/tests/pytorch/test_bf16_adam_optimizer_precision.py b/tests/pytorch/test_bf16_adam_optimizer_precision.py
+new file mode 100644
+index 0000000..2cb3ac6
+--- /dev/null
++++ b/tests/pytorch/test_bf16_adam_optimizer_precision.py
+@@ -0,0 +1,127 @@
++import torch
++import torch.nn as nn
++import copy
++import transformer_engine.pytorch as te
++import numpy as np
++import random
++import os
++
++os.environ["USE_BF16_BUFFER"] = "true"
++
++seed = 42
++torch.manual_seed(seed)
++torch.cuda.manual_seed(seed)
++torch.cuda.manual_seed_all(seed)
++np.random.seed(seed)
++random.seed(seed)
++torch.backends.cudnn.deterministic = True
++torch.backends.cudnn.benchmark = False
++
++class SmallTransformer(nn.Module):
++    def __init__(self, vocab_size=1000, embed_dim=64, num_heads=1, num_layers=1, ff_dim=256):
++        super().__init__()
++        self.embedding = nn.Embedding(vocab_size, embed_dim)
++        encoder_layer = nn.TransformerEncoderLayer(
++            d_model=embed_dim,
++            nhead=num_heads,
++            dim_feedforward=ff_dim,
++            activation="relu",
++            dropout=0.0,
++            batch_first=True
++        )
++        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
++        self.fc = nn.Linear(embed_dim, vocab_size)
++
++    def forward(self, x):
++        emb = self.embedding(x)
++        enc_out = self.encoder(emb)
++        logits = self.fc(enc_out)
++        return logits
++
++def compare_te_steps():
++    model_new = SmallTransformer().cuda().to(torch.bfloat16)
++    model_old = copy.deepcopy(model_new)
++
++    seq_len = 32
++    batch_size = 8
++    vocab_size = 1000
++    x = torch.randint(0, vocab_size, (batch_size, seq_len), device='cuda')
++    y = torch.randint(0, vocab_size, (batch_size, seq_len), device='cuda')
++
++    criterion = nn.CrossEntropyLoss()
++
++    param_groups_new = [
++        {
++            "params": [p for n, p in model_new.named_parameters() if "encoder" in n],
++            "lr": 1e-3,
++        },
++        {
++            "params": [p for n, p in model_new.named_parameters() if "decoder" in n or "head" in n],
++            "lr": 5e-4,
++        },
++    ]
++
++    param_groups_old = [
++        {
++            "params": [p for n, p in model_old.named_parameters() if "encoder" in n],
++            "lr": 1e-3,
++        },
++        {
++            "params": [p for n, p in model_old.named_parameters() if "decoder" in n or "head" in n],
++            "lr": 5e-4,
++        },
++    ]
++
++
++    opt_new = te.optimizers.FusedAdam(
++        param_groups_new,
++        betas=(0.9, 0.999),
++        capturable=False,
++        master_weights=False,
++        master_weight_dtype=torch.float32,
++        exp_avg_dtype=torch.bfloat16,
++        exp_avg_sq_dtype=torch.bfloat16,
++    )
++    opt_old = te.optimizers.FusedAdam(
++        param_groups_old,
++        lr=1e-3,
++        betas=(0.9, 0.999),
++        capturable=False,
++        master_weights=False,
++        master_weight_dtype=torch.float32,
++        exp_avg_dtype=torch.bfloat16,
++        exp_avg_sq_dtype=torch.bfloat16,
++    )
++    opt_old.load_state_dict(copy.deepcopy(opt_new.state_dict()))
++
++    for i in range(5):
++        print("=============================iter", i,"===================================")
++        out_new = model_new(x).reshape(-1, vocab_size).float()
++        loss_new = criterion(out_new, y.reshape(-1))
++        loss_new.backward()
++
++        out_old = model_old(x).reshape(-1, vocab_size).float()
++        loss_old = criterion(out_old, y.reshape(-1))
++        loss_old.backward()
++
++        opt_new.step()
++        opt_old.original_step()
++
++    max_diff = 0.0
++    has_print = False
++    for p_new, p_old in zip(model_new.parameters(), model_old.parameters()):
++        if not has_print:
++            has_print = True
++            print(p_new[1])
++            print(p_old[1])
++        diff = (p_new - p_old).abs().max().item()
++        max_diff = max(max_diff, diff)
++
++    print(f"max param difference: {max_diff:.6e}")
++    if max_diff < 1e-5:
++        print("the two steps are identical")
++    else:
++        print("the two steps are different")
++
++if __name__ == "__main__":
++    compare_te_steps()
+\ No newline at end of file
