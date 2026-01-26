@@ -1,0 +1,32 @@
+diff --git a/transformer_engine/common/recipe/__init__.py b/transformer_engine/common/recipe/__init__.py
+index 7bc39f07..7f666adc 100644
+--- a/transformer_engine/common/recipe/__init__.py
++++ b/transformer_engine/common/recipe/__init__.py
+@@ -331,10 +331,24 @@ class Float8BlockScaling(Recipe):
+ 
+     use_f32_scales: bool = os.getenv("NVTE_FP8_BLOCK_SCALING_FP32_SCALES", "0") == "1"
+ 
++    # Set "NVTE_FP8_BLOCK_SCALING_xxx_POWER2" to "1" to enable power2, otherwise depends on "NVTE_FP8_BLOCK_SCALING_FP32_SCALES"
++    fp8_quant_fwd_inp_power2 = (
++        (_v == "1") if (_v := os.getenv("NVTE_FP8_BLOCK_SCALING_FWD_INP_POWER2", None)) is not None 
++        else (not use_f32_scales)
++    )
++    fp8_quant_fwd_weight_power2 = (
++        (_v == "1") if (_v := os.getenv("NVTE_FP8_BLOCK_SCALING_FWD_WEIGHT_POWER2", None)) is not None 
++        else (not use_f32_scales)
++    )
++    fp8_quant_bwd_grad_power2 = (
++        (_v == "1") if (_v := os.getenv("NVTE_FP8_BLOCK_SCALING_BWD_GRAD_POWER2", None)) is not None 
++        else (not use_f32_scales)
++    )
++
+     fp8_format: Format = Format.E4M3
+-    fp8_quant_fwd_inp = QParams(power_2_scale=not use_f32_scales, amax_epsilon=0.0)
+-    fp8_quant_fwd_weight = QParams(power_2_scale=not use_f32_scales, amax_epsilon=0.0)
+-    fp8_quant_bwd_grad = QParams(power_2_scale=not use_f32_scales, amax_epsilon=0.0)
++    fp8_quant_fwd_inp = QParams(power_2_scale=fp8_quant_fwd_inp_power2, amax_epsilon=float(os.environ.get('FP8_QUANT_FWD_INP_AMAX_EPS', '0.0')))
++    fp8_quant_fwd_weight = QParams(power_2_scale=fp8_quant_fwd_weight_power2, amax_epsilon=float(os.environ.get('FP8_QUANT_FWD_WEIGHT_AMAX_EPS', '0.0')))
++    fp8_quant_bwd_grad = QParams(power_2_scale=fp8_quant_bwd_grad_power2, amax_epsilon=float(os.environ.get('FP8_QUANT_BWD_GRAD_AMAX_EPS', '0.0')))
+     x_block_scaling_dim: int = 1
+     w_block_scaling_dim: int = 2
+     grad_block_scaling_dim: int = 1

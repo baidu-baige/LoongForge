@@ -1,0 +1,163 @@
+diff --git a/xpu_plugin/_hydra/_linear.py b/xpu_plugin/_hydra/_linear.py
+new file mode 100644
+index 0000000..d27ad66
+--- /dev/null
++++ b/xpu_plugin/_hydra/_linear.py
+@@ -0,0 +1,157 @@
++"""
++Reinplementation of `LinearWithGradAccumulationAndAsyncCommunication` via hydra.
++"""
++
++from typing import List, Optional, Tuple
++
++import torch
++import torch.distributed as dist
++from hydrax.xaccelerator.fc_fusion import fc_fusion
++from hydrax.xaccelerator.linear import (
++    linear_bwd_dgrad,
++    linear_bwd_wgrad,
++    linear_fwd,
++)
++from hydrax.xaccelerator.stateful import StatefulConfig
++from torch_xmlir.config import config
++
++from megatron.core.parallel_state import (
++    get_global_memory_buffer,
++    get_tensor_model_parallel_group,
++    get_tensor_model_parallel_world_size,
++)
++from megatron.core.utils import prepare_input_tensors_for_wgrad_compute
++
++
++@StatefulConfig(
++    retain_state_for_parameter=not config.disable_cast_cache
++).make_autograd_function_stateful
++class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
++    @staticmethod
++    def forward(
++        ctx,
++        input: torch.Tensor,
++        weight: torch.Tensor,
++        bias: Optional[torch.Tensor],
++        gradient_accumulation_fusion: bool,
++        allreduce_dgrad: bool,
++        sequence_parallel: bool,
++        grad_output_buffer: Optional[List[torch.Tensor]] = None,
++        wgrad_deferral_limit: Optional[int] = 0,
++    ) -> torch.Tensor:
++        ctx.use_bias = bias is not None
++        ctx.gradient_accumulation_fusion = gradient_accumulation_fusion
++        ctx.allreduce_dgrad = allreduce_dgrad
++        ctx.sequence_parallel = sequence_parallel
++        ctx.wgrad_deferral_limit = wgrad_deferral_limit
++        ctx.grad_output_buffer = grad_output_buffer
++
++        if sequence_parallel:
++            world_size = get_tensor_model_parallel_world_size()
++            dim_size = list(input.size())
++            dim_size[0] = dim_size[0] * world_size
++
++            total_input = get_global_memory_buffer().get_tensor(
++                dim_size, input.dtype, "mpu"
++            )
++
++            dist.all_gather_into_tensor(
++                total_input, input, group=get_tensor_model_parallel_group()
++            )
++            ctx.input_shape = input.shape
++        else:
++            total_input = input
++
++        result = linear_fwd(total_input, weight, bias)
++        ctx.save_for_backward(total_input, weight)
++
++        return result
++
++    @classmethod
++    def backward(cls, ctx, grad_output: torch.Tensor):  # type: ignore[reportIncompatibleMethodOverride]
++        grad_input, handle = cls._async_backward_input(ctx, grad_output)
++        grad_weight = cls._backward_weight(ctx, grad_output)
++        grad_bias = cls._backward_bias(ctx, grad_output)
++
++        if handle is not None:
++            handle.wait()
++
++        return grad_input, grad_weight, grad_bias, None, None, None, None, None
++
++    @classmethod
++    def _async_backward_input(
++        cls, ctx, grad_output: torch.Tensor
++    ) -> Tuple[torch.Tensor, Optional[dist.Work]]:
++        total_input, weight = ctx.saved_tensors
++
++        grad_total_input = torch.empty_like(total_input)
++        linear_bwd_dgrad(grad_output, weight, grad_total_input)
++
++        if ctx.sequence_parallel:
++            grad_input = total_input.new_empty(ctx.input_shape, requires_grad=False)
++            handle = dist.reduce_scatter_tensor(
++                grad_input,
++                grad_total_input,
++                group=get_tensor_model_parallel_group(),
++                async_op=True,
++            )
++        elif ctx.allreduce_dgrad:
++            grad_input = grad_total_input
++            handle = dist.all_reduce(
++                grad_input, group=get_tensor_model_parallel_group(), async_op=True
++            )
++        else:
++            grad_input = grad_total_input
++            handle = None
++
++        return grad_input, handle
++
++    @classmethod
++    def _backward_weight(cls, ctx, grad_output: torch.Tensor) -> Optional[torch.Tensor]:
++        total_input, weight = ctx.saved_tensors
++        grad_output_buffer = ctx.grad_output_buffer
++        wgrad_deferral_limit = ctx.wgrad_deferral_limit
++
++        wgrad_compute = True
++        if grad_output_buffer is not None and (
++            wgrad_deferral_limit == 0 or len(grad_output_buffer) < wgrad_deferral_limit
++        ):
++            grad_output_buffer.append(grad_output)
++            wgrad_compute = False
++
++        if ctx.gradient_accumulation_fusion:
++            if wgrad_compute:
++                grad_output, total_input = prepare_input_tensors_for_wgrad_compute(
++                    grad_output, total_input
++                )
++
++                fc_fusion(
++                    grad_output,
++                    total_input,
++                    lhs_trans=True,
++                    beta=1.0,
++                    out=weight.main_grad,
++                )
++
++            if hasattr(weight, "grad_added_to_main_grad"):
++                if getattr(weight, "zero_out_wgrad", False):
++                    grad_weight = total_input.new_zeros(
++                        weight.main_grad.shape, requires_grad=False
++                    )
++                else:
++                    grad_weight = total_input.new_empty(
++                        weight.main_grad.shape, requires_grad=False
++                    )
++                weight.grad_added_to_main_grad = True
++            else:
++                grad_weight = None
++
++        else:
++            grad_weight = torch.empty_like(weight)
++            linear_bwd_wgrad(grad_output, total_input, grad_weight)
++
++        return grad_weight
++
++    @classmethod
++    def _backward_bias(cls, ctx, grad_output: torch.Tensor) -> Optional[torch.Tensor]:
++        return grad_output.sum(0) if ctx.use_bias else None

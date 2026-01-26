@@ -1,0 +1,38 @@
+diff --git a/megatron/core/extensions/transformer_engine.py b/megatron/core/extensions/transformer_engine.py
+index e95409e08..9a5c3c3c0 100644
+--- a/megatron/core/extensions/transformer_engine.py
++++ b/megatron/core/extensions/transformer_engine.py
+@@ -1040,8 +1040,19 @@ class TEDotProductAttention(te.pytorch.DotProductAttention):
+             ):
+                 #  need to change mask type for SWA inference decode stage.
+                 attn_mask_type = AttnMaskType.causal_bottom_right
++        has_padding_attn_mask = (
++            attention_mask is not None and
++            (
++                attention_mask.any() and attention_mask.dim() == 4 and attention_mask.shape[-2] == 1
++                if not isinstance(attention_mask, (tuple, list))
++                else any(
++                    mask is not None and mask.any() and mask.dim() == 4 and mask.shape[-2] == 1
++                    for mask in attention_mask
++                )
++            )
++        )
+         if self.te_forward_mask_type:
+-            if qkv_format == "thd" and is_te_min_version("1.7.0"):
++            if (qkv_format == "thd" and is_te_min_version("1.7.0")) or has_padding_attn_mask:
+                 # thd format uses flash attention with cuDNN kernel which requires is_padding=True,
+                 # so the only acceptable mask types are `padding_causal` and `padding`. These do not
+                 # necessarily indicate there are padded tokens in the sequence.
+@@ -2116,3 +2127,11 @@ def set_save_original_input(module):
+             "set_save_original_input is only needed on transformer-engine modules that save "
+             "quantized tensors by default. It needs transformer-engine>=2.6.0dev0."
+         )
++
++try:
++    # pylint: disable=unused-import
++    from transformer_engine.pytorch import cpu_offload
++    from transformer_engine.pytorch.float8_tensor import Float8Tensor
++except ImportError:
++    Float8Tensor = None
++    cpu_offload = None
+\ No newline at end of file

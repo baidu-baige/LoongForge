@@ -1,0 +1,17 @@
+diff --git a/xpu_plugin/empty_package/__init__.py b/xpu_plugin/empty_package/__init__.py
+new file mode 100644
+index 0000000..58da457
+--- /dev/null
++++ b/xpu_plugin/empty_package/__init__.py
+@@ -0,0 +1,11 @@
++"""
++Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved
++This module provides megatron-core-aiak plugin.
++"""
++
++
++def empty_function(*args, **kwargs):
++    """
++    empty_function
++    """
++    pass

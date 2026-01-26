@@ -1,0 +1,39 @@
+diff --git a/megatron/core/models/common/embeddings/rotary_pos_embedding.py b/megatron/core/models/common/embeddings/rotary_pos_embedding.py
+index 0d7d5e626..2673c42bb 100644
+--- a/megatron/core/models/common/embeddings/rotary_pos_embedding.py
++++ b/megatron/core/models/common/embeddings/rotary_pos_embedding.py
+@@ -2,7 +2,7 @@
+ 
+ from __future__ import annotations
+ 
+-from typing import TYPE_CHECKING, List, Optional
++from typing import TYPE_CHECKING, List, Optional, Tuple
+ 
+ if TYPE_CHECKING:
+     from megatron.core.transformer.transformer_config import TransformerConfig
+@@ -64,6 +64,7 @@ class RotaryEmbedding(nn.Module):
+         rotary_base: int = 10000,
+         rope_scaling: bool = False,
+         rope_scaling_factor: float = 8.0,
++        dtype: torch.dtype = torch.float32,
+         use_cpu_initialization: bool = False,
+         cp_group: Optional[torch.distributed.ProcessGroup] = None,
+     ) -> None:
+@@ -77,7 +78,7 @@ class RotaryEmbedding(nn.Module):
+         self.seq_len_interpolation_factor = seq_len_interpolation_factor
+         device = 'cpu' if use_cpu_initialization else torch.cuda.current_device()
+         self.inv_freq = 1.0 / (
+-            rotary_base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)
++            rotary_base ** (torch.arange(0, dim, 2, dtype=dtype, device=device) / dim)
+         )
+ 
+         if rope_scaling:
+@@ -139,7 +140,7 @@ class RotaryEmbedding(nn.Module):
+ 
+         return freqs
+ 
+-    def get_cos_sin(self, max_seq_len: int, offset: int = 0) -> (Tensor, Tensor):
++    def get_cos_sin(self, max_seq_len: int, offset: int = 0) -> Tuple[Tensor, Tensor]:
+         """Cosine and sine values for RoPE are precomputed for all positions up to the maximum
+         sequence length"""
+         freqs = self.get_freqs_non_repeated(max_seq_len, offset)

@@ -1,0 +1,134 @@
+diff --git a/megatron/core/transformer/multi_latent_attention.py b/megatron/core/transformer/multi_latent_attention.py
+index a8893ebec..acd863617 100644
+--- a/megatron/core/transformer/multi_latent_attention.py
++++ b/megatron/core/transformer/multi_latent_attention.py
+@@ -6,6 +6,7 @@ from dataclasses import dataclass
+ from typing import NoReturn, Optional, Union
+ 
+ import torch
++import torch.nn.functional as F
+ 
+ try:
+     from einops import rearrange
+@@ -22,6 +23,11 @@ from megatron.core.models.common.embeddings import (
+     _yarn_get_mscale,
+     apply_rotary_pos_emb,
+ )
++from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
++    fine_grained_offloading_group_commit,
++    fine_grained_offloading_group_start,
++    get_fine_grained_offloading_context,
++)
+ from megatron.core.process_groups_config import ProcessGroupCollection
+ from megatron.core.tensor_parallel.layers import ColumnParallelLinear
+ from megatron.core.tensor_parallel.mappings import (
+@@ -87,7 +93,7 @@ class MultiLatentAttention(Attention):
+     def __init__(
+         self,
+         config: MLATransformerConfig,
+-        submodules: Union[MLASelfAttentionSubmodules],
++        submodules: MLASelfAttentionSubmodules,
+         layer_number: int,
+         attn_mask_type: AttnMaskType,
+         attention_type: str,
+@@ -147,6 +153,13 @@ class MultiLatentAttention(Attention):
+                 f"Unsupported RoPE type: {self.config.rope_type}, supported types are "
+                 "'rope' and 'yarn'"
+             )
++        
++        self.v_channels = self.config.v_head_dim
++        self.padding_v_head_dim = False
++
++        if self.config.padding_v_to_qk_dim and self.q_head_dim > self.config.v_head_dim:
++            self.v_channels = self.q_head_dim
++            self.padding_v_head_dim = True
+ 
+         self.core_attention = build_module(
+             submodules.core_attention,
+@@ -156,7 +169,7 @@ class MultiLatentAttention(Attention):
+             attention_type=self.attention_type,
+             softmax_scale=self.softmax_scale,
+             k_channels=self.q_head_dim,
+-            v_channels=self.config.v_head_dim,
++            v_channels=self.v_channels,
+             cp_comm_type=cp_comm_type,
+             pg_collection=self.pg_collection,
+         )
+@@ -266,15 +279,19 @@ class MultiLatentAttention(Attention):
+                 query, key, value, attention_mask, packed_seq_params=packed_seq_params
+             )
+         else:
++            if self.offload_core_attention and self.training:
++                query = fine_grained_offloading_group_start(query, name="core_attn")
++
+             if inference_context is None or inference_context.is_static_batching():
+-                core_attn_out = self.core_attention(
+-                    query,
+-                    key,
+-                    value,
+-                    attention_mask,
+-                    packed_seq_params=packed_seq_params,
+-                    attn_mask_type=attn_mask_type,
+-                )
++                with get_fine_grained_offloading_context(self.offload_core_attention):
++                    core_attn_out = self.core_attention(
++                        query,
++                        key,
++                        value,
++                        attention_mask,
++                        packed_seq_params=packed_seq_params,
++                        attn_mask_type=attn_mask_type,
++                    )
+             elif self.cache_mla_latents:
+                 # Dynamic batching attention kernel.
+                 q, k, v = (query, key, value)
+@@ -295,7 +312,10 @@ class MultiLatentAttention(Attention):
+                 # Only rearrange if not in absorption mode (Flash MLA handles format correctly)
+                 if not inference_context.is_decode_only():
+                     core_attn_out = rearrange(core_attn_out, 's b h d -> s b (h d)')
+-
++            if self.offload_core_attention and self.training:
++                (core_attn_out,) = fine_grained_offloading_group_commit(
++                    core_attn_out, name="core_attn", forced_released_tensors=[query, key, value]
++                )
+         # We are doing absorption with cache mla latents and decode mode.
+         if self.cache_mla_latents and inference_context.is_decode_only():
+             # core_attn_out = self.self.up_v_layer(core_attn_out)
+@@ -305,6 +325,11 @@ class MultiLatentAttention(Attention):
+             # Flatten back: [seq, batch, num_heads * v_head_dim]
+             core_attn_out = core_attn_out.view(core_attn_out.size(0), core_attn_out.size(1), -1)
+ 
++        if self.padding_v_head_dim:
++            _prefix = core_attn_out.shape[:-1]
++            core_attn_out = core_attn_out.reshape(*_prefix, -1, self.v_channels)
++            core_attn_out = core_attn_out[..., : self.config.v_head_dim].reshape(*_prefix, -1)
++
+         if packed_seq_params is not None and packed_seq_params.qkv_format == 'thd':
+             # reshape to same output shape as unpacked case
+             # (t, np, hn) -> (t, b=1, h=np*hn)
+@@ -320,7 +345,14 @@ class MultiLatentAttention(Attention):
+         # =================
+         # Output. [sq, b, h]
+         # =================
+-        output, bias = self.linear_proj(core_attn_out)
++        if self.offload_attn_proj:
++            core_attn_out = fine_grained_offloading_group_start(core_attn_out, name="attn_proj")
++        with get_fine_grained_offloading_context(self.offload_attn_proj):
++            output, bias = self.linear_proj(core_attn_out)
++        if self.offload_attn_proj:
++            output, bias = fine_grained_offloading_group_commit(
++                output, bias, name="attn_proj", forced_released_tensors=[core_attn_out]
++            )
+ 
+         return output, bias
+ 
+@@ -774,6 +806,9 @@ class MLASelfAttention(MultiLatentAttention):
+                     k_pos_emb = k_pos_emb.expand(-1, self.num_attention_heads_per_partition, -1)
+                 key = torch.cat([k_no_pe, k_pos_emb], dim=-1)
+ 
++            if self.padding_v_head_dim:
++                value = F.pad(value, [0, self.q_head_dim - self.config.v_head_dim])
++
+             query = query.contiguous()
+             key = key.contiguous()
+             value = value.contiguous()

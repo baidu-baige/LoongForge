@@ -1,0 +1,128 @@
+diff --git a/megatron/training/checkpointing.py b/megatron/training/checkpointing.py
+index da173912d..951587e59 100644
+--- a/megatron/training/checkpointing.py
++++ b/megatron/training/checkpointing.py
+@@ -98,7 +98,7 @@ def check_checkpoint_args(checkpoint_args):
+     _compare('num_layers')
+     _compare('hidden_size')
+     _compare('num_attention_heads')
+-    _compare('add_position_embedding', default=True)
++    _compare('add_position_embedding', default=False)
+     if args.vocab_file:
+         _compare('max_position_embeddings')
+         _compare('make_vocab_size_divisible_by')
+@@ -391,7 +391,7 @@ def _build_sharded_state_dict_metadata(args: Namespace) -> dict:
+ 
+ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler, num_floating_point_operations_so_far,
+                     checkpointing_context=None, pipeline_rank=None, expert_rank=None, tensor_rank=None, pipeline_parallel=None, expert_parallel=None, non_persistent_ckpt=False,
+-                    train_data_iterator=None, preprocess_common_state_dict_fn = None, release=False):
++                    train_data_iterator=None, preprocess_common_state_dict_fn=None, release=False, save_arg='save'):
+     """Save a model, optimizer and optionally dataloader checkpoint.
+ 
+     Checkpointing context is used to persist some checkpointing state
+@@ -424,7 +424,7 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler, num_floati
+     # Handle non_persistent_ckpt flag. Besides overwriting `args.save` and
+     # `args.use_dist_ckpt`, non-persistent global ckpt requires no additional logic
+     ckpt_type = CheckpointType.GLOBAL if args.use_dist_ckpt else CheckpointType.LEGACY
+-    save_dir = args.save
++    save_dir = getattr(args, save_arg)
+     if non_persistent_ckpt:
+         if args.non_persistent_ckpt_type == 'global':
+             ckpt_type = CheckpointType.GLOBAL
+@@ -628,7 +628,7 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler, num_floati
+                     f.write("release" if release else str(iteration))
+                 tensor_rank_to_print = (tensor_rank if tensor_rank is not None else mpu.get_tensor_model_parallel_rank()) + 1
+                 pipeline_rank_to_print = (pipeline_rank if pipeline_rank is not None else mpu.get_pipeline_model_parallel_rank()) + 1
+-                print_rank_0(f'  successfully saved checkpoint from iteration {int(iteration):7d} to {args.save} '
++                print_rank_0(f'  successfully saved checkpoint from iteration {int(iteration):7d} to {save_dir} '
+                              f'[ t {tensor_rank_to_print}/{mpu.get_tensor_model_parallel_world_size()}, '
+                              f'p {pipeline_rank_to_print}/{mpu.get_pipeline_model_parallel_world_size()} ]')
+                 if args.log_progress and args.async_save:
+@@ -636,28 +636,28 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler, num_floati
+                                            barrier=False)
+ 
+                 def delete_checkpoint(args, iteration_to_delete):
+-                    checkpoint_name = get_checkpoint_name(args.save, iteration=iteration_to_delete,
++                    checkpoint_name = get_checkpoint_name(save_dir, iteration=iteration_to_delete,
+                                                           return_base_dir=True)
+                     try:
+                         shutil.rmtree(checkpoint_name)  # TODO: Make this work with MSC remote paths?
+                         print_rank_0(f'  successfully deleted checkpoint from iteration {iteration_to_delete:7d} '
+-                                     f'at {args.save}')
++                                     f'at {save_dir}')
+                         if args.log_progress:
+                             append_to_progress_log(f'Deleted checkpoint\tIteration: {iteration_to_delete}', barrier=False)
+                     except Exception as e:
+                         print_rank_0(f'  encountered exception "{e}" when trying to delete checkpoint from '
+-                                     f'iteration {iteration_to_delete:7d} at {args.save}')
++                                     f'iteration {iteration_to_delete:7d} at {save_dir}')
+                         # Any exception encountered in checkpoint deletion can be ignored and is not fatal.
+                         pass
+ 
+                 if save_retain_interval is not None:
+                     if prev_iteration > 0 and prev_iteration != iteration and prev_iteration % save_retain_interval != 0:
+-                        checkpoint_name = get_checkpoint_name(args.save, iteration=prev_iteration,
++                        checkpoint_name = get_checkpoint_name(save_dir, iteration=prev_iteration,
+                                                               return_base_dir=True)
+                         # Don't delete if `checkpoint_name` is a symbolic link.
+                         if os.path.islink(checkpoint_name):  # TODO: Make this work with MSC remote paths?
+                             print_rank_0(f'  skipping deleting checkpoint from iteration {prev_iteration:7d} '
+-                                         f'at {args.save} since it is a symbolic link')
++                                         f'at {save_dir} since it is a symbolic link')
+                         else:
+                             # Asynchronous version of delete_checkpoint(args, iteration_to_delete=prev_iteration).
+                             threading.Thread(target=delete_checkpoint, args=(args, prev_iteration,)).start()
+@@ -745,6 +745,11 @@ def maybe_save_dataloader_state(train_iterator, iteration, dataloader_save_path)
+     # If no dataloader or saving path is provided, exit early, otherwise, raise an error.
+     if train_iterator is None or dataloader_save_path is None or dataloader_save_path == "":
+         return
++    
++    # For virtual pipeline model parallel, we only save the state for the first vpp stage.
++    if isinstance(train_iterator, list) and mpu.get_virtual_pipeline_model_parallel_rank() is not None:
++        if mpu.get_virtual_pipeline_model_parallel_rank() == 0:
++            train_iterator = train_iterator[0]
+ 
+     # If dataloader doesn't support saving state, raise an error.
+     if not hasattr(train_iterator.iterable, "save_state"):
+@@ -1564,18 +1569,19 @@ def load_checkpoint(ddp_model, optimizer, opt_param_scheduler, load_arg='load',
+     num_floating_point_operations_so_far = state_dict.get('num_floating_point_operations_so_far', 0)
+ 
+     # Check arguments.
+-    if 'args' in state_dict and not args.finetune:
+-        checkpoint_args = state_dict['args']
+-        check_checkpoint_args(checkpoint_args)
+-        args.consumed_train_samples = getattr(checkpoint_args,
+-                                              'consumed_train_samples', 0)
+-        args.skipped_train_samples = getattr(checkpoint_args,
+-                                             'skipped_train_samples', 0)
+-        update_num_microbatches(consumed_samples=args.consumed_train_samples, verbose=True)
+-        args.consumed_valid_samples = getattr(checkpoint_args,
+-                                              'consumed_valid_samples', 0)
+-    else:
+-        print_rank_0('could not find arguments in the checkpoint ...')
++    if load_arg == 'load':
++        if 'args' in state_dict and not args.finetune:
++            checkpoint_args = state_dict['args']
++            check_checkpoint_args(checkpoint_args)
++            args.consumed_train_samples = getattr(checkpoint_args,
++                                                'consumed_train_samples', 0)
++            args.skipped_train_samples = getattr(checkpoint_args,
++                                                'skipped_train_samples', 0)
++            update_num_microbatches(consumed_samples=args.consumed_train_samples, verbose=True)
++            args.consumed_valid_samples = getattr(checkpoint_args,
++                                                'consumed_valid_samples', 0)
++        else:
++            print_rank_0('could not find arguments in the checkpoint ...')
+ 
+     def load_model_state_dict(module, state_dict, strict: bool):
+         """Helper function to load state dict with fallback for missing extra states."""
+@@ -1613,7 +1619,8 @@ def load_checkpoint(ddp_model, optimizer, opt_param_scheduler, load_arg='load',
+             # Load distributed optimizer's custom parameter state.
+             # For distributed checkpoint it's already loaded in load_state_dict above
+             is_torch_dist = ckpt_format == "torch_dist"
+-            if args.use_distributed_optimizer and not is_torch_dist and ckpt_format not in ["torch_dcp", "fsdp_dtensor"]:
++            if args.use_distributed_optimizer and not is_torch_dist and \
++                ckpt_format not in ["torch_dcp", "fsdp_dtensor"] and optimizer is not None:
+                 # NOTE: this is a manual read of the tracker file.
+                 # This code should not be reached when reading from a non_persistent checkpoint
+                 assert not is_torch_dist
