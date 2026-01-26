@@ -240,7 +240,7 @@ class HuggingfaceBase:
                 if depend_weight is None:
                     return
         else:
-            if name not in [WORD_EMBEDDINGS_FOR_HEAD, MTP_WORD_EMBEDDING]:
+            if name not in [WORD_EMBEDDINGS_FOR_HEAD, MTP_WORD_EMBEDDING] or WORD_EMBEDDINGS not in self.name_map:
                 return
             else:
                 layer_id = None
