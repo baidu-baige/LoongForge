@@ -25,8 +25,7 @@ from megatron.core import parallel_state
 from megatron.core.fusions.fused_bias_dropout import get_bias_dropout_add
 
 
-def _get_mlp_module_spec(
-) -> ModuleSpec:
+def _get_mlp_module_spec() -> ModuleSpec:
     """Helper function to get module spec for MLP"""
     # Dense MLP w/ TE modules.
     return ModuleSpec(
@@ -36,6 +35,7 @@ def _get_mlp_module_spec(
             linear_fc2=multiacc_modules.TERowParallelLinear,
         ),
     )
+
 
 def get_qwen2_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """
@@ -54,6 +54,7 @@ def get_qwen2_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     qk_norm = (
         multiacc_modules.TENorm
         if is_te_min_version("1.9.0")
+        and config.normalization in ["LayerNorm", "RMSNorm"]
         else multiacc_modules.LocalNorm
     )
 
@@ -81,6 +82,7 @@ def get_qwen2_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
             mlp_bda=multiacc_modules.get_bias_dropout_add,
         ),
     )
+
 
 def _rotate_half(x):
     x1, x2 = torch.chunk(x, 2, dim=-1)
@@ -124,7 +126,11 @@ def apply_mrope(
 ):
     """mrope"""
     if cu_seqlens is not None:
-        cp_size = cp_group.size() if cp_group is not None else parallel_state.get_context_parallel_world_size()
+        cp_size = (
+            cp_group.size()
+            if cp_group is not None
+            else parallel_state.get_context_parallel_world_size()
+        )
         cu_seqlens = cu_seqlens // cp_size
         seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
 
@@ -149,6 +155,12 @@ def get_qwen2_vl_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """
     Use this spec for an implementation using transformer, local or multi-accel engine
     """
+    qk_norm = (
+        multiacc_modules.TENorm
+        if is_te_min_version("1.9.0")
+        and config.normalization in ["LayerNorm", "RMSNorm"]
+        else multiacc_modules.LocalNorm
+    )
     return ModuleSpec(
         module=TransformerLayer,
         submodules=TransformerLayerSubmodules(
@@ -160,8 +172,8 @@ def get_qwen2_vl_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
                     linear_qkv=TELayerNormColumnParallelLinear,
                     core_attention=TEDotProductAttention,
                     linear_proj=TERowParallelLinear,
-                    q_layernorm=LocalNorm if config.qk_layernorm else IdentityOp,
-                    k_layernorm=LocalNorm if config.qk_layernorm else IdentityOp,
+                    q_layernorm=qk_norm if config.qk_layernorm else IdentityOp,
+                    k_layernorm=qk_norm if config.qk_layernorm else IdentityOp,
                     apply_rotary_fn=apply_mrope,
                 ),
             ),

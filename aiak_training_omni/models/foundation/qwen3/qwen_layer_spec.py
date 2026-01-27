@@ -83,6 +83,7 @@ def get_qwen3_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     qk_norm = (
         multiacc_modules.TENorm
         if is_te_min_version("1.9.0")
+        and config.normalization in ["LayerNorm", "RMSNorm"]
         else multiacc_modules.LocalNorm
     )
 
@@ -112,15 +113,15 @@ def get_qwen3_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     )
 
 
-
-
 def get_llava_ov_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """
     Use this spec for an implementation using transformer, local or multi-accel engine
     """
     # To simplify the code, temporarily remove the compatibility with MoE/MLA.
     # If there is a new version in the future, add and test it separately.
-    assert not config.multi_latent_attention, "Not supporting multi-latent attention for Qwen model yet."
+    assert (
+        not config.multi_latent_attention
+    ), "Not supporting multi-latent attention for Qwen model yet."
 
     mlp = _get_mlp_module_spec(
         num_experts=config.num_moe_experts,
@@ -130,7 +131,11 @@ def get_llava_ov_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     # TENorm significantly harms convergence when used for QKLayerNorm if TE Version < 1.9;
     # we instead use the Apex implementation.
     # qk_norm = multiacc_modules.TENorm if is_te_min_version("1.9.0") else multiacc_modules.LocalNorm
-    qk_norm = multiacc_modules.LocalNorm
+    qk_norm = (
+        multiacc_modules.TENorm
+        if config.normalization in ["LayerNorm", "RMSNorm"]
+        else multiacc_modules.LocalNorm
+    )
 
     return ModuleSpec(
         module=TransformerLayer,
@@ -154,7 +159,7 @@ def get_llava_ov_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
             ),
             mlp=mlp,
             mlp_bda=multiacc_modules.get_bias_dropout_add,
-        )
+        ),
     )
 
 
@@ -173,26 +178,30 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens, mscale: float = 1.0):
         Tensor: The input tensor after applying RoPE
     """
     rot_dim = freq.shape[-1]
-    
+
     # ideally t_pass is empty so rotary pos embedding is applied to all tensor t
     freq = freq.permute(2, 1, 0, 3).contiguous()
     t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
 
     # first part is cosine component
     # second part is sine component, need to change signs with _rotate_half method
-    cos_ = (torch.cos(freq) * mscale).to(t.dtype) # [1, 1, 84, 128]
-    sin_ = (torch.sin(freq) * mscale).to(t.dtype) # [1, 1, 84, 128]
+    cos_ = (torch.cos(freq) * mscale).to(t.dtype)  # [1, 1, 84, 128]
+    sin_ = (torch.sin(freq) * mscale).to(t.dtype)  # [1, 1, 84, 128]
 
     t = (t * cos_) + (_rotate_half(t) * sin_)
 
     t = torch.cat((t, t_pass), dim=-1)
     return t
-    
+
 
 def apply_mrope(t, freq, config, cu_seqlens=None, mscale: float = 1.0, cp_group=None):
-    """ mrope """
+    """mrope"""
     if cu_seqlens is not None:
-        cp_size = cp_group.size() if cp_group is not None else parallel_state.get_context_parallel_world_size()
+        cp_size = (
+            cp_group.size()
+            if cp_group is not None
+            else parallel_state.get_context_parallel_world_size()
+        )
         cp_rank = parallel_state.get_context_parallel_rank()
         cu_seqlens = cu_seqlens // cp_size
         seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
@@ -233,6 +242,7 @@ def get_qwen3_vl_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     qk_norm = (
         multiacc_modules.TENorm
         if is_te_min_version("1.9.0")
+        and config.normalization in ["LayerNorm", "RMSNorm"]
         else multiacc_modules.LocalNorm
     )
 

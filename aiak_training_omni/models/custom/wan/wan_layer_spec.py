@@ -37,7 +37,7 @@ from .wan_utils import wan_rope_apply
 from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
 
 # qk_norm = TENorm if is_te_min_version("1.9.0") else LocalNorm
-qk_norm = LocalNorm
+qk_norm = TENorm
 
 
 # TODO: add multi acc support

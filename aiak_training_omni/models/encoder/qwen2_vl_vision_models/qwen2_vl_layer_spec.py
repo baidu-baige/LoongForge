@@ -16,6 +16,7 @@ from megatron.core.extensions.transformer_engine import (
     TELayerNormColumnParallelLinear,
     TEDotProductAttention,
     TERowParallelLinear,
+    TENorm,
 )
 from megatron.core.transformer.transformer_config import TransformerConfig
 from aiak_training_omni.models.common.local_layers.local_norm import LocalNorm
@@ -35,6 +36,7 @@ class AdapterSubmodules:
 def _rotate_half(x):
     x1, x2 = torch.chunk(x, 2, dim=-1)
     return torch.cat((-x2, x1), dim=-1)
+
 
 def apply_rotary_pos_emb_vision(
     t,
@@ -60,7 +62,9 @@ def apply_rotary_pos_emb_vision(
     return t.to(orig_dtype)
 
 
-def get_qwen2_vl_vision_model_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
+def get_qwen2_vl_vision_model_layer_with_te_spec(
+    config: TransformerConfig,
+) -> ModuleSpec:
     """Use this spec for an implementation using transformer, local or multi-accel engine."""
     return ModuleSpec(
         module=TransformerLayer,
@@ -91,7 +95,9 @@ def get_qwen2_vl_vision_model_layer_with_te_spec(config: TransformerConfig) -> M
 def get_adapeter_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """Use this spec for an implementation using transformer, local or multi-accel engine."""
     return AdapterSubmodules(
-        layernorm=LocalNorm,
+        layernorm=(
+            TENorm if config.normalization in ["LayerNorm", "RMSNorm"] else LocalNorm
+        ),
         linear_fc1=TELinear,
         linear_fc2=TELinear,
     )
