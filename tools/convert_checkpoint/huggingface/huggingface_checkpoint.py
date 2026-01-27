@@ -177,7 +177,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         hargs = self.c_config.get_args("huggingface")
         args = parse_args()
         num_layers = cargs["num_layers"]
-        mtp_reset_layer_id = hargs.get("mtp_reset_layer_id", False)
+        mtp_layer_id = hargs.get("mtp_layer_id", None)
         name_map = self.c_config.get("name_map")["huggingface"]
         mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
         mtp_layer_prefix = name_map.get(MTP_LAYER_PREFIX, None)
@@ -195,7 +195,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            hf_layer_id = layer_id - num_layers if (layer_id >= num_layers and mtp_reset_layer_id) else layer_id
+            hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
+            if layer_id > num_layers and mtp_layer_id is not None:
+                continue
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
             for c_name in BASE_NAMES:
@@ -250,7 +252,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         self.args = parse_args()
         c_ckpt = CommonCheckpoint(self.c_config)
         num_layers = cargs["num_layers"]
-        mtp_reset_layer_id = hargs.get("mtp_reset_layer_id", False)
+        mtp_layer_id = hargs.get("mtp_layer_id", None)
         name_map = self.c_config.get("name_map")["huggingface"]
         mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
         mtp_layer_prefix = name_map.get(MTP_LAYER_PREFIX, None)
@@ -263,7 +265,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            hf_layer_id = layer_id - num_layers if (layer_id >= num_layers and mtp_reset_layer_id) else layer_id
+            hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
             for c_name in BASE_NAMES:
