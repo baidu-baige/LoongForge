@@ -1,0 +1,21 @@
+diff --git a/xpu_plugin/scaled_upper_triang_masked_softmax/scaled_upper_triang_masked_softmax.py b/xpu_plugin/scaled_upper_triang_masked_softmax/scaled_upper_triang_masked_softmax.py
+new file mode 100644
+index 0000000..e3bbab6
+--- /dev/null
++++ b/xpu_plugin/scaled_upper_triang_masked_softmax/scaled_upper_triang_masked_softmax.py
+@@ -0,0 +1,15 @@
++"""
++Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved
++This module provides megatron-core-aiak plugin.
++"""
++
++from torch_xmlir.nn import scaled_upper_triang_masked_softmax
++
++
++def forward(input, scale):
++    """
++    forward
++    """
++    return scaled_upper_triang_masked_softmax.ScaledUpperTriangMaskedSoftmaxFunction.apply(
++        input, scale
++    )

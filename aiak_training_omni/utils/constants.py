@@ -99,3 +99,8 @@ class CustomModelFamilies(_BaseFamilies):
     INTERN_VL = "intern_vl"
     WAN2_1_I2V = "wan2_1_i2v"
     WAN2_2_I2V = "wan2_2_i2v"
+
+
+class VisionLanguageActionModelFamilies(_BaseFamilies):
+    """Vision language action model families"""
+    PI05 = "pi05"

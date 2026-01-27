@@ -203,12 +203,6 @@ class VLMPretrainCollator:
                 ), "micro-batch-size must be 1 for packing"
 
         batch["loss_mask"] = loss_mask
-        attn_mask_type = (
-            AttnMaskType.padding_causal if attention_mask.any() else AttnMaskType.causal
-        )
-        batch["attn_mask_type_id"] = torch.tensor(
-            [attn_mask_type.value], dtype=torch.int64
-        )
 
 
 def get_train_dataset(task_encoder):

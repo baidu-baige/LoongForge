@@ -2,7 +2,7 @@
 from typing import Tuple
 import torch
 from megatron.core.transformer import TransformerConfig
-from megatron.training.activations import squared_relu
+from megatron.core.activations import squared_relu
 import torch.nn.functional as F
 from aiak_training_omni.utils import constants
 from copy import deepcopy
@@ -13,7 +13,7 @@ from collections.abc import Iterable
 from aiak_training_omni.utils.global_vars import get_args_dict
 
 
-def import_module(module_path: Tuple[str], config: TransformerConfig):
+def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):
     """Import a named object from a module in the context of this function.
 
     TODO: make this importer module more robust, at least make sure there
@@ -25,7 +25,7 @@ def import_module(module_path: Tuple[str], config: TransformerConfig):
     except ImportError as e:
         print(f"couldn't import module due to {e}")
         return None
-    return vars(module)[name](config)
+    return vars(module)[name](config, **kwargs)
 
 
 def convert_megatron_transformer_config_args(megatron_args):
@@ -95,7 +95,8 @@ def build_model_config(args, config):
 
     if (hasattr(config, "model_type") and config.model_type in
             (set(constants.LanguageModelFamilies.names()) |
-            set(constants.CustomModelFamilies.names()))):
+            set(constants.CustomModelFamilies.names()) |
+            set(constants.VisionLanguageActionModelFamilies.names()))):
         model_type = config.model_type
         model_config = config
     else:
@@ -134,6 +135,22 @@ def build_model_config(args, config):
         merged = convert_megatron_transformer_config_args(merged)
         merged.update(OmegaConf.to_container(model_config, resolve=True))
         model_cfgs = instantiate(model_config, **merged)
+    elif model_type in constants.VisionLanguageActionModelFamilies.names():
+        # Vision-language-action models are self-contained (no Megatron config merge yet)
+        if "_target_" not in model_config:
+            raise ValueError("Model config missing '_target_' field for vla type.\n")
+
+        # Remove dispatcher-only metadata like model_type before instantiation.
+        vla_config = deepcopy(model_config)
+        if isinstance(vla_config, dict) and "model_type" in vla_config:
+            vla_config = deepcopy(vla_config)
+            vla_config.pop("model_type", None)
+        elif "model_type" in getattr(vla_config, "keys", lambda: [])():
+            # DictConfig / OmegaConf path
+            vla_config = OmegaConf.create(OmegaConf.to_container(vla_config, resolve=True))
+            vla_config.pop("model_type", None)
+
+        model_cfgs = instantiate(vla_config)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_cfgs

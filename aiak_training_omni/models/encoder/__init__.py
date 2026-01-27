@@ -1,6 +1,7 @@
 """encoder models package."""
 
-from .qwen2_vl_vision_models.vision_model import Qwen2VisionModel, Qwen2VisionModelWithRMSNorm
+from .base_vision_models.base_vision_model import BaseVisionModel
+from .qwen2_vl_vision_models.vision_model import Qwen2VisionModelWithRMSNorm
 from .qwen2_vl_vision_models.adapter import Adapter
 from .qwen2_vl_vision_models.qwen2_vl_config import (
     Qwen2VisionModelConfig,
@@ -21,7 +22,7 @@ from .internvl_vision_models.internvl_config import (
     InternMLPAdapterConfig,
 )
 
-AutoModel.register(Qwen2VisionModelConfig, Qwen2VisionModel)
+AutoModel.register(Qwen2VisionModelConfig, BaseVisionModel)
 AutoModel.register(Qwen2VisionRMSNormConfig, Qwen2VisionModelWithRMSNorm)
 AutoModel.register(Qwen3VisionModelConfig, Qwen3VisionModel)
 AutoModel.register(MLPAdapterConfig, Adapter)

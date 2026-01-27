@@ -2,6 +2,7 @@
 # The script needs to be run on at least 1 nodes.
 source /root/.bashrc
 export CUDA_DEVICE_MAX_CONNECTIONS=1
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 ipcs -m | awk '$4 == 666 {print $2}' | while read shmid; do
 ipcrm -m $shmid

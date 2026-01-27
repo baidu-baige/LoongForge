@@ -61,7 +61,6 @@ def get_batch_on_this_tp_rank(data_iterator):
     max_lengths = tensor_parallel.broadcast_data(["max_lengths"], data, torch.int32)["max_lengths"]
     position_ids = tensor_parallel.broadcast_data(["position_ids"], data, torch.int64)["position_ids"]
     loss_mask = tensor_parallel.broadcast_data(["loss_mask"], data, torch.int64)["loss_mask"]
-    attn_mask_type_id = tensor_parallel.broadcast_data(["attn_mask_type_id"], data, torch.int64)["attn_mask_type_id"]
     attn_mask = tensor_parallel.broadcast_data(["attn_mask"], data, torch.bool)["attn_mask"]
 
     has_video = bool((tokens == VIDEO_TOKEN_ID).any())
@@ -83,7 +82,6 @@ def get_batch_on_this_tp_rank(data_iterator):
         video_grid_thw = tensor_parallel.broadcast_data(
             ["video_grid_thw"], data, torch.int32
         )["video_grid_thw"]
-    attn_mask_type = AttnMaskType(int(attn_mask_type_id.item()))
 
     tokens = tokens.cuda(non_blocking=True)
     labels = labels.cuda(non_blocking=True)
@@ -128,7 +126,6 @@ def get_batch_on_this_tp_rank(data_iterator):
         "max_lengths": max_lengths,
         "position_ids": position_ids,
         "loss_mask": loss_mask,
-        "attn_mask_type": attn_mask_type,
         "packed_seq_params": packed_seq_params,
     }
 
@@ -149,13 +146,14 @@ def get_batch(data_iterator):
 SPIKY_LOSS_FACTOR = 10
 
 
-def forward_step(data_iterator, model):
+def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
 
     Args:
         data_iterator : Input data iterator
         model: Megatron Model
     """
+    args = get_args()
     timers = get_timers()
     model_config = get_model_config()
     # Get the batch.
@@ -176,31 +174,53 @@ def forward_step(data_iterator, model):
             max_lengths,
             position_ids,
             loss_mask,
-            attn_mask_type,
             packed_seq_params,
         ) = get_batch(data_iterator)
 
     timers("batch-generator").stop()
 
+    loss_func = getattr(model_config, "loss_func", default_loss_func)
+
     with stimer:
-        output_tensor = model(
-            dict(
+        if return_schedule_plan:
+            assert args.overlap_moe_expert_parallel_comm, \
+                "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
+            schedule_plan = model.build_schedule_plan(
+                dict(
                 images=images,
                 image_grid_thw=image_grid_thw,
-            ) if images is not None else None,
-            dict(
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-            ) if pixel_values_videos is not None else None,
-            None,
-            input_ids=tokens,
-            position_ids=position_ids,
-            attention_mask=attn_mask,
-            attn_mask_type=attn_mask_type,
-            labels=labels,
-            packed_seq_params=packed_seq_params,
-        )
-    loss_func = getattr(model_config, "loss_func", default_loss_func)
+                ) if images is not None else None,
+                dict(
+                    pixel_values_videos=pixel_values_videos,
+                    video_grid_thw=video_grid_thw,
+                ) if pixel_values_videos is not None else None,
+                None,
+                input_ids=tokens,
+                position_ids=position_ids,
+                attention_mask=attn_mask,
+                labels=labels,
+                packed_seq_params=packed_seq_params,
+                loss_mask=loss_mask,
+            )
+            return schedule_plan, partial(loss_func, loss_mask)
+        else:
+            output_tensor = model(
+                dict(
+                    images=images,
+                    image_grid_thw=image_grid_thw,
+                ) if images is not None else None,
+                dict(
+                    pixel_values_videos=pixel_values_videos,
+                    video_grid_thw=video_grid_thw,
+                ) if pixel_values_videos is not None else None,
+                None,
+                input_ids=tokens,
+                position_ids=position_ids,
+                attention_mask=attn_mask,
+                labels=labels,
+                packed_seq_params=packed_seq_params,
+            )
+
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
 

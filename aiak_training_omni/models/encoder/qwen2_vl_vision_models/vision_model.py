@@ -2,172 +2,13 @@
 
 import torch
 import torch.nn.functional as F
+from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.transformer.enums import ModelType, AttnMaskType
-from megatron.core.transformer.transformer_config import TransformerConfig
-from .vision_transformer_block import TransformerBlock as Qwen2VisionTransformerBlock
-from ..qwen3_vl_vision_models.vision_transformer_block import TransformerBlock as Qwen3VisionTransformerBlock
-from .qwen2_vl_config import Qwen2VisionModelConfig, Qwen2VisionRMSNormConfig
-from aiak_training_omni.models.common import BaseMegatronVisionModule
-from aiak_training_omni.models.utils import import_module
+from aiak_training_omni.models.encoder.base_vision_models.base_vision_model import BaseVisionModel
+from .qwen2_vl_config import Qwen2VisionRMSNormConfig
 
 
-class PatchEmbed(torch.nn.Module):
-    """ " Patch Embedding"""
-
-    def __init__(
-        self,
-        patch_size: int = 14,
-        temporal_patch_size: int = 2,
-        in_channels: int = 3,
-        embed_dim: int = 1152,
-        bias: bool = False,
-    ) -> None:
-        super().__init__()
-        self.patch_size = patch_size
-        self.temporal_patch_size = temporal_patch_size
-        self.in_channels = in_channels
-        self.embed_dim = embed_dim
-
-        kernel_size = [temporal_patch_size, patch_size, patch_size]
-        self.proj = torch.nn.Conv3d(
-            in_channels,
-            embed_dim,
-            kernel_size=kernel_size,
-            stride=kernel_size,
-            bias=bias,
-        )
-
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        """ " Forward pass"""
-        target_dtype = self.proj.weight.dtype
-        hidden_states = hidden_states.view(
-            -1,
-            self.in_channels,
-            self.temporal_patch_size,
-            self.patch_size,
-            self.patch_size,
-        )
-        hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(
-            -1, self.embed_dim
-        )
-        return hidden_states
-
-
-class VisionRotaryEmbedding(torch.nn.Module):
-    """ " Rotary Position Embedding"""
-
-    def __init__(self, dim: int, theta: float = 10000.0) -> None:
-        super().__init__()
-        inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float) / dim))
-        self.inv_freq = inv_freq.to(torch.cuda.current_device())
-
-    def forward(self, seqlen: int) -> torch.Tensor:
-        """Forward Pass"""
-        seq = torch.arange(
-            seqlen, device=self.inv_freq.device, dtype=self.inv_freq.dtype
-        )
-        freqs = torch.outer(seq, self.inv_freq)
-        return freqs
-
-
-class Qwen2VisionModel(BaseMegatronVisionModule):
-    """VisionTransformer model."""
-
-    config_class = Qwen2VisionModelConfig
-
-    def __init__(
-        self, config: Qwen2VisionModelConfig, spatial_merge_size: int = 2, **kwargs
-    ) -> None:
-        super().__init__(config)
-        if self.config.model_spec is None:
-            model_spec = [
-                "aiak_training_omni.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
-                "get_qwen2_vl_vision_model_layer_with_te_spec",
-            ]
-        else:
-            model_spec = self.config.model_spec
-        self.transformer_layer_spec = import_module(model_spec, self.config)
-        self.model_type = ModelType.encoder_or_decoder
-        self.spatial_merge_size = spatial_merge_size
-
-        self.rotary_pos_emb = VisionRotaryEmbedding(self.config.kv_channels // 2)
-
-        self.patch_embed = PatchEmbed(
-            patch_size=self.config.patch_size,
-            in_channels=self.config.in_channels,
-            embed_dim=self.config.hidden_size,
-        )
-        TransformerBlock = Qwen2VisionTransformerBlock
-        if self.config.model_type == "qwen3_vit":
-            TransformerBlock = Qwen3VisionTransformerBlock
-        self.decoder = TransformerBlock(
-            config=self.config,
-            spec=self.transformer_layer_spec,
-            pre_process=True,
-            post_process=False,
-        )
-        if hasattr(config, 'freeze') and config.freeze:
-            self.freeze()
-
-    def set_input_tensor(self, input_tensor: torch.Tensor) -> None:
-        """Sets input tensor to the model.
-
-        Args:
-            input_tensor (Tensor): Sets the input tensor for the model.
-        """
-        self.decoder.set_input_tensor(input_tensor)
-
-    def rot_pos_emb(self, grid_thw):
-        """rotation position embedding"""
-        pos_ids = []
-        for t, h, w in grid_thw:
-            hpos_ids = torch.arange(h).unsqueeze(1).expand(-1, w)
-            hpos_ids = hpos_ids.reshape(
-                h // self.spatial_merge_size,
-                self.spatial_merge_size,
-                w // self.spatial_merge_size,
-                self.spatial_merge_size,
-            )
-            hpos_ids = hpos_ids.permute(0, 2, 1, 3)
-            hpos_ids = hpos_ids.flatten()
-
-            wpos_ids = torch.arange(w).unsqueeze(0).expand(h, -1)
-            wpos_ids = wpos_ids.reshape(
-                h // self.spatial_merge_size,
-                self.spatial_merge_size,
-                w // self.spatial_merge_size,
-                self.spatial_merge_size,
-            )
-            wpos_ids = wpos_ids.permute(0, 2, 1, 3)
-            wpos_ids = wpos_ids.flatten()
-            pos_ids.append(torch.stack([hpos_ids, wpos_ids], dim=-1).repeat(t, 1))
-        pos_ids = torch.cat(pos_ids, dim=0)
-        max_grid_size = grid_thw[:, 1:].max()
-        rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
-        rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(1)
-        return rotary_pos_emb
-
-    def forward(
-        self, images: torch.Tensor, image_grid_thw: torch.Tensor
-    ) -> torch.Tensor:
-        """forward function"""
-        rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
-        rotary_pos_emb = rotary_pos_emb.unsqueeze(1).unsqueeze(2).float()
-
-        x = self.patch_embed(images)
-        x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
-        x = self.decoder(
-            x,
-            rotary_pos_emb=rotary_pos_emb,
-            attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
-        )
-        x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
-        return x, None, []
-
-
-class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
+class Qwen2VisionModelWithRMSNorm(BaseVisionModel):
     """VisionModel With RMSNorm"""
 
     config_class = Qwen2VisionRMSNormConfig
@@ -178,9 +19,10 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
         spatial_merge_size: int = 2,
         fullatt_block_indexes: list = [7, 15, 23, 31],
         window_size: int = 112,
+        vp_stage: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(config, spatial_merge_size=spatial_merge_size)
+        super().__init__(config, spatial_merge_size=spatial_merge_size, vp_stage=vp_stage)
         self.patch_size = config.patch_size
         self.fullatt_block_indexes = fullatt_block_indexes
         self.window_size = window_size
@@ -269,7 +111,7 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
         x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
-        x = self.decoder(
+        x, _ = self.decoder(
             x,
             packed_seq_params=[
                 PackedSeqParams(
@@ -289,7 +131,6 @@ class Qwen2VisionModelWithRMSNorm(Qwen2VisionModel):
             ],
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 

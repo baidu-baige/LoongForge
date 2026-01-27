@@ -6,26 +6,16 @@ from typing import Dict, Literal, Optional
 import torch
 from torch import Tensor
 
-from megatron.core import InferenceParams, tensor_parallel
-from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
-from megatron.core.dist_checkpointing.mapping import ShardedStateDict
-from megatron.core.models.common.embeddings.language_model_embedding import (
-    LanguageModelEmbedding,
-)
-from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
-from megatron.core.models.common.language_module.language_module import LanguageModule
+from megatron.core import InferenceParams
 from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.transformer.enums import ModelType, AttnMaskType
-from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_block import TransformerBlock
-from megatron.core.transformer.transformer_config import TransformerConfig
-from aiak_training_omni.models.common import (
-    BaseMegatronLanuageModule,
-)
+from megatron.core.process_groups_config import ProcessGroupCollection
+from megatron.core.inference.contexts import BaseInferenceContext
+
+from aiak_training_omni.models.foundation.base import BaseGPTModel
 from aiak_training_omni.models.utils import import_module
 
 
-class LLaMAModel(BaseMegatronLanuageModule):
+class LLaMAModel(BaseGPTModel):
     """LLaMA Transformer language model.
 
     Args:
@@ -59,155 +49,60 @@ class LLaMAModel(BaseMegatronLanuageModule):
         parallel_output: bool = True,
         scatter_embedding_sequence_parallel: bool = True,
         language_embedding: Optional[torch.nn.Module] = None,
+        pg_collection: Optional[ProcessGroupCollection] = None,
+        vp_stage: Optional[int] = None,
+        rotary_dtype: torch.dtype = torch.float32,
         **kwargs,
     ) -> None:
-        super().__init__(config=config, **kwargs)
 
-        if has_config_logger_enabled(self.config):
-            log_config_to_disk(self.config, locals(), prefix=type(self).__name__)
-
-        if self.config.model_spec is None:
+        if config.model_spec is None:
             model_spec = [
                 "aiak_training_omni.models.foundation.llama.llama_layer_spec",
                 "get_llama_layer_with_te_spec",
             ]
         else:
-            model_spec = self.config.model_spec
+            model_spec = config.model_spec
 
-        self.pre_process = pre_process
-        self.post_process = post_process
-        self.parallel_output = parallel_output
-        self.vocab_size = self.config.padded_vocab_size
+        transformer_layer_spec = import_module(model_spec, config)
 
-        self.transformer_layer_spec = import_module(model_spec, self.config)
-        self.max_sequence_length = self.config.max_position_embeddings
-        self.fp16_lm_cross_entropy = self.config.fp16_lm_cross_entropy
-        self.share_embeddings_and_output_weights = not self.config.untie_embeddings_and_output_weights
-        self.position_embedding_type = self.config.position_embedding_type
-        self.seq_len_interpolation_factor = self.config.rotary_seq_len_interpolation_factor
-
-        # TODO: remove this dependency ?
-        self.rotary_dtype = torch.float32
-
-        # megatron core pipelining currently depends on model type
-        # TODO: remove this dependency ?
-        self.model_type = ModelType.encoder_or_decoder
-
-        # These 4 attributes are needed for TensorRT-LLM export.
-        self.max_position_embeddings = self.config.max_position_embeddings
-        self.rotary_percent = self.config.rotary_percent
-        self.rotary_base = self.config.rotary_base
-        self.rope_scaling = self.config.use_rope_scaling
-        self.rope_scaling_factor = self.config.rope_scaling_factor
-
-        if self.pre_process:
-            if language_embedding is None:
-                self.embedding = LanguageModelEmbedding(
-                    config=self.config,
-                    vocab_size=self.vocab_size,
-                    max_sequence_length=self.max_sequence_length,
-                    position_embedding_type=self.position_embedding_type,
-                    scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
-                )
-            else:
-                self.embedding = language_embedding
-
-        if (
-            self.position_embedding_type == "rope"
-            and not self.config.multi_latent_attention
-        ):
-            self.rotary_pos_emb = RotaryEmbedding(
-                kv_channels=self.config.kv_channels,
-                rotary_percent=self.rotary_percent,
-                rotary_interleaved=self.config.rotary_interleaved,
-                seq_len_interpolation_factor=self.seq_len_interpolation_factor,
-                rotary_base=self.rotary_base,
-                dtype=self.rotary_dtype,
-                rope_scaling=self.rope_scaling,
-                rope_scaling_factor=self.rope_scaling_factor,
-                use_cpu_initialization=self.config.use_cpu_initialization,
-            )
-
-        # Cache for RoPE tensors which do not change between iterations.
-        self.rotary_pos_emb_cache = {}
-
-        # Transformer.
-        self.decoder = TransformerBlock(
-            config=self.config,
-            spec=self.transformer_layer_spec,
-            pre_process=self.pre_process,
-            post_process=self.post_process,
+        super().__init__(
+            config=config,
+            transformer_layer_spec=transformer_layer_spec,
+            vocab_size=config.padded_vocab_size,
+            max_sequence_length=config.max_position_embeddings,
+            pre_process=pre_process,
+            post_process=post_process,
+            fp16_lm_cross_entropy=config.fp16_lm_cross_entropy,
+            parallel_output=parallel_output,
+            share_embeddings_and_output_weights=(not config.untie_embeddings_and_output_weights),
+            position_embedding_type=config.position_embedding_type,
+            language_embedding=language_embedding,
+            rotary_dtype=rotary_dtype,
+            rotary_percent=config.rotary_percent,
+            rotary_base=config.rotary_base,
+            rope_scaling=config.use_rope_scaling,
+            rope_scaling_factor=config.rope_scaling_factor,
+            scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
+            seq_len_interpolation_factor=config.rotary_seq_len_interpolation_factor,
+            pg_collection=pg_collection,
+            vp_stage=vp_stage,
         )
-
-        # Output
-        if post_process:
-            if self.config.defer_embedding_wgrad_compute:
-                # The embedding activation buffer preserves a reference to the input activations
-                # of the final embedding projection layer GEMM. It will hold the activations for
-                # all the micro-batches of a global batch for the last pipeline stage. Once we are
-                # done with all the back props for all the microbatches for the last pipeline stage,
-                # it will be in the pipeline flush stage. During this pipeline flush we use the
-                # input activations stored in embedding activation buffer and gradient outputs stored
-                # in gradient buffer to calculate the weight gradients for the embedding final linear layer.
-                self.embedding_activation_buffer = []
-                self.grad_output_buffer = []
-            else:
-                self.embedding_activation_buffer = None
-                self.grad_output_buffer = None
-
-            self.output_layer = tensor_parallel.ColumnParallelLinear(
-                self.config.hidden_size,
-                self.vocab_size,
-                config=self.config,
-                init_method=self.config.init_method,
-                bias=False,
-                skip_bias_add=False,
-                gather_output=not self.parallel_output,
-                skip_weight_param_allocation=self.pre_process
-                and self.share_embeddings_and_output_weights,
-                embedding_activation_buffer=self.embedding_activation_buffer,
-                grad_output_buffer=self.grad_output_buffer,
-            )
-
-        if self.pre_process or self.post_process:
-            self.setup_embeddings_and_output_layer()
-
-        if has_config_logger_enabled(self.config):
-            log_config_to_disk(
-                self.config,
-                self.state_dict(),
-                prefix=f"{type(self).__name__}_init_ckpt",
-            )
-
-    def set_input_tensor(self, input_tensor: Tensor) -> None:
-        """Sets input tensor to the model.
-
-        See megatron.model.transformer.set_input_tensor()
-
-        Args:
-            input_tensor (Tensor): Sets the input tensor for the model.
-        """
-        # This is usually handled in schedules.py but some inference code still
-        # gives us non-lists or None
-        if not isinstance(input_tensor, list):
-            input_tensor = [input_tensor]
-
-        assert len(input_tensor) == 1, "input_tensor should only be length 1"
-        self.decoder.set_input_tensor(input_tensor[0])
 
     def forward(
         self,
         input_ids: Tensor,
         position_ids: Tensor,
         attention_mask: Tensor,
-        attn_mask_type: Optional[AttnMaskType] = None,
         decoder_input: Tensor = None,
         labels: Tensor = None,
+        inference_context: BaseInferenceContext = None,
         inference_params: InferenceParams = None,
         packed_seq_params: PackedSeqParams = None,
         extra_block_kwargs: dict = None,
         rotary_pos_emb: Tensor = None,
         runtime_gather_output: Optional[bool] = None,
+        loss_mask: Optional[Tensor] = None,
+        **kwargs,
     ) -> Tensor:
         """Forward function of the GPT Model This function passes the input tensors
         through the embedding layer, and then the decoeder and finally into the post
@@ -219,110 +114,17 @@ class LLaMAModel(BaseMegatronLanuageModule):
             runtime_gather_output (bool): Gather output at runtime. Default None means
                 `parallel_output` arg in the constructor will be used.
         """
-        # If decoder_input is provided (not None), then input_ids and position_ids are ignored.
-        # Otherwise, apply embedding layer on input_ids and position_ids to get decoder_input.
-
-        # Decoder embedding.
-        if decoder_input is None:
-            if self.pre_process:
-                decoder_input = self.embedding(
-                    input_ids=input_ids, position_ids=position_ids
-                )
-            else:
-                # intermediate stage of pipeline
-                # decoder will get hidden_states from encoder.input_tensor
-                decoder_input = None
-
-        # Rotary positional embeddings (embedding is None for PP intermediate devices)
-        if (
-            self.position_embedding_type == "rope"
-            and rotary_pos_emb is None
-            and not self.config.multi_latent_attention
-        ):
-            rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
-                inference_params,
-                self.decoder,
-                decoder_input,
-                self.config,
-                packed_seq_params,
-            )
-            rotary_pos_emb = self.rotary_pos_emb(
-                rotary_seq_len,
-                packed_seq=packed_seq_params is not None
-                and packed_seq_params.qkv_format == "thd",
-            )
-
-        # Run decoder.
-        hidden_states = self.decoder(
-            hidden_states=decoder_input,
+        return super().forward(
+            input_ids=input_ids,
+            position_ids=position_ids,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
+            decoder_input=decoder_input,
+            labels=labels,
+            inference_context=inference_context,
             inference_params=inference_params,
-            rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=packed_seq_params,
-            **(extra_block_kwargs or {}),
-        )
-
-        if not self.post_process:
-            return hidden_states
-
-        # logits and loss
-        output_weight = None
-        if self.share_embeddings_and_output_weights:
-            output_weight = self.shared_embedding_or_output_weight()
-        logits, _ = self.output_layer(
-            hidden_states,
-            weight=output_weight,
+            extra_block_kwargs=extra_block_kwargs,
+            rotary_pos_emb=rotary_pos_emb,
             runtime_gather_output=runtime_gather_output,
+            loss_mask=loss_mask,
         )
-
-        if has_config_logger_enabled(self.config):
-            payload = OrderedDict(
-                {
-                    "input_ids": input_ids,
-                    "position_ids": position_ids,
-                    "attention_mask": attention_mask,
-                    "decoder_input": decoder_input,
-                    "logits": logits,
-                }
-            )
-            log_config_to_disk(self.config, payload, prefix="input_and_logits")
-
-        if labels is None:
-            # [s b h] => [b s h]
-            return logits.transpose(0, 1).contiguous()
-
-        loss = self.compute_language_model_loss(labels, logits)
-
-        return loss
-
-    def sharded_state_dict(
-        self,
-        prefix: str = "",
-        sharded_offsets: tuple = (),
-        metadata: Optional[Dict] = None,
-    ) -> ShardedStateDict:
-        """Sharded state dict implementation for GPTModel backward-compatibility
-        (removing extra state).
-
-        Args:
-            prefix (str): Module name prefix.
-            sharded_offsets (tuple): PP related offsets, expected to be empty at this module level.
-            metadata (Optional[Dict]): metadata controlling sharded state dict creation.
-
-        Returns:
-            ShardedStateDict: sharded state dict for the GPTModel
-        """
-        sharded_state_dict = super().sharded_state_dict(
-            prefix, sharded_offsets, metadata
-        )
-        output_layer_extra_state_key = f"{prefix}output_layer._extra_state"
-
-        # Old GPT checkpoints only stored the output layer weight key. So we remove the
-        # _extra_state key but check that it doesn't contain any data anyway
-        output_extra_state = sharded_state_dict.pop(output_layer_extra_state_key, None)
-        assert not (
-            output_extra_state and output_extra_state.data
-        ), f"Expected output layer extra state to be empty, got: {output_extra_state}"
-
-        return sharded_state_dict

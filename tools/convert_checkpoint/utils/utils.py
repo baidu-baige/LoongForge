@@ -433,7 +433,7 @@ def make_hf_sub_checkpoints(base_path):
     shutil.rmtree(f'{base_path}/sub_checkpoint')
 
 def get_num_layers_in_vp_map(stage, num_layers, pp,
-                           num_nextn_predict_layers=0,
+                           mtp_num_layers=0,
                            custom_pipeline_layers=None,
                            num_layers_in_first_pipeline_stage=None,
                            num_layers_in_last_pipeline_stage=None):
@@ -446,7 +446,7 @@ def get_num_layers_in_vp_map(stage, num_layers, pp,
             num_layers, pp, stage, num_layers_in_first_pipeline_stage, num_layers_in_last_pipeline_stage)
     else:
         num_layers_in_vp, _ = partition_balanced(num_layers, pp * stage)
-    num_layers_in_vp[-1] += num_nextn_predict_layers
+    num_layers_in_vp[-1] += mtp_num_layers
     return num_layers_in_vp
 
 def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
@@ -465,7 +465,7 @@ def get_layer_ids(c_config, args, p):
     margs = c_config.get_args("mcore")
 
     num_layers = cargs["num_layers"]
-    num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
+    mtp_num_layers = cargs.get("mtp_num_layers", 0)
     num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage
@@ -477,7 +477,7 @@ def get_layer_ids(c_config, args, p):
     num_layers_in_first_pipeline_stage = args.decoder_first_pipeline_num_layers
     num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers
     num_layers_in_vp = get_num_layers_in_vp_map(
-            stage, num_layers, pp, num_nextn_predict_layers=num_nextn_predict_layers,
+            stage, num_layers, pp, mtp_num_layers=mtp_num_layers,
             custom_pipeline_layers=custom_pipeline_layers,
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)

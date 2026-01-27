@@ -24,15 +24,11 @@ stimer = StragglerDetector()
 def default_pretrain_trainer(train_args):
     """build trainer"""
     from aiak_training_omni.train.pretrain import pretrain_vlm
-    if train_args.encoder_pipeline_model_parallel_size in [0, None]:
-        model_type = ModelType.encoder_or_decoder
-    else:
-        model_type = ModelType.encoder_and_decoder
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=pretrain_vlm.train_valid_test_dataset_provider,
         model_provider=omni_model_provider,
-        model_type=model_type,
+        model_type=ModelType.encoder_or_decoder,
         forward_step_func=pretrain_vlm.forward_step,
     )
 

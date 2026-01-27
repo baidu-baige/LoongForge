@@ -2,11 +2,12 @@
 
 import torch
 import torch.nn.functional as F
+from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
 from .llavaov_1_5_config import RiceVisionConfig
-from aiak_training_omni.models.encoder.qwen2_vl_vision_models.vision_model import (
-    Qwen2VisionModel,
+from aiak_training_omni.models.encoder.base_vision_models.base_vision_model import (
+    BaseVisionModel,
 )
 
 
@@ -41,20 +42,20 @@ class PatchEmbed(torch.nn.Module):
         
         return hidden_states
 
-class RiceViTModel(Qwen2VisionModel):
+class RiceViTModel(BaseVisionModel):
     """"""
 
     config_class = RiceVisionConfig
 
     def __init__(
-        self, config: RiceVisionConfig, spatial_merge_size: int = 2, **kwargs
+        self, config: RiceVisionConfig, spatial_merge_size: int = 2, vp_stage: Optional[int] = None, **kwargs
     ) -> None:
         if config.model_spec is None:
             config.model_spec = [
                 "aiak_training_omni.models.encoder.llavaov1_5_vision_models.llavaov_1_5_layer_spec",
                 "get_vision_layer_with_spec",
             ]
-        super().__init__(config, spatial_merge_size)
+        super().__init__(config, spatial_merge_size, vp_stage=vp_stage)
         self.patch_size = config.patch_size
         self.fullatt_block_indexes = list(range(config.num_layers))
         self.spatial_merge_unit = self.spatial_merge_size * self.spatial_merge_size
@@ -144,7 +145,7 @@ class RiceViTModel(Qwen2VisionModel):
 
         x = self.pre_layernorm(x)
 
-        x = self.decoder(
+        x, _ = self.decoder(
             x,
             packed_seq_params=[
                 PackedSeqParams(
@@ -158,7 +159,6 @@ class RiceViTModel(Qwen2VisionModel):
             ],
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
         )
         x = x[:-pad_len if pad_len > 0 else None, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 

@@ -34,7 +34,6 @@ def _get_mlp_module_spec(
         submodules=MLPSubmodules(
             linear_fc1=multiacc_modules.TELayerNormColumnParallelLinear,
             linear_fc2=multiacc_modules.TERowParallelLinear,
-            bias_activation_func_impl=multiacc_modules.bias_activation_func_impl,
         ),
     )
 
@@ -88,15 +87,17 @@ def _rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-def _apply_mrope_bshd(t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 24]):
+def _apply_mrope_bshd(
+    t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 24], mscale: float = 1.0
+):
     """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors
     (https://qwenlm.github.io/blog/qwen2-vl/).
     Args:
         t (torch.Tensor): Input tensor of shape [S, B, heads, dim]
         freq (torch.Tensor): Frequency tensor of shape [S, B, 3, dim]
     """
-    cos = freq.cos().to(dtype=t.dtype)
-    sin = freq.sin().to(dtype=t.dtype)
+    cos = (freq.cos() * mscale).to(dtype=t.dtype)
+    sin = (freq.sin() * mscale).to(dtype=t.dtype)
     mrope_section = mrope_section * 2
 
     cos = torch.cat(
@@ -112,11 +113,18 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 2
     return t
 
 
-def apply_mrope(t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 24]):
+def apply_mrope(
+    t,
+    freq,
+    config,
+    cu_seqlens=None,
+    mrope_section=[16, 24, 24],
+    mscale: float = 1.0,
+    cp_group=None,
+):
     """mrope"""
     if cu_seqlens is not None:
-        cp_size = parallel_state.get_context_parallel_world_size()
-        cp_rank = parallel_state.get_context_parallel_rank()
+        cp_size = cp_group.size() if cp_group is not None else parallel_state.get_context_parallel_world_size()
         cu_seqlens = cu_seqlens // cp_size
         seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
 
@@ -128,12 +136,13 @@ def apply_mrope(t, freq, config, cu_seqlens=None, mrope_section=[16, 24, 24]):
                     config,
                     cu_seqlens,
                     mrope_section,
+                    mscale,
                 )
                 for i, x in enumerate(torch.split(t, seqlens))
             ]
         ).squeeze(1)
     else:
-        return _apply_mrope_bshd(t, freq, config, cu_seqlens, mrope_section)
+        return _apply_mrope_bshd(t, freq, config, cu_seqlens, mrope_section, mscale)
 
 
 def get_qwen2_vl_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:

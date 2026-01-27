@@ -42,6 +42,7 @@ class OmniCombinationModel(BaseMegatronModule):
         share_embeddings_and_output_weights: bool = True,
         seq_len_interpolation_factor: float = None,
         scatter_embedding_sequence_parallel=False,
+        vp_stage: Optional[int] = None,
     ) -> None:
         super().__init__(config.foundation)
         self.pre_process = pre_process
@@ -57,6 +58,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 position_embedding_type=language_position_embedding_type,
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
                 allow_missing_adapter_checkpoint=allow_missing_adapter_checkpoint,
+                vp_stage=vp_stage,
             )
         else:
             self.encoder_model = None
@@ -81,6 +83,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
                 language_embedding=self.encoder_model.text_encoder if add_encoder else True,
                 rotary_dtype=language_rotary_dtype,
+                vp_stage=vp_stage,
             )
         else:
             raise ValueError(
@@ -163,7 +166,6 @@ class OmniCombinationModel(BaseMegatronModule):
         input_ids: Optional[torch.LongTensor],
         position_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        attn_mask_type: Optional[AttnMaskType] = None,
         packed_seq_params=None,
         labels: Optional[torch.LongTensor] = None,
         inference_params: InferenceParams = None,
@@ -207,15 +209,15 @@ class OmniCombinationModel(BaseMegatronModule):
             input_ids=None,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             decoder_input=combined_embeddings,
             labels=labels,
             # rotary_pos_emb=rotary_pos_emb,
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
-            visual_pos_masks=visual_pos_masks,
-            deepstack_visual_embeds=deepstack_visual_embeds,
-            extra_block_kwargs={},
+            extra_block_kwargs={
+                "visual_pos_masks": visual_pos_masks,
+                "deepstack_visual_embeds": deepstack_visual_embeds,
+            },
         )
 
         return output
@@ -229,16 +231,14 @@ class OmniCombinationModel(BaseMegatronModule):
         input_ids: Optional[torch.LongTensor],
         position_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        attn_mask_type: Optional[AttnMaskType] = None,
         packed_seq_params=None,
         labels: Optional[torch.LongTensor] = None,
-        inference_params: InferenceParams = None,
         **kwargs: Any,
     ):
         """Build the schedule plan for the model."""
-        from ..common.fine_grained_schedule import build_model_chunk_schedule_plan
+        from .model_chunk_schedule_plan import TransformerModelChunkSchedulePlan
 
-        return build_model_chunk_schedule_plan(
+        return TransformerModelChunkSchedulePlan(
             self,
             image_inputs=image_inputs,
             video_inputs=video_inputs,
@@ -246,9 +246,7 @@ class OmniCombinationModel(BaseMegatronModule):
             input_ids=input_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             labels=labels,
-            inference_params=inference_params,
             packed_seq_params=packed_seq_params,
-            **kwargs
+            **kwargs,
         )

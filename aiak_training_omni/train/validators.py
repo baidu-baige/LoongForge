@@ -6,10 +6,11 @@ import warnings
 import torch
 from megatron.core.rerun_state_machine import RerunStateMachine
 from megatron.core.transformer.enums import AttnBackend
+from megatron.training.utils import warn_rank_0
 
 from aiak_training_omni.tokenizer import get_default_tokenizer
 from aiak_training_omni.utils import (constants, get_device_arch_version,
-                                      is_torch_min_version, print_rank_0)
+                                      is_torch_min_version, print_rank_0, convert_custom_pipeline_to_layout)
 from aiak_training_omni.utils.utils import get_default_sft_dataset_config
 
 
@@ -18,6 +19,7 @@ def validate_aiak_extra_args(args, config):
     _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
     _validate_extra_sft_args(args)
+    _validate_extra_training_args(args)
     _validata_extra_multimodal_args(args)
     _validata_extra_custom_args(args)
     _validata_extra_parallel_args(args)
@@ -163,6 +165,17 @@ def _validate_extra_sft_args(args):
         )
 
 
+def _validate_extra_training_args(args):
+    """Validate training arguments"""
+
+    if args.num_experts is None and args.moe_token_dispatcher_type in ['allgather', 'alltoall_seq']:
+        args.moe_token_dispatcher_type = 'alltoall'
+        warnings.warn(
+            f"Since num_experts is {args.num_experts}, moe_token_dispatcher_type argument is not applicable. "
+            f"Setting it to 'alltoall' to pass transformer config validation."
+        )
+
+
 def _validata_extra_multimodal_args(args):
     """Validate multimodal arguments"""
     if args.model_family not in constants.VisionLanguageModelFamilies.names():
@@ -240,6 +253,77 @@ def _validata_extra_parallel_args(args):
                 "Disabling tp comm overlap since fp16 is not supported on GPU",
                 args.rank,
             )
+    
+    # Uneven virtual pipeline parallelism
+    assert not (
+        args.custom_pipeline_layers is not None
+        and args.pipeline_model_parallel_layout is not None
+    ), 'custom_pipeline_layers and pipeline_model_parallel_layout cannot be set at the same time'
+
+    # convert custom_pipeline_layers to pipeline_model_parallel_layout
+    if args.custom_pipeline_layers is not None:
+        assert args.decoder_first_pipeline_num_layers is None and args.decoder_last_pipeline_num_layers is None, \
+            'The layer partition mode conflicts.'
+
+        pp_splits = []
+        if args.custom_pipeline_layers.find(',') != -1:
+            pp_splits = [int(s) for s in args.custom_pipeline_layers.split(',')]
+
+        assert len(pp_splits) == args.pipeline_model_parallel_size, (
+            f"the number of elements in --custom-pipeline-layers must be equal to "
+            f"pipeline size {args.pipeline_model_parallel_size}")
+
+        assert args.num_layers == sum(pp_splits), \
+            f"the sum of --custom-pipeline-layers must be equal to {args.num_layers}"
+
+        if args.num_virtual_stages_per_pipeline_rank is not None:
+            assert all(x >= args.num_virtual_stages_per_pipeline_rank for x in pp_splits), \
+                f"when num_virtual_stages_per_pipeline_rank is {args.num_virtual_stages_per_pipeline_rank}, \
+                each element in custom_pipeline_layers must be >= num_virtual_stages_per_pipeline_rank"
+
+        args.pipeline_model_parallel_layout = convert_custom_pipeline_to_layout(
+            custom_pipeline_layers=args.custom_pipeline_layers,
+            num_virtual_stages_per_pipeline_rank=args.num_virtual_stages_per_pipeline_rank,
+            mtp_num_layers=args.mtp_num_layers,
+        )
+
+        # To pass the megatron validation
+        if args.num_virtual_stages_per_pipeline_rank is not None:
+            args.num_virtual_stages_per_pipeline_rank = None
+
+    # add aiak for custom virtual pipeline layers check
+    if args.custom_virtual_pipeline_layers is not None:
+        assert args.pipeline_model_parallel_size > 1, \
+            "custom_virtual_pipeline_layers is only supported when pipeline_model_parallel_size > 1"
+        assert args.num_virtual_stages_per_pipeline_rank is not None, \
+                "num_virtual_stages_per_pipeline_rank should be set when custom_virtual_pipeline_layers is set"
+        assert args.custom_pipeline_layers is None, \
+                "custom_pipeline_layers should not be set when custom_virtual_pipeline_layers is set"
+        
+        custom_vpp_splits = []
+        if args.custom_virtual_pipeline_layers.find(',') != -1:
+            custom_vpp_splits = [int(s) for s in args.custom_virtual_pipeline_layers.split(',') if s.strip()]
+        
+        assert sum(custom_vpp_splits) == args.num_layers, (
+            f"the sum of --custom-virtual-pipeline-layers must be equal to {args.num_layers}"
+        )
+        
+        assert len(custom_vpp_splits) == args.pipeline_model_parallel_size * \
+            args.num_virtual_stages_per_pipeline_rank, (
+            f"the number of elements in --custom-virtual-pipeline-layers must be equal to "
+            f"pipeline size {args.pipeline_model_parallel_size} * num_virtual_stages_per_pipeline_rank "
+            f"{args.num_virtual_stages_per_pipeline_rank}"
+        )
+
+        args.pipeline_model_parallel_layout = convert_custom_pipeline_to_layout(
+            custom_virtual_pipeline_layers=args.custom_virtual_pipeline_layers,
+            num_virtual_stages_per_pipeline_rank=args.num_virtual_stages_per_pipeline_rank,
+            mtp_num_layers=args.mtp_num_layers,
+        )
+
+        # To pass the megatron validation
+        if args.num_virtual_stages_per_pipeline_rank is not None:
+            args.num_virtual_stages_per_pipeline_rank = None
 
 
 def _check_arg_is_not_none(args, arg):
@@ -250,8 +334,6 @@ def _check_arg_is_not_none(args, arg):
 # Adapted from megatron/training/arguments.py
 def _validate_custom_model_args(name, args, defaults={}):
     """Validate non foundational model arguments"""
-    if args.custom_virtual_layers_first_pipeline:
-        args.custom_virtual_layers_first_pipeline = None
     if args.custom_pipeline_recompute_layers is not None:
         assert args.recompute_granularity == "full", \
             "recompute-granularity should be full, when custom-pipeline-recompute-layers is set."
@@ -322,19 +404,12 @@ def _validate_custom_model_args(name, args, defaults={}):
             "legacy model format only supports the 'torch' checkpoint format."
     args.use_dist_ckpt = args.ckpt_format != "torch"
 
-    encoder_model_size = (args.encoder_tensor_model_parallel_size *
-                          args.encoder_pipeline_model_parallel_size *
-                          args.context_parallel_size)
 
-    decoder_model_size = (args.tensor_model_parallel_size *
-                          args.pipeline_model_parallel_size *
-                          args.context_parallel_size)
-    total_model_size = encoder_model_size + decoder_model_size
+    total_model_size = args.tensor_model_parallel_size * args.pipeline_model_parallel_size * args.context_parallel_size
 
     # Total model size.
     assert args.world_size % total_model_size == 0, (
-        f"world size ({args.world_size}) is not divisible by total_model_size "
-        f"({encoder_model_size=} + {decoder_model_size=})"
+        f"world size ({args.world_size}) is not divisible by total_model_size ({total_model_size=})"
     )
 
     if args.attention_backend == AttnBackend.local:
@@ -350,16 +425,12 @@ def _validate_custom_model_args(name, args, defaults={}):
               'context-parallel size: {}, '
               'hierarchical context-parallel sizes: {}'
               'tensor-model-parallel size: {}, '
-              'encoder-tensor-model-parallel size: {}, '
-              'pipeline-model-parallel size: {}, '
-              'encoder-pipeline-model-parallel size: {}'.format(
+              'pipeline-model-parallel size: {}, '.format(
                   args.world_size, args.data_parallel_size,
                   args.context_parallel_size,
                   args.hierarchical_context_parallel_sizes,
                   args.tensor_model_parallel_size,
-                  args.encoder_tensor_model_parallel_size,
-                  args.pipeline_model_parallel_size,
-                  args.encoder_pipeline_model_parallel_size), flush=True)
+                  args.pipeline_model_parallel_size, flush=True))
 
     if args.hierarchical_context_parallel_sizes:
         from numpy import prod
@@ -490,13 +561,6 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.data_parallel_sharding_strategy == "optim_grads":
         args.overlap_grad_reduce = True
 
-    if args.vpp_scheduler == "dualpipev":
-        assert args.virtual_pipeline_model_parallel_size is not None , \
-            'virtual pipeline parallel size must be specified for dualpipev scheduler'
-        assert args.virtual_pipeline_model_parallel_size == 2, \
-         ('number of layers per pipeline stage must be twice the number of layers per virtual pipeline stage for '
-          'dualpipev scheduler')
-
     if args.overlap_param_gather:
         assert args.use_distributed_optimizer, \
             '--overlap-param-gather only supported with distributed optimizer'
@@ -549,14 +613,17 @@ def _validate_custom_model_args(name, args, defaults={}):
         assert args.use_distributed_optimizer or args.use_torch_fsdp2, \
             '--fp8-param-gather only supported with distributed optimizer or torch fsdp2'
 
-    if args.use_custom_fsdp:
-        assert args.use_distributed_optimizer, \
-            '--use-custom-fsdp only supported with distributed optimizer'
+    if args.use_megatron_fsdp:
+        # NOTE: The flag `use_custom_fsdp` is deprecated and will be removed in future versions.
+        #       Please use `use_megatron_fsdp` instead, as all functionality will be migrated there.
+        #       Future updates will drop support for `use_custom_fsdp` to avoid confusion.
+        args.use_custom_fsdp = True
 
         if args.data_parallel_sharding_strategy in ["optim_grads_params", "optim_grads"]:
-            warnings.warn('Please make sure your TransformerEngine support FSDP + gradient accumulation fusion')
-            assert args.gradient_accumulation_fusion is False, \
-                "optim_grads_params optim_grads are not supported with gradient accumulation fusion"
+            warn_rank_0(
+                'Please make sure your TransformerEngine support FSDP + gradient accumulation fusion',
+                args.rank,
+            )
 
         if args.data_parallel_sharding_strategy == "optim_grads_params":
             assert args.check_weight_hash_across_dp_replicas_interval is None, \
@@ -564,6 +631,9 @@ def _validate_custom_model_args(name, args, defaults={}):
 
         assert os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') != "1", \
             'FSDP always requires CUDA_DEVICE_MAX_CONNECTIONS value large than one'
+
+        assert args.ckpt_format == "fsdp_dtensor", \
+            "Megatron FSDP only supports fsdp_dtensor checkpoint format"
 
     # Parameters dtype.
     args.params_dtype = torch.float
@@ -741,7 +811,7 @@ def _validate_custom_model_args(name, args, defaults={}):
     # model parallel memory optimization is enabled
     if args.tensor_model_parallel_size > 1 or args.context_parallel_size > 1 and get_device_arch_version() < 10:
         # CUDA_DEVICE_MAX_CONNECTIONS requirement no longer exists since the Blackwell architecture
-        if args.use_torch_fsdp2 or args.use_custom_fsdp:
+        if args.use_torch_fsdp2 or getattr(args, "use_custom_fsdp", False):
             fsdp_impl = "Torch-FSDP2" if args.use_torch_fsdp2 else "Custom-FSDP"
             warnings.warn(
                 f"Using tensor model parallelism or context parallelism with {fsdp_impl} together. "
@@ -749,12 +819,6 @@ def _validate_custom_model_args(name, args, defaults={}):
                 "settings for best performance. sequence parallelism requires setting the "
                 f"environment variable CUDA_DEVICE_MAX_CONNECTIONS to 1 while {fsdp_impl} "
                 "requires not setting CUDA_DEVICE_MAX_CONNECTIONS=1 for better parallelization.")
-        elif args.combined_1f1b:
-            warnings.warn("Try not to use tensor model parallelism or context parallelism with combined_1f1b. "
-                         "Using tensor/context model parallelism requires setting the environment "
-                         "variable CUDA_DEVICE_MAX_CONNECTIONS to 1. "
-                         "While combined_1f1b requires setting a larger CUDA_DEVICE_MAX_CONNECTIONS "
-                         "for better parallelization.")
     if args.preprocess_data_on_cpu is True:
         print("Skipping CUDA_DEVICE_MAX_CONNECTIONS checks because use megatron preprocess data")
     else:

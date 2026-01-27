@@ -57,7 +57,8 @@ def build_model_trainer(args):
     
     if hasattr(config, "model_type") and config.model_type in \
             (set(constants.LanguageModelFamilies.names()) |
-             set(constants.CustomModelFamilies.names())):
+             set(constants.CustomModelFamilies.names()) |
+             set(constants.VisionLanguageActionModelFamilies.names())):
         model_family = config.model_type
     else:
         if not hasattr(config, 'model'):

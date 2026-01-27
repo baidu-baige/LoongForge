@@ -1,4 +1,5 @@
 #!/bin/bash
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
@@ -67,6 +68,7 @@ TRAINING_ARGS=(
     --eval-iters 10
     --no-load-optim
     --no-load-rng
+    --enable-experimental
 )
 
 MOE_ARGS=(

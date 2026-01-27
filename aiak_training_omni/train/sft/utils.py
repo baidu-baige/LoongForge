@@ -2,7 +2,7 @@
 
 import logging
 
-from typing import TYPE_CHECKING, List, Optional, Union, Any, Type
+from typing import TYPE_CHECKING, List, Optional, Union, Any, Type, Dict
 from dataclasses import dataclass
 
 import torch
@@ -11,8 +11,7 @@ from transformers.utils import PaddingStrategy
 
 from datasets.distributed import split_dataset_by_node
 
-from megatron.core import mpu, tensor_parallel
-from megatron.core.transformer.enums import AttnMaskType
+from megatron.core import mpu, tensor_parallel, parallel_state
 from megatron.core.packed_seq_params import PackedSeqParams
 
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
@@ -251,7 +250,6 @@ def _get_attention_mask(attention_mask: torch.Tensor) -> torch.Tensor:
     # Only used attn_mask when attn_mask_type in [padding, padding_causal, arbitrary] in TE
     # TODO: for multi-acceleator, maybe we should update attn_mask_type and attention_mask shape
 
-    attn_mask_type = AttnMaskType.causal
     if args.context_parallel_size > 1:
         # Firstly, context parallel only support causal mask in TE now.
         # Secondly, when context-parallel is enabled, the input data is of a relatively long length,
@@ -270,10 +268,8 @@ def _get_attention_mask(attention_mask: torch.Tensor) -> torch.Tensor:
         # create mask for te, shape [B, 1, 1, S]. attn_mask_type is padding_causal or causal.
         attention_mask.unsqueeze_(1).unsqueeze_(1)
         attention_mask = (attention_mask < 0.5).bool()
-        if torch.any(attention_mask).item():
-            attn_mask_type = AttnMaskType.padding_causal
 
-    return attention_mask, attn_mask_type
+    return attention_mask
 
 
 def _get_packed_sequence_params(attention_mask: torch.Tensor) -> PackedSeqParams:
@@ -303,7 +299,7 @@ def _get_packed_sequence_params(attention_mask: torch.Tensor) -> PackedSeqParams
     packed_seq_params.max_seqlen_q = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
     packed_seq_params.max_seqlen_kv = packed_seq_params.max_seqlen_q
 
-    return packed_seq_params, AttnMaskType.padding_causal
+    return packed_seq_params
 
 
 def get_batch_on_this_tp_rank(data_iterator):
@@ -375,16 +371,15 @@ def get_batch_on_this_tp_rank(data_iterator):
 
     # attention mask
     attention_mask = None
-    attn_mask_type = None
     packed_seq_params = None
 
     if not args.packing_sft_data:
-        attention_mask, attn_mask_type = _get_attention_mask(
+        attention_mask = _get_attention_mask(
             data_b["attention_mask"].long()
         )
     else:
         # attention_mask will be ignored in te
-        packed_seq_params, attn_mask_type = _get_packed_sequence_params(
+        packed_seq_params = _get_packed_sequence_params(
             data_b["attention_mask"].long()
         )
 
@@ -394,8 +389,48 @@ def get_batch_on_this_tp_rank(data_iterator):
         "loss_mask": loss_mask,
         "position_ids": position_ids,
         "attention_mask": attention_mask,
-        "attn_mask_type": attn_mask_type,
         "packed_seq_params": packed_seq_params,
     }
+
+    return batch
+
+
+def get_batch_on_this_cp_rank(batch: Dict[str, Any]):
+    """Slice batch input along sequence dimension into multiple chunks,
+    which are parallelized across GPUs in a context parallel group.
+    """
+    cp_size = parallel_state.get_context_parallel_world_size()
+    if cp_size > 1:
+        packed_seq_params = batch.get('packed_seq_params', None)
+        cp_rank = parallel_state.get_context_parallel_rank()
+        for key, val in batch.items():
+            if val is not None:
+                if key == 'packed_seq_params':
+                    batch[key] = val
+                    continue
+          
+                seq_dim = 1 if key != 'attention_mask' else 2
+                if packed_seq_params is not None and packed_seq_params.qkv_format == 'thd':
+                    #assert get_accelerator_backend() == "NvidiaGpu", "Only NvidiaGPU supports packed_seq_params."
+                    import transformer_engine_torch as tex
+                    # assume cu_seqlens_q == cu_seqlens_kv
+                    cu_seqlens_q = packed_seq_params.cu_seqlens_q
+                    seq_idx_val = tex.thd_get_partitioned_indices(
+                        cu_seqlens_q, val.shape[seq_dim], cp_size, cp_rank
+                    )
+                    batch[key] = val.index_select(seq_dim, seq_idx_val)
+                else:
+                    val = val.view(
+                        *val.shape[0:seq_dim],
+                        2 * cp_size,
+                        val.shape[seq_dim] // (2 * cp_size),
+                        *val.shape[(seq_dim + 1) :],
+                    )
+                    index = torch.tensor(
+                        [cp_rank, (2 * cp_size - cp_rank - 1)], device="cpu", pin_memory=True
+                    ).cuda(non_blocking=True)
+                    val = val.index_select(seq_dim, index)
+                    val = val.view(*val.shape[0:seq_dim], -1, *val.shape[(seq_dim + 2) :])
+                    batch[key] = val
 
     return batch

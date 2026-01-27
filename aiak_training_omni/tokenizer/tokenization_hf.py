@@ -4,10 +4,10 @@ from typing import Dict, List, Union, Optional
 
 from transformers import AutoTokenizer
 
-from megatron.core.datasets.megatron_tokenizer import MegatronTokenizer
+from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
 
-class AutoTokenizerFromHF(MegatronTokenizer):
+class AutoTokenizerFromHF(MegatronLegacyTokenizer):
     """
     Here we adopt the approach of wrapping HF Tokenizer and inheriting from MegatronTokenizer. 
 	The purpose of this approach is:

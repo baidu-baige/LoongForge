@@ -1,0 +1,113 @@
+diff --git a/megatron/core/transformer/module.py b/megatron/core/transformer/module.py
+index 4fdcacb79..2ecef6aa3 100644
+--- a/megatron/core/transformer/module.py
++++ b/megatron/core/transformer/module.py
+@@ -3,6 +3,7 @@
+ """Megatron Module."""
+ from typing import Optional, Tuple
+ 
++import logging
+ import torch
+ from torch.autograd import Variable
+ from torch.nn.parameter import Parameter
+@@ -19,6 +20,8 @@ _FLOAT_TYPES = (torch.FloatTensor, torch.cuda.FloatTensor)
+ _HALF_TYPES = (torch.HalfTensor, torch.cuda.HalfTensor)
+ _BF16_TYPES = (torch.BFloat16Tensor, torch.cuda.BFloat16Tensor)
+ 
++logger = logging.getLogger(__name__)
++
+ 
+ def param_is_not_shared(param):  # pylint: disable=missing-function-docstring
+     return not hasattr(param, 'shared') or not param.shared
+@@ -374,30 +377,87 @@ class Float16Module(MegatronModule):
+         config (TransformerConfig): The transformer config used to initalize the model
+     """
+ 
+-    def __init__(self, config: TransformerConfig, module: torch.nn.Module):
++    def __init__(self, config: TransformerConfig, module: torch.nn.Module, keep_fp32_params: list = None):
+         super(Float16Module, self).__init__(config)
+         self.config = config
+         self.fp16 = config.fp16
+         self.bf16 = config.bf16
+         self.vp_stage = getattr(module, 'vp_stage', None)
++        self.keep_fp32_params = keep_fp32_params or []
++        self.fp32_param_set = self._build_fp32_param_set(module)
+ 
+         if self.fp16:
+-            self.add_module('module', module.half())
++            _converted_module = self._convert_with_exclusions(module, torch.float16)
+ 
+             def float16_convertor(val):
+                 return val.half()
+ 
+         elif self.bf16:
+-            self.add_module('module', module.bfloat16())
++            _converted_module = self._convert_with_exclusions(module, torch.bfloat16)
+ 
+             def float16_convertor(val):
+                 return val.bfloat16()
+ 
+         else:
+             raise Exception('Either config.fp16 or config.bf16 should be True.')
+-
++        
++        self.add_module('module', _converted_module)
+         self.float16_convertor = float16_convertor
+ 
++    def _build_fp32_param_set(self, module):
++        """
++        Build a set containing all Parameters and Buffers whose names match one of the patterns
++        in `self.keep_fp32_params`.
++        """
++        fp32_set = set()
++        
++        if not self.keep_fp32_params:
++            return fp32_set
++
++        import re
++        compiled_patterns = [re.compile(pattern) for pattern in self.keep_fp32_params]
++
++        for name, param in module.named_parameters():
++            for pattern in compiled_patterns:
++                if pattern.match(name):
++                    fp32_set.add(param)
++                    logger.info(f"Parameter '{name}' will be kept in FP32")
++                    break
++        
++        if hasattr(module, "named_buffers"):
++            for name, buffer in module.named_buffers():
++                for pattern in compiled_patterns:
++                    if pattern.match(name):
++                        fp32_set.add(buffer)
++                        logger.info(f"Buffer '{name}' will be kept in FP32")
++                        break
++        
++        return fp32_set
++
++    def _convert_with_exclusions(self, module, target_dtype):
++        """convert the entire module except those parameters listed in self.keep_fp32_params"""
++        if target_dtype == torch.float16:
++            converted = module.half()
++        else:
++            converted = module.bfloat16()
++
++        self._restore_fp32_parameters(converted)
++        return converted
++
++    def _restore_fp32_parameters(self, module):
++        """Restores original dtypes of parameters stored in self.fp32_param_set"""
++        if len(self.fp32_param_set) == 0:
++            return
++
++        for _, param in module.named_parameters():
++            if param in self.fp32_param_set and param.dtype != torch.float32:
++                param.data = param.data.to(torch.float32)
++        
++        if hasattr(module, "named_buffers"):
++            for _, buffer in module.named_buffers():
++                if buffer in self.fp32_param_set and buffer.dtype != torch.float32:
++                    buffer.data = buffer.data.to(torch.float32)
++
+     def set_input_tensor(self, input_tensor):  # pylint: disable=missing-function-docstring
+         return self.module.set_input_tensor(input_tensor)
+ 

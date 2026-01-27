@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from typing import Optional
 
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.models.common.vision_module.vision_module import VisionModule
@@ -13,21 +14,25 @@ from aiak_training_omni.models.common import BaseMegatronVisionModule
 from aiak_training_omni.models.utils import import_module
 from aiak_training_omni.utils import get_model_config
 
-from .vision_transformer_block import TransformerBlock
-from .qwen3_vl_config import Qwen3VisionModelConfig 
-from ..qwen2_vl_vision_models.vision_model import Qwen2VisionModel, PatchEmbed
+from aiak_training_omni.models.encoder.vision_transformer_block import TransformerBlock
+from aiak_training_omni.models.encoder.base_vision_models.base_vision_model import (
+    BaseVisionModel,
+    PatchEmbed
+)
+from .qwen3_vl_config import Qwen3VisionModelConfig  
 from ..qwen2_vl_vision_models.adapter import Adapter
 
 
-class Qwen3VisionModel(Qwen2VisionModel):
+class Qwen3VisionModel(BaseVisionModel):
     """ VisionModel With LayerNorm (for Qwen3-VL) """
 
     config_class = Qwen3VisionModelConfig
 
     def __init__(self,
         config: TransformerConfig,
+        vp_stage: Optional[int] = None,
     ) -> None:
-        super().__init__(config)
+        super().__init__(config, vp_stage=vp_stage)
         self.patch_embed = PatchEmbed(
             patch_size=config.patch_size,
             in_channels=config.in_channels,
@@ -121,6 +126,46 @@ class Qwen3VisionModel(Qwen2VisionModel):
         patch_pos_embeds = torch.cat(patch_pos_embeds_permute)
         return patch_pos_embeds
 
+    def rot_pos_emb(self, grid_thw: torch.Tensor) -> torch.Tensor:
+        """Compute rotary positional embedding based on frame size."""
+        merge_size = self.spatial_merge_size
+
+        max_hw = int(grid_thw[:, 1:].max().item())
+        freq_table = self.rotary_pos_emb(max_hw)  # (max_hw, dim // 2)
+        device = freq_table.device
+
+        total_tokens = int(torch.prod(grid_thw, dim=1).sum().item())
+        pos_ids = torch.empty((total_tokens, 2), dtype=torch.long, device=device)
+
+        offset = 0
+        for num_frames, height, width in grid_thw:
+            merged_h, merged_w = height // merge_size, width // merge_size
+
+            block_rows = torch.arange(merged_h, device=device)  # block row indices
+            block_cols = torch.arange(merged_w, device=device)  # block col indices
+            intra_row = torch.arange(merge_size, device=device)  # intra-block row offsets
+            intra_col = torch.arange(merge_size, device=device)  # intra-block col offsets
+
+            # Compute full-resolution positions
+            row_idx = block_rows[:, None, None, None] * merge_size + intra_row[None, None, :, None]
+            col_idx = block_cols[None, :, None, None] * merge_size + intra_col[None, None, None, :]
+
+            row_idx = row_idx.expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
+            col_idx = col_idx.expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
+
+            coords = torch.stack((row_idx, col_idx), dim=-1)
+
+            if num_frames > 1:
+                coords = coords.repeat(num_frames, 1)
+
+            num_tokens = coords.shape[0]
+            pos_ids[offset : offset + num_tokens] = coords
+            offset += num_tokens
+
+        embeddings = freq_table[pos_ids]  # lookup rotary embeddings
+        embeddings = embeddings.flatten(1)
+        return embeddings
+
     def forward(self, x: torch.Tensor, image_grid_thw: torch.Tensor) -> torch.Tensor:
         """Forward."""
         x = self.patch_embed(x)
@@ -139,13 +184,11 @@ class Qwen3VisionModel(Qwen2VisionModel):
             x = F.pad(x, (0, 0, 0, pad_len))
 
         rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
-        rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
+        rotary_pos_emb = rotary_pos_emb.reshape(seq_len, 1, 1, -1).repeat(1, 1, 1, 2)
 
         if pad_len > 0:
-            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, pad_len))
-
-        emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
-        position_embeddings = (emb.cos(), emb.sin())
+            # Ensure rotary_pos_emb has same length as x after padding
+            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, 0, 0, 0, 0, pad_len))
 
         cu_seqlens = torch.repeat_interleave(image_grid_thw[:, 1] * image_grid_thw[:, 2], image_grid_thw[:, 0]).cumsum(
             dim=0,
@@ -169,13 +212,12 @@ class Qwen3VisionModel(Qwen2VisionModel):
                 cu_seqlens_q=cu_seqlens,
                 cu_seqlens_kv=cu_seqlens,
             ) for i in range(self.config.num_layers)],
-            rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
+            rotary_pos_emb=rotary_pos_emb,
             attention_mask=None,
-            attn_mask_type=AttnMaskType.no_mask,
             deepstack_visual_indexes=self.deepstack_visual_indexes,
             deepstack_merger_list=self.deepstack_merger_list
         )
-        # x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
+
         x = x[:-pad_len if pad_len > 0 else None, 0, :].contiguous()  # [s, 1, h] -> [s, h]
         if pad_len > 0:
             for i in range(len(deepstack_feature_lists)):

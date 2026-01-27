@@ -181,7 +181,6 @@ class WanSelfAttention(SelfAttention):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         key_value_states=None,
         inference_params=None,
         rotary_pos_emb=None,
@@ -217,7 +216,7 @@ class WanSelfAttention(SelfAttention):
         # Adjust key, value, and rotary_pos_emb for inference
         # ===================================================
 
-        query, key, value, rotary_pos_emb, attn_mask_type = (
+        query, key, value, rotary_pos_emb, attn_mask_type, _ = (
             self._adjust_key_value_for_inference(
                 inference_params,
                 query,
@@ -226,7 +225,6 @@ class WanSelfAttention(SelfAttention):
                 rotary_pos_emb,
                 rotary_pos_cos,
                 rotary_pos_sin,
-                attn_mask_type,
                 sequence_len_offset,
             )
         )
@@ -412,7 +410,6 @@ class WanCrossAttention(CrossAttention):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         key_value_states=None,
         inference_params=None,
         rotary_pos_emb=None,
@@ -450,7 +447,7 @@ class WanCrossAttention(CrossAttention):
         # Adjust key, value, and rotary_pos_emb for inference
         # ===================================================
 
-        query, key, value, rotary_pos_emb, attn_mask_type = (
+        query, key, value, rotary_pos_emb, attn_mask_type, _ = (
             self._adjust_key_value_for_inference(
                 inference_params,
                 query,
@@ -459,7 +456,6 @@ class WanCrossAttention(CrossAttention):
                 rotary_pos_emb,
                 rotary_pos_cos,
                 rotary_pos_sin,
-                attn_mask_type,
                 sequence_len_offset,
             )
         )

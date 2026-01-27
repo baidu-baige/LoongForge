@@ -13,6 +13,8 @@ CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVisi
 #! /bin/bash
 # The script needs to be run on at least 1 nodes.
 
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
+
 # --- Multi-node configuration ---
 # List of IP addresses for the nodes in the training cluster
 declare -a list_ip=(
@@ -95,7 +97,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov_1_5/llava_ov_1_5_30b_a3b.yaml
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov1.5/llavaov_1_5_30b_a3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer

@@ -15,6 +15,8 @@ def wan2_1_i2v_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
+    vp_stage: int = None,
+    config=None,
 ) -> WanModel:
     """Builds the Wan model.
 
@@ -30,7 +32,8 @@ def wan2_1_i2v_model_provider(
 
     print_rank_0("building Wan2.1 model ...")
 
-    config = build_transformer_config(args, config_class=BaseModelStditConfig)
+    if config is None:
+        config = build_transformer_config(args, config_class=BaseModelStditConfig)
     config.pipeline_dtype = torch.float32
 
     if args.spec is not None:
@@ -65,6 +68,7 @@ def wan2_1_i2v_model_provider(
         share_embeddings_and_output_weights=False,
         position_embedding_type=args.position_embedding_type,
         rotary_percent=args.rotary_percent,
+        vp_stage=vp_stage,
         **extra_config,
     )
 

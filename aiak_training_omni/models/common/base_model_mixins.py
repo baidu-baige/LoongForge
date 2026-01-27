@@ -4,7 +4,7 @@ Alternative translations"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Tuple, List
+from typing import Any, Dict, Optional
 
 import torch
 from transformers import (
@@ -12,21 +12,19 @@ from transformers import (
     AutoConfig,
 )
 import logging
-
 logger = logging.getLogger(__name__)
 from megatron.core.models.common.vision_module.vision_module import VisionModule
-from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.transformer.module import MegatronModule
-import torch.nn.functional as F
-from copy import deepcopy
+from megatron.core.models.common.language_module.language_module import LanguageModule
+from megatron.core.process_groups_config import ProcessGroupCollection
 
 
-class BaseMegatronLanuageModule(LanguageModule):
+class BaseMegatronLanguageModule(LanguageModule):
     """Unified Base Class for Language Models"""
 
-    def __init__(self, config: AutoConfig, **kwargs):
-        super().__init__(config=config, **kwargs)
-    
+    def __init__(self, config: AutoConfig, pg_collection: Optional[ProcessGroupCollection] = None, **kwargs):
+        super().__init__(config=config, pg_collection=pg_collection, **kwargs)
+
     def freeze(self):
         """Freeze model parameters during training to prevent them from being updated.
         """
@@ -78,7 +76,8 @@ class BaseMegatronModule(MegatronModule):
         return model
 
 
-class BaseMegatronVisionModule(VisionModule):
+class BaseMegatronVisionModule(MegatronModule):
+    # TODO: Since VisionModule does not have any special logic, we inherit from MegatronModule instead.
     """Unified Abstract Base Class for Vision Models"""
 
     def __init__(self, config: AutoConfig, **kwargs):

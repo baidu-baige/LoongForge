@@ -1,0 +1,237 @@
+diff --git a/megatron/training/arguments.py b/megatron/training/arguments.py
+index 57a2d82bd..a9e23c8bf 100644
+--- a/megatron/training/arguments.py
++++ b/megatron/training/arguments.py
+@@ -542,6 +542,20 @@ def validate_args(args, defaults={}):
+         f'{args.pipeline_model_parallel_layout=}.'
+     )
+ 
++    if args.custom_pipeline_recompute_layers is not None:
++        assert args.recompute_granularity == "full", \
++            "recompute-granularity should be full, when custom-pipeline-recompute-layers is set."
++
++        pp_recompute_splits = []
++        if args.custom_pipeline_recompute_layers.find(',') != -1:
++            pp_recompute_splits = [int(s) for s in args.custom_pipeline_recompute_layers.split(',')]
++
++        assert len(pp_recompute_splits) == args.pipeline_model_parallel_size, (
++            f"the number of elements in --custom-pipeline-recompute-layers must be equal to "
++            f"pipeline size {args.pipeline_model_parallel_size}")
++
++        args.custom_pipeline_recompute_layers = pp_recompute_splits
++
+     if args.pipeline_model_parallel_layout is not None:
+         # Parse the input flattened layout to a list and get the vpp size.
+         # We will validate the layout more carefully in the TransformerConfig constructor.
+@@ -776,7 +790,17 @@ def validate_args(args, defaults={}):
+     # across batches/microbatches. Due to additional communication overhead
+     # during pipeline parallelism, it should not be set if sequence length
+     # is constant during training.
+-    args.variable_seq_lengths = False
++    # Note: default false, but for sft, we should support variable sequence lengths
++    # args.variable_seq_lengths = False
++
++    if args.reduce_variable_seq_shape_p2p_comm:
++        assert args.seq_length > 0, "seq-length must be set when reduce-variable-seq-shape-p2p-comm is enabled"
++
++        if args.hidden_size < 32:
++            args.reduce_variable_seq_shape_p2p_comm = False
++
++        args.p2p_comm_fixed_seq_lengths_per_rank = args.seq_length // (
++            args.tensor_model_parallel_size * args.context_parallel_size)
+ 
+     # Iteration-based training.
+     if args.train_iters:
+@@ -956,9 +980,12 @@ def validate_args(args, defaults={}):
+                 args.rank,
+             )
+         else:
+-            assert os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') == "1", \
+-                "Using tensor model parallelism or context parallelism require setting the environment variable " \
+-                "CUDA_DEVICE_MAX_CONNECTIONS to 1"
++            if args.preprocess_data_on_cpu:
++                print("Skipping CUDA_DEVICE_MAX_CONNECTIONS checks because use megatron preprocess data")
++            else:
++                assert os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') == "1", \
++                    "Using tensor model parallelism or context parallelism require setting the environment variable " \
++                    "CUDA_DEVICE_MAX_CONNECTIONS to 1"
+ 
+     # Setting FSDP communication groups for high priority streams for Blackwell and later architectures
+     # Assigning high priority to communication streams ensures that communication kernels are scheduled
+@@ -1156,10 +1183,10 @@ def validate_args(args, defaults={}):
+             "The optimizer cpu offload must be used in conjunction with `--use-precision-aware-optimizer`, "
+             "as the hybrid device optimizer reuses the code path of this flag."
+         )
+-        assert not args.fp8_param_gather or args.fp8_recipe == "delayed", (
+-            "When `--fp8-param-gather` is enabled, the optimizer cpu offload "
+-            "must be used in conjunction with `--fp8-recipe delayed`."
+-        )
++        # assert not args.fp8_param_gather or args.fp8_recipe == "delayed", (
++        #     "When `--fp8-param-gather` is enabled, the optimizer cpu offload "
++        #     "must be used in conjunction with `--fp8-recipe delayed`."
++        # )
+ 
+     if args.non_persistent_ckpt_type == "local":
+         assert args.non_persistent_local_ckpt_dir is not None, "Tried to use local checkpointing without specifying --local-ckpt-dir!"
+@@ -1342,6 +1369,10 @@ def _add_transformer_engine_args(parser):
+     group.add_argument('--fp8-param-gather', action='store_true',
+                        help='Keep the compute param in fp8 (do not use any other intermediate '
+                             'dtype) and perform the param all-gather in fp8.')
++    # Added by AIAK
++    group.add_argument('--enable-fp8-comm', action='store_true',
++                       help='enable fp8 format comm in dispatch',
++                       dest='enable_fp8_comm')
+     group.add_argument('--first-last-layers-bf16', action='store_true',
+                        help='Construct first and last layers in bf16 when doing FP8 training.')
+     group.add_argument('--num-layers-at-start-in-bf16', type=int, default=1,
+@@ -1899,6 +1930,15 @@ def _add_regularization_args(parser):
+                        'numerical stability')
+     group.add_argument('--sgd-momentum', type=float, default=0.9,
+                        help='Momentum factor for sgd')
++    group.add_argument('--muon-matched-adamw-rms', type=float, default=0.2,
++                    help="The RMS of the matched AdamW's, typically 0.2 ~ 0.4")
++    group.add_argument('--muon-momentum', type=float, default=0.95,
++                       help='Momentum beta for muon')
++    group.add_argument('--muon-ns-steps', type=int, default=5,
++                       help='Number of Newton-Schultz iteartion steps for muon')
++    group.add_argument('--no-muon-nesterov', action='store_false',
++                       dest='muon_nesterov', default=True,
++                       help='If set, disable Nesterov momentum for muon')
+     return parser
+ 
+ 
+@@ -2044,8 +2084,9 @@ def _add_training_args(parser):
+                        'to recompute within each pipeline stage.')
+     group.add_argument('--recompute-modules', nargs='*', type=str, default=None,
+                        help='The submodules to recompute. '
+-                       'choices: "core_attn", "moe_act", "layernorm", "mla_up_proj", '
+-                       '         "mlp", "moe", "shared_experts". '
++                       'choices: "core_attn", "moe_act", "mlp_act", "layernorm", "mla_up_proj", '
++                       '         "mlp", "moe", "shared_experts", "routed_experts", "pre_mlp",   '
++                       '         "a2a_overlap_attn", "a2a_overlap_post_attn", "a2a_overlap_mlp". '
+                        'default: ["core_attn"].'
+                        '"core_attn": recompute the core attention part of the transformer layer. '
+                        '"moe_act": recompute the MoE MLP activation function. '
+@@ -2055,7 +2096,10 @@ def _add_training_args(parser):
+                        '"moe": recompute the MoE layer.'
+                        '"shared_experts": recompute the shared experts in the MoE layer.'
+                        '"moe_act", "layernorm", and "mla_up_proj" use output-discarding checkpointing, '
+-                       '"core_attn", "mlp", "moe", and "shared_experts" use normal checkpointing.')
++                       '"core_attn", "mlp", "moe", and "shared_experts" use normal checkpointing, '
++                       '"a2a_overlap_attn", "a2a_overlap_post_attn", "a2a_overlap_mlp": recompute '
++                       '"computation segments that are split to enable expert-parallel All-to-All '
++                       '"communication overlap; only valid when EP A2A overlap is enabled.')
+     group.add_argument('--no-clone-scatter-output-in-embedding', action='store_false',
+                        help='If not set, clone the output of the scatter in embedding layer to GC original tensor.',
+                        dest='clone_scatter_output_in_embedding')
+@@ -2195,7 +2239,7 @@ def _add_training_args(parser):
+                        help='Enable bias only in the QKV linear layers',
+                        dest='add_qkv_bias')
+     group.add_argument('--optimizer', type=str, default='adam',
+-                       choices=['adam', 'sgd'],
++                       choices=['adam', 'sgd', 'muon'],
+                        help='Optimizer function')
+     group.add_argument('--optimizer-cpu-offload', action='store_true',
+                        help='Offload optimizer state to CPU')
+@@ -2209,6 +2253,8 @@ def _add_training_args(parser):
+                        help='Disable pinning of CPU memory for gradients.')
+     group.add_argument('--no-pin-cpu-params', action='store_false', dest='pin_cpu_params',
+                        help='Disable pinning of CPU memory for parameters.')
++    group.add_argument('--no-use-deepspeed-cpu-adam', action='store_false', dest='use_deepspeed_cpu_adam',
++                       help='Disable Deepspeed CPU Adam implementation.')
+     group.add_argument('--dataloader-type', type=str, default=None,
+                        choices=['single', 'cyclic', 'external'],
+                        help='Single pass vs multiple pass data loader')
+@@ -2265,7 +2311,20 @@ def _add_training_args(parser):
+                        help='The communicator group names to use high priority streams.')
+     group.add_argument('--use-te-activation-func', action='store_true',
+                        help='Use activation function kernel from Transformer Engine in MLP module.')
+-
++    group.add_argument('--fine-grained-activation-offloading', action='store_true',
++                       help='Enable fine-grained activation offloading.')
++    group.add_argument('--offload-modules', nargs='*', type=str, default=[],
++                       help='The submodules to offload its input. '
++                       'Choices: "attn_norm", "core_attn", "attn_proj", "mlp_norm",'
++                       ' "expert_fc1", "moe_act".')
++    group.add_argument('--offload-tensors', nargs='*', type=str, default=[],
++                   help='Enable selective tensor offloading based on tensor tags.'
++                       ' Choices: "dispatched_input". ')
++    group.add_argument('--min-offloaded-tensor-size', type=int, default=1024 * 1024,
++                       help='The minimum size of the tensor to be offloaded.')
++    # CPU affinity optimization.
++    group.add_argument('--bindpcie', action='store_true', 
++                       help='Enable NUMA binding according to GPU PCIe affinity')
+     return parser
+ 
+ 
+@@ -2551,6 +2610,8 @@ def _add_mixed_precision_args(parser):
+                        'prevent matmul from using reduced precision accumulation when using BF16.')
+     group.add_argument('--reuse-grad-buf-for-mxfp8-param-ag', action='store_true',
+                        help='If True, reuse the grad buffer for MXFP8 parameter all-gather.')
++    group.add_argument('--use-fp32-dtype-for-param-pattern', nargs="*", default=None,
++                       help="Specifies the floating point datatype for parameters within the given param patterns.")
+ 
+     return parser
+ 
+@@ -2578,6 +2639,10 @@ def _add_distributed_args(parser):
+                        'Replicated stages or layers can be described with multiplication. '
+                        'Commas can be used cosmetically. '
+                        'Default None is not using this argument to set the layout.'))
++    # add by aiak for recompute layer imbalance.
++    group.add_argument('--custom-pipeline-recompute-layers', type=str, default=None,
++                       help='Add by aiak for recompute layer imbalance. For example 10,11,12,13.'
++                       '10 for stage0 recompute layers, 11 for stage1 recompute layers...')
+     group.add_argument('--model-parallel-size', type=int, default=None,
+                        help='Old model parallel argument, do not use. Use '
+                        '--tensor-model-parallel-size instead.')
+@@ -2733,6 +2798,13 @@ def _add_distributed_args(parser):
+                        "and must be consistent across all ranks.")
+     group.add_argument('--replication-factor', default=2, type=int,
+                        help="Number of machines storing the replica of a given rank's data.")
++    group.add_argument(f"--reduce-variable-seq-shape-p2p-comm", action='store_true',
++                       help="If enabled, all the lengths of p2p data will be padding to fixed lengths;"
++                       "It can be uesed for sft, to reduce communication shape of  variable seq."
++                       " the fixed lengths is seq-length-per-rank + 1.")
++    group.add_argument("--force-turn-on-bucketing", action='store_true',
++                        dest='force_turn_on_bucketing',
++                        help="Force turn on bucketing on all pp stages")
+     return parser
+ 
+ 
+@@ -2882,6 +2954,9 @@ def _add_data_args(parser):
+                        help='Path to cache index files when using s3 or msc dataloader')
+     group.add_argument('--mid-level-dataset-surplus', type=float, default=0.005,
+                        help='The sample surplus to build for the mid-level datasets(s)')
++    group.add_argument('--preprocess-data-on-cpu', action='store_true',
++                       default=None,
++                       help='If set, initialize dataset on the CPU.')
+     return parser
+ 
+ 
+@@ -3160,6 +3235,14 @@ def _add_moe_args(parser):
+                        help="some MoE routers have a D2H sync that will break cuda graphs.  If this flag is set the router will switch" \
+                        " to dropping and padding during decode time which does not have a D2H sync. The capacity factor is set to the" \
+                        " max that an expert could see during inference so no tokens are actually dropped.")
++    # add for moe memory monitor
++    group.add_argument('--enable-moe-mem-monitor',  action='store_true', help='Enable mem monitor')
++    group.add_argument('--print-moe-mem-monitor-interval',  type=int, default=100000,
++                       help='Interval at which to log memory usage')
++    group.add_argument('--moe-mem-monitor-log',  type=str, default=None,
++                       help='File path where to store memory monitoring logs')
++    group.add_argument('--moe-mem-monitor-force-print-token-threshold',  type=int, default=10000000,
++                       help='Force printing out memory usage when it exceeds this number')
+     return parser
+ 
+ def _add_mla_args(parser):
+@@ -3182,6 +3265,11 @@ def _add_mla_args(parser):
+                        help="Mscale all dimensions for YaRN RoPE in multi-latent attention.")
+     group.add_argument('--cache-mla-latents', action='store_true', default=False,
+                        help="If set caches the mla down projected latents with mla flash decode.")
++    # padding v for fa2
++    group.add_argument('--padding-v-to-qk-dim', action='store_true', default=False,
++                       help="Whether to add zero padding to v dim if qk dim is not equal to v dim")
++    group.add_argument('--original-max-position-embeddings', type=int, default=4096,
++                       help="Original maximum position embeddings for YaRN RoPE in multi-latent attention.")
+ 
+     return parser
+ 

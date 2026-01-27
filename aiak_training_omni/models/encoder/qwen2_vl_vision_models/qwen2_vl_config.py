@@ -3,7 +3,7 @@
 import torch
 from dataclasses import dataclass, fields
 
-from megatron.training.activations import quick_gelu
+from megatron.core.activations import quick_gelu
 from ...common.base_model_config import BaseModelConfig
 from megatron.core.transformer import TransformerConfig
 from aiak_training_omni.models.factory import register_model_config

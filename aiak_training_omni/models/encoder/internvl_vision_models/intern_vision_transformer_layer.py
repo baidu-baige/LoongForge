@@ -84,7 +84,6 @@ class TransformerLayerIntern(TransformerLayer):
             self,
             hidden_states,
             attention_mask=None,
-            attn_mask_type=None,
             context=None,
             context_mask=None,
             rotary_pos_emb=None,
@@ -101,10 +100,10 @@ class TransformerLayerIntern(TransformerLayer):
         # Residual connection.
         residual = hidden_states
         # Optional Input Layer norm
-        if self.config.layernorm_recompute:
-            self.input_layernorm_recompute_manager = tensor_parallel.RecomputeManager()
-            input_layernorm_output = self.input_layernorm_recompute_manager.checkpoint(
-                self.input_layernorm, False, hidden_states
+        if self.recompute_input_layernorm:
+            self.input_layernorm_checkpoint = tensor_parallel.CheckpointWithoutOutput()
+            input_layernorm_output = self.input_layernorm_checkpoint.checkpoint(
+                self.input_layernorm, hidden_states
             )
         else:
             input_layernorm_output = self.input_layernorm(hidden_states)
@@ -113,7 +112,6 @@ class TransformerLayerIntern(TransformerLayer):
         attention_output, attention_bias = self.self_attention(
             input_layernorm_output,
             attention_mask=attention_mask,
-            attn_mask_type=attn_mask_type,
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
             rotary_pos_cos=rotary_pos_cos,
@@ -123,10 +121,12 @@ class TransformerLayerIntern(TransformerLayer):
             sequence_len_offset=sequence_len_offset,
         )
 
-        if self.config.layernorm_recompute:
-            self.input_layernorm_recompute_manager.discard_output()
-            if attention_output.requires_grad:
-                attention_output.register_hook(self.input_layernorm_recompute_manager.recompute)
+        if self.recompute_input_layernorm:
+            # discard the output of the input layernorm and register the recompute
+            # as a gradient hook of attention_output_with_bias[0]
+            self.input_layernorm_checkpoint.discard_output_and_register_recompute(
+                attention_output
+            )
 
         attention_output_with_bias = self.post_attention_layerscale((
             attention_output + attention_bias) if attention_bias is not None else attention_output), None
@@ -148,7 +148,6 @@ class TransformerLayerIntern(TransformerLayer):
         attention_output_with_bias = self.cross_attention(
             pre_cross_attn_layernorm_output,
             attention_mask=context_mask,
-            attn_mask_type=attn_mask_type,
             key_value_states=context,
             inference_params=inference_params,
         )
@@ -167,20 +166,23 @@ class TransformerLayerIntern(TransformerLayer):
         residual = hidden_states
 
         # Optional Layer norm post the cross-attention.
-        if self.config.layernorm_recompute:
-            self.pre_mlp_layernorm_recompute_manager = tensor_parallel.RecomputeManager()
-            pre_mlp_layernorm_output = self.pre_mlp_layernorm_recompute_manager.checkpoint(
-                self.pre_mlp_layernorm, False, hidden_states)
+        if self.recompute_pre_mlp_layernorm:
+            self.pre_mlp_norm_checkpoint = tensor_parallel.CheckpointWithoutOutput()
+            pre_mlp_layernorm_output = self.pre_mlp_norm_checkpoint.checkpoint(
+                self.pre_mlp_layernorm, hidden_states
+            )
         else:
             pre_mlp_layernorm_output = self.pre_mlp_layernorm(hidden_states)
 
         # MLP.
         mlp_output, mlp_bias = self.mlp(pre_mlp_layernorm_output)
 
-        if self.config.layernorm_recompute:
-            self.pre_mlp_layernorm_recompute_manager.discard_output()
-            if mlp_output.requires_grad:
-                mlp_output.register_hook(self.pre_mlp_layernorm_recompute_manager.recompute)
+        if self.recompute_pre_mlp_layernorm:
+            # discard the output of the pre-mlp layernorm and register the recompute
+            # as a gradient hook of mlp_output_with_bias[0]
+            self.pre_mlp_norm_checkpoint.discard_output_and_register_recompute(
+                mlp_output
+            )
 
         mlp_output_with_bias = self.post_mlp_layerscale((mlp_output +
                                                          mlp_bias) if mlp_bias is not None else mlp_output), None

@@ -1,5 +1,6 @@
 """llm model provider"""
 import inspect
+from typing import Optional
 from contextlib import nullcontext
 from transformers import AutoModel
 
@@ -7,13 +8,14 @@ from megatron.core.transformer.spec_utils import import_module
 from aiak_training_omni.utils import (
     get_args, get_model_config, print_rank_0
 )
-from aiak_training_omni.models.common import BaseMegatronLanuageModule
+from aiak_training_omni.models.common import BaseMegatronLanguageModule
 
 
 def llm_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
+    vp_stage: Optional[int] = None,
 ):
     """Generic LLM model provider.
     
@@ -66,11 +68,12 @@ def llm_model_provider(
                 "--fp8-param-gather requires `fp8_model_init` from TransformerEngine,but not found.")
 
     with build_model_context(**build_model_context_args):
-        model: BaseMegatronLanuageModule = AutoModel.from_config(
+        model: BaseMegatronLanguageModule = AutoModel.from_config(
             config=config,
             pre_process=pre_process,
             post_process=post_process,
             parallel_output=parallel_output,
+            vp_stage=vp_stage,
         )
 
     return model

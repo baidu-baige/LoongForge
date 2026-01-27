@@ -48,7 +48,8 @@ SUPPORTED_MODELS = [
 
 stimer = StragglerDetector()
 
-def model_provider(pre_process=True, post_process=True):
+
+def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     """Builds the model.
 
     Args:
@@ -74,7 +75,7 @@ def model_provider(pre_process=True, post_process=True):
     if args.model_name == "wan2_2_i2v":
         model_provider = wan2_2_i2v_model_provider
 
-    return model_provider(pre_process, post_process)
+    return model_provider(pre_process, post_process, vp_stage)
 
 
 scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True)

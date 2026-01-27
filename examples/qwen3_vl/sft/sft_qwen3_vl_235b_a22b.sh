@@ -1,5 +1,6 @@
 #! /bin/bash
 # The script needs to be run on at least 4 nodes.
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
@@ -46,7 +47,7 @@ TRAINING_ARGS=(
     --training-phase sft
     # --trainable-modules language_model adapter
     --seq-length 32768
-    --max-position-embeddings 32768
+    --max-position-embeddings 262144
     --init-method-std 0.02
     --micro-batch-size 1
     --global-batch-size 4
@@ -76,9 +77,10 @@ MOE_ARGS=(
     --moe-router-load-balancing-type aux_loss
     --moe-router-topk 8
     --moe-aux-loss-coeff 1e-3
-    #--moe-grouped-gemm
+    --moe-grouped-gemm
     --moe-router-dtype fp32
     --empty-unused-memory-level 2
+    --moe-token-dispatcher-type alltoall
 )
 
 MODEL_PARALLEL_ARGS=(
@@ -86,7 +88,6 @@ MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 8
-    --moe-token-dispatcher-type alltoall
     --use-distributed-optimizer
     #--sequence-parallel
     --overlap-grad-reduce

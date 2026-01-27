@@ -89,7 +89,6 @@ def create_parallel_state(module_name, tp_size=0):
         tensor_model_parallel_size=tp_size,
         pipeline_model_parallel_size=1,
         virtual_pipeline_model_parallel_size=None,
-        pipeline_model_parallel_split_rank=None,
         use_sharp=False,
         context_parallel_size=1,
         expert_model_parallel_size=1,
@@ -107,6 +106,7 @@ def initialize_aiak_megatron(
     skip_mpu_initialization=False,
     get_embedding_ranks=None,
     get_position_embedding_ranks=None,
+    store=None,
 ):
     """Set global variables, initialize distributed, and
     set autoresume and random seeds.
@@ -161,7 +161,7 @@ def initialize_aiak_megatron(
         """torch.distributed initialization"""
 
         # Pytorch distributed.
-        _initialize_distributed(get_embedding_ranks, get_position_embedding_ranks)
+        _initialize_distributed(get_embedding_ranks, get_position_embedding_ranks, store)
 
         save_parallel_state('text_decoder')
         global _DecoderTensorParallelSize
@@ -187,7 +187,14 @@ def initialize_aiak_megatron(
             args.data_parallel_random_init,
             args.te_rng_tracker,
             args.inference_rng_tracker,
+            use_cudagraphable_rng=args.cuda_graph_impl != "none",
         )
+
+        # Setup MoE aux loss scale value.
+        if args.num_experts is not None:
+            from megatron.core.transformer.moe.router import MoEAuxLossAutoScaler
+
+            MoEAuxLossAutoScaler.set_loss_scale(torch.ones(1, device=torch.cuda.current_device()))
 
     if skip_mpu_initialization:
         return None
@@ -213,6 +220,7 @@ def initialize_aiak_megatron(
         _compile_dependencies()
 
         if args.tp_comm_overlap:
+            # TODO: Should this be activated with just decoder-tp-comm-overlap too?
             _initialize_tp_communicators()
 
         # No continuation function

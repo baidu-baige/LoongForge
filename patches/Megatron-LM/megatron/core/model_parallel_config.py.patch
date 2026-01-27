@@ -1,0 +1,30 @@
+diff --git a/megatron/core/model_parallel_config.py b/megatron/core/model_parallel_config.py
+index 2758c9c07..77bea09ff 100644
+--- a/megatron/core/model_parallel_config.py
++++ b/megatron/core/model_parallel_config.py
+@@ -1,7 +1,8 @@
+ # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ 
++import warnings
+ from dataclasses import dataclass
+-from typing import Callable, ContextManager, Optional
++from typing import Callable, ContextManager, Optional, List
+ 
+ import torch
+ 
+@@ -349,6 +350,15 @@ class ModelParallelConfig:
+        the user adds a level 1 timer that is not called by all ranks.
+     """
+ 
++    ###################
++    # AIAK Add
++    ###################
++    reduce_variable_seq_shape_p2p_comm: bool = False
++    """If True, reduce the shape communication when variable_seq_lengths is True."""
++
++    custom_pipeline_recompute_layers: Optional[List[int]] = None
++    """Custom recomputation layers for each stage"""
++
+     def __post_init__(self):
+         """Python dataclass method that is used to modify attributes after initialization.
+         See https://docs.python.org/3/library/dataclasses.html#post-init-processing for more

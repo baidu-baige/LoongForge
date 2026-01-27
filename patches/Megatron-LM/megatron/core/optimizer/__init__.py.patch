@@ -1,0 +1,149 @@
+diff --git a/megatron/core/optimizer/__init__.py b/megatron/core/optimizer/__init__.py
+index 307538fad..7cd153278 100644
+--- a/megatron/core/optimizer/__init__.py
++++ b/megatron/core/optimizer/__init__.py
+@@ -5,7 +5,8 @@ from typing import Callable, Dict, List, Optional, Tuple
+ 
+ import torch
+ from torch.optim import SGD as CPUSGD
+-from torch.optim import AdamW as CPUAdam
++from torch.optim import AdamW
++from .muon import Muon
+ 
+ try:
+     from transformer_engine.pytorch.optimizers import FusedAdam as Adam
+@@ -61,6 +62,7 @@ def _get_param_groups(
+     min_lr: float,
+     decoupled_lr: Optional[float],
+     decoupled_min_lr: Optional[float],
++    use_muon: bool = False,
+     default_skip_embedding_weight_decay: bool = False,
+ ) -> List[Dict]:
+     """Create parameter groups for optimizer.
+@@ -94,6 +96,7 @@ def _get_param_groups(
+ 
+     # Map (wd_mult, lr_mult, is_expert_parallel, is_decoupled_lr) to params.
+     params_map = {}
++    muon_params_map = {}
+     for model_chunk in model_chunks:
+         for name, param in model_chunk.named_parameters():
+             if not param.requires_grad:
+@@ -136,10 +139,22 @@ def _get_param_groups(
+             ):
+                 is_decoupled_lr = True
+ 
+-            key = (wd_mult, _lr_mult, is_expert_parallel, is_decoupled_lr)
+-            if key not in params_map:
+-                params_map[key] = []
+-            params_map[key].append(param)
++            # check if linear params
++            bias_flag = name.endswith(".bias")
++            shape_flag = param.dim() == 2
++            embedding_flag = "embedding" in name or "output_layer" in name
++            muon_flag = use_muon and shape_flag \
++                and (not bias_flag) and (not embedding_flag)
++            if muon_flag:
++                key = (wd_mult, _lr_mult, is_expert_parallel)
++                if key not in muon_params_map:
++                    muon_params_map[key] = []
++                muon_params_map[key].append(param)
++            else:
++                key = (wd_mult, _lr_mult, is_expert_parallel, is_decoupled_lr)
++                if key not in params_map:
++                    params_map[key] = []
++                params_map[key].append(param)
+ 
+     # Distributed checkpoint requires all ranks to have the same param groups,
+     # so we need to align the param groups across ranks, otherwise we may have
+@@ -176,6 +191,20 @@ def _get_param_groups(
+         decoupled_min_lr=decoupled_min_lr,
+     )
+ 
++    for (wd_mult, _lr_mult, is_expert_parallel), params in muon_params_map.items():
++        if len(params) == 0:
++            continue
++        param_groups.append(
++            {
++                'params': params,
++                'wd_mult': wd_mult,
++                'lr_mult': _lr_mult,
++                'is_expert_parallel': is_expert_parallel,
++                'use_muon': True,
++                'is_decoupled_lr': False,
++            }
++        )
++
+     return param_groups
+ 
+ 
+@@ -261,6 +290,7 @@ def _get_param_groups_and_buffers(
+         min_lr=config.min_lr,
+         decoupled_lr=config.decoupled_lr,
+         decoupled_min_lr=config.decoupled_min_lr,
++        use_muon=config.optimizer == 'muon',
+         default_skip_embedding_weight_decay=default_skip_embedding_weight_decay,
+     )
+     param_groups = list(filter(filter_fn, param_groups))
+@@ -316,6 +346,16 @@ def _get_megatron_optimizer_based_on_param_groups(
+             assert (
+                 config.decoupled_weight_decay
+             ), "CPU offloading only supported with decoupled_weight_decay enabled (AdamW mode)."
++            CPUAdam = AdamW
++            if config.use_deepspeed_cpu_adam:
++                try:
++                    from deepspeed.ops.adam import DeepSpeedCPUAdam
++                    CPUAdam = DeepSpeedCPUAdam
++                except ImportError:
++                    warnings.warn(
++                        "DeepSpeed CPU Adam is not available (import failed). Falling back to PyTorch AdamW"
++                    )
++                    config.use_deepspeed_cpu_adam = False
+             gpu_optimizer_cls = Adam if config.optimizer == 'adam' else SGD
+             cpu_optimizer_cls = CPUAdam if config.optimizer == 'adam' else CPUSGD
+             if config.use_torch_optimizer_for_cpu_offload:
+@@ -331,6 +371,19 @@ def _get_megatron_optimizer_based_on_param_groups(
+                     bias_correction=True,
+                     fused=True,  # this flag is used to improve the performance of the cpu optimizer
+                 )
++            elif config.optimizer == 'muon':
++                gpu_optimizer_cls = Muon
++                cpu_optimizer_cls = Muon
++                optimizer_defaults = dict(
++                    lr=config.lr,
++                    weight_decay=config.weight_decay,
++                    matched_adamw_rms=config.muon_matched_adamw_rms,
++                    momentum=config.muon_momentum,
++                    nesterov=config.muon_nesterov,
++                    ns_steps=config.muon_ns_steps,
++                    adamw_betas=(config.adam_beta1, config.adam_beta2),
++                    adamw_eps=config.adam_eps
++                )
+             else:
+                 gpu_optimizer_cls = SGD
+                 cpu_optimizer_cls = CPUSGD
+@@ -410,6 +463,25 @@ def _get_megatron_optimizer_based_on_param_groups(
+                 momentum=config.sgd_momentum,
+             )
+             init_state_fn = None
++        elif config.optimizer == 'muon':
++            optimizer = Muon(param_groups,
++                             lr=config.lr, weight_decay=config.weight_decay,
++                             matched_adamw_rms=config.muon_matched_adamw_rms,
++                             momentum=config.muon_momentum,
++                             nesterov=config.muon_nesterov,
++                             ns_steps=config.muon_ns_steps,
++                             adamw_betas=(config.adam_beta1, config.adam_beta2),
++                             adamw_eps=config.adam_eps)
++
++            def init_state_fn(opt, config=None):
++                for group in opt.param_groups:
++                    for p in group['params']:
++                        if len(opt.state[p]) == 0:
++                            if config is None or not config.use_precision_aware_optimizer:
++                                opt.state[p]['exp_avg'] = torch.zeros_like(p.data)
++                                opt.state[p]['exp_avg_sq'] = torch.zeros_like(p.data)
++                            else:
++                                opt.initialize_state(p)
+         else:
+             raise Exception('{} optimizer is not supported.'.format(config.optimizer))
+     else:

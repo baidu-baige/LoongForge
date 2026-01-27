@@ -1,0 +1,14 @@
+diff --git a/xpu_plugin/scaled_softmax/__init__.py b/xpu_plugin/scaled_softmax/__init__.py
+new file mode 100644
+index 0000000..de3a700
+--- /dev/null
++++ b/xpu_plugin/scaled_softmax/__init__.py
+@@ -0,0 +1,8 @@
++"""
++Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved
++This module provides megatron-core-aiak plugin.
++"""
++
++from . import scaled_softmax
++
++forward = scaled_softmax.forward

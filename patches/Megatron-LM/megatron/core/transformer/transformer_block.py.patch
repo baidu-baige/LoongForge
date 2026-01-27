@@ -1,0 +1,91 @@
+diff --git a/megatron/core/transformer/transformer_block.py b/megatron/core/transformer/transformer_block.py
+index aead6133f..b7f41f279 100755
+--- a/megatron/core/transformer/transformer_block.py
++++ b/megatron/core/transformer/transformer_block.py
+@@ -16,6 +16,9 @@ from megatron.core.fp8_utils import get_fp8_context
+ from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
+ from megatron.core.inference.contexts import BaseInferenceContext
+ from megatron.core.packed_seq_params import PackedSeqParams
++from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
++    fine_grained_offloading_set_last_layer,
++)
+ from megatron.core.pipeline_parallel.utils import is_vp_first_stage, is_vp_last_stage
+ from megatron.core.process_groups_config import ProcessGroupCollection
+ from megatron.core.transformer.enums import LayerType
+@@ -396,6 +399,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+         attention_bias: Tensor,
+         packed_seq_params: PackedSeqParams,
+         use_inner_quantization_context: bool,
++        **kwargs,
+     ):
+         """Forward method with activation checkpointing."""
+ 
+@@ -432,6 +436,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                             attention_bias=attention_bias,
+                             inference_context=None,
+                             packed_seq_params=packed_seq_params,
++                            **kwargs,
+                         )
+                 return hidden_states, context
+ 
+@@ -451,6 +456,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                     context,
+                     context_mask,
+                     rotary_pos_emb,
++                    **kwargs,
+                 )
+             else:
+                 return tensor_parallel.checkpoint(
+@@ -461,6 +467,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                     context,
+                     context_mask,
+                     rotary_pos_emb,
++                    **kwargs,
+                 )
+ 
+         if self.config.recompute_method == 'uniform':
+@@ -494,7 +501,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                     hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1))
+                 else:
+                     hidden_states, context = custom(layer_idx, layer_idx + 1)(
+-                        hidden_states, attention_mask, context, context_mask, rotary_pos_emb
++                        hidden_states, attention_mask, context, context_mask, rotary_pos_emb, **kwargs
+                     )
+         else:
+             raise ValueError("Invalid activation recompute method.")
+@@ -569,6 +576,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+         *,
+         inference_params: Optional[BaseInferenceContext] = None,
+         dynamic_inference_decode_only: Optional[bool] = None,
++        **kwargs,
+     ):
+         """
+         Perform the forward pass through the transformer block.
+@@ -675,6 +683,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                     attention_bias=attention_bias,
+                     packed_seq_params=packed_seq_params,
+                     use_inner_quantization_context=use_inner_quantization_context,
++                    **kwargs,
+                 )
+             else:
+                 for l_no, layer in enumerate(self.layers):
+@@ -693,6 +702,11 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                     else:
+                         inner_quantization_context = nullcontext()
+ 
++                    if self.config.fine_grained_activation_offloading:
++                        fine_grained_offloading_set_last_layer(
++                            l_no == self.num_layers_per_pipeline_rank - 1
++                        )
++
+                     with self.offload_context, inner_quantization_context:
+                         hidden_states, context = layer(
+                             hidden_states=hidden_states,
+@@ -707,6 +721,7 @@ class TransformerBlock(GraphableMegatronModule, MegatronModule):
+                             inference_context=inference_context,
+                             packed_seq_params=packed_seq_params,
+                             sequence_len_offset=sequence_len_offset,
++                            **kwargs,
+                         )
+ 
+                     if (

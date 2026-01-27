@@ -68,44 +68,36 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     Returns:
         the loss scalar for this micro-batch
         the number of non-padded tokens in this microbatch
-        a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
+        a dict containing reporting metrics on the loss and number of tokens across
+            the data parallel ranks
     """
     args = get_args()
 
-    losses = output_tensor.float()
+    losses = output_tensor.view(-1).float()
     loss_mask = loss_mask.view(-1).float()
-
-    total_tokens = loss_mask.sum()
-    loss = torch.cat(
-        [torch.sum(losses.view(-1) * loss_mask).view(1), total_tokens.view(1)]
-    )
-
-    if args.context_parallel_size > 1:
-        torch.distributed.all_reduce(loss, group=mpu.get_context_parallel_group())
+    loss = torch.sum(losses * loss_mask)
 
     # Check individual rank losses are not NaN prior to DP all-reduce.
     rerun_state_machine = get_rerun_state_machine()
-
     if args.check_for_nan_in_loss_and_grad:
         rerun_state_machine.validate_result(
-            result=loss[0],
+            result=loss,
             rejection_func=torch.isnan,
             message="found NaN in local forward loss calculation",
             tolerance=0.0,  # forward pass calculations are determinisic
             fatal=True,
         )
         rerun_state_machine.validate_result(
-            result=loss[0],
+            result=loss,
             rejection_func=torch.isinf,
             message="found Inf in local forward loss calculation",
             tolerance=0.0,  # forward pass calculations are determinisic
             fatal=True,
         )
-
     # Check for spiky loss
     if args.check_for_spiky_loss:
         rerun_state_machine.validate_result(
-            result=loss[0],
+            result=loss,
             rejection_func=partial(
                 rerun_state_machine.is_unexpectedly_large,
                 threshold=SPIKY_LOSS_FACTOR,
@@ -116,25 +108,20 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
             fatal=False,
         )
 
-    # Reduce loss for logging.
-    reporting_loss = loss.clone().detach()
-    torch.distributed.all_reduce(reporting_loss, group=mpu.get_data_parallel_group())
+    num_tokens = loss_mask.sum().clone().detach().to(torch.int)
+    reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
 
-    local_num_tokens = loss[1].clone().detach().to(torch.int)
-    return (
-        loss[0] * args.context_parallel_size,
-        local_num_tokens,
-        {"lm loss": (reporting_loss[0], reporting_loss[1])},
-    )
+    return (loss, num_tokens, {'lm loss': reporting_loss})
 
 
-def forward_step(data_iterator, model):
+def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
 
     Args:
         data_iterator : Input data iterator
         model: Megatron Model
     """
+    args = get_args()
     timers = get_timers()
 
     # Get the batch.
@@ -149,12 +136,17 @@ def forward_step(data_iterator, model):
     timers("batch-generator").stop()
 
     with stimer:
-        output_tensor = model(
-            input_ids=tokens,
-            position_ids=position_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-        )
+        if return_schedule_plan:
+            assert args.overlap_moe_expert_parallel_comm, \
+                "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
+            schedule_plan = model.build_schedule_plan(
+                tokens, position_ids, attention_mask, labels=labels, loss_mask=loss_mask
+            )
+            return schedule_plan, partial(loss_func, loss_mask)
+        else:
+            output_tensor = model(
+                tokens, position_ids, attention_mask, labels=labels, loss_mask=loss_mask
+            )
 
     return output_tensor, partial(loss_func, loss_mask)
 

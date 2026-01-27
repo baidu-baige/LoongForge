@@ -89,7 +89,6 @@ class FlashSelfAttention(MegatronModule):
         key: Tensor,
         value: Tensor,
         attention_mask: Tensor,
-        attn_mask_type: AttnMaskType = None,
         packed_seq_params: PackedSeqParams = None,
     ):
         """Implements the multihead softmax attention.

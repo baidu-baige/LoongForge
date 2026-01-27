@@ -1,8 +1,6 @@
 #!/bin/bash
-
 # This script is used for SFT training Deepseek-v3 in FP8 mixed precision.
-
-
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
@@ -16,6 +14,7 @@ DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/AIAK-Training-LLM/configs
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3"}
 
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/deepseek3/DeepSeek-V3-tp8pp8ep32etp1"}
+CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/aiak-training-llm/deepseek3/save/DeepSeek-V3-tp8pp8ep32etp1"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/aiak-training-llm/tensorboard-log/deepseek-v3"}
 
@@ -27,12 +26,19 @@ GPUS_PER_NODE=8
 
 export NCCL_SOCKET_IFNAME=bond0
 export NCCL_IB_GID_INDEX=3
-export NVSHMEM_HCA_LIST=mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7,mlx5_8,mlx5_9
+
+# Hzz2
+# export NVSHMEM_HCA_LIST=mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7,mlx5_8,mlx5_9
+
+# Bzz2
+export NVSHMEM_HCA_LIST=mlx5_4,mlx5_7,mlx5_8,mlx5_9,mlx5_10,mlx5_11,mlx5_12,mlx5_13
+export NVSHMEM_BOOTSTRAP=UID
+export NVSHMEM_IB_TRAFFIC_CLASS=130
+
 export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=bond0
 export NVSHMEM_BOOTSTRAP_UID_SOCK_FAMILY=AF_INET
 export NVSHMEM_IB_GID_INDEX=3
 
-export NCCL_NVLS_ENABLE=0
 export NVTE_FWD_LAYERNORM_SM_MARGIN=8
 export NVTE_BWD_LAYERNORM_SM_MARGIN=24
 export NVTE_ALLOW_NONDETERMINISTIC_ALGO=1
@@ -56,6 +62,7 @@ DISTRIBUTED_ARGS=(
 
 MODEL_ARGS=(
   --model-name deepseek-v3
+  --multi-latent-attention
   --rotary-base 10000
   --original-max-position-embeddings 4096
   --mscale 1.0
@@ -63,28 +70,31 @@ MODEL_ARGS=(
   --norm-epsilon 1e-6
   --rotary-scaling-factor 40
   --enable-fa-within-mla
+  # --attention-backend fused
+  --use-fp32-dtype-for-param-pattern '^expert_bias$' '.+\.expert_bias$'
 )
 
 DATA_ARGS=(
   --tokenizer-type HFTokenizer
   --hf-tokenizer-path $TOKENIZER_PATH
   --data-path $DATA_PATH
-  --split 100,0,0
+  --split 90,8,2
+  --no-create-attention-mask-in-dataloader
 )
 
 SFT_ARGS=(
-  --chat-template deepseek3
+  --chat-template no-template
   --sft-num-preprocess-workers 16
   --no-check-for-nan-in-loss-and-grad
   --packing-sft-data
-  --sft-dataset alpaca
+  --sft-dataset sharegpt
 )
 
 TRAINING_ARGS=(
   --training-phase sft
   --seq-length 65536
-  --max-position-embeddings 163840  # not used
-  --init-method-std 0.01
+  --max-position-embeddings 163840
+  --init-method-std 0.02
   --no-masked-softmax-fusion
   --micro-batch-size 1
   --global-batch-size 128
@@ -98,22 +108,26 @@ TRAINING_ARGS=(
   --clip-grad 1.0
   --bf16
   --load $CHECKPOINT_PATH
-  --save $CHECKPOINT_PATH
-  --save-interval 100
-  --eval-interval 1000
-  --eval-iters 30
+  --save $CHECKPOINT_PATH_SAVE
+  --save-interval 1000
+  --eval-interval 10
+  --eval-iters 1
   --no-load-optim
   --no-load-rng
   --recompute-granularity full
   --recompute-method block
   --custom-pipeline-layers 8,7,8,8,8,8,8,6
   --custom-pipeline-recompute-layers 8,7,8,8,8,8,8,6
+  --num-virtual-stages-per-pipeline-rank 2
+  --reduce-variable-seq-shape-p2p-comm
   --fp8-format e4m3
   --fp8-recipe blockwise
   --fp8-param-gather
   --enable-fp8-comm
-
-  --use-fp32-dtype-for-param-pattern '^expert_bias$' '.+\.expert_bias$'
+  --distributed-timeout-minutes 60
+  --optimizer-cpu-offload
+  --optimizer-offload-fraction 1.0
+  --enable-experimental
 )
 
 MOE_ARGS=(
@@ -159,6 +173,8 @@ LOGGING_ARGS=(
   --tensorboard-dir ${TENSORBOARD_PATH}
   --log-timers-to-tensorboard
   --log-memory-to-tensorboard
+  --log-validation-ppl-to-tensorboard
+  --check-weight-hash-across-dp-replicas-interval 30
 )
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \

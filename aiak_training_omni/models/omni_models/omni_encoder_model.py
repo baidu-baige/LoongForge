@@ -108,6 +108,7 @@ class OmniEncoderModel(torch.nn.Module):
         allow_missing_adapter_checkpoint=False,
         position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
         scatter_embedding_sequence_parallel: bool = True,
+        vp_stage: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -130,7 +131,7 @@ class OmniEncoderModel(torch.nn.Module):
         ):
             change_parallel_state("image_encoder")
             self.image_encoder: BaseMegatronModule = AutoModel.from_config(
-                config.image_encoder, **kwargs
+                config.image_encoder, vp_stage=vp_stage, **kwargs
             )
             self.encoder_modality["image"] = True
             self.image_encoder.register_forward_pre_hook(
@@ -146,7 +147,7 @@ class OmniEncoderModel(torch.nn.Module):
         ):
             change_parallel_state("video_encoder")
             self.video_encoder: BaseMegatronModule = AutoModel.from_config(
-                self.config.video_encoder, **kwargs
+                self.config.video_encoder, vp_stage=vp_stage, **kwargs
             )
             self.encoder_modality["video"] = True
             self.video_encoder.register_forward_pre_hook(
@@ -164,7 +165,7 @@ class OmniEncoderModel(torch.nn.Module):
         ):
             change_parallel_state("audio_encoder")
             self.audio_encoder: BaseMegatronModule = AutoModel.from_config(
-                self.config.audio_encoder, **kwargs
+                self.config.audio_encoder, vp_stage=vp_stage, **kwargs
             )
             self.encoder_modality["audio"] = True
             self.audio_encoder.register_forward_pre_hook(

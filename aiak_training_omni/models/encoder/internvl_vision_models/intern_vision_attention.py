@@ -14,6 +14,7 @@ from megatron.core.parallel_state import (
 )
 from megatron.core.transformer.utils import make_sharded_tensors_for_checkpoint
 from megatron.core.extensions.transformer_engine import TEDotProductAttention
+from megatron.core.process_groups_config import ProcessGroupCollection
 
 try:
     import transformer_engine
@@ -137,6 +138,7 @@ class InternSelfAttention(Attention):
         layer_number: int,
         attn_mask_type=AttnMaskType.padding,
         cp_comm_type: str = None,
+        pg_collection: ProcessGroupCollection = None,
     ):
         super().__init__(
             config=config,
@@ -145,6 +147,7 @@ class InternSelfAttention(Attention):
             attn_mask_type=attn_mask_type,
             attention_type="self",
             cp_comm_type=cp_comm_type,
+            pg_collection=pg_collection,
         )
         self.config = config
         self.linear_qkv = build_module(
@@ -244,7 +247,6 @@ class InternSelfAttention(Attention):
         self,
         hidden_states,
         attention_mask,
-        attn_mask_type=None,
         key_value_states=None,
         inference_params=None,
         rotary_pos_emb=None,
@@ -306,7 +308,7 @@ class InternSelfAttention(Attention):
             output, bias = self.linear_proj(context_layer)
             return output, bias
 
-        query, key, value, rotary_pos_emb, attn_mask_type = self._adjust_key_value_for_inference(
+        query, key, value, rotary_pos_emb, attn_mask_type, _ = self._adjust_key_value_for_inference(
             inference_params,
             query,
             key,
@@ -314,7 +316,6 @@ class InternSelfAttention(Attention):
             rotary_pos_emb,
             rotary_pos_cos,
             rotary_pos_sin,
-            attn_mask_type,
             sequence_len_offset,
         )
 

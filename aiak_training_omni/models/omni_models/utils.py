@@ -177,10 +177,4 @@ def get_batch_on_this_cp_rank(batch: Dict):
         batch['labels'] = labels
         batch['loss_mask'] = loss_mask
 
-        # With Column Parallelism enabled and packing not in use, 
-        # FlashAttention mandates that the attn_mask_type cannot be set to the padding type.
-        attn_mask_type = batch['attn_mask_type']
-        if packed_seq_params is None or (packed_seq_params is not None and packed_seq_params.qkv_format != "thd"):
-            batch['attn_mask_type'] = AttnMaskType.causal if "padding" in attn_mask_type else attn_mask_type
-
     return batch

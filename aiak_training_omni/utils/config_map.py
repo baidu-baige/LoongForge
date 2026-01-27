@@ -200,6 +200,12 @@ MODEL_CONFIG_REGISTRY = {
     "wan2_1_i2v": {
         "config_path": "configs/models/wan",
         "config_name": "wan2_1_i2v",
+    },
+
+    "pi05": {
+        # Hydra expects the directory, config name selects the file.
+        "config_path": "configs/models/pi05",
+        "config_name": "pi05",
     }
 }
 

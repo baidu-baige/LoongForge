@@ -31,7 +31,6 @@ class MultiAccModules:
     # other ops impl
     get_bias_dropout_add: Any = None
     apply_rotary_pos_emb: Any = None
-    bias_activation_func_impl: Any = None
     # some flags
     TELinear: Any = None
 
@@ -80,7 +79,6 @@ def _gpu_backend_transformer_layer_modules() -> MultiAccModules:
         # ops
         get_bias_dropout_add=get_bias_dropout_add,
         apply_rotary_pos_emb=apply_rotary_pos_emb,
-        bias_activation_func_impl=None,
         TELinear=TELinear,
     )
 

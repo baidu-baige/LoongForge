@@ -1,0 +1,75 @@
+diff --git a/megatron/core/timers.py b/megatron/core/timers.py
+index 75387c33d..ce01073e4 100644
+--- a/megatron/core/timers.py
++++ b/megatron/core/timers.py
+@@ -223,6 +223,37 @@ class Timers:
+         self._log_levels = {}
+         self._dummy_timer = DummyTimer()
+         self._max_log_level = 2
++        
++        # use for detail log
++        self._show_detail_log = False
++        self._detail_log_timers = {}
++        self._detail_log_levels = {}
++
++    def set_show_detail_log(self, is_show):
++        """Used to enable or disable the display of detailed logs."""
++        self._show_detail_log = is_show
++
++    def is_show_detail_log(self):
++        """Determine whether to display detailed logs."""
++        return self._show_detail_log
++
++    def _get_detail_timer(self, name, log_level=None):
++        """The timer will call cuda.sync, causing the asynchronous stream to be ineffective
++        and leading to a decrease in performance. Therefore, considering performance,
++        only the time of a single iteration is recorded to minimize the impact on performance.
++        """
++        if not self._show_detail_log:
++            return self._dummy_timer
++        if name in self._detail_log_timers:
++            if log_level is not None:
++                assert log_level == self._detail_log_levels[name], \
++                    'input log level {} does not match already existing '\
++                    'log level {} for {} timer'.format(
++                        log_level, self._detail_log_levels[name], name)
++            return self._detail_log_timers[name]
++        self._detail_log_timers[name] = Timer(name)
++        self._detail_log_levels[name] = log_level
++        return self._detail_log_timers[name]
+ 
+     def __call__(self, name, log_level=None):
+         """Call timer with name and log level."""
+@@ -247,7 +278,7 @@ class Timers:
+         # Now if the input log level is larger than the one set for
+         # the timers class, just ignore it and return a dummy timer.
+         if log_level > self._log_level:
+-            return self._dummy_timer
++            return self._get_detail_timer(name)
+         # Otherwise, initalize the timer and set the level.
+         self._timers[name] = Timer(name)
+         self._log_levels[name] = log_level
+@@ -292,6 +323,8 @@ class Timers:
+                 # issue of different timers having different barrier
+                 # groups inside their class.
+                 rank_name_to_time[rank, i] = self._timers[name].elapsed(reset=reset)
++            elif self._show_detail_log and name in self._detail_log_timers:
++                rank_name_to_time[rank, i] = self._detail_log_timers[name].elapsed(reset=reset)
+ 
+         # See the note above for why we are not using gather.
+         dist_all_gather_func(rank_name_to_time.view(-1), rank_name_to_time[rank, :].view(-1))
+@@ -458,8 +491,11 @@ class Timers:
+         name_to_min_max_time = self._get_global_min_max_time(names, reset, barrier, normalizer)
+         if writer is not None:
+             for name in name_to_min_max_time:
+-                _, max_time = name_to_min_max_time[name]
++                min_time, max_time = name_to_min_max_time[name]
+                 if isinstance(writer, SummaryWriter) and SummaryWriter is not None:
+-                    writer.add_scalar(name + '-time', max_time, iteration)
++                    writer.add_scalar(name + '-time/min', min_time, iteration)
++                    writer.add_scalar(name + '-time/max', max_time, iteration)
+                 elif writer == wandb and wandb is not None:
+-                    writer.log({name + '-time': max_time}, iteration)
++                    writer.log({name + '-time/min': min_time}, iteration)
++                    writer.log({name + '-time/max': max_time}, iteration)
++

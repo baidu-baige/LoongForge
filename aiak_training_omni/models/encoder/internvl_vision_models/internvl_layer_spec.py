@@ -22,7 +22,6 @@ class AdapterSubmodules:
     layernorm: Union[ModuleSpec, type] = None
     linear_fc1: Union[ModuleSpec, type] = None
     linear_fc2: Union[ModuleSpec, type] = None
-    bias_activation_func_impl: Union[ModuleSpec, type] = None
 
 
 def get_vision_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
@@ -62,7 +61,7 @@ def get_vision_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
                 submodules=MLPSubmodules(
                     linear_fc1=multiacc_modules.TELayerNormColumnParallelLinear,
                     linear_fc2=multiacc_modules.TERowParallelLinear,
-                    bias_activation_func_impl=multiacc_modules.bias_activation_func_impl),
+                ),
             ),
             mlp_bda=multiacc_modules.get_bias_dropout_add,
         ),

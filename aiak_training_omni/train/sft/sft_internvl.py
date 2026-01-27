@@ -41,7 +41,7 @@ from aiak_training_omni.models.omni_models.omni_model_provider import (
 stimer = StragglerDetector()
 
 
-def model_provider(pre_process=True, post_process=True):
+def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     """Builds the model.
 
     Args:
@@ -55,7 +55,7 @@ def model_provider(pre_process=True, post_process=True):
     #model_family = get_model_family(args.model_family)
     model_provider = get_model_provider(args.model_family)
     assert model_provider is not None, f'model provider for {args.model_name} not found'
-    return model_provider(pre_process, post_process)
+    return model_provider(pre_process, post_process, vp_stage)
 
 
 def get_packed_seq_params(attention_mask):
@@ -67,7 +67,7 @@ def get_packed_seq_params(attention_mask):
     packed_seq_params.max_seqlen_q = (attention_mask[1:] - attention_mask[:-1]).max().item()
     packed_seq_params.max_seqlen_kv = packed_seq_params.max_seqlen_q
 
-    return packed_seq_params, AttnMaskType.padding_causal
+    return packed_seq_params
 
 
 def get_batch(data_iterator):
@@ -90,16 +90,14 @@ def get_batch(data_iterator):
     data_l = {}
     packed_seq_params = None
     attention_mask = None
-    attn_mask_type = None
 
     if args.packing_sft_data:
         data_a = tensor_parallel.broadcast_data(["attention_mask"], data, torch.int32)
         attention_mask = data_a["attention_mask"].squeeze_(0)
-        packed_seq_params, attn_mask_type = get_packed_seq_params(attention_mask)
+        packed_seq_params = get_packed_seq_params(attention_mask)
     else:
         data_a = tensor_parallel.broadcast_data(["attention_mask"], data, torch.bool)
-        packed_seq_params, attn_mask_type = None, AttnMaskType.padding_causal if data_a["attention_mask"].any(
-        ) else AttnMaskType.causal
+        packed_seq_params = None
         attention_mask = ~(data_a["attention_mask"].unsqueeze(1).unsqueeze(1))
 
     if args.pipeline_model_parallel_size == 1:
@@ -141,7 +139,6 @@ def get_batch(data_iterator):
              image_flags,
              attention_mask,
              labels,
-             attn_mask_type,
              loss_mask,
              packed_seq_params,
              loss_weight)
@@ -169,7 +166,7 @@ def forward_step(data_iterator, model):
     args = get_args()
     global stimer
     with stimer(bdata=True):
-        (pixel_values, position_ids, input_ids, image_flags, attention_mask, labels, attn_mask_type, loss_mask,
+        (pixel_values, position_ids, input_ids, image_flags, attention_mask, labels, loss_mask,
          packed_seq_params, loss_weights) = get_batch(data_iterator)
 
     timers('batch-generator').stop()
@@ -180,7 +177,6 @@ def forward_step(data_iterator, model):
             attention_mask=attention_mask,
             image_inputs={"images": pixel_values, "image_flags": image_flags},
             labels=labels,
-            attn_mask_type=attn_mask_type,
             packed_seq_params=packed_seq_params,
         )
     # for qianfanvl
