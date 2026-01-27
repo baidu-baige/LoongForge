@@ -3,10 +3,10 @@ set -e
 
 # Install bcecmd
 PFS_DIR="/workspace"
-wget -P ${PFS_DIR} https://doc.bce.baidu.com/bos-optimization/linux-bcecmd-0.5.9.zip 
-unzip -o "${PFS_DIR}/linux-bcecmd-0.5.9.zip" -d "${PFS_DIR}"
-boscmd_dir="${PFS_DIR}/linux-bcecmd-0.5.9/bcecmd"
-ln -sf /workspace/linux-bcecmd-0.5.9/bcecmd /usr/local/bin/bcecmd || true
+# wget -P ${PFS_DIR} https://doc.bce.baidu.com/bos-optimization/linux-bcecmd-0.5.9.zip 
+# unzip -o "${PFS_DIR}/linux-bcecmd-0.5.9.zip" -d "${PFS_DIR}"
+# boscmd_dir="${PFS_DIR}/linux-bcecmd-0.5.9/bcecmd"
+# ln -sf /workspace/linux-bcecmd-0.5.9/bcecmd /usr/local/bin/bcecmd || true
 
 # Define bcecmd wrapper function with retry mechanism
 REAL_BCECMD="/usr/local/bin/bcecmd"
@@ -153,6 +153,21 @@ elif [ "$DOWNLOAD_MODE" == "optional" ]; then
     # internvl3.5_38b
     bcecmd bos sync bos:/ai-data/OpenGVLab/InternVL3_5-38B ${huggingface_dir}/internvl/InternVL3_5-38B
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/internvl3.5_38b/tp4pp2/  ${checkpoint_dir}/internvl3.5/internvl3.5_38b/
+
+    # qwen3_8b
+    bcecmd bos sync bos:/ai-data/Qwen/Qwen3-8B ${huggingface_dir}/Qwen/Qwen3-8B/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_8b/tp1pp1/  ${checkpoint_dir}/qwen3/qwen3_8b/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen3/pile_test/ ${datasets_dir}/qwen3/pile_test/
+
+    # qwen3_30b_a3b
+    bcecmd bos sync bos:/ai-data/Qwen/Qwen3-30B-A3B ${huggingface_dir}/Qwen/Qwen3-30B-A3B/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_30b_a3b/tp2pp2ep4/  ${checkpoint_dir}/qwen3/qwen3_30b_a3b/
+
+    # qwen3_vl_30b_a3b
+    bcecmd bos sync bos:/ai-data/Qwen3-VL-30B-A3B-Instruct ${huggingface_dir}/Qwen/Qwen3-VL-30B-A3B-Instruct/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen_vl/demo/wds/ ${datasets_dir}/qwen3_vl/demo/wds  
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_vl_30b_a3b/tp1pp2ep8/  ${checkpoint_dir}/qwen3/qwen3_vl_30b_a3b/
+
 fi
 
 echo "========================================"

@@ -1,5 +1,5 @@
 model_name: llama3_8b
-description: $model_name Model Automation
+description: ${model_name}
 huggingface_path: https://huggingface.co/meta-llama/Meta-Llama-3-8B
 bos_path: bos:/ai-data/meta-llama/Meta-Llama-3-8B
 TOTAL_K8S_NODES: 1
