@@ -8,7 +8,10 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from .intern_vision_attention import InternSelfAttention, SelfAttentionSubmodules
-from .intern_vision_transformer_layer import TransformerLayerIntern, TransformerLayerInternVisionSubmodules
+from .intern_vision_transformer_layer import (
+    TransformerLayerIntern,
+    TransformerLayerInternVisionSubmodules,
+)
 from .internvl_config import InternVisionConfig
 from aiak_training_omni.models.dispatch import multiacc_modules
 from aiak_training_omni.utils import is_te_min_version
@@ -19,6 +22,7 @@ from dataclasses import dataclass
 @dataclass
 class AdapterSubmodules:
     """Adapter sub-modules."""
+
     layernorm: Union[ModuleSpec, type] = None
     linear_fc1: Union[ModuleSpec, type] = None
     linear_fc2: Union[ModuleSpec, type] = None
@@ -27,9 +31,17 @@ class AdapterSubmodules:
 def get_vision_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """Use this spec for an implementation using transformer, local or multi-accel engine."""
 
-    from .intern_vision_attention import InternViTTEDotProductAttention, InternViTRMSNorm
+    from .intern_vision_attention import (
+        InternViTTEDotProductAttention,
+        InternViTRMSNorm,
+    )
 
-    qk_norm = multiacc_modules.TENorm if is_te_min_version("1.9.0") else multiacc_modules.LocalNorm
+    qk_norm = (
+        multiacc_modules.TENorm
+        if is_te_min_version("1.9.0")
+        and config.normalization in ["LayerNorm", "RMSNorm"]
+        else multiacc_modules.LocalNorm
+    )
     if config.model_type == "intern_vit_6b":
         qk_layernorm = InternViTRMSNorm
         core_attention = InternViTTEDotProductAttention
@@ -53,7 +65,8 @@ def get_vision_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
                     q_layernorm=qk_layernorm,
                     k_layernorm=qk_layernorm,
                     apply_rotary_fn=multiacc_modules.apply_rotary_pos_emb,
-                )),
+                ),
+            ),
             self_attn_bda=multiacc_modules.get_bias_dropout_add,
             pre_mlp_layernorm=IdentityOp,
             mlp=ModuleSpec(
@@ -76,4 +89,3 @@ def get_adapeter_layer_with_te_spec(config: TransformerConfig) -> AdapterSubmodu
         linear_fc1=torch.nn.Linear,
         linear_fc2=torch.nn.Linear,
     )
-

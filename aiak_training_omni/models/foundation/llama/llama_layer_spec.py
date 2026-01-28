@@ -41,6 +41,7 @@ def get_llama_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     qk_norm = (
         multiacc_modules.TENorm
         if is_te_min_version("1.9.0")
+        and config.normalization in ["LayerNorm", "RMSNorm"]
         else multiacc_modules.LocalNorm
     )
 

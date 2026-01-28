@@ -58,7 +58,7 @@ class LocalNorm:
         eps: float = 1e-5,
         elementwise_affine=True,
     ):
-        if config.normalization == "LayerNorm":
+        if config.normalization == "Apex_LayerNorm":
             if elementwise_affine:
                 instance = FusedLayerNorm(
                     config=config,
@@ -74,7 +74,7 @@ class LocalNorm:
                     eps=eps,
                     elementwise_affine=elementwise_affine,
                 )
-        elif config.normalization == "RMSNorm":
+        elif config.normalization == "Apex_RMSNorm":
             instance = FusedRMSNorm(
                 config=config,
                 hidden_size=hidden_size,
