@@ -36,6 +36,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
     name_map = c_config.get("name_map")["huggingface"]
     cargs = c_config.get_args("common")
     hargs = c_config.get_args("huggingface")
+    num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
     mtp_num_layers = hargs.get("mtp_num_layers", 0)
     ori_num_layers = cargs["num_layers"]
     num_layers = ori_num_layers + mtp_num_layers
@@ -57,7 +58,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
         if num_nextn_predict_layers > 0:
             for c_name in MTP_NAMES:
                 if c_name in name_map:
-                    hf_name, _, no_layer_id, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                    hf_name, _, _, _, no_layer_id, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                     if not no_layer_id:
                         continue
                     name = hf_name + ".weight"
