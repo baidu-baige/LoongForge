@@ -1,99 +1,108 @@
 # Support New Model
 
-This document will guide you on how to add support for a new model in the AIAK-Training-Omni framework. Thanks to the flexible networking design of the framework, in most cases, you only need to add configuration files and complete the registration without modifying the core code.
+This document describes how to support new models in AIAK-Training-Omni, covering **LLM models**, **VLM models**, and **Custom models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
 
-The process of supporting a new model is mainly divided into three steps:
+## Supporting LLM Models
+### 1.1 Adding New LLM Configuration
+If your LLM is a new specification of an existing architecture (e.g., from Llama3-8B to Llama3-70B), simply create a new YAML file.
 
-1. **Prepare Component Configurations**: Define the configurations for the LLM base, visual encoder, and projector.
-2. **Create Combination Configuration**: Write the top-level YAML configuration file for the VLM.
-3. **Register Model Name**: Register the new model in `config_map.py`.
-
-## Step 1: Prepare Component Configurations
-
-### 1. Foundation Model (LLM)
-If your LLM is a new specification of an existing architecture (e.g., from Llama3-8B to Llama3-16B), simply create a new YAML file.
-
-* **Path**: `configs/models/<model_family>/<model_name>.yaml` (Example: `configs/models/llama3/llama3_custom_16b.yaml`):
+* **Path**: configs/models/<model_family>/<model_name>.yaml
+* **Example**: configs/models/llama3/llama3_70b.yaml:
 
 ```yaml
 # Inherit the common configuration class for this model family
 _target_: aiak_training_omni.models.foundation.Llama3Config
 
 # Modify specific parameters
-num_layers: 40
-hidden_size: 5120
-ffn_hidden_size: 13824
-num_attention_heads: 40
-max_sequence_length: 8192
+num_layers: 80
+hidden_size: 8192
+ffn_hidden_size: 28672
+num_attention_heads: 64
 # ... other parameters
 ```
 
-### 2. Visual/Audio Encoder
-Define the parameters for the Vision Transformer.
+### 1.2 Register Model Name
+Register in the MODEL_CONFIG_REGISTRY in aiak_training_omni/utils/config_map.py, then you can reference the model directly by name (e.g., `llama3-70b`).
 
-* **Path**: `configs/models/image_encoder/<encoder_name>.yaml` (Example: `configs/models/image_encoder/llava_vit.yaml`):
+```python
+MODEL_CONFIG_REGISTRY = {
+    # ... existing models
+    "llama3-70b": {
+            "config_path": "configs/models/llama3",
+            "config_name": "llama3_70b",
+        },
+    }
+```
+
+## Supporting VLM Models
+VLM can be viewed as **ViT + Projector + LLM**. When adding new VLM models, the LLM part can reuse existing configurations (no need to rewrite LLM details), mainly adding **vision encoder**, **projection layer**, and **VLM combination configuration**. The process to support VLM models is divided into three main steps:
+
+    1. **Prepare component configurations**: Define LLM base, vision encoder, and projector configurations.
+    2. **Create combination configuration**: Write the top-level YAML configuration file for VLM.
+    3. **Register model name**: Register the new model in config_map.py.
+
+### 2.1 Vision Encoder (ViT) Configuration
+Define Vision Transformer parameters.
+
+* **Path**: configs/models/image_encoder/<encoder_name>.yaml 
+* Example: configs/models/image_encoder/qwen2_5_vit.yaml
 
 ```yaml
-# Inherit the common configuration class for this model family
-_target_: aiak_training_omni.models.encoder.RiceVisionConfig
+# Find the Qwen2VisionRMSNormConfig class through this path, use the following parameters (e.g., num_layers, hidden_size, etc.) to create its instance
+_target_: aiak_training_omni.models.encoder.Qwen2VisionRMSNormConfig
 
-num_layers: 24
-hidden_size: 1024
-ffn_hidden_size: 4096
-num_attention_heads: 16
+num_layers: 32
+hidden_size: 1280
+kv_channels: 80
+ffn_hidden_size: 3420
 patch_size: 14
+num_attention_heads: 16
+num_query_groups: 16
 image_size: [1344, 1344]
-kv_channels: 64
 # ... other parameters
 ```
 
-### 3. Projector
-The projector layer binds the implementation of OmniEncoder with the Foundation model. Each VLM model has a corresponding Projector implementation.
+### 2.2 Projector Configuration
+The Projector implementation is interrelated with OmniEncoder. Each type of VLM model is equipped with a dedicated Projector. You need to select the Projector type, and its dimension information will be specified in the model combination configuration.
 
-(Usually, you only need to select the type, and the dimensions are specified in the combination configuration).
-
-* **Path**: `configs/models/image_projector/<projector_name>.yaml`:
+* **Path**: configs/models/image_projector/<projector_name>.yaml
+* **Example**: configs/models/image_projector/qwen_mlp_adapter.yaml
 
 ```yaml
-# Select the image_projector type
+# Select image_projector type
 _target_: aiak_training_omni.models.encoder.MLPAdapterConfig
 
-# Modify the specific configuration parameters for this component
+# Modify component-specific configuration parameters
 normalization: "RMSNorm"
 add_bias_linear: True
 model_type: "qwen2_5_vl_adapter"
 ```
 
-## Step 2: Create Combination Configuration
-This step is crucial for defining the VLM model. You need to create a YAML file that "assembles" the components together and sets key alignment parameters.
+### 2.3 Create Combination (VLM Top-level YAML) Configuration
+This step is the key to defining VLM models. You need to create a YAML file that "assembles" the above components and sets key alignment parameters.
 
-* **Suggested Path**: `configs/models/<vlm_family>/<my_new_vlm>.yaml`, content structure:
+* **Recommended path**: `configs/models/<vlm_family>/<my_new_vlm>.yaml`, content structure:
 
 ```yaml
-# 1. Use the defaults list to introduce components
+# 1. Use defaults list to import components
 defaults:
-  # Introduce Encoder
-  - ../../models/image_encoder@model.image_encoder: llava_vit
+  # Import Encoder
+  - ../../models/image_encoder@model.image_encoder: qwen2_5_vit
   
-  # Introduce Projector
+  # Import Projector
   - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
   
-  # Introduce LLM
-  - ../../models/qwen2.5@model.foundation: qwen2_5_7b
+  # Import LLM
+  - ../../models/llama3@model.foundation: llama3_8b
   - _self_
 
 model:
   # Define global model parameters
-  model_type: qwen2_5_vl
   position_idx_func: ${position_func:mrope_ids}
   loss_func: ${loss_func:default}
-  mix_used_vision_encoder: true
-  mix_used_vision_projector: true
   
   # Align foundation model details
   foundation: 
-    rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["aiak_training_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
     
@@ -102,32 +111,43 @@ model:
     activation_func: ${act:gelu}
 ```
 
-## Step 3: Model Registration
-To enable the training script to find your configuration file via the `--model-name` parameter, you need to register it in `aiak_training_omni/utils/config_map.py`. Open `aiak_training_omni/utils/config_map.py` and add an entry to the `MODEL_CONFIG_REGISTRY` dictionary:
+### 2.4 Model Registration
+You need to register in aiak_training_omni/utils/config_map.py. Open aiak_training_omni/utils/config_map.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
 
 ```python
 MODEL_CONFIG_REGISTRY = {
     # ... existing models
     
     # === Add your new model ===
-    "my-custom-vlm-16b": {
-        "config_path": "configs/models/model_family",      # Directory where the combination configuration file is located
-        "config_name": "my_new_vlm",                 # Combination configuration file name (without .yaml)
+    "my-custom-vlm-8b": {
+        "config_path": "configs/models/<vlm_family>",       # Directory where the combination configuration file is located
+        "config_name": "my_new_vlm",                        # Combination configuration file name (without .yaml)
     },
 }
 ```
 
-## Verification
-After completing the above three steps, you can start training with the new model:
+After successful registration, you can reference the model directly by name (e.g., `my-custom-vlm-8b`).
 
-```bash
-# Launch the training script
-torchrun ... train.py \
-    --model-name my-custom-vlm-16b \
-    ...
+## Supporting Custom Models (Using Wan as Example)
+Wan series model configurations are located in `configs/models/wan/`, for example:
+
+* `configs/models/wan/wan2_1_i2v.yaml`
+* `configs/models/wan/wan2_2_i2v.yaml`
+
+### 3.1 Adding New Wan Configuration
+If it's a new specification or variant of Wan, it's recommended to copy the existing configuration and modify necessary parameters:
+
+```
+configs/models/wan/<your_wan_variant>.yaml
 ```
 
-**Troubleshooting Tips**:
-
-* If you encounter `KeyError: 'my-custom-vlm-16b'`: Check if `config_map.py` is saved and if the name spelling is consistent.
-* If you encounter a projector dimension mismatch error: Check if the `image_projector.hidden_size` in the combination YAML matches the `hidden_size` of the LLM.
+### 3.2 Register Model Name
+```python
+MODEL_CONFIG_REGISTRY = {
+    # ... existing models
+    "my-wan-variant": {
+        "config_path": "configs/models/wan",
+        "config_name": "<your_wan_variant>",
+    },
+}
+```

@@ -8,3 +8,4 @@ Get Started
    installation
    support_model
    benchmark
+   optimization_guide

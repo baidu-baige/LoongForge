@@ -1,6 +1,6 @@
 # Overview
-![AIAK-Training-Omni Logo](_images/Image_20260117_204343.jpg)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://github.com/baidu-baige/AIAK-Training-Omni/docs/build/html/index.html)
+![AIAK-Training-Omni Logo](assets/_images/Image_20260117_204343.jpg)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)
 [![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/AIAK-Training-Omni)
 [![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/AIAK-Training-Omni/blob/master/LICENSE)
 [![stars](https://img.shields.io/github/stars/baidu-baige/AIAK-Training-Omni=social)](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master)
@@ -18,11 +18,11 @@ The AIAK-Omni framework is an all-scenario training framework built on Megatron,
 
 ## Features
 * Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See [model_combination.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/model_combination.md) for details.
-* Heterogeneous TP, supporting different TP size splitting for different components in VLM to cope with various model sizes, see [heterogeneous_tp_parallel.md](xxx.html) for details.
-* DP data balance, optimizing the data parallel load imbalance problem introduced by data packing, see [data_parallel_balance.md](xxx.html) for details.
+* Heterogeneous TP, supporting different TP size splitting for different components in VLM to cope with various model sizes, see [heterogeneous_tp_parallel.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/heterogeneous_tp_parallel.md) for details.
+* DP data balance, optimizing the data parallel load imbalance problem introduced by data packing, see [data_parallel_balance.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/data_parallel_balancing.md) for details.
 * Offline data packing, supporting offline data packing to reduce the number of padding tokens during training, see [offline_data_packing.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/offline_data_packing.md) for details.
-* FP8 training, supporting FP8 precision training, see [fp8_training.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/fp8_training.md) for details.
-* MOE optimization, the framework optimizes the training performance of MOE models, see [moe_all2all_overlap.md](xxx.html) for details.
+* FP8 training, supporting FP8 precision training, see [fp8_training.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/fp8_training.md) and [fp8_training_for_vlm](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/fp8_training_for_vlm.md) for details.
+* MOE optimization, the framework optimizes the training performance of MOE models, see [moe_all2all_overlap.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/moe_all2all_overlap.md) for details.
 
 ## Roadmap
 * [ ] Support more models, including Ernie4.5VL, GROOT N1.5, etc.
@@ -30,14 +30,17 @@ The AIAK-Omni framework is an all-scenario training framework built on Megatron,
 * [ ] Support heterogeneous DP for VLM models.
 * [ ] Support for DP load balancing across adjacent micro-batches.
 
+## Documentation
+🔔🔔🔔Please refer to the [documentation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/) for detailed usage and features of the framework.
+
 ## Support Model
 
 |**Model Type**|**Model Category**|**Model**|**Pretrain**|**SFT**|**Config**|
 |-|-|-|-|-|-|
-|LLM|DeepSeek-V2|deepseek_v2_group|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek2/deepseek_v2.yaml)|
-|||deepseek_v2_lite_group|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek2/deepseek_v2_lite.yaml)|
-||DeepSeek-V3|deepseek_v3_group_bf16|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek3/deepseek_v3.yaml)|
-|||deepseek_v3_group_fp8|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek3/deepseek_v3.yaml)|
+|LLM|DeepSeek-V2|deepseek_v2|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek2/deepseek_v2.yaml)|
+|||deepseek_v2_lite|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek2/deepseek_v2_lite.yaml)|
+||DeepSeek-V3|deepseek_v3_bf16|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek3/deepseek_v3.yaml)|
+|||deepseek_v3_fp8|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/deepseek3/deepseek_v3.yaml)|
 ||Llama2|llama2_7b|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_7b.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_7b.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/llama2/llama2_7b.yaml)|
 |||llama2_13b|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_13b.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_13b.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/llama2/llama2_13b.yaml)|
 |||llama2_70b|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/pretrain/pretrain_llama2_70b.sh  ))|✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/llama2/finetuning/sft_llama2_70b.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/llama2/llama2_70b.yaml)|
@@ -104,7 +107,7 @@ The AIAK-Omni framework is an all-scenario training framework built on Megatron,
 
 
 #### Installation  
-*(content to be added)*
+Please refer to the [Installation Guide](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/get_started/installation.md) for detailed instructions.
 
 #### Prepare the dataset  
 Convert your corpus into JSON format.  
@@ -163,16 +166,16 @@ bash examples/qwen3/finetuning/sft_qwen3_8b.sh
 ```
 
 ### Quick Start for LLM Model Training
-Refer to the [Quick Start for LLM Model Training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain_training.md) document for details.
+Refer to the [Quick Start for LLM Pretrain](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md) and [Quick Start for LLM SFT](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_sft.md) document for details.
 
 ### Quick Start for VLM Model Training
-Refer to the [Quick Start for VLM Model Training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vlm_tutorial/quick_start_vlm_training.md) document for details.
+Refer to the [Quick Start for VLM Pretrain](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vlm_tutorial/quick_start_vlm_pretrain.md) and [Quick Start for VLM SFT](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md) document for details.
 
 ### Quick Start for VLA Model Training
-Refer to the [Quick Start for VLA Model Training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vla_tutorial/quick_start_vla_training.md) document for details.
+Refer to the [Quick Start for VLA Training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/vla_tutorial/quick_start_vla_training.md) document for details.
 
 ### Quick Start for Diffusion Model Training
-Refer to the [Quick Start for WAN Model Training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/wan_tutorial/quick_start_wan_training.md) document for details.
+Refer to the [Quick Start for WAN Training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/wan_tutorial/quick_start_wan_training.md) document for details.
 
 ## References
 - [qianfan-vl](https://github.com/baidubce/Qianfan-VL) – is a general-purpose multimodal model enhanced for enterprise-level multimodal applications.   

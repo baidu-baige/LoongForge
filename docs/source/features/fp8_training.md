@@ -1,107 +1,80 @@
 # FP8 Training
 
-AIAK-Training-Omni provides FP8 low-precision training support for various models. By modifying the corresponding YAML configuration files, you can independently enable or disable FP8 for the vision/audio encoder (Encoder) and the language foundation model (Foundation) to achieve optimal training efficiency.
+DeepSeek-V3 models adopt **Blockwise FP8** training:  
+* Finer-grained scaling (tile-wise for activations, block-wise for weights) replaces per-tensor quantisation, cutting quantisation noise.  
+* Up-to-date amax statistics reduce distribution-shift error that plagues delayed updates.  
 
-## 1. Supported Models
-The following models have been verified to support FP8 training:
+This section lists the feature flags / environment variables required to turn the scheme on in AIAK-Omni, gives a proven recipe, and collects troubleshooting hints.
 
-| Model Family | Notes |
-|--------------|-------|
-|              |       |
-|              |       |
+---
 
-## 2. FP8 Low-Precision Training Guide
+## 0. Prerequisites
 
-Below we use **qwen3vl-30b** as an example to demonstrate how to enable FP8 training.
+| Item | Requirement |
+|------|-------------|
+| **Hardware** | Native FP8 support (NVIDIA Hopper / Blackwell: H100, GB200, …) |
+| **Software** | Transformer Engine enabled in the framework |
+| **Care** | FP8 is numerically stricter → keep NaN/Inf/overflow monitors active while you dial in the setup |
 
-### 2.1 Globally Enable FP8 Training
-Add FP8-related launch flags in `examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh`:
+---
 
+## 1. Feature switches
+
+### 1.1 CLI arguments
+
+| Argument | Meaning |
+|----------|---------|
+| `--fp8-format e4m3` | Use **E4M3** (4-bit exponent, 3-bit mantissa) for FP8 tensors. Must be combined with `--fp8-recipe blockwise`. |
+| `--fp8-recipe blockwise` | Turn on **block-wise / tile-wise quantisation** and per-block/tile amax tracking. Requires `--fp8-format e4m3`. |
+| `--fp8-param-gather` | Keep **weights in FP8** during distributed gather/communication and throughout the param buffer. Lowers memory and traffic, but needs a full convergence & checkpoint regression test. |
+
+### 1.2 Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `FP8_QUANT_FWD_INP_AMAX_EPS` | Epsilon clamp for **forward activation** amax (avoid div-by-zero → NaN). **Default 0, recommended 1e-12** |
+| `FP8_QUANT_FWD_WEIGHT_AMAX_EPS` | Same for **forward weight** amax. |
+| `FP8_QUANT_BWD_GRAD_AMAX_EPS` | Same for **backward gradient** amax. If NaN appears in back-prop, check this first. |
+| `NVTE_FP8_BLOCK_SCALING_FP32_SCALES` | Store scaling factors in **FP32** instead of E8M0 when set to `1`. Do **not** enable on Blackwell. |
+| `NVTE_FP8_BLOCK_SCALING_FWD_INP_POWER2` | Force **E8M0** scales for forward activations when set to `1`. |
+| `NVTE_FP8_BLOCK_SCALING_FWD_WEIGHT_POWER2` | Force **E8M0** scales for forward weights when set to `1`. |
+| `NVTE_FP8_BLOCK_SCALING_BWD_GRAD_POWER2` | Force **E8M0** scales for backward grads when set to `1`. |
+
+---
+
+## 2. Recommended recipe
+
+### Stage 1 – baseline (prove stability)
 ```bash
-TRAINING_ARGS=(
-    --training-phase pretrain        # options: pretrain, sft
-    --seq-length 32768
-    --max-position-embeddings 32768
-    --init-method-std 0.02
-    --micro-batch-size 1
-    --global-batch-size 32
-    --lr 0.0002
-    --min-lr 1.0e-5
-    --clip-grad 1.0
-    --weight-decay 0.01
-    --optimizer adam
-    --adam-beta1 0.9
-    --adam-beta2 0.95
-    --adam-eps 1e-05
-    --norm-epsilon 1e-6
-    --train-iters 50000
-    --lr-decay-iters 50000
-    --lr-decay-style cosine
-    --lr-warmup-fraction 0.002
-    --initial-loss-scale 65536
-    --bf16
-    #--load $CHECKPOINT_PATH
-    #--save $CHECKPOINT_PATH
-    --save-interval 10000000
-    --ckpt-format torch
-    --dataloader-save ${CHECKPOINT_PATH}/dataloader
-    # <-- blockwise FP8 GEMM & weight -->
-    --fp8-format e4m3
-    --fp8-recipe blockwise
-    --fp8-param-gather
-)
+--fp8-format e4m3 \
+--fp8-recipe blockwise
+```
+Train until loss/metrics match the BF16 reference.
+
+### Stage 2 – optimise (save memory)
+```bash
+--fp8-format e4m3 \
+--fp8-recipe blockwise \
+--fp8-param-gather
+```
+Re-run full convergence + downstream eval + checkpoint round-trip.
+
+### Universal epsilon guard (add at the top of your launch script)
+```bash
+export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
+export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
+export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 ```
 
-Launch the job with the `--fp8-format` flags above to enable **global** FP8 training for qwen3vl.
+---
 
-### 2.2 Partially Enable FP8 Training
-To control FP8 independently for the Encoder or Foundation model, modify the YAML configuration and toggle the FP8 switches.
+## 3. Quick troubleshooting checklist
 
-Edit `configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml`:
+| Symptom | Likely fix |
+|---------|------------|
+| NaN/Inf in loss or grads | Raise the three `*_AMAX_EPS` values gradually (1e-12 → 1e-10). |
+| Divergence vs. BF16 | Disable `--fp8-param-gather` first; if still diverging, lower LR 10-20 %. |
+| Checkpoint reload failure | Ensure the same FP8 flags & epsilon values were used when the checkpoint was saved. |
+| Blackwell runtime error with `NVTE_FP8_BLOCK_SCALING_FP32_SCALES=1` | Remove the variable (keep E8M0 scales). |
 
-```yaml
-# hydra:
-#   searchpath:
-#     - file://configs/
-
-defaults:
-  - ../../models/image_encoder@model.image_encoder: qwen3_vit
-  - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
-  - ../../models/qwen3@model.foundation: qwen3_30b_a3b
-  #- ../../data@data: vlm_data
-  - _self_
-
-model:
-  model_type: qwen3_vl
-  position_idx_func: ${position_func:rope_ids_qwen3vl}
-  loss_func: ${loss_func:default}
-  foundation: 
-    rotary_emb_func: "Qwen3VLRotaryEmbedding"
-    mrope_section: [24, 20, 20]
-    rotary_base: 1000000
-    model_spec: 
-      - "aiak_training_omni.models.foundation.qwen3.qwen_layer_spec"
-      - "get_qwen3_vl_layer_with_te_spec"
-    # <-- blockwise FP8 GEMM & weight -->
-    fp8: "e4m3"
-    fp8_recipe: "blockwise"
-    fp8_param: True
-  image_encoder:
-    model_spec: 
-      - "aiak_training_omni.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec"
-      - "get_qwen3_vl_vision_model_layer_with_te_spec"
-    # <-- blockwise FP8 GEMM & weight -->
-    fp8: "e4m3"
-    fp8_recipe: "blockwise"
-    fp8_param: True
-  image_projector:
-    activation_func: ${act:gelu}
-    normalization: "LayerNorm"
-```
-
-With the above changes:
-- The **Foundation** (language model) will run in FP8 when you launch training.
-- The **image_encoder** will also run in FP8.
-- The **image_projector** remains in the original precision (no FP8 keys).
-
-You can mix and match these flags to suit your accuracy/performance requirements.
+With the above switches and epsilon guards, Blockwise FP8 training in AIAK-Omni is ready for production-scale runs.
