@@ -288,7 +288,7 @@ def cooker_packed_multi_mix_qa(sample: dict):
 
     if len(captions) != len(prompts):
         raise ValueError(
-            f"[cooker_packed_multi_mix_qa] captions/prompts length mismatch for key={sample["__key__"]}: "
+            f"[cooker_packed_multi_mix_qa] captions/prompts length mismatch for key={sample['__key__']}: "
             f"{len(captions)} vs {len(prompts)}"
         )
 
