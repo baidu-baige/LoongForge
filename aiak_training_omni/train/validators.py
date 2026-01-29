@@ -148,16 +148,6 @@ def _validate_extra_sft_args(args):
                     args.rank,
                 )
 
-        # check if the model is supported
-        if args.multi_latent_attention:
-            if not args.enable_fa_within_mla:
-                args.enable_fa_within_mla = True
-                args.attention_backend = AttnBackend.flash
-                print_rank_0(
-                    "WARING: Setting args.enable_fa_within_mla to true since enable sft-packing with mla",
-                    args.rank,
-                )
-
     if args.padding_side == "left":
         args.padding_side = "right"
         print_rank_0(
