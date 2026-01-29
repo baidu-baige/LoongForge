@@ -6,7 +6,7 @@ from .trainer_builder import build_model_trainer
 from .pretrain import pretrain_llm, pretrain_vlm
 from .custom import sft_vla
 
-from .sft import sft_llm, sft_vlm
+from .sft import sft_llm, sft_vlm, sft_internvl
 from .custom import pretrain_wan
 
 

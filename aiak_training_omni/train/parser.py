@@ -317,6 +317,5 @@ def parse_train_args(args_defaults={}):
     )
     set_hydra_config(hydra_cfg)
     # Apply data/model config to args early so downstream init sees hydrated values
-    parse_args_from_config(args)
 
     return args
