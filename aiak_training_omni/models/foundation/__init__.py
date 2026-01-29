@@ -4,8 +4,11 @@ from .qwen2.qwen_model import Qwen2Model
 from .qwen2.qwen_config import Qwen2Config
 from .qwen3.qwen_model import Qwen3Model
 from .qwen3.qwen_config import Qwen3Config
+from .qwen3_next.qwen3_next_config import Qwen3NextConfig
 from .deepseek.deepseek_config import DeepseekConfig
 from .deepseek.deepseek_model import DeepseekModelWithMTP
+from .mimo.mimo_config import MimoConfig
+from .minimax.minimax_config import MinimaxConfig
 from .llama.llama_config import LLaMAConfig
 from .llama.llama_model import LLaMAModel
 from transformers import AutoModel

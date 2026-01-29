@@ -1,0 +1,9 @@
+_target_: aiak_training_omni.models.foundation.MinimaxConfig
+
+num_layers: 62
+hidden_size: 3072
+ffn_hidden_size: 1536
+num_attention_heads: 48
+num_query_groups: 8
+vocab_size_in_config_file: 200064
+num_experts: 256

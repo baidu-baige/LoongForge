@@ -115,7 +115,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
 
-        mtp_num_layers = cargs.get("mtp_num_layers", 0)
+        mtp_num_layers = self.args.mtp_num_layers if self.args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers
@@ -339,12 +339,11 @@ class McoreCheckpoint(AbstractCheckpoint):
 
         name_map = self.c_config.get("name_map")["mcore"]
         cargs = self.c_config.get_args("common")
-        margs = self.c_config.get_args("mcore")
 
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
 
-        mtp_num_layers = cargs.get("mtp_num_layers", 0)
+        mtp_num_layers = self.args.mtp_num_layers if self.args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers

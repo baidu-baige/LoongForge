@@ -1,0 +1,9 @@
+_target_: aiak_training_omni.models.foundation.MimoConfig
+
+num_layers: 36
+hidden_size: 4096
+ffn_hidden_size: 11008
+num_attention_heads: 32
+num_query_groups: 8
+vocab_size_in_config_file: 151680
+mtp_num_layers: 1
