@@ -56,6 +56,10 @@ git clone https://github.com/NVIDIA/TransformerEngine.git
 
 **2. Switch to the required tag**
 
+**Important: Now we use the following specific versions:**
+- **Megatron-LM**: Use version `0.15.0`
+- **TransformerEngine**: Use version `2.9`
+
 ```bash
 cd Megatron-LM
 git fetch --all --tags
