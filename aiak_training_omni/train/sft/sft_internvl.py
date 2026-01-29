@@ -229,16 +229,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         return train_dataloader, None, None
 
 
-@register_model_trainer(
-    model_family=constants.CustomModelFamilies.INTERN_VL,
-    training_phase=constants.TrainingPhase.SFT,
-)
+@register_model_trainer(model_family=constants.VisionLanguageModelFamilies.INTERN_VL,
+                        training_phase=constants.TrainingPhase.SFT, override=True)
 def default_sft_trainer(train_args):
     """Build trainer"""
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-        # model_provider=model_provider,
         model_provider=omni_model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
