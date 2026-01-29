@@ -1,5 +1,5 @@
 model_name: llama2_7b
-description: $model_name Model Automation
+description: $model_name
 huggingface_path: https://huggingface.co/meta-llama/Llama-2-7b-hf
 bos_path: bos:/ai-data/Llama-2-7b-hf-test
 TOTAL_K8S_NODES: 1
@@ -50,14 +50,8 @@ scenarios:
             --split 100,0,0'
           SFT_ARGS: '
             --chat-template llama2
-            --padding-side right
             --sft-num-preprocess-workers 16
-            --no-check-for-nan-in-loss-and-grad
-            --sft-dataset-config ${DATA_PATH}/llm/sft_dataset_config.json
-            --sft-dataset default
-            --sft-data-streaming
-            --train-on-prompt
-            --eod-mask-loss'
+            --no-check-for-nan-in-loss-and-grad'
           TRAINING_ARGS: '
             --training-phase sft
             --seq-length 4096

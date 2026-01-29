@@ -1,5 +1,5 @@
 model_name: internvl3.5_30b_a3b
-description: $model_name Model Automation
+description: $model_name
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL3_5-30B-A3B
 bos_path: bos:/ai-data/OpenGVLab/InternVL3_5-30B-A3B
 TOTAL_K8S_NODES: 1

@@ -1,5 +1,5 @@
 model_name: llavaov_1.5_4b
-description: $model_name Model Automation
+description: $model_name
 huggingface_path: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 bos_path: bos:/ai-data/lmms-lab/LLaVA-OneVision-1.5-4B-stage0
 TOTAL_K8S_NODES: 1
@@ -12,7 +12,6 @@ TOKENIZER_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/llavaov1.5/llavaov_1_5_4b.yaml
-BASELINE_PATH: $aiak_training_path/tests/baseline
 
 FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
 IMAGE_ENCODER_CONVERT_FILE: $aiak_training_path/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml

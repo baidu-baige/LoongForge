@@ -38,7 +38,7 @@ class CorrectnessCheckTask(BaseTask):
                  model_configer,
                  args
                 )
-        self.__init_ckpt_file__()
+        # self.__init_ckpt_file__()
 
 
     def __call__(self) -> TaskResut:
@@ -103,6 +103,6 @@ class CorrectnessCheckTask(BaseTask):
                     logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] Execution End \n")
         
         # Clean up ckpt files etc.
-        self.__clean_up__()
+        # self.__clean_up__()
 
         return TaskResut()
