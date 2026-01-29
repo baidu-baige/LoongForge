@@ -7,7 +7,7 @@ ffn_hidden_size: 18432
 num_attention_heads: 128
 num_query_groups: 128
 num_experts: 256
-mtp_num_layers: 1
+mtp_num_layers: 3
 moe_ffn_hidden_size: 2048
 moe_shared_expert_intermediate_size: 2048
 q_lora_rank: 1536
@@ -15,7 +15,7 @@ kv_lora_rank: 512
 qk_head_dim: 128
 qk_pos_emb_head_dim: 64
 v_head_dim: 128
-moe_layer_freq: ${moe_freq:"[0]*3+[1]*58"}
+moe_layer_freq: moe_freq_type("[0]*3+[1]*58")
 qk_layernorm: true
 vocab_size_in_config_file: 129280
 

@@ -36,10 +36,11 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
     name_map = c_config.get("name_map")["huggingface"]
     cargs = c_config.get_args("common")
     hargs = c_config.get_args("huggingface")
-    num_nextn_predict_layers = cargs.get("num_nextn_predict_layers", 0)
-    mtp_num_layers = hargs.get("mtp_num_layers", 0)
+    mtp_num_layers = cargs.get("mtp_num_layers", 0)
     ori_num_layers = cargs["num_layers"]
     num_layers = ori_num_layers + mtp_num_layers
+    mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
+    mtp_layer_id = hargs.get("mtp_layer_id", None)
 
     filenames_in_the_layer = set()
     if 0 in layer_ids or num_layers - 1 in layer_ids:
@@ -55,7 +56,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
                 name = name_map[c_name] + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
-        if num_nextn_predict_layers > 0:
+        if mtp_num_layers > 0:
             for c_name in MTP_NAMES:
                 if c_name in name_map:
                     hf_name, _, _, _, no_layer_id, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
@@ -65,13 +66,19 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
                     if name in weight_map:
                         filenames_in_the_layer.add(weight_map[name])
 
-    transformer = name_map[TRANSFORMER]
+    ori_transformer = name_map[TRANSFORMER]
     layer_prefix = name_map[LAYER_PREFIX]
     if expert_ids is not None:
         moe_expert = name_map[MOE_EXPERT]
     for layer_id in layer_ids:
+        transformer = ori_transformer
+        cur_layer_id = layer_id
+        if layer_id >= ori_num_layers and mtp_num_layers > 0 and mtp_transformer is not None:
+            transformer = mtp_transformer
+            if mtp_layer_id is not None:
+                cur_layer_id = mtp_layer_id
         for key, value in weight_map.items():
-            name_prefix = f"{transformer}.{layer_prefix}.{layer_id}."
+            name_prefix = f"{transformer}.{layer_prefix}.{cur_layer_id}."
             if key.startswith(name_prefix) and value not in filenames_in_the_layer:
                 if expert_ids is None or not key.startswith(f"{name_prefix}.{moe_expert}."):
                     filenames_in_the_layer.add(value)
