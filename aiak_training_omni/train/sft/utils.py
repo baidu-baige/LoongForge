@@ -67,7 +67,7 @@ def build_sft_data_collator(
 
     # https://github.com/NVIDIA/TransformerEngine/blob/v2.4/transformer_engine/pytorch/utils.py#L425
     # https://github.com/NVIDIA/TransformerEngine/blob/main/transformer_engine/common/gemm/cublaslt_gemm.cu#L151
-    pad_to_multiple_of *= 16 if args.fp8 else 1
+    pad_to_multiple_of *= 128 if args.fp8 else 1
 
     padding = (
         PaddingStrategy.LONGEST
