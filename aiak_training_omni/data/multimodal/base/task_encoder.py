@@ -9,7 +9,9 @@ import os
 import sys
 import traceback
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+import yaml
 
 from PIL import Image
 from torchvision.transforms import ToPILImage
@@ -143,15 +145,102 @@ class BaseTaskBatchPacked(Batch):
     num_tiles: Optional[List[int]]= None
     pixel_values_videos: Optional[torch.Tensor]= None
 
+_vlm_tags_cache: Optional[Dict[str, Dict]] = None
+
+
+def _load_vlm_tags(section: Optional[str] = None) -> Dict[str, any]:
+    """Load and cache the VLM message tags from the dataset config file.
+
+    Reads the ``tags`` block under the given *section* in ``--sft-dataset-config``.
+    Falls back to an empty dict (which triggers per-field defaults) when the
+    config file is unavailable or the section is missing.
+
+    To add a new data format, define a new named section in the config file and
+    pass its name as *section* from the cooker.  Example config sections::
+
+        # role/content fields, user/assistant values (default)
+        multimodal:
+          tags:
+            role_tag: role
+            content_tag: content
+
+        # from/value fields, human/gpt values
+        multimodal_sharegpt:
+          tags:
+            role_tag: from
+            content_tag: value
+            user_tag: human
+            assistant_tag: gpt
+            system_tag: system
+    """
+    global _vlm_tags_cache
+    args = get_args()
+    if section is None:
+        section = args.sft_dataset[0] if args.sft_dataset else "multimodal"
+
+    if _vlm_tags_cache is not None and section in _vlm_tags_cache:
+        return _vlm_tags_cache[section]
+
+    tags: Dict[str, any] = {}
+    if args.sft_dataset_config:
+        p = Path(args.sft_dataset_config)
+        if p.exists():
+            with open(p) as f:
+                cfg = yaml.safe_load(f) or {}
+            tags = cfg.get(section, {}).get("tags", {})
+
+    if _vlm_tags_cache is None:
+        _vlm_tags_cache = {}
+    _vlm_tags_cache[section] = tags
+    return tags
+
+
+def _parse_messages(raw_messages, section: Optional[str] = None) -> Tuple[List[Dict], Optional[str]]:
+    """Parse a list of raw message dicts into (messages, system).
+
+    Field names and role aliases are read directly from the ``tags`` block of
+    *section* in ``--sft-dataset-config``.  No fallback field logic — whatever
+    is configured in ``role_tag`` / ``content_tag`` is used as-is.
+
+    For a new data format, add a new named section to the config and pass its
+    name via the *section* argument from the relevant cooker function.
+
+    Returns:
+        messages: list of dicts with keys ``role`` and ``content``
+        system:   system prompt string, or None
+    """
+    tags = _load_vlm_tags(section)
+    role_tag = tags.get("role_tag", "role")
+    content_tag = tags.get("content_tag", "content")
+    role_map = {
+        tags.get("user_tag", "user"): "user",
+        tags.get("assistant_tag", "assistant"): "assistant",
+        tags.get("system_tag", "system"): "system",
+    }
+
+    messages: List[Dict] = []
+    system: Optional[str] = None
+
+    for message in raw_messages:
+        role = message.get(role_tag)
+        content = message.get(content_tag, "")
+        role = role_map.get(role, role)
+        if role not in ("system", "user", "assistant"):
+            raise ValueError(f"Unsupported role '{role}' in message: {message}")
+        if role == "system":
+            system = content
+            continue
+        messages.append({"role": role, "content": content})
+
+    return messages, system
+
+
 @stateless
 def cooker_multi_mix_qa(sample: dict):
     """Convert raw sample dict into a MultiMixQASample. """
-    # messages = []
-    system = None
-    messages = sample["json"]
+    messages, system = _parse_messages(sample["json"]["texts"])
     video = []
     image = []
-
     if sample["json"]["media"] == "video":
         for name in sample["json"]["name"]:
             video.append(sample.get(name))
@@ -184,17 +273,7 @@ def cooker_multi_mix_qa(sample: dict):
 @stateless
 def cooker_multi_vid_vqa(sample: dict):
     """Convert raw sample dict into a MultiVidQASample. """
-    messages = []
-    system = None
-    for message in sample["json"]["texts"]:
-        assert message["role"] in ["system", "user", "assistant"]
-        if message["role"] == "system":
-            system = message["content"]
-            continue
-        messages.append(dict(
-            role=message["role"],
-            content=message["content"]
-        ))
+    messages, system = _parse_messages(sample["json"]["texts"])
 
     video = []
     image = []
@@ -443,6 +522,15 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
     @stateless(restore_seeds=True)
     def encode_sample(self, sample: Union[CaptioningSample, VQASample, MultiVidQASample, MultiMixQASample]):
         """Generates an encoded sample from a raw sample."""
+        assert not (
+            self.args.packing_sft_data
+            and isinstance(sample, (PackedCaptioningSample, PackedVQASample, PackedMultiMixQASample))
+        ), (
+            f"Configuration conflict: --packing-sft-data is enabled (online packing), "
+            f"but the dataset contains offline-packed samples of type '{type(sample).__name__}'. "
+            f"Either disable --packing-sft-data to use offline-packed data, "
+            f"or switch to a non-packed dataset for online packing."
+        )
         if isinstance(sample, CaptioningSample):
             yield self.encode_captioning(sample)
         elif isinstance(sample, VQASample):

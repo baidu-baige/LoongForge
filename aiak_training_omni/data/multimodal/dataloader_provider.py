@@ -167,6 +167,12 @@ class VLMPretrainCollator:
             batch["labels"], (0, pad_len), "constant", self.label_pad_token_id
         )
         batch["attn_mask"] = F.pad(batch["attn_mask"], (0, pad_len), "constant", True)
+        # Extend last packed boundary after right-padding;
+        # keep sum(seqlens) == tokens.shape[-1] for apply_mrope split.
+        cu_lengths = batch.get("cu_lengths")
+        if cu_lengths is not None and cu_lengths.shape != torch.Size([1, 1]):
+            batch["cu_lengths"] = cu_lengths.clone()
+            batch["cu_lengths"][..., -1] += pad_len
 
     def _build_masks_and_positions(self, batch: Dict[str, Any]) -> None:
         tokens = batch["tokens"]

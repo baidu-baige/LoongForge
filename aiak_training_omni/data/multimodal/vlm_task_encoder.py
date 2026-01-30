@@ -470,21 +470,38 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        return VLMTaskSample(
-            __key__=sample.__key__,
-            __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
-            __subflavors__=sample.__subflavors__,
-            imgs=imgs,
-            image_grid_thw=image_grid_thw,
-            pixel_values_videos=pixel_values_videos,
-            video_grid_thw=video_grid_thw,
-            num_tiles=num_tiles,
-            tokens=input_ids,
-            labels=target,
-            attn_mask=attn_mask,
-            total_len=len(input_ids),
-        )
+
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return VLMTaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavor__=None,
+                __subflavors__=sample.__subflavors__,
+                imgs=imgs,
+                image_grid_thw=image_grid_thw,
+                pixel_values_videos=pixel_values_videos,
+                video_grid_thw=video_grid_thw,
+                num_tiles=num_tiles,
+                tokens=input_ids,
+                labels=target,
+                attn_mask=attn_mask,
+                total_len=len(input_ids),
+            )
+        else:
+            return VLMTaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavors__=sample.__subflavors__,
+                imgs=imgs,
+                image_grid_thw=image_grid_thw,
+                pixel_values_videos=pixel_values_videos,
+                video_grid_thw=video_grid_thw,
+                num_tiles=num_tiles,
+                tokens=input_ids,
+                labels=target,
+                attn_mask=attn_mask,
+                total_len=len(input_ids),
+            )
 
     def encode_packed_captioning(
         self, sample: PackedCaptioningSample
@@ -520,15 +537,25 @@ class VLMTaskEncoder(BaseTaskEncoder):
         n_orig_sample = len(sample.images)
         l_VLMTaskSample = []
         for idx in range(n_orig_sample):
-            cur_capsample = VQASample(
-                __key__=f"{sample.__key__}.img{idx:03d}_jpg",
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                image=sample.images[idx],
-                answers=sample.answers[idx],
-                context=sample.contexts[idx],
-            )
+            if _ENERGON_NEEDS_SUBFLAVOR:
+                cur_capsample = VQASample(
+                    __key__=f"{sample.__key__}.img{idx:03d}_jpg",
+                    __restore_key__=sample.__restore_key__,
+                    __subflavor__=None,
+                    __subflavors__=sample.__subflavors__,
+                    image=sample.images[idx],
+                    answers=sample.answers[idx],
+                    context=sample.contexts[idx],
+                )
+            else:
+                cur_capsample = VQASample(
+                    __key__=f"{sample.__key__}.img{idx:03d}_jpg",
+                    __restore_key__=sample.__restore_key__,
+                    __subflavors__=sample.__subflavors__,
+                    image=sample.images[idx],
+                    answers=sample.answers[idx],
+                    context=sample.contexts[idx],
+                )
             l_VLMTaskSample.append(self.encode_vqa4packing(cur_capsample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
         self.is_packing_enabled = True
@@ -572,27 +599,31 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 {"role": "assistant", "content": answer},
             ]
             if has_images:
-                cur_sample = MultiMixQASample(
-                    __key__=f"{sample.__key__}.q{idx:03d}",
-                    __restore_key__=sample.__restore_key__,
-                    __subflavor__=None,
-                    __subflavors__=sample.__subflavors__,
-                    messages=messages,
-                    image=media_group,
-                    video=None,
-                    system=None,
-                )
+                init_kwargs = {
+                    "__key__": f"{sample.__key__}.q{idx:03d}",
+                    "__restore_key__": sample.__restore_key__,
+                    "__subflavors__": sample.__subflavors__,
+                    "messages": messages,
+                    "image": media_group,
+                    "video": None,
+                    "system": None,
+                }
+                if _ENERGON_NEEDS_SUBFLAVOR:
+                    init_kwargs["__subflavor__"] = None
+                cur_sample = MultiMixQASample(**init_kwargs)
             else:  # has_videos
-                cur_sample = MultiMixQASample(
-                    __key__=f"{sample.__key__}.q{idx:03d}",
-                    __restore_key__=sample.__restore_key__,
-                    __subflavor__=None,
-                    __subflavors__=sample.__subflavors__,
-                    messages=messages,
-                    image=None,
-                    video=media_group,  # List[AVData]
-                    system=None,
-                )
+                init_kwargs = {
+                    "__key__": f"{sample.__key__}.q{idx:03d}",
+                    "__restore_key__": sample.__restore_key__,
+                    "__subflavors__": sample.__subflavors__,
+                    "messages": messages,
+                    "image": None,
+                    "video": media_group,  # List[AVData]
+                    "system": None,
+                }
+                if _ENERGON_NEEDS_SUBFLAVOR:
+                    init_kwargs["__subflavor__"] = None
+                cur_sample = MultiMixQASample(**init_kwargs)
             l_VLMTaskSample.append(self.encode_multi_mix_qa4packing(cur_sample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
         self.is_packing_enabled = True
