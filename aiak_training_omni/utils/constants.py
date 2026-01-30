@@ -92,11 +92,11 @@ class VisionLanguageModelFamilies(_BaseFamilies):
     QWEN3_VL = "qwen3_vl"
     LLAVA_OV_1_5 = "llava_ov_1_5"
     VLM = "vlm"
+    INTERN_VL = "intern_vl"
 
 
 class CustomModelFamilies(_BaseFamilies):
     """User defined Custom Vision model families"""
-    INTERN_VL = "intern_vl"
     WAN2_1_I2V = "wan2_1_i2v"
     WAN2_2_I2V = "wan2_2_i2v"
 

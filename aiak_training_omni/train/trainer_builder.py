@@ -1,18 +1,22 @@
 """all model trainer"""
 
 from typing import Union, List, Callable
+import logging
 
 from aiak_training_omni.models import get_model_family
 from aiak_training_omni.utils.global_vars import get_hydra_config
 from aiak_training_omni.utils import constants
 
 MODEL_FAMILY_TRAINER_FACTORY = {}
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def register_model_trainer(
     model_family: Union[str, List[str]],
     training_phase: str,
     training_func: Callable = None,
+    override: bool = False,
 ):
     """
     register model training function
@@ -23,9 +27,11 @@ def register_model_trainer(
 
         training_phase: need to be consistent with the --training-phase definition in train.arguments
         trainig_func: training function.
+        override: Whether to overwrite existing training functions for the same model/phase.
+                  Default: False (no overwrite).
     """
 
-    def _add_trainer(families, phase, func):
+    def _add_trainer(families, phase, func, override):
         if not isinstance(families, list):
             families = [families]
 
@@ -35,18 +41,19 @@ def register_model_trainer(
                 MODEL_FAMILY_TRAINER_FACTORY[_family] = {}
 
             if phase in MODEL_FAMILY_TRAINER_FACTORY[_family]:
-                raise ValueError(
-                    f"Cannot register duplicate trainer ({_family} family, {phase} phase)"
-                )
+                if not override:
+                    continue
+                else:
+                    logger.info(f"Overriding existing trainer ({_family} family, {phase} phase)")
 
             MODEL_FAMILY_TRAINER_FACTORY[_family][phase] = func
 
     def _register_function(fn):
-        _add_trainer(model_family, training_phase, fn)
+        _add_trainer(model_family, training_phase, fn, override)
         return fn
 
     if training_func is not None:
-        return _add_trainer(model_family, training_phase, training_func)
+        return _add_trainer(model_family, training_phase, training_func, override)
     else:
         return _register_function
 
