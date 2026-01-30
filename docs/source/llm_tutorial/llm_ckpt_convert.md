@@ -1,6 +1,6 @@
 # Checkpoint Conversion for LLM
 
-## Supported Models
+## 1. Supported Models
 Supports weight conversion between Hugging Face (HF) and Megatron-Core (Mcore) formats for various mainstream Large Language Models (LLMs), facilitating user experimentation and deployment.
 
 |**Model Series**|**Model**|**Convert File**|**HF->Mcore**|**Mcore->HF**|
@@ -49,7 +49,7 @@ Supports weight conversion between Hugging Face (HF) and Megatron-Core (Mcore) f
 ||qwen3_235b_a22b|qwen3_moe_convert|||
 ||qwen3_480b_a35b|qwen3_moe_convert|||
 
-## Common Parameters
+## 2. Common Parameters
 When performing LLM weight conversion, it is recommended to pass parameters using arguments (args). The following are commonly used parameters:
 
 |**Parameter**|**Description**|
@@ -75,7 +75,7 @@ When performing LLM weight conversion, it is recommended to pass parameters usin
 
 For descriptions of other parameters, please refer to [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc).
 
-## Example Scripts
+## 3. Example Scripts
 The framework provides weight conversion example scripts for each model. Users can find specific scripts under `configs/models/{model}/ckpt_convert/`.
 
 Below is an example script for converting **DeepSeek V3.1** model weights from **Huggingface FP8** format to **MegatronCore FP8** format. When converting FP8 format weights, it is crucial to set the `amax_epsilon` parameter. This parameter must align with the FP8 EPS environment variables set during training (`export FP8_QUANT_FWD_INP_AMAX_EPS`, `export FP8_QUANT_FWD_WEIGHT_AMAX_EPS`, `export FP8_QUANT_BWD_GRAD_AMAX_EPS`).

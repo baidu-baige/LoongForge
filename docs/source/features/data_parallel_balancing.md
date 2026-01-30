@@ -4,7 +4,7 @@ It significantly improves GPU utilisation and linear-scaling efficiency in **lar
 
 ---
 
-## Background & Problem  
+## 1. Background & Problem  
 In large-model **Data-Parallel (DP)** training we usually apply **fixed-length packing**, concatenating several samples into a constant token length (e.g. 32 K / 64 K / 128 K):
 
 ∑<sub>i</sub> len(sample<sub>i</sub>) = L
@@ -25,7 +25,7 @@ The issue becomes pronounced when **DP size ≥ 32**.
 
 ---
 
-## Solution Overview  
+## 2. Solution Overview  
 The key idea is to **reorder samples across DP ranks** according to their **compute load** before the forward pass, so that every rank ends up with a similar workload.  
 Expected benefits:
 
@@ -41,7 +41,7 @@ Expected benefits:
 
 ---
 
-## Usage  
+## 3. Usage  
 1. Add the flag in your training launcher:
 
 ```bash
@@ -52,7 +52,7 @@ The feature has been **implemented and validated on InternVL** and is being exte
 
 ---
 
-## Core Design  
+## 4. Core Design  
 
 ### Warm-up: Build a Load Model  
 During the first few iterations we **profile** each DP rank’s sample-length distribution and iteration time, then fit the following per-rank model:
@@ -80,7 +80,7 @@ After every `get_batch`:
 
 ---
 
-## Experimental Results  
+## 5. Experimental Results  
 Fixed **tensor-parallel = 4**, InternVL on *** dataset.  
 Average tokens / GPU / sec (TGS) vs. DP size:
 

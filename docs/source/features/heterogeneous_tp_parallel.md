@@ -8,7 +8,7 @@ This heterogeneous TP mechanism enables the model to flexibly select the most ap
 
 ![heterogeneous_tp](../../../assets/_images/tp_pic1.png)
 
-## Usage Method
+## 1. Usage Method
 Set `tensor-model-parallel-size` in the corresponding model's vit.yaml to specify the vit tp size. For example, adding `tensor_model_parallel_size: 2` in qwen3_vit specifies the vit's tp size:
 
 ```yaml
@@ -56,7 +56,7 @@ MODEL_PARALLEL_ARGS=(
 )
 ```
 
-## Performance Results
+## 2. Performance Results
 Based on qwen2.5vl7b testing with decoder tp = 4 and encoder tp of 1, 2, and 4, different settings show different performance characteristics. Specific performance for different models requires testing.
 
 ![heterogeneous_tp_res](../../../assets/_images/tp_pic2.png)

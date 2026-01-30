@@ -24,11 +24,6 @@ The AIAK-Omni framework is an all-scenario training framework built on Megatron,
 * FP8 training, supporting FP8 precision training, see [fp8_training.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/fp8_training.md) and [fp8_training_for_vlm](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/fp8_training_for_vlm.md) for details.
 * MOE optimization, the framework optimizes the training performance of MOE models, see [moe_all2all_overlap.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/features/moe_all2all_overlap.md) for details.
 
-## Roadmap
-* [ ] Support more models, including Ernie4.5VL, GROOT N1.5, etc.
-* [ ] Support more tasks, including Lora, DPO, Knowledge Distillation, etc.
-* [ ] Support heterogeneous DP for VLM models.
-* [ ] Support for DP load balancing across adjacent micro-batches.
 
 ## Documentation
 🔔🔔🔔Please refer to the [documentation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/) for detailed usage and features of the framework.
@@ -102,68 +97,6 @@ The AIAK-Omni framework is an all-scenario training framework built on Megatron,
 ||Wan2.2|wan2.2_i2v_a14b||✅([example](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/examples/wan/pretrain_wan2.2_i2v_a14b.sh  ))|[model config](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/configs/models/wan/wan2_2_i2v.yaml)|
 
 ## Quick Start
-
-### Quick Start for Qwen3
-
-
-#### Installation  
-Please refer to the [Installation Guide](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/get_started/installation.md) for detailed instructions.
-
-#### Prepare the dataset  
-Convert your corpus into JSON format.  
-Each sample should contain three fields: `instruction`, `input`, and `output`.
-
-**Example file: `sft_alpaca_zh_data.json`**
-```json
-[
-  {
-    "instruction": "Identify and explain the two scientific theories in the given list: cell theory and heliocentric theory.",
-    "input": "",
-    "output": "Cell theory is a fundamental biological theory stating that all living organisms are composed of cells, the basic unit of life. Proposed by Schleiden, Schwann, and Virchow in 1839, it asserts that all organisms are made of one or more cells, and cells only arise from pre-existing cells through division.\n\nHeliocentric theory posits that the Sun is the center of the solar system, with planets orbiting around it. This theory overturned the geocentric view. Nicolaus Copernicus introduced it in the early 16th century in his work 'De revolutionibus orbium coelestium', laying the groundwork for modern astronomy."
-  },
-  {
-    "instruction": "Enter the names of three basketball teams and generate an appropriate slogan.",
-    "input": "Oklahoma City Thunder, Chicago Bulls, Brooklyn Nets",
-    "output": "\"Thunder, Bulls and Nets: each shows its prowess, battling for supremacy!\""
-  },
-  {
-    "instruction": "Compare the two famous figures below using a list of characteristics and provide the output in sentences.",
-    "input": "Person 1: Albert Einstein\nPerson 2: Stephen Hawking\nCharacteristics: intelligence, education, impact on the world",
-    "output": "Both Albert Einstein and Stephen Hawking possessed extraordinary intelligence. They achieved top educational accomplishments and profoundly advanced science. Einstein is renowned for relativity and the mass-energy equivalence E=mc², while Hawking is celebrated for his discoveries about black holes and cosmology. Their remarkable contributions have influenced the world deeply."
-  },
-  {
-    "instruction": "Please construct a question that needs to be answered based on the following article.",
-    "input": "",
-    "output": "I'm sorry, you haven't provided any article or information for me to construct a question. Please supply the corresponding article or information so that I can help you formulate a question."
-  }
-]
-```
-
-Point the environment variable to your file (or use the built-in test set *$AIAK_TRAINING_PATH/tests/datasets/llm/sft_alpaca_zh_data.json*):
-```bash
-export DATA_PATH=/your/dataset/path
-# use test set: export DATA_PATH=$AIAK_TRAINING_PATH/tests/datasets/llm/sft_alpaca_zh_data.json
-```
-
-#### Checkpoint conversion  
-1. Download Hugging Face weights from [Qwen3-8B checkpoint](https://huggingface.co/Qwen/Qwen3-8B).  
-2. Convert to Megatron-Core format:
-
-```bash
-cd $AIAK_TRAINING_PATH/examples/qwen3/checkpoint_convert
-
-# edit LOAD (HF path) and SAVE (MCore output path)
-vim convert_qwen3_8b_hf_to_mcore.sh
-
-bash convert_qwen3_8b_hf_to_mcore.sh
-
-export CHECKPOINT_PATH=/path/to/mcore/ckpt
-```
-
-#### Launch Qwen3-8B SFT  
-```bash
-bash examples/qwen3/finetuning/sft_qwen3_8b.sh
-```
 
 ### Quick Start for LLM Model Training
 Refer to the [Quick Start for LLM Pretrain](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md) and [Quick Start for LLM SFT](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_sft.md) document for details.
