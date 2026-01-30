@@ -18,43 +18,16 @@ ARG COMPILE_ENV={{COMPILE_ENV}}
 # 默认: false, 设置true 则替换编译算子二进制
 ARG BINARY_REPLACE="false"
 
-# 默认: false, 设置true 是否需要针对代码进行加密
-ARG ENCRYPT_FLAG="false"
-
-# 默认: false, 设置true 是否安装bccl
-ARG INSTALL_BCCL_FLAG="false"
-
-# bccl 下载地址
-ARG INSTALL_BCCL_ADDR=""
-
 # 默认: false, 设置true 是否安装 TransformerEngine
 ARG INSTALL_TransformerEngine_FLAG="false"
 
-# 默认: false, 设置true 是否安装 AIAK-ACCELERATOR
-ARG INSTALL_AIAK_ACCELERATOR_FLAG="false"
-
 # 安装 megatron 的类别: aiak/community
-ARG MEGATRON_TYPE="aiak"
-
-# 指定bccl版本号
-ARG VERSION=""
+ARG MEGATRON_TYPE="community"
 
 # 指定token
 ARG TOKEN=""
 
-# 标志是否是BCCL 版本
-ENV USE_BCCL=${INSTALL_BCCL_FLAG}
-
-RUN if [ "${COMPILE_ENV}" = "p800" ] ; then rm -rf /workspace/Megatron-LM /workspace/aiak-tool ; else rm -rf /workspace/ ; fi
 RUN mkdir -p /workspace 
 COPY ./AIAK-Training-Omni /workspace/AIAK-Training-Omni
 RUN bash /workspace/AIAK-Training-Omni/docker/install.sh ${COMPILE_ENV} \
-    ${BINARY_REPLACE} ${ENCRYPT_FLAG} ${INSTALL_BCCL_FLAG} "${INSTALL_BCCL_ADDR}" \
-    ${INSTALL_TransformerEngine_FLAG} ${INSTALL_AIAK_ACCELERATOR_FLAG} ${MEGATRON_TYPE} \
-    "${VERSION}" "${TOKEN}"
-
-# 临时补丁，解决报错: AssertionError: add_position_embedding value from checkpoint (True) is not equal to the input argument value (False)
-# ENV NVTE_FUSED_ATTN=0
-
-# 设置 bccl 安装路径
-ENV BCCL_PATH=/usr/local/bccl/lib
+    ${BINARY_REPLACE} ${INSTALL_TransformerEngine_FLAG} ${MEGATRON_TYPE}

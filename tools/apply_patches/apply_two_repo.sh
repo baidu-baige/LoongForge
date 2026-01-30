@@ -106,17 +106,23 @@ SKIP_COUNT=0
 FAILED_PATCHES=()
 
 # Collect patch files into array (recursively search subdirectories)
+# Convert PATCH_DIR to absolute path if it's relative
+if [[ "$PATCH_DIR" != /* ]]; then
+    # Relative path: convert to absolute (relative to where script is called from)
+    PATCH_DIR="$(cd "$PATCH_DIR" && pwd)"
+fi
+
 # Use mapfile for bash 4.0+, fallback to while-read for older versions
 BASH_MAJOR_VERSION="${BASH_VERSINFO[0]}"
 if [ "$BASH_MAJOR_VERSION" -ge 4 ]; then
     # bash 4.0+ supports mapfile (more efficient)
-    mapfile -t PATCH_FILES < <(find "../$PATCH_DIR" -name "*.patch" -type f | sort)
+    mapfile -t PATCH_FILES < <(find "$PATCH_DIR" -name "*.patch" -type f | sort)
 else
     # bash 3.x fallback (compatible with macOS default bash)
     PATCH_FILES=()
     while IFS= read -r line; do
         PATCH_FILES+=("$line")
-    done < <(find "../$PATCH_DIR" -name "*.patch" -type f | sort)
+    done < <(find "$PATCH_DIR" -name "*.patch" -type f | sort)
 fi
 
 # Check if there are any patch files
