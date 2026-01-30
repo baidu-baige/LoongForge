@@ -2,36 +2,90 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from functools import partial
+from copy import deepcopy
+from dataclasses import fields
 import os
 from pathlib import Path
+from collections import Counter
+from pprint import pformat
+from typing import Optional
 
 import torch
 from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 from megatron.training import get_timers
 from megatron.training.utils import average_losses_across_data_parallel_group
-from torch.utils.data import Dataset, default_collate
+from torch.utils.data import Dataset, SubsetRandomSampler, Sampler, default_collate
 
 from aiak_training_omni.data.lerobot import (
     LeRobotDatasetConfig,
     build_lerobot_dataset,
     get_lerobot_dataset_stats,
-    make_pi05_pre_post_processors,
 )
 from aiak_training_omni.models import get_model_family, get_model_provider
 from aiak_training_omni.train.megatron_trainer import MegatronTrainer
-from aiak_training_omni.train.sft.utils import _build_cylic_iterator
+from aiak_training_omni.train.sft.utils import _build_cylic_iterator, _cyclic_iter
 from aiak_training_omni.train.trainer_builder import register_model_trainer
 from aiak_training_omni.utils import constants, get_args, print_rank_0
 from aiak_training_omni.utils.global_vars import get_model_config
 from lerobot.configs.types import FeatureType
 from lerobot.datasets.utils import dataset_to_policy_features
 from lerobot.utils.constants import OBS_LANGUAGE_ATTENTION_MASK, OBS_LANGUAGE_TOKENS
+from aiak_training_omni.models.custom.pi05.configuration_pi05 import PI05Config
+from lerobot.configs.default import DatasetConfig
+from lerobot.configs.train import TrainPipelineConfig
+from lerobot.datasets.factory import make_dataset
+from lerobot.policies.pi05.configuration_pi05 import PI05Config as LrPI05Config
+from lerobot.policies.factory import make_policy, make_pre_post_processors
 
 
 stimer = StragglerDetector()
+
+
+
+def _summarize_batch_tensors(batch: dict, limit: int = 8) -> list[str]:
+    """Readable snapshot of a few tensors in the batch."""
+    summaries: list[str] = []
+    for idx, (key, value) in enumerate(batch.items()):
+        if idx >= limit:
+            break
+        if torch.is_tensor(value):
+            summaries.append(f"{key}: shape={tuple(value.shape)}, dtype={value.dtype}, device={value.device}")
+        else:
+            summaries.append(f"{key}: type={type(value).__name__}")
+    return summaries
+
+
+def _log_torch_debug_once(batch: dict, model):
+    """Print torch/device precision info once to help compare runs."""
+    global _TORCH_DEBUG_LOGGED
+    if _TORCH_DEBUG_LOGGED:
+        return
+
+    cuda_available = torch.cuda.is_available()
+    first_param = next(model.parameters(), None)
+    model_device = str(first_param.device) if first_param is not None else None
+    torch_info = {
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda if cuda_available else None,
+        "cudnn_version": torch.backends.cudnn.version() if cuda_available else None,
+        "default_dtype": str(torch.get_default_dtype()),
+        "autocast_gpu_dtype": str(torch.get_autocast_gpu_dtype()) if cuda_available else None,
+        "matmul_precision": torch.get_float32_matmul_precision(),
+        "allow_tf32_cuda": torch.backends.cuda.matmul.allow_tf32 if cuda_available else None,
+        "allow_tf32_cudnn": torch.backends.cudnn.allow_tf32 if cuda_available else None,
+        "cudnn_benchmark": torch.backends.cudnn.benchmark,
+        "model_device": model_device,
+    }
+    param_dtypes = Counter(str(p.dtype) for p in model.parameters())
+    param_devices = Counter(str(p.device) for p in model.parameters())
+    batch_snapshot = _summarize_batch_tensors(batch)
+
+    print_rank_0(f"[torch env] {pformat(torch_info)}")
+    print_rank_0(f"[params] dtypes={dict(param_dtypes)} devices={dict(param_devices)}")
+    print_rank_0(f"[batch] {'; '.join(batch_snapshot)}")
+    _TORCH_DEBUG_LOGGED = True
 
 
 def _strip_leading_batch_dim(sample: dict):
@@ -171,22 +225,6 @@ def _ensure_megatron_defaults(train_args):
 
 
 
-class Pi05PreprocessedDataset(Dataset):
-    """Wrap a LeRobot dataset and run the pi05 processor per-sample."""
-
-    def __init__(self, dataset, preprocessor):
-        self.dataset = dataset
-        self.preprocessor = preprocessor
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        sample = self.dataset[index]
-        processed = self.preprocessor(sample)
-        return _strip_leading_batch_dim(processed)
-
-
 def model_provider(pre_process=True, post_process=True, vp_stage: int | None = None):
     """Build the pi05 model through the standard provider registry."""
     args = get_args()
@@ -287,8 +325,9 @@ def forward_step(data_iterator, model):
 
     timers("batch-generator", log_level=2).start()
     with stimer(bdata=True):
-        batch = get_batch(data_iterator)
+        batch = get_batch(data_iterator=data_iterator)
     timers("batch-generator").stop()
+    _log_torch_debug_once(batch, model)
 
     with stimer:
         output_loss, loss_dict = model(batch)
@@ -311,7 +350,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         train_samples = getattr(args, "train_iters", 1) * getattr(args, "global_batch_size", 1)
     consumed = getattr(args, "consumed_train_samples", 0) or 0
 
-    # Build the LeRobot-backed dataset mirroring the pretrain pipeline.
+    # Build the LeRobot-backed dataset via shared helper to mirror lerobot_train.
     repo_id = None
     if isinstance(getattr(args, "data_path", None), (list, tuple)):
         repo_id = args.data_path[0] if args.data_path else None
@@ -326,17 +365,35 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     repo_path = Path(str(repo_id))
     ds_root = repo_path if repo_path.exists() else getattr(args, "data_cache_dir", None)
 
-    ds_cfg = LeRobotDatasetConfig(
-        repo_id=repo_id,
+    # Build dataset via lerobot's factory to match lerobot_train.py path exactly.
+    ds_cfg = DatasetConfig(
+        repo_id=str(repo_id),
         root=str(ds_root) if ds_root is not None else None,
         episodes=None,
         revision=None,
         use_imagenet_stats=True,
         streaming=getattr(args, "sft_data_streaming", False),
-        tolerance_s=getattr(config, "tolerance_s", 1e-4),
     )
+    # Instantiate lerobot-native config so Draccus choice registry (policy.type) works in factory
+    # while preserving omni-only attributes.
+    lr_field_names = {f.name for f in fields(LrPI05Config)}
+    lr_kwargs = {k: v for k, v in config.__dict__.items() if k in lr_field_names}
+    lr_policy_cfg = LrPI05Config(**lr_kwargs)
+    for k, v in config.__dict__.items():
+        if k not in lr_field_names:
+            setattr(lr_policy_cfg, k, v)
 
-    base_dataset = build_lerobot_dataset(ds_cfg, policy=config)
+    tp_cfg = TrainPipelineConfig(dataset=ds_cfg, policy=lr_policy_cfg)
+    base_dataset = make_dataset(tp_cfg)
+
+    dataset_stats = get_lerobot_dataset_stats(base_dataset)
+    preprocess_cfg = deepcopy(lr_policy_cfg)
+    preprocess_cfg.device = "cpu"
+    # Use lerobot factory so processor graph matches lerobot_train exactly
+    preprocessor, _postprocessor = make_pre_post_processors(
+        policy_cfg=preprocess_cfg,
+        dataset_stats=dataset_stats,
+    )
 
     # Auto-fill config features from dataset metadata if the caller didn't set them,
     # mirroring lerobot's factory logic so camera keys align with the dataset.
@@ -357,20 +414,31 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     if missing_visuals:
         print_rank_0(message=f"[sft_vla] Warning: missing visual keys were not added: {missing_visuals}")
 
-    dataset_stats = get_lerobot_dataset_stats(base_dataset)
 
-    preprocess_config = deepcopy(config)
-    preprocess_config.device = "cpu"
-    preprocessor, _ = make_pi05_pre_post_processors(
-        config=preprocess_config, dataset_stats=dataset_stats
+    # Optional debug hook: force the first sample index to match a reference run (e.g., lerobot).
+    sampler = None
+    shuffle = not getattr(args, "sft_data_streaming", False)
+    dataloader_kwargs = {}
+
+    if sampler is not None:
+        dataloader_kwargs["sampler"] = sampler
+
+    dataloader = torch.utils.data.DataLoader(
+        base_dataset,
+        num_workers=args.num_workers,
+        batch_size=args.micro_batch_size,
+        shuffle=shuffle,
+        pin_memory=config.device == "cuda",
+        drop_last=False,
+        prefetch_factor=2 if args.num_workers > 0 else None,
+        **dataloader_kwargs,
     )
-    processed_dataset = Pi05PreprocessedDataset(base_dataset, preprocessor)
 
-    train_iter = _build_cylic_iterator(processed_dataset, consumed, default_collate)
+    def _preprocess_iter(dl_iter):
+        for batch in dl_iter:
+            yield preprocessor(batch)
 
-    print_rank_0(f"> finished creating {args.model_name} sft datasets ...")
-
-    # Validation/test are not wired for this pipeline.
+    train_iter = _preprocess_iter(_cyclic_iter(dataloader))
     return train_iter, None, None
 
 
