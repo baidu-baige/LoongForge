@@ -8,11 +8,12 @@ from megatron.core.rerun_state_machine import RerunStateMachine
 from megatron.core.transformer.enums import AttnBackend
 from megatron.training.utils import warn_rank_0
 from megatron.training.arguments import validate_args
+from packaging.version import Version as PkgVersion
 
 from aiak_training_omni.tokenizer import get_default_tokenizer
 from aiak_training_omni.utils import (constants, get_device_arch_version,
                                       is_torch_min_version, print_rank_0, convert_custom_pipeline_to_layout)
-from aiak_training_omni.utils.utils import get_default_sft_dataset_config
+from aiak_training_omni.utils.utils import get_default_sft_dataset_config, get_transformers_version
 
 
 def validate_aiak_extra_args(args, config):
@@ -50,6 +51,14 @@ def _validate_extra_model_args(args, config):
 
         print_rank_0(
             "---------------- End of configuration ----------------", args.rank
+        )
+
+    # Version guard for Qwen3-VL: transformers must be recent enough.
+    if args.model_family == constants.VisionLanguageModelFamilies.QWEN3_VL:
+        required = PkgVersion("4.57.1")
+        current = get_transformers_version()
+        assert current >= required, (
+            f"transformers>={required} required for qwen3-vl, found {current}"
         )
 
     if args.enable_fa_within_mla:

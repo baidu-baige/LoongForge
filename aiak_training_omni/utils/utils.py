@@ -16,6 +16,7 @@ except Exception:
     _torch_version = PkgVersion("0.0.0")
 
 _te_version = None
+_transformers_version = None
 
 
 def print_rank_0(message, rank=None):
@@ -83,6 +84,22 @@ def get_torch_version():
     if _torch_version is None:
         _torch_version = PkgVersion(get_torch_version_str())
     return _torch_version
+
+
+def get_transformers_version():
+    """Get transformers version (cached)."""
+    import transformers
+
+    global _transformers_version
+
+    if _transformers_version is None:
+        # prefer module __version__ to avoid importlib.metadata lookup issues in editable installs
+        ver = getattr(transformers, "__version__", None)
+        if ver is None:
+            ver = version("transformers")
+        _transformers_version = PkgVersion(ver)
+
+    return _transformers_version
 
 
 def is_te_min_version(version, check_equality=True):
