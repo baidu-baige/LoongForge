@@ -97,7 +97,7 @@ AIAK provides a unified weight conversion tool `tools/convert_checkpoint` for su
 ```bash
 #!/bin/bash
 
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="${AIAK_TRAINING_PATH}/tools/convert_checkpoint"
 

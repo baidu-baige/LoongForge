@@ -109,7 +109,7 @@ Below are conversion scripts for Dense and MoE models with parameter explanation
 ```bash
 #!/bin/bash
 
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"} # Specify AIAK_Training_Omni path
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"} # Specify AIAK_Training_Omni path
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"} # Specify Megatron backend path
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint" # convert_checkpoint module path, no modification needed
 
@@ -216,7 +216,7 @@ rm -rf $SAVE_PATCH
 ```bash
 #!/bin/bash
 
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
@@ -351,7 +351,7 @@ rm -rf $SAVE_PATCH
 ```bash
 #!/bin/bash
 
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
@@ -457,7 +457,7 @@ rm -rf $SAVE_PATCH
 ```bash
 #!/bin/bash
 
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
