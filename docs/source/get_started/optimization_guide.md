@@ -4,7 +4,7 @@ AIAK-Training-Omni is built on Megatron-LM and is fully compatible with all exis
 On top of that we have added several enhancements. This document describes the basic parallelism strategies and how to enable their optimizations.  
 They can be combined as needed to efficiently train **billion- to trillion-parameter** models on **hundreds to thousands of GPUs**.
 
-## Overview
+# 1. Parallelism Strategies
 
 |Strategy|Parallel Dimension|Primary Use-Case|
 |--------|------------------|----------------|
@@ -16,7 +16,7 @@ They can be combined as needed to efficiently train **billion- to trillion-param
 
 ---
 
-## Data Parallelism (DP)
+## 1.1 Data Parallelism (DP)
 
 * **What is parallelised**: different mini-batch samples  
 * **Key idea**: every rank keeps a full copy of the model; gradients are synchronised
@@ -51,7 +51,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## Tensor Parallelism (TP)
+## 1.2 Tensor Parallelism (TP)
 
 * **What is parallelised**: matrix computations inside one layer  
 * **Key idea**: split large matrices along a dimension across GPUs
@@ -65,7 +65,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## Pipeline Parallelism (PP)
+## 1.3 Pipeline Parallelism (PP)
 
 * **What is parallelised**: model depth (layer dimension)  
 * **Key idea**: different GPUs own different stages; execute with micro-batch pipeline
@@ -77,7 +77,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## Context Parallelism (CP)
+## 1.4 Context Parallelism (CP)
 
 * **What is parallelised**: sequence length (token dimension)  
 * **Key idea**: split a long sequence across GPUs
@@ -89,7 +89,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## Expert Parallelism (EP)
+## 1.5 Expert Parallelism (EP)
 
 * **What is parallelised**: experts in an MoE layer  
 * **Key idea**: different GPUs hold different experts; tokens are dispatched with All-to-All
@@ -100,9 +100,9 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-# Performance Optimisations
+# 2. Performance Optimisations
 
-## Communication Optimisations
+## 2.1 Communication Optimisations
 
 1. **Gradient-Reduction Overlap**
    ```bash
@@ -144,7 +144,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## Pipeline Load Balancing
+## 2.2 Pipeline Load Balancing
 
 **Pipeline-load-balancing** is an advanced partitioning mechanism for **PP / VPP** that lets users specify exactly how each layer is mapped to pipeline stages via an explicit layout string.  
 It solves:
@@ -170,7 +170,7 @@ Use `--pipeline-model-parallel-layout` to assign layer types and counts per stag
 
 ---
 
-## Operator Fusion
+## 2.3 Operator Fusion
 
 ### MoE permute fusion
 ```bash
@@ -180,9 +180,9 @@ Fuses token-reordering kernels to reduce memory traffic.
 
 ---
 
-# Memory Optimisations
+# 3. Memory Optimisations
 
-## Re-computation (Activation Checkpointing)
+## 3.1 Re-computation (Activation Checkpointing)
 
 Trade extra backward compute for lower activation memory when GPU memory is tight.
 
@@ -224,7 +224,7 @@ Supported modules:
 
 ---
 
-## Activation Offloading
+## 3.2 Activation Offloading
 
 Offloads selected activation tensors to CPU during forward and brings them back on demand during backward to reduce peak GPU memory.
 
@@ -252,7 +252,7 @@ Supported tensor tags:
 
 ---
 
-## Optimiser-State CPU Offload
+## 3.3 Optimiser-State CPU Offload
 
 Moves optimiser states (e.g. Adam momentum/variance) from GPU to CPU memory, greatly reducing GPU memory at the cost of extra CPU↔GPU traffic.  
 Can be combined with recompute, activation offload and communication overlap.

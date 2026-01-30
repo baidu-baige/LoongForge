@@ -1,11 +1,10 @@
-I'll translate this Chinese markdown documentation about VLM model SFT (Supervised Fine-Tuning) training into English for you.
 # Quick Start: VLM SFT
 
 This document will guide you through the quick start process for Vision-Language Model (VLM) fine-tuning under the AIAK-Training-Omni framework.
 
-# Data Preparation
+## 1. Data Preparation
 
-## Dataset Configuration and Processing
+### 1.1 Dataset Configuration and Processing
 
 In VLM instruction fine-tuning scenarios, the **multimodal ShareGPT** format (containing `messages` and `images`) is used. AIAK-Training-Omni parses this format through AIAK-Training-Omni/configs/data/sft_dataset_config.yaml. Below is the **ShareGPT format example**:
 
@@ -29,14 +28,14 @@ multimodal:
 
 `tags` tells the parser which field names are used in the message structure and what the role values are. If your data uses different keys or role values, you should update them here accordingly.
 
-## Dataset Parameter Description
+### 1.2 Dataset Parameter Description
 
 * `--data-path`: Dataset path (multiple paths can be specified for mixed training).
 * `--sft-dataset-config`: Dataset configuration file path, default is sft_dataset_config.yaml.
 * `--packing-sft-data`: Enable online packing mode
 * `--packing-batch-size`: Packing batch size, affecting packing efficiency and memory usage
 
-## Dataset Preprocessing
+### 1.3 Dataset Preprocessing
 
 The process of converting to **Energon loading format** is the same as the pre-training section, see section 1.2 in [7.1. Quick Start:VLM Model Pretrain Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/48y2Lqs8HhEN5U?t=mention&mt=doc&dt=doc). The framework provides two data preprocessing methods: online packing and offline packing, described below:
 
@@ -48,13 +47,13 @@ Enable under DATA_ARGS in the training script: `--packing-sft-data`, `--packing-
 
 Provides an "offline sequence packing" pipeline: groups and rearranges **sample-level** data directories (one `json` per sample + several media files) according to `max_token_len`, generating **packed WebDataset** (`pretrain-*.tar` + Energon metadata) to improve training throughput and reduce padding. For further understanding of offline packing details, refer to: [4.2. docs/Features/offline_data_packing.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/pwpYfzgvvvnu_n?t=mention&mt=doc&dt=doc)
 
-# Model Weight Preparation
+## 2. Model Weight Preparation
 
 This section is the same as the pre-training section, see section 2 in [7.1. Quick Start:VLM Model Pretrain Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/48y2Lqs8HhEN5U?t=mention&mt=doc&dt=doc)
 
-# Start SFT Training
+## 3. Start SFT Training
 
-## 3.1 Parameter Configuration Description
+### 3.1 Parameter Configuration Description
 
 Based on supporting open-source Megatron parameters, AIAK-Training-Omni adds more convenient training startup parameters. Detailed configuration can be found in the aiak_training_omni/train/arguments.py file. Main parameter descriptions are as follows:
 
@@ -62,7 +61,7 @@ Based on supporting open-source Megatron parameters, AIAK-Training-Omni adds mor
 * `--chat-template qwen2-vl`: Specify SFT conversation template as qwen2-vl for concatenating multi-round dialogue samples into model input
 * `+model.image_encoder.freeze=True`: Override through Hydra configuration to freeze image encoder model parameters for training
 
-## 3.2 SFT Training Script
+### 3.2 SFT Training Script
 
 AIAK-Training-Omni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples/{model}/finetuning/` directory. Below is an example using Qwen3_vl_30b_a3b SFT training script:
 
@@ -202,6 +201,6 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     +model.image_encoder.freeze=True \
 ```
 
-## 3.3 Monitor Logs
+### 3.3 Monitor Logs
 
 The script will output TensorBoard logs to the directory specified by TENSORBOARD_PATH by default. You can view training curves through TensorBoard.

@@ -3,7 +3,7 @@ AIAK-Training-Omni provides FP8 low-precision training for various models. By ed
 
 ---
 
-## Supported Models  
+## 1. Supported Models  
 Verified VLM models that support FP8:
 
 | Model               | FP8 Support |
@@ -15,10 +15,10 @@ Verified VLM models that support FP8:
 
 ---
 
-## How to Run FP8 Training  
+## 2. How to Run FP8 Training  
 Below we use **Qwen3-VL 30 B** as an example.
 
-### 1. Turn on FP8 globally  
+### 2.1 Turn on FP8 globally  
 Add FP8-related launcher flags in  
 `examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh`:
 
@@ -61,7 +61,7 @@ With these flags the **entire** Qwen3-VL model will be trained in FP8.
 
 ---
 
-### 2. Enable FP8 selectively  
+### 2.2 Enable FP8 selectively  
 If you prefer to enable FP8 only for the **Encoder** and/or **Foundation** model, edit the YAML config:
 
 `configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml`

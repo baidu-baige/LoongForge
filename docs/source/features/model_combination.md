@@ -9,7 +9,7 @@ This **configuration-driven assembly** dramatically lowers the cost of exploring
 
 ---
 
-## Core Components
+## 1. Core Components
 
 ### OmniEncoderModel
 Abstract base class for all encoder components.  
@@ -106,7 +106,7 @@ model = OmniCombinationModel(
 
 ---
 
-## How to use
+## 2. How to use
 
 We adopt a **Hydra-based** configuration system that composes components via the `defaults` list.  
 Take `configs/models/internvl2.5/internvl2_5_8b.yaml` as an example:

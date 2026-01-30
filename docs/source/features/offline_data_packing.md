@@ -5,7 +5,7 @@ By concatenating variable-length sequences up to the target length we reduce pad
 Entry script:  
 `tools/data_preprocess/vlm/offline_packing/scripts/pack_wds.sh` (4 steps, see below).
 
-## Supported packing scenarios (`sample.sample_type`)
+## 1. Supported packing scenarios (`sample.sample_type`)
 
 We currently support packing for single-sample captioning, VQA, and multi-modal mixed-QA formats.
 
@@ -15,7 +15,7 @@ We currently support packing for single-sample captioning, VQA, and multi-modal 
 |Offline packed single-image QA|`packed_vqa`|Same as above.|
 |Offline packed image+video mixed QA|`packed_multi_mix_qa`|Same as above (input JSON must declare media types and file lists).|
 
-## Input requirements (`data.wds_dir`)
+## 2. Input requirements (`data.wds_dir`)
 The implementation **does NOT read tar shards directly**; it expects a flat, random-accessible directory:
 
 * Many `*.json` files (each file = one sample / one WDS json payload).  
@@ -35,7 +35,7 @@ Notes:
 * `packed_vqa` / `packed_captioning`: if the JSON does not contain an explicit `media_files/name` field, the code tries to find a media file with the same stem (e.g. `0001.json` → `0001.jpg`).  
 * `packed_multi_mix_qa`: JSON must declare `media`/`media_type` (`image` or `video`) and supply `name`/`media_files` list (nested lists allowed).
 
-## Quick start
+## 3. Quick start
 ```bash
 cd tools/data_preprocess/vlm/offline_packing
 
@@ -49,7 +49,7 @@ To switch to another config:
 * Option 1: overwrite/copy it to `config.yaml`  
 * Option 2: run each script manually with `--config your.yaml` (see next section)
 
-## Pipeline details (mirrors `pack_wds.sh`)
+## 4. Pipeline details (mirrors `pack_wds.sh`)
 
 ### Step 1: Compute per-sample token length (`get_sample_len.py`)
 * Input: `*.json` + media files under `data.wds_dir`  
@@ -90,7 +90,7 @@ Manual run:
 python packed_to_wds.py --config config.yaml
 ```
 
-## Configuration (`config.yaml`)
+## 5. Configuration (`config.yaml`)
 Key fields:
 
 * `data.wds_dir` – input sample directory (`*.json` + media)  
@@ -117,7 +117,7 @@ sample:
   sample_type: packed_multi_mix_qa
 ```
 
-## Switching models / tuning image processing
+## 6. Switching models / tuning image processing
 Step 1’s token counts depend on the actual `AutoProcessor` logic, so you can change the model or image-preprocessing parameters via config:
 
 * Change model: set `model.processor_kwargs.pretrained_model_name_or_path` to the desired HF model/processor; update `model.model_type` accordingly.  

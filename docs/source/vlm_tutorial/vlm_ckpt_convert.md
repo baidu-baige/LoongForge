@@ -1,7 +1,6 @@
-I'll translate this comprehensive model checkpoint conversion documentation from Chinese to English for you.
 # Model Checkpoint Conversion for VLM
 
-## Supported Models
+## 1. Supported Models
 
 | **Model Series** | **Model** | **Convert Files** | **HF->Mcore** | **Mcore->HF** |
 |------------------|-----------|-------------------|---------------|---------------|
@@ -21,7 +20,7 @@ I'll translate this comprehensive model checkpoint conversion documentation from
 | **LLaVA-OV1.5** | llava_ov_1_5_30b_a3b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_moe_convert | | |
 | | llava_ov_4b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_convert_llava | ✅ | ✅ |
 
-## Parameter Passing Methods
+## 2. Parameter Passing Methods
 
 Supports two parameter passing methods: defining in config files and passing through command line args during conversion
 
@@ -66,7 +65,7 @@ While supporting parameter definition in config files, traditional command line 
 
 *Currently `num_virtual_stages_per_pipeline_rank` is not supported in YAML and needs to be passed through args
 
-## Common Parameters
+## 3. Common Parameters
 
 | **Parameter Name** | **Explanation** | **Optional Values** | **Default Value** |
 |-------------------|-----------------|-------------------|------------------|
@@ -95,7 +94,7 @@ While supporting parameter definition in config files, traditional command line 
 | moe-grouped-gemm | Use grouped gemm in moe | `True`/`False` (action) | `False` |
 | resume-convert | Resume checkpoint converting when failed | `True`/`False` (action) | `False` |
 
-## Script Examples and Parameter Explanation
+## 4. Script Examples and Parameter Explanation
 
 Below are conversion scripts for Dense and MoE models with parameter explanations
 

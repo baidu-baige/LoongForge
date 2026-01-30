@@ -2,7 +2,7 @@
 
 This document describes how to support new models in AIAK-Training-Omni, covering **LLM models**, **VLM models**, and **Custom models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
 
-## Supporting LLM Models
+## 1. Supporting LLM Models
 ### 1.1 Adding New LLM Configuration
 If your LLM is a new specification of an existing architecture (e.g., from Llama3-8B to Llama3-70B), simply create a new YAML file.
 
@@ -34,7 +34,7 @@ MODEL_CONFIG_REGISTRY = {
     }
 ```
 
-## Supporting VLM Models
+## 2. Supporting VLM Models
 VLM can be viewed as **ViT + Projector + LLM**. When adding new VLM models, the LLM part can reuse existing configurations (no need to rewrite LLM details), mainly adding **vision encoder**, **projection layer**, and **VLM combination configuration**. The process to support VLM models is divided into three main steps:
 
     1. **Prepare component configurations**: Define LLM base, vision encoder, and projector configurations.
@@ -128,7 +128,7 @@ MODEL_CONFIG_REGISTRY = {
 
 After successful registration, you can reference the model directly by name (e.g., `my-custom-vlm-8b`).
 
-## Supporting Custom Models (Using Wan as Example)
+## 3. Supporting Custom Models (Using Wan as Example)
 Wan series model configurations are located in `configs/models/wan/`, for example:
 
 * `configs/models/wan/wan2_1_i2v.yaml`

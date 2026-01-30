@@ -2,7 +2,7 @@
 
 This document will guide you through the quick start process for Vision-Language Model (VLM) pre-training under the AIAK-Training-Omni framework.
 
-## Data Preparation
+## 1. Data Preparation
 
 Before model training, you need to process and convert large-scale pre-training data to maximize training speed. The specific process is as follows:
 
@@ -82,15 +82,15 @@ Function Description:
 
 For further understanding of various parameters and detailed functions of dataset conversion, refer to [dataset_conversion.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/ZDK80UXEny69eb?t=mention&mt=doc&dt=doc)
 
-## Model Weight Preparation
+## 2. Model Weight Preparation
 
 Training usually starts with open-source Hugging Face weights. We need to download the weights first, then convert them to the format supported by this framework (Megatron-Core format).
 
-### Download Hugging Face Model
+### 2.1 Download Hugging Face Model
 
 Take Qwen3-VL-30B-A3B as an example, please download model weights from Hugging Face ([https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct)).
 
-### Convert Weight Format
+### 2.2 Convert Weight Format
 
 AIAK provides a unified weight conversion tool `tools/convert_checkpoint` for supported models, which can conveniently convert between Huggingface and Mcore formats. Taking Qwen3-VL-30B-A3B as an example, if you need to convert Huggingface weights to MegatronCore format supported by AIAK, you can refer to the following example:
 
@@ -203,9 +203,9 @@ Partial Parameter Description:
 
 For further understanding of various parameters and detailed functions of weight conversion, please refer to: [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc)
 
-## Start Pre-training
+## 3. Start Pre-training
 
-### Parameter Configuration Description
+### 3.1 Parameter Configuration Description
 
 Based on supporting parameters provided by open-source Megatron, AIAK-Training-Omni adds more convenient training startup parameters. Detailed configuration can be found in the aiak_training_omni/train/arguments.py file. Main parameter descriptions are as follows:
 
@@ -215,7 +215,7 @@ Based on supporting parameters provided by open-source Megatron, AIAK-Training-O
 * `--dataloader-save`: When enabled, the dataloader state will be written to this path during training, facilitating consistent data reading order recovery during checkpoint restart
 * `--packing-sft-data`: When enabled, online packing strategy will be activated, concatenating multiple shorter samples into one long sample
 
-### Pre-training Script
+### 3.2 Pre-training Script
 
 AIAK-Training-Omni currently provides pre-training example scripts for various models. After entering the container, you can find relevant scripts in the examples/{model}/pretrain/ directory. Below is an example using Qwen3-VL-30B-A3B pre-training script:
 

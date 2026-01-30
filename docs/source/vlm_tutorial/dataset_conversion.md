@@ -1,6 +1,6 @@
 # VLM Dataset Conversion
 
-## Dataset Format and Processing
+## 1. Dataset Format and Processing
 
 Considering the diversity of multimodal datasets, this project adopts the Energon loader to improve data processing performance, which requires datasets to be stored in standard WebDataset format. WebDataset stores data in native file formats (jpg, mp4, etc.), allowing various native multimodal datasets to be simply compressed and converted to WebDataset format, then read by Energon.
 
@@ -11,7 +11,7 @@ Reference Documentation:
 
 This directory provides `tools/data_preprocess/vlm/convert_to_webdataset.py` for converting `.json/.jsonl` annotation files + original media files (images/videos) into WebDataset directories that Energon can directly read (while generating Energon-required indexes and `dataset.yaml`).
 
-## Supported Data Types (`--sample_type`)
+## 2. Supported Data Types (`--sample_type`)
 
 Different `dataset.yaml` files are written based on `--sample_type`, determining the field organization of samples inside tar files:
 
@@ -31,7 +31,7 @@ Notes:
 * `--media` is only used to write dataset metadata (for distinguishing image/video/mix). Whether actual samples contain images/videos is determined by whether each entry contains `image(s)` / `video(s)`.
 * If an entry has neither `image(s)` nor `video(s)`, it will be written as a "pure text sample" (containing only `json`).
 
-## Conversion Script Usage
+## 3. Conversion Script Usage
 
 Supported input files:
 
@@ -70,7 +70,7 @@ Output Description:
 * Output directory contains `pretrain-0.tar`, `pretrain-1.tar`... (each tar stores several files corresponding to `__key__` according to WebDataset specification, such as `xxx.jpg`/`xxx.json`/`xxx.0_a.mp4`, etc.)
 * Also generates Energon-required metadata directory (usually named `.wds/`), containing `dataset.yaml` and index files; during training, `--data-path` typically points to `--output_dir`
 
-## Input JSON Conventions (Common Fields)
+## 4. Input JSON Conventions (Common Fields)
 
 Each entry supports the following field combinations (all relative paths, will be concatenated with `--image_dir/--video_dir` to read binary files):
 
@@ -84,7 +84,7 @@ Text field requirements for different `sample_type` (aligned with script-generat
 * `caption`: `messages` should support reading `json[captions][0][content]` (e.g., dict contains `captions: [{content: ...}]`)
 * `multi_mix_qa` / `multi_vid_vqa`, etc.: Script writes a structured `json` (containing `texts/media/name`), downstream parses according to corresponding `sample_type` cooker
 
-# Offline Packing Data Processing
+## 5. Offline Packing Data Processing
 
 In multimodal scenarios, sequence offline packing processing methods are provided
 
