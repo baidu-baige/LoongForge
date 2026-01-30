@@ -28,6 +28,7 @@ def build_sft_dataset(args):
         enable_discard_sample=args.enable_discard_sample,
         blend=get_blend_from_list([args.input]),
         split=args.split,
+        path_to_cache=None,
         tokenizer=tokenizer,
         dataset=get_dataset_blend_from_list([args.sft_dataset]),
         dataset_config_file=args.sft_dataset_config,
@@ -38,6 +39,7 @@ def build_sft_dataset(args):
         train_on_prompt=args.train_on_prompt,
         ignore_index=constants.IGNORE_INDEX,
         eod_mask_loss=args.eod_mask_loss,
+        history_mask_loss=args.history_mask_loss,
         path_to_cache=None,
         is_tokenized=False,
         packing=args.packing_sft_data,
@@ -68,60 +70,25 @@ def build_sft_dataset(args):
 
 def _add_arguments(parser: argparse.ArgumentParser):
     """Add arguments"""
-    group = parser.add_argument_group(title='input data')
+    group = parser.add_argument_group(title='input-data')
     group.add_argument('--input', type=str, required=True, help='Path to input JSON')
 
     group.add_argument('--seq-length', type=int, default=None, help='max sequence length')
 
-    group.add_argument("--enable-discard-sample",
-                       action='store_true',
-                       help="Whether to discard sample when its length is greater than seq-length.")
-
-    group.add_argument('--sft-dataset-config', type=str, default=None,
-                       help="A yaml file that contains the dataset configuration."
-                            "default: configs/data/sft_dataset_config.yaml")
-
-    group.add_argument('--sft-dataset', type=str, default="default",
-                       help='the dataset name should be defined in the dataset config file (--sft-dataset-config)')
-
     group.add_argument('--output-path', type=str, required=True,
                        help='Output directory where the processed dataset will be saved')
     
-    group.add_argument("--packing-sft-data",
-                       action='store_true',
-                       help="Whether to pack multiple sft data into one.")
-    group.add_argument("--packing-batch-size",
-                       type=int,
-                       default=10000,
-                       help="Perform packing in batches, deciding how many samples each batch contains;"
-                            "if the --sft-sort-batch option is enabled, the samples will be sorted after packing.")
-    group.add_argument('--sft-sort-batch',
-                       action='store_true',
-                       help='Sort the entire dataset from smallest to largest; '
-                            'if the --packing-sft-data option is enabled, sort the data after packing. Default: False')
+    group.add_argument('--split', type=str, default="100,0,0",
+                    help='Comma-separated list of proportions for training,'
+                    ' validation, and test split. For example the split '
+                    '`90,5,5` will use 90%% of data for training, 5%% for '
+                    'validation and 5%% for test.')
 
     group.add_argument("--context-parallel-size",
                        type=int, default=None,
                        help="If packing is enabled, and context-parallel is enabled during the training phase, "
                             "it is necessary to set the corresponding context_parallel_size "
                             "to correctly pad the data.")
-
-    group.add_argument('--split', type=str, default="100,0,0",
-                       help='Comma-separated list of proportions for training,'
-                       ' validation, and test split. For example the split '
-                       '`90,5,5` will use 90%% of data for training, 5%% for '
-                       'validation and 5%% for test.')
-    
-    group = parser.add_argument_group(title='model&tokenizer')
-    group.add_argument('--chat-template', type=str, required=True,
-                       choices=["llama2", "llama2_zh", "llama3", "llama3.1",
-                                "baichuan", "baichuan2",
-                                "qwen",
-                                "mistral",
-                                "qwen2-vl",
-                                "alpaca",
-                                "deepseek", "deepseek3"],
-                       help='The template to apply to instruction data.')
 
     group.add_argument('--tokenizer-type', type=str, default='HFTokenizer',
                        choices=['HFTokenizer'],
@@ -132,8 +99,6 @@ def _add_arguments(parser: argparse.ArgumentParser):
                             '1) A string, the *model id* of a predefined tokenizer hosted inside a model repo '
                             'on huggingface.co'
                             '2) A path to a *directory* containing vocabulary files required by the tokenizer')
-
-    group.add_argument('--image-resolution', type=int, help='Resolution of image inputs')
 
     group.add_argument('--use-fast-tokenizer', action='store_true',
                        help='Whether to use the fast tokenizer when --tokenizer-type=HFTokenizer. Default: False')
@@ -147,11 +112,64 @@ def _add_arguments(parser: argparse.ArgumentParser):
                        default=None,
                        help="Additional special tokens to add to the tokenizer. Use commas to separate multiple tokens")
 
+    group = parser.add_argument_group(title='extra-sft')
+    group.add_argument('--chat-template', type=str, required=True,
+                       choices=[
+                                "empty",
+                                "llama2",
+                                "llama2_zh",
+                                "llama3",
+                                "llama3.1",
+                                "baichuan",
+                                "baichuan2",
+                                "qwen",
+                                "mistral",
+                                "qwen2-vl",
+                                "alpaca",
+                                "deepseek",
+                                "deepseek3",
+                                "deepseek3.1-nothink",
+                                "no-template",
+                                ],
+                       help='The template to apply to instruction data.')
+
+    group.add_argument('--sft-dataset-config', type=str, default=None,
+                       help="A json file that contains the dataset configuration."
+                            "default: configs/dataset_config.jsoin")
+
+    group.add_argument('--sft-dataset', type=str, default="default",
+                       help='the dataset name should be defined in the dataset config file (--sft-dataset-config)')
+
+    group.add_argument("--packing-sft-data",
+                       action='store_true',
+                       help="Whether to pack multiple sft data into one.")
+
+    group.add_argument("--packing-batch-size",
+                       type=int,
+                       default=10000,
+                       help="Perform packing in batches, deciding how many samples each batch contains;"
+                            "if the --sft-sort-batch option is enabled, the samples will be sorted after packing.")
+
+    group.add_argument('--sft-sort-batch',
+                       action='store_true',
+                       help='Sort the entire dataset from smallest to largest; '
+                            'if the --packing-sft-data option is enabled, sort the data after packing. Default: False')
+
+    group.add_argument('--image-resolution', type=int, help='Resolution of image inputs')
+
     group.add_argument('--train-on-prompt', action='store_true',
                        help='Whether compute loss on prompt. Default: False')
 
+    group.add_argument('--history-mask-loss',
+                       action='store_true',
+                       help='Only compute loss on last turn response, instead of full history. Default: False')
+
     group.add_argument('--eod-mask-loss', action='store_true',
                        help='Mask loss for the end of document tokens.')
+
+    group.add_argument("--enable-discard-sample",
+                       action='store_true',
+                       help="Whether to discard sample when its length is greater than seq-length.")
 
     group = parser.add_argument_group(title='preprocess-runtime')
     group.add_argument('--workers', type=int, required=True, help='Number of worker processes to launch.')
@@ -186,7 +204,10 @@ def parse_args():
     args.variable_seq_lengths = True
     if args.packing_sft_data:
         print(f"Enable to pack multiple sft data with max length {args.seq_length} ...")
-    
+
+    if args.train_on_prompt and args.history_mask_loss:
+        raise ValueError('--train-on-prompt and --history-mask-loss cannot both be True at the same time')
+            
     return args
 
 

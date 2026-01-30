@@ -506,3 +506,9 @@ _register_chat_template(
     format_user=StringFormatter(slots=["<｜User｜>{{content}}<｜Assistant｜></think>"]),
     format_prefix=EmptyFormatter(slots=[{"bos_token"}]),
 )
+
+_register_chat_template(
+    name="no-template",
+    format_user=StringFormatter(slots=["{{content}}"]),
+    format_prefix=EmptyFormatter(slots=[{"bos_token"}]),
+)

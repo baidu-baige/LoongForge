@@ -215,6 +215,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     config = SFTDatasetConfig(
         random_seed=args.seed,
         sequence_length=args.seq_length,  # max sequence length
+        enable_discard_sample=args.enable_discard_sample,
         blend=get_blend_from_list(args.data_path),
         blend_per_split=[
             get_blend_from_list(args.train_data_path),
