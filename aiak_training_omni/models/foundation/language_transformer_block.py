@@ -135,11 +135,6 @@ class TransformerBlock(MegatronTransformerBlock):
             Union[Tensor, Tuple[Tensor, Tensor]]: The output hidden states tensor of shape
             [s, b, h], and optionally the updated context tensor if cross-attention is used.
         """
-        deepstack_visual_embeds = kwargs.get('deepstack_visual_embeds', None)
-        visual_pos_masks = kwargs.get('visual_pos_masks', None)
-        has_deepstack = self._check_inputs_parameters(deepstack_visual_embeds, visual_pos_masks)
-        # 用于重计算时判断has_deepstack
-        kwargs['has_deepstack'] = has_deepstack
 
         inference_context = deprecate_inference_params(inference_context, inference_params)
         # Remove 'dynamic_inference_decode_only' from kwargs if present
@@ -210,9 +205,13 @@ class TransformerBlock(MegatronTransformerBlock):
                     attention_bias=attention_bias,
                     packed_seq_params=packed_seq_params,
                     use_inner_quantization_context=use_inner_quantization_context,
-                    # **kwargs,
+                    **kwargs,
                 )
             else:
+                deepstack_visual_embeds = kwargs.pop('deepstack_visual_embeds', None)
+                visual_pos_masks = kwargs.pop('visual_pos_masks', None)
+                has_deepstack = self._check_inputs_parameters(deepstack_visual_embeds, visual_pos_masks)
+                
                 for l_no, layer in enumerate(self.layers):
                     # Get appropriate inner quantization context
                     if use_inner_quantization_context:
@@ -250,7 +249,7 @@ class TransformerBlock(MegatronTransformerBlock):
                             inference_context=inference_context,
                             packed_seq_params=packed_seq_params,
                             sequence_len_offset=sequence_len_offset,
-                            # **kwargs,
+                            **kwargs,
                         )
                         
                         # vision deepstack features process
@@ -301,17 +300,15 @@ class TransformerBlock(MegatronTransformerBlock):
         **kwargs,
     ):
         """Forward method with activation checkpointing."""
-        has_deepstack = kwargs.get('has_deepstack', False)
-        if has_deepstack:
-            deepstack_visual_embeds = kwargs.get('deepstack_visual_embeds', None)
-            visual_pos_masks = kwargs.get('visual_pos_masks', None)
-            # 如果有DeepStack，使用uniform策略时，recompute_num_layers必须为1，否则可能会跳过DeepStack
-            if (
-                self.config.recompute_method == 'uniform'
-                and self.config.recompute_granularity == 'full'
-            ):
-                assert self.config.recompute_num_layers == 1, \
-                    "If has_deepstack is true and recompute_method is set to uniform, recompute_num_layers must be 1."
+        deepstack_visual_embeds = kwargs.pop('deepstack_visual_embeds', None)
+        visual_pos_masks = kwargs.pop('visual_pos_masks', None)
+        has_deepstack = self._check_inputs_parameters(deepstack_visual_embeds, visual_pos_masks)
+        if has_deepstack and (self.config.recompute_method == 'uniform'
+            and self.config.recompute_granularity == 'full'):
+            # If DeepStack is present and the uniform strategy is used, 
+            # the value of recompute_num_layers must be set to 1; otherwise, DeepStack may be skipped
+            assert self.config.recompute_num_layers == 1, \
+                "If has_deepstack is true and recompute_method is set to uniform, recompute_num_layers must be 1."
 
         def custom(start: int, end: int):
             def custom_forward(

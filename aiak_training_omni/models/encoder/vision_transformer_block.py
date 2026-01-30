@@ -156,11 +156,6 @@ class TransformerBlock(MegatronTransformerBlock):
             [s, b, h], and optionally the updated context tensor if cross-attention is used.
         """
         deepstack_feature_lists = []
-        if self.has_deepstack:
-            deepstack_visual_indexes = kwargs.get('deepstack_visual_indexes', None)
-            deepstack_merger_list = kwargs.get('deepstack_merger_list', None)
-            assert deepstack_visual_indexes is not None and deepstack_merger_list is not None, \
-                "deepstack_visual_indexes and deepstack_merger_list must be passed when has_deepstack is True"
 
         inference_context = deprecate_inference_params(inference_context, inference_params)
         # Remove 'dynamic_inference_decode_only' from kwargs if present
@@ -234,6 +229,11 @@ class TransformerBlock(MegatronTransformerBlock):
                     **kwargs,
                 )
             else:
+                if self.has_deepstack:
+                    deepstack_visual_indexes = kwargs.pop('deepstack_visual_indexes', None)
+                    deepstack_merger_list = kwargs.pop('deepstack_merger_list', None)
+                    assert deepstack_visual_indexes is not None and deepstack_merger_list is not None, \
+                        "deepstack_visual_indexes and deepstack_merger_list must be passed when has_deepstack is True"
                 for l_no, layer in enumerate(self.layers):
                     # Get appropriate inner quantization context
                     if use_inner_quantization_context:
@@ -256,8 +256,6 @@ class TransformerBlock(MegatronTransformerBlock):
                         )
 
                     with self.offload_context, inner_quantization_context:
-                        if isinstance(packed_seq_params, list) and len(packed_seq_params) > 0:
-                            packed_seq_params_l_no = packed_seq_params[l_no]
                         hidden_states, context = layer(
                             hidden_states=hidden_states,
                             attention_mask=attention_mask,
@@ -323,12 +321,10 @@ class TransformerBlock(MegatronTransformerBlock):
         """Forward method with activation checkpointing."""
         deepstack_feature_lists = []
         if self.has_deepstack:
-            deepstack_visual_indexes = kwargs.get('deepstack_visual_indexes', None)
-            deepstack_merger_list = kwargs.get('deepstack_merger_list', None)
+            deepstack_visual_indexes = kwargs.pop('deepstack_visual_indexes', None)
+            deepstack_merger_list = kwargs.pop('deepstack_merger_list', None)
             assert deepstack_visual_indexes is not None and deepstack_merger_list is not None, \
                 "deepstack_visual_indexes and deepstack_merger_list must be passed when has_deepstack is True"
-            kwargs = {k: v for k, v in kwargs.items()
-                               if k not in ('deepstack_visual_indexes', 'deepstack_merger_list')}
             
             # 如果有DeepStack，使用uniform策略时，recompute_num_layers必须为1，否则可能会跳过DeepStack
             if self.config.recompute_method == 'uniform' and self.config.recompute_granularity == 'full':
