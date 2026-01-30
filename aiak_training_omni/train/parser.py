@@ -11,7 +11,6 @@ from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import instantiate
 from megatron.training.arguments import add_megatron_arguments, moe_freq_type
-from megatron.training.arguments import validate_args as validate_megatron_args
 from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
 from dataclasses import fields
@@ -26,7 +25,8 @@ from aiak_training_omni.train.get_position_idx_func import (get_mrope_index,
                                                             get_rope_index_internvl, 
                                                             get_rope_index_qwen3vl)
 from aiak_training_omni.train.validators import (validate_aiak_extra_args,
-                                                    validate_custom_model_args)
+                                                validate_custom_model_args,
+                                                validate_megatron_args)
 from aiak_training_omni.utils import constants
 from aiak_training_omni.utils.config_map import get_config_from_model_name
 from aiak_training_omni.utils.global_vars import (get_hydra_config,

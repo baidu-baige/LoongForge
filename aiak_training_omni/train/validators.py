@@ -7,6 +7,7 @@ import torch
 from megatron.core.rerun_state_machine import RerunStateMachine
 from megatron.core.transformer.enums import AttnBackend
 from megatron.training.utils import warn_rank_0
+from megatron.training.arguments import validate_args
 
 from aiak_training_omni.tokenizer import get_default_tokenizer
 from aiak_training_omni.utils import (constants, get_device_arch_version,
@@ -26,6 +27,12 @@ def validate_aiak_extra_args(args, config):
 
     # megatron one_logger is not supported in aiak
     args.enable_one_logger = False
+
+
+def validate_megatron_args(args):
+    """Validate Megatron arguments"""
+    _validate_legacy_pipeline_args(args)
+    validate_args(args)
 
 
 def validate_custom_model_args(name, args):
@@ -253,7 +260,10 @@ def _validata_extra_parallel_args(args):
                 "Disabling tp comm overlap since fp16 is not supported on GPU",
                 args.rank,
             )
-    
+
+
+def _validate_legacy_pipeline_args(args):
+    """Validate parallel arguments"""
     # Uneven virtual pipeline parallelism
     assert not (
         args.custom_pipeline_layers is not None

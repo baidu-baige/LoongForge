@@ -99,7 +99,6 @@ class LLaMAModel(BaseGPTModel):
         inference_params: InferenceParams = None,
         packed_seq_params: PackedSeqParams = None,
         extra_block_kwargs: dict = None,
-        rotary_pos_emb: Tensor = None,
         runtime_gather_output: Optional[bool] = None,
         loss_mask: Optional[Tensor] = None,
         **kwargs,
@@ -124,7 +123,6 @@ class LLaMAModel(BaseGPTModel):
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
             extra_block_kwargs=extra_block_kwargs,
-            rotary_pos_emb=rotary_pos_emb,
             runtime_gather_output=runtime_gather_output,
             loss_mask=loss_mask,
         )
