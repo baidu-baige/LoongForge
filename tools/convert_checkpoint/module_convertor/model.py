@@ -103,13 +103,16 @@ class Model():
             args.common_config_path = os.path.join(base_dir, f"config/{args.model_type_custom}.json")
         else:
             model_type_custom = os.path.splitext(os.path.basename(args.common_config_path))[0]
-            setattr(args, "model_type_custom", model_type_custom) 
+            setattr(args, "model_type_custom", model_type_custom)
 
         platform = args.load_platform
         ckpt_path = args.load_ckpt_path
 
         # load common config
         assert isinstance(self.config, CommonConfig)
+
+        cargs = self.config.get_args("common")
+        mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
 
         # load checkpoint
         if platform == 'huggingface':
@@ -118,7 +121,7 @@ class Model():
             p = list(layer_dict.keys())[0]
             layer_ids = layer_dict[p]
             expert_ids=expert_dict.values() if expert_dict is not None else None
-            hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids)
+            hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
             self.c_ckpt = hf_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
 
         # load checkpoint

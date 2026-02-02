@@ -179,6 +179,10 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/qwen3",
         "config_name": "qwen3_coder_30b_a3b",
     },
+    "qwen3-next-80b-a3b": {
+        "config_path": "configs/models/qwen3",
+        "config_name": "qwen3_next_80b_a3b",
+    },
 
     # qwen2.5-vl
     "qwen2_5-vl-7b": {
@@ -206,7 +210,15 @@ MODEL_CONFIG_REGISTRY = {
         # Hydra expects the directory, config name selects the file.
         "config_path": "configs/models/pi05",
         "config_name": "pi05",
-    }
+    },
+    "mimo": {
+        "config_path": "configs/models/mimo",
+        "config_name": "mimo_7b",
+    },
+    "minmax": {
+        "config_path": "configs/models/minmax",
+        "config_name": "minimax_m2_1",
+    },
 }
 
 

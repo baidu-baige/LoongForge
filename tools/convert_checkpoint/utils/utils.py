@@ -462,10 +462,9 @@ def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
 
 def get_layer_ids(c_config, args, p):
     cargs = c_config.get_args("common")
-    margs = c_config.get_args("mcore")
 
     num_layers = cargs["num_layers"]
-    mtp_num_layers = cargs.get("mtp_num_layers", 0)
+    mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
     num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage

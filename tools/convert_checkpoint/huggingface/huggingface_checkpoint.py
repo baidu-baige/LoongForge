@@ -32,11 +32,10 @@ from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 from convert_checkpoint.huggingface.huggingface_moe import HuggingfaceMoe
 
-def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None):
+def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mtp_num_layers=0):
     name_map = c_config.get("name_map")["huggingface"]
     cargs = c_config.get_args("common")
     hargs = c_config.get_args("huggingface")
-    mtp_num_layers = cargs.get("mtp_num_layers", 0)
     ori_num_layers = cargs["num_layers"]
     num_layers = ori_num_layers + mtp_num_layers
     mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
@@ -306,7 +305,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         return c_ckpt
 
-    def load(self, load_path, load_safe=False, c_config=None, layer_ids=[], expert_ids=None):
+    def load(self, load_path, load_safe=False, c_config=None, layer_ids=[], expert_ids=None, mtp_num_layers=0):
         """ load ckpt """
         if load_safe:
             from safetensors.torch import load_file
@@ -320,7 +319,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids)
+                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
                 self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, True)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
         else:
@@ -335,7 +334,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids)
+                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
                 self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 

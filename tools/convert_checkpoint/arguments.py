@@ -101,6 +101,11 @@ def _add_checkpoint_args(parser):
     group.add_argument('--convert_file', type=str, help="Convert file for checkpoint conversion.")
     # group.add_argument('--config_name', type=str, help="Config file name for model configuration.")
     # group.add_argument('--module', type=str, default="language", help="Module type, default: language", choices=["language", "vit"])
+    group.add_argument('--mtp_num_layers', type=int, default=None,
+                       help='Number of Multi-Token Prediction (MTP) Layers.'
+                       'MTP extends the prediction scope to multiple future tokens at each position.'
+                       'This MTP implementation sequentially predict additional tokens '
+                       'by using D sequential modules to predict D additional tokens.')
 
 def _add_common_args(parser):
     group = parser.add_argument_group(title='common')
