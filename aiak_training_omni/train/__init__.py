@@ -6,9 +6,9 @@ from .trainer_builder import build_model_trainer
 from .pretrain import pretrain_llm, pretrain_vlm
 # sft_vla is optional (depends on lerobot); import defensively.
 try:
-    from .custom import sft_vla
+    from .custom import sft_pi05
 except ImportError:
-    sft_vla = None
+    sft_pi05 = None
 
 from .sft import sft_llm, sft_vlm, sft_internvl
 from .custom import pretrain_wan

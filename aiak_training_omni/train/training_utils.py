@@ -495,6 +495,13 @@ def setup_model_and_optimizer(
     # If the user is asking for a non-zero embedding init std, skip weight decay for embeddings
     # to avoid embeddings from shrinking to zero as recommended in https://arxiv.org/abs/2312.16903
     # default_skip_embedding_weight_decay=args.embedding_init_method_std is not None,
+
+    # Control whether to force every parameter into the weight‑decay group.
+    # Legacy default (flag unset) keeps the old behavior: force everything.
+    # When --force-all-weight-decay true/false is provided, we respect that choice.
+    if getattr(args, "force_all_weight_decay", None):
+        no_wd_decay_cond = False,
+
     optimizer = get_megatron_optimizer(
         config,
         model,
