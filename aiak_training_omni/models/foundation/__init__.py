@@ -5,6 +5,7 @@ from .qwen2.qwen_config import Qwen2Config
 from .qwen3.qwen_model import Qwen3Model
 from .qwen3.qwen_config import Qwen3Config
 from .qwen3_next.qwen3_next_config import Qwen3NextConfig
+from .qwen3_next.qwen3_next_model import Qwen3NextModel
 from .deepseek.deepseek_config import DeepseekConfig
 from .deepseek.deepseek_model import DeepseekModelWithMTP
 from .mimo.mimo_config import MimoConfig
@@ -20,6 +21,7 @@ from .internlm.internlm_config import InternLMConfig
 # or we can use exist_ok flag?
 AutoModel.register(Qwen2Config, Qwen2Model, exist_ok=True)  # overwrite existing Qwen2Config
 AutoModel.register(Qwen3Config, Qwen3Model, exist_ok=True)  # overwrite existing Qwen3Config
+AutoModel.register(Qwen3NextConfig, Qwen3NextModel, exist_ok=True)
 AutoModel.register(InternLMConfig, InternLMModel)
 AutoModel.register(DeepseekConfig, DeepseekModelWithMTP)
 AutoModel.register(LLaMAConfig, LLaMAModel)

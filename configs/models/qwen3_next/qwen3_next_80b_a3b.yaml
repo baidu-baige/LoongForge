@@ -29,5 +29,4 @@ linear_num_key_heads: 16
 linear_num_value_heads: 32
 linear_conv_kernel_dim: 4
 full_attention_interval: 4
-layer_types: ['linear_attention', 'full_attention'] # overridden in llm_model_provider.py
 model_type: "qwen3_next"

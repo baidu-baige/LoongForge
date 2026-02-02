@@ -79,6 +79,7 @@ class LanguageModelFamilies(_BaseFamilies):
     QWEN2 = "qwen2"
     QWEN2_5 = "qwen2.5"
     QWEN3 = "qwen3"
+    QWEN3_NEXT = "qwen3_next"
     MIXTRAL = "mixtral"
     DEEPSEEK = "deepseek"
     INTERNLM2_5 = "internlm2.5"
