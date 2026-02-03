@@ -1,7 +1,7 @@
 """Model utilities."""
 from typing import Tuple
 import torch
-from megatron.core.transformer import TransformerConfig
+from megatron.core.transformer import MLATransformerConfig, TransformerConfig
 from megatron.core.activations import squared_relu
 import torch.nn.functional as F
 from aiak_training_omni.utils import constants
@@ -28,11 +28,17 @@ def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):
     return vars(module)[name](config, **kwargs)
 
 
-def convert_megatron_transformer_config_args(megatron_args):
+def convert_megatron_transformer_config_args(megatron_args, config_class=None):
     """convert megatron args to transformer config"""
+    # Config class.
+    config_class = config_class or TransformerConfig
+
+    if megatron_args["multi_latent_attention"]:
+        config_class = MLATransformerConfig
+
     transformer_config_args = {}
     for k, v in megatron_args.items():
-        if k in TransformerConfig.__dataclass_fields__:
+        if k in config_class.__dataclass_fields__:
             transformer_config_args[k] = v
     transformer_config_args["persist_layer_norm"] = not megatron_args[
         "no_persist_layer_norm"
@@ -85,6 +91,15 @@ def convert_megatron_transformer_config_args(megatron_args):
     if len(megatron_args["cp_comm_type"]) == 1:
         transformer_config_args["cp_comm_type"] = megatron_args["cp_comm_type"][0]
     transformer_config_args["config_logger_dir"] = megatron_args["config_logger_dir"]
+    
+    if megatron_args["rope_type"] is None:
+        # Pop 'rope_type' to let the config class use the default value.
+        transformer_config_args.pop('rope_type', None)
+    else:
+        assert (megatron_args["multi_latent_attention"] or megatron_args["rope_type"] == 'rope'), (
+            f'Common attention only support rope_type="rope", but got {megatron_args["rope_type"]}.'
+        )
+
     return transformer_config_args
 
 

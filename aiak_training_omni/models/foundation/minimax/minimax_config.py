@@ -3,8 +3,8 @@
 from typing import Optional, Union, List
 from dataclasses import dataclass
 
-from aiak_training_llm.utils.constants import LanguageModelFamilies
-from aiak_training_llm.models.factory import register_model_config
+from aiak_training_omni.utils.constants import LanguageModelFamilies
+from aiak_training_omni.models.factory import register_model_config
 
 
 @dataclass
