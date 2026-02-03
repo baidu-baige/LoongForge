@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from aiak_training_llm.utils.constants import LanguageModelFamilies
-from aiak_training_llm.models.factory import register_model_config
+from aiak_training_omni.utils.constants import LanguageModelFamilies
+from aiak_training_omni.models.factory import register_model_config
 
 
 @dataclass
@@ -32,19 +32,3 @@ class MimoConfig:
     num_experts: int = None
     moe_ffn_hidden_size: int = None
     mtp_num_layers: int = 0
-
-
-@register_model_config(model_family=LanguageModelFamilies.MIMO, model_arch="mimo-7b")
-def mimo_7b() -> MimoConfig:
-    """mimo 7b"""
-    return MimoConfig(
-        num_layers=36,
-        hidden_size=4096,
-        ffn_hidden_size=11008,
-        num_attention_heads=32,
-        group_query_attention=True,
-        num_query_groups=8,
-        vocab_size_in_config_file=151680,
-        make_vocab_size_divisible_by=128,
-    )
-
