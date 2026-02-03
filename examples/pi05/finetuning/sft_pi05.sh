@@ -50,8 +50,8 @@ TRAINING_ARGS=(
     --load /workspace/model_dcp/
     --no-load-optim
     --no-load-rng
-    --no-strict-fsdp-dtensor-load # 开启后，不会严格校对 模型每层的state key，如果对不上，会跳过
-    --finetune # 读取torch_dcp 权重的时候不强制加载 args
+    --no-strict-fsdp-dtensor-load
+    --finetune
 )
 
 MODEL_CONFIG_ARGS=(
