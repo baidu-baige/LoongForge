@@ -179,11 +179,11 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/qwen3",
         "config_name": "qwen3_coder_30b_a3b",
     },
+    # qwen3-next-80b-a3b
     "qwen3-next-80b-a3b": {
-        "config_path": "configs/models/qwen3",
+        "config_path": "configs/models/qwen3_next",
         "config_name": "qwen3_next_80b_a3b",
     },
-
     # qwen2.5-vl
     "qwen2_5-vl-7b": {
         "config_path": "configs/models/qwen2.5_vl",
