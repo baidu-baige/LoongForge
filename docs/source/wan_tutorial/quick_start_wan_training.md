@@ -10,7 +10,7 @@ This section walks through the **Wan Pre-train** pipeline end-to-end.
 → Apply the provided patch `launch_data_process_v118.patch` to community tag `v1.1.8` to enable offline generation.
 
 #### Expected data layout  
-Same as the community format:
+Same as the DiffSynth-Studio community format:
 
 ```
 data/example_video_dataset/
@@ -32,7 +32,7 @@ video2.mp4,"a dog is running"
 git checkout -b v1118 v1.1.8
 ```
 
-**Step-2** Copy `launch_data_process_v118.patch` into the repo root.
+**Step-2** Copy `AIAK-Training-Omni/examples/wan/patch/launch_data_process_v118.patch` into the DiffSynth-Studio repo root.
 
 **Step-3** Apply the patch  
 ```bash
