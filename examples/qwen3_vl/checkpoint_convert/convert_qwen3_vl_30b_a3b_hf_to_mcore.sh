@@ -80,19 +80,34 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
-    python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
-    --megatron_path $MEGATRON_PATH \
-    --language_model_path $SAVE_LANGUAGE_MODEL/release \
-    --vision_model_path $SAVE_VISION_MODEL/release \
-    --vision_patch $SAVE_PATCH/release \
-    --adapter_path $SAVE_ADAPTER/release \
-    --encoder_tensor_model_parallel_size $ETP \
-    --decoder_tensor_model_parallel_size $DTP \
-    --pipeline_model_parallel_size $PP \
-    --save_ckpt_path $SAVE/release \
-    --config_file $MODEL_CONFIG_FILE 
-
+if [ $EP -gt 1 ]; then
+    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+        python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py\
+        --megatron_path $MEGATRON_PATH \
+        --language_model_path $SAVE_LANGUAGE_MODEL/release \
+        --vision_model_path $SAVE_VISION_MODEL/release \
+        --vision_patch $SAVE_PATCH/release \
+        --adapter_path $SAVE_ADAPTER/release \
+        --encoder_tensor_model_parallel_size $ETP \
+        --decoder_tensor_model_parallel_size $DTP \
+        --pipeline_model_parallel_size $PP \
+        --expert_parallel_size $EP \
+        --save_ckpt_path $SAVE/release \
+        --config_file $MODEL_CONFIG_FILE 
+else
+    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+        python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
+        --megatron_path $MEGATRON_PATH \
+        --language_model_path $SAVE_LANGUAGE_MODEL/release \
+        --vision_model_path $SAVE_VISION_MODEL/release \
+        --vision_patch $SAVE_PATCH/release \
+        --adapter_path $SAVE_ADAPTER/release \
+        --encoder_tensor_model_parallel_size $ETP \
+        --decoder_tensor_model_parallel_size $DTP \
+        --pipeline_model_parallel_size $PP \
+        --save_ckpt_path $SAVE/release \
+        --config_file $MODEL_CONFIG_FILE 
+fi
 
 echo release > $SAVE/latest_checkpointed_iteration.txt
 rm -rf $SAVE_LANGUAGE_MODEL
