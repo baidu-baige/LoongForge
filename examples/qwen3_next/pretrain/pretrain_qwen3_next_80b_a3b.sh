@@ -6,6 +6,7 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
+
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/pile_test/pile-qwen_text_document"}
@@ -32,8 +33,13 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
+
+MODEL_CONFIG_ARGS=(
+    --config-file $MODEL_CONFIG_PATH
+)
+
 MODEL_ARGS=(
-    --model-name qwen3-next-80b-a3b
     --rotary-base 10000000
 )
 
@@ -133,4 +139,5 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${TRAINING_ARGS[@]} \
     ${MOE_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
-    ${LOGGING_ARGS[@]}
+    ${MODEL_CONFIG_ARGS[@]} \
+    ${LOGGING_ARGS[@]} 2>&1 | tee /workspace/pretrain_qwen3_next_80b_a3b.log
