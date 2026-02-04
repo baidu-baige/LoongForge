@@ -1,4 +1,4 @@
-# Copyright 2025 The HuggingFace Team.
+# Copyright 2025 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All rights reserved.
 # Copyright 2026 AIAK Training Omni, All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
