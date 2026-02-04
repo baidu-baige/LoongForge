@@ -202,9 +202,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
-            if layer_id > num_layers and mtp_layer_id is not None:
-                continue
+            hf_layer_id = mtp_layer_id + (layer_id - num_layers) if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
             for c_name in BASE_NAMES:
