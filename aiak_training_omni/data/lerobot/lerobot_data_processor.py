@@ -4,6 +4,7 @@ Data processor for LeRobot PI0.5 policy.
 Copied from lerobot/src/lerobot/policies/pi05/processor_pi05.py
 """
 
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -141,6 +142,9 @@ def make_pi05_pre_post_processors(
         )
     renamed_stats = rename_stats(dataset_stats, rename_map) if dataset_stats is not None else dataset_stats
 
+    # Prefer env override (e.g., exported in sft_pi05.sh) and fall back to config default.
+    tokenizer_path = os.environ.get("TOKENIZER_PATH", config.tokenizer_name)
+
     # Add remaining processors
     input_steps: list[ProcessorStep] = [
         RenameObservationsProcessorStep(rename_map=rename_map),  # To mimic the same processor as pretrained one
@@ -155,7 +159,7 @@ def make_pi05_pre_post_processors(
         Pi05PrepareStateTokenizerProcessorStep(max_state_dim=config.max_state_dim),
         # TokenizerProcessorStep requires PaliGemma which is gated - comment out for testing
         TokenizerProcessorStep(
-            tokenizer_name="/workspace/paligemma-3b-pt-224",
+            tokenizer_name=tokenizer_path,
             max_length=config.tokenizer_max_length,
             padding_side="right",
             padding="max_length",

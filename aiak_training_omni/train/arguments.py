@@ -687,11 +687,11 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
     group.add_argument(
         "--force-all-weight-decay",
-        type=lambda x: str(x).lower() in {"1", "true", "yes", "y", "on"},
+        action="store_false",
         default=None,
         help=(
             "Override whether to force every parameter into the weight-decay group. "
-            "Not set: keep legacy behavior (force all). Pass true/false to control."
+            "Not set keeps legacy behavior (force all). "
         ),
     )
     return parser

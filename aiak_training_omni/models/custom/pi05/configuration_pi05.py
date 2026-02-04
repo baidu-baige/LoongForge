@@ -17,7 +17,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass, field
-
+import os
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
 from lerobot.optim.optimizers import AdamWConfig
@@ -62,7 +62,8 @@ class PI05Config(PreTrainedConfig):
     empty_cameras: int = 0
 
     tokenizer_max_length: int = 200  # see openpi `__post_init__`
-    tokenizer_name: str = "/workspace/paligemma-3b-pt-224"
+    tokenizer_name: str = os.environ.get("TOKENIZER_PATH", "")
+
     tokenizer_local_files_only: bool = True  # Default to offline loading
 
     normalization_mapping: dict[str, NormalizationMode] = field(
