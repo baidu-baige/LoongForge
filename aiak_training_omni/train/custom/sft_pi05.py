@@ -43,64 +43,6 @@ from lerobot.policies.factory import make_policy, make_pre_post_processors
 stimer = StragglerDetector()
 
 
-
-def _summarize_batch_tensors(batch: dict, limit: int = 8) -> list[str]:
-    """Readable snapshot of a few tensors in the batch."""
-    summaries: list[str] = []
-    for idx, (key, value) in enumerate(batch.items()):
-        if idx >= limit:
-            break
-        if torch.is_tensor(value):
-            summaries.append(f"{key}: shape={tuple(value.shape)}, dtype={value.dtype}, device={value.device}")
-        else:
-            summaries.append(f"{key}: type={type(value).__name__}")
-    return summaries
-
-
-def _log_torch_debug_once(batch: dict, model):
-    """Print torch/device precision info once to help compare runs."""
-    global _TORCH_DEBUG_LOGGED
-    if _TORCH_DEBUG_LOGGED:
-        return
-
-    cuda_available = torch.cuda.is_available()
-    first_param = next(model.parameters(), None)
-    model_device = str(first_param.device) if first_param is not None else None
-    torch_info = {
-        "torch_version": torch.__version__,
-        "cuda_version": torch.version.cuda if cuda_available else None,
-        "cudnn_version": torch.backends.cudnn.version() if cuda_available else None,
-        "default_dtype": str(torch.get_default_dtype()),
-        "autocast_gpu_dtype": str(torch.get_autocast_gpu_dtype()) if cuda_available else None,
-        "matmul_precision": torch.get_float32_matmul_precision(),
-        "allow_tf32_cuda": torch.backends.cuda.matmul.allow_tf32 if cuda_available else None,
-        "allow_tf32_cudnn": torch.backends.cudnn.allow_tf32 if cuda_available else None,
-        "cudnn_benchmark": torch.backends.cudnn.benchmark,
-        "model_device": model_device,
-    }
-    param_dtypes = Counter(str(p.dtype) for p in model.parameters())
-    param_devices = Counter(str(p.device) for p in model.parameters())
-    batch_snapshot = _summarize_batch_tensors(batch)
-
-    print_rank_0(f"[torch env] {pformat(torch_info)}")
-    print_rank_0(f"[params] dtypes={dict(param_dtypes)} devices={dict(param_devices)}")
-    print_rank_0(f"[batch] {'; '.join(batch_snapshot)}")
-    _TORCH_DEBUG_LOGGED = True
-
-
-def _strip_leading_batch_dim(sample: dict):
-    """Remove the singleton batch dimension added by the processor."""
-    cleaned = {}
-    for key, value in sample.items():
-        if torch.is_tensor(value) and value.dim() > 0 and value.shape[0] == 1:
-            cleaned[key] = value.squeeze(0)
-        elif isinstance(value, list) and len(value) == 1:
-            cleaned[key] = value[0]
-        else:
-            cleaned[key] = value
-    return cleaned
-
-
 def _ensure_megatron_defaults(train_args):
     """Backfill Megatron-required args for the VLA sanity path."""
     defaults = {
@@ -272,22 +214,6 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int | None = N
     if getattr(config, "device", None) is None:
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Debug snapshot to verify Megatron-facing flags are present.
-    dbg = {
-        "fp16": config.fp16,
-        "bf16": config.bf16,
-        "fp8": config.fp8,
-        "fp4": config.fp4,
-        "enable_autocast": config.enable_autocast,
-        "barrier_with_L1_time": config.barrier_with_L1_time,
-        "fine_grained_activation_offloading": config.fine_grained_activation_offloading,
-        "no_sync_func": config.no_sync_func,
-        "overlap_moe_expert_parallel_comm": config.overlap_moe_expert_parallel_comm,
-        "calculate_per_token_loss": config.calculate_per_token_loss,
-        "init_model_with_meta_device": config.init_model_with_meta_device,
-    }
-    print_rank_0(f"[pi05] config debug snapshot: {dbg}")
-
     return provider(pre_process, post_process, vp_stage, config=config)
 
 
@@ -327,7 +253,6 @@ def forward_step(data_iterator, model):
     with stimer(bdata=True):
         batch = get_batch(data_iterator=data_iterator)
     timers("batch-generator").stop()
-    _log_torch_debug_once(batch, model)
 
     with stimer:
         output_loss, loss_dict = model(batch)
