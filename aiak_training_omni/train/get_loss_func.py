@@ -141,9 +141,9 @@ def loss_func_internvl(
     # reduce loss for logging.
     if valid_mask:
         if loss_weight is not None:
-            num_tokens = shift_weights_sum.clone().detach().to(torch.int)
+            num_tokens = shift_weights_sum.clone().detach()
         else:
-            num_tokens = loss_mask.sum().clone().detach().to(torch.int)
+            num_tokens = loss_mask.sum().clone().detach()
     else:
         num_tokens = 1
 
@@ -164,5 +164,5 @@ def loss_func_internvl(
         loss_reduced_dict["total_inputs"] = (
             input_tokens * args.context_parallel_size
         )
-
+    num_tokens = torch.as_tensor(num_tokens, dtype=torch.int)
     return loss, num_tokens, loss_reduced_dict
