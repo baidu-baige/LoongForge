@@ -75,7 +75,6 @@ defaults:
   - ../../models/image_encoder@model.image_encoder: qwen3_vit
   - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
   - ../../models/qwen3@model.foundation: qwen3_30b_a3b
-  #- ../../data@data: vlm_data
   - _self_
 
 model:

@@ -36,7 +36,6 @@ defaults:
   - ../../models/image_encoder@model.image_encoder: qwen2.5_vit
   - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
   - ../../models/qwen@model.foundation: qwen2_5_7b
-  #- ../../data@data: vlm_data
   - _self_
 
 model:
@@ -620,7 +619,6 @@ defaults:
   - ../../models/image_encoder@model.image_encoder: ${Your image encoder}
   - ../../models/image_projector@model.image_projector: ${Your image projector}
   - ../../models/xxx@model.foundation: ${Your foundation model}
-  #- ../../data@data: vlm_data
   - _self_
 
 ...
