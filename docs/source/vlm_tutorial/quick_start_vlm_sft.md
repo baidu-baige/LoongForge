@@ -69,26 +69,27 @@ AIAK-Training-Omni currently provides SFT training example scripts for various m
 #!/bin/bash
 # The script needs to be run on at least 2 nodes.
 
-# MEGATRON_PATH / AIAK_TRAINING_PATH: Codebase roots added to PYTHONPATH.
+# Codebase roots added to PYTHONPATH.
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-# DATA_PATH: Dataset root or manifest path used by the external dataloader.
+# Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}
 
-# TOKENIZER_PATH: HF tokenizer directory or model ID; must match the model vocabulary.
+# TOKENIZER_PATH: HF tokenizer directory，must match the model vocabulary.
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/path/to/your/hf/tokenizer"}
 
-# CHECKPOINT_PATH: Output directory for training checkpoints (and dataloader state).
+# Paths for loading and saving weights
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/path/to/your/mcore/checkpoint"}
+CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/path/to/your/mcore/checkpoint_save"}
 
-# TENSORBOARD_PATH: TensorBoard log directory for training metrics.
+# TensorBoard log directory for training metrics.
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/path/to/your/tensorboard"}
 
-# GPUS_PER_NODE: GPU count per node used by torchrun.
+# GPU count per node used by torchrun.
 GPUS_PER_NODE=8
 
-# Change for multinode config,Distributed training rendezvous settings.
+# Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
@@ -120,7 +121,7 @@ DATA_ARGS=(
 TRAINING_ARGS=(
     --training-phase sft
     --seq-length 32768
-    --max-position-embeddings 32768
+    --max-position-embeddings 262144
     --init-method-std 0.006
     --micro-batch-size 1
     --global-batch-size 32
@@ -133,15 +134,15 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-08
     --norm-epsilon 1e-6
-    --train-iters 50000
+    --train-iters 5000
+    --eval-iters 0
     --lr-decay-iters 50000
     --lr-decay-style cosine
-    --lr-warmup-iters 50
-    # --lr-warmup-fraction 0.002
-    # --initial-loss-scale 65536
+    --lr-warmup-fraction 0.002
+    --initial-loss-scale 65536
     --bf16
-    #--load $CHECKPOINT_PATH
-    #--save $CHECKPOINT_PATH
+    --load $CHECKPOINT_PATH
+    --save $CHECKPOINT_PATH_SAVE
     --save-interval 10000000
     --ckpt-format torch
     --dataloader-save ${CHECKPOINT_PATH}/dataloader
@@ -155,7 +156,6 @@ MOE_ARGS=(
     --moe-grouped-gemm
     --moe-router-dtype fp32
     --empty-unused-memory-level 2
-    --moe-router-score-function sigmoid
     --moe-token-dispatcher-type alltoall
 )
 
@@ -166,7 +166,6 @@ MODEL_PARALLEL_ARGS=(
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 8
     --use-distributed-optimizer
-    # --sequence-parallel
     --overlap-grad-reduce
     --overlap-param-gather
     --distributed-backend nccl
@@ -197,8 +196,7 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${TRAINING_ARGS[@]} \
     ${MOE_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
-    ${LOGGING_ARGS[@]} \
-    +model.image_encoder.freeze=True \
+    ${LOGGING_ARGS[@]} 
 ```
 
 ### 3.3 Monitor Logs

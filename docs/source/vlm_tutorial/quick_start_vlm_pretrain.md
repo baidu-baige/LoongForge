@@ -176,19 +176,34 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
-    python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
-    --megatron_path $MEGATRON_PATH \
-    --language_model_path $SAVE_LANGUAGE_MODEL/release \
-    --vision_model_path $SAVE_VISION_MODEL/release \
-    --vision_patch $SAVE_PATCH/release \
-    --adapter_path $SAVE_ADAPTER/release \
-    --encoder_tensor_model_parallel_size $ETP \
-    --decoder_tensor_model_parallel_size $DTP \
-    --pipeline_model_parallel_size $PP \
-    --save_ckpt_path $SAVE/release \
-    --config_file $MODEL_CONFIG_FILE 
-
+if [ $EP -gt 1 ]; then
+    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+        python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py\
+        --megatron_path $MEGATRON_PATH \
+        --language_model_path $SAVE_LANGUAGE_MODEL/release \
+        --vision_model_path $SAVE_VISION_MODEL/release \
+        --vision_patch $SAVE_PATCH/release \
+        --adapter_path $SAVE_ADAPTER/release \
+        --encoder_tensor_model_parallel_size $ETP \
+        --decoder_tensor_model_parallel_size $DTP \
+        --pipeline_model_parallel_size $PP \
+        --expert_parallel_size $EP \
+        --save_ckpt_path $SAVE/release \
+        --config_file $MODEL_CONFIG_FILE 
+else
+    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+        python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
+        --megatron_path $MEGATRON_PATH \
+        --language_model_path $SAVE_LANGUAGE_MODEL/release \
+        --vision_model_path $SAVE_VISION_MODEL/release \
+        --vision_patch $SAVE_PATCH/release \
+        --adapter_path $SAVE_ADAPTER/release \
+        --encoder_tensor_model_parallel_size $ETP \
+        --decoder_tensor_model_parallel_size $DTP \
+        --pipeline_model_parallel_size $PP \
+        --save_ckpt_path $SAVE/release \
+        --config_file $MODEL_CONFIG_FILE 
+fi
 
 echo release > $SAVE/latest_checkpointed_iteration.txt
 rm -rf $SAVE_LANGUAGE_MODEL
@@ -223,23 +238,24 @@ AIAK-Training-Omni currently provides pre-training example scripts for various m
 #!/bin/bash
 # The script needs to be run on at least 2 nodes.
 
-# MEGATRON_PATH / AIAK_TRAINING_PATH: Codebase roots added to PYTHONPATH.
+# Codebase roots added to PYTHONPATH.
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-# DATA_PATH: Dataset root or manifest path used by the external dataloader.
+# Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}
 
-# TOKENIZER_PATH: HF tokenizer directory or model ID; must match the model vocabulary.
+# TOKENIZER_PATH: HF tokenizer directory，must match the model vocabulary.
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/path/to/your/hf/tokenizer"}
 
-# CHECKPOINT_PATH: Output directory for training checkpoints (and dataloader state).
+# Paths for loading and saving weights
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/path/to/your/mcore/checkpoint"}
+CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/path/to/your/mcore/checkpoint_save"}
 
-# TENSORBOARD_PATH: TensorBoard log directory for training metrics.
+# TensorBoard log directory for training metrics.
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/path/to/your/tensorboard"}
 
-# GPUS_PER_NODE: GPU count per node used by torchrun.
+# GPU count per node used by torchrun.
 GPUS_PER_NODE=8
 
 # Change for multinode confi,Distributed training rendezvous settings.
@@ -269,8 +285,6 @@ DATA_ARGS=(
     --add-question-in-pretrain
     --enable-discard-sample
     --num-workers 16
-    # --packing-sft-data
-    # --packing-batch-size 500
 )
 
 # Core training hyperparameters
@@ -290,14 +304,15 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-05
     --norm-epsilon 1e-6
-    --train-iters 50000
+    --train-iters 5000
+    --eval-iters 0
     --lr-decay-iters 50000
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
     --initial-loss-scale 65536
     --bf16
-    #--load $CHECKPOINT_PATH
-    #--save $CHECKPOINT_PATH
+    --load $CHECKPOINT_PATH
+    --save $CHECKPOINT_PATH_SAVE
     --save-interval 10000000
     --ckpt-format torch
     --dataloader-save ${CHECKPOINT_PATH}/dataloader
@@ -320,22 +335,19 @@ MODEL_PARALLEL_ARGS=(
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 8
     --moe-token-dispatcher-type alltoall
-    # --sequence-parallel
     --use-distributed-optimizer
     --overlap-grad-reduce
     --overlap-param-gather
     --distributed-backend nccl
-    # --tp-comm-overlap
-    # --tp-comm-overlap-bootstrap-backend nccl # or: gloo, mpi
 )
 
+# Model architecture/config file
 MODEL_CONFIG_ARGS=(
-    # Model architecture/config file
     --config-file $MODEL_CONFIG_PATH
 )
 
+# Logging & monitoring
 LOGGING_ARGS=(
-    # Logging & monitoring
     --log-interval 1
     --tensorboard-dir ${TENSORBOARD_PATH}
     --log-timers-to-tensorboard
