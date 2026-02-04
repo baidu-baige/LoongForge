@@ -1,19 +1,5 @@
-# Copyright (c) NVIDIA CORPORATION & AFFILIATES and ModelScope.
-# Copyright 2026 AIAK Training Omni, All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# This file contains code adapted from https://github.com/modelscope/ms-swift
+# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2026 AIAK Training Omni, All rights reserved.
 
 """GatedSoftmaxAttention"""
 import torch
@@ -106,7 +92,6 @@ class Qwen3NextSelfAttention(SelfAttention):
         else:
             self.k_layernorm = None
 
-    # Code borrowed from NVIDIA/Megatron-LM
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -342,9 +327,8 @@ class Qwen3NextSelfAttention(SelfAttention):
 
     def get_query_key_value_tensors(self, hidden_states, key_value_states=None):
         """
-        Derives `query`, `key` and `value` tensors from `hidden_states`.
+        Derives query, key, value, and gate tensors from the input hidden states.
         """
-        # Attention heads [sq, b, h] --> [sq, b, ng * (np/ng + 2) * hn)]
         mixed_qkv, _ = self.linear_qkv(hidden_states)
 
         new_tensor_shape = mixed_qkv.size()[:-1] + (
@@ -361,19 +345,18 @@ class Qwen3NextSelfAttention(SelfAttention):
         ]
 
         if SplitAlongDim is not None:
-
             # [sq, b, ng, (np/ng + 2) * hn]
             # --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
             (query, key, value) = SplitAlongDim(mixed_qkv, 3, split_arg_list)
         else:
-
             # [sq, b, ng, (np/ng + 2) * hn]
             # --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
             (query, key, value) = torch.split(mixed_qkv, split_arg_list, dim=3)
 
-        # [sq, b, ng, np/ng * hn] -> [sq, b, np, hn]
         query = query.reshape(query.size(0), query.size(1), -1, self.hidden_size_per_attention_head)
-        query, gate = query[:, :, ::2], query[:, :, 1::2]
+        query = query[:, :, ::2]
+        g = query[:, :, 1::2]
+        
         if self.q_layernorm is not None:
             query = self.q_layernorm(query)
 
@@ -383,4 +366,4 @@ class Qwen3NextSelfAttention(SelfAttention):
         if self.config.test_mode:
             self.run_realtime_tests()
 
-        return query, key, value, gate
+        return query, key, value, g

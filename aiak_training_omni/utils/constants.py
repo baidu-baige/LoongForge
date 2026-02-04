@@ -83,7 +83,6 @@ class LanguageModelFamilies(_BaseFamilies):
     MIXTRAL = "mixtral"
     DEEPSEEK = "deepseek"
     INTERNLM2_5 = "internlm2.5"
-    QWEN3_NEXT = "qwen3next"
 
 
 class VisionLanguageModelFamilies(_BaseFamilies):

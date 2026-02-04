@@ -111,12 +111,13 @@ def get_qwen3_next_transformer_layer_spec(config, vp_stage=None):
         num_experts=config.num_moe_experts,
         moe_grouped_gemm=config.moe_grouped_gemm,
     )
-
-    layer_specs = [
+    
+    layer_types = [
         'full_attention' if (i + 1) % config.full_attention_interval == 0 else 'linear_attention'
         for i in range(config.num_layers)
     ]
-    for layer_type in layer_specs:
+    layer_specs = []
+    for layer_type in layer_types:
         layer_spec = deepcopy(moe_layer_spec)
         shard_moe_gate_spec = deepcopy(mlp)
         if layer_type == 'linear_attention':
