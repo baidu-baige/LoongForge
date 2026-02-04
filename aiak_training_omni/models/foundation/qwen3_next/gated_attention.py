@@ -329,14 +329,14 @@ class Qwen3NextSelfAttention(SelfAttention):
         """
         Derives query, key, value, and gate tensors from the input hidden states.
         """
-        mixed_qkv, _ = self.linear_qkv(hidden_states)
+        mixed_qgkv, _ = self.linear_qkv(hidden_states)
 
-        new_tensor_shape = mixed_qkv.size()[:-1] + (
+        new_tensor_shape = mixed_qgkv.size()[:-1] + (
             self.num_query_groups_per_partition,
             ((self.num_attention_heads_per_partition // self.num_query_groups_per_partition * 2 + 2)
              * self.hidden_size_per_attention_head),
         )
-        mixed_qkv = mixed_qkv.view(*new_tensor_shape)
+        mixed_qgkv = mixed_qgkv.view(*new_tensor_shape)
         split_arg_list = [
             (self.num_attention_heads_per_partition // self.num_query_groups_per_partition
              * self.hidden_size_per_attention_head * 2),
@@ -347,15 +347,15 @@ class Qwen3NextSelfAttention(SelfAttention):
         if SplitAlongDim is not None:
             # [sq, b, ng, (np/ng + 2) * hn]
             # --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
-            (query, key, value) = SplitAlongDim(mixed_qkv, 3, split_arg_list)
+            (query_gate, key, value) = SplitAlongDim(mixed_qgkv, 3, split_arg_list)
         else:
             # [sq, b, ng, (np/ng + 2) * hn]
             # --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
-            (query, key, value) = torch.split(mixed_qkv, split_arg_list, dim=3)
+            (query_gate, key, value) = torch.split(mixed_qgkv, split_arg_list, dim=3)
 
-        query = query.reshape(query.size(0), query.size(1), -1, self.hidden_size_per_attention_head)
-        query = query[:, :, ::2]
-        g = query[:, :, 1::2]
+        query_gate = query_gate.reshape(query_gate.size(0), query_gate.size(1), -1, self.hidden_size_per_attention_head)
+        query = query_gate[:, :, ::2]
+        gate = query_gate[:, :, 1::2]
         
         if self.q_layernorm is not None:
             query = self.q_layernorm(query)
@@ -366,4 +366,4 @@ class Qwen3NextSelfAttention(SelfAttention):
         if self.config.test_mode:
             self.run_realtime_tests()
 
-        return query, key, value, g
+        return query, key, value, gate
