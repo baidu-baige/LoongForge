@@ -62,17 +62,18 @@ def default_loss_func(
 
     if valid_mask:
         if loss_weight is not None:
-            num_tokens = shift_weights_sum.clone().detach().to(torch.int)
+            num_tokens = shift_weights_sum.clone().detach()
         else:
-            num_tokens = loss_mask.sum().clone().detach().to(torch.int)
+            num_tokens = loss_mask.sum().clone().detach()
     else:
-        num_tokens = 1
+        num_tokens = torch.tensor(1.0, device=output_tensor.device)
 
     # Reduce loss for logging.
     reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
+    if args.legacy_reporting_loss_reduction:
+        torch.distributed.all_reduce(reporting_loss, group=mpu.get_data_parallel_group())
 
-    loss_reduced_dict = {'lm loss': reporting_loss if not args.legacy_reporting_loss_reduction
-                         else reporting_loss[0] / num_tokens}
+    loss_reduced_dict = {'lm loss': reporting_loss}
 
     if args.variable_seq_lengths:
         # for variable seq length, we need to calculate the number of tokens on fly
@@ -86,8 +87,9 @@ def default_loss_func(
         loss_reduced_dict["total_inputs"] = (
             input_tokens * args.context_parallel_size
         )
+    num_tokens = torch.as_tensor(num_tokens, dtype=torch.int, device=num_tokens.device)
 
-    return (loss, num_tokens, loss_reduced_dict)
+    return loss, num_tokens, loss_reduced_dict
 
 
 def loss_func_internvl(
@@ -145,7 +147,7 @@ def loss_func_internvl(
         else:
             num_tokens = loss_mask.sum().clone().detach()
     else:
-        num_tokens = 1
+        num_tokens = torch.tensor(1.0, device=output_tensor.device)
 
     reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
 
@@ -164,5 +166,5 @@ def loss_func_internvl(
         loss_reduced_dict["total_inputs"] = (
             input_tokens * args.context_parallel_size
         )
-    num_tokens = torch.as_tensor(num_tokens, dtype=torch.int)
+    num_tokens = torch.as_tensor(num_tokens, dtype=torch.int, device=num_tokens.device)
     return loss, num_tokens, loss_reduced_dict
