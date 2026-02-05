@@ -76,7 +76,6 @@ class RiceViTModel(BaseVisionModel):
         x = self.patch_embed(x)
 
         batch_size = image_grid_thw.size(0)
-        seq_len, hidden_dim = x.size()
 
         rotary_pos_emb = self.rot_pos_emb(image_grid_thw)
 
@@ -100,14 +99,6 @@ class RiceViTModel(BaseVisionModel):
 
         x = torch.cat(new_x, dim=0)
 
-        seq_len = x.size(0)
-        pad_len = 0
-        # Pad x to multiple of 16 when using fp8 blockwise
-        if (self.config.fp8) and self.config.fp8_recipe == 'blockwise':
-            pad_len = (16 - seq_len % 16) % 16
-        if pad_len > 0: # Pad pad_len zeros at the end of sequence dimension (0th dimension)
-            x = F.pad(x, (0, 0, 0, pad_len)) 
- 
         new_rotary_pos_emb = []
         start_idx = 0
         for i in range(batch_size):
@@ -119,9 +110,6 @@ class RiceViTModel(BaseVisionModel):
 
         rotary_pos_emb = torch.cat(new_rotary_pos_emb, dim=0)
 
-        # Pad rotary_pos_emb to multiple of 16
-        if pad_len > 0: # Pad pad_len zeros at the end of sequence dimension (0th dimension)
-            rotary_pos_emb = F.pad(rotary_pos_emb, (0, 0, 0, pad_len))  
         cu_seqlens = []
         cumulative_length = 0
         cu_seqlens.append(cumulative_length)  # Starts from 0
@@ -129,10 +117,6 @@ class RiceViTModel(BaseVisionModel):
 
             cumulative_length += int(length + 1)
             cu_seqlens.append(cumulative_length)
-
-        # Update cumulative length to include padding
-        if pad_len > 0:
-            cu_seqlens[-1] += pad_len
 
         cu_seqlens = torch.tensor(
             cu_seqlens,
@@ -160,7 +144,7 @@ class RiceViTModel(BaseVisionModel):
             rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
             attention_mask=None,
         )
-        x = x[:-pad_len if pad_len > 0 else None, 0, :].contiguous()  # [s, 1, h] -> [s, h]
+        x = x[:, 0, :].contiguous()  # [s, 1, h] -> [s, h]
 
         patch_output = []
         start_idx = 0

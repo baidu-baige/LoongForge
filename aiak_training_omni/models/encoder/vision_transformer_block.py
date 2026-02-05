@@ -7,6 +7,7 @@ from typing import List, Optional, Union
 
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 
 from megatron.core import parallel_state, tensor_parallel
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
@@ -78,6 +79,72 @@ else:
 
 
 logger = logging.getLogger(__name__)
+
+
+def pad_sequence_for_alignment(
+    hidden_states: Tensor,
+    rotary_pos_emb: Optional[Tensor],
+    packed_seq_params: Optional[List],
+    target_multiple: int = 16,
+) -> tuple[Tensor, Optional[Tensor], int]:
+    """
+    Pad hidden_states and related tensors to align with a target multiple.
+
+    Args:
+        hidden_states: Input tensor of shape [s, ...]
+        rotary_pos_emb: Rotary positional embeddings
+        packed_seq_params: List of PackedSeqParams for packed sequence processing
+        target_multiple: The target multiple to align sequence length to
+
+    Returns:
+        A tuple of (padded_hidden_states, padded_rotary_pos_emb, pad_len)
+    """
+    seq_len = hidden_states.shape[0]
+    pad_len = (target_multiple - seq_len % target_multiple) % target_multiple
+
+    if pad_len > 0:
+        hidden_states = F.pad(
+            hidden_states,
+            pad=[0, 0] * (hidden_states.dim() - 1) + [0, pad_len]
+        )
+        if rotary_pos_emb is not None:
+            rotary_pos_emb = F.pad(
+                rotary_pos_emb,
+                pad=[0, 0] * (rotary_pos_emb.dim() - 1) + [0, pad_len]
+            )
+        if packed_seq_params is not None:
+            for packed_seq_param in packed_seq_params:
+                packed_seq_param.cu_seqlens_q = packed_seq_param.cu_seqlens_q.clone()
+                packed_seq_param.cu_seqlens_q[-1] += pad_len
+                packed_seq_param.cu_seqlens_kv = packed_seq_param.cu_seqlens_kv.clone()
+                packed_seq_param.cu_seqlens_kv[-1] += pad_len
+
+    return hidden_states, rotary_pos_emb, packed_seq_params, pad_len
+
+
+def unpad_sequence(
+    hidden_states: Tensor,
+    deepstack_feature_lists: Optional[List[Tensor]] = None,
+    pad_len: int = 0,
+) -> tuple[Tensor, Optional[List[Tensor]]]:
+    """
+    Remove padding from hidden_states and deepstack_feature_lists.
+
+    Args:
+        hidden_states: Padded input tensor
+        deepstack_feature_lists: Optional list of deepstack features that need unpadding
+        pad_len: The number of padding tokens to remove from the end
+
+    Returns:
+        A tuple of (unpadded_hidden_states, unpadded_deepstack_feature_lists)
+    """
+    if pad_len > 0:
+        hidden_states = hidden_states[:-pad_len].contiguous()
+        if deepstack_feature_lists is not None:
+            for i, deepstack_feature in enumerate(deepstack_feature_lists):
+                deepstack_feature_lists[i] = deepstack_feature[:-(pad_len // 4)].contiguous()
+
+    return hidden_states, deepstack_feature_lists
 
 
 class TransformerBlock(MegatronTransformerBlock):
@@ -214,6 +281,11 @@ class TransformerBlock(MegatronTransformerBlock):
             use_inner_quantization_context = False
             outer_quantization_context = nullcontext()
 
+        if use_inner_quantization_context:
+            hidden_states, rotary_pos_emb, packed_seq_params, pad_len = pad_sequence_for_alignment(
+                hidden_states, rotary_pos_emb, packed_seq_params
+            )
+
         with rng_context, outer_quantization_context:
             # Forward pass.
             if self.config.recompute_granularity == 'full' and self.training:
@@ -303,6 +375,11 @@ class TransformerBlock(MegatronTransformerBlock):
         # on the computational graph and will lead to unexpected errors in pipeline schedules.
         if not self.pre_process and len(self.layers) == 0 and not self.final_layernorm:
             hidden_states = hidden_states.clone()
+
+        if use_inner_quantization_context:
+            hidden_states, deepstack_feature_lists = unpad_sequence(
+                hidden_states, deepstack_feature_lists, pad_len
+            )
 
         return hidden_states, deepstack_feature_lists
         
