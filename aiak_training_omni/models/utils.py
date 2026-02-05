@@ -31,10 +31,8 @@ def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):
 def convert_megatron_transformer_config_args(megatron_args, config_class=None):
     """convert megatron args to transformer config"""
     # Config class.
-    config_class = config_class or TransformerConfig
-
-    if megatron_args["multi_latent_attention"]:
-        config_class = MLATransformerConfig
+    if config_class is None:
+        config_class = TransformerConfig if not megatron_args["multi_latent_attention"] else MLATransformerConfig
 
     transformer_config_args = {}
     for k, v in megatron_args.items():
