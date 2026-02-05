@@ -6,7 +6,6 @@ defaults:
   - ../../models/image_encoder@model.image_encoder: intern_vit_6b
   - ../../models/image_projector@model.image_projector: intern_mlp_adapter
   - ../../models/qwen2.5@model.foundation: qwen2_5_72b
-  #- ../../data@data: vlm_data
   - _self_
 
 model:
