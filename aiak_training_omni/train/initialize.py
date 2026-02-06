@@ -59,10 +59,10 @@ def change_parallel_state(module_name):
     if _CurrentParallelStateModel in _ParallelStatesDict:
         current_globals = _ParallelStatesDict[_CurrentParallelStateModel]
         for k in current_globals:
-            if k in target_globals:
+            if k in target_globals and "_GLOO" not in k:
                 current_globals[k] = target_globals[k]
     for k, v in source_globals.items():
-        if k in target_globals:
+        if k in target_globals and "_GLOO" not in k:
             target_globals[k] = v
     _CurrentParallelStateModel = module_name
 
