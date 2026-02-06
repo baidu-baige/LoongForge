@@ -14,7 +14,6 @@ from aiak_training_omni.models.common import BaseMegatronVisionModule
 from aiak_training_omni.models.utils import import_module
 from aiak_training_omni.utils import get_model_config
 
-from aiak_training_omni.models.encoder.vision_transformer_block import TransformerBlock
 from aiak_training_omni.models.encoder.base_vision_models.base_vision_model import (
     BaseVisionModel,
     PatchEmbed

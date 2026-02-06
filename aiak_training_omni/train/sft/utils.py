@@ -336,16 +336,6 @@ def get_batch_on_this_tp_rank(data_iterator):
     if tokens is not None:
         position_ids = _get_position_ids(tokens)
 
-    # set AIAK-ACCELERATOR custom_roll
-    try:
-        from aiak_accelerator.multiacc_engine import multiacc_utils
-    except ImportError:
-        multiacc_utils = None
-
-    if multiacc_utils is not None:
-        if multiacc_utils["custom_roll"] is not None:
-            torch.roll = multiacc_utils["custom_roll"]
-
     # labels & loss mask
     labels = data_b["labels"].long() if "labels" in data_b else None
     if labels is not None:

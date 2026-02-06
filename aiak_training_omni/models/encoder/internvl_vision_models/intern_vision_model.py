@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.transformer.enums import ModelType, AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_block import TransformerBlock
+from aiak_training_omni.models.encoder.vision_transformer_block import TransformerBlock
 
 from .internvl_config import InternVisionConfig
 from aiak_training_omni.models.common import BaseMegatronVisionModule
@@ -203,12 +203,12 @@ class InternVisionModel(BaseMegatronVisionModule):
         if self.config.sequence_parallel:
             hidden_states = tensor_parallel.scatter_to_sequence_parallel_region(hidden_states)
             #hidden_states = hidden_states.transpose(0, 1).contiguous()  # [b, s, h] -> [s, b, h]
-            hidden_states = self.encoder(hidden_states, attention_mask=attention_mask)
+            hidden_states, _ = self.encoder(hidden_states, attention_mask=attention_mask)
             #hidden_states = hidden_states.transpose(0, 1).contiguous()
             hidden_states = tensor_parallel.gather_from_sequence_parallel_region(hidden_states)
             hidden_states = hidden_states.transpose(0, 1).contiguous()
         else:
-            hidden_states = self.encoder(hidden_states, attention_mask=attention_mask)
+            hidden_states, _ = self.encoder(hidden_states, attention_mask=attention_mask)
         hidden_states = hidden_states.transpose(0, 1).contiguous()  # [s, b, h] -> [b, s, h]
 
         last_hidden_state = hidden_states

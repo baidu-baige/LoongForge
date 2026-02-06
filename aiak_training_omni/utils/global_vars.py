@@ -81,17 +81,6 @@ def set_aiak_extra_global_vars(args, build_tokenizer=True) -> None:
         _ = _build_chat_template(args)
         _ = _build_tokenizer(args)
 
-    # set AIAK-ACCELERATOR extra global vars
-    try:
-        from aiak_accelerator.multiacc_engine import (
-            multiacc_set_accelerator_extra_global_vars,
-        )
-    except ImportError:
-        multiacc_set_accelerator_extra_global_vars = None
-
-    if multiacc_set_accelerator_extra_global_vars is not None:
-        multiacc_set_accelerator_extra_global_vars(args, build_tokenizer)
-
 
 def _build_chat_template(args) -> Optional["ChatTemplate"]:
     """Build the chat template."""
