@@ -131,6 +131,21 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         "this option, the head dimensions will be aligned by padding, so that fa can be used."
         "Deprecated: use --attention-backend=flash",
     )
+
+    # use for freeze parameters
+    group.add_argument('--freeze-parameters',
+                       type=str,
+                       nargs="*",
+                       default=[],
+                       help='Prefixes of parameters to freeze (default: [])'
+    )
+
+    group.add_argument('--freeze-parameters-regex',
+                       type=str,
+                       default=None,
+                       help='Regular expression pattern to match parameters to freeze (default: None)'
+    )
+
     # adapter checkpoint control
     group.add_argument(
         "--allow-missing-adapter-checkpoint",
