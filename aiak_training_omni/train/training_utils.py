@@ -8,6 +8,7 @@ import gc
 from datetime import datetime, timedelta
 import logging
 import sys
+import re
 
 try:
     from nvidia_resiliency_ext.inprocess import CallWrapper
@@ -165,6 +166,41 @@ def enable_memory_history_record(memory_snapshot_path):
         )
 
     torch._C._cuda_attach_out_of_memory_observer(oom_observer)
+
+
+def freeze_parameters(model, freeze_parameters, freeze_parameters_regex):
+    """Freezes model parameters based on exact name matches or regex patterns."""
+    for model_module in model:
+        if freeze_parameters:
+            logging.info(f"freeze_parameters: {freeze_parameters}")
+            for n, p in model_module.named_parameters():
+                for freeze_p in freeze_parameters:
+                    if n.startswith(freeze_p):
+                        p.requires_grad = False
+
+        if freeze_parameters_regex is not None:
+            logging.info(f"freeze_parameters_regex: {freeze_parameters_regex}")
+            try:
+                pattern = re.compile(freeze_parameters_regex)
+            except re.error as e:
+                logging.info(f"Invalid freeze_parameters_regex '{freeze_parameters_regex}': {e}")
+                raise
+
+            for n, p in model_module.named_parameters():
+                if pattern.search(n):
+                    p.requires_grad = False
+
+    # Only log checking info if freezing enable
+    if freeze_parameters or freeze_parameters_regex:
+        logging.info(
+            "<Freezing model parameters> \n"
+            + [sorted(f"FROZEN: {n}" for m in model for n, p in m.named_parameters() if not p.requires_grad)]
+            + "\n</Freezing model parameters>"
+            + "\n\n"
+            + "<Trainable model parmeters> \n"
+            + [sorted(f"TRAINABLE: {n}" for m in model for n, p in m.named_parameters() if p.requires_grad)]
+            + "\n</Trainable model parmeters>"
+        )
 
 
 def add_hooks(model, args, prefix):
@@ -482,7 +518,15 @@ def setup_model_and_optimizer(
     args = get_args()
     timers = get_timers()
 
-    model = get_model(model_provider_func, model_type)
+    def provider_with_freeze(*p_args, **p_kwargs):
+        m = model_provider_func(*p_args, **p_kwargs)
+
+        # m can be a Module or list/tuple of Modules depending on PP/VPP.
+        mods = m if isinstance(m, (list, tuple)) else [m]
+        freeze_parameters(mods, args.freeze_parameters, args.freeze_parameters_regex)
+        return m
+
+    model = get_model(provider_with_freeze, model_type)
     unwrapped_model = unwrap_model(model)
 
     kwargs = {}
