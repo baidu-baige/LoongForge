@@ -22,6 +22,10 @@ from .internvl_vision_models.internvl_config import (
     InternMLPAdapterConfig,
 )
 
+from .ernie4_5_vl_vision_models.ernie_vision_model import ErnieVisionModel
+from .ernie4_5_vl_vision_models.ernie_adapter import ErnieAdapter
+from .ernie4_5_vl_vision_models.ernie_config import ErnieVisionConfig, ErnieAdapterConfig
+
 AutoModel.register(Qwen2VisionModelConfig, BaseVisionModel)
 AutoModel.register(Qwen2VisionRMSNormConfig, Qwen2VisionModelWithRMSNorm)
 AutoModel.register(Qwen3VisionModelConfig, Qwen3VisionModel)
@@ -29,3 +33,5 @@ AutoModel.register(MLPAdapterConfig, Adapter)
 AutoModel.register(RiceVisionConfig, RiceViTModel)
 AutoModel.register(InternVisionConfig, InternVisionModel)
 AutoModel.register(InternMLPAdapterConfig, InternAdapter)
+AutoModel.register(ErnieVisionConfig, ErnieVisionModel)
+AutoModel.register(ErnieAdapterConfig, ErnieAdapter)

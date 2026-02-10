@@ -1,0 +1,23 @@
+_target_: aiak_training_omni.models.encoder.ErnieVisionConfig
+
+attn_implementation: "flash"
+num_layers: 32
+embed_dim: 1280
+hidden_act: "quick_gelu"
+hidden_size: 5120
+in_channels: 3
+in_chans: 3
+mlp_ratio: 4
+num_heads: 16
+patch_size: 14
+spatial_merge_size: 2
+spatial_patch_size: 14
+vit_first_fwd_bsz: 128
+attn_sep: True
+rms_norm_eps: 1e-5
+temporal_merge_size: 2
+use_temporal_conv: True
+resampler_hidden_in: 1280
+resampler_hidden_out: 2560
+
+model_type: ernie4_5_vit

@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from . import video_transforms
 from megatron.training import get_args
+from transformers import AutoProcessor
 
 
 def _extract_into_tensor(arr, timesteps, broadcast_shape):
@@ -287,6 +288,46 @@ class TensorDataset(torch.utils.data.Dataset):
         # used for generate timestep
         data["seed"] = seed
         return data
+
+    def __len__(self):
+        return self.steps_per_epoch
+
+
+class ErnieImageDataset(torch.utils.data.Dataset):
+    """Dataset for ernie-vl"""
+    def __init__(self, args, metadata_path, steps_per_epoch=0):
+        self.manual_seed = args.seed
+        self.steps_per_epoch = steps_per_epoch
+        self.processor = AutoProcessor.from_pretrained(args.hf_tokenizer_path,  trust_remote_code=True)
+        self.data_list = []
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                data = json.loads(line.strip())
+                self.data_list.append(data)
+
+    def __getitem__(self, index):
+        seed = (self.manual_seed + index) % 2**32
+        numpy_random_state = np.random.RandomState(seed=seed)
+        data_id = numpy_random_state.randint(0, self.steps_per_epoch)
+        data_id = data_id % len(self.data_list)
+        message = self.data_list[data_id]["message"]
+        text = self.processor.apply_chat_template(
+            message, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+        image_inputs, video_inputs = self.processor.process_vision_info(message)
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+
+        inputs["labels"] = inputs["input_ids"].clone()
+        inputs["labels"] = torch.roll(inputs["labels"], shifts=-1, dims=1)
+        inputs["labels"][: , -1] = -100
+
+        return inputs
 
     def __len__(self):
         return self.steps_per_epoch
