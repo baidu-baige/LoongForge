@@ -24,10 +24,13 @@ ARG INSTALL_TransformerEngine_FLAG="false"
 # 安装 megatron 的类别: aiak/community
 ARG MEGATRON_TYPE="community"
 
+# 是否安装 lerobot: true/false
+ARG INSTALL_LEROBOT="false"
+
 # 指定token
 ARG TOKEN=""
 
 RUN mkdir -p /workspace 
 COPY ./AIAK-Training-Omni /workspace/AIAK-Training-Omni
 RUN bash /workspace/AIAK-Training-Omni/docker/install.sh ${COMPILE_ENV} \
-    ${BINARY_REPLACE} ${INSTALL_TransformerEngine_FLAG} ${MEGATRON_TYPE}
+    ${BINARY_REPLACE} ${INSTALL_TransformerEngine_FLAG} ${MEGATRON_TYPE} ${INSTALL_LEROBOT}
