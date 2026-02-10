@@ -14,6 +14,7 @@ from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.dist_checkpointing.utils import apply_prefix_mapping
 from megatron.core.transformer.identity_op import IdentityFuncOp, IdentityOp
 from megatron.core.transformer.module import MegatronModule
+from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.transformer.transformer_layer import (
     BaseTransformerLayer,
     get_transformer_layer_offset,
@@ -66,6 +67,8 @@ class WanLayer(MegatronModule, BaseTransformerLayer):
         submodules: WanLayerSubmodules,
         layer_number: int = 1,
         hidden_dropout: float = None,
+        pg_collection: Optional[ProcessGroupCollection] = None,
+        vp_stage: Optional[int] = None,
     ):
         super().__init__(config=config)
 
