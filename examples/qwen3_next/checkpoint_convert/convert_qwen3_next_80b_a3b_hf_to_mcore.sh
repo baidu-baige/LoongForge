@@ -11,8 +11,8 @@ MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3_next/qwen3_next_80b
 
 CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml
 
-TP=2
-PP=2
+TP=1
+PP=4
 EP=8
 ETP=1
 

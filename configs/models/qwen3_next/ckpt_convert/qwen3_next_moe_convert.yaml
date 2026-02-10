@@ -3,7 +3,7 @@ hydra:
     - file://${oc.env:AIAK_TRAINING_PATH}/configs/models/
 
 defaults:
-  - qwen3@module: ???
+  - qwen3_next@module: ???
   - _self_
 
 args:

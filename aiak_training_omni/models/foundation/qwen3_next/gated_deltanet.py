@@ -34,7 +34,7 @@ from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.tensor_parallel import get_cuda_rng_tracker
 from megatron.core.transformer import TransformerConfig
 from megatron.core.transformer.identity_op import IdentityOp
-from megatron.core.transformer.module import MegatronModule
+from megatron.core.models.huggingface import HuggingFaceModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.utils import (
     make_sharded_tensors_for_checkpoint,
@@ -47,7 +47,7 @@ from megatron.core.utils import (
 )
 from megatron.core.tensor_parallel import (
     gather_from_sequence_parallel_region, 
-    scatter_to_sequence_parallel_region
+    reduce_scatter_to_sequence_parallel_region
 )
 
 try:
@@ -138,7 +138,7 @@ class GatedDeltaNetSubmodules:
     out_proj: Union[ModuleSpec, type] = IdentityOp
 
 
-class GatedDeltaNet(MegatronModule):
+class GatedDeltaNet(HuggingFaceModule):
     """Gated Delta Net (GDN) layer class
     GDN layer takes input with size [s, b, h]
     and returns output of the same size.
@@ -199,9 +199,19 @@ class GatedDeltaNet(MegatronModule):
         self.v_dim = self.value_head_dim * self.num_value_heads
         self.unpacking_hidden_states_in_gdn = int(os.environ.get('UNPACKING_HIDDEN_STATES_IN_GDN', 1))
 
-        # Input projection (hidden_states -> q, k, v, gate, beta, alpha)
-        # TODO: for now, output gate is forced for GDN.
-        # We may remove this restriction in the future.
+        # Conv1d for QKV
+        self.conv_dim = self.qk_dim * 2 + self.v_dim
+        # weight shape: [conv_dim, 1, d_conv]
+        # bias shape: [conv_dim]
+        self.conv1d = nn.Conv1d(
+            in_channels=self.conv_dim,
+            out_channels=self.conv_dim,
+            bias=conv_bias,
+            kernel_size=self.conv_kernel_dim,
+            groups=self.conv_dim,
+            padding=self.conv_kernel_dim - 1,
+        )
+
         self.in_proj_qkvz_dim = self.qk_dim * 2 + self.v_dim * 2
         self.in_proj_ba_dim = self.num_value_heads * 2
         if self.config.fp8:
@@ -213,39 +223,13 @@ class GatedDeltaNet(MegatronModule):
         self.in_proj_qkvz = nn.Linear(self.hidden_size, self.in_proj_qkvz_dim, bias=False)
         self.in_proj_ba = nn.Linear(self.hidden_size, self.in_proj_ba_dim, bias=False)
 
-        # Conv1d for QKV
-        self.conv_dim = self.qk_dim * 2 + self.v_dim
-
-        # weight shape: [conv_dim, 1, d_conv]
-        # bias shape: [conv_dim]
-        self.conv1d = nn.Conv1d(
-            in_channels=self.conv_dim,
-            out_channels=self.conv_dim,
-            bias=conv_bias,
-            kernel_size=self.conv_kernel_dim,
-            groups=self.conv_dim,
-            padding=self.conv_kernel_dim - 1,
-            device=torch.cuda.current_device(),
-            dtype=config.params_dtype,
-        )
-        
         # dt_bias parameter
-        self.dt_bias = nn.Parameter(
-            torch.empty(
-                self.num_value_heads,
-                dtype=config.params_dtype,
-                device=torch.cuda.current_device(),
-            )
-        )
-
-        # A_log parameter
-        self.A_log = nn.Parameter(
-            torch.empty(
-                self.num_value_heads,
-                dtype=config.params_dtype,
-                device=torch.cuda.current_device(),
-            )
-        )
+        self.dt_bias = nn.Parameter(torch.ones(self.num_value_heads))
+        A = torch.empty(self.num_value_heads).uniform_(self.A_init_range[0], self.A_init_range[1])
+        self.A_log = nn.Parameter(torch.log(A))
+        if self.tp_size > 1:
+            setattr(self.dt_bias, "average_gradients_across_tp_domain", True)
+            setattr(self.A_log, "average_gradients_across_tp_domain", True)
         
         self.out_norm = ( 
             Qwen3NextRMSNormGated(
@@ -259,33 +243,8 @@ class GatedDeltaNet(MegatronModule):
                 dtype=self.config.params_dtype,
             )
         )
-        self.out_proj = nn.Linear(self.v_dim, self.hidden_size, bias=False)
 
-        # TODO: support CP
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        """Reset the parameters."""
-        if self.config.perform_initialization:
-            with get_cuda_rng_tracker().fork():
-                # conv1d.weight
-                if self.conv_init is not None:
-                    nn.init.uniform_(self.conv1d.weight, -self.conv_init, self.conv_init)
-                # dt_bias
-                torch.ones(
-                    self.num_value_heads,
-                    out=self.dt_bias.data,
-                    dtype=self.config.params_dtype,
-                    device=torch.cuda.current_device(),
-                )
-                # A_log
-                A = torch.empty(
-                    self.num_value_heads,
-                    dtype=self.config.params_dtype,
-                    device=torch.cuda.current_device(),
-                ).uniform_(*self.A_init_range)
-                self.A_log.data.copy_(torch.log(A))
+        self.out_proj = nn.Linear(self.v_dim, self.hidden_size, bias=False)        
 
     def fix_query_key_value_ordering(self, mixed_qkvz, mixed_ba):
         """
@@ -399,7 +358,7 @@ class GatedDeltaNet(MegatronModule):
             hidden_states = hidden_states.transpose(0, 1)
             if attention_mask is not None:
                 if attention_mask.shape[2] > 1:
-                    attention_mask = attention_mask.sum(dim=(1, 3)) > 0
+                    attention_mask = (~attention_mask).sum(dim=(1, 2)) > 0
                 else:
                     attention_mask = ~(attention_mask.squeeze(1).squeeze(1))
         hidden_states = self.apply_mask_to_padding_states(hidden_states, attention_mask)
@@ -514,7 +473,7 @@ class GatedDeltaNet(MegatronModule):
             out = out.transpose(0, 1).contiguous()
 
         if self.sequence_parallel and self.tp_size > 1:
-            out = scatter_to_sequence_parallel_region(out)
+            out = reduce_scatter_to_sequence_parallel_region(out) / self.tp_size
         return out, None
 
 
