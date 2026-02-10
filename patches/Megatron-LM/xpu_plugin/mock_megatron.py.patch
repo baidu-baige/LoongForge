@@ -1,9 +1,9 @@
 diff --git a/xpu_plugin/mock_megatron.py b/xpu_plugin/mock_megatron.py
 new file mode 100644
-index 0000000..14bdfcc
+index 0000000..75d75eb
 --- /dev/null
 +++ b/xpu_plugin/mock_megatron.py
-@@ -0,0 +1,417 @@
+@@ -0,0 +1,456 @@
 +"""
 +Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved
 +This module provides megatron-core-aiak plugin.
@@ -14,6 +14,7 @@ index 0000000..14bdfcc
 +import torch
 +from torch import Tensor
 +from torch.nn import LayerNorm as TorchLayerNorm
++from typing import List, Optional, Tuple
 +
 +try:
 +    import torch_xmlir
@@ -69,7 +70,7 @@ index 0000000..14bdfcc
 +        return tmp, tmp
 +
 +
-+def mock_bias_swiglu_impl(input, bias, fp8_input_store=False):
++def mock_bias_swiglu_impl(input, bias, fp8_input_store=False, cpu_offload_input=False):
 +    """
 +    mock_bias_swiglu_impl
 +    """
@@ -80,6 +81,11 @@ index 0000000..14bdfcc
 +
 +    if bias is not None:
 +        input = input + bias
++    
++    if cpu_offload_input:
++        input.activation_offloading = True
++        if bias is not None:
++            bias.activation_offloading = True
 +
 +    from torch_xmlir.nn.swiglu import SwiGLUFunction
 +
@@ -187,19 +193,6 @@ index 0000000..14bdfcc
 +    return iteration, release
 +
 +
-+def mock_is_kernel_available(self, mask, b, np, sq, sk):
-+    """
-+    mock_is_kernel_available
-+    """
-+    if (
-+        self.scaled_masked_softmax_fusion  # user want to fuse
-+        and self.input_in_float16  # input must be fp16
-+        and sk <= 16384  # sk must be <= 16384
-+    ):
-+        return True
-+    return False
-+
-+
 +def mock_unpermute(
 +    permuted_tokens: torch.Tensor,
 +    sorted_indices: torch.Tensor,
@@ -233,7 +226,25 @@ index 0000000..14bdfcc
 +    Returns:
 +        torch.Tensor: The tokens restored to their original order.
 +    """
++    try:
++        import transformer_engine as te  # pylint: disable=unused-import
++
++        from megatron.core.extensions.transformer_engine import (
++            fused_unpermute,
++        )
++        HAVE_TE = True
++    except ImportError:
++        HAVE_TE = False
++
++    if fused:
++        if not HAVE_TE or fused_unpermute is None:
++            raise ValueError("fused_unpermute is not available. Please install TE >= 2.1.0.")
++        return fused_unpermute(
++            permuted_tokens, sorted_indices, merging_probs=probs, restore_shape=restore_shape
++        )
++
 +    _, hidden = restore_shape
++    input_dtype = permuted_tokens.dtype
 +
 +    if probs is not None:
 +        assert routing_map is not None, "Mask must be provided to permute the probs."
@@ -255,16 +266,44 @@ index 0000000..14bdfcc
 +            permuted_probs = probs_T_1D.index_select(0, indices_1D)
 +        else:
 +            permuted_probs = probs.T.contiguous().masked_select(routing_map.T.contiguous())
++        # Here may promote permuted_tokens to higher precision (fp32/fp64) if probs is in
++        # higher precision due to moe_router_dtype being enabled. This can lead to
++        # additional GPU memory usage. Use --moe-permute-fusion flag to avoid this extra memory
++        # allocation.
 +        permuted_tokens = permuted_tokens * permuted_probs.unsqueeze(-1)
 +
 +    # Create an output tensor filled with zeros
 +    output_tokens = torch.zeros(
-+        restore_shape, device=permuted_tokens.device, dtype=permuted_tokens.dtype
++        restore_shape, dtype=permuted_tokens.dtype, device=permuted_tokens.device
 +    )
-+    # Scatter add the permuted_input back to the original positions
-+    # output_tokens.scatter_add_(0, sorted_indices.unsqueeze(1).expand(-1, hidden), permuted_tokens)
-+    output_tokens.index_add_(0, sorted_indices, permuted_tokens)
-+    return output_tokens
++    if torch.are_deterministic_algorithms_enabled():
++        # Use index_add which is deterministic when deterministic algorithms are enabled
++        # and is CUDA graph compatible
++        output_tokens = torch.zeros(
++            restore_shape, dtype=permuted_tokens.dtype, device=permuted_tokens.device
++        )
++        # index_add is deterministic when torch.use_deterministic_algorithms(True) is set
++        # and is CUDA graph compatible unlike scatter_add
++        output_tokens.index_add_(0, sorted_indices, permuted_tokens)
++    else:
++        # Scatter add the permuted_input back to the original positions
++        # output_tokens.scatter_add_(
++        #     0, sorted_indices.unsqueeze(1).expand(-1, hidden), permuted_tokens
++        # )
++        output_tokens.index_add_(0, sorted_indices, permuted_tokens)
++    return output_tokens.to(dtype=input_dtype)
++
++def mock_is_kernel_available(self, mask, b, np, sq, sk):
++    """
++    mock_is_kernel_available
++    """
++    if (
++        self.scaled_masked_softmax_fusion  # user want to fuse
++        and self.input_in_float16  # input must be fp16
++        and sk <= 16384  # sk must be <= 16384
++    ):
++        return True
++    return False
 +
 +
 +def mock_gather_along_first_dim(
@@ -421,3 +460,4 @@ index 0000000..14bdfcc
 +            output = temp_output[: original_chunk_sizes[rank]]
 +            output = output.contiguous()
 +    return output
+\ No newline at end of file

@@ -1,5 +1,5 @@
 diff --git a/megatron/core/transformer/attention.py b/megatron/core/transformer/attention.py
-index 659402a39..a86f77180 100644
+index 659402a39..904a6276c 100644
 --- a/megatron/core/transformer/attention.py
 +++ b/megatron/core/transformer/attention.py
 @@ -22,6 +22,11 @@ from megatron.core.parallel_state import (
@@ -73,10 +73,13 @@ index 659402a39..a86f77180 100644
          """
          The flash decoding kernel will do the following in a single execution:
          1. Compute RoPE embedding with precomputed cos & sin tensors
-@@ -728,6 +755,17 @@ class Attention(MegatronModule, ABC):
-         qkv_output = self.get_query_key_value_tensors(
-             hidden_states, key_value_states, split_qkv=split_qkv
-         )
+@@ -725,9 +752,17 @@ class Attention(MegatronModule, ABC):
+                 self.config.fused_single_qkv_rope and split_qkv
+             ), "fused_single_qkv_rope requested but not available/supported for the config."
+ 
+-        qkv_output = self.get_query_key_value_tensors(
+-            hidden_states, key_value_states, split_qkv=split_qkv
+-        )
 +        if self.offload_qkv_linear:
 +            hidden_states = fine_grained_offloading_group_start(hidden_states, name="qkv_linear")
 +        with get_fine_grained_offloading_context(self.offload_qkv_linear):
@@ -91,7 +94,7 @@ index 659402a39..a86f77180 100644
          attn_mask_type = self.attn_mask_type
          block_table = None
          if split_qkv:
-@@ -822,10 +860,11 @@ class Attention(MegatronModule, ABC):
+@@ -822,10 +857,11 @@ class Attention(MegatronModule, ABC):
                  cu_seqlens_q = cu_seqlens_kv = None
  
              if split_qkv:
@@ -104,7 +107,7 @@ index 659402a39..a86f77180 100644
                              query,
                              q_pos_emb,
                              config=self.config,
-@@ -838,7 +877,7 @@ class Attention(MegatronModule, ABC):
+@@ -838,7 +874,7 @@ class Attention(MegatronModule, ABC):
                              query, q_pos_emb, self.config, cu_seqlens_q, self.pg_collection.cp
                          )
                  if k_pos_emb is not None:
@@ -113,7 +116,7 @@ index 659402a39..a86f77180 100644
                          key,
                          k_pos_emb,
                          config=self.config,
-@@ -873,17 +912,20 @@ class Attention(MegatronModule, ABC):
+@@ -873,17 +909,20 @@ class Attention(MegatronModule, ABC):
                  packed_seq_params=packed_seq_params,
              )
          else:
@@ -143,7 +146,7 @@ index 659402a39..a86f77180 100644
  
              else:
                  # Dynamic batching attention kernel.
-@@ -903,6 +945,10 @@ class Attention(MegatronModule, ABC):
+@@ -903,6 +942,10 @@ class Attention(MegatronModule, ABC):
                      block_table,
                  )
                  core_attn_out = rearrange(core_attn_out, 's b h d -> s b (h d)')
@@ -154,7 +157,7 @@ index 659402a39..a86f77180 100644
  
          if packed_seq_params is not None and packed_seq_params.qkv_format == 'thd':
              # reshape to same output shape as unpacked case
-@@ -917,7 +963,14 @@ class Attention(MegatronModule, ABC):
+@@ -917,7 +960,14 @@ class Attention(MegatronModule, ABC):
          # =================
  
          nvtx_range_push(suffix="linear_proj")

@@ -1,0 +1,20 @@
+diff --git a/megatron/core/distributed/finalize_model_grads.py b/megatron/core/distributed/finalize_model_grads.py
+index 55663acdc..977307d7a 100644
+--- a/megatron/core/distributed/finalize_model_grads.py
++++ b/megatron/core/distributed/finalize_model_grads.py
+@@ -292,8 +292,13 @@ def _update_router_expert_bias(model: List[torch.nn.Module], config: Transformer
+     for model_chunk in model:
+         for module in get_attr_wrapped_model(model_chunk, 'modules')():
+             if hasattr(module, 'expert_bias'):
+-                tokens_per_expert_list.append(module.local_tokens_per_expert)
+-                expert_bias_list.append(module.expert_bias)
++                # NEW: skip expert-bias updates for frozen routers.
++                # This prevents the main model from changing when its params are frozen,
++                # while still allowing MTP routers (trainable) to update.
++                has_trainable_param = any(p.requires_grad for p in module.parameters())
++                if has_trainable_param:
++                    tokens_per_expert_list.append(module.local_tokens_per_expert)
++                    expert_bias_list.append(module.expert_bias)
+     # For hybrid models with both MoE and Dense layers, this list can be empty.
+     if len(expert_bias_list) == 0:
+         return

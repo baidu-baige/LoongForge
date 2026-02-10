@@ -1,5 +1,5 @@
 diff --git a/megatron/training/checkpointing.py b/megatron/training/checkpointing.py
-index da173912d..951587e59 100644
+index da173912d..9de282bf7 100644
 --- a/megatron/training/checkpointing.py
 +++ b/megatron/training/checkpointing.py
 @@ -98,7 +98,7 @@ def check_checkpoint_args(checkpoint_args):
@@ -84,7 +84,7 @@ index da173912d..951587e59 100644
  
      # If dataloader doesn't support saving state, raise an error.
      if not hasattr(train_iterator.iterable, "save_state"):
-@@ -1564,18 +1569,19 @@ def load_checkpoint(ddp_model, optimizer, opt_param_scheduler, load_arg='load',
+@@ -1564,28 +1569,32 @@ def load_checkpoint(ddp_model, optimizer, opt_param_scheduler, load_arg='load',
      num_floating_point_operations_so_far = state_dict.get('num_floating_point_operations_so_far', 0)
  
      # Check arguments.
@@ -116,7 +116,21 @@ index da173912d..951587e59 100644
  
      def load_model_state_dict(module, state_dict, strict: bool):
          """Helper function to load state dict with fallback for missing extra states."""
-@@ -1613,7 +1619,8 @@ def load_checkpoint(ddp_model, optimizer, opt_param_scheduler, load_arg='load',
+         try:
+             module.load_state_dict(state_dict, strict=strict)
+         except Exception as e:
++            # This is where PyTorch prints the missing/unexpected keys when strict=True
++            print(f"[load_state_dict strict={strict}] exception:\n{e}")
++
+             if strict:
+                 # Fallback support for backward compatibility breaking changes in TransformerEngine
+                 load_return = module.load_state_dict(state_dict, strict=False)
+-                print(f"load_return: {load_return}")
++                print(f"[load_state_dict strict=False] return: {load_return}")
+     # Model.
+     strict = False if args.retro_add_retriever else strict
+     if not skip_load_to_model_and_opt:
+@@ -1613,7 +1622,8 @@ def load_checkpoint(ddp_model, optimizer, opt_param_scheduler, load_arg='load',
              # Load distributed optimizer's custom parameter state.
              # For distributed checkpoint it's already loaded in load_state_dict above
              is_torch_dist = ckpt_format == "torch_dist"

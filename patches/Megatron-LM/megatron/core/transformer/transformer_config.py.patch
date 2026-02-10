@@ -1,5 +1,5 @@
 diff --git a/megatron/core/transformer/transformer_config.py b/megatron/core/transformer/transformer_config.py
-index 147c5b23b..09268be0f 100644
+index 147c5b23b..445c14f26 100644
 --- a/megatron/core/transformer/transformer_config.py
 +++ b/megatron/core/transformer/transformer_config.py
 @@ -21,6 +21,7 @@ from ..utils import (
@@ -10,7 +10,17 @@ index 147c5b23b..09268be0f 100644
  
  try:
      from packaging.version import Version as PkgVersion
-@@ -325,7 +326,8 @@ class TransformerConfig(ModelParallelConfig):
+@@ -51,6 +52,9 @@ class TransformerConfig(ModelParallelConfig):
+     mtp_loss_scaling_factor: Optional[float] = None
+     """Weighting factor of Multi-Token Prediction (MTP) loss."""
+ 
++    mtp_loss_scaling_factor_decay_ratio: Optional[float] = None
++    """Weighting factor decay ratio for Multi-Token Prediction (MTP) loss."""
++
+     num_layers_in_first_pipeline_stage: Optional[int] = None
+     """Number of transformer layers on first pipeline stage.
+     None implies equal layer division across PP ranks."""
+@@ -325,7 +329,8 @@ class TransformerConfig(ModelParallelConfig):
  
      recompute_modules: Optional[List[str]] = None
      """The submodules to recompute.
@@ -20,7 +30,7 @@ index 147c5b23b..09268be0f 100644
      default: ["core_attn"].
      "core_attn": recompute the core attention part of the transformer layer.
      "moe_act": recompute the MoE MLP activation function.
-@@ -336,8 +338,10 @@ class TransformerConfig(ModelParallelConfig):
+@@ -336,8 +341,10 @@ class TransformerConfig(ModelParallelConfig):
      "shared_experts": recompute the shared experts in the MoE layer.
      "moe_act", "layernorm", and "mla_up_proj" use output-discarding checkpointing,
      "core_attn", "mlp", "moe", and "shared_experts" use normal checkpointing.
@@ -32,7 +42,7 @@ index 147c5b23b..09268be0f 100644
      ####################
      # fp8 related
      ####################
-@@ -420,6 +424,10 @@ class TransformerConfig(ModelParallelConfig):
+@@ -420,6 +427,10 @@ class TransformerConfig(ModelParallelConfig):
      together with fp4 mode (i.e., TransformerConfig.fp4 is not None). Note that not all parameters
      will be converted to fp4; for example, biases will remain unchanged."""
  
@@ -43,7 +53,7 @@ index 147c5b23b..09268be0f 100644
      ####################
      # MoE related
      ####################
-@@ -588,6 +596,19 @@ class TransformerConfig(ModelParallelConfig):
+@@ -588,6 +599,19 @@ class TransformerConfig(ModelParallelConfig):
      moe_apply_probs_on_input: bool = False
      """Apply probs on input of experts instead of applying after activation and glu."""
  
@@ -63,7 +73,7 @@ index 147c5b23b..09268be0f 100644
      ##################
      # Context Parallel
      ##################
-@@ -725,6 +746,42 @@ class TransformerConfig(ModelParallelConfig):
+@@ -725,6 +749,44 @@ class TransformerConfig(ModelParallelConfig):
      """Transformer implementation to use.
      Options are 'transformer_engine' for Transformer Engine and 'local' for MCore."""
  
@@ -94,10 +104,12 @@ index 147c5b23b..09268be0f 100644
 +    """
 +    offload_tensors: Optional[list[str]] = None
 +    """Tensors to offload to CPU during forward pass and reload during backward pass.
-+    Choices: "dispatched_input", "expert_output".
-+    "dispatched_input": 
-+        This tensor is the output of pre_routed_experts_compute() and serves as 
-+        input to routed_experts_compute(). 
++    Choices: "dispatched_input", "pre_mlp_layernorm_output".
++    "dispatched_input": This tensor is the output of pre_routed_experts_compute() and 
++    serves as the input to routed_experts_compute(). It contains the token data that 
++    has been routed and prepared to be sent to individual experts.
++    "pre_mlp_layernorm_output": This tensor is the output of pre_mlp_layernorm and 
++    serves as the input to shared_experts_compute().
 +    """
 +    min_offloaded_tensor_size: int = 1024 * 1024
 +    """The minimum size of the tensor to be offloaded."""
@@ -106,7 +118,7 @@ index 147c5b23b..09268be0f 100644
      def __post_init__(self):
          """Python dataclass method that is used to modify attributes after initialization.
          See https://docs.python.org/3/library/dataclasses.html#post-init-processing for more
-@@ -824,6 +881,12 @@ class TransformerConfig(ModelParallelConfig):
+@@ -824,6 +886,12 @@ class TransformerConfig(ModelParallelConfig):
              if self.moe_token_dispatcher_type != "flex":
                  raise ValueError("DeepEP backend is only supported with flex token dispatcher.")
  
@@ -119,7 +131,7 @@ index 147c5b23b..09268be0f 100644
          if self.moe_token_dispatcher_type == "flex":
              if self.moe_pad_expert_input_to_capacity:
                  raise ValueError(
-@@ -890,6 +953,9 @@ class TransformerConfig(ModelParallelConfig):
+@@ -890,6 +958,9 @@ class TransformerConfig(ModelParallelConfig):
              raise ValueError(
                  f"CPU offloading can be done only for layers less than {self.num_layers}"
              )
@@ -129,7 +141,7 @@ index 147c5b23b..09268be0f 100644
  
          if self.cpu_offloading and self.pipeline_model_parallel_size > 1:
              raise ValueError(
-@@ -948,11 +1014,17 @@ class TransformerConfig(ModelParallelConfig):
+@@ -948,11 +1019,17 @@ class TransformerConfig(ModelParallelConfig):
                  allowed_modules = {
                      "core_attn",
                      "moe_act",
@@ -147,7 +159,7 @@ index 147c5b23b..09268be0f 100644
                  }
                  invalid_modules = set(self.recompute_modules) - allowed_modules
                  assert not invalid_modules, (
-@@ -987,6 +1059,18 @@ class TransformerConfig(ModelParallelConfig):
+@@ -987,6 +1064,18 @@ class TransformerConfig(ModelParallelConfig):
                      raise ValueError(
                          "shared_experts recompute cannot work with --moe-shared-expert-overlap."
                      )
@@ -166,7 +178,7 @@ index 147c5b23b..09268be0f 100644
  
              if self.fp8:
                  if "moe_act" in self.recompute_modules or "layernorm" in self.recompute_modules:
-@@ -1015,6 +1099,52 @@ class TransformerConfig(ModelParallelConfig):
+@@ -1015,6 +1104,63 @@ class TransformerConfig(ModelParallelConfig):
              if "moe" not in self.recompute_modules:
                  self.recompute_modules.append("moe")
  
@@ -204,7 +216,10 @@ index 147c5b23b..09268be0f 100644
 +            
 +            # Validate offload_tensors if specified
 +            if has_tensors:
-+                allowed_tensors = {"dispatched_input"}
++                allowed_tensors = {
++                    "dispatched_input",
++                    "pre_mlp_layernorm_output",
++                }
 +                invalid_tensors = set(self.offload_tensors) - allowed_tensors
 +                assert not invalid_tensors, (
 +                    f'Invalid choices for offload_tensors: {invalid_tensors}. '
@@ -215,11 +230,19 @@ index 147c5b23b..09268be0f 100644
 +                        "Offloading 'dispatched_input' is only supported when 'a2a_overlap_mlp' recomputation "
 +                        "is enabled. Please add 'a2a_overlap_mlp' to --recompute-modules."
 +                    )
++                if (
++                    "pre_mlp_layernorm_output" in self.offload_tensors
++                    and "a2a_overlap_mlp" not in self.recompute_modules
++                ):
++                    raise ValueError(
++                        "Offloading 'dispatched_input' is only supported when 'a2a_overlap_mlp' recomputation "
++                        "is enabled. Please add 'a2a_overlap_mlp' to --recompute-modules."
++                    )
 +
          if (
              self.num_layers_in_first_pipeline_stage is not None
              or self.num_layers_in_last_pipeline_stage is not None
-@@ -1601,6 +1731,9 @@ class MLATransformerConfig(TransformerConfig):
+@@ -1601,6 +1747,9 @@ class MLATransformerConfig(TransformerConfig):
      """Cache the low dimensional tensors for MLA rather than full KV cache.
         This is only for the dynamic inference backend and requires that 
         Flash MLA is installed."""
