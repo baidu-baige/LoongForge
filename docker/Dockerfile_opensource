@@ -1,0 +1,13 @@
+ARG BASE_IMAGE="nvcr.io/nvidia/pytorch:25.06-py3"
+FROM ${BASE_IMAGE}
+
+ARG COMPILE_ENV={{COMPILE_ENV}}
+
+ARG INSTALL_TransformerEngine_FLAG="true"
+
+ARG INSTALL_LEROBOT="false"
+
+RUN mkdir -p /workspace 
+COPY ./AIAK-Training-Omni /workspace/AIAK-Training-Omni
+RUN bash /workspace/AIAK-Training-Omni/docker/install_opensource.sh ${COMPILE_ENV} \
+    ${INSTALL_TransformerEngine_FLAG} ${INSTALL_LEROBOT}
