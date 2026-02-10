@@ -46,58 +46,33 @@ The project contains the following key directories:
 * `patches/Megatron-LM/` – patches for the community Megatron-LM
 * `patches/TransformerEngine/` – patches for the community TransformerEngine
 
-### 2.3 Apply patches
-**1. Clone upstream repositories**
+### 2.3 Automated Environment Setup
+We provide a helper script `setup_env.py` to automate the entire process, including cloning repositories, switching tags, applying patches, building TransformerEngine, and installing dependencies.
+
+**Important: Recommended versions:**
+- **Megatron-LM**: `0.15.0` (ensure the tag matches the remote repository, e.g., `core_v0.15.0`)
+- **TransformerEngine**: `2.9` (e.g., `v2.9`)
+
+**Usage:**
+
+Run the following command from the project root (replace tags with the actual versions you need):
 
 ```bash
-git clone https://github.com/NVIDIA/Megatron-LM.git
-git clone https://github.com/NVIDIA/TransformerEngine.git
+python setup_env.py --megatron-tag <MEGATRON_TAG> --te-tag <TE_TAG>
 ```
 
-**2. Switch to the required tag**
-
-**Important: Now we use the following specific versions:**
-- **Megatron-LM**: Use version `0.15.0`
-- **TransformerEngine**: Use version `2.9`
+**Example:**
 
 ```bash
-cd Megatron-LM
-git fetch --all --tags
-git checkout $tag -b aiak_$tag
-git restore .
-
-cd TransformerEngine
-git fetch --all --tags
-git checkout $tag -b aiak_$tag
-git restore .
+# Example for specific versions
+python setup_env.py --megatron-tag core_v0.15.0 --te-tag v2.9
 ```
 
-**The tag must match the version declared in the Dockerfile / README; otherwise the patches may fail or behave inconsistently.**
-
-**3. Apply the patches**
-
-```bash
-bash {AIAK-Training-Omni-path}/tools/apply_patches/apply_two_repo.sh \
-     {AIAK-Training-Omni-path}/patches/Megatron-LM {Megatron-LM-path}
-
-bash {AIAK-Training-Omni-path}/tools/apply_patches/apply_two_repo.sh \
-     {AIAK-Training-Omni-path}/patches/TransformerEngine {TransformerEngine-path}
-```
-
-The script `apply_two_repo.sh` applies the corresponding patch files to the upstream repositories. After patching, build TransformerEngine:
-
-```bash
-cd TransformerEngine
-git submodule update --init --recursive
-export NVTE_FRAMEWORK=pytorch         # optional
-pip3 install --no-build-isolation .   # build & install
-```
-
-**4. Install Omni dependencies**
-
-```bash
-cd AIAK-Training-Omni
-pip install -r requirements.txt
-```
+This script will automatically:
+1. Clone `Megatron-LM` and `TransformerEngine` if they don't exist.
+2. Checkout the specified tags and create local branches (`aiak_<tag>`).
+3. Apply AIAK-Omni patches to both repositories.
+4. Compile and install `TransformerEngine`.
+5. Install all python dependencies for `AIAK-Training-Omni`.
 
 All dependencies are now installed; you can run the training scripts under `AIAK-Training-Omni/examples/`.
