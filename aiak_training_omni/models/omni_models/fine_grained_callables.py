@@ -432,6 +432,9 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         attention_mask = node.chunk_state.attention_mask
         rotary_pos_emb = node.chunk_state.rotary_pos_emb
         packed_seq_params = node.chunk_state.packed_seq_params
+        rotary_pos_cos = node.chunk_state.rotary_pos_cos
+        rotary_pos_sin = node.chunk_state.rotary_pos_sin
+        sequence_len_offset = node.chunk_state.sequence_len_offset
 
         if layer.a2a_overlap_attn_recompute:
             def custom_forward(hidden_states, attention_mask, rotary_pos_emb, packed_seq_params):
@@ -439,10 +442,10 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
                     rotary_pos_emb=rotary_pos_emb,
-                    rotary_pos_cos=node.chunk_state.rotary_pos_cos,
-                    rotary_pos_sin=node.chunk_state.rotary_pos_sin,
+                    rotary_pos_cos=rotary_pos_cos,
+                    rotary_pos_sin=rotary_pos_sin,
                     packed_seq_params=packed_seq_params,
-                    sequence_len_offset=node.chunk_state.sequence_len_offset,
+                    sequence_len_offset=sequence_len_offset
                 )
                 return output_    
 
@@ -453,10 +456,16 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
                 rotary_pos_emb=rotary_pos_emb,
+                rotary_pos_cos=rotary_pos_cos,
+                rotary_pos_sin=rotary_pos_sin,
                 packed_seq_params=packed_seq_params,
+                sequence_len_offset=sequence_len_offset
             )
-        if "dispatched_input" in layer.config.offload_tensors:
-            hidden_states = fine_grained_offloading_group_start(hidden_states, name="dispatched_input")
+        if (
+            "dispatched_input" in layer.config.offload_tensors
+            or "pre_mlp_layernorm_output" in layer.config.offload_tensors
+        ):
+            hidden_states = fine_grained_offloading_group_start(hidden_states, name="dispatched-pre_mlp_layernorm")
 
         return hidden_states
 
@@ -542,7 +551,11 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                 return expert_output, shared_expert_output, mlp_bias
 
             maybe_set_offload_tag('dispatched_input', dispatched_input, layer.config)
-            with get_fine_grained_offloading_context('dispatched_input' in layer.config.offload_tensors):  
+            maybe_set_offload_tag('pre_mlp_layernorm_output', pre_mlp_layernorm_output, layer.config)
+            with get_fine_grained_offloading_context(
+                "dispatched_input" in layer.config.offload_tensors
+                or "pre_mlp_layernorm_output" in layer.config.offload_tensors
+            ):
                 expert_output, shared_expert_output, mlp_bias = tensor_parallel.checkpoint(
                     custom_forward, False, dispatched_input, tokens_per_expert, permuted_probs, pre_mlp_layernorm_output
                 )     
@@ -559,8 +572,15 @@ def build_transformer_layer_callables(layer: TransformerLayer):
             # as a gradient hook of expert_output
             layer.pre_mlp_norm_checkpoint.discard_output_and_register_recompute(expert_output)
 
-        if "dispatched_input" in layer.config.offload_tensors:
-            expert_output = fine_grained_offloading_group_commit(expert_output, name="dispatched_input")
+        if (
+            "dispatched_input" in layer.config.offload_tensors
+            or "pre_mlp_layernorm_output" in layer.config.offload_tensors
+        ):
+            expert_output = fine_grained_offloading_group_commit(
+                expert_output,
+                name="dispatched-pre_mlp_layernorm",
+                forced_released_tensors=[pre_mlp_layernorm_output],
+            )
         # release tensor reference after use
         node.layer_state.dispatched_probs = None
         node.layer_state.pre_mlp_layernorm_output = None
