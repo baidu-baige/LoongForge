@@ -277,13 +277,19 @@ function install_lerobot() {
     export GIT_SSL_NO_VERIFY=1
     
     cd /workspace
+    if [ -d "lerobot" ]; then
+        rm -rf lerobot
+    fi
     git clone https://github.com/huggingface/lerobot.git
     cd lerobot
     
     # 移除 evdev 依赖，避免编译错误
-    sed -i '/evdev/d' /workspace/lerobot/requirements-ubuntu.txt
+    if [ -f "requirements-ubuntu.txt" ]; then
+        sed -i '/evdev/d' requirements-ubuntu.txt
+    fi
     
-    pip install --no-build-isolation .
+    # install [pi] extras
+    pip install --no-build-isolation ".[pi]"
 }
 
 
@@ -299,6 +305,7 @@ COMPILE_ENV=$1
 BINARY_REPLACE=$2
 INSTALL_TransformerEngine_FLAG=$3
 MEGATRON_TYPE=$4
+INSTALL_LEROBOT=${5:-"false"}
 
 echo "Received COMPILE_ENV: ${COMPILE_ENV}"
 
@@ -319,7 +326,11 @@ if  [[ "$MEGATRON_TYPE" == "community" ]];then apply_megatron; fi
 
 
 # 安装lerobot
-install_lerobot
+if [[ "$INSTALL_LEROBOT" == "true" ]]; then
+    install_lerobot
+else
+    echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"
+fi
 
 
 # 简化jupyter安装
