@@ -17,6 +17,11 @@ from aiak_training_omni.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core.transformer.module import MegatronModule
+from aiak_training_omni.train.initialize import (
+    mpu,
+    change_parallel_state, 
+    get_encoder_dp_size,
+)
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_init_chunk_handler,
 )
@@ -63,6 +68,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 allow_missing_adapter_checkpoint=allow_missing_adapter_checkpoint,
                 vp_stage=vp_stage,
             )
+            self.vit_contexts = {}
         else:
             self.encoder_model = None
 
@@ -190,6 +196,10 @@ class OmniCombinationModel(BaseMegatronModule):
         inference_params: InferenceParams = None,
         visual_pos_masks: Optional[list[Tensor]] = None,
         deepstack_visual_embeds: Optional[list[Tensor]] = None,
+        enable_encoder_hetero_dp: bool = False,
+        batch_list: Optional[list] = None,
+        forward_group_id: Optional[int] = None,
+        inner_group_id: Optional[int] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Forward pass supporting multiple execution paths.
@@ -200,7 +210,8 @@ class OmniCombinationModel(BaseMegatronModule):
             3. Offline foundation model: use preprocessed output_embeddings
             4. Decoder only: freeze encoder and foundation
         """
-        
+        _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
+
         if self.config.fine_grained_activation_offloading:
             self.preprocess_for_fine_grained_offloading()
 
@@ -211,22 +222,129 @@ class OmniCombinationModel(BaseMegatronModule):
         if use_inference_kv_cache:
             vision_embeddings = None
         elif self.add_encoder:
-            combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = self.encoder_model(
-                input_ids=input_ids,
-                position_ids=position_ids,
-                image_inputs=image_inputs,
-                video_inputs=video_inputs,
-                inference_params=inference_params,
-            )
+            if not enable_encoder_hetero_dp:
+                combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = self.encoder_model(
+                    input_ids=input_ids,
+                    position_ids=position_ids,
+                    image_inputs=image_inputs,
+                    video_inputs=video_inputs,
+                    inference_params=inference_params,
+                    enable_encoder_hetero_dp=enable_encoder_hetero_dp,
+                )
 
-            if self.config.context_parallel_size > 1:
-                combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+                if self.config.context_parallel_size > 1:
+                    combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
 
-            if self.config.sequence_parallel:
-                combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
-            
+                if self.config.sequence_parallel:
+                    combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+            elif enable_encoder_hetero_dp and inner_group_id == 0:
+                batch_id = mpu.get_tensor_model_parallel_rank()
+
+                input_embeds_list = []
+                for i in range(_ImageEncoderDataParallelSize):
+                    input_embeds = self.encoder_model.text_forward(
+                        batch_list[i]["tokens"], 
+                        batch_list[i]["position_ids"]
+                    )
+                    input_embeds_list.append(input_embeds)
+
+                (
+                    local_images,
+                    local_image_grid_thw,
+                    local_pixel_values_videos,
+                    local_video_grid_thw,
+                    local_input_ids,
+                    local_attn_mask,
+                    local_labels,
+                    local_cu_lengths,
+                    local_max_lengths,
+                    local_position_ids,
+                    local_loss_mask,
+                    local_packed_seq_params,
+                ) = batch_list[batch_id].values()
+
+                combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = self.encoder_model(
+                    input_ids=local_input_ids,
+                    position_ids=local_position_ids,
+                    image_inputs=dict(
+                        images=local_images,
+                        image_grid_thw=local_image_grid_thw,
+                    ) if local_images is not None else None,
+                    video_inputs=dict(
+                        pixel_values_videos=local_pixel_values_videos,
+                        video_grid_thw=local_video_grid_thw,
+                    ) if local_pixel_values_videos is not None else None,
+                    inference_params=inference_params,
+                    inputs_embeds=input_embeds_list[batch_id],
+                    enable_encoder_hetero_dp=enable_encoder_hetero_dp,
+                )
+
+                if self.config.context_parallel_size > 1:
+                    combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+                if self.config.sequence_parallel:
+                    combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+
+                self.vit_contexts.setdefault(forward_group_id, {
+                    "local_embedding": combined_embeddings,
+                    "grads": None,
+                })
         if not self.pre_process:
             combined_embeddings = None
+
+        if mpu.is_pipeline_first_stage() and enable_encoder_hetero_dp:
+            group = mpu.get_tensor_model_parallel_group()
+            src = torch.distributed.get_global_rank(group, inner_group_id)
+            local_rank = torch.distributed.get_rank()
+
+            if local_rank == src:
+                shape = torch.tensor(
+                    self.vit_contexts[forward_group_id]["local_embedding"].shape, 
+                    dtype=torch.long, 
+                    device='cuda'
+                )
+            else:
+                shape = torch.zeros(3, dtype=torch.long, device='cuda')
+            
+            torch.distributed.broadcast(shape, group=group, src=src)
+
+            if local_rank == src:
+                combined_embeddings = (
+                    self.vit_contexts[forward_group_id]["local_embedding"]
+                    .detach()
+                    .requires_grad_(True)
+                )
+            else:
+                combined_embeddings = torch.zeros(
+                    tuple(shape.tolist()), 
+                    dtype=self.vit_contexts[forward_group_id]["local_embedding"].dtype, 
+                    device='cuda'
+                ).requires_grad_(True)
+
+            torch.distributed.broadcast(combined_embeddings, group=group, src=src)
+
+            def vit_grad_hook_factory(forward_group_id, inner_group_id, vit_contexts):
+                def hook(grad):
+                    ctx = vit_contexts[forward_group_id]
+                    tp_id = mpu.get_tensor_model_parallel_rank()
+                    if tp_id == inner_group_id:
+                        ctx["grads"] = grad.clone()
+
+                    if inner_group_id == _ImageEncoderDataParallelSize - 1:
+                        ctx["local_embedding"].backward(
+                            gradient=ctx["grads"], 
+                            inputs=list(self.encoder_model.parameters())
+                        )
+                        del vit_contexts[forward_group_id]
+                        
+                return hook
+
+            combined_embeddings.register_hook(
+                vit_grad_hook_factory(forward_group_id, 
+                                    inner_group_id, 
+                                    self.vit_contexts
+                )
+            )
 
         output = self.foundation_model(
             input_ids=None,

@@ -415,6 +415,7 @@ class OmniEncoderModel(torch.nn.Module):
         video_inputs: Optional[Dict[str, torch.Tensor]] = None,
         audio_inputs: Optional[Dict[str, torch.Tensor]] = None,
         inference_params: Optional[Dict] = None,
+        enable_encoder_hetero_dp: Optional[bool] = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward pass for the OmniEncoderModel.
@@ -434,7 +435,7 @@ class OmniEncoderModel(torch.nn.Module):
                 - Combined embeddings tensor
                 - Dictionary of decoder inputs
         """
-        if self.text_encoder is not None and input_ids is not None:
+        if self.text_encoder is not None and input_ids is not None and not enable_encoder_hetero_dp:
             input_embeds = self.text_forward(input_ids, position_ids)
         else:
             input_embeds = kwargs.get("inputs_embeds")

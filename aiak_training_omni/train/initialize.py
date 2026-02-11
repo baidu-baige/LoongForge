@@ -46,6 +46,22 @@ import inspect
 _ParallelStatesDict = {}
 _CurrentParallelStateModel = "defaults"
 _DecoderTensorParallelSize = 1
+_ImageEncoderDataParallelSize = 1
+_VideoEncoderDataParallelSize = 1
+_AudioEncoderDataParallelSize = 1
+
+def get_encoder_dp_size(name):
+    """
+    Get the data parallel size of the encoder.
+    """
+    if name == 'image_encoder':
+        return _ImageEncoderDataParallelSize
+    elif name == 'video_encoder':
+        return _VideoEncoderDataParallelSize
+    elif name == 'audio_encoder':
+        return _AudioEncoderDataParallelSize
+    else:
+        raise ValueError(f'Unknown encoder type: {name}')
 
 def change_parallel_state(module_name):
     """
@@ -76,7 +92,7 @@ def save_parallel_state(module_name):
     }
     _ParallelStatesDict.setdefault(module_name, {}).update(state_snapshot)
 
-def create_parallel_state(module_name, tp_size=0):
+def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False):
     """
     Create the parallel state of the model and save it
     """
@@ -84,6 +100,18 @@ def create_parallel_state(module_name, tp_size=0):
         tp_size = _DecoderTensorParallelSize
     assert tp_size <= _DecoderTensorParallelSize and _DecoderTensorParallelSize % tp_size == 0
     mpu.destroy_model_parallel()
+
+    if enable_encoder_hetero_dp:
+        assert tp_size == 1, f"encoder_tp_size must be 1 when enable_encoder_hetero_dp is True, but got {tp_size}"
+        if module_name == "image_encoder":
+            global _ImageEncoderDataParallelSize
+            _ImageEncoderDataParallelSize = _DecoderTensorParallelSize // tp_size
+        elif module_name == "video_encoder":
+            global _VideoEncoderDataParallelSize
+            _VideoEncoderDataParallelSize = _DecoderTensorParallelSize // tp_size
+        elif module_name == "audio_encoder":
+            global _AudioEncoderDataParallelSize
+            _AudioEncoderDataParallelSize = _DecoderTensorParallelSize // tp_size
 
     initialize_model_parallel(
         tensor_model_parallel_size=tp_size,
@@ -173,11 +201,23 @@ def initialize_aiak_megatron(
         from megatron.training import print_rank_0
         print_rank_0(f"model_config: {model_config}")
         if hasattr(model_config, "image_encoder") and model_config.image_encoder is not None:
-            create_parallel_state('image_encoder', model_config.image_encoder.tensor_model_parallel_size)
+            create_parallel_state(
+                'image_encoder', 
+                model_config.image_encoder.tensor_model_parallel_size, 
+                args.enable_encoder_hetero_dp
+            )
         if hasattr(model_config, "video_encoder") and model_config.video_encoder is not None:
-            create_parallel_state('video_encoder', model_config.video_encoder.tensor_model_parallel_size)
+            create_parallel_state(
+                'video_encoder', 
+                model_config.video_encoder.tensor_model_parallel_size, 
+                args.enable_encoder_hetero_dp
+            )
         if hasattr(model_config, "audio_encoder") and model_config.audio_encoder is not None:
-            create_parallel_state('audio_encoder', model_config.audio_encoder.tensor_model_parallel_size)
+            create_parallel_state(
+                'audio_encoder', 
+                model_config.audio_encoder.tensor_model_parallel_size, 
+                args.enable_encoder_hetero_dp
+            )
 
         change_parallel_state('text_decoder')
 

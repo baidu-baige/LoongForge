@@ -3,6 +3,7 @@
 import os
 import torch
 from functools import partial
+import copy
 
 from megatron.training import get_timers
 
@@ -40,7 +41,7 @@ from aiak_training_omni.models.omni_models.omni_model_provider import (
 )
 from aiak_training_omni.models.omni_models.utils import get_batch_on_this_cp_rank
 from aiak_training_omni.train.get_loss_func import default_loss_func
-from aiak_training_omni.train.initialize import change_parallel_state
+from aiak_training_omni.train.initialize import change_parallel_state, get_encoder_dp_size
 
 stimer = StragglerDetector()
 
@@ -139,12 +140,30 @@ def get_batch(data_iterator):
 
     batch = get_batch_on_this_cp_rank(batch)
 
-    return batch.values()
+    return batch
 
 
 # define spiky loss as a loss that's 10x the max loss observed
 SPIKY_LOSS_FACTOR = 10
 
+batch_list = []
+forward_step_calling_count = 0
+
+def free_batch_list(batch_list):
+    """
+    Free the memory of the batch list.
+    """
+    for batch in batch_list:
+        if isinstance(batch, dict):
+            for k in list(batch.keys()):
+                v = batch[k]
+                if torch.is_tensor(v):
+                    del v
+                batch.pop(k)
+        del batch
+
+    batch_list.clear()
+    torch.cuda.empty_cache()
 
 def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
@@ -161,7 +180,22 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     change_parallel_state('text_decoder')
 
     global stimer
-    with stimer(bdata=True):
+    global forward_step_calling_count
+    global batch_list
+
+    _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
+    forward_group_id = forward_step_calling_count // _ImageEncoderDataParallelSize
+    inner_group_id = forward_step_calling_count % _ImageEncoderDataParallelSize
+    if inner_group_id == 0:
+        free_batch_list(batch_list)
+        with stimer(bdata=True):
+            for _ in range(_ImageEncoderDataParallelSize):
+                local_batch = copy.deepcopy(get_batch(data_iterator))
+                batch_list.append(local_batch)
+
+    timers("batch-generator").stop()
+
+    with stimer:
         (
             images,
             image_grid_thw,
@@ -175,13 +209,10 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
             position_ids,
             loss_mask,
             packed_seq_params,
-        ) = get_batch(data_iterator)
+        ) = batch_list[inner_group_id].values()
 
-    timers("batch-generator").stop()
+        loss_func = getattr(model_config, "loss_func", default_loss_func)
 
-    loss_func = getattr(model_config, "loss_func", default_loss_func)
-
-    with stimer:
         if return_schedule_plan:
             assert args.overlap_moe_expert_parallel_comm, \
                 "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
@@ -219,7 +250,13 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 attention_mask=attn_mask,
                 labels=labels,
                 packed_seq_params=packed_seq_params,
+                enable_encoder_hetero_dp=args.enable_encoder_hetero_dp,
+                batch_list=batch_list,
+                forward_group_id=forward_group_id,
+                inner_group_id=inner_group_id,
             )
+
+        forward_step_calling_count += 1
 
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 

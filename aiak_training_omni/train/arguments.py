@@ -843,4 +843,5 @@ def _add_extra_parallel_args(parser):
                        'Add by aiak for virtual pipeline layer imbalance.'
                        'For example 19,20,20,21. If we have two virtual chunks in one pp stage, '
                        '19 for stage0 virtual chunk0 layers, 20 for stage1 virtual chunk0 layers...')
+    group.add_argument('--enable-encoder-hetero-dp', default=False, action="store_true")
     return parser
