@@ -5,23 +5,24 @@ import os
 from dist_checkpoint.config.parallel_config import ParallelConfig
 from dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from omegaconf import OmegaConf
-from tools.convert_checkpoint.utils.config_utils import parse_at_configs, load_config, update_overwrite
+from convert_checkpoint.utils.config_utils import parse_at_configs, load_config, update_overwrite
 
-from tools.convert_checkpoint.common.common_config import CommonConfig
+from convert_checkpoint.common.common_config import CommonConfig
 
-def test_hf_to_mcore():
+def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks):
     parallel_config = ParallelConfig()
-    parallel_config.vpp_size = 2
+    parallel_config.vpp_size = vpp
     parallel_config.vpp_scheduler = None
-    parallel_config.tp_size = 2
-    parallel_config.pp_size = 2
+    parallel_config.tp_size = tp
+    parallel_config.pp_size = pp
     parallel_config.custom_pipeline_layers = None
     parallel_config.safetensors = True
     parallel_config.ep_size = None
-    parallel_config.pp_ranks = [1]
+    parallel_config.pp_ranks = pp_ranks
     parallel_config.ep_ranks = None
-    parallel_config.tp_ranks = [1]
+    parallel_config.tp_ranks = tp_ranks
     parallel_config.etp_ranks = None
+    parallel_config.moe_grouped_gemm = True
     config_file = os.environ.get('MODEL_CONFIG_FILE')
     convert_file = os.environ.get('CONVERT_FILE')
     ckpt_path = os.environ.get('LOAD')
@@ -93,11 +94,17 @@ def test_moe_hf_to_mcore():
 if __name__ == "__main__":
     test_model = os.environ.get('TEST_MODEL')
     if test_model == "mimo":
-        m_dict = test_hf_to_mcore()
-        for key in m_dict:
-            print(f"{key}: {m_dict[key].keys()}")
-    if test_model == "MiniMax":
+        m_dict = test_hf_to_mcore(2, 2, 2, [1], [0, 1])
+        for p in m_dict:
+            print(f"{p=}: {m_dict[p].keys()}")
+    if test_model == "qwen2":
+        m_dict = test_hf_to_mcore(2, 2, None, [1], [1])
+        for p in m_dict:
+            for t in m_dict[p]:
+                print(f"{p=}, {t=}: {m_dict[p][t]['model']['decoder.layers.0.mlp.linear_fc1.weight'].shape}")
+    if test_model == "qwen3moe":
         m_dict = test_moe_hf_to_mcore()
-        for key in m_dict:
-            for k in m_dict[key]:
-                print(f"{key}: {k}, {m_dict[key][k].keys()}")
+        for p in m_dict:
+            print(f"{p=}: {m_dict[p].keys()}")
+            for e in m_dict[p]:
+                print(f"{p=}: {e=}, {m_dict[p][e].keys()}")
