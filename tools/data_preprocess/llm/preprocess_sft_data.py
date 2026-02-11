@@ -40,7 +40,6 @@ def build_sft_dataset(args):
         ignore_index=constants.IGNORE_INDEX,
         eod_mask_loss=args.eod_mask_loss,
         history_mask_loss=args.history_mask_loss,
-        path_to_cache=None,
         is_tokenized=False,
         packing=args.packing_sft_data,
         sort_batch=args.sft_sort_batch,

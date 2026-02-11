@@ -44,6 +44,13 @@ function install_requirements() {
     # 仅保留AIAK-Training-Omni自身的requirements
     requirements_file="/workspace/AIAK-Training-Omni/requirements.txt"
 
+    if [[ "$COMPILE_ENV" == "p800" ]];then
+        requirements_file="/workspace/AIAK-Training-Omni/requirements_xpu.txt"
+
+        echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh
+        echo "source /etc/profile.d/alias.sh" >> ~/.bashrc
+    fi
+
     # 安装基础pip包（仅保留必要的）
     # 添加 --no-cache-dir 和 -q 避免进度条线程问题
     pip install -q --no-cache-dir wandb -i http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
@@ -300,6 +307,17 @@ function install_aihclite_jupyter() {
     chmod +x /root/.jupyter/enterpoint.sh
 }
 
+function download_xpytorch() {
+    # 为 p800 安装 xpytorch
+    local XPYTORCH_URL=$1
+    XPYTORCH_FILE=$(basename "${XPYTORCH_URL}")
+
+    echo "下载 xpytorch 安装包: ${XPYTORCH_URL}"
+    wget "${XPYTORCH_URL}"
+    bash "${XPYTORCH_FILE}"
+    rm "${XPYTORCH_FILE}"
+}
+
 # ======================== 参数解析（精简版） ========================
 COMPILE_ENV=$1
 BINARY_REPLACE=$2
@@ -309,11 +327,47 @@ INSTALL_LEROBOT=${5:-"false"}
 
 echo "Received COMPILE_ENV: ${COMPILE_ENV}"
 
+XPYTORCH_URL_ARG=""
+if [ -n "${5:-}" ]; then
+    XPYTORCH_URL_ARG=$5
+fi
+
 CURRENT_DIR=$(cd `dirname $0`; pwd)
 
 # ======================== 核心流程（仅保留基础环境） ========================
 
 # 仅安装基础环境，跳过二进制替换/加密/BCCL/TransformerEngine等
+
+# 如果是 p800 镜像，激活当前 conda 环境，download xpytorch
+if [[ "$COMPILE_ENV" == "p800" ]];then
+    . /root/miniconda/etc/profile.d/conda.sh
+    conda activate python310_torch25_cuda
+
+    if [[ -n "$XPYTORCH_URL_ARG" ]]; then
+        XPYTORCH_URL="$XPYTORCH_URL_ARG"
+        echo "使用指定的 xpytorch 版本: $XPYTORCH_URL"
+    else
+        xpytorch_info="/workspace/AIAK-Training-LLM/xpytorch_info.txt"
+
+        if [[ ! -f "$xpytorch_info" ]]; then
+            echo "xpytorch配置文件不存在: $xpytorch_info"
+            exit 1
+        fi
+
+        DEFAULT_XPYTORCH_URL=$(cat "$xpytorch_info" | tr -d '[:space:]')
+
+        if [[ -z "$DEFAULT_XPYTORCH_URL" ]]; then
+            echo "Error: xpytorch_info.txt 文件内容为空"
+            exit 1
+        fi
+
+        XPYTORCH_URL="$DEFAULT_XPYTORCH_URL"
+        echo "使用默认的 xpytorch 版本: $XPYTORCH_URL"
+    fi
+
+    download_xpytorch "$XPYTORCH_URL"
+fi
+
 if  [[ "$BINARY_REPLACE" == "false" ]];then
     install_base_env $COMPILE_ENV
 fi
