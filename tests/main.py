@@ -10,9 +10,11 @@
 from tools.arguments import parse_args
 from tools.color_logger import create_color_logger
 from tools.config_manager import ConfigManager
+from tasks.base_task import BaseTask
 from tqdm import tqdm
 import time
 import sys
+import os
 
 
 logger = create_color_logger(name=__name__)
@@ -103,6 +105,20 @@ def main() -> None:
         logger.info(f"Finish {model_name} test, {index + 1} / {total_scenarios_num}.\n")
 
     logger.info(f"Finish all jobs run ipipe from main.py.")
+
+    rank = os.getenv("RANK")
+    is_final_pod = False
+    if rank is not None:
+        try:
+            is_final_pod = int(rank) == int(args.node_nums) - 1
+        except Exception:
+            is_final_pod = False
+
+    if is_final_pod:
+        BaseTask.write_validation_summary()
+        if BaseTask.has_validation_failures():
+            logger.error("Validation failed: at least one case did not pass.")
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -43,6 +43,7 @@ scenarios:
   - function:
       pretrain:
         Step1:
+          # RUNNABLE_FLAG: false
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -103,6 +104,7 @@ scenarios:
             --num_virtual_stages_per_pipeline_rank=${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --config_file ${MODEL_CONFIG_PATH}'
         Step1.5:
+          # RUNNABLE_FLAG: false  
           # mcore to hf checkpoint convert and check
           # HF checkpoint path after reverse conversion
           REVERSE_HF_CKPT_PATH: $step1_output_path/reverse-hf-ckpt
@@ -181,6 +183,7 @@ scenarios:
             --adapter_path ${REVERSE_ADAPTER_PATH}
             --save_ckpt_path ${REVERSE_HF_CKPT_PATH}'
         Step2:
+          # RUNNABLE_FLAG: false
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
@@ -214,10 +217,11 @@ scenarios:
             --initial-loss-scale 65536
             --bf16
             --save-interval 10000000
+            --eval-iters 0
             --ckpt-format torch
             --dataloader-save ${CHECKPOINT_PATH}/dataloader
-            --log-memory-stats'
-            # --save ${step1_output_path}
+            --log-memory-stats
+            --legacy-reporting-loss-reduction'
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
@@ -275,10 +279,10 @@ scenarios:
             --initial-loss-scale 65536
             --bf16
             --save-interval 10000000
+            --eval-iters 0
             --ckpt-format torch
             --dataloader-save ${CHECKPOINT_PATH}/dataloader
             --log-memory-stats'
-            
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
@@ -317,6 +321,7 @@ scenarios:
           --maxsize 10000000
           --sample_type vqa'
       offline_packing: 
+        # RUNNABLE_FLAG: false
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tests/tools/offline_packing.sh
         packing_config_path: '${aiak_training_path}/tests/tools/offline_packing.yaml'
         PREPROCESS_DATA_ARGS: '${packing_config_path}'

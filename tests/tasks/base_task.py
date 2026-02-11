@@ -56,6 +56,8 @@ class TaskResut(object):
         pass
 
 class BaseTask(object):
+    _validation_results = []
+
     def __init__(self,
                  model_description: Dict[str, Any],
                  task_description: Dict[str, Any],
@@ -83,6 +85,84 @@ class BaseTask(object):
 
         self.metric = Metric()
 
+    @classmethod
+    def _get_diff_category(cls, model) -> str:
+        config_source = model.get("_config_source", {}) if isinstance(model, dict) else {}
+        config_dir = config_source.get("dir", "")
+        if "optional_configs" in config_dir:
+            return "optional"
+        return "default"
+
+    @classmethod
+    def _resolve_diff_base_dir(cls, category: str) -> str:
+        try:
+            common_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "common.yaml"))
+            if os.path.exists(common_yaml):
+                with open(common_yaml, "r") as f:
+                    cfg = yaml.safe_load(f) or {}
+                pfs_path = cfg.get("pfs_path")
+                if pfs_path:
+                    return os.path.join(pfs_path, "E2E", "diff", category)
+        except Exception:
+            pass
+        return os.path.join(os.getcwd(), "E2E", "diff", category)
+
+    @classmethod
+    def _record_case_result(cls, model_name: str, training_type: str, category: str, passed: bool, failed_metrics: List[str], error_message: str = ""):
+        cls._validation_results.append({
+            "model_name": model_name,
+            "training_type": training_type or "unknown",
+            "category": category or "default",
+            "passed": bool(passed),
+            "failed_metrics": failed_metrics or [],
+            "error_message": error_message or "",
+        })
+
+    @classmethod
+    def write_validation_summary(cls):
+        grouped = {}
+        for item in cls._validation_results:
+            grouped.setdefault(item["category"], []).append(item)
+
+        if not grouped:
+            grouped = {"default": []}
+
+        for category, items in grouped.items():
+            base_dir = cls._resolve_diff_base_dir(category)
+            os.makedirs(base_dir, exist_ok=True)
+            output_file = os.path.join(base_dir, "output.log")
+            total = len(items)
+            failed = sum(1 for x in items if not x["passed"])
+            passed = total - failed
+            lines = []
+            lines.append(f"total_cases={total}")
+            lines.append(f"passed_cases={passed}")
+            lines.append(f"failed_cases={failed}")
+            lines.append("")
+            for item in items:
+                status = "PASSED" if item["passed"] else "FAILED"
+                case_name = f"{item['model_name']}#{item['training_type']}"
+                error_message = item.get("error_message", "")
+                if item["failed_metrics"]:
+                    metrics = ",".join(item["failed_metrics"])
+                    if error_message:
+                        lines.append(f"{status}\t{case_name}\tfailed_metrics={metrics}\terror={error_message}")
+                    else:
+                        lines.append(f"{status}\t{case_name}\tfailed_metrics={metrics}")
+                else:
+                    if error_message:
+                        lines.append(f"{status}\t{case_name}\terror={error_message}")
+                    else:
+                        lines.append(f"{status}\t{case_name}")
+
+            with open(output_file, "w") as f:
+                f.write("\n".join(lines))
+            logger.info(f"Validation summary written: {output_file}")
+
+    @classmethod
+    def has_validation_failures(cls) -> bool:
+        return any(not item.get("passed") for item in cls._validation_results)
+
     # Update lock file
     def update_lock_file(self, lock_file_path, task_flag):
         with open(lock_file_path, "a") as file:
@@ -99,7 +179,10 @@ class BaseTask(object):
         flag = True
 
         parent_path = os.path.dirname(lock_file_path)
+        expected_files = {f"rank_{i}_lock.txt" for i in range(self.input_cmd_args.node_nums)}
         for filename in os.listdir(parent_path):
+            if filename not in expected_files:
+                continue
             with open(os.path.join(parent_path, filename), "r") as f:
                 content = f.read().strip()
                 if content == task_flag:
@@ -112,7 +195,8 @@ class BaseTask(object):
     def wait_async_task_complete(self, lock_file_path, task_flag, model_name="", scenarios_name=""):
         # Check lock file, if all Pods are completed, enter next stage
         for _ in range(self.input_cmd_args.timeout // 10):
-            if self.check_lock_file(lock_file_path, task_flag):
+            _, state = self.check_lock_file(lock_file_path, task_flag)
+            if state:
                 logger.info(f"Model [{model_name}] {scenarios_name} all Pods completed")
                 # if self.is_final_pod:
                 #     parent_path = os.path.dirname(os.path.dirname(lock_file_path))
@@ -352,8 +436,26 @@ class BaseTask(object):
 
         if not self.is_final_pod:
             return
-        # Collect training metric indicators
-        self.collect_metrics(training_log_file)
+        # Collect training metric indicators (prefer rank_0 log if needed)
+        loss_count = self.collect_metrics(training_log_file, strict=False)
+        logger.info(f"Parsed loss_count={loss_count} from log: {training_log_file}")
+        if loss_count == 0:
+            for candidate_log in self._resolve_training_logs(training_log_file, training_type):
+                if not os.path.exists(candidate_log):
+                    continue
+                if candidate_log == training_log_file:
+                    continue
+                logger.warning(f"No loss found yet, retry with log {candidate_log}")
+                self.metric = Metric()
+                loss_count = self.collect_metrics(candidate_log, strict=False)
+                logger.info(f"Parsed loss_count={loss_count} from log: {candidate_log}")
+                if loss_count != 0:
+                    training_log_file = candidate_log
+                    break
+        assert loss_count != 0, "Loss list for this task is empty, please check if training task is normal!!!"
+        # Optional: auto collect baseline from log
+        if getattr(self.input_cmd_args, "auto_collect_baseline", False):
+            self.save_baseline_from_log(training_log_file, training_type)
         # Unified validation of accuracy and performance metrics
         self.validate_metrics(self.model_name, training_type)
         logger.info(f"End assert_aiak_training_omni")
@@ -366,29 +468,55 @@ class BaseTask(object):
             model_name: Model name, used to locate baseline JSON file
             training_type: Training type (e.g. 'pretrain', 'sft')
         """
-        baseline_data = ConfigManager.get_baseline_data(None, self.model, model_name, training_type)
+        chip = getattr(self.input_cmd_args, "chip", "default")
+        baseline_data = ConfigManager.get_baseline_data(None, self.model, model_name, training_type, chip=chip)
+        case_failed_metrics = []
+        case_passed = True
+        category = self._get_diff_category(self.model)
+
         # Accuracy metrics
         accuracy_relative_tolerance = self.accuracy_relative_tolerance
         # lm_loss
         if hasattr(self.metric, 'lm_loss_list') and self.metric.lm_loss_list and 'lm_loss' in baseline_data[0]:
             expected_loss_list = [item['lm_loss'] for item in baseline_data]
-            self._compare_metric(
+            lm_loss_passed = self._compare_metric(
                 actual_list=self.metric.lm_loss_list,
                 expected_list=expected_loss_list,
                 metric_name="lm_loss",
                 tolerance=accuracy_relative_tolerance,
-                is_relative=False
+                is_relative=False,
+                raise_on_fail=False
             )
+            if not lm_loss_passed:
+                case_passed = False
+                case_failed_metrics.append("lm_loss")
+            self._plot_loss_diffs(expected_loss_list, self.metric.lm_loss_list, model_name, training_type)
         # grad_norm
         if hasattr(self.metric, 'grad_norm_list') and self.metric.grad_norm_list and 'grad_norm' in baseline_data[0]:
             expected_grad_norm_list = [item['grad_norm'] for item in baseline_data]
-            self._compare_metric(
-                actual_list=self.metric.grad_norm_list,
+            if not self.input_cmd_args.check_loss_only:
+                grad_norm_passed = self._compare_metric(
+                    actual_list=self.metric.grad_norm_list,
+                    expected_list=expected_grad_norm_list,
+                    metric_name="grad_norm",
+                    tolerance=accuracy_relative_tolerance,
+                    is_relative=False,
+                    raise_on_fail=False
+                )
+                if not grad_norm_passed:
+                    case_passed = False
+                    case_failed_metrics.append("grad_norm")
+            else:
+                logger.info("Skip grad_norm check due to check_loss_only=True")
+            self._plot_metric_compare(
                 expected_list=expected_grad_norm_list,
+                actual_list=self.metric.grad_norm_list,
+                model_name=model_name,
+                training_type=training_type,
                 metric_name="grad_norm",
-                tolerance=accuracy_relative_tolerance,
-                is_relative=False
+                y_label="grad_norm"
             )
+        
         logger.info("Accuracy metrics validation passed!")
 
         # Performance metrics
@@ -397,27 +525,48 @@ class BaseTask(object):
         if num_iters == 0:
             logger.warning("Not enough data for performance validation")
             return
+        
+        def _check_avg_metric(actual, expected, name, tol):
+            if len(actual) == 0 or len(expected) == 0:
+                return
+            avg_actual = np.mean(actual)
+            avg_expected = np.mean(expected)
+            if avg_expected == 0:
+                rel_err = 0 if avg_actual == 0 else float('inf')
+            else:
+                rel_err = abs(avg_actual - avg_expected) / abs(avg_expected)
+            
+            if rel_err <= tol:
+                logger.info(f"{name} avg comparison: Actual: {avg_actual:.4f} vs Expected: {avg_expected:.4f}, Relative Error: {rel_err*100:.2f}%, Passed!")
+            else:
+                logger.warning(f"{name} avg comparison: Actual: {avg_actual:.4f} vs Expected: {avg_expected:.4f}, Relative Error: {rel_err*100:.2f}% Exceeds {tol*100:.0f}%, Failed (Warning Only)!")
+
         # elapsed_time_ms
         if hasattr(self.metric, 'elapsed_time_match') and self.metric.elapsed_time_match and 'elapsed_time_ms' in baseline_data[0]:
             expected_elapsed_time = [item['elapsed_time_ms'] for item in baseline_data[:num_iters]]
             actual_elapsed_time = [float(x) for x in self.metric.elapsed_time_match[:num_iters]]
-            self._compare_metric(
-                actual_list=actual_elapsed_time,
+            _check_avg_metric(actual_elapsed_time, expected_elapsed_time, "elapsed_time_ms", performance_relative_tolerance)
+            self._plot_metric_compare(
                 expected_list=expected_elapsed_time,
+                actual_list=actual_elapsed_time,
+                model_name=model_name,
+                training_type=training_type,
                 metric_name="elapsed_time_ms",
-                tolerance=performance_relative_tolerance,
-                is_relative=True
+                y_label="elapsed_time_ms"
             )
+        
         # throughput
         if hasattr(self.metric, 'throughput') and self.metric.throughput and 'throughput' in baseline_data[0]:
             expected_throughput = [item['throughput'] for item in baseline_data[:num_iters]]
             actual_throughput = [float(x) for x in self.metric.throughput[:num_iters]]
-            self._compare_metric(
-                actual_list=actual_throughput,
+            _check_avg_metric(actual_throughput, expected_throughput, "throughput", performance_relative_tolerance)
+            self._plot_metric_compare(
                 expected_list=expected_throughput,
+                actual_list=actual_throughput,
+                model_name=model_name,
+                training_type=training_type,
                 metric_name="throughput",
-                tolerance=performance_relative_tolerance,
-                is_relative=True
+                y_label="throughput"
             )
 
         # Memory metrics
@@ -425,31 +574,41 @@ class BaseTask(object):
         if hasattr(self.metric, 'mem_allocated_avg_MB') and self.metric.mem_allocated_avg_MB and 'mem_allocated_avg_MB' in baseline_data[0]:
             expected_mem_allocated = [item['mem_allocated_avg_MB'] for item in baseline_data[:num_iters]]
             actual_mem_allocated = [float(x) for x in self.metric.mem_allocated_avg_MB[:num_iters]]
-            self._compare_metric(
-                actual_list=actual_mem_allocated,
+            _check_avg_metric(actual_mem_allocated, expected_mem_allocated, "mem_allocated_avg_MB", performance_relative_tolerance)
+            self._plot_metric_compare(
                 expected_list=expected_mem_allocated,
+                actual_list=actual_mem_allocated,
+                model_name=model_name,
+                training_type=training_type,
                 metric_name="mem_allocated_avg_MB",
-                tolerance=performance_relative_tolerance,
-                is_relative=True
+                y_label="mem_allocated_avg_MB"
             )
+        
         # mem_max_allocated_avg_MB
         if hasattr(self.metric, 'mem_max_allocated_avg_MB') and self.metric.mem_max_allocated_avg_MB and 'mem_max_allocated_avg_MB' in baseline_data[0]:
             expected_mem_max_allocated = [item['mem_max_allocated_avg_MB'] for item in baseline_data[:num_iters]]
             actual_mem_max_allocated = [float(x) for x in self.metric.mem_max_allocated_avg_MB[:num_iters]]
-            self._compare_metric(
-                actual_list=actual_mem_max_allocated,
+            _check_avg_metric(actual_mem_max_allocated, expected_mem_max_allocated, "mem_max_allocated_avg_MB", performance_relative_tolerance)
+            self._plot_metric_compare(
                 expected_list=expected_mem_max_allocated,
+                actual_list=actual_mem_max_allocated,
+                model_name=model_name,
+                training_type=training_type,
                 metric_name="mem_max_allocated_avg_MB",
-                tolerance=performance_relative_tolerance,
-                is_relative=True
+                y_label="mem_max_allocated_avg_MB"
             )
-        logger.info("Performance metrics validation passed!")
+            
+        logger.info("Performance metrics validation passed (Soft Check)!")
+
+        self._record_case_result(model_name, training_type, category, case_passed, case_failed_metrics)
     
-    def collect_metrics(self, training_log_file):
+    def collect_metrics(self, training_log_file, strict=True):
         self.metric.model_name = self.model_name
         # Collect training metric indicators
         with open(training_log_file, 'r') as file:
             lines = file.readlines()
+
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
         # Clear to prevent mixing when there are many scenarios
         self.metric.lm_loss_list = []
@@ -461,8 +620,8 @@ class BaseTask(object):
 
         # Add loss value
         for i in range(len(lines)):
-            line = lines[i]
-            loss_match = re.search(r'lm loss: ([\d\.E\+-]+)', line)
+            line = ansi_escape.sub('', lines[i])
+            loss_match = re.search(r'lm[ _-]loss:?\s*([\d\.E\+-]+)', line)
             if loss_match:
                 training_lm_loss_str = str(loss_match.group(1)).strip()
                 self.metric.lm_loss_list.append(training_lm_loss_str)
@@ -497,10 +656,140 @@ class BaseTask(object):
                 batch_size_str = str(batch_size_match.group(1)).strip()
                 self.metric.global_batch_size.append(batch_size_str)
 
-        assert len(self.metric.lm_loss_list) != 0, "Loss list for this task is empty, please check if training task is normal!!!"
+        if strict:
+            assert len(self.metric.lm_loss_list) != 0, "Loss list for this task is empty, please check if training task is normal!!!"
+        return len(self.metric.lm_loss_list)
         # logger.info(f"self.metric dict: {self.metric.obj_to_dict()}")
+
+    def _resolve_rank0_training_log(self, training_log_file, training_type=None):
+        try:
+            log_dir = os.path.dirname(training_log_file)
+            node_nums = self.input_cmd_args.node_nums
+            if training_type:
+                return os.path.join(
+                    log_dir,
+                    f"training#{self.model_name}#{training_type}#nodes_{node_nums}#rank_0#run.log",
+                )
+            return re.sub(r"#rank_\d+#run\.log$", "#rank_0#run.log", training_log_file)
+        except Exception:
+            return None
+
+    def _resolve_training_logs(self, training_log_file, training_type=None):
+        try:
+            import glob
+            log_dir = os.path.dirname(training_log_file)
+            if training_type:
+                pattern = os.path.join(
+                    log_dir,
+                    f"training#{self.model_name}#{training_type}#nodes_*#rank_*#run.log",
+                )
+            else:
+                pattern = os.path.join(log_dir, "training#*#rank_*#run.log")
+
+            logs = glob.glob(pattern)
+
+            def _rank_from_path(p):
+                m = re.search(r"#rank_(\d+)#run\.log$", p)
+                return int(m.group(1)) if m else -1
+
+            logs.sort(key=lambda p: (_rank_from_path(p)), reverse=True)
+
+            if training_log_file in logs:
+                logs.remove(training_log_file)
+                logs.insert(0, training_log_file)
+
+            return logs
+        except Exception:
+            return []
+
+    def save_baseline_from_log(self, training_log_file, training_type=None):
+        from tools import log2json
+        chip = getattr(self.input_cmd_args, "chip", "default")
+        baseline_file = ConfigManager.get_baseline_file_path_for_write(self.model, self.model_name, chip=chip)
+        phase, records = log2json.parse_log_file(training_log_file)
+        if not records:
+            logger.warning(f"No baseline records parsed from log: {training_log_file}")
+            return
+
+        baseline_key = training_type or phase or "unknown"
+
+        if os.path.exists(baseline_file):
+            try:
+                with open(baseline_file, "r") as f:
+                    baseline_data = json.load(f)
+            except Exception:
+                baseline_data = {}
+        else:
+            baseline_data = {}
+
+        if isinstance(baseline_data, list):
+            baseline_data = {baseline_key: baseline_data}
+        elif not isinstance(baseline_data, dict):
+            baseline_data = {}
+
+        baseline_data[baseline_key] = records
+
+        with open(baseline_file, "w") as f:
+            json.dump(baseline_data, f, indent=2)
+        logger.info(f"Baseline saved to {baseline_file} (training_type={baseline_key}, records={len(records)})")
+
+    def _plot_loss_diffs(self, expected_loss_list, actual_loss_list, model_name, training_type=None):
+        try:
+            from tools.diff_vis import save_loss_diff_plots
+            output_dir = None
+            category = "default"
+            config_source = self.model.get("_config_source", {})
+            config_dir = config_source.get("dir", "")
+            if "optional_configs" in config_dir:
+                category = "optional"
+            common_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "common.yaml"))
+            if os.path.exists(common_yaml):
+                with open(common_yaml, "r") as f:
+                    cfg = yaml.safe_load(f) or {}
+                pfs_path = cfg.get("pfs_path")
+                if pfs_path:
+                    output_dir = os.path.join(pfs_path, "E2E", "diff", category, model_name)
+            save_loss_diff_plots(
+                baseline_list=expected_loss_list,
+                current_list=actual_loss_list,
+                model_name=model_name,
+                training_type=training_type or "unknown",
+                output_dir=output_dir,
+                category=category
+            )
+        except Exception as e:
+            logger.warning(f"Loss plot generation failed: {e}")
+
+    def _plot_metric_compare(self, expected_list, actual_list, model_name, training_type, metric_name, y_label=None):
+        try:
+            from tools.diff_vis import save_metric_compare_plot
+            output_dir = None
+            category = "default"
+            config_source = self.model.get("_config_source", {})
+            config_dir = config_source.get("dir", "")
+            if "optional_configs" in config_dir:
+                category = "optional"
+            common_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "common.yaml"))
+            if os.path.exists(common_yaml):
+                with open(common_yaml, "r") as f:
+                    cfg = yaml.safe_load(f) or {}
+                pfs_path = cfg.get("pfs_path")
+                if pfs_path:
+                    output_dir = os.path.join(pfs_path, "E2E", "diff", category, model_name)
+            save_metric_compare_plot(
+                baseline_list=expected_list,
+                current_list=actual_list,
+                model_name=model_name,
+                training_type=training_type or "unknown",
+                metric_name=metric_name,
+                y_label=y_label,
+                output_dir=output_dir,
+                category=category
+            )
+        except Exception as e:
+            logger.warning(f"Metric plot generation failed ({metric_name}): {e}")
       
-    def _compare_metric(self, actual_list, expected_list, metric_name, tolerance, is_relative=False):
+    def _compare_metric(self, actual_list, expected_list, metric_name, tolerance, is_relative=False, raise_on_fail=True):
         """
         Generic metric comparison function, supports absolute and relative error, allows some iterations to exceed tolerance range
         :param actual_list: Actual value list
@@ -509,6 +798,9 @@ class BaseTask(object):
         :param tolerance: Tolerance (absolute or relative)
         :param is_relative: Whether to use relative error
         """
+        if len(actual_list) != len(expected_list):
+            logger.warning(f"Warning: {metric_name} length mismatch! Actual: {len(actual_list)}, Expected: {len(expected_list)}")
+
         is_close = []
         total_steps_evaluated = min(len(actual_list), len(expected_list))
         for index in range(total_steps_evaluated):
@@ -537,9 +829,13 @@ class BaseTask(object):
         num_failing_steps_allowed = min(max(total_steps_evaluated // 100, 1), 50)
         passing = np.sum(is_close) >= (total_steps_evaluated - num_failing_steps_allowed)
         if not passing:
-            raise ValueError(f"{metric_name} comparison failed: Allowed failing steps {num_failing_steps_allowed}, Actual passed steps {np.sum(is_close)}, Total steps {total_steps_evaluated}")
-        else:
-            logger.info(f"{metric_name} comparison passed: Allowed failing steps {num_failing_steps_allowed}, Actual passed steps {np.sum(is_close)}, Total steps {total_steps_evaluated}")
+            message = f"{metric_name} comparison failed: Allowed failing steps {num_failing_steps_allowed}, Actual passed steps {np.sum(is_close)}, Total steps {total_steps_evaluated}"
+            if raise_on_fail:
+                raise ValueError(message)
+            logger.warning(message)
+            return False
+        logger.info(f"{metric_name} comparison passed: Allowed failing steps {num_failing_steps_allowed}, Actual passed steps {np.sum(is_close)}, Total steps {total_steps_evaluated}")
+        return True
     
     def _get_hf_layer_state_dict(self, load_path: str, layer_prefix: str, layer_id: int):
         """

@@ -52,7 +52,6 @@ scenarios:
         Step2:
           MODEL_ARGS: '
             --model-name deepseek-v2-lite
-            --enable-fa-within-mla
             --norm-epsilon 1e-6
             --rotary-scaling-factor 40
             --mscale 0.707
@@ -85,6 +84,8 @@ scenarios:
             --eval-iters 0
             --no-load-optim
             --no-load-rng
+            --enable-experimental
+            --deterministic-mode
             --log-memory-stats'
             # --save ${step1_output_path}
           MOE_ARGS: '
@@ -93,6 +94,7 @@ scenarios:
             --moe-aux-loss-coeff 1e-3
             --moe-grouped-gemm'
           MODEL_PARALLEL_ARGS: '
+            --attention-backend unfused
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
             --expert-model-parallel-size ${EXPERT_MODEL_PARALLEL_SIZE}

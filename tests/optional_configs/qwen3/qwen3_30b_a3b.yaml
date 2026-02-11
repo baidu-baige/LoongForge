@@ -11,8 +11,8 @@ HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-30B-A3B
 PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/qwen3/pile_test/pile-qwen_text_document
 SFT_DATA_PATH: $scripts_root_path/datasets/llm/sft_aplaca_zh_data.json
 TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-30B-A3B
-CHECKPOINT_PATH: $step1_output_path
-TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/qwen3/$model_name
+TENSORBOARD_PATH: $pfs_path/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen3/qwen3_30b_a3b.yaml
 CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml
 
@@ -45,7 +45,7 @@ scenarios:
             --no_load_optim
             --moe-grouped-gemm'
         Step2:
-          # RUNNABLsE_FLAG: False
+          # RUNNABLE_FLAG: False
           MODEL_ARGS: '
             --model-name qwen3-30b-a3b
             --rotary-base 1000000
@@ -62,7 +62,7 @@ scenarios:
             --max-position-embeddings 40960
             --init-method-std 0.006
             --micro-batch-size 1
-            --global-batch-size 32
+            --global-batch-size 128
             --lr 1.0e-5
             --min-lr 1.0e-6
             --clip-grad 1.0
@@ -76,12 +76,12 @@ scenarios:
             --lr-decay-iters 50000
             --lr-decay-style cosine
             --lr-warmup-fraction 0.002
-            --initial-loss-scale ${initial_loss_scale}
+            --initial-loss-scale 65536
             --bf16
             --load $CHECKPOINT_PATH
             --save-interval 5000
             --eval-interval 1000
-            --eval-iters 10
+            --eval-iters 0
             --log-memory-stats'
           MOE_ARGS: '
             --moe-router-load-balancing-type aux_loss
@@ -139,7 +139,7 @@ scenarios:
             --load $CHECKPOINT_PATH
             --save-interval 500
             --eval-interval 100
-            --eval-iters 10'
+            --eval-iters 0'
           MOE_ARGS: '
             --moe-router-load-balancing-type aux_loss
             --moe-router-topk 8

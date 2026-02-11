@@ -1,27 +1,27 @@
-model_name: qwen3_vl_30b_a3b
+model_name: qwen2_5_vl_7b
 description: $model_name
-huggingface_path: https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct
-bos_path: bos:/ai-data/Qwen/Qwen3-VL-30B-A3B-Instruct
+huggingface_path: https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
+bos_path: bos:/ai-data/Qwen/Qwen2.5-VL-7B-Instruct
 TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True
 
 # aiak-training-omni training parameters
-HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct/  
-DATA_PATH: $pfs_path/omni_datasets/qwen3_vl/qwen3vl_30b_a3b_data/  
-TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct/
-CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/qwen3_vl/$model_name
+HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
+PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/qwen3_vl/demo/wds/
+SFT_DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/qwen3_vl/demo/wds/
+TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
+CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/qwen2.5_vl/$model_name
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
+MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 
 # ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 1
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 1
-PIPELINE_MODEL_PARALLER_SIZE: 2
-EXPERT_PARALLEL_SIZE: 8
-FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_qwen3vl.yaml
-IMAGE_ENCODER_CONVERT_FILE: $aiak_training_path/configs/models/image_encoder/ckpt_convert/qwen3_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE: $aiak_training_path/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
+PIPELINE_MODEL_PARALLER_SIZE: 1
+FOUNDATION_CONVERT_FILE: $aiak_training_path/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE: $aiak_training_path/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE: $aiak_training_path/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
 LANGUAGE_MODEL_PATH: $step1_output_path/language-mcore
 VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
 ADAPTER_PATH: $step1_output_path/adapter-mcore
@@ -44,13 +44,11 @@ scenarios:
             --convert_file=${FOUNDATION_CONVERT_FILE}
             --tensor_model_parallel_size=${DECODER_TENSOR_MODEL_PARALLER_SIZE}
             --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
-            --expert_parallel_size=${EXPERT_PARALLEL_SIZE}
             --load_ckpt_path=${HF_CKPT_PATH}
             --save_ckpt_path=${LANGUAGE_MODEL_PATH}
             --safetensors
             --no_save_optim
-            --no_load_optim
-            --moe-grouped-gemm'
+            --no_load_optim'
           VISION_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -93,24 +91,23 @@ scenarios:
             --encoder_tensor_model_parallel_size ${ENCODER_TENSOR_MODEL_PARALLER_SIZE}
             --decoder_tensor_model_parallel_size ${DECODER_TENSOR_MODEL_PARALLER_SIZE}
             --pipeline_model_parallel_size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --expert_parallel_size=${EXPERT_PARALLEL_SIZE}
             --save_ckpt_path ${CHECKPOINT_PATH}/release
             --config_file ${MODEL_CONFIG_PATH}'
         Step2:
-          # RUNNABLE_FLAG: False
+          # RUNNABLE_FLAG: false
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
-            --data-path $DATA_PATH
+            --data-path $PRETRAIN_DATA_PATH
             --dataloader-type external
             --split 100,0,0
+            --num-workers 16
             --add-question-in-pretrain
-            --enable-discard-sample
-            --num-workers 16'
+            --enable-discard-sample'
           TRAINING_ARGS: '
             --training-phase pretrain
-            --seq-length 32768
-            --max-position-embeddings 32768
+            --seq-length 1024
+            --max-position-embeddings 4096
             --init-method-std 0.02
             --micro-batch-size 1
             --global-batch-size 32
@@ -123,31 +120,21 @@ scenarios:
             --adam-beta2 0.95
             --adam-eps 1e-05
             --norm-epsilon 1e-6
-            --train-iters ${train_iters}
-            --eval-iters 0
+            --train-iters 20
             --lr-decay-iters 50000
             --lr-decay-style cosine
             --lr-warmup-fraction 0.002
+            --eval-iters 0
             --initial-loss-scale ${initial_loss_scale}
             --bf16
             --load $CHECKPOINT_PATH
             --save-interval 10000000
             --ckpt-format torch
-            --dataloader-save ${CHECKPOINT_PATH}/dataloader
             --log-memory-stats'
-          MOE_ARGS: '
-            --moe-router-load-balancing-type aux_loss
-            --moe-router-topk 8
-            --moe-aux-loss-coeff 1e-3
-            --moe-grouped-gemm
-            --moe-router-dtype fp32
-            --empty-unused-memory-level 2'
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --expert-model-parallel-size ${EXPERT_PARALLEL_SIZE}
-            --moe-token-dispatcher-type alltoall
             --use-distributed-optimizer
             --overlap-grad-reduce
             --overlap-param-gather
@@ -160,56 +147,46 @@ scenarios:
             --log-timers-to-tensorboard'
       sft:
         Step2:
-          # RUNNABLE_FLAG: False
           DATA_ARGS: '
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
-            --data-path $DATA_PATH
+            --data-path $SFT_DATA_PATH
             --dataloader-type external
             --split 100,0,0
             --num-workers 16
             --chat-template qwen2-vl'
           TRAINING_ARGS: '
             --training-phase sft
-            --seq-length 32768
-            --max-position-embeddings 32768
-            --init-method-std 0.006
+            --seq-length 1024
+            --max-position-embeddings 4096
+            --init-method-std 0.02
             --micro-batch-size 1
             --global-batch-size 32
-            --lr 6.0e-5
-            --min-lr 6.0e-5
+            --lr 0.0002
+            --min-lr 1.0e-5
             --clip-grad 1.0
-            --weight-decay 0.1
+            --weight-decay 0.01
             --optimizer adam
             --adam-beta1 0.9
             --adam-beta2 0.95
-            --adam-eps 1e-08
+            --adam-eps 1e-05
             --norm-epsilon 1e-6
-            --train-iters ${train_iters}
+            --train-iters 20
             --eval-iters 0
             --lr-decay-iters 50000
             --lr-decay-style cosine
-            --lr-warmup-iters 50
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale ${initial_loss_scale}
             --bf16
             --load $CHECKPOINT_PATH
             --save-interval 10000000
             --ckpt-format torch
             --dataloader-save ${CHECKPOINT_PATH}/dataloader
             --log-memory-stats'
-          MOE_ARGS: '
-            --moe-router-load-balancing-type aux_loss
-            --moe-router-topk 8
-            --moe-aux-loss-coeff 1e-3
-            --moe-grouped-gemm
-            --moe-router-dtype fp32
-            --empty-unused-memory-level 2
-            --moe-router-score-function sigmoid
-            --moe-token-dispatcher-type alltoall'
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
-            --expert-model-parallel-size ${EXPERT_PARALLEL_SIZE}
             --use-distributed-optimizer
             --overlap-grad-reduce
             --overlap-param-gather

@@ -182,6 +182,16 @@ def parse_args():
                         nargs='*',
                         default=[],
                         help="Additional models to run from optional_configs (e.g., 'internvl3.5/internvl3.5_30b_a3b').")
+    parser.add_argument("--check_loss_only",
+                        action='store_true',
+                        help="Only check lm_loss, ignore grad_norm.")
+    parser.add_argument("--chip",
+                        type=str,
+                        default="default",
+                        help="Specify the chip type for baseline check (e.g., A800, H800). Default is 'default' which uses the root baseline directory.")
+    parser.add_argument("--auto_collect_baseline",
+                        action='store_true',
+                        help="Automatically collect baseline from training logs and save into tests/baseline.")
 
     args = parser.parse_args()
     print_args(args)

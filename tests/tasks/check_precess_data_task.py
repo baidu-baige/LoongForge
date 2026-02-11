@@ -203,16 +203,27 @@ class PrecessDataCheckTask(BaseTask):
         if os.system(start_command) != 0:
            raise RuntimeError(f"Start {step_stage} {step_name} error, cmd is {start_command}")
         
+        def _assert_and_record_preprocess():
+            category = self._get_diff_category(self.model)
+            case_name = f"preprocess_data:{step_stage}"
+            try:
+                self.assert_preprocess_data(model_config=model_config, step_stage=step_stage)
+                self._record_case_result(model_name, case_name, category, True, [])
+                return True
+            except Exception as exc:
+                error_message = str(exc)
+                logger.error(f"Preprocess data check failed: {model_name} {case_name}, error: {error_message}")
+                self._record_case_result(model_name, case_name, category, False, [step_stage], error_message=error_message)
+                return False
+
         # Wait for all pods to complete
         self.wait_async_pod_complete(
             model_lock_file,
             model_name,
             f"{scenario_name}_{step_name}",
             is_function=True,
-            function=self.assert_preprocess_data,
-            raise_on_error=True,
-            model_config=model_config,
-            step_stage=step_stage,
+            function=_assert_and_record_preprocess,
+            raise_on_error=False,
         )
 
         logger.info(f"{step_stage} End {step_name}")
@@ -235,11 +246,15 @@ class PrecessDataCheckTask(BaseTask):
                     step_name = key
                     logger.info(f"{self.class_name} Model [{model_name}] - [{scenario_name}] - [{step_name}] Execution Start ...")
 
-                    self.start_aiak_preprocess_data(index, step_name, scenario_name)
-                    step_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step_name, self.master_addr, f"{self.rank_name}_lock.txt")
-                    self.wait_async_pod_complete(step_scenario_lock_file, model_name, f"{scenario_name}_{step_name}")
+                    runnable_flag = self.model["scenarios"][index][scenario_name][step_name].get("RUNNABLE_FLAG")
+                    if runnable_flag is None or (isinstance(runnable_flag, str) and runnable_flag.lower() == "true") or runnable_flag is True:
+                        self.start_aiak_preprocess_data(index, step_name, scenario_name)
+                        step_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step_name, self.master_addr, f"{self.rank_name}_lock.txt")
+                        self.wait_async_pod_complete(step_scenario_lock_file, model_name, f"{scenario_name}_{step_name}")
 
-                    logger.info(f"{self.class_name} Model [{model_name}] - [{scenario_name}] - [{step_name}] Completed \n")
+                        logger.info(f"{self.class_name} Model [{model_name}] - [{scenario_name}] - [{step_name}] Completed \n")
+                    else:
+                        logger.info(f"{self.class_name} Model [{model_name}] - [{scenario_name}] - [{step_name}] RUNNABLE_FLAG is false, skipping.\n")
 
                 logger.info(f"{self.class_name} Model [{model_name}] - [{scenario_name}] Execution End \n")
     
