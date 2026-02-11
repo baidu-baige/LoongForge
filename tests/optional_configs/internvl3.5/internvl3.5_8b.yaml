@@ -35,7 +35,7 @@ scenarios:
   - function:
       sft:
         Step1:
-          RUNNABLE_FLAG: "False"
+          RUNNABLE_FLAG: False
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -126,6 +126,7 @@ scenarios:
             --no-gradient-accumulation-fusion
             --load $CHECKPOINT_PATH
             --save-interval 2000
+            --eval-iters 0
             --exit-interval 500
             --dataloader-type external
             --variable-seq-lengths

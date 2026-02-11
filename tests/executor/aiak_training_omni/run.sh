@@ -8,6 +8,7 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export NCCL_ALGO=Ring
 export NVTE_ALLOW_NONDETERMINISTIC_ALGO=0
 export CUDA_DEVICE_MAX_CONNECTIONS=1
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 ############################################ Model Training Parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}

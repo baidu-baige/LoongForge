@@ -8,6 +8,7 @@ AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
+export AIAK_TRAINING_PATH
 export PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
 # Parse arguments

@@ -88,7 +88,6 @@ scenarios:
             --distributed-backend nccl
             --sequence-parallel
             --tp-comm-overlap
-            --tp-comm-overlap-bootstrap-backend nccl
             --overlap-cpu-optimizer-d2h-h2d
             --recompute-granularity full
             --recompute-method block

@@ -8,6 +8,7 @@ AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
+export AIAK_TRAINING_PATH
 export PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH
 
 CONVERT_ARGS=(
@@ -22,9 +23,9 @@ commands=()
 # VLM Model type detection function
 is_vlm_model() {
     local model=$1
-    if [[ "${model}" =~ "qwen2.5_vl" ]] || [[ "${model}" =~ "qwen2_vl" ]] || \
-       [[ "${model}" =~ "internvl" ]] || [[ "${model}" =~ "llavaov" ]] || \
-       [[ "${model}" =~ "qwen3_vl" ]]; then
+    if [[ "${model}" =~ "qwen2.5_vl" ]] || [[ "${model}" =~ "qwen2_5_vl" ]] || \
+       [[ "${model}" =~ "qwen2_vl" ]] || [[ "${model}" =~ "internvl" ]] || \
+       [[ "${model}" =~ "llavaov" ]] || [[ "${model}" =~ "qwen3_vl" ]]; then
         return 0
     fi
     return 1

@@ -20,7 +20,7 @@ CONVERT_FILE: $aiak_training_path/configs/models/llama2/ckpt_convert/llama2_conv
 TENSOR_MODEL_PARALLER_SIZE: 1
 PIPELINE_MODEL_PARALLER_SIZE: 1
 log_interval: 1
-initial_loss_scale: 65536
+initial_loss_scale: 1024
 global_batch_size: 64
 precision: fp16
 
@@ -78,7 +78,8 @@ scenarios:
             --save-interval 500
             --eval-interval 100
             --eval-iters 0
-            --log-memory-stats'
+            --log-memory-stats
+            --deterministic-mode'
           MODEL_PARALLEL_ARGS: '
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
@@ -93,7 +94,7 @@ scenarios:
   - preprocess_data:
       llm_sft:
         PREPROCESS_DATA_PATH: ${aiak_training_path}/tools/data_preprocess/llm/preprocess_sft_data.py
-        output_prefix: /workspace/pile_test_sft/$model_name
+        output_prefix: ${pfs_path}/pile_test_sft/$model_name
         train_json_file_name: '${DATA_PATH}/llm/sft_aplaca_zh_data.json'
         PREPROCESS_DATA_ARGS: '
           --input ${train_json_file_name}

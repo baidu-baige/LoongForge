@@ -122,12 +122,13 @@ class ConfigManager(object):
         return result
 
     @staticmethod
-    def get_baseline_file_path(model_config, model_name):
+    def get_baseline_file_path(model_config, model_name, chip="default"):
         """
         Get baseline file path. Select baseline from default or optional directory based on model source directory.
         Args:
             model_config: Model configuration dictionary
             model_name: Model name
+            chip: Chip type (e.g. A800, H800)
         Returns:
             Full path to the baseline file
         """
@@ -141,16 +142,83 @@ class ConfigManager(object):
             config_dir = config_source.get("dir", "")
             current_dir = os.path.dirname(os.path.abspath(__file__))
             baseline_root = os.path.join(current_dir, "..", "baseline")
+            
+            # Determine base path (default or optional)
             if "optional_configs" in config_dir:
-                baseline_file = os.path.join(baseline_root, "optional", f"{model_name}.json")
+                base_path = os.path.join(baseline_root, "optional")
             else:
-                baseline_file = os.path.join(baseline_root, "default", f"{model_name}.json")
+                base_path = os.path.join(baseline_root, "default")
+
+            # Determine final file path based on chip
+            if chip and chip != "default":
+                baseline_file = os.path.join(base_path, chip, f"{model_name}.json")
+                # Optional: You might want to fallback if specific chip file doesn't exist
+                # but explicit request usually implies strict check.
+            else:
+                baseline_file = os.path.join(base_path, f"{model_name}.json")
+
+        os.makedirs(os.path.dirname(baseline_file), exist_ok=True)
+
         if not os.path.exists(baseline_file):
             raise FileNotFoundError(f"Baseline file not found: {baseline_file}")
         return baseline_file
 
     @staticmethod
-    def get_baseline_data(self_unused, model_config, model_name, training_type=None):
+    def get_baseline_file_path_for_write(model_config, model_name, chip="default"):
+        """
+        Get baseline file path for writing. Creates directories if needed.
+        """
+        baseline_path = model_config.get("BASELINE_PATH")
+        if baseline_path and os.path.isdir(baseline_path):
+            baseline_file = os.path.join(baseline_path, f"{model_name}.json")
+        else:
+            config_source = model_config.get("_config_source", {})
+            config_dir = config_source.get("dir", "")
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            baseline_root = os.path.join(current_dir, "..", "baseline")
+
+            if "optional_configs" in config_dir:
+                base_path = os.path.join(baseline_root, "optional")
+            else:
+                base_path = os.path.join(baseline_root, "default")
+
+            if chip and chip != "default":
+                baseline_file = os.path.join(base_path, chip, f"{model_name}.json")
+            else:
+                baseline_file = os.path.join(base_path, f"{model_name}.json")
+
+        os.makedirs(os.path.dirname(baseline_file), exist_ok=True)
+        return baseline_file
+
+    @staticmethod
+    def get_baseline_file_path_for_write(model_config, model_name, chip="default"):
+        """
+        Get baseline file path for writing. Creates parent directories if needed.
+        """
+        baseline_path = model_config.get("BASELINE_PATH")
+        if baseline_path and os.path.isdir(baseline_path):
+            baseline_file = os.path.join(baseline_path, f"{model_name}.json")
+        else:
+            config_source = model_config.get("_config_source", {})
+            config_dir = config_source.get("dir", "")
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            baseline_root = os.path.join(current_dir, "..", "baseline")
+
+            if "optional_configs" in config_dir:
+                base_path = os.path.join(baseline_root, "optional")
+            else:
+                base_path = os.path.join(baseline_root, "default")
+
+            if chip and chip != "default":
+                baseline_file = os.path.join(base_path, chip, f"{model_name}.json")
+            else:
+                baseline_file = os.path.join(base_path, f"{model_name}.json")
+
+        os.makedirs(os.path.dirname(baseline_file), exist_ok=True)
+        return baseline_file
+
+    @staticmethod
+    def get_baseline_data(self_unused, model_config, model_name, training_type=None, chip="default"):
         """Get baseline data (for BaseTask calls)
         
         Args:
@@ -158,11 +226,12 @@ class ConfigManager(object):
             model_config: Model configuration dictionary
             model_name: Model name
             training_type: Training type (e.g. 'pretrain', 'sft')
+            chip: Chip type
         
         Returns:
             List of baseline data, where each element contains lm_loss, grad_norm, elapsed_time_ms, throughput
         """
-        baseline_file = ConfigManager.get_baseline_file_path(model_config, model_name)
+        baseline_file = ConfigManager.get_baseline_file_path(model_config, model_name, chip)
         
         with open(baseline_file, 'r') as f:
             data = json.load(f)

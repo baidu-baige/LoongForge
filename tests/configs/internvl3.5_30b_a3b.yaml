@@ -134,6 +134,7 @@ scenarios:
             --hidden-dropout 0
             --train-iters ${train_iters}
             --load $CHECKPOINT_PATH
+            --eval-iters 0
             --lr-decay-style cosine
             --lr-warmup-fraction 0.03
             --bf16

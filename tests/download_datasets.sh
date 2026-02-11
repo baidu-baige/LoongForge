@@ -3,10 +3,6 @@ set -e
 
 # Install bcecmd
 PFS_DIR="/workspace"
-# wget -P ${PFS_DIR} https://doc.bce.baidu.com/bos-optimization/linux-bcecmd-0.5.9.zip 
-# unzip -o "${PFS_DIR}/linux-bcecmd-0.5.9.zip" -d "${PFS_DIR}"
-# boscmd_dir="${PFS_DIR}/linux-bcecmd-0.5.9/bcecmd"
-# ln -sf /workspace/linux-bcecmd-0.5.9/bcecmd /usr/local/bin/bcecmd || true
 
 # Define bcecmd wrapper function with retry mechanism
 REAL_BCECMD="/usr/local/bin/bcecmd"
@@ -40,7 +36,6 @@ bcecmd() {
 
 # Parse arguments
 DOWNLOAD_MODE="default"
-AKSK_FILE=""
 
 for arg in "$@"; do
     case $arg in
@@ -51,22 +46,9 @@ for arg in "$@"; do
         DOWNLOAD_MODE="optional"
         ;;
         *)
-        if [ -z "$AKSK_FILE" ] && [[ "$arg" != --* ]]; then
-            AKSK_FILE="$arg"
-        fi
-        ;;
+            ;;
     esac
 done
-
-# Configure bcecmd (if AKSK file is provided)
-if [ -n "$AKSK_FILE" ] && [ -f "$AKSK_FILE" ]; then
-    echo "Configuring bcecmd with credentials from $AKSK_FILE"
-    AK=$(sed -n '1p' "$AKSK_FILE" | tr -d '\r\n ')
-    SK=$(sed -n '2p' "$AKSK_FILE" | tr -d '\r\n ')
-    
-    printf "%s\n%s\n\n\n" "$AK" "$SK" | bcecmd -c
-fi
-
 
 checkpoint_dir=${PFS_DIR}/megatron_checkpoint
 huggingface_dir=${PFS_DIR}/huggingface.co
@@ -87,7 +69,6 @@ if [ "$DOWNLOAD_MODE" == "default" ]; then
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/llama2/pile_test/ ${datasets_dir}/llama2/pile_test/
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/llama2_7b/tp1pp1  ${checkpoint_dir}/llama2_7b/
 
-
     # llama3_8b
     bcecmd bos sync bos:/ai-data/meta-llama/Meta-Llama-3-8B ${huggingface_dir}/meta-llama/Meta-Llama-3-8B
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/llama3_8b/tp2pp2/  ${checkpoint_dir}/llama3_8b/
@@ -100,7 +81,7 @@ if [ "$DOWNLOAD_MODE" == "default" ]; then
     # qwen2.5_vl_7b
     bcecmd bos sync bos:/ai-data/Qwen/Qwen2.5-VL-7B-Instruct ${huggingface_dir}/Qwen/Qwen2.5-VL-7B-Instruct/
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen2.5_vl_7b/pretrain/llava_details-minigpt4_3500_formate/wds ${datasets_dir}/qwen2.5_vl_7b/pretrain/llava_details-minigpt4_3500_formate/wds
-    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen2.5_vl_7b/sft/test_packing/test_vqa_16k_packed_wds ${datasets_dir}/qwen2.5_vl_7b/sft/test_packing/test_vqa_16k_packed_wds
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen2.5_vl_7b/sft/test_packing/test_packed_wds_4k/ ${datasets_dir}/qwen2.5_vl_7b/sft/test_packing/test_packed_wds_4k/
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen2.5_vl_7b/tp4pp2vpp2/  ${checkpoint_dir}/qwen2.5_vl_7b/
 
     # llavaov_1.5_4b
@@ -118,6 +99,8 @@ if [ "$DOWNLOAD_MODE" == "default" ]; then
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/internvl/webdataset_video ${datasets_dir}/internvl3.5_30b_a3b/webdataset_video
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/internvl3.5_30b_a3b/tp2pp2ep4/  ${checkpoint_dir}/internvl3.5_30b_a3b/
 
+    # offline packing
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/offline_packing/test_wds/ ${datasets_dir}/offline_packing_data/
 elif [ "$DOWNLOAD_MODE" == "optional" ]; then
     echo "Running optional dataset download..."
     
@@ -154,6 +137,18 @@ elif [ "$DOWNLOAD_MODE" == "optional" ]; then
     bcecmd bos sync bos:/ai-data/OpenGVLab/InternVL3_5-38B ${huggingface_dir}/internvl/InternVL3_5-38B
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/internvl3.5_38b/tp4pp2/  ${checkpoint_dir}/internvl3.5/internvl3.5_38b/
 
+    # qwen2_7b
+    bcecmd bos sync bos:/ai-data/huggingface.co/Qwen/Qwen2-7B-Instruct ${huggingface_dir}/Qwen/Qwen2-7B-Instruct/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen2/pile_test/ ${datasets_dir}/qwen2/pile_test/
+
+    # qwen2.5_7b
+    bcecmd bos sync bos:/ai-data/Qwen2.5-7B-Instruct ${huggingface_dir}/Qwen/Qwen2.5-7B-Instruct/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen/pile_test/ ${datasets_dir}/qwen2.5/pile_test/
+
+    # qwen2.5_vl_7b
+    bcecmd bos sync bos:/ai-data/Qwen/Qwen2.5-VL-7B-Instruct ${huggingface_dir}/Qwen/Qwen2.5-VL-7B-Instruct/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen2.5_vl_7b/tp1pp1/  ${checkpoint_dir}/qwen2.5_vl_7b/
+
     # qwen3_8b
     bcecmd bos sync bos:/ai-data/Qwen/Qwen3-8B ${huggingface_dir}/Qwen/Qwen3-8B/
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_8b/tp1pp1/  ${checkpoint_dir}/qwen3/qwen3_8b/
@@ -165,7 +160,7 @@ elif [ "$DOWNLOAD_MODE" == "optional" ]; then
 
     # qwen3_vl_30b_a3b
     bcecmd bos sync bos:/ai-data/Qwen3-VL-30B-A3B-Instruct ${huggingface_dir}/Qwen/Qwen3-VL-30B-A3B-Instruct/
-    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen_vl/demo/wds/ ${datasets_dir}/qwen3_vl/demo/wds  
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen_vl/qwen3vl_30b_a3b_data/ ${datasets_dir}/qwen3_vl/qwen3vl_30b_a3b_data
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_vl_30b_a3b/tp1pp2ep8/  ${checkpoint_dir}/qwen3/qwen3_vl_30b_a3b/
 
 fi

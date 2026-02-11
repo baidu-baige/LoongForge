@@ -5,9 +5,9 @@ data:
   # Text field name
   template_text_key: "messages"
   # Directory for intermediate json results
-  packed_json_dir: "/workspace/offline_packing/packed_json"
+  packed_json_dir: "/workspace/omni_datasets/aiak-training-omni/packed_json/"
   # Packed wds dataset
-  packed_wds_dir: "/workspace/offline_packing/packed_wds"
+  packed_wds_dir: "/workspace/omni_datasets/aiak-training-omni/packed_8k_wds"
 
 model:
   model_type: "qwenvl"

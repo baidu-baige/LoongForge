@@ -36,7 +36,7 @@ scenarios:
   - function:
       pretrain:
         Step1:
-          RUNNABLE_FLAG: "false"
+          RUNNABLE_FLAG: False
           LANGUAGE_MODEL_ARGS: '
             --load_platform=huggingface
             --save_platform=mcore
@@ -119,6 +119,7 @@ scenarios:
             --adam-eps 1e-05
             --norm-epsilon 1e-6
             --train-iters ${train_iters}
+            --eval-iters 0
             --load $CHECKPOINT_PATH
             --lr-decay-iters 2500
             --lr-decay-style cosine
