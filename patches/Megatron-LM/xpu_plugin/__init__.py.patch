@@ -1,9 +1,9 @@
 diff --git a/xpu_plugin/__init__.py b/xpu_plugin/__init__.py
 new file mode 100644
-index 0000000..c312181
+index 0000000..814fa84
 --- /dev/null
 +++ b/xpu_plugin/__init__.py
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,165 @@
 +"""
 +Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved
 +This module provides megatron-core-aiak plugin.
@@ -20,6 +20,7 @@ index 0000000..c312181
 +    scaled_masked_softmax,
 +    scaled_softmax,
 +    scaled_upper_triang_masked_softmax,
++    multi_latent_attention,
 +)
 +
 +__all__ = [
@@ -27,6 +28,7 @@ index 0000000..c312181
 +    "scaled_upper_triang_masked_softmax",
 +    "scaled_masked_softmax",
 +    "scaled_softmax",
++    "multi_latent_attention",
 +]
 +
 +
@@ -36,6 +38,7 @@ index 0000000..c312181
 +    "megatron.core.fusions",
 +    "megatron.core.transformer.moe.token_dispatcher",
 +    "megatron.core.transformer.moe.moe_layer",
++    "megatron.core.transformer.multi_latent_attention",
 +]
 +
 +
@@ -108,7 +111,7 @@ index 0000000..c312181
 +    )
 +    replace_module("scaled_masked_softmax_cuda", "xpu_plugin.scaled_masked_softmax")
 +    replace_module("scaled_softmax_cuda", "xpu_plugin.scaled_softmax")
-+
++    
 +    # replace_symbol
 +    replace_symbol(
 +        "megatron.legacy.model.fused_layer_norm.MixedFusedLayerNorm",
@@ -136,7 +139,7 @@ index 0000000..c312181
 +    )
 +    replace_symbol("megatron.legacy.model.fused_bias_gelu.bias_gelu", mock_megatron.mock_bias_gelu)
 +    replace_symbol(
-+        "megatron.core.transformer.moe.moe_utils.unpermute", mock_megatron.mock_unpermute
++        "megatron.core.transformer.moe.token_dispatcher.unpermute", mock_megatron.mock_unpermute
 +    )
 +    replace_symbol(
 +        "megatron.core.fp8_utils._modify_underlying_storage_impl", empty_package.empty_function
@@ -144,7 +147,10 @@ index 0000000..c312181
 +    replace_symbol(
 +        "megatron.core.fp8_utils._quantize_param_shard_impl", empty_package.empty_function
 +    )
-+
++    replace_symbol(
++        "megatron.core.transformer.multi_latent_attention.MLASelfAttention", 
++        multi_latent_attention.MLASelfAttention
++    )
 +    if os.getenv("XMLIR_USE_ROPE_FUSION") in ("true", "1", "True"):
 +        replace_symbol(
 +            "megatron.core.models.common.embeddings.rope_utils.apply_rotary_emb_flash", None

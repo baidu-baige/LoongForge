@@ -1,9 +1,9 @@
 diff --git a/xpu_plugin/_hydra/_linear.py b/xpu_plugin/_hydra/_linear.py
 new file mode 100644
-index 0000000..d27ad66
+index 0000000..fa83eaa
 --- /dev/null
 +++ b/xpu_plugin/_hydra/_linear.py
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,162 @@
 +"""
 +Reinplementation of `LinearWithGradAccumulationAndAsyncCommunication` via hydra.
 +"""
@@ -18,7 +18,8 @@ index 0000000..d27ad66
 +    linear_bwd_wgrad,
 +    linear_fwd,
 +)
-+from hydrax.xaccelerator.stateful import StatefulConfig
++from hydrax.xaccelerator.linear import linear_with_all_gather_x as _linear_with_all_gather_x
++from hydrax.xaccelerator.stateful import StatefulConfig, state_of
 +from torch_xmlir.config import config
 +
 +from megatron.core.parallel_state import (
@@ -44,7 +45,16 @@ index 0000000..d27ad66
 +        sequence_parallel: bool,
 +        grad_output_buffer: Optional[List[torch.Tensor]] = None,
 +        wgrad_deferral_limit: Optional[int] = 0,
++        tp_group: Optional[torch.distributed.ProcessGroup] = None,
 +    ) -> torch.Tensor:
++        """Forward pass of linear layer with grad accumulation and async communication."""
++        if tp_group is None:
++            tp_group = get_tensor_model_parallel_group()
++        ctx.tp_group = tp_group
++
++        input = input.contiguous()
++        ctx.weight_caster = None
++
 +        ctx.use_bias = bias is not None
 +        ctx.gradient_accumulation_fusion = gradient_accumulation_fusion
 +        ctx.allreduce_dgrad = allreduce_dgrad
@@ -82,7 +92,7 @@ index 0000000..d27ad66
 +        if handle is not None:
 +            handle.wait()
 +
-+        return grad_input, grad_weight, grad_bias, None, None, None, None, None
++        return grad_input, grad_weight, grad_bias, None, None, None, None, None, None
 +
 +    @classmethod
 +    def _async_backward_input(
@@ -96,16 +106,11 @@ index 0000000..d27ad66
 +        if ctx.sequence_parallel:
 +            grad_input = total_input.new_empty(ctx.input_shape, requires_grad=False)
 +            handle = dist.reduce_scatter_tensor(
-+                grad_input,
-+                grad_total_input,
-+                group=get_tensor_model_parallel_group(),
-+                async_op=True,
++                grad_input, grad_total_input, group=ctx.tp_group, async_op=True
 +            )
 +        elif ctx.allreduce_dgrad:
 +            grad_input = grad_total_input
-+            handle = dist.all_reduce(
-+                grad_input, group=get_tensor_model_parallel_group(), async_op=True
-+            )
++            handle = dist.all_reduce(grad_input, group=ctx.tp_group, async_op=True)
 +        else:
 +            grad_input = grad_total_input
 +            handle = None

@@ -1,8 +1,12 @@
 diff --git a/megatron/core/transformer/multi_token_prediction.py b/megatron/core/transformer/multi_token_prediction.py
-index bd3aa9c8c..e3f799eba 100755
+index bd3aa9c8c..0b93d51e0 100755
 --- a/megatron/core/transformer/multi_token_prediction.py
 +++ b/megatron/core/transformer/multi_token_prediction.py
-@@ -6,13 +6,16 @@ from typing import Callable, List, Optional, Union
+@@ -3,16 +3,20 @@
+ from contextlib import nullcontext
+ from dataclasses import dataclass
+ from typing import Callable, List, Optional, Union
++from functools import partial
  
  import torch
  from torch import Tensor
@@ -20,7 +24,7 @@ index bd3aa9c8c..e3f799eba 100755
  from megatron.core.pipeline_parallel.utils import is_vp_last_stage
  from megatron.core.process_groups_config import ProcessGroupCollection
  from megatron.core.tensor_parallel import (
-@@ -106,7 +109,7 @@ def tie_output_layer_state_dict(
+@@ -106,7 +110,7 @@ def tie_output_layer_state_dict(
      )
  
  
@@ -29,7 +33,7 @@ index bd3aa9c8c..e3f799eba 100755
      """Roll the tensor input along the sequence dimension with Context Parallelism (CP) support.
  
      This function extends the original roll_tensor to support Context Parallelism, which allows
-@@ -118,15 +121,24 @@ def roll_tensor(tensor, shifts=-1, dims=-1, cp_group=None):
+@@ -118,15 +122,24 @@ def roll_tensor(tensor, shifts=-1, dims=-1, cp_group=None):
      For CP>1: Splits tensor into chunks, performs rolling within each chunk, then exchanges
      boundary elements between adjacent CP ranks to maintain sequence continuity.
  
@@ -54,7 +58,7 @@ index bd3aa9c8c..e3f799eba 100755
      # Standard rolling behavior when CP is not enabled (cp_group is None or size=1)
      if cp_group is None or cp_group.size() == 1:
          rolled_tensor = torch.roll(tensor, shifts=shifts, dims=dims)
-@@ -195,6 +207,91 @@ def roll_tensor(tensor, shifts=-1, dims=-1, cp_group=None):
+@@ -195,6 +208,91 @@ def roll_tensor(tensor, shifts=-1, dims=-1, cp_group=None):
      return rolled_tensor, rolled_tensor.sum()
  
  
@@ -146,7 +150,15 @@ index bd3aa9c8c..e3f799eba 100755
  class MTPLossLoggingHelper:
      """Helper class for logging MTP losses."""
  
-@@ -490,6 +587,7 @@ class MultiTokenPredictionLayer(MegatronModule):
+@@ -472,6 +570,7 @@ class MultiTokenPredictionLayer(MegatronModule):
+             skip_bias_add=False,
+             is_expert=False,
+         )
++
+         self.transformer_layer = build_module(
+             self.submodules.transformer_layer, config=self.config, vp_stage=vp_stage
+         )
+@@ -490,6 +589,7 @@ class MultiTokenPredictionLayer(MegatronModule):
          position_ids: torch.Tensor,
          embedding: Callable,
          hidden_states: torch.Tensor,
@@ -154,7 +166,7 @@ index bd3aa9c8c..e3f799eba 100755
      ):
          """
          Preprocesses input data for the Multi-Token Prediction (MTP) layers.
-@@ -504,10 +602,23 @@ class MultiTokenPredictionLayer(MegatronModule):
+@@ -504,10 +604,23 @@ class MultiTokenPredictionLayer(MegatronModule):
                  from gpt model to compute the decoder input.
              hidden_states (torch.Tensor): hidden states tensor of shape [s, b, h] where s is the
                  sequence length, b is the batch size, and h is the hidden size.
@@ -180,7 +192,7 @@ index bd3aa9c8c..e3f799eba 100755
          # embedding
          decoder_input = embedding(input_ids=input_ids, position_ids=position_ids)
  
-@@ -570,6 +681,8 @@ class MultiTokenPredictionLayer(MegatronModule):
+@@ -570,6 +683,8 @@ class MultiTokenPredictionLayer(MegatronModule):
              fp8_context = nullcontext()
              transformer_layer_fp8_context = nullcontext()
  
@@ -189,7 +201,7 @@ index bd3aa9c8c..e3f799eba 100755
          with rng_context:
              with fp8_context:
                  hidden_states = self._concat_embeddings(hidden_states, decoder_input)
-@@ -688,15 +801,13 @@ class MultiTokenPredictionLayer(MegatronModule):
+@@ -688,20 +803,22 @@ class MultiTokenPredictionLayer(MegatronModule):
              [s, b, h], and optionally the updated context tensor if cross-attention is used.
          """
          assert context is None, f"multi token prediction + cross attention is not yet supported."
@@ -206,7 +218,26 @@ index bd3aa9c8c..e3f799eba 100755
          )
  
          if self.config.recompute_granularity == 'full' and self.training:
-@@ -901,6 +1012,8 @@ class MultiTokenPredictionBlock(MegatronModule):
+             hidden_states = self._checkpointed_forward(
+-                self._proj_and_transformer_layer,
++                partial(
++                    self._proj_and_transformer_layer,
++                    packed_seq_params=packed_seq_params,
++                    sequence_len_offset=sequence_len_offset,
++                ),
+                 hidden_states=hidden_states,
+                 decoder_input=decoder_input,
+                 attention_mask=attention_mask,
+@@ -712,8 +829,6 @@ class MultiTokenPredictionLayer(MegatronModule):
+                 rotary_pos_sin=rotary_pos_sin,
+                 attention_bias=attention_bias,
+                 inference_params=inference_params,
+-                packed_seq_params=packed_seq_params,
+-                sequence_len_offset=sequence_len_offset,
+             )
+         else:
+             hidden_states = self._proj_and_transformer_layer(
+@@ -901,6 +1016,8 @@ class MultiTokenPredictionBlock(MegatronModule):
          hidden_states_list = list(torch.chunk(hidden_states, 1 + offset, dim=0))
          hidden_states = hidden_states_list[offset]
          for layer_number in range(len(self.layers)):

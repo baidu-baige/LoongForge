@@ -1,5 +1,5 @@
 diff --git a/megatron/core/optimizer/distrib_optimizer.py b/megatron/core/optimizer/distrib_optimizer.py
-index 2925edcce..8f2c9ef2d 100644
+index 2925edcce..19f557a3b 100644
 --- a/megatron/core/optimizer/distrib_optimizer.py
 +++ b/megatron/core/optimizer/distrib_optimizer.py
 @@ -33,6 +33,7 @@ except ImportError:
@@ -333,24 +333,31 @@ index 2925edcce..8f2c9ef2d 100644
      @torch.no_grad()
      def load_parameter_state_from_fully_reshardable(self, state_dict: dict):
          """Load counterpart of sharded_param_state_fully_reshardable.
-@@ -2523,7 +2640,48 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -2523,17 +2640,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
          the model params. This copy does not make use of the grad buffer as
          an intermediary.
          """
-+        # Utility method for copying group params.
-+        def copy_group_params(model_groups, shard_main_groups):
-+            for model_group, shard_main_group in zip(model_groups, shard_main_groups):
-+                for model_param, shard_main_param in zip(model_group, shard_main_group):
-+
-+                    param_range_map = self._get_model_param_range_map(model_param)
-+                    param_range = param_range_map["param"]
-+                    assert param_range.size == shard_main_param.nelement()
-+
-+                    if state_dict is not None:
-+                        # Use param from state_dict to initialize main_param
-+                        model_param = model_param_to_state_dict_param_map[model_param]
-+
-+                    if is_float8tensor(model_param):
+-        if isinstance(self.optimizer, HybridDeviceOptimizer):
+-            self.optimizer.update_fp32_param_by_new_param()
+-            return
+-
+-        if self.ddp_config.use_megatron_fsdp:
+-            return
+-
+-        # When using precision-aware optimizer, main params are held by self.optimizer. It will also
+-        # do the work of copying data from main params to model params.
+-        if self.config.use_precision_aware_optimizer_no_fp8_or_ds_fp8:
+-            return
+ 
+         if state_dict is not None:
+             # Build a mapping from the model params to the corresponding tensors in the state dict,
+@@ -2558,15 +2664,45 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+                         model_param = model_param_to_state_dict_param_map[model_param]
+ 
+                     if is_float8tensor(model_param):
+-                        shard_model_param = dequantize_fp8_tensor(model_param).view(-1)[
+-                            param_range.start : param_range.end
+-                        ]
 +                        if hasattr(model_param, 'get_high_precision_init_val'):
 +                            shard_model_param = (
 +                                model_param.get_high_precision_init_val()
@@ -364,13 +371,13 @@ index 2925edcce..8f2c9ef2d 100644
 +                            shard_model_param = dequantize_fp8_tensor(model_param).view(-1)[
 +                                param_range.start : param_range.end
 +                            ]
-+                    else:
-+                        shard_model_param = model_param.view(-1)[
-+                            param_range.start : param_range.end
-+                        ]
-+                    shard_main_param.data.copy_(shard_model_param)
-+
-         if isinstance(self.optimizer, HybridDeviceOptimizer):
+                     else:
+                         shard_model_param = model_param.view(-1)[
+                             param_range.start : param_range.end
+                         ]
+                     shard_main_param.data.copy_(shard_model_param)
+ 
++        if isinstance(self.optimizer, HybridDeviceOptimizer):
 +            # Copy model groups to shard groups. 
 +            # HDO uses `shard_params` as param_groups:
 +            # bf16 case, `shard_params` shares the same underlying storage, after loading ckpt, it was updated.
@@ -379,36 +386,17 @@ index 2925edcce..8f2c9ef2d 100644
 +            if not self.config.use_precision_aware_optimizer_no_fp8_or_ds_fp8:
 +                copy_group_params(self.model_float16_groups, self.shard_fp32_from_float16_groups)
 +                copy_group_params(self.model_fp32_groups, self.shard_fp32_groups)
-             self.optimizer.update_fp32_param_by_new_param()
-             return
- 
-@@ -2544,29 +2702,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
-                 state_dict
-             )
- 
--        # Utility method for copying group params.
--        def copy_group_params(model_groups, shard_main_groups):
--            for model_group, shard_main_group in zip(model_groups, shard_main_groups):
--                for model_param, shard_main_param in zip(model_group, shard_main_group):
--
--                    param_range_map = self._get_model_param_range_map(model_param)
--                    param_range = param_range_map["param"]
--                    assert param_range.size == shard_main_param.nelement()
--
--                    if state_dict is not None:
--                        # Use param from state_dict to initialize main_param
--                        model_param = model_param_to_state_dict_param_map[model_param]
--
--                    if is_float8tensor(model_param):
--                        shard_model_param = dequantize_fp8_tensor(model_param).view(-1)[
--                            param_range.start : param_range.end
--                        ]
--                    else:
--                        shard_model_param = model_param.view(-1)[
--                            param_range.start : param_range.end
--                        ]
--                    shard_main_param.data.copy_(shard_model_param)
--
++            self.optimizer.update_fp32_param_by_new_param()
++            return
++
++        if self.ddp_config.use_megatron_fsdp:
++            return
++
++        # When using precision-aware optimizer, main params are held by self.optimizer. It will also
++        # do the work of copying data from main params to model params.
++        if self.config.use_precision_aware_optimizer_no_fp8_or_ds_fp8:
++            return
++
          # Copy model groups to shard groups.
          copy_group_params(self.model_float16_groups, self.shard_fp32_from_float16_groups)
          copy_group_params(self.model_fp32_groups, self.shard_fp32_groups)

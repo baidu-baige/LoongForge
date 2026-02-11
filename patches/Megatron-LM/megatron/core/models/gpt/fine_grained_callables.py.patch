@@ -1,5 +1,5 @@
 diff --git a/megatron/core/models/gpt/fine_grained_callables.py b/megatron/core/models/gpt/fine_grained_callables.py
-index b125ee112..3dc41e777 100644
+index b125ee112..9eed29e37 100644
 --- a/megatron/core/models/gpt/fine_grained_callables.py
 +++ b/megatron/core/models/gpt/fine_grained_callables.py
 @@ -8,6 +8,12 @@ from typing import Optional
@@ -51,42 +51,7 @@ index b125ee112..3dc41e777 100644
  class PreProcessNode(ScheduleNode):
      """Node responsible for preprocessing operations in the model.
  
-@@ -110,8 +129,8 @@ class PreProcessNode(ScheduleNode):
-         # Get decoder input
-         if not self.gpt_model.pre_process:
-             self.chunk_state.decoder_input = self.gpt_model.decoder.input_tensor
--        # Run GPTModel._preprocess
--        decoder_input, rotary_pos_emb, rotary_pos_cos, rotary_pos_sin, sequence_len_offset = (
-+        # Run _preprocess
-+        decoder_input, rotary_pos_emb = (                
-             self.gpt_model._preprocess(
-                 input_ids=self.chunk_state.input_ids,
-                 position_ids=self.chunk_state.position_ids,
-@@ -123,9 +142,6 @@ class PreProcessNode(ScheduleNode):
-         # Saved for later use
-         self.chunk_state.decoder_input = decoder_input
-         self.chunk_state.rotary_pos_emb = rotary_pos_emb
--        self.chunk_state.rotary_pos_cos = rotary_pos_cos
--        self.chunk_state.rotary_pos_sin = rotary_pos_sin
--        self.chunk_state.sequence_len_offset = sequence_len_offset
-         return decoder_input
- 
- 
-@@ -181,13 +197,10 @@ class PostProcessNode(ScheduleNode):
-             labels=self.chunk_state.labels,
-             decoder_input=self.chunk_state.decoder_input,
-             rotary_pos_emb=self.chunk_state.rotary_pos_emb,
--            rotary_pos_cos=self.chunk_state.rotary_pos_cos,
--            rotary_pos_sin=self.chunk_state.rotary_pos_sin,
-             mtp_in_postprocess=False,
-             loss_mask=self.chunk_state.loss_mask,
-             attention_mask=self.chunk_state.attention_mask,
-             packed_seq_params=self.chunk_state.packed_seq_params,
--            sequence_len_offset=self.chunk_state.sequence_len_offset,
-             runtime_gather_output=self.chunk_state.runtime_gather_output,
-             extra_block_kwargs=self.chunk_state.extra_block_kwargs,
-         )
-@@ -331,15 +344,32 @@ def build_transformer_layer_callables(layer: TransformerLayer):
+@@ -331,15 +350,44 @@ def build_transformer_layer_callables(layer: TransformerLayer):
          """
          Performs same attnention forward logic as GPT Model.
          """
@@ -102,6 +67,9 @@ index b125ee112..3dc41e777 100644
 +        attention_mask = node.chunk_state.attention_mask
 +        rotary_pos_emb = node.chunk_state.rotary_pos_emb
 +        packed_seq_params = node.chunk_state.packed_seq_params
++        rotary_pos_cos = node.chunk_state.rotary_pos_cos
++        rotary_pos_sin = node.chunk_state.rotary_pos_sin
++        sequence_len_offset = node.chunk_state.sequence_len_offset
 +
 +        if layer.a2a_overlap_attn_recompute:
 +            def custom_forward(hidden_states, attention_mask, rotary_pos_emb, packed_seq_params):
@@ -109,7 +77,10 @@ index b125ee112..3dc41e777 100644
 +                    hidden_states=hidden_states,
 +                    attention_mask=attention_mask,
 +                    rotary_pos_emb=rotary_pos_emb,
++                    rotary_pos_cos=rotary_pos_cos,
++                    rotary_pos_sin=rotary_pos_sin,
 +                    packed_seq_params=packed_seq_params,
++                    sequence_len_offset=sequence_len_offset
 +                )
 +                return output_    
 +
@@ -120,15 +91,21 @@ index b125ee112..3dc41e777 100644
 +                hidden_states=hidden_states,
 +                attention_mask=attention_mask,
 +                rotary_pos_emb=rotary_pos_emb,
++                rotary_pos_cos=rotary_pos_cos,
++                rotary_pos_sin=rotary_pos_sin,
 +                packed_seq_params=packed_seq_params,
++                sequence_len_offset=sequence_len_offset
 +            )
-+        if "dispatched_input" in layer.config.offload_tensors:
-+            hidden_states = fine_grained_offloading_group_start(hidden_states, name="dispatched_input")
++        if (
++            "dispatched_input" in layer.config.offload_tensors
++            or "pre_mlp_layernorm_output" in layer.config.offload_tensors
++        ):
++            hidden_states = fine_grained_offloading_group_start(hidden_states, name="dispatched-pre_mlp_layernorm")
 +
          return hidden_states
  
      def submodule_post_attn_forward(node: ScheduleNode, hidden_states: torch.Tensor):
-@@ -347,15 +377,29 @@ def build_transformer_layer_callables(layer: TransformerLayer):
+@@ -347,15 +395,29 @@ def build_transformer_layer_callables(layer: TransformerLayer):
          Run forward pass for computations between attention and dispatch:
              pre mlp layernorm->router->dispatch preprocess
          """
@@ -166,7 +143,7 @@ index b125ee112..3dc41e777 100644
  
          # Detach here for mlp_bda residual connection
          node.layer_state.residual = node.detach(hidden_states)
-@@ -381,7 +425,9 @@ def build_transformer_layer_callables(layer: TransformerLayer):
+@@ -381,7 +443,9 @@ def build_transformer_layer_callables(layer: TransformerLayer):
          node.layer_state.dispatched_probs = node.detach(dispatched_probs)
          return dispatched_tokens
  
@@ -177,7 +154,7 @@ index b125ee112..3dc41e777 100644
          """
          Run forward pass for computations between dispatch and combine:
              post dispatch->experts->combine preprocess
-@@ -395,45 +441,78 @@ def build_transformer_layer_callables(layer: TransformerLayer):
+@@ -395,45 +459,89 @@ def build_transformer_layer_callables(layer: TransformerLayer):
              token_dispatcher._comm_manager.dispatched_probs = dispatched_probs
  
          pre_mlp_layernorm_output = getattr(node.layer_state, 'pre_mlp_layernorm_output', None)
@@ -198,7 +175,11 @@ index b125ee112..3dc41e777 100644
 +                return expert_output, shared_expert_output, mlp_bias
 +
 +            maybe_set_offload_tag('dispatched_input', dispatched_input, layer.config)
-+            with get_fine_grained_offloading_context('dispatched_input' in layer.config.offload_tensors):  
++            maybe_set_offload_tag('pre_mlp_layernorm_output', pre_mlp_layernorm_output, layer.config)
++            with get_fine_grained_offloading_context(
++                "dispatched_input" in layer.config.offload_tensors
++                or "pre_mlp_layernorm_output" in layer.config.offload_tensors
++            ):
 +                expert_output, shared_expert_output, mlp_bias = tensor_parallel.checkpoint(
 +                    custom_forward, False, dispatched_input, tokens_per_expert, permuted_probs, pre_mlp_layernorm_output
 +                )     
@@ -215,8 +196,15 @@ index b125ee112..3dc41e777 100644
              # as a gradient hook of expert_output
              layer.pre_mlp_norm_checkpoint.discard_output_and_register_recompute(expert_output)
 +
-+        if "dispatched_input" in layer.config.offload_tensors:
-+            expert_output = fine_grained_offloading_group_commit(expert_output, name="dispatched_input")
++        if (
++            "dispatched_input" in layer.config.offload_tensors
++            or "pre_mlp_layernorm_output" in layer.config.offload_tensors
++        ):
++            expert_output = fine_grained_offloading_group_commit(
++                expert_output,
++                name="dispatched-pre_mlp_layernorm",
++                forced_released_tensors=[pre_mlp_layernorm_output],
++            )
          # release tensor reference after use
          node.layer_state.dispatched_probs = None
          node.layer_state.pre_mlp_layernorm_output = None
@@ -275,7 +263,7 @@ index b125ee112..3dc41e777 100644
          output = make_viewless_tensor(
              inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
          )
-@@ -441,8 +520,11 @@ def build_transformer_layer_callables(layer: TransformerLayer):
+@@ -441,8 +549,11 @@ def build_transformer_layer_callables(layer: TransformerLayer):
          # Need to record residual to comm stream, since it's created on comp stream
          node.layer_state.residual.record_stream(torch.cuda.current_stream())
  
@@ -288,7 +276,7 @@ index b125ee112..3dc41e777 100644
          return output
  
      def mlp_wrapper(node: ScheduleNode, *args, **kwargs):
-@@ -459,8 +541,9 @@ def build_transformer_layer_callables(layer: TransformerLayer):
+@@ -459,8 +570,9 @@ def build_transformer_layer_callables(layer: TransformerLayer):
      dispatch_func = submodule_dispatch_forward if is_moe else raise_not_implemented
      mlp_func = submodule_moe_forward if is_moe else mlp_wrapper
      combine_func = submodule_combine_forward if is_moe else raise_not_implemented
@@ -299,7 +287,7 @@ index b125ee112..3dc41e777 100644
      backward_dw = {"attn": layer.self_attention, "mlp": layer.mlp}
      return forward_funcs, backward_dw
  
-@@ -473,7 +556,7 @@ def build_mtp_layer_callables(layer):
+@@ -473,7 +585,7 @@ def build_mtp_layer_callables(layer):
      """
  
      forward_funcs, backward_dw = build_transformer_layer_callables(layer.transformer_layer)
@@ -308,7 +296,7 @@ index b125ee112..3dc41e777 100644
          forward_funcs
      )
      is_moe = isinstance(layer.transformer_layer.mlp, MoELayer)
-@@ -548,6 +631,7 @@ def build_mtp_layer_callables(layer):
+@@ -548,6 +660,7 @@ def build_mtp_layer_callables(layer):
      dispatch_func = partial(rng_context_wrapper, dispatch_forward)
      mlp_func = partial(rng_context_wrapper, mlp_forward)
      combine_func = partial(rng_context_wrapper, combine_forward)
@@ -316,7 +304,7 @@ index b125ee112..3dc41e777 100644
      mtp_post_process_func = submodule_mtp_postprocess_forward
  
      forward_funcs = [
-@@ -556,6 +640,7 @@ def build_mtp_layer_callables(layer):
+@@ -556,6 +669,7 @@ def build_mtp_layer_callables(layer):
          dispatch_func,
          mlp_func,
          combine_func,

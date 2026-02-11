@@ -1,5 +1,5 @@
 diff --git a/megatron/core/pipeline_parallel/schedules.py b/megatron/core/pipeline_parallel/schedules.py
-index e83f8d906..f5368cf0e 100644
+index e83f8d906..bc54c508a 100644
 --- a/megatron/core/pipeline_parallel/schedules.py
 +++ b/megatron/core/pipeline_parallel/schedules.py
 @@ -9,7 +9,13 @@ from torch.autograd.variable import Variable
@@ -17,6 +17,15 @@ index e83f8d906..f5368cf0e 100644
  from megatron.core.pipeline_parallel.utils import (
      is_pp_first_stage,
      is_pp_last_stage,
+@@ -461,7 +467,7 @@ def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, c
+     # will not participate in the computation.
+     # This results in a tensor that does not require gradients.
+     # In such cases, we intentionally skip the backward pass while preserving zero gradients.
+-    if output_tensor[0].requires_grad:
++    if (output_tensor[0].requires_grad) and (output_tensor[0].grad_fn is not None):
+         if config.deallocate_pipeline_outputs:
+             custom_backward(output_tensor[0], output_tensor_grad[0])
+         else:
 @@ -562,6 +568,9 @@ def forward_backward_no_pipelining(
      if config.timers is not None:
          config.timers('forward-backward', log_level=1).start(barrier=config.barrier_with_L1_time)
