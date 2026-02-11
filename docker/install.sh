@@ -173,8 +173,8 @@ function clear_unused_file() {
     rm -rf /workspace/AIAK-Megatron/.github
     rm -rf /workspace/AIAK-Megatron/output
 
-    rm /workspace/README.md
-    rm /workspace/license.txt
+    rm -f /workspace/README.md
+    rm -f /workspace/license.txt
     rm -rf /workspace/docker-examples
     rm -rf /workspace/tutorials
 
@@ -328,8 +328,8 @@ INSTALL_LEROBOT=${5:-"false"}
 echo "Received COMPILE_ENV: ${COMPILE_ENV}"
 
 XPYTORCH_URL_ARG=""
-if [ -n "${5:-}" ]; then
-    XPYTORCH_URL_ARG=$5
+if [ -n "${6:-}" ]; then
+    XPYTORCH_URL_ARG=$6
 fi
 
 CURRENT_DIR=$(cd `dirname $0`; pwd)
@@ -347,7 +347,7 @@ if [[ "$COMPILE_ENV" == "p800" ]];then
         XPYTORCH_URL="$XPYTORCH_URL_ARG"
         echo "使用指定的 xpytorch 版本: $XPYTORCH_URL"
     else
-        xpytorch_info="/workspace/AIAK-Training-LLM/xpytorch_info.txt"
+        xpytorch_info="/workspace/AIAK-Training-Omni/xpytorch_info.txt"
 
         if [[ ! -f "$xpytorch_info" ]]; then
             echo "xpytorch配置文件不存在: $xpytorch_info"
