@@ -30,7 +30,10 @@ ARG INSTALL_LEROBOT="false"
 # 指定token
 ARG TOKEN=""
 
+# Xpytorch的源路径（可选，默认值在AIAK-Training-Omni/xpytorch_info.txt）
+ARG XPYTORCH_URL_ARG=""
+
 RUN mkdir -p /workspace 
 COPY ./AIAK-Training-Omni /workspace/AIAK-Training-Omni
 RUN bash /workspace/AIAK-Training-Omni/docker/install.sh ${COMPILE_ENV} \
-    ${BINARY_REPLACE} ${INSTALL_TransformerEngine_FLAG} ${MEGATRON_TYPE} ${INSTALL_LEROBOT}
+    ${BINARY_REPLACE} ${INSTALL_TransformerEngine_FLAG} ${MEGATRON_TYPE} ${INSTALL_LEROBOT} "${XPYTORCH_URL_ARG}"
