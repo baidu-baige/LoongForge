@@ -65,9 +65,9 @@ class McoreBase:
         McoreBase
     """
 
-    def __init__(self, c_config):
+    def __init__(self, c_config, args):
         self.c_config = c_config
-        self.args = parse_args()
+        self.args = args
         margs = c_config.get_args("mcore")
         self.cargs = self.c_config.get_args("common")
         self.name_map = self.c_config.get("name_map")["mcore"]
@@ -195,6 +195,8 @@ class McoreBase:
             else:
                 et = mt
                 t = etp_to_tp[et]
+            if mt not in m_dict:
+                continue
             m_dict[mt][t_name] = {} if t_name not in m_dict[mt] else m_dict[mt][t_name]
             m_dict[mt][t_name][mcore_weight_path] = weight_list[t]
             if mcore_bias_path is not None and bias_list is not None:

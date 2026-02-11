@@ -32,11 +32,11 @@ class McoreCheckpoint(AbstractCheckpoint):
         McoreCheckpoint
     """
 
-    def __init__(self, c_config):
+    def __init__(self, c_config, args):
         super().__init__(c_config)
-        self.args = parse_args()
-        self.m_base = McoreBase(c_config)
-        self.m_moe = McoreMoe(c_config)
+        self.args = args
+        self.m_base = McoreBase(c_config, args)
+        self.m_moe = McoreMoe(c_config, args)
         self.iteration = 0
         self.checkpoint_version = 3.0
         self.rng_state = None
@@ -99,7 +99,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         return need_check_dones, done_keys
 
 
-    def convert_from_common(self, c_ckpt, m_config, layer_dict, expert_dict=None):
+    def convert_from_common(self, c_ckpt, m_config, layer_dict, expert_dict=None, save_file=True, tp_ranks=None, etp_ranks=None):
         """
         Convert common checkpoint to mcore checkpoint.
 
@@ -141,13 +141,22 @@ class McoreCheckpoint(AbstractCheckpoint):
         etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
 
         # check dones dir and mkdir release
-        save_path = self.args.save_ckpt_path
-        done_dir = os.path.join(save_path, "dones")
-        need_check_dones, done_keys = McoreCheckpoint.get_need_check_dones(done_dir, layer_dict, expert_dict)
-        release_dir, save_margs = self.pre_save(save_path, m_config)
+        if save_file:
+            save_path = self.args.save_ckpt_path
+            done_dir = os.path.join(save_path, "dones")
+            need_check_dones, done_keys = McoreCheckpoint.get_need_check_dones(done_dir, layer_dict, expert_dict)
+            release_dir, save_margs = self.pre_save(save_path, m_config)
+        else:
+            mcore_dict = {}
+            mcore_dict[p] = {}
+            if expert_dict is None:
+                mcore_dict[p] = {}
+            else:
+                for ep_id in expert_dict.keys():
+                    mcore_dict[p][ep_id] = {}
 
         def convert_one_ep_from_common(ep_id=None):
-            if need_check_dones:
+            if save_file and need_check_dones:
                 if ep_id is None and p in done_keys:
                     logging.info(f"> p: {p} already converted. pass...")
                     return
@@ -157,9 +166,13 @@ class McoreCheckpoint(AbstractCheckpoint):
             m_dict = {}
             if ep_id is None or self.etp is None:
                 for t in range(self.tp):
+                    if tp_ranks is not None and t not in tp_ranks:
+                        continue
                     m_dict[t] = {}
             else:
                 for et in range(self.etp):
+                    if etp_ranks is not None and et not in etp_ranks:
+                        continue
                     m_dict[et] = {}
             if p == 0:
                 t_name = self.get_transformer_name(0)
@@ -209,22 +222,29 @@ class McoreCheckpoint(AbstractCheckpoint):
             for mt in m_dict.keys():
                 if ep_id is None:
                     t = mt
-                    self.save_model_file(
-                        release_dir, save_margs, p, t, None, m_dict[t],
-                        self.optim_state_dict[p][t] if self.optim_state_dict is not None else None, layer_ids)
+                    if save_file:
+                        self.save_model_file(
+                            release_dir, save_margs, p, t, None, m_dict[mt],
+                            self.optim_state_dict[p][t] if self.optim_state_dict is not None else None, layer_ids)
+                    else:
+                        mcore_dict[p][t] = m_dict[mt]
                 else:
                     if self.etp is None:
                         t = mt
                     else:
                         et = mt
                         t = etp_to_tp_mapping[ep_id][et]
-                    self.save_model_file(
-                        release_dir, save_margs, p, t, ep_id, m_dict[mt],
-                        self.optim_state_dict[p][ep_id][et] if self.optim_state_dict is not None else None,
-                        layer_ids)
+                    if save_file:
+                        self.save_model_file(
+                            release_dir, save_margs, p, t, ep_id, m_dict[mt],
+                            self.optim_state_dict[p][ep_id][et] if self.optim_state_dict is not None else None,
+                            layer_ids)
+                    else:
+                        mcore_dict[p][ep_id][t] = m_dict[mt]
 
-            touch_file(done_dir=done_dir, p=p, ep_id=ep_id)
-            logging.info(f"Finish saving {p=} {ep_id=} {layer_ids=}.")
+            if save_file:
+                touch_file(done_dir=done_dir, p=p, ep_id=ep_id)
+                logging.info(f"Finish saving {p=} {ep_id=} {layer_ids=}.")
 
         if expert_dict is None:
             convert_one_ep_from_common(ep_id=None)
@@ -245,6 +265,8 @@ class McoreCheckpoint(AbstractCheckpoint):
                 for ep_id in expert_dict.keys():
                     convert_one_ep_from_common(ep_id=ep_id)
         logging.info(f"Finish saving mcore checkpoint. {p=} {layer_ids=}.")
+        if not save_file:
+            return mcore_dict
 
     def load_state_dict(self, load_path, p, t, e=None):
         checkpoint_name = "model_optim_rng.pt"
@@ -261,20 +283,26 @@ class McoreCheckpoint(AbstractCheckpoint):
             logging.info(f"load checkpoint: {checkpoint_path}")
             return torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
-    def load_state_dict_from_mcore(self, load_path, p, ep_ids=None, tp_to_ep=None, etp_to_tp_mapping=None):
+    def load_state_dict_from_mcore(self, load_path, p, ep_ids=None, tp_to_ep=None, etp_to_tp_mapping=None, mcore_dict=None):
         tp = self.tp
         # return {ep_id: {tp: state_dict}}
         m_dict = {}
         if ep_ids is None:
             for t in range(tp):
-                m_dict[t] = self.load_state_dict(load_path, p, t)
+                if mcore_dict is None:
+                    m_dict[t] = self.load_state_dict(load_path, p, t)
+                else:
+                    m_dict[t] = mcore_dict[p][t]
                 self.checkpoint_version = m_dict[t]['checkpoint_version']
             ep_mcore_state_dict = None
         elif self.etp is None:
             loaded_keys = {}
             for ep_id in ep_ids:
                 for t in range(tp):
-                    m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                    if mcore_dict is None:
+                        m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                    else:
+                        m_dict[t] = mcore_dict[p][ep_id][t]
                     self.checkpoint_version = m_dict[t]['checkpoint_version']
                     loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
             ep_mcore_state_dict = {}
@@ -285,14 +313,20 @@ class McoreCheckpoint(AbstractCheckpoint):
                     if key in loaded_keys:
                         ep_mcore_state_dict[ep_id][t] = loaded_keys[key]
                     else:
-                        ep_mcore_state_dict[ep_id][t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                        if mcore_dict is None:
+                            ep_mcore_state_dict[ep_id][t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                        else:
+                            ep_mcore_state_dict[ep_id][t] = mcore_dict[p][ep_id][t]
         else:
             assert tp_to_ep is not None, f"tp_to_ep is not provided, {ep_ids=}"
             assert etp_to_tp_mapping is not None, f"etp_to_tp_mapping is not provided, {ep_ids=}"
             loaded_keys = {}
             for t in range(tp):
                 ep_id = tp_to_ep[t]
-                m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                if mcore_dict is None:
+                    m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                else:
+                    m_dict[t] = mcore_dict[p][ep_id][t]
                 self.checkpoint_version = m_dict[t]['checkpoint_version']
                 loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
             ep_mcore_state_dict = {}
@@ -306,7 +340,10 @@ class McoreCheckpoint(AbstractCheckpoint):
                     if key in loaded_keys:
                         ep_mcore_state_dict[ep_id][et] = loaded_keys[key]
                     else:
-                        ep_mcore_state_dict[ep_id][et] = self.load_state_dict(load_path, p, t, e=ep_id)
+                        if mcore_dict is None:
+                            ep_mcore_state_dict[ep_id][et] = self.load_state_dict(load_path, p, t, e=ep_id)
+                        else:
+                            ep_mcore_state_dict[ep_id][et] = mcore_dict[p][ep_id][t]
 
         assert len(m_dict) > 0, f"m_dict must not be empty"
         self.checkpoint_version = m_dict[0].get('checkpoint_version', 3.0)
@@ -314,15 +351,15 @@ class McoreCheckpoint(AbstractCheckpoint):
         return m_dict, ep_mcore_state_dict
 
 
-    def load(self, load_path, layer_dict, expert_dict=None):
+    def load(self, load_path, layer_dict, expert_dict=None, mcore_dict=None):
         p = list(layer_dict.keys())[0]
         if expert_dict is None:
-            self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(load_path, p)
+            self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(load_path, p, mcore_dict=mcore_dict)
         else:
             ep_ids = list(expert_dict.keys())
             etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
             self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(
-                    load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping)
+                    load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping, mcore_dict=mcore_dict)
 
     def convert_to_common(self, layer_dict, expert_dict=None):
         """

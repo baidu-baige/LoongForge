@@ -1,0 +1,91 @@
+""" Huggingface checkpoint converter """
+
+import argparse
+
+from dist_checkpoint.config.parallel_config import ParallelConfig
+from convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
+from convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
+from convert_checkpoint.common.common_config import CommonConfig
+from convert_checkpoint.utils.utils import(
+    get_layer_ids
+)
+
+from convert_checkpoint.utils.utils import get_ep_map
+
+class HfCheckpointConverter:
+    """Converter for Huggingface checkpoint."""
+
+    def __init__(self, parallel_config: ParallelConfig, mapping_cfg: CommonConfig):
+        self.args = argparse.Namespace()
+        self.args.tensor_model_parallel_size = parallel_config.tp_size
+        self.args.num_virtual_stages_per_pipeline_rank = parallel_config.vpp_size
+        self.args.vpp_scheduler = parallel_config.vpp_scheduler
+        self.args.pipeline_model_parallel_size = parallel_config.pp_size
+        self.args.expert_tensor_parallel_size = parallel_config.etp_size
+        self.args.expert_parallel_size = parallel_config.ep_size
+        self.args.custom_pipeline_layers = parallel_config.custom_pipeline_layers
+        self.args.safetensors = parallel_config.safetensors
+        self.args.decoder_first_pipeline_num_layers = parallel_config.decoder_first_pipeline_num_layers
+        self.args.decoder_last_pipeline_num_layers = parallel_config.decoder_last_pipeline_num_layers
+        self.args.num_layers_per_virtual_pipeline_stage = None
+        self.args.vit_in_first_virtual_stage_only = parallel_config.vit_in_first_virtual_stage_only
+        self.args.save_ckpt_path = None
+        self.args.load_ckpt_path = None
+        self.args.convert_to_fp8 = False
+        self.args.max_workers = parallel_config.max_workers
+        self.args.moe_grouped_gemm = parallel_config.moe_grouped_gemm
+        self.args.fp8_force_no_requant = parallel_config.fp8_force_no_requant
+        self.args.force_pow_2_scales = parallel_config.force_pow_2_scales
+        self.args.amax_epsilon = parallel_config.amax_epsilon
+        self.args.mtp_num_layers = parallel_config.mtp_num_layers
+        self.ep_size = parallel_config.ep_size
+        self.pp_ranks = parallel_config.pp_ranks
+        self.ep_ranks = parallel_config.ep_ranks
+        self.tp_ranks = parallel_config.tp_ranks
+        self.etp_ranks = parallel_config.etp_ranks
+
+        self.config = mapping_cfg
+        cargs = self.config.get_args("common")
+        self.num_experts = cargs.get("num_experts", None)
+        self.layer_ids = []
+        for p in self.pp_ranks:
+            self.layer_dict = {}
+            layer_id_list = get_layer_ids(self.config, self.args, p)
+            self.layer_dict[p] = layer_id_list
+            self.layer_ids.extend(layer_id_list)
+        if self.ep_ranks is None:
+            self.expert_dict = None
+        else:
+            self.expert_dict = []
+            _, _, ep_expert_mapping = get_ep_map(self.num_experts, self.ep_size)
+            self.expert_dict = {key: value for key, value in ep_expert_mapping.items() if key in self.ep_ranks}
+
+    def set_mapping_cfg(self, mapping_cfg: CommonConfig):
+        self.hf_ckpt = HuggingFaceCheckpoint(mapping_cfg, self.args)
+        self.m_ckpt = McoreCheckpoint(mapping_cfg, self.args)
+
+    def load_hf(self, ckpt_path, mapping_cfg: CommonConfig):
+        """ load hf checkpoint
+            mapping_cfg: config or list(config)
+        """
+        expert_ids=self.expert_dict.values() if self.expert_dict is not None else None
+        self.hf_ckpt.load(ckpt_path, self.args.safetensors, mapping_cfg, self.layer_ids, expert_ids=expert_ids)
+
+    def get_mcore_ckpt(self):
+        mcore_dict = {}
+        for p in self.pp_ranks:
+            c_ckpt = self.hf_ckpt.convert_to_common(self.layer_dict, expert_dict=self.expert_dict)
+            mcore_dict[p] = self.m_ckpt.convert_from_common(
+                    c_ckpt, None, self.layer_dict, expert_dict=self.expert_dict,save_file=False,
+                    tp_ranks=self.tp_ranks, etp_ranks=self.etp_ranks)[p]
+        return mcore_dict
+
+    def load_mcore(self, mcore_dict):
+        self.m_ckpt.load(None, layer_dict=self.layer_dict, expert_dict=self.expert_dict, mcore_dict=mcore_dict)
+
+    def save_hf_ckpt(self, save_path):
+        mcore_dict = {}
+        for p in self.pp_ranks:
+            c_ckpt = self.m_ckpt.convert_to_common(self.layer_dict, expert_dict=self.expert_dict)
+            mcore_dict[p] = self.hf_ckpt.convert_from_common(c_ckpt, self.layer_dict, expert_dict=self.expert_dict, save_path=save_path)[p]
+

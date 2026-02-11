@@ -122,6 +122,20 @@ from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelpe
 from aiak_training_omni.utils import get_args, constants
 from .initialize import initialize_aiak_megatron
 
+# Add project root to Python path
+import sys
+import os
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Add tools directory to Python path
+tools_path = os.path.join(project_root, "tools")
+if tools_path not in sys.path:
+    sys.path.insert(0, tools_path)
+
+from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+
 try:
     from inspector.hooks import register_hooks
     HAS_INSPECTOR = True
@@ -614,14 +628,11 @@ def setup_model_and_optimizer(
     ) and not args.moe_use_upcycling:
         timers("load-checkpoint", log_level=0).start(barrier=True)
 
-        args.iteration, args.num_floating_point_operations_so_far = load_checkpoint(
+        args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
             model,
             optimizer,
             opt_param_scheduler,
-            checkpointing_context=checkpointing_context,
-            skip_load_to_model_and_opt=HAVE_FSDP2
-            and getattr(args, "use_torch_fsdp2", False)
-            and args.ckpt_format == "torch_dist",
+            args
         )
 
         timers("load-checkpoint").stop(barrier=True)

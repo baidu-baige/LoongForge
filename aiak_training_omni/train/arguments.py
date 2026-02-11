@@ -696,6 +696,13 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--yaml-file",
+        type=str,
+        default=None,
+        help="Path to YAML file for specific configuration needs"
+    )
+
+    group.add_argument(
         "--legacy-reporting-loss-reduction",
         action="store_true",
         help="Use legacy reporting loss reduction method. Default is False.",

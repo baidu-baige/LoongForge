@@ -461,31 +461,39 @@ def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
     return virtual_p, layer_offset
 
 def get_layer_ids(c_config, args, p):
-    cargs = c_config.get_args("common")
+    cargs = c_config.get_args("common")  # 获取模型通用配置参数
 
-    num_layers = cargs["num_layers"]
-    mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
+    # 获取模型层数相关参数
+    num_layers = cargs["num_layers"]  # 模型总层数
+    mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)  # MTP附加层数，默认为0
     num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
+    # 计算虚拟pipeline阶段数
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage
     else:
         stage = args.num_virtual_stages_per_pipeline_rank or 1
-    dualpipev = args.vpp_scheduler == 'dualpipev'
-    pp = args.pipeline_model_parallel_size
-    custom_pipeline_layers = args.custom_pipeline_layers
-    num_layers_in_first_pipeline_stage = args.decoder_first_pipeline_num_layers
-    num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers
+    
+    dualpipev = args.vpp_scheduler == 'dualpipev'  # 判断是否使用dualpipev调度器
+    pp = args.pipeline_model_parallel_size  # pipeline并行度
+    custom_pipeline_layers = args.custom_pipeline_layers  # 自定义pipeline层分配
+    num_layers_in_first_pipeline_stage = args.decoder_first_pipeline_num_layers  # 第一个pipeline阶段层数
+    num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers  # 最后一个pipeline阶段层数
+    
+    # 获取虚拟pipeline中各阶段的层数分布
     num_layers_in_vp = get_num_layers_in_vp_map(
             stage, num_layers, pp, mtp_num_layers=mtp_num_layers,
             custom_pipeline_layers=custom_pipeline_layers,
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)
 
-    layer_ids = []
+    layer_ids = []  # 存储当前pipeline rank的layer id列表
+    # 遍历所有虚拟pipeline阶段
     for stage_index in range(stage):
+        # 获取当前阶段的虚拟分区和层偏移量
         virtual_p, layer_offset, = get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp)
+        # 遍历当前虚拟分区中的所有层
         for layer_index in range(num_layers_in_vp[virtual_p]):
-            layer_id = layer_index + layer_offset
+            layer_id = layer_index + layer_offset  # 计算全局layer id
             layer_ids.append(layer_id)
     return layer_ids
 
@@ -515,7 +523,7 @@ def get_pipeline_by_rank_id(rank_id, world_size, pp, ep=None):
 
 
 def get_ep_map(num_experts, ep):
-    if ep is None:
+    if num_experts is None or ep is None:
         return None, None, None
     experts_ids = [x for x in range(num_experts)]
     chunks = [experts_ids[x:x + num_experts // ep]

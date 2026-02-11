@@ -71,12 +71,13 @@ class Model():
                 args (dict): arguments
         """
 
+        args = parse_args()
         if platform == 'mcore':
-            m_ckpt = McoreCheckpoint(self.config)
+            m_ckpt = McoreCheckpoint(self.config, args)
             return m_ckpt.convert_from_common(self.c_ckpt, target_config, layer_dict, expert_dict=expert_dict)
         if platform == 'huggingface':
-            hf_ckpt = HuggingFaceCheckpoint(self.config)
-            return hf_ckpt.convert_from_common(self.c_ckpt, layer_dict, expert_dict=expert_dict)
+            hf_ckpt = HuggingFaceCheckpoint(self.config, args)
+            return hf_ckpt.convert_from_common(self.c_ckpt, layer_dict, expert_dict=expert_dict, save_path=args.save_ckpt_path)
         self.common_ckpt.clear()
 
     def convert_config(self, platform):
@@ -116,7 +117,7 @@ class Model():
 
         # load checkpoint
         if platform == 'huggingface':
-            hf_ckpt = HuggingFaceCheckpoint(self.config)
+            hf_ckpt = HuggingFaceCheckpoint(self.config, args)
             assert len(layer_dict.keys()) == 1, f"layer_dict keys: {layer_dict.keys()}"
             p = list(layer_dict.keys())[0]
             layer_ids = layer_dict[p]
@@ -127,7 +128,7 @@ class Model():
         # load checkpoint
         if platform == 'mcore':
             self.delay_convert_optimizer = args.model_type_custom in BIG_MODEL_LIST
-            m_ckpt = McoreCheckpoint(self.config)
+            m_ckpt = McoreCheckpoint(self.config, args)
             m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict)
             self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
 
@@ -174,14 +175,6 @@ def main():
 
     if args.megatron_path is not None:
         sys.path.insert(0, args.megatron_path)
-
-    if args.load_platform == "mcore"  or args.save_platform == "mcore":
-        assert args.transformer_impl == "transformer_engine", \
-            "Only support transformer_engine implemenation for mcore now!"
-
-        args.no_load_optim = True
-        args.no_save_optim = True
-        logging.info(f"<< Warning: not support mcore optimizer now, so no_load_optim and no_save_optim are set to True! >>")
 
     if not args.distributed_convert:
         os.environ['RANK'] = '0'
@@ -312,32 +305,18 @@ def test():
     args.common_config_path = "./convert_checkpoint/config/deepseek-v3-lite.json"
     args.megatron_path = None
     args.model_type_custom = None
-    args.torch_dtype = None
-    args.vocab_size = None
     args.vpp_scheduler = None
     args.num_virtual_stages_per_pipeline_rank = None
     args.decoder_first_pipeline_num_layers = None
     args.decoder_last_pipeline_num_layers = None
-    args.use_distributed_optimizer = False
     args.tensor_model_parallel_size = tp
     args.pipeline_model_parallel_size = pp
     args.data_parallel_size = 1
     args.expert_parallel_size = ep
-    args.pad_vocab_size_to = None
     args.num_layers_per_virtual_pipeline_stage = None
-    args.transformer_impl = 'transformer_engine'
-    args.checkpoint_format = None
     args.max_workers = 1
     args.num_experts = num_experts
-    args.no_load_optim = True
-    args.no_save_optim = True
-    args.no_te = True
     args.moe_grouped_gemm = True
-    args.resume_convert = False
-    args.cache_path = None
-    args.layer_for_test = None
-    args.num_experts_for_test = None
-    args.sub_num_layers_for_save = None
     args.custom_pipeline_layers = custom_pipeline_layers
     args.safetensors = True
     args.save_sub_checkpoint_by_pp = True

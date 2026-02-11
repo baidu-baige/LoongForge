@@ -89,7 +89,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                             break
     return list(filenames_in_the_layer)
 
-def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False):
+def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, max_workers=1):
     """
     Merge sharded checkpoints from transformers into a single checkpoint.
 
@@ -99,7 +99,6 @@ def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False):
     """
     if load_safe:
         from safetensors.torch import load_file
-    args = parse_args()
     state_dict = {}
     current_chunks = [None] * len(checkpoint_names)
     def load_files(checkpoint_path, i):
@@ -108,12 +107,12 @@ def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False):
         else:
             current_chunks[i] = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         logging.info(f"Loaded huggingface checkpoint: {checkpoint_path}")
-    if args.max_workers is None:
+    if max_workers is None:
         for i in range(len(checkpoint_names)):
             load_files(os.path.join(path, checkpoint_names[i]), i)
     else:
         futures = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             for i in range(len(checkpoint_names)):
                 futures.append(executor.submit(load_files, os.path.join(path, checkpoint_names[i]), i))
         concurrent.futures.wait(futures)
@@ -133,13 +132,13 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
        HuggingFaceCheckpoint
     """
 
-    def __init__(self, c_config):
+    def __init__(self, c_config, args):
         super().__init__(c_config)
-        self.args = parse_args()
+        self.args = args
         self.margs = self.c_config.get_args("mcore")
         self.cargs = self.c_config.get_args("common")
-        self.h_base = HuggingfaceBase(c_config)
-        self.h_moe = HuggingfaceMoe(c_config)
+        self.h_base = HuggingfaceBase(c_config, args)
+        self.h_moe = HuggingfaceMoe(c_config, args)
         self.state_dict = {}
 
     @staticmethod
@@ -173,7 +172,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         return False
 
 
-    def convert_from_common(self, c_ckpt, layer_dict, expert_dict=None):
+    def convert_from_common(self, c_ckpt, layer_dict, expert_dict=None, save_path=None):
         """
         Convert HuggingFace checkpoint to common checkpoint.
         """
@@ -182,7 +181,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         cargs = self.c_config.get_args("common")
         hargs = self.c_config.get_args("huggingface")
-        args = parse_args()
         num_layers = cargs["num_layers"]
         mtp_layer_id = hargs.get("mtp_layer_id", None)
         name_map = self.c_config.get("name_map")["huggingface"]
@@ -193,7 +191,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         layer_ids = layer_dict[p]
         ep_ids = list(expert_dict.keys()) if expert_dict is not None else None
 
-        save_path = args.save_ckpt_path
         if self.check_done_files(save_path, layer_dict, expert_dict=expert_dict):
             return
 
@@ -202,7 +199,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            hf_layer_id = mtp_layer_id + (layer_id - num_layers) if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
+            hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
+            if layer_id > num_layers and mtp_layer_id is not None:
+                continue
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
             for c_name in BASE_NAMES:
@@ -254,7 +253,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         cargs = self.c_config.get_args("common")
         hargs = self.c_config.get_args("huggingface")
-        self.args = parse_args()
         c_ckpt = CommonCheckpoint(self.c_config)
         num_layers = cargs["num_layers"]
         mtp_layer_id = hargs.get("mtp_layer_id", None)
@@ -317,8 +315,13 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
-                self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, True)
+                if isinstance(c_config, list):
+                    checkpoint_names = []
+                    for one_c_config in c_config:
+                        checkpoint_names.append(get_hf_checkpoint_names(one_c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers))
+                else:
+                    checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
+                self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
         else:
             sub_dirs = [x for x in os.listdir(load_path) if x.startswith("pytorch_model")]
@@ -332,8 +335,13 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
-                self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names)
+                if isinstance(c_config, list):
+                    checkpoint_names = []
+                    for one_c_config in c_config:
+                        checkpoint_names.append(get_hf_checkpoint_names(one_c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers))
+                else:
+                    checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
+                self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, max_workers=self.args.max_workers)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
 
@@ -362,10 +370,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             save_file(shard, shard_path, metadata={"format": "pt"})
             logging.info(f"Saving HuggingFace shard to: {shard_path}")
 
-        args = parse_args()
-        if args.max_workers > 1:
+        if self.args.max_workers > 1:
             futures = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.args.max_workers) as executor:
                 for shard_file, tensors in state_dict_split.filename_to_tensors.items():
                     has_safetensor_file = True
                     futures.append(executor.submit(save_hf_shard, tensors=tensors, shard_file=shard_file))

@@ -1,0 +1,13 @@
+# Configuration file paths
+config:
+  model_config_file: configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+  foundation_convert_file: configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
+  image_encoder_convert_file: configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+  image_projector_convert_file: configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
+
+# Parallel strategy parameters
+param_dict:
+  tp_size: 4
+  pp_size: 2
+  vpp_size: 2  # Virtual Pipeline Parallel
+  custom_pipeline_layers: [6, 8, 6, 8]  # Number of layers in each PP stage
