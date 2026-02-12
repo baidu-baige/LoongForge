@@ -74,9 +74,10 @@ class HfCheckpointConverter:
     def get_mcore_ckpt(self):
         mcore_dict = {}
         for p in self.pp_ranks:
-            c_ckpt = self.hf_ckpt.convert_to_common(self.layer_dict, expert_dict=self.expert_dict)
+            cur_layer_dict = {p: self.layer_dict[p]}
+            c_ckpt = self.hf_ckpt.convert_to_common(cur_layer_dict, expert_dict=self.expert_dict)
             mcore_dict[p] = self.m_ckpt.convert_from_common(
-                    c_ckpt, None, self.layer_dict, expert_dict=self.expert_dict,save_file=False,
+                    c_ckpt, None, cur_layer_dict, expert_dict=self.expert_dict,save_file=False,
                     tp_ranks=self.tp_ranks, etp_ranks=self.etp_ranks)[p]
         return mcore_dict
 
@@ -84,8 +85,8 @@ class HfCheckpointConverter:
         self.m_ckpt.load(None, layer_dict=self.layer_dict, expert_dict=self.expert_dict, mcore_dict=mcore_dict)
 
     def save_hf_ckpt(self, save_path):
-        mcore_dict = {}
         for p in self.pp_ranks:
-            c_ckpt = self.m_ckpt.convert_to_common(self.layer_dict, expert_dict=self.expert_dict)
-            mcore_dict[p] = self.hf_ckpt.convert_from_common(c_ckpt, self.layer_dict, expert_dict=self.expert_dict, save_path=save_path)[p]
+            cur_layer_dict = {p: self.layer_dict[p]}
+            c_ckpt = self.m_ckpt.convert_to_common(cur_layer_dict, expert_dict=self.expert_dict)
+            self.hf_ckpt.convert_from_common(c_ckpt, cur_layer_dict, expert_dict=self.expert_dict, save_path=save_path)
 

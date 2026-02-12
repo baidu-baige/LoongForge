@@ -293,18 +293,21 @@ class McoreCheckpoint(AbstractCheckpoint):
                     m_dict[t] = self.load_state_dict(load_path, p, t)
                 else:
                     m_dict[t] = mcore_dict[p][t]
-                self.checkpoint_version = m_dict[t]['checkpoint_version']
+                self.checkpoint_version = m_dict[t].get('checkpoint_version', self.checkpoint_version)
             ep_mcore_state_dict = None
         elif self.etp is None:
             loaded_keys = {}
-            for ep_id in ep_ids:
-                for t in range(tp):
-                    if mcore_dict is None:
-                        m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
-                    else:
-                        m_dict[t] = mcore_dict[p][ep_id][t]
-                    self.checkpoint_version = m_dict[t]['checkpoint_version']
-                    loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
+            if 0 in ep_ids:
+                for ep_id in ep_ids:
+                    for t in range(tp):
+                        if mcore_dict is None:
+                            m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                        else:
+                            m_dict[t] = mcore_dict[p][ep_id][t]
+                        self.checkpoint_version = m_dict[t].get('checkpoint_version', self.checkpoint_version)
+                        loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
+            else:
+                m_dict = None
             ep_mcore_state_dict = {}
             for ep_id in ep_ids:
                 ep_mcore_state_dict[ep_id] = {}
@@ -321,14 +324,17 @@ class McoreCheckpoint(AbstractCheckpoint):
             assert tp_to_ep is not None, f"tp_to_ep is not provided, {ep_ids=}"
             assert etp_to_tp_mapping is not None, f"etp_to_tp_mapping is not provided, {ep_ids=}"
             loaded_keys = {}
-            for t in range(tp):
-                ep_id = tp_to_ep[t]
-                if mcore_dict is None:
-                    m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
-                else:
-                    m_dict[t] = mcore_dict[p][ep_id][t]
-                self.checkpoint_version = m_dict[t]['checkpoint_version']
-                loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
+            if 0 in ep_ids:
+                for t in range(tp):
+                    ep_id = tp_to_ep[t]
+                    if mcore_dict is None:
+                        m_dict[t] = self.load_state_dict(load_path, p, t, e=ep_id)
+                    else:
+                        m_dict[t] = mcore_dict[p][ep_id][t]
+                    self.checkpoint_version = m_dict[t].get('checkpoint_version', self.checkpoint_version)
+                    loaded_keys[f"{p}_{t}_{ep_id}"] = m_dict[t]
+            else:
+                m_dict = None
             ep_mcore_state_dict = {}
             for ep_id in ep_ids:
                 assert ep_id in etp_to_tp_mapping, f"{etp_to_tp_mapping=} does not contain {ep_id=}"
@@ -345,11 +351,11 @@ class McoreCheckpoint(AbstractCheckpoint):
                         else:
                             ep_mcore_state_dict[ep_id][et] = mcore_dict[p][ep_id][t]
 
-        assert len(m_dict) > 0, f"m_dict must not be empty"
-        self.checkpoint_version = m_dict[0].get('checkpoint_version', 3.0)
-        self.rng_state = m_dict[0].get('rng_state', None)
+        if m_dict is not None:
+            assert len(m_dict) > 0, f"m_dict must not be empty"
+            self.checkpoint_version = m_dict[0].get('checkpoint_version', self.checkpoint_version)
+            self.rng_state = m_dict[0].get('rng_state', None)
         return m_dict, ep_mcore_state_dict
-
 
     def load(self, load_path, layer_dict, expert_dict=None, mcore_dict=None):
         p = list(layer_dict.keys())[0]

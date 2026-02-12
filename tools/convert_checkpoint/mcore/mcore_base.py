@@ -281,6 +281,8 @@ class McoreBase:
         # ep_mcore_state_dict: 
         #   etp is None: ep_id->t->dict
         #   etp is not None: ep_id->et->dict
+        if m_dict is None:
+            return
         if name not in self.name_map:
             return
         if name == MTP_WORD_EMBEDDING and self.aiak_version > 0.14:
