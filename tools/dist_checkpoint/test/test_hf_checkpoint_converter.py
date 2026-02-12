@@ -50,20 +50,61 @@ def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks):
     m_dict = hf_convert.get_mcore_ckpt()
     return m_dict
 
-def test_moe_hf_to_mcore():
+def test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, mcore_dict):
     parallel_config = ParallelConfig()
-    parallel_config.vpp_size = 2
+    parallel_config.vpp_size = vpp
     parallel_config.vpp_scheduler = None
-    parallel_config.tp_size = 2
-    parallel_config.pp_size = 2
+    parallel_config.tp_size = tp
+    parallel_config.pp_size = pp
     parallel_config.custom_pipeline_layers = None
     parallel_config.safetensors = True
-    parallel_config.ep_size = 8
-    parallel_config.etp_size = 1
-    parallel_config.pp_ranks = [1]
-    parallel_config.ep_ranks = [2,3]
-    parallel_config.tp_ranks = [0,1]
-    parallel_config.etp_ranks = [0]
+    parallel_config.ep_size = None
+    parallel_config.pp_ranks = pp_ranks
+    parallel_config.ep_ranks = None
+    parallel_config.tp_ranks = tp_ranks
+    parallel_config.etp_ranks = None
+    parallel_config.moe_grouped_gemm = True
+    config_file = os.environ.get('MODEL_CONFIG_FILE')
+    convert_file = os.environ.get('CONVERT_FILE')
+    ckpt_path = os.environ.get('SAVE')
+
+    c_config = CommonConfig()
+    with open(config_file, 'r') as f:
+        module_names = parse_at_configs(f.readlines())
+    module_type = convert_file.split('/')[-3]
+    if module_names == {}: # llm
+        cfg = load_config(convert_file, hydra_overrides={module_type+'@module='+config_file.split("/")[-1].split(".")[0]})
+    else: # omni vlm
+        cfg = load_config(convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
+    OmegaConf.set_struct(cfg, False)
+
+    model_cfg = load_config(config_file)
+    if module_type != 'image_encoder':
+        module_type = 'foundation'
+
+    c_config.load_convert_data(cfg)
+
+    update_overwrite(model_cfg, c_config, module_type)
+    hf_convert = HfCheckpointConverter(parallel_config, c_config)
+    hf_convert.set_mapping_cfg(c_config)
+    hf_convert.load_mcore(mcore_dict)
+    hf_convert.save_hf_ckpt(ckpt_path)
+
+def test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks):
+    parallel_config = ParallelConfig()
+    parallel_config.vpp_size = vpp
+    parallel_config.vpp_scheduler = None
+    parallel_config.tp_size = tp
+    parallel_config.pp_size = pp
+    parallel_config.custom_pipeline_layers = None
+    parallel_config.safetensors = True
+    parallel_config.ep_size = ep
+    parallel_config.etp_size = etp
+    parallel_config.pp_ranks = pp_ranks
+    parallel_config.ep_ranks = ep_ranks
+    parallel_config.tp_ranks = tp_ranks
+    parallel_config.etp_ranks = etp_ranks
+    parallel_config.moe_grouped_gemm = True
     config_file = os.environ.get('MODEL_CONFIG_FILE')
     convert_file = os.environ.get('CONVERT_FILE')
     ckpt_path = os.environ.get('LOAD')
@@ -91,20 +132,72 @@ def test_moe_hf_to_mcore():
     m_dict = hf_convert.get_mcore_ckpt()
     return m_dict
 
+def test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, mcore_dict):
+    parallel_config = ParallelConfig()
+    parallel_config.vpp_size = vpp
+    parallel_config.vpp_scheduler = None
+    parallel_config.tp_size = tp
+    parallel_config.pp_size = pp
+    parallel_config.custom_pipeline_layers = None
+    parallel_config.safetensors = True
+    parallel_config.ep_size = ep
+    parallel_config.etp_size = etp
+    parallel_config.pp_ranks = pp_ranks
+    parallel_config.ep_ranks = ep_ranks
+    parallel_config.tp_ranks = tp_ranks
+    parallel_config.etp_ranks = etp_ranks
+    parallel_config.moe_grouped_gemm = True
+    config_file = os.environ.get('MODEL_CONFIG_FILE')
+    convert_file = os.environ.get('CONVERT_FILE')
+    ckpt_path = os.environ.get('SAVE')
+
+    c_config = CommonConfig()
+    with open(config_file, 'r') as f:
+        module_names = parse_at_configs(f.readlines())
+    module_type = convert_file.split('/')[-3]
+    if module_names == {}: # llm
+        cfg = load_config(convert_file, hydra_overrides={module_type+'@module='+config_file.split("/")[-1].split(".")[0]})
+    else: # omni vlm
+        cfg = load_config(convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
+    OmegaConf.set_struct(cfg, False)
+
+    model_cfg = load_config(config_file)
+    if module_type != 'image_encoder':
+        module_type = 'foundation'
+
+    c_config.load_convert_data(cfg)
+
+    update_overwrite(model_cfg, c_config, module_type)
+    hf_convert = HfCheckpointConverter(parallel_config, c_config)
+    hf_convert.set_mapping_cfg(c_config)
+    hf_convert.load_mcore(mcore_dict)
+    hf_convert.save_hf_ckpt(ckpt_path)
+
 if __name__ == "__main__":
     test_model = os.environ.get('TEST_MODEL')
+    tp = int(os.environ.get('TP_SIZE')) if os.environ.get('TP_SIZE') is not None else 1
+    pp = int(os.environ.get('PP_SIZE')) if os.environ.get('PP_SIZE') is not None else 1
+    vpp = int(os.environ.get('VPP_SIZE')) if os.environ.get('VPP_SIZE') is not None else None
+    pp_ranks = [int(x.strip()) for x in os.environ.get('PP_RANKS').split(',') if x.strip()]
+    tp_ranks = [int(x.strip()) for x in os.environ.get('TP_RANKS').split(',') if x.strip()]
+    ep = int(os.environ.get('EP_SIZE')) if os.environ.get('EP_SIZE') is not None else None
+    etp = int(os.environ.get('ETP_SIZE')) if os.environ.get('ETP_SIZE') is not None else None
+    ep_ranks = [int(x.strip()) for x in (os.environ.get('EP_RANKS') if os.environ.get('EP_RANKS') is not None else "").split(',') if x.strip()]
+    etp_ranks = [int(x.strip()) for x in (os.environ.get('ETP_RANKS') if os.environ.get('ETP_RANKS') is not None else "").split(',') if x.strip()]
     if test_model == "mimo":
-        m_dict = test_hf_to_mcore(2, 2, 2, [1], [0, 1])
+        m_dict = test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks)
         for p in m_dict:
             print(f"{p=}: {m_dict[p].keys()}")
+        test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, m_dict)
     if test_model == "qwen2":
-        m_dict = test_hf_to_mcore(2, 2, None, [1], [1])
+        m_dict = test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks)
         for p in m_dict:
             for t in m_dict[p]:
                 print(f"{p=}, {t=}: {m_dict[p][t]['model']['decoder.layers.0.mlp.linear_fc1.weight'].shape}")
     if test_model == "qwen3moe":
-        m_dict = test_moe_hf_to_mcore()
+        m_dict = test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks)
         for p in m_dict:
             print(f"{p=}: {m_dict[p].keys()}")
             for e in m_dict[p]:
                 print(f"{p=}: {e=}, {m_dict[p][e].keys()}")
+        test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, m_dict)
