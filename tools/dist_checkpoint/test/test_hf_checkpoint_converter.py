@@ -1,6 +1,8 @@
 """ Huggingface checkpoint converter """
 
 import os
+import shutil
+import time
 
 from dist_checkpoint.config.parallel_config import ParallelConfig
 from dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
@@ -8,6 +10,12 @@ from omegaconf import OmegaConf
 from convert_checkpoint.utils.config_utils import parse_at_configs, load_config, update_overwrite
 
 from convert_checkpoint.common.common_config import CommonConfig
+
+from convert_checkpoint.utils.utils import(
+    check_all_done,
+    make_hf_sub_checkpoints
+)
+
 
 def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks):
     parallel_config = ParallelConfig()
@@ -87,8 +95,7 @@ def test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, mcore_dict):
     update_overwrite(model_cfg, c_config, module_type)
     hf_convert = HfCheckpointConverter(parallel_config, c_config)
     hf_convert.set_mapping_cfg(c_config)
-    hf_convert.load_mcore(mcore_dict)
-    hf_convert.save_hf_ckpt(ckpt_path)
+    hf_convert.save_hf_ckpt(mcore_dict, ckpt_path)
 
 def test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks):
     parallel_config = ParallelConfig()
@@ -168,10 +175,21 @@ def test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp
     c_config.load_convert_data(cfg)
 
     update_overwrite(model_cfg, c_config, module_type)
+
     hf_convert = HfCheckpointConverter(parallel_config, c_config)
     hf_convert.set_mapping_cfg(c_config)
-    hf_convert.load_mcore(mcore_dict)
-    hf_convert.save_hf_ckpt(ckpt_path)
+    hf_convert.save_hf_ckpt(mcore_dict, ckpt_path)
+
+    rank_id = int(os.getenv('RANK', '0'))
+    if rank_id == 0:
+        done_dir = os.path.join(ckpt_path, "dones")
+        while True:
+            checked_done = check_all_done(done_dir, pp, ep)
+            if checked_done:
+                shutil.rmtree(done_dir)
+                break
+        make_hf_sub_checkpoints(ckpt_path)
+
 
 if __name__ == "__main__":
     test_model = os.environ.get('TEST_MODEL')
@@ -199,5 +217,6 @@ if __name__ == "__main__":
         for p in m_dict:
             print(f"{p=}: {m_dict[p].keys()}")
             for e in m_dict[p]:
-                print(f"{p=}: {e=}, {m_dict[p][e].keys()}")
+                for t in m_dict[p][e]:
+                    print(f"{p=}, {e=}, {t=}")
         test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, m_dict)

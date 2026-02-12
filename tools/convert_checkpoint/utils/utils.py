@@ -73,6 +73,8 @@ def vocab_size_with_padding(orig_vocab_size, make_vocab_size_divisible_by, tp):
 
 def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_vocab_size=None):
     """ add embedding padding """
+    if weight is None:
+        return None
     if padded_vocab_size is None:
         padded_vocab_size = vocab_size_with_padding(orig_vocab_size, divisible_by, tp)
         padding_size = padded_vocab_size - orig_vocab_size
@@ -88,7 +90,8 @@ def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_voca
 
 def cut_embedding_padding(weight, orig_vocab_size):
     """ cut embedding padding """
-    #TODO
+    if weight is None:
+        return None
     return weight[0:orig_vocab_size, :]
 
 

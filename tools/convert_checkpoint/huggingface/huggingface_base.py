@@ -164,6 +164,8 @@ class HuggingfaceBase:
                         weight = weight[:, :self.heads * self.hidden_size_per_head].contiguous()
                     elif name in [ATTENTION_QNORM, ATTENTION_KNORM]:
                         weight = weight[:self.heads * self.hidden_size_per_head].contiguous()
+                if name == MTP_WORD_EMBEDDING:
+                    weight = weight.clone()
                 self.update_tensor(h_dict, hf_weight_path, weight, hf_bias_path=hf_bias_path, bias=bias,
                         hf_weight_scale_path=hf_weight_scale_path, weight_scale=weight_scale)
 
