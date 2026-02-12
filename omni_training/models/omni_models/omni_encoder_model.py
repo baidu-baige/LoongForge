@@ -504,7 +504,16 @@ class OmniEncoderModel(torch.nn.Module):
     def encoder_dummy_forward(self, input_embeds, encoder_model, projector_model):
         """Helper method to handle empty inputs"""
         dummy_input = encoder_model.get_dummy_input(input_embeds.device)
-        encoder_output, window_index = encoder_model(*dummy_input)
+        encoder_ret = encoder_model(*dummy_input)
+        # Different encoders do not share a strict return signature:
+        # some return (features, window_index, ...), while others return (features, None, ...) or only features.
+        # We normalize both cases to avoid unpacking failures in dummy forward.
+        if isinstance(encoder_ret, (tuple, list)):
+            encoder_output = encoder_ret[0]
+            window_index = encoder_ret[1] if len(encoder_ret) > 1 else None
+        else:
+            encoder_output = encoder_ret
+            window_index = None
         if projector_model is not None:
             encoder_output = projector_model(encoder_output, window_index)
         input_embeds = input_embeds + encoder_output.sum() * 0.0
