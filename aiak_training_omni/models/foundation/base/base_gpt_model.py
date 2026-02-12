@@ -620,7 +620,11 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                             with_context_parallel=True
                         ),
                     )
-                mtp_loss_scale = self.config.mtp_loss_scaling_factor / self.config.mtp_num_layers
+                mtp_loss_scaling_factor = (
+                    self.config.mtp_loss_scaling_factor
+                    * self.config.mtp_loss_scaling_factor_decay_ratio ** mtp_layer_number
+                )
+                mtp_loss_scale = mtp_loss_scaling_factor / self.config.mtp_num_layers
                 if self.config.calculate_per_token_loss:
                     hidden_states = MTPLossAutoScaler.apply(
                         hidden_states, mtp_loss_scale * mtp_loss
