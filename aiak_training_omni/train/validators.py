@@ -22,7 +22,7 @@ def validate_aiak_extra_args(args, config):
     _validate_extra_tokenizer_args(args)
     _validate_extra_sft_args(args)
     _validate_extra_training_args(args)
-    _validata_extra_multimodal_args(args)
+    _validate_extra_multimodal_args(args)
     _validata_extra_custom_args(args)
     _validata_extra_parallel_args(args)
 
@@ -182,7 +182,7 @@ def _validate_extra_training_args(args):
         )
 
 
-def _validata_extra_multimodal_args(args):
+def _validate_extra_multimodal_args(args):
     """Validate multimodal arguments"""
     if args.model_family not in constants.VisionLanguageModelFamilies.names():
         return
