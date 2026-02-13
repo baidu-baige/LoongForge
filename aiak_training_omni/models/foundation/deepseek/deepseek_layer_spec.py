@@ -5,6 +5,12 @@ from omegaconf import ListConfig
 
 from megatron.core.models.gpt.gpt_layer_specs import get_gpt_mtp_block_spec
 from megatron.core.transformer.enums import AttnMaskType, LayerType
+from megatron.core.transformer.experimental_attention_variant.dsa import (
+    DSAIndexer,
+    DSAIndexerSubmodules,
+    DSAttention,
+    DSAttentionSubmodules,
+)
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
@@ -35,41 +41,77 @@ def _get_deepseek_layer_with_te_spec(
     num_experts: Optional[int] = None,
     moe_grouped_gemm: Optional[bool] = True,
     qk_layernorm: Optional[bool] = False,
+    experimental_attention_variant: Optional[str] = None,
 ) -> ModuleSpec:
-    """Get the transformer layer spec for deepseek"""
-
+    """Get the transformer layer spec for deepseek
+    
+    Args:
+        experimental_attention_variant (str, optional): The type of experimental attention variant.
+                                                        Defaults to None.
+    """
     mlp = _get_mlp_module_spec(
         num_experts=num_experts,
         moe_grouped_gemm=moe_grouped_gemm,
+    )
+
+    if experimental_attention_variant is not None:
+        if experimental_attention_variant == "dsa":
+            core_attention = ModuleSpec(
+                module=DSAttention,
+                submodules=DSAttentionSubmodules(
+                    indexer=ModuleSpec(
+                        module=DSAIndexer,
+                        submodules=DSAIndexerSubmodules(
+                            linear_wq_b=multiacc_modules.TELinear,
+                            linear_wk=multiacc_modules.TELinear,
+                            k_norm=multiacc_modules.TENorm,
+                            linear_weights_proj=multiacc_modules.TELinear,
+                        ),
+                    )
+                ),
+            )
+            linear_q_up_proj = multiacc_modules.TEColumnParallelLinear
+            linear_kv_up_proj = multiacc_modules.TEColumnParallelLinear
+            q_layernorm = (multiacc_modules.TENorm if qk_layernorm else IdentityOp)
+            kv_layernorm = (multiacc_modules.TENorm if qk_layernorm else IdentityOp)
+        else:
+            raise ValueError(
+                f"Invalid experimental attention variant: {experimental_attention_variant}"
+            )
+    else:
+        core_attention = multiacc_modules.DotProductAttention
+        linear_q_up_proj = (
+            multiacc_modules.TELayerNormColumnParallelLinear if qk_layernorm
+            else multiacc_modules.TEColumnParallelLinear
+        )
+        linear_kv_up_proj = (
+            multiacc_modules.TELayerNormColumnParallelLinear if qk_layernorm
+            else multiacc_modules.TEColumnParallelLinear
+        )
+        q_layernorm = IdentityOp
+        kv_layernorm = IdentityOp
+
+    attention = ModuleSpec(
+        module=MLASelfAttention,
+        params={"attn_mask_type": AttnMaskType.causal},
+        submodules=MLASelfAttentionSubmodules(
+            linear_q_proj=multiacc_modules.TEColumnParallelLinear,
+            linear_q_down_proj=multiacc_modules.TEColumnParallelLinear,
+            linear_q_up_proj=linear_q_up_proj,
+            linear_kv_down_proj=multiacc_modules.TEColumnParallelLinear,
+            linear_kv_up_proj=linear_kv_up_proj,
+            core_attention=core_attention,
+            linear_proj=multiacc_modules.TERowParallelLinear,
+            q_layernorm=q_layernorm,
+            kv_layernorm=kv_layernorm,
+        ),
     )
 
     return ModuleSpec(
         module=TransformerLayer,
         submodules=TransformerLayerSubmodules(
             input_layernorm=multiacc_modules.TENorm,
-            self_attention=ModuleSpec(
-                module=MLASelfAttention,
-                params={"attn_mask_type": AttnMaskType.causal},
-                submodules=MLASelfAttentionSubmodules(
-                    linear_q_proj=multiacc_modules.TEColumnParallelLinear,
-                    linear_q_down_proj=multiacc_modules.TEColumnParallelLinear,
-                    linear_q_up_proj=(
-                        multiacc_modules.TELayerNormColumnParallelLinear
-                        if qk_layernorm
-                        else multiacc_modules.TEColumnParallelLinear
-                    ),
-                    linear_kv_down_proj=multiacc_modules.TEColumnParallelLinear,
-                    linear_kv_up_proj=(
-                        multiacc_modules.TELayerNormColumnParallelLinear
-                        if qk_layernorm
-                        else multiacc_modules.TEColumnParallelLinear
-                    ),
-                    core_attention=multiacc_modules.DotProductAttention,
-                    linear_proj=multiacc_modules.TERowParallelLinear,
-                    q_layernorm=IdentityOp,
-                    kv_layernorm=IdentityOp,
-                ),
-            ),
+            self_attention=attention,
             self_attn_bda=multiacc_modules.get_bias_dropout_add,
             pre_mlp_layernorm=multiacc_modules.TENorm,
             mlp=mlp,
@@ -152,12 +194,14 @@ def get_deepseek_decoder_block_and_mtp_spec(
         num_experts=None,
         moe_grouped_gemm=False,
         qk_layernorm=config.qk_layernorm,
+        experimental_attention_variant=config.experimental_attention_variant,
     )
 
     moe_layer_spec = _get_deepseek_layer_with_te_spec(
         num_experts=config.num_moe_experts,
         moe_grouped_gemm=config.moe_grouped_gemm,
         qk_layernorm=config.qk_layernorm,
+        experimental_attention_variant=config.experimental_attention_variant,
     )
 
     # In FP8 training, replace `linear_q_down_proj` and `linear_kv_down_proj`

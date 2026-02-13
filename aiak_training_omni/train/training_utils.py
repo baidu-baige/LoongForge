@@ -65,6 +65,7 @@ from megatron.core.optimizer import get_megatron_optimizer, OptimizerConfig
 from megatron.core.rerun_state_machine import get_rerun_state_machine
 from megatron.core.transformer.moe import upcycling_utils
 from megatron.core.transformer.moe.moe_utils import track_moe_metrics
+from megatron.core.transformer.experimental_attention_variant.dsa import DSAIndexerLossLoggingHelper
 from megatron.training.global_vars import get_energy_monitor
 
 from megatron.core.parallel_state import (
@@ -1169,7 +1170,16 @@ def training_log(
         MTPLossLoggingHelper.track_mtp_metrics(
             mtp_loss_scale, iteration, writer, wandb_writer, total_loss_dict
         )
-
+    # Track sparse attention indexer loss
+    if args.dsa_indexer_loss_coeff is not None and args.dsa_indexer_loss_coeff > 0:
+        indexer_loss_scale = 1 / get_num_microbatches()
+        DSAIndexerLossLoggingHelper.track_indexer_metrics(
+            loss_scale=indexer_loss_scale,
+            iteration=iteration,
+            writer=writer,
+            wandb_writer=wandb_writer,
+            total_loss_dict=total_loss_dict,
+        )
     if iteration % args.log_interval == 0:
         if args.record_memory_history and is_last_rank():
             snapshot = torch.cuda.memory._snapshot()
