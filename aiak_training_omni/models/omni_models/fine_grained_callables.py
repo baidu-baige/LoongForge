@@ -180,7 +180,8 @@ class PreProcessNode(ScheduleNode):
             rotary_pos_emb is None
             and model.foundation_model.position_embedding_type == "rope"
             and not model.foundation_model.config.multi_latent_attention
-            and model.foundation_model.config.rotary_emb_func != "Qwen2VLRotaryEmbedding"
+            and model.foundation_model.config.rotary_emb_func not in \
+                ["Qwen2VLRotaryEmbedding", "Qwen3VLRotaryEmbedding"]
         ):
             rotary_seq_len = model.foundation_model.rotary_pos_emb.get_rotary_seq_len(
                 inference_params,

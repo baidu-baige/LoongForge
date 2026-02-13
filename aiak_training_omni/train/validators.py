@@ -803,6 +803,18 @@ def _validate_custom_model_args(name, args, defaults={}):
         assert args.recompute_method is None, \
             'recompute method is not yet supported for ' \
             'selective recomputing granularity'
+        
+    if args.recompute_modules:
+        warnings.warn(f"WARNING: Now for {name} model, a2a modules are not supported"
+                      "for selective recomputing granularity, ignoring them.")
+        args.recompute_modules = [
+            m for m in args.recompute_modules 
+            if not m.startswith('a2a')
+        ]
+    
+    if args.fine_grained_activation_offloading:
+        warnings.warn(f"WARNING: Now for {name} model, fine_grained_activation_offloading is not supported.")
+        args.fine_grained_activation_offloading = False
 
     # disable sequence parallelism when tp=1
     # to avoid change in numerics when
@@ -878,6 +890,12 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.num_experts is not None:
         warnings.warn("Warning: For those non foundation model, num_experts must be None.")
         args.num_experts = None
+
+    if args.overlap_moe_expert_parallel_comm:
+        warnings.warn(f"Warning: Now for {name}, we do not support overlap_moe_expert_parallel_comm and "
+                      "delay_wgrad_compute.")
+        args.overlap_moe_expert_parallel_comm = False
+        args.delay_wgrad_compute = False
 
     # Context parallel
     if args.context_parallel_size > 1:
