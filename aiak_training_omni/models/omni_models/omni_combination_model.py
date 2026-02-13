@@ -17,7 +17,9 @@ from aiak_training_omni.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core.transformer.module import MegatronModule
-
+from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
+    fine_grained_offloading_init_chunk_handler,
+)
 
 class OmniCombinationModel(BaseMegatronModule):
     """Omni multimodal combination model"""
@@ -49,6 +51,7 @@ class OmniCombinationModel(BaseMegatronModule):
         self.post_process = post_process
         self.add_encoder = add_encoder
         self.add_decoder = add_decoder
+        self.disable_param_offloading = True
 
         if config.image_encoder is not None and add_encoder:
             self.encoder_model = OmniEncoderModel(
@@ -157,6 +160,22 @@ class OmniCombinationModel(BaseMegatronModule):
         """Generate multimodal data"""
         pass
 
+    def preprocess_for_fine_grained_offloading(self):
+        """Preprocess for fine-grained activation offloading."""
+        fine_grained_offloading_init_chunk_handler(
+            self.vp_stage, self.config.min_offloaded_tensor_size
+        )
+        if self.disable_param_offloading:
+            for param in self.foundation_model.decoder.parameters():
+                param.offloading_activation = False
+            if self.foundation_model.mtp_process:
+                for param in self.foundation_model.mtp.parameters():
+                    param.offloading_activation = False
+            if self.foundation_model.post_process:
+                for param in self.foundation_model.output_layer.parameters():
+                    param.offloading_activation = False
+            self.disable_param_offloading = False
+
     def forward(
         self,
         image_inputs: Optional[Dict[str, torch.Tensor]] = None,
@@ -181,6 +200,10 @@ class OmniCombinationModel(BaseMegatronModule):
             3. Offline foundation model: use preprocessed output_embeddings
             4. Decoder only: freeze encoder and foundation
         """
+        
+        if self.config.fine_grained_activation_offloading:
+            self.preprocess_for_fine_grained_offloading()
+
         use_inference_kv_cache = (
             inference_params is not None
             and "image_tokens_count" in inference_params.key_value_memory_dict
@@ -235,6 +258,10 @@ class OmniCombinationModel(BaseMegatronModule):
         labels: Optional[torch.LongTensor] = None,
         **kwargs: Any,
     ):
+
+        if self.config.fine_grained_activation_offloading:
+            self.preprocess_for_fine_grained_offloading()
+
         """Build the schedule plan for the model."""
         from .model_chunk_schedule_plan import TransformerModelChunkSchedulePlan
 
