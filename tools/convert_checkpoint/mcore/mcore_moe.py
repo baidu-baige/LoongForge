@@ -16,6 +16,8 @@ from convert_checkpoint.common.common_checkpoint import (
     EXTRA_DATA,
     MOE_EXPERT,
     MOE_GROUPED_GEMM_EXPERT,
+    LORA_NAME_IN,
+    LORA_NAME_OUT
 )
 
 
@@ -104,14 +106,24 @@ class McoreMoe(McoreBase):
             mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
             mcore_weight_path = f"{mcore_path}.{WEIGHT}{local_eid}"
             mcore_bias_path = f"{mcore_path}.{BIAS}{local_eid}"
+            mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}.{WEIGHT}{local_eid}"
+            mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}.{WEIGHT}{local_eid}"
         else:
             m_name_prefix = self.name_map[MOE_EXPERT] if name_prefix is None \
                     else f"{name_prefix}.{self.name_map[MOE_EXPERT]}"
             mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{local_eid}.{mcore_name}"
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
             mcore_bias_path = f"{mcore_path}.{BIAS}"
+            mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}.{WEIGHT}"
+            mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}.{WEIGHT}"
         weight_list, bias_list, weight_scale_list = self.get_mcore_e_weight_list(
                 e_m_dict, t_name, mcore_weight_path, mcore_bias_path)
+        lora_in_weight_list, _, _ = self.get_mcore_e_weight_list(e_m_dict, t_name, mcore_lora_in_path, None)
+        lora_out_weight_list, _, _ = self.get_mcore_e_weight_list(e_m_dict, t_name, mcore_lora_out_path, None)
+        if lora_in_weight_list is not None and lora_out_weight_list is not None:
+            # Merge lora weight
+            for i in range(len(weight_list)):
+                weight_list[i] = self.lora_merge(weight_list[i], lora_out_weight_list[i], lora_in_weight_list[i], self.lora_alpha, self.lora_dim)
 
         m_tp = self.etp if self.etp is not None else self.tp
         weight, bias, weight_scale = self.get_cat_weight(

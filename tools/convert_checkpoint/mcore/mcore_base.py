@@ -23,7 +23,7 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    WEIGHT, BIAS, WEIGHT_SCALE, LAYERNORM_WEIGHT, LAYERNORM_BIAS, MIXER_ATT_IN_PROJ_QKVZ, MIXER_ATT_IN_PROJ_BA,
+    WEIGHT, BIAS, WEIGHT_SCALE, LAYERNORM_WEIGHT, LAYERNORM_BIAS, LORA_NAME_IN, LORA_NAME_OUT, MIXER_ATT_IN_PROJ_QKVZ, MIXER_ATT_IN_PROJ_BA,
     ATTENTION_QUERY_GATE_KEY_VALUE, WORD_EMBEDDINGS, WORD_EMBEDDINGS_FOR_HEAD, MTP_SHARED_HEAD_HEAD, MLP_DENSE_H_TO_4H,
     MLP_DENSE_4H_TO_H, MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
     LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER, EXTRA_DATA, LAYER_NAME, LAYER_EXTRA_DATA,
@@ -81,6 +81,8 @@ class McoreBase:
 
         self.save_path = self.args.save_ckpt_path
         self.load_path = self.args.load_ckpt_path
+        self.lora_alpha = self.args.lora_alpha
+        self.lora_dim = self.args.lora_dim
         self.transpose_mlp_dense = margs.get("transpose_mlp_dense", False)
         self.tensor_parallel_dim = TENSOR_PARALLEL_DIM
         if c_config.get("tensor_parallel_dim", None) is not None:
@@ -312,12 +314,16 @@ class McoreBase:
         else:
             m_name_prefix = mcore_name if name_prefix is None else f"{name_prefix}.{mcore_name}"
             mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}"
+        mcore_lora_in_path = None
+        mcore_lora_out_path = None
         if is_direct_name:
             mcore_weight_path = mcore_path
         elif is_layernorm:
             mcore_weight_path = f"{mcore_path}.{LAYERNORM_WEIGHT}"
         else:
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
+            mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}.{WEIGHT}"
+            mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}.{WEIGHT}"
         if is_layernorm:
             mcore_bias_path = f"{mcore_path}.{LAYERNORM_BIAS}"
         else:
@@ -330,6 +336,18 @@ class McoreBase:
 
         weight_list, bias_list, weight_scale_list = self.get_mcore_weight_list(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path)
+        if mcore_lora_in_path is None:
+            lora_in_weight_list = None
+        else:
+            lora_in_weight_list, _, _ = self.get_mcore_weight_list(m_dict, t_name, mcore_lora_in_path, None)
+        if mcore_lora_out_path is None:
+            lora_out_weight_list = None
+        else:
+            lora_out_weight_list, _, _ = self.get_mcore_weight_list(m_dict, t_name, mcore_lora_out_path, None)
+        if lora_in_weight_list is not None and lora_out_weight_list is not None:
+            # Merge lora weight
+            for i in range(len(weight_list)):
+                weight_list[i] = self.lora_merge(weight_list[i], lora_out_weight_list[i], lora_in_weight_list[i], self.lora_alpha, self.lora_dim)
 
         weight, bias, weight_scale = self.get_cat_weight(
             name, self.tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
@@ -442,3 +460,27 @@ class McoreBase:
             bias = None
         
         return weight, bias, weight_scale
+
+    def lora_merge(
+        self,
+        base_weight: torch.Tensor,
+        linear_out: torch.Tensor,
+        linear_in: torch.Tensor,
+        alpha: int,
+        dim: int,
+    ) -> torch.Tensor:
+        """
+        Merges the LoRA adapter weights with the base model weights.
+
+        Args:
+            base_weight (torch.Tensor): The base model weights.
+            linear_out (torch.Tensor): LoRA's B matrix.
+            linear_in (torch.Tensor): LoRA's A matrix.
+            alpha (int): Weighting factor for the low-rank projection.
+            dim (int): Dimension of the low-rank projection space.
+
+        Returns:
+            torch.Tensor: The merged weights.
+        """
+        lora_weight = alpha / dim * (linear_out @ linear_in)
+        return base_weight + lora_weight

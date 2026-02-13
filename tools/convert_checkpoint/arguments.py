@@ -106,6 +106,9 @@ def _add_checkpoint_args(parser):
                        'MTP extends the prediction scope to multiple future tokens at each position.'
                        'This MTP implementation sequentially predict additional tokens '
                        'by using D sequential modules to predict D additional tokens.')
+    group.add_argument('--load_lora_ckpt_path', type=str, default=None, help='path to load lora checkpoint')
+    group.add_argument('--lora_alpha', type=int, help="Lora alpha for LoRA fine tuning.")
+    group.add_argument('--lora_dim', type=int, help="Lora dim for LoRA fine tuning.")
 
 def _add_common_args(parser):
     group = parser.add_argument_group(title='common')
