@@ -5,17 +5,19 @@ from dataclasses import dataclass
 
 from aiak_training_omni.utils.constants import LanguageModelFamilies
 from aiak_training_omni.models.factory import register_model_config
+from aiak_training_omni.models.common.base_model_config import BaseModelMLAConfig
+from aiak_training_omni.models.common.base_model_config import BaseModelConfig
 
 
 @dataclass
-class MinimaxConfig:
+class MinimaxConfig(BaseModelConfig):
     """config for minimax model"""
     num_layers: int
     hidden_size: int
     ffn_hidden_size: int
     num_attention_heads: int
-    num_experts: int
-    moe_ffn_hidden_size: int
+    num_experts: int = None
+    moe_ffn_hidden_size: int = None
     make_vocab_size_divisible_by: int = 128
     kv_channels: int = None
     moe_layer_freq: Optional[Union[int, List[int]]] = None
@@ -34,3 +36,4 @@ class MinimaxConfig:
     num_query_groups: int = None
     apply_rope_fusion: bool = True
     group_query_attention: bool = False
+    model_type = LanguageModelFamilies.MINIMAX2_1

@@ -508,6 +508,14 @@ _register_chat_template(
 )
 
 _register_chat_template(
+      name="minimax-m2.1",
+      format_system=StringFormatter(slots=["{bos_token}", "]~b]system\n{{content}}", "{eos_token}", "\n"]),
+      format_user=StringFormatter(slots=["]~b]user\n{{content}}", "{eos_token}", "\n"]),
+      format_assistant=StringFormatter(slots=["]~b]ai\n{{content}}", "{eos_token}", "\n"]),
+      format_prefix=EmptyFormatter(slots=["{bos_token}", "]~b]ai\n"]),
+)
+
+_register_chat_template(
     name="no-template",
     format_user=StringFormatter(slots=["{{content}}"]),
     format_prefix=EmptyFormatter(slots=[{"bos_token"}]),

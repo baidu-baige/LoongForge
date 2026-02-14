@@ -215,8 +215,8 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/mimo",
         "config_name": "mimo_7b",
     },
-    "minmax": {
-        "config_path": "configs/models/minmax",
+    "minimax2.1-230b": {
+        "config_path": "configs/models/minimax",
         "config_name": "minimax_m2_1",
     },
 }
