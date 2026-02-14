@@ -15,6 +15,30 @@ from aiak_training_omni.models.foundation.base import BaseGPTModel
 from aiak_training_omni.models.foundation.qwen3_next.qwen3_next_config import Qwen3NextConfig
 
 
+def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
+    """Hook to ignore Transformer Engine _extra_state used for FP8.
+
+    This is for backwards-compatibility. Newer TE versions add _extra_state keys to the state dict,
+    while older models might not have those keys. Those keys can be ignored when not using FP8.
+
+    Args:
+        module (torch.nn.Module): The torch module this hook applies to. Required by the torch API.
+        incompatible_keys (namedtuple): Namedtuple with fields missing_keys and unexpected_keys,
+            which collect the missing and unexpected keys, respectively.
+    """
+    keys_to_remove = [
+        key
+        for key in incompatible_keys.missing_keys
+        if "in_proj_qkvz._extra_state" in key
+        or "in_proj_ba._extra_state" in key
+        or "out_proj._extra_state" in key
+    ]
+
+    for key in keys_to_remove:
+        if key in incompatible_keys.missing_keys:
+            incompatible_keys.missing_keys.remove(key)
+
+
 class Qwen3NextModel(BaseGPTModel):
     """Qwen3Next language model.
 
@@ -114,6 +138,10 @@ class Qwen3NextModel(BaseGPTModel):
                 attention = layer.transformer_layer.self_attention
                 attention.config = deepcopy(attention.config)
                 attention.config.apply_rope_fusion = False
+        
+        self.register_load_state_dict_post_hook(
+                _load_state_dict_hook_ignore_extra_state
+            )
 
     def forward(
         self,

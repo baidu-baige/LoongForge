@@ -25,6 +25,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
+from transformer_engine.pytorch import Linear as TE_Linear
+
 from megatron.core.dist_checkpointing import ShardedTensor
 from megatron.core.dist_checkpointing.mapping import ReplicaId, ShardedTensorFactory
 from megatron.core.fp8_utils import get_fp8_align_size
@@ -220,8 +222,8 @@ class GatedDeltaNet(HuggingFaceModule):
                 "For FP8, the innermost dimension of the GDN layer "
                 "input projection output tensor must be a multiple of 16."
             )
-        self.in_proj_qkvz = nn.Linear(self.hidden_size, self.in_proj_qkvz_dim, bias=False)
-        self.in_proj_ba = nn.Linear(self.hidden_size, self.in_proj_ba_dim, bias=False)
+        self.in_proj_qkvz = TE_Linear(self.hidden_size, self.in_proj_qkvz_dim, bias=False)
+        self.in_proj_ba = TE_Linear(self.hidden_size, self.in_proj_ba_dim, bias=False)
 
         # dt_bias parameter
         self.dt_bias = nn.Parameter(torch.ones(self.num_value_heads))
@@ -244,7 +246,7 @@ class GatedDeltaNet(HuggingFaceModule):
             )
         )
 
-        self.out_proj = nn.Linear(self.v_dim, self.hidden_size, bias=False)        
+        self.out_proj = TE_Linear(self.v_dim, self.hidden_size, bias=False)
 
     def fix_query_key_value_ordering(self, mixed_qkvz, mixed_ba):
         """
@@ -475,6 +477,24 @@ class GatedDeltaNet(HuggingFaceModule):
         if self.sequence_parallel and self.tp_size > 1:
             out = reduce_scatter_to_sequence_parallel_region(out) / self.tp_size
         return out, None
+    
+    def backward_dw(self):
+        """Execute weight gradient computation for all linear layers."""
+        self._backward_in_proj_qkvz()
+        self._backward_in_proj_ba()
+        self._backward_out_proj()
+
+    def _backward_in_proj_qkvz(self):
+        """Computes weight gradients of in_proj_qkvz layer."""
+        self.in_proj_qkvz.backward_dw()
+
+    def _backward_in_proj_ba(self):
+        """Computes weight gradients of in_proj_ba layer."""
+        self.in_proj_ba.backward_dw()
+
+    def _backward_out_proj(self):
+        """Computes weight gradients of out_proj layer."""
+        self.out_proj.backward_dw()
 
 
 def torch_chunk_gated_delta_rule(
