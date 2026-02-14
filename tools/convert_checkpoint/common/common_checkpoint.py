@@ -119,6 +119,8 @@ WEIGHT_SCALE = "weight_scale_inv"
 LAYERNORM_WEIGHT = "layer_norm_weight"
 LAYERNORM_BIAS = "layer_norm_bias"
 EXTRA_DATA = "_extra_state"
+LORA_NAME_IN = "adapter.linear_in"
+LORA_NAME_OUT = "adapter.linear_out"
 
 # The member names for each key in one layer
 LAYER_NAME = "name"
