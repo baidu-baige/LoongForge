@@ -357,15 +357,36 @@ class McoreCheckpoint(AbstractCheckpoint):
             self.rng_state = m_dict[0].get('rng_state', None)
         return m_dict, ep_mcore_state_dict
 
-    def load(self, load_path, layer_dict, expert_dict=None, mcore_dict=None):
+    def load(self, load_path, layer_dict, expert_dict=None, mcore_dict=None, lora_load_path=None):
         p = list(layer_dict.keys())[0]
         if expert_dict is None:
             self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(load_path, p, mcore_dict=mcore_dict)
+            if lora_load_path is not None:
+                lora_m_dict, _ = self.load_state_dict_from_mcore(lora_load_path, p)
+                for t in self.m_dict.keys():
+                    for key in self.m_dict[t].keys():
+                        if not key.startswith("model"):
+                            continue
+                        self.m_dict[t][key].update(lora_m_dict[t][key])
         else:
             ep_ids = list(expert_dict.keys())
             etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
             self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(
                     load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping, mcore_dict=mcore_dict)
+            if lora_load_path is not None:
+                lora_m_dict, lora_ep_mcore_state_dict = self.load_state_dict_from_mcore(
+                        lora_load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping)
+                for t in self.m_dict.keys():
+                    for key in self.m_dict[t].keys():
+                        if not key.startswith("model"):
+                            continue
+                        self.m_dict[t][key].update(lora_m_dict[t][key])
+                for e in self.ep_mcore_state_dict.keys():
+                    for t in self.ep_mcore_state_dict[e].keys():
+                        for key in self.ep_mcore_state_dict[e][t].keys():
+                            if not key.startswith("model"):
+                                continue
+                            self.ep_mcore_state_dict[e][t][key].update(lora_ep_mcore_state_dict[e][t][key])
 
     def convert_to_common(self, layer_dict, expert_dict=None):
         """

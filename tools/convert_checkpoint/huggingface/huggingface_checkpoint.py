@@ -45,6 +45,8 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     if 0 in layer_ids or num_layers - 1 in layer_ids:
         for c_name in FIRST_LAYER_NAMES:
             if c_name in name_map:
+                if name_map[c_name] is None:
+                    continue
                 name = name_map[c_name] + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
@@ -52,12 +54,16 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     if (num_layers - 1) in layer_ids:
         for c_name in LAST_LAYER_NAMES:
             if c_name in name_map:
+                if name_map[c_name] is None:
+                    continue
                 name = name_map[c_name] + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
         if mtp_num_layers > 0:
             for c_name in MTP_NAMES:
                 if c_name in name_map:
+                    if name_map[c_name] is None:
+                        continue
                     hf_name, _, _, _, no_layer_id, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                     if not no_layer_id:
                         continue

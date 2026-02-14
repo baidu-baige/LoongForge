@@ -129,7 +129,7 @@ class Model():
         if platform == 'mcore':
             self.delay_convert_optimizer = args.model_type_custom in BIG_MODEL_LIST
             m_ckpt = McoreCheckpoint(self.config, args)
-            m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict)
+            m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict, lora_load_path=args.load_lora_ckpt_path)
             self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
 
 
