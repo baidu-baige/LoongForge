@@ -1,0 +1,2 @@
+"""minimax model"""
+

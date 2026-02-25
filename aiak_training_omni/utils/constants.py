@@ -83,7 +83,7 @@ class LanguageModelFamilies(_BaseFamilies):
     MIXTRAL = "mixtral"
     DEEPSEEK = "deepseek"
     INTERNLM2_5 = "internlm2.5"
-
+    MINIMAX2_1 = "minimax2.1"
 
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""

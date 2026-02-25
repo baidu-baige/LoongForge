@@ -10,6 +10,8 @@ from .deepseek.deepseek_config import DeepseekConfig
 from .deepseek.deepseek_model import DeepseekModelWithMTP
 from .mimo.mimo_config import MimoConfig
 from .minimax.minimax_config import MinimaxConfig
+from .minimax.minimax_model import MinimaxModelWithMTP
+
 from .llama.llama_config import LLaMAConfig
 from .llama.llama_model import LLaMAModel
 from transformers import AutoModel
@@ -24,4 +26,5 @@ AutoModel.register(Qwen3Config, Qwen3Model, exist_ok=True)  # overwrite existing
 AutoModel.register(Qwen3NextConfig, Qwen3NextModel, exist_ok=True)
 AutoModel.register(InternLMConfig, InternLMModel)
 AutoModel.register(DeepseekConfig, DeepseekModelWithMTP)
+AutoModel.register(MinimaxConfig, MinimaxModelWithMTP)
 AutoModel.register(LLaMAConfig, LLaMAModel)
