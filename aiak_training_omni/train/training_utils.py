@@ -135,6 +135,7 @@ if tools_path not in sys.path:
     sys.path.insert(0, tools_path)
 
 from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+from dist_checkpoint.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
 
 try:
     from inspector.hooks import register_hooks
@@ -1799,6 +1800,9 @@ def train(
             checkpointing_context,
             train_data_iterator,
         )
+        # FIX NEEDED: 这边我不知道最后保存成HF这个逻辑要放在哪里，先临时放在这边
+        if iteration == args.training_iters:
+            save_hf_checkpoint_online(model, args)
         if should_exit:
             break
 

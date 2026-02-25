@@ -90,174 +90,65 @@ class TPGather:
         state_dict: Dict[str, torch.Tensor]
     ) -> Optional[List[Dict[str, torch.Tensor]]]:
         """
-        Gather state_dicts from all TP ranks to TP rank 0
+        Gather state_dicts from all TP ranks to TP rank 0 using dist.gather
+
+        Assumes all ranks have the same model architecture and thus identical keys.
+        Uses tensor communication (no pickle serialization overhead).
 
         Args:
-            state_dict: Complete state_dict of current rank
+            state_dict: Complete state_dict of current rank (on GPU)
 
         Returns:
-            List[Dict]: TP rank 0 returns list (index corresponds to tp_rank)
+            List[Dict]: TP rank 0 returns list of state_dicts (index corresponds to tp_rank)
                        Other ranks return None
                        List format: [state_dict_tp0, state_dict_tp1, ...]
 
         Notes:
-            - Only TP rank 0 receives and returns the complete list
-            - Other TP ranks only send data and return None
-            - List index i corresponds to state_dict of tp_rank=i
-            - No concatenation is performed; PPDistSaver handles that
+            - Only TP rank 0 receives and stores the complete list
+            - Other TP ranks send data and return None
+            - Uses sorted keys to ensure consistent ordering across all ranks
+            - Filters out non-tensor values (metadata, etc.)
+            - No serialization involved - pure tensor communication via dist.gather
         """
-        # Get TP communication group from parallel_state
         tp_group = parallel_state.get_tensor_model_parallel_group()
 
-        # Get the global rank of tp_rank=0 in my TP group
-        # This is needed because gather_object's dst parameter expects global rank within the group
+        # Get the global rank of TP rank 0 for dist.gather
         tp_rank_0_global = parallel_state.get_tensor_model_parallel_src_rank()
 
-        # Prepare gather list based on tp_rank
+        # Step 1: Sort keys and filter tensor-only keys
+        # (all ranks have identical model architecture)
+        local_keys = sorted([k for k, v in state_dict.items() if isinstance(v, torch.Tensor)])
+        print(f"[TPGather] Rank {self.rank} (tp={self.tp_rank}) gathering {len(local_keys)} tensors")
+
+        # Step 2: Gather each tensor from all TP ranks
         if self.tp_rank == 0:
-            gather_list = [None] * self.tp_size
-            print(f"[TPGather] Rank {self.rank} (tp=0) gathering state_dicts "
-                  f"from {self.tp_size} TP ranks...")
+            # TP rank 0: prepare receive buffers for each key
+            gathered_dict = {}
+            for key in local_keys:
+                # Create a list of empty tensors to receive data from all ranks
+                gathered_dict[key] = [torch.zeros_like(state_dict[key]) for _ in range(self.tp_size)]
+
+            # Gather each tensor one by one
+            for idx, key in enumerate(local_keys):
+                dist.gather(state_dict[key], gathered_dict[key], dst=tp_rank_0_global, group=tp_group)
+                if (idx + 1) % max(1, len(local_keys) // 10) == 0:
+                    print(f"[TPGather] Rank {self.rank} gathered {idx + 1}/{len(local_keys)} tensors")
+
+            print(f"[TPGather] Rank {self.rank} (tp=0) gathered all {len(local_keys)} tensors")
+
+            # Step 3: Reconstruct as list of state_dicts
+            result = []
+            for tp_idx in range(self.tp_size):
+                state_dict_tp = {key: gathered_dict[key][tp_idx] for key in local_keys}
+                result.append(state_dict_tp)
+
+            return result
         else:
-            gather_list = None
-            print(f"[TPGather] Rank {self.rank} (tp={self.tp_rank}) "
-                  f"sending state_dict to tp=0 (global rank {tp_rank_0_global})...")
+            # Other TP ranks: only send data, no receiving
+            for idx, key in enumerate(local_keys):
+                dist.gather(state_dict[key], None, dst=tp_rank_0_global, group=tp_group)
+                if (idx + 1) % max(1, len(local_keys) // 10) == 0:
+                    print(f"[TPGather] Rank {self.rank} sent {idx + 1}/{len(local_keys)} tensors")
 
-        # Use gather_object: dst is the global rank of tp_rank=0 in this TP group
-        dist.gather_object(
-            obj=state_dict,
-            object_gather_list=gather_list,
-            dst=tp_rank_0_global,
-            group=tp_group
-        )
-
-        # Return result and log
-        if self.tp_rank == 0:
-            print(f"[TPGather] Rank {self.rank} (tp=0) collected "
-                  f"{len(gather_list)} state_dicts")
-            # Validate list completeness
-            for i, sd in enumerate(gather_list):
-                if sd is None:
-                    print(f"[TPGather] WARNING: state_dict at index {i} is None!")
-        else:
-            print(f"[TPGather] Rank {self.rank} (tp={self.tp_rank}) "
-                  f"send complete")
-
-        return gather_list  # TP rank 0 returns list, others return None
-
-
-def test():
-    """
-    Test TPGather functionality
-
-    Test scenario:
-    - TP=4, PP=2, world_size=8
-    - Each rank creates a mock state_dict containing its rank information
-    - Verify that TP rank 0 correctly collects all state_dicts
-
-    Run with:
-        torchrun --nproc_per_node=8 tools/dist_checkpoint/core/tp_gather.py
-    """
-    print("\n" + "="*80)
-    print("TPGather Test Starting...")
-    print("="*80 + "\n")
-
-    # Step 1: Initialize distributed environment
-    if not dist.is_initialized():
-        dist.init_process_group(backend='nccl' if torch.cuda.is_available() else 'gloo')
-
-    rank = dist.get_rank()
-    world_size = dist.get_world_size()
-
-    # Set GPU device for each rank to avoid "Duplicate GPU detected" error
-    if torch.cuda.is_available():
-        local_rank = int(os.environ.get('LOCAL_RANK', 0))
-        torch.cuda.set_device(local_rank)
-        print(f"[Test] Rank {rank}/{world_size} initialized on GPU {local_rank}")
-    else:
-        print(f"[Test] Rank {rank}/{world_size} initialized on CPU")
-
-    # Step 2: Create parallel configuration
-    from tools.dist_checkpoint.config.parallel_config import ParallelConfig
-
-    parallel_config = ParallelConfig(
-        tp_size=4,
-        pp_size=2,
-        ep_size=1,  # Use 1 instead of None for expert parallel
-        etp_size=None,
-        vpp_size=None,
-        custom_pipeline_layers=None
-    )
-
-    # Step 3: Initialize TopoSharder
-    print(f"[Test] Rank {rank} initializing TopoSharder...")
-    topo_sharder = TopoSharder(parallel_config)
-
-    # Step 4: Create TPGather (pass topo_sharder)
-    print(f"[Test] Rank {rank} initializing TPGather...")
-    tp_gather = TPGather(topo_sharder)
-
-    # Step 5: Create mock state_dict
-    # Each rank's state_dict contains its rank information for verification
-    state_dict = {
-        "layer.weight": torch.tensor([float(rank * 100 + tp_gather.tp_rank * 10)]),
-        "layer.bias": torch.tensor([float(rank)]),
-        "metadata": {
-            "global_rank": rank,
-            "tp_rank": tp_gather.tp_rank,
-            "pp_rank": tp_gather.pp_rank,
-        }
-    }
-
-    print(f"[Test] Rank {rank} created state_dict: {state_dict['metadata']}")
-
-    # Step 6: Execute gather
-    print(f"[Test] Rank {rank} calling gather_state_dicts...")
-    gathered = tp_gather.gather_state_dicts(state_dict)
-
-    # Step 7: Verify results
-    if gathered is not None:
-        print(f"\n[Test] Rank {rank} (tp=0) received gathered results:")
-        print(f"  Number of state_dicts: {len(gathered)}")
-
-        # Verify list length
-        assert len(gathered) == tp_gather.tp_size, \
-            f"Expected {tp_gather.tp_size} state_dicts, got {len(gathered)}"
-
-        # Verify each state_dict
-        for i, sd in enumerate(gathered):
-            assert sd is not None, f"state_dict at index {i} is None"
-            assert "metadata" in sd, f"state_dict at index {i} missing metadata"
-
-            metadata = sd["metadata"]
-            print(f"  [{i}] tp_rank={metadata['tp_rank']}, "
-                  f"pp_rank={metadata['pp_rank']}, "
-                  f"global_rank={metadata['global_rank']}")
-
-            # Verify tp_rank order
-            assert metadata["tp_rank"] == i, \
-                f"state_dict at index {i} has wrong tp_rank: {metadata['tp_rank']}"
-
-            # Verify pp_rank consistency
-            assert metadata["pp_rank"] == tp_gather.pp_rank, \
-                f"state_dict at index {i} has wrong pp_rank: {metadata['pp_rank']}"
-
-        print(f"[Test] Rank {rank} (tp=0) ✅ All validations passed!")
-
-    else:
-        print(f"[Test] Rank {rank} (tp={tp_gather.tp_rank}) returned None as expected")
-
-    # Step 8: Synchronize all ranks
-    dist.barrier()
-
-    if rank == 0:
-        print("\n" + "="*80)
-        print("✅ TPGather Test Completed Successfully!")
-        print("="*80 + "\n")
-
-    # Cleanup
-    dist.destroy_process_group()
-
-
-if __name__ == "__main__":
-    test()
+            print(f"[TPGather] Rank {self.rank} (tp={self.tp_rank}) sent all {len(local_keys)} tensors")
+            return None

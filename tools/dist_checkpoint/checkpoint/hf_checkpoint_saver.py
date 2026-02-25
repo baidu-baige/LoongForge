@@ -1,0 +1,307 @@
+"""
+HF Checkpoint Online Saving for Training
+Implements online saving of model to HF checkpoint format based on tools/dist_checkpoint modules
+"""
+import os
+import sys
+from typing import Dict, Optional
+import shutil
+
+# Add project root to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+
+import torch
+import torch.distributed as dist
+from megatron.core import parallel_state
+from megatron.training import print_rank_0
+
+# Import existing dist_checkpoint modules
+from tools.dist_checkpoint.core.parser import Parser
+from tools.dist_checkpoint.core.topo_sharder import TopoSharder
+from tools.dist_checkpoint.core.tp_gather import TPGather
+from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+# Import the utility function for merging checkpoints
+from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints
+
+
+def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_path: Optional[str] = None) -> None:
+    """
+    Consolidate checkpoint files from per-PP-rank directories to final checkpoint.
+
+    This function is called by global rank 0 after all TP rank 0's have saved their checkpoints
+    to save_hf_path/sub_checkpoint/{pp_rank}/ subdirectories. It:
+    1. Uses make_hf_sub_checkpoints to merge and rename safetensors files
+    2. Copies config/tokenizer files from original HF checkpoint
+
+    Args:
+        save_hf_path: Base checkpoint directory
+        pp_size: Number of pipeline stages (for logging, not strictly used by make_hf_sub_checkpoints)
+        original_hf_path: Path to original HF checkpoint to copy config/tokenizer files from
+    """
+    print_rank_0(f"Starting checkpoint consolidation from {pp_size} PP stages...")
+
+    if not os.path.exists(save_hf_path):
+        print_rank_0(f"Error: save_hf_path {save_hf_path} does not exist")
+        return
+
+    sub_checkpoint_base = os.path.join(save_hf_path, "sub_checkpoint")
+    if not os.path.exists(sub_checkpoint_base):
+        print_rank_0(f"Error: sub_checkpoint directory {sub_checkpoint_base} does not exist")
+        return
+
+    # Step 1: Use make_hf_sub_checkpoints to merge and rename files
+    print_rank_0("Merging and renaming checkpoint files from all PP ranks...")
+    try:
+        make_hf_sub_checkpoints(save_hf_path)
+        print_rank_0("Checkpoint files merged and consolidated successfully")
+    except Exception as e:
+        print_rank_0(f"Error during checkpoint consolidation: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+    # Step 2: Copy non-weight HF checkpoint files from original HF checkpoint
+    # Copy all files except safetensors shards and index files
+    if original_hf_path and os.path.exists(original_hf_path):
+        files_copied = 0
+        for filename in os.listdir(original_hf_path):
+            src_file = os.path.join(original_hf_path, filename)
+            dst_file = os.path.join(save_hf_path, filename)
+
+            # Skip directories and already existing files
+            if os.path.isdir(src_file):
+                continue
+            if os.path.exists(dst_file):
+                continue
+            # Skip safetensors files (we already have consolidated versions)
+            if filename.endswith('.safetensors'):
+                continue
+            # Skip index files (we already created merged index)
+            if filename.endswith('.index.json'):
+                continue
+
+            try:
+                shutil.copy2(src_file, dst_file)
+                print_rank_0(f"Copied {filename}")
+                files_copied += 1
+            except Exception as e:
+                print_rank_0(f"Warning: Failed to copy {filename}: {e}")
+
+        if files_copied > 0:
+            print_rank_0(f"Copied {files_copied} additional file(s)")
+    else:
+        if original_hf_path:
+            print_rank_0(f"Warning: original_hf_path {original_hf_path} does not exist, skipping file copy")
+        else:
+            print_rank_0("Note: original_hf_path not provided, skipping additional file copy")
+
+    print_rank_0("Checkpoint consolidation completed!")
+
+
+def save_hf_checkpoint_online(
+    model,
+    args
+) -> None:
+    """
+    Save model to HF checkpoint online with distributed gathering
+
+    Uses tools/dist_checkpoint modules:
+    1. Parser to parse config
+    2. TopoSharder to initialize parallel topology
+    3. TPGather to gather TP shards to TP rank 0
+    4. HfCheckpointConverter to convert and save to pp{pp_rank}/ subdirectory
+    5. Global rank 0 consolidates all PP checkpoints to final location
+
+    Args:
+        model: Megatron distributed model
+        args: Command line arguments with save_hf_path and yaml_file
+
+    Returns:
+        None
+    """
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+
+    # Set GPU device for NCCL backend
+    # Required by gather_object when using NCCL for tensor communication
+    if torch.cuda.is_available():
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        torch.cuda.set_device(local_rank)
+
+    print_rank_0("="*80)
+    print_rank_0("Saving HF checkpoint with online gathering")
+    print_rank_0("="*80)
+    print_rank_0(f"Save path: {args.save_hf_path}")
+    print_rank_0(f"World size: {world_size}")
+    print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
+                f"PP={args.pipeline_model_parallel_size}")
+
+    # Step 1: Parse config file
+    if args.yaml_file is None:
+        raise ValueError(
+            "--yaml-file is required when saving HF checkpoint\n"
+            "Please provide a YAML config file with Mcore to HF mapping"
+        )
+
+    print_rank_0(f"Parsing mapping config from {args.yaml_file}")
+    parser = Parser(yaml_file=args.yaml_file)
+
+    # Get parallel config
+    parallel_config = parser.get_parallel_config()
+
+    # Get mapping config based on model type
+    if parser.type == 'llm':
+        mapping_cfg = parser.get_language_model_cfg()
+        mapping_cfgs = [mapping_cfg]
+    elif parser.type == 'vlm':
+        # VLM has multiple mapping configs (no language_model key)
+        mapping_cfgs = [
+            parser.get_foundation_model_cfg(),
+            parser.get_image_encoder_cfg(),
+            parser.get_image_projector_cfg()
+        ]
+    else:
+        raise ValueError(f"Unsupported model type: {parser.type}")
+
+    print_rank_0(f"Model type: {parser.type}")
+
+    # Step 2: Initialize TopoSharder (parallel_state already initialized by training)
+    # Note: parallel_state is already set up by training initialization
+    print_rank_0("Initializing TopoSharder...")
+    topo_sharder = TopoSharder(parallel_config)
+    tp_rank, pp_rank, ep_rank, etp_rank = topo_sharder.get_current_rank_coordinates()
+
+    # Each rank prints its own coordinates
+    print(f"[Rank {rank}] Coordinates: tp={tp_rank}, pp={pp_rank}, "
+          f"ep={ep_rank}, etp={etp_rank}")
+
+    # Step 3: Extract model state_dict
+    print(f"[Rank {rank}] Extracting model state_dict...")
+    from megatron.training.utils import unwrap_model
+
+    unwrapped_model = unwrap_model(model)
+    model_state_dict = {}
+    for model_module in unwrapped_model:
+        model_state_dict.update(model_module.state_dict())
+
+    print(f"[Rank {rank}] Extracted {len(model_state_dict)} parameters")
+
+    # Ensure all tensors are on GPU (required for dist.gather with NCCL backend)
+    if torch.cuda.is_available():
+        device = torch.cuda.current_device()
+        model_state_dict = {
+            k: v.to(device) if isinstance(v, torch.Tensor) else v
+            for k, v in model_state_dict.items()
+        }
+        print(f"[Rank {rank}] Moved state_dict tensors to GPU device {device}")
+
+    # Step 4: Initialize TPGather
+    print_rank_0("Initializing TPGather...")
+    tp_gather = TPGather(topo_sharder)
+
+    # IMPORTANT: Synchronize all ranks before gather
+    # This ensures that all ranks have initialized TPGather simultaneously
+    print_rank_0("Synchronizing all ranks before gather...")
+    dist.barrier()
+
+    # Step 5: Gather state_dicts within TP group to TP rank 0
+    print(f"[Rank {rank}] About to call gather_state_dicts, tp_rank={tp_rank}...")
+
+    gathered_state_dicts = tp_gather.gather_state_dicts(model_state_dict)
+
+    print(f"[Rank {rank}] Returned from gather_state_dicts")
+
+    # Step 6: TP rank 0 saves checkpoint using HfCheckpointConverter
+    if tp_rank == 0:
+        print(f"[Rank {rank}] TP rank 0 starting HF checkpoint conversion and saving...")
+
+        # Type check: gathered_state_dicts should be a list for tp_rank == 0
+        # (dist.gather ensures only tp_rank==0 receives the list)
+        assert gathered_state_dicts is not None and isinstance(gathered_state_dicts, list), \
+            "gathered_state_dicts should be a list for tp_rank == 0"
+        assert len(gathered_state_dicts) > 0, "gathered_state_dicts should not be empty"
+
+        # Create a new parallel config for this specific PP rank only
+        # IMPORTANT: Keep original pp_size but only set pp_ranks to [pp_rank]
+        from tools.dist_checkpoint.config.parallel_config import ParallelConfig
+        pp_parallel_config = ParallelConfig(
+            tp_size=len(gathered_state_dicts),
+            pp_size=parallel_config.pp_size,  # Keep original pp_size
+            ep_size=parallel_config.ep_size,
+            etp_size=parallel_config.etp_size,
+            vpp_size=parallel_config.vpp_size,
+            custom_pipeline_layers=parallel_config.custom_pipeline_layers
+        )
+        pp_parallel_config.tp_ranks = list(range(len(gathered_state_dicts)))
+        pp_parallel_config.pp_ranks = [pp_rank]  # Only current pp_rank
+        if ep_rank is not None:
+            pp_parallel_config.ep_ranks = [ep_rank]
+        if etp_rank is not None:
+            pp_parallel_config.etp_ranks = [etp_rank]
+
+        # Create HF converter
+        print(f"[Rank {rank}] Creating HF checkpoint converter...")
+        converter = HfCheckpointConverter(
+            parallel_config=pp_parallel_config,
+            mapping_cfg=mapping_cfgs[0]
+        )
+
+        converter.set_mapping_cfg(mapping_cfgs[0])
+
+        # Prepare mcore_dict from gathered state_dicts
+        # gathered_state_dicts is a list: [state_dict_tp0, state_dict_tp1, ...]
+        # Convert to format: {pp_rank: {tp_rank: {"model": state_dict, "checkpoint_version": 3.0}}}
+        # Note: state_dict must be wrapped in {"model": ...} for McoreCheckpoint
+        print(f"[Rank {rank}] Debug: gathered_state_dicts length = {len(gathered_state_dicts)}")
+        for tp_idx, sd in enumerate(gathered_state_dicts):
+            print(f"[Rank {rank}] Debug: TP {tp_idx} has {len(sd)} parameters")
+            print(f"[Rank {rank}] Debug: TP {tp_idx} sample keys: {list(sd.keys())[:5]}")
+
+        mcore_dict = {
+            pp_rank: {
+                tp_idx: {
+                    "model": state_dict,
+                    "checkpoint_version": 3.0,
+                }
+                for tp_idx, state_dict in enumerate(gathered_state_dicts)
+            }
+        }
+
+        print(f"[Rank {rank}] Prepared mcore_dict with {len(gathered_state_dicts)} TP shards")
+
+        # Create save directory
+        os.makedirs(args.save_hf_path, exist_ok=True)
+
+        # Convert from Mcore format to HF format and save
+        try:
+            print(f"[Rank {rank}] Converting to HF format and saving to {args.save_hf_path}...")
+            converter.save_hf_ckpt(mcore_dict, args.save_hf_path)
+            print(f"[Rank {rank}] HF checkpoint saved successfully to {args.save_hf_path}")
+        except Exception as e:
+            print(f"[Rank {rank}] Error saving HF checkpoint: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    else:
+        # Non-TP rank 0 ranks in the same TP group just exit after gathering
+        print(f"[Rank {rank}] TP rank {tp_rank} completed gathering and exiting")
+
+    # Step 7: Synchronize all ranks
+    print_rank_0("Synchronizing all ranks...")
+    dist.barrier()
+
+    # Step 8: Global rank 0 consolidates all PP checkpoints to final location
+    if rank == 0:
+        print_rank_0("Starting checkpoint consolidation...")
+        _consolidate_pp_checkpoints(
+            args.save_hf_path,
+            args.pipeline_model_parallel_size,
+            original_hf_path=args.load  # Use the original HF checkpoint path for config files
+        )
+
+    dist.barrier()
+
+    print_rank_0("="*80)
+    print_rank_0("HF checkpoint saved successfully!")
+    print_rank_0("="*80)

@@ -167,7 +167,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     logging.info(f"> p: {p}, ep_id: {ep_ids} already converted. pass...")
                     return True
         else:
-            rank_id = int(os.getenv('RANK', '0'))
+            from megatron.core import parallel_state
+            rank_id = parallel_state.get_tensor_model_parallel_rank()
+            # rank_id = int(os.getenv('RANK', '0'))
             if rank_id == 0:
                 os.makedirs(done_dir, exist_ok=True)
             else:

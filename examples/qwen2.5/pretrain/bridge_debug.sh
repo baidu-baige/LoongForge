@@ -10,10 +10,15 @@ export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-0.5B-Instruct"}
+# TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge"}
 
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-tp2-pp2"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen2.5-0.5b"}
+
+# SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-1"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge"}
+
 
 GPUS_PER_NODE=4
 
@@ -51,7 +56,7 @@ TRAINING_ARGS=(
     --max-position-embeddings 32768
     --init-method-std 0.006
     --micro-batch-size 4
-    --global-batch-size 1024
+    --global-batch-size 16
     --lr 1.0e-5
     --min-lr 1.0e-6
     --clip-grad 1.0
@@ -61,7 +66,7 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-08
     --norm-epsilon 1e-6
-    --train-iters 50000
+    --train-iters 1
     --lr-decay-iters 50000
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
@@ -69,7 +74,8 @@ TRAINING_ARGS=(
     --bf16
     --load $TOKENIZER_PATH  # Load from HF checkpoint directly
     --save $CHECKPOINT_PATH
-    --save-interval 5000
+    --save-hf-path $SAVE_HF_PATH
+    --save-interval 20
     --eval-interval 1000
     --eval-iters 10
     --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/llm_demo.yaml  # HF to Mcore mapping config (same as hf_debug.sh)
@@ -80,6 +86,7 @@ TRAINING_ARGS=(
 )
 
 MODEL_PARALLEL_ARGS=(
+    --attention-backend fused
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
     --use-distributed-optimizer
@@ -98,7 +105,7 @@ LOGGING_ARGS=(
 if [ -n "${WANDB_API_KEY}" ]; then
     LOGGING_ARGS+=(
         --wandb-project ${WANDB_PROJECT}
-        --wandb-exp-name ${WANDB_NAME} 
+        --wandb-exp-name ${WANDB_NAME}
     )
 fi
 
