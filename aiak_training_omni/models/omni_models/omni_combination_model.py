@@ -346,6 +346,11 @@ class OmniCombinationModel(BaseMegatronModule):
                 )
             )
 
+        extra_kwargs = {
+            "visual_pos_masks": visual_pos_masks,
+            "deepstack_visual_embeds": deepstack_visual_embeds,
+        },
+        kwargs.update(extra_kwargs)
         output = self.foundation_model(
             input_ids=None,
             position_ids=position_ids,
@@ -355,10 +360,7 @@ class OmniCombinationModel(BaseMegatronModule):
             # rotary_pos_emb=rotary_pos_emb,
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
-            extra_block_kwargs={
-                "visual_pos_masks": visual_pos_masks,
-                "deepstack_visual_embeds": deepstack_visual_embeds,
-            },
+            extra_block_kwargs=kwargs,
         )
 
         return output
