@@ -349,7 +349,7 @@ class OmniCombinationModel(BaseMegatronModule):
         extra_kwargs = {
             "visual_pos_masks": visual_pos_masks,
             "deepstack_visual_embeds": deepstack_visual_embeds,
-        },
+        }
         kwargs.update(extra_kwargs)
         output = self.foundation_model(
             input_ids=None,
