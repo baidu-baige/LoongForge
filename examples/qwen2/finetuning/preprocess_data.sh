@@ -1,12 +1,12 @@
 #!/bin/bash
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/leoli/qwen/Qwen2-7B-HF"}
 
-input_data=/mnt/cluster/aiak-training-llm/dataset/sft_aplaca_zh_data.json
-output_path=/mnt/cluster/aiak-training-llm/qwen2/sft_aplaca_zh_tokenized
+input_data=/mnt/cluster/OmniTraining/dataset/sft_aplaca_zh_data.json
+output_path=/mnt/cluster/OmniTraining/qwen2/sft_aplaca_zh_tokenized
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     python ${AIAK_TRAINING_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
@@ -21,5 +21,5 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
         # --packing-sft-data \
         # --train-on-prompt \
         # --eod-mask-loss \
-        # --sft-dataset-config /workspace/AIAK-Training-LLM/configs/sft_dataset_config.json \
+        # --sft-dataset-config /workspace/OmniTraining/configs/sft_dataset_config.json \
         # --sft-dataset custom_dataset \

@@ -32,7 +32,7 @@ video2.mp4,"a dog is running"
 git checkout -b v1118 v1.1.8
 ```
 
-**Step-2** Copy `AIAK-Training-Omni/examples/wan/patch/launch_data_process_v118.patch` into the DiffSynth-Studio repo root.
+**Step-2** Copy `OmniTraining/examples/wan/patch/launch_data_process_v118.patch` into the DiffSynth-Studio repo root.
 
 **Step-3** Apply the patch  
 ```bash
@@ -62,7 +62,7 @@ One `.tensors.pth` file per video containing three keys:
 
 ### 2. Checkpoint Conversion (HF → Megatron)
 
-Inside **AIAK-Training-Omni** repo:
+Inside **OmniTraining** repo:
 
 **Step-1** Generate **random Megatron checkpoints** with correct PP split (needed as scaffold).  
 - Pick an empty folder, e.g. `<base>/wan2.2/hg2mcore_pp4/high_noise/Megatron_Random`  
@@ -131,7 +131,7 @@ bash examples/wan/convert_wan2.2.sh mcore2hg
 
 ### 5. Argument Reference
 
-Full argument list → see `aiak_training_omni/train/arguments.py`.
+Full argument list → see `omni_training/train/arguments.py`.
 
 ---
 
@@ -213,7 +213,7 @@ NODE_RANK=0
 torchrun --nproc_per_node $GPUS_PER_NODE \
          --nnodes $NNODES --node_rank $NODE_RANK \
          --master_addr $MASTER_ADDR --master_port $MASTER_PORT \
-  $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+  $AIAK_TRAINING_PATH/omni_training/train.py \
   --model-name wan2_1_i2v \
   --tokenizer-type NullTokenizer --vocab-size 0 \
   --data-path $METADATA_PATH --dataset-base-path $DATASET_BASE_PATH \
@@ -243,7 +243,7 @@ Same parameter meanings as `hg2mcore`; `--num_layers 40` required.
 
 ### 5. Argument Reference
 
-See `aiak_training_omni/train/arguments.py`.  
+See `omni_training/train/arguments.py`.  
 Extra Wan2.1 flags:  
 - `--max-text-length`  
 - `--max-image-length` (fixed after pre-processing, rarely changed)

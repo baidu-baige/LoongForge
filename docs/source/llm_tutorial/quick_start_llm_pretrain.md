@@ -1,6 +1,6 @@
 # Quick Start: LLM Pre-training
 
-This guide walks you through launching a Large-Language-Model (LLM) pre-training job in the AIAK-Training-Omni framework.
+This guide walks you through launching a Large-Language-Model (LLM) pre-training job in the OmniTraining framework.
 
 ---
 
@@ -20,7 +20,7 @@ Before training you usually need to transform massive raw corpora into a format 
 
 ```bash
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 TOKENIZER_PATH=/path/to/your/tokenizer
 input_data=/path/to/your/json
@@ -56,7 +56,7 @@ Below we convert the original FP8 HF checkpoint to MCore FP8:
 
 ```bash
 #!/bin/bash
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
@@ -92,14 +92,14 @@ Key flags:
   If VPP is enabled (`--num-virtual-stages-per-pipeline-rank`), list the layers of every vPP chunk in order, e.g.  
   `--custom_pipeline_layers 4,3,4,4,4,4,4,3,4,4,4,4,4,4,4,3` for 2 virtual stages.
 
-See [llm_ckpt_convert.md](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/llm_ckpt_convert.md) for full details.
+See [llm_ckpt_convert.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/llm_tutorial/llm_ckpt_convert.md) for full details.
 
 ---
 
 ## 3. Launch pre-training
 
-### 3.1 Extra arguments provided by AIAK-Training-Omni
-Besides the native Megatron flags, the framework adds convenient options (defined in `aiak_training_omni/train/arguments.py`):
+### 3.1 Extra arguments provided by OmniTraining
+Besides the native Megatron flags, the framework adds convenient options (defined in `omni_training/train/arguments.py`):
 
 * `--config-file` – path to a YAML file that contains all model hyper-params, e.g. `configs/models/deepseek3/deepseek_v3.yaml`.  
 * `--model-name` – short name such as `deepseek-v3`; the system looks up the YAML automatically.  
@@ -126,7 +126,7 @@ Below is the FP8 pre-training script for DeepSeek-V3.1 (comments added for clari
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1   # allow non-weights-only loading
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 DATA_PATH=/path/to/your/dataset
 TOKENIZER_PATH=/path/to/your/hf/tokenizer
@@ -281,7 +281,7 @@ LOGGING_ARGS=(
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+  $AIAK_TRAINING_PATH/omni_training/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

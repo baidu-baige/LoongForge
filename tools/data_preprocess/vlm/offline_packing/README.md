@@ -15,7 +15,7 @@
 
 
 ```sh
-cd AIAK-Training-Omni/tools/data_preprocess
+cd OmniTraining/tools/data_preprocess
 
 python convert_to_webdataset.py \
     --json_file /mnt/cluster/data/mmdu-45k.jsonl \
@@ -56,7 +56,7 @@ python convert_to_webdataset.py \
 
 
 ```sh
-cd AIAK-Training-Omni/tools/data_preprocess/omni_packing
+cd OmniTraining/tools/data_preprocess/omni_packing
 
 ```
 

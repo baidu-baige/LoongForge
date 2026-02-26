@@ -2,7 +2,7 @@
 
 ## 1.Heterogeneous TP Parallel
 
-AIAK-Training-Omni supports heterogeneous Tensor Parallel (TP) configuration for encoder and decoder, meaning encoder and decoder can use different TP sizes for parallel computation.
+OmniTraining supports heterogeneous Tensor Parallel (TP) configuration for encoder and decoder, meaning encoder and decoder can use different TP sizes for parallel computation.
 
 In this design, encoder and decoder are treated as two sub-modules with different computational characteristics and resource requirements. The system allows them to configure independent tensor parallel groups separately, enabling more fine-grained parallel strategy control within the same training or inference task.
 
@@ -14,7 +14,7 @@ This heterogeneous TP mechanism enables the model to flexibly select the most ap
 Set `tensor-model-parallel-size` in the corresponding model's vit.yaml to specify the vit tp size. For example, adding `tensor_model_parallel_size: 2` in qwen3_vit specifies the vit's tp size:
 
 ```yaml
-_target_: aiak_training_omni.models.encoder.Qwen3VisionModelConfig
+_target_: omni_training.models.encoder.Qwen3VisionModelConfig
 
 num_layers: 27
 hidden_size: 1152

@@ -6,7 +6,7 @@ fi
 input_string=$1
 
 MEGATRON_PATH=/workspace/ernie/AIAK-Megatron/
-AIAK_TRAINING_PATH=/workspace/ernie/AIAK-Training-Omni/
+AIAK_TRAINING_PATH=/workspace/ernie/OmniTraining/
 
 export PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH 
 

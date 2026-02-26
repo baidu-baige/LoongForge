@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Paths
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/vla/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/vla/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/vla/OmniTraining"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 
@@ -64,7 +64,7 @@ LOGGING_ARGS=(
 
 CUDA_VISIBLE_DEVICES=2,3 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:${PYTHONPATH:-} \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

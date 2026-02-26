@@ -2,21 +2,21 @@
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/dataset/sft_aplaca_zh_data.json"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/sft_aplaca_zh_data.json"}
 
-#DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/deepseek2/sft_aplaca_zh_tokenized"}
+#DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/deepseek2/sft_aplaca_zh_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/aiak-training-llm/deepseek2/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/OmniTraining/deepseek2/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/AIAK-Training-LLM/configs/sft_dataset_config.json"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/OmniTraining/configs/sft_dataset_config.json"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V2-Lite"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/deepseek2/DeepSeek_V2_Lite_group_tp1pp1ep8/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/deepseek2/DeepSeek_V2_Lite_group_tp1pp1ep8/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/aiak-training-llm/tensorboard-log/deepseek-v2"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/deepseek-v2"}
 
 GPUS_PER_NODE=8
 
@@ -117,7 +117,7 @@ LOGGING_ARGS=(
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

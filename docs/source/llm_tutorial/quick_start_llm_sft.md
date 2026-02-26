@@ -1,6 +1,6 @@
 # Quick Start: LLM SFT
 
-This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job for Large-Language Models (LLM) in the AIAK-Training-Omni framework.
+This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job for Large-Language Models (LLM) in the OmniTraining framework.
 
 ---
 
@@ -8,7 +8,7 @@ This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job fo
 
 ### 1.1 Dataset format & configuration
 For instruction tuning, two dialogue styles are common: **Alpaca-style** and **ShareGPT-style**.  
-AIAK-Training-Omni currently supports **Alpaca-style JSON**, one sample per line:
+OmniTraining currently supports **Alpaca-style JSON**, one sample per line:
 
 ```json
 [
@@ -22,7 +22,7 @@ AIAK-Training-Omni currently supports **Alpaca-style JSON**, one sample per line
 
 Field names may differ across datasets, so you must supply a **dataset config file** that tells the loader how to map your columns.  
 A template is shipped at  
-`/workspace/AIAK-Training-Omni/configs/data/sft_dataset_config.yaml`.
+`/workspace/OmniTraining/configs/data/sft_dataset_config.yaml`.
 
 #### (1) File format  
 We follow the community convention used by [LlamaFactory](https://github.com/hiyouga/LlamaFactory/blob/main/data/README.md).
@@ -95,7 +95,7 @@ Run the helper script once:
 ```bash
 #!/bin/bash
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 TOKENIZER_PATH=/path/to/hf/tokenizer
 input_data=/path/to/custom_dataset_name.json
@@ -131,7 +131,7 @@ After pre-processing, pass the **directory** to training:
 ---
 
 ## 2. Prepare the checkpoint
-Same as pre-training – see [Quick Start: LLM Pre-training](https://github.com/baidu-baige/AIAK-Training-Omni/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
+Same as pre-training – see [Quick Start: LLM Pre-training](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
 
 ---
 
@@ -162,7 +162,7 @@ Below is the FP8 SFT script for DeepSeek-V3.1 (comments added in English):
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 # ------------- data -------------
 DATA_PATH=/path/to/your/data
@@ -346,7 +346,7 @@ LOGGING_ARGS=(
 # ------------- launch -------------
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+  $AIAK_TRAINING_PATH/omni_training/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

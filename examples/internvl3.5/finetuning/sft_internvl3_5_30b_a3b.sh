@@ -14,7 +14,7 @@ CHECKPOINT_LOAD_PATH=/mnt/cluster/models/internvl/ckpt-megatron/InternVL3_5-30B-
 CHECKPOINT_SAVE_PATH=/mnt/cluster/models/internvl/ckpt-megatron/InternVL3_5-30B-A3B-tp4pp1ep8etp1-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node/"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
@@ -150,7 +150,7 @@ fi
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+  $AIAK_TRAINING_PATH/omni_training/train.py \
   --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/sft_dataset_config.json \
   ${MODEL_CONFIG_ARGS[@]} \
   ${DATA_ARGS[@]} \

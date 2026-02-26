@@ -1,17 +1,17 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22
-LOAD=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release
-OMNI_LOAD=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12/release
+SAVE=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22
+LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release
+OMNI_LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12/release
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/aiak-training-llm/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/aiak-training-llm/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/aiak-training-llm/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/aiak-training-llm/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
 
 MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 

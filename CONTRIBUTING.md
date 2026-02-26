@@ -3,12 +3,12 @@
 
 Please check out the [Apache Code of Conduct](https://www.apache.org/foundation/policies/conduct.html) first.
 
-We welcome community contributors to AIAK-Training-Omni. Feel free to share your ideas or submit code—help us make AIAK-Training-Omni even better!
+We welcome community contributors to OmniTraining. Feel free to share your ideas or submit code—help us make OmniTraining even better!
 
 Before getting started, please read the following open-source contribution guidelines and adhere to the relevant agreements.
 
 ## How to Contribute
-We welcome and encourage contributions from the community. Whether it's fixing bugs, adding new features, improving documentation, or sharing ideas, all contributions help make AIAK-Training-Omni better.
+We welcome and encourage contributions from the community. Whether it's fixing bugs, adding new features, improving documentation, or sharing ideas, all contributions help make OmniTraining better.
 
 ## Issues
 We use GitHub Issues to track bugs, feature requests, and other public discussions.
@@ -28,7 +28,7 @@ When opening a new issue, please provide as much information as possible, such a
 The more context you provide, the easier it will be for maintainers to diagnose and resolve the issue.
 
 ## Pull Requests
-We strongly welcome pull requests to help improve AIAK-Training-Omni.
+We strongly welcome pull requests to help improve OmniTraining.
 
 ### Submitting Pull Requests
 All pull requests will be reviewed by the maintainers. Automated checks and tests
@@ -37,11 +37,11 @@ approved, the pull request will be accepted. Please note that merging into the
 `main` branch may not happen immediately and could be subject to scheduling.
 
 
-1. Clone the AIAK-Training-Omni repository
+1. Clone the OmniTraining repository
 
 ```bash
-git clone https://github.com/baidu/aiak-training-omni.git
-cd AIAK-Training-Omni
+git clone https://github.com/baidu/OmniTraining.git
+cd OmniTraining
 ```
 
 2. Create a new branch from main
@@ -75,9 +75,9 @@ Before submitting a pull request, please make sure that:
 6. You submit the pull request against the development branch as required.
 
 ## License
-By contributing to AIAK-Training-Omni.
+By contributing to OmniTraining.
 you agree that your contributions will be licensed under the
-[Apache License 2.0](https://github.com/baidu/aiak-training-omni/blob/master/LICENSE).
+[Apache License 2.0](https://github.com/baidu/OmniTraining/blob/master/LICENSE).
 
 ### Submitting Pull Requests
 All pull requests will be reviewed by the maintainers. Automated checks and tests

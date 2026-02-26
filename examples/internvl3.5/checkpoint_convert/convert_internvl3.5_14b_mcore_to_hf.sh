@@ -1,17 +1,17 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/aiak-training-llm/internvl3.5/internvl3.5-14b-hf-Dec23
-LOAD=/mnt/cluster/aiak-training-llm/internvl3.5/internvl3.5-14b-tp4-pp1-Original/release
-OMNI_LOAD=/mnt/cluster/aiak-training-llm/internvl3.5/internvl3.5-14b-tp4-pp1-Dec16/release
+SAVE=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-14b-hf-Dec23
+LOAD=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-14b-tp4-pp1-Original/release
+OMNI_LOAD=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-14b-tp4-pp1-Dec16/release
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/aiak-training-llm/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/aiak-training-llm/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/aiak-training-llm/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/aiak-training-llm/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
 
 MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/internvl3.5/internvl3_5_14b.yaml
 

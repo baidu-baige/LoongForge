@@ -1,5 +1,5 @@
 
-_target_: aiak_training_omni.models.encoder.MLPAdapterConfig
+_target_: omni_training.models.encoder.MLPAdapterConfig
 
 normalization: "RMSNorm"
 add_bias_linear: True

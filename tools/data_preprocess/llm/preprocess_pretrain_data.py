@@ -20,9 +20,9 @@ try:
 except ImportError:
     nltk_available = False
 
-from aiak_training_omni.tokenizer import build_tokenizer
+from omni_training.tokenizer import build_tokenizer
 from megatron.core.datasets import indexed_dataset
-from aiak_training_omni.utils import constants
+from omni_training.utils import constants
 
 
 # https://stackoverflow.com/questions/33139531/preserve-empty-lines-with-nltks-punkt-tokenizer

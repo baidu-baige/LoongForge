@@ -12,12 +12,13 @@ echo_cmd() {
     $1
 }
 
-echo "========= build AIAK-Training-Omni ========="
+echo "========= build OmniTraining ========="
 
 echo_cmd "rm -rf output"
 echo_cmd "mkdir -p output"
 
 rm -rf output/.scm/
+# NOTE: 适配icode项目名
 tar -zcvf ../AIAK-Training-Omni.tar.gz ../AIAK-Training-Omni/
 mv ../AIAK-Training-Omni.tar.gz ./output/
 

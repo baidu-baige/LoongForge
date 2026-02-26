@@ -1,11 +1,11 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/Qwen3-32B
-SAVE=/mnt/cluster/aiak-training-llm/qwen3/qwen3-32b-tp4-pp4-Dec24
+SAVE=/mnt/cluster/OmniTraining/qwen3/qwen3-32b-tp4-pp4-Dec24
 
 MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/qwen3_32b.yaml
 

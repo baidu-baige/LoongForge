@@ -3,11 +3,11 @@
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron/"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 METADATA_PATH=${METADATA_PATH:-"/mnt/cluster/agidriod_validation_1k/metadata.jsonl"}
 DATASET_BASE_PATH=${DATASET_BASE_PATH:-"/mnt/cluster/agidriod_validation_1k/"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-omni/wan2.1/hg2mcore/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/aiak-training-omni/tensorboard-log/wan2.1/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/wan2.1/hg2mcore/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/wan2.1/"}
 
 GPUS_PER_NODE=8
 
@@ -106,7 +106,7 @@ fi
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -1,5 +1,5 @@
 # qwen3_5 model configuration
-_target_: aiak_training_omni.models.foundation.Qwen3Config
+_target_: omni_training.models.foundation.Qwen3Config
 
 num_layers: 36
 hidden_size: 4096

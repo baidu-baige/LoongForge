@@ -1,4 +1,4 @@
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 AIAK_MAGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 TP="${1:-1}"
 PP="${2:-1}"
@@ -6,7 +6,7 @@ SEQ_LEN="${3:-9192}"
 MBS="${4:-1}"
 GBS="${5:-32}"
 NSTEP="${6:-21000}"
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/dataset/mllm/demo/wds/"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/mllm/demo/wds/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/llava_ov_1.5/rice_vl_30b_a3b_init_hf_1600px"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVision-1.5-4B-stage0_mcore_tp1_pp1"}
 
@@ -200,7 +200,7 @@ logfile="${SAVE_CKPT_PATH}/run_${TM}_tp${TP}_pp${PP}_seqlen${SEQ_LEN}_mbs${MBS}_
 
 PYTHONPATH="$AIAK_MAGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$AIAK_TRAINING_PATH/aiak_training_omni/train.py" \
+    "$AIAK_TRAINING_PATH/omni_training/train.py" \
     "${DATA_ARGS[@]}" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${MOE_ARGS[@]}" \

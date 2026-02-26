@@ -1,5 +1,5 @@
 # Optimizer Support  
-AIAK-Training-Omni offers optimizer off-loading and low-precision optimizers to cut memory usage when training in reduced precision.
+OmniTraining offers optimizer off-loading and low-precision optimizers to cut memory usage when training in reduced precision.
 
 ---
 

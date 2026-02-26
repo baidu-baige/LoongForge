@@ -297,7 +297,7 @@ function run_all_ipipe_case(){
         fi
         
         pytorchjob_yaml_path=${scripts_root_path}/yaml_template/pytorchjob_standalone.yaml
-        aiak_training_omni_folder="/workspace/AIAK-Training-Omni"
+        omni_training_folder="/workspace/OmniTraining"
 
         # Pass variables to run_pytorchjob to generate yaml file, usage: envsubst < ${pytorchjob_yaml_path} > ${new_pytorcjob_yaml_path}
         NAME_PREFIX=${NAME_PREFIX_AGILE:-"agile-aiak-transformer-run"}
@@ -327,13 +327,13 @@ function run_all_ipipe_case(){
                 set -euo pipefail
                 mkdir -p /workspace/logs
                 
-                echo "Start downloading aiak_training_omni"
-                cd /workspace && rm -rf AIAK-Training-Omni
+                echo "Start downloading omni_training"
+                cd /workspace && rm -rf OmniTraining
                 wget ${BOS_SYNC_AIAK_TRANSFORMER_ADDR}
-                tar -zxvf AIAK-Training-Omni.tar.gz
-                echo "Download complete aiak_training_omni"
+                tar -zxvf OmniTraining.tar.gz
+                echo "Download complete omni_training"
 
-                cd $aiak_training_omni_folder/tests
+                cd $omni_training_folder/tests
                 extra_param="--node_nums ${node_nums} \
                              --gpu_nums ${gpu_nums} \
                              --models ${model_names} \

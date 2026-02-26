@@ -1,4 +1,4 @@
-_target_: aiak_training_omni.models.foundation.ErnieMoeConfig
+_target_: omni_training.models.foundation.ErnieMoeConfig
 
 num_layers: 28
 hidden_size: 2560

@@ -7,7 +7,7 @@ TOTAL_K8S_NODES: 1
 MODEL_RUNNABLE: True 
 
 HF_CKPT_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
-DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/llavaov_1.5_4b/test_packed_wds_4k/
+DATA_PATH: $pfs_path/omni_datasets/OmniTraining/llavaov_1.5_4b/test_packed_wds_4k/
 TOKENIZER_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
@@ -23,7 +23,7 @@ PATCH_PATH: $step1_output_path/patch-mcore
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 2
 
-# aiak-training-omni training parameters
+# OmniTraining training parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 2
 log_interval: 1

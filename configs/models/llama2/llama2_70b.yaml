@@ -1,5 +1,5 @@
 # llama2_7b model config
-_target_: aiak_training_omni.models.foundation.LLaMAConfig
+_target_: omni_training.models.foundation.LLaMAConfig
 
 num_layers: 80
 hidden_size: 8192

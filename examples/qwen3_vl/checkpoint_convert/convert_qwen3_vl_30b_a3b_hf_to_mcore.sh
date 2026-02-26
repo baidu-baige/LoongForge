@@ -1,11 +1,11 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="${AIAK_TRAINING_PATH}/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct/
-SAVE=/mnt/cluster/aiak-training-llm/qwen3-vl-30b-a3b/qwen3-vl-30b-etp1etp1pp8ep1
+SAVE=/mnt/cluster/OmniTraining/qwen3-vl-30b-a3b/qwen3-vl-30b-etp1etp1pp8ep1
 
 SAVE_LANGUAGE_MODEL=${SAVE}/tmp/language-mcore
 SAVE_VISION_MODEL=${SAVE}/tmp/vision-model-mcore

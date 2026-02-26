@@ -1,4 +1,4 @@
-"""Setup AIAK-Training-Omni environment."""
+"""Setup OmniTraining environment."""
 import os
 import subprocess
 import sys
@@ -21,7 +21,7 @@ def run_command(command, cwd=None, shell=True, check=True, env=None):
 def main():
     """main process"""
     parser = argparse.ArgumentParser(
-        description="Setup AIAK-Training-Omni development environment.")
+        description="Setup OmniTraining development environment.")
     parser.add_argument("--megatron-tag", required=True,
                         help="Tag for Megatron-LM (e.g., core_v0.15.0)")
     parser.add_argument("--te-tag", required=True,
@@ -35,10 +35,10 @@ def main():
     megatron_path = os.path.join(workspace, "Megatron-LM")
     te_path = os.path.join(workspace, "TransformerEngine")
     # Assuming this script is run from outside or we adjust paths
-    omni_path = os.path.join(workspace, "AIAK-Training-Omni")
+    omni_path = os.path.join(workspace, "OmniTraining")
 
-    # Adjust omni_path if script is running inside AIAK-Training-Omni
-    if os.path.basename(workspace) == "AIAK-Training-Omni":
+    # Adjust omni_path if script is running inside OmniTraining
+    if os.path.basename(workspace) == "OmniTraining":
         omni_path = workspace
         workspace = os.path.dirname(workspace)
         megatron_path = os.path.join(workspace, "Megatron-LM")
@@ -47,7 +47,7 @@ def main():
     print(f"Workspace: {workspace}")
     print(f"Megatron-LM Path: {megatron_path}")
     print(f"TransformerEngine Path: {te_path}")
-    print(f"AIAK-Training-Omni Path: {omni_path}")
+    print(f"OmniTraining Path: {omni_path}")
 
     # 1. Clone Repositories
     if not os.path.exists(megatron_path):
@@ -123,8 +123,8 @@ def main():
     # rename Megatron-LM
     run_command("mv Megatron-LM AIAK-Megatron", cwd=workspace)
 
-    # 5. Install AIAK-Training-Omni dependencies
-    print("Installing AIAK-Training-Omni dependencies...")
+    # 5. Install OmniTraining dependencies
+    print("Installing OmniTraining dependencies...")
     run_command("pip install -r requirements.txt", cwd=omni_path)
 
     print("\nSetup completed successfully!")

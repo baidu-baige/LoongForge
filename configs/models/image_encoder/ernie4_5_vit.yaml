@@ -1,4 +1,4 @@
-_target_: aiak_training_omni.models.encoder.ErnieVisionConfig
+_target_: omni_training.models.encoder.ErnieVisionConfig
 
 attn_implementation: "flash"
 num_layers: 32

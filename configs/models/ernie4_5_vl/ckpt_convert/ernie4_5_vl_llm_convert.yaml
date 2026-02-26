@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file:///workspace/AIAK-Training-Omni/configs/models/
+    - file:///workspace/OmniTraining/configs/models/
 
 defaults:
   - ernie4_5_vl@module: ???

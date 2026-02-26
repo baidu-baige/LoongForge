@@ -1,6 +1,6 @@
-# AIAK-Training-Omni Automated Test Guide
+# OmniTraining Automated Test Guide
 
-This document explains how to use the automated test scripts and configurations for AIAK-Training-Omni CI and functional validation.
+This document explains how to use the automated test scripts and configurations for OmniTraining CI and functional validation.
 
 ## Directory Structure
 

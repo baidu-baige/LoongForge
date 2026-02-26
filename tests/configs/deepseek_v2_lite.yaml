@@ -7,9 +7,9 @@ bos_path: bos:/ai-data/deepseek-ai/DeepSeek-V2-Lite
 # Model Parameters
 MODEL_RUNNABLE: True # Should be True / False
 
-# aiak-training-omni training parameters
+# OmniTraining training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
-DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/deepseek_v2_lite/pile_test/pile-deepseek_text_document
+DATA_PATH: $pfs_path/omni_datasets/OmniTraining/deepseek_v2_lite/pile_test/pile-deepseek_text_document
 TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log

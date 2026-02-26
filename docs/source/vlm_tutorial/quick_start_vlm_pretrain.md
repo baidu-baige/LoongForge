@@ -1,6 +1,6 @@
 # Quick Start: VLM Pre-training
 
-This document will guide you through the quick start process for Vision-Language Model (VLM) pre-training under the AIAK-Training-Omni framework.
+This document will guide you through the quick start process for Vision-Language Model (VLM) pre-training under the OmniTraining framework.
 
 ## 1. Data Preparation
 
@@ -47,7 +47,7 @@ Considering the diversity of multimodal datasets, the framework adopts the **Ene
 The conversion script to **WebDataset and adapt to Energon loading format** is as follows:
 
 ```bash
-python /workspace/AIAK-Training-Omni/tools/data_preprocess/vlm/convert_to_webdataset.py \
+python /workspace/OmniTraining/tools/data_preprocess/vlm/convert_to_webdataset.py \
     --output_dir /tmp/mllm/wds \
     --json_file /tmp/mllm/mllm_demo.json \
     --image_dir /tmp/mllm/ \
@@ -97,7 +97,7 @@ AIAK provides a unified weight conversion tool `tools/convert_checkpoint` for su
 ```bash
 #!/bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="${AIAK_TRAINING_PATH}/tools/convert_checkpoint"
 
@@ -222,7 +222,7 @@ For further understanding of various parameters and detailed functions of weight
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting parameters provided by open-source Megatron, AIAK-Training-Omni adds more convenient training startup parameters. Detailed configuration can be found in the aiak_training_omni/train/arguments.py file. Main parameter descriptions are as follows:
+Based on supporting parameters provided by open-source Megatron, OmniTraining adds more convenient training startup parameters. Detailed configuration can be found in the omni_training/train/arguments.py file. Main parameter descriptions are as follows:
 
 * `--training-phase`: Specify the training phase as pretrain
 * `--add-question-in-pretrain`: When enabled, questions will be concatenated and added to the input for training; when disabled, only answers or other default text fields will be used for training
@@ -232,7 +232,7 @@ Based on supporting parameters provided by open-source Megatron, AIAK-Training-O
 
 ### 3.2 Pre-training Script
 
-AIAK-Training-Omni currently provides pre-training example scripts for various models. After entering the container, you can find relevant scripts in the examples/{model}/pretrain/ directory. Below is an example using Qwen3-VL-30B-A3B pre-training script:
+OmniTraining currently provides pre-training example scripts for various models. After entering the container, you can find relevant scripts in the examples/{model}/pretrain/ directory. Below is an example using Qwen3-VL-30B-A3B pre-training script:
 
 ```bash
 #!/bin/bash
@@ -240,7 +240,7 @@ AIAK-Training-Omni currently provides pre-training example scripts for various m
 
 # Codebase roots added to PYTHONPATH.
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 # Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}
@@ -362,7 +362,7 @@ fi
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

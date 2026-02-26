@@ -1,6 +1,6 @@
 # Model Combination
 
-One of the core features of the **AIAK-Training-Omni** framework is **native support for flexible network assembly**.  
+One of the core features of the **OmniTraining** framework is **native support for flexible network assembly**.  
 With a simple YAML configuration file, users can freely combine vision/audio encoders, modality-alignment projectors, and language-model backbones to rapidly build customized multimodal large models.  
 By editing only the model-configuration YAML files under `../configs/models`, the entire model structure can be re-assembled or switched without touching a single line of code.
 
@@ -20,7 +20,7 @@ It converts image, video, audio or other modality data into embeddings that the 
   * **Multimodal compatibility**: New modalities are added by simply inserting a new branch.
 
 ```python
-# aiak_training_omni/models/omni_models/omni_encoder_model.py
+# omni_training/models/omni_models/omni_encoder_model.py
 class OmniEncoderModel(torch.nn.Module):
     def __init__(self, config, ...):
         # text modality
@@ -56,7 +56,7 @@ Defines **when and how** data flows among modality components; contains **no act
 * **Logical decoupling**: Dynamically decides whether to load an encoder or a foundation model via external config, achieving component-level decoupling.
 
 ```python
-# aiak_training_omni/models/omni_models/omni_combination_model.py
+# omni_training/models/omni_models/omni_combination_model.py
 class OmniCombinationModel(BaseMegatronModule):
     def __init__(self, config, ...):
         # 1. Dynamically init Encoder Model
@@ -78,7 +78,7 @@ Key capabilities:
 * **Distributed Pipeline Parallel**: Detects the current Pipeline-Parallel stage and loads the encoder/foundation model on demand, enabling **cross-GPU pipelined deployment**.
 
 ```python
-# aiak_training_omni/models/omni_models/omni_model_provider.py
+# omni_training/models/omni_models/omni_model_provider.py
 def omni_model_provider(...):
     # Auto-detect if current rank is the first PP stage; decide whether to load encoder
     # This is critical for placing encoder and decoder on different GPUs
@@ -167,7 +167,7 @@ model:
     rotary_base: 1000000
 
     # Megatron layer spec, supports Transformer-Engine acceleration
-    model_spec: ["aiak_training_omni.models.foundation.internlm.internlm_layer_spec",
+    model_spec: ["omni_training.models.foundation.internlm.internlm_layer_spec",
                  "get_internlm_layer_with_te_spec"]
 ```
 

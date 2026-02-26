@@ -1,4 +1,4 @@
-_target_: aiak_training_omni.models.encoder.ErnieAdapterConfig
+_target_: omni_training.models.encoder.ErnieAdapterConfig
 
 in_dim: 1280
 out_dim: 2560

@@ -7,12 +7,12 @@ from datasets import DatasetDict
 
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
-from aiak_training_omni.data.sft_dataset import SFTDatasetConfig, SFTDataset
-from aiak_training_omni.data import ChatTemplate
-from aiak_training_omni.tokenizer import build_tokenizer
-from aiak_training_omni.utils import constants
-from aiak_training_omni.utils.utils import get_default_sft_dataset_config
-from aiak_training_omni.train.sft.utils import get_dataset_blend_from_list
+from omni_training.data.sft_dataset import SFTDatasetConfig, SFTDataset
+from omni_training.data import ChatTemplate
+from omni_training.tokenizer import build_tokenizer
+from omni_training.utils import constants
+from omni_training.utils.utils import get_default_sft_dataset_config
+from omni_training.train.sft.utils import get_dataset_blend_from_list
 
 
 def build_sft_dataset(args):

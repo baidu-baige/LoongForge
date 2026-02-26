@@ -1,6 +1,6 @@
 # Support New Model
 
-This document describes how to support new models in AIAK-Training-Omni, covering **LLM models**, **VLM models**, and **Custom models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
+This document describes how to support new models in OmniTraining, covering **LLM models**, **VLM models**, and **Custom models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
 
 ## 1. Supporting LLM Models
 ### 1.1 Adding New LLM Configuration
@@ -11,7 +11,7 @@ If your LLM is a new specification of an existing architecture (e.g., from Llama
 
 ```yaml
 # Inherit the common configuration class for this model family
-_target_: aiak_training_omni.models.foundation.Llama3Config
+_target_: omni_training.models.foundation.Llama3Config
 
 # Modify specific parameters
 num_layers: 80
@@ -22,7 +22,7 @@ num_attention_heads: 64
 ```
 
 ### 1.2 Register Model Name
-Register in the MODEL_CONFIG_REGISTRY in aiak_training_omni/utils/config_map.py, then you can reference the model directly by name (e.g., `llama3-70b`).
+Register in the MODEL_CONFIG_REGISTRY in omni_training/utils/config_map.py, then you can reference the model directly by name (e.g., `llama3-70b`).
 
 ```python
 MODEL_CONFIG_REGISTRY = {
@@ -49,7 +49,7 @@ Define Vision Transformer parameters.
 
 ```yaml
 # Find the Qwen2VisionRMSNormConfig class through this path, use the following parameters (e.g., num_layers, hidden_size, etc.) to create its instance
-_target_: aiak_training_omni.models.encoder.Qwen2VisionRMSNormConfig
+_target_: omni_training.models.encoder.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280
@@ -70,7 +70,7 @@ The Projector implementation is interrelated with OmniEncoder. Each type of VLM 
 
 ```yaml
 # Select image_projector type
-_target_: aiak_training_omni.models.encoder.MLPAdapterConfig
+_target_: omni_training.models.encoder.MLPAdapterConfig
 
 # Modify component-specific configuration parameters
 normalization: "RMSNorm"
@@ -112,7 +112,7 @@ model:
 ```
 
 ### 2.4 Model Registration
-You need to register in aiak_training_omni/utils/config_map.py. Open aiak_training_omni/utils/config_map.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
+You need to register in omni_training/utils/config_map.py. Open omni_training/utils/config_map.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
 
 ```python
 MODEL_CONFIG_REGISTRY = {

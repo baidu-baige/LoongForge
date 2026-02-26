@@ -35,13 +35,13 @@ function install_requirements() {
         > "$source_file"
     fi
 
-    requirements_file="/workspace/AIAK-Training-Omni/requirements.txt"
+    requirements_file="/workspace/OmniTraining/requirements.txt"
 
     pip install -q --no-cache-dir wandb
     pip install -q --no-cache-dir swanlab==0.6.1
     
     local original_pwd=$(pwd)
-    cd /workspace/AIAK-Training-Omni/
+    cd /workspace/OmniTraining/
     pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file}
     cd ${original_pwd}
 
@@ -128,7 +128,7 @@ function install_aiak_fp8_quant() {
     cd ${CURRENT_DIR}
 
     # 基于 https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-FP8-Quantization/commits/2c5bdacec6f850fef16e016e89bdf5624aaeb4e3/setup.py
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/AIAK-FP8-Quantization.tar.gz
+    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/OmniTraining/ngc2506_torch28_cuda129_tev29/AIAK-FP8-Quantization.tar.gz
 
     tar -zxvf AIAK-FP8-Quantization.tar.gz
 
@@ -162,10 +162,10 @@ function install_flash_attn() {
 
 function clear_unused_file() {
     rm -rf /tmp/* ~/.bash_history
-    rm -rf /workspace/AIAK-Training-Omni/.git
-    rm -rf /workspace/AIAK-Training-Omni/build.sh
-    rm -rf /workspace/AIAK-Training-Omni/ci.yml
-    rm -rf /workspace/AIAK-Training-Omni/docker/ci || true
+    rm -rf /workspace/OmniTraining/.git
+    rm -rf /workspace/OmniTraining/build.sh
+    rm -rf /workspace/OmniTraining/ci.yml
+    rm -rf /workspace/OmniTraining/docker/ci || true
     
     rm -rf /workspace/TransformerEngine
 
@@ -196,9 +196,9 @@ function apply_transformerEngine() {
     git restore .
     
     # 3. Apply patches from omni
-    if [ -f "/workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh" ]; then
-        bash /workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh \
-            /workspace/AIAK-Training-Omni/patches/TransformerEngine \
+    if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then
+        bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+            /workspace/OmniTraining/patches/TransformerEngine \
             $transformerEngine_dir
     else
         echo "Warning: apply_two_repo.sh not found, skipping patch application"
@@ -241,9 +241,9 @@ function apply_megatron() {
     git restore .
     
     # 3. Apply patches from omni repo
-    if [ -f "/workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh" ]; then
-        bash /workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh \
-            /workspace/AIAK-Training-Omni/patches/Megatron-LM \
+    if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then
+        bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+            /workspace/OmniTraining/patches/Megatron-LM \
             $megatron_dir
     else
         echo "Warning: apply_two_repo.sh not found, skipping patch application"

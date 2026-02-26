@@ -1,6 +1,6 @@
 # internlm2.5_8b model configuration
 
-_target_: aiak_training_omni.models.foundation.InternLMConfig
+_target_: omni_training.models.foundation.InternLMConfig
 
 num_layers: 32
 hidden_size: 4096

@@ -1,4 +1,4 @@
-_target_: aiak_training_omni.models.foundation.MimoConfig
+_target_: omni_training.models.foundation.MimoConfig
 
 num_layers: 36
 hidden_size: 4096

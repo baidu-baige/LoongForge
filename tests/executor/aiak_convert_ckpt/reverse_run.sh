@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ mcore to hf checkpoint convert ############################################
 
 AIAK_MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/OmniTraining"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$AIAK_TRAINING_PATH/tools/convert_checkpoint"}
 
 export AIAK_TRAINING_PATH

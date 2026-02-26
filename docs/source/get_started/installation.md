@@ -12,13 +12,13 @@
 From the project root run:
 
 ```bash
-docker build -t AIAK-Training-Omni:latest -f ./docker/Dockerfile .
+docker build -t OmniTraining:latest -f ./docker/Dockerfile .
 ```
 
 After the build finishes, verify the image:
 
 ```bash
-docker images | grep AIAK-Training-Omni
+docker images | grep OmniTraining
 ```
 
 ---
@@ -31,10 +31,10 @@ docker run --gpus all -it --rm \
   -v /path/to/your/hf/tokenizer:/workspace/tokenizer \
   -v /path/to/data:/workspace/data \
   -v /path/to/checkpoints:/workspace/checkpoints \
-  AIAK-Training-Omni:latest /bin/bash
+  OmniTraining:latest /bin/bash
 ```
 
-Once inside the container, navigate to `/workspace/AIAK-Training-Omni/examples/` and launch the desired training script.
+Once inside the container, navigate to `/workspace/OmniTraining/examples/` and launch the desired training script.
 
 ## 2. Manual Patch Application
 ### 2.1 When to use
@@ -73,6 +73,6 @@ This script will automatically:
 2. Checkout the specified tags and create local branches (`aiak_<tag>`).
 3. Apply AIAK-Omni patches to both repositories.
 4. Compile and install `TransformerEngine`.
-5. Install all python dependencies for `AIAK-Training-Omni`.
+5. Install all python dependencies for `OmniTraining`.
 
-All dependencies are now installed; you can run the training scripts under `AIAK-Training-Omni/examples/`.
+All dependencies are now installed; you can run the training scripts under `OmniTraining/examples/`.

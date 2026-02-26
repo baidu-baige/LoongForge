@@ -1,5 +1,5 @@
 
-_target_: aiak_training_omni.models.encoder.Qwen3VisionModelConfig
+_target_: omni_training.models.encoder.Qwen3VisionModelConfig
 
 num_layers: 27
 hidden_size: 1152

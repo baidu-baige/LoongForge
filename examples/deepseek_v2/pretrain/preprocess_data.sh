@@ -1,12 +1,12 @@
 #!/bin/bash
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V2-Lite"}
 
-input_data=/mnt/cluster/aiak-training-llm/dataset/pile_test/train.jsonl
-output_prefix=/mnt/cluster/aiak-training-llm/deepseek2/pile_test/pile-deepseek
+input_data=/mnt/cluster/OmniTraining/dataset/pile_test/train.jsonl
+output_prefix=/mnt/cluster/OmniTraining/deepseek2/pile_test/pile-deepseek
 
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \

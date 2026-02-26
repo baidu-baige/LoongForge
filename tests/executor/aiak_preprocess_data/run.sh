@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ Preprocess dataset parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${aiak_training_path:-"/workspace/OmniTraining"}
 PREPROCESS_DATA_PATH="${PREPROCESS_DATA_PATH}"
 
 PREPROCESS_DATA_ARGS=(

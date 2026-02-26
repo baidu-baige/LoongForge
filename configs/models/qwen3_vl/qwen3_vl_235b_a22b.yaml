@@ -15,14 +15,14 @@ model:
   foundation: 
     rotary_emb_func: "Qwen3VLRotaryEmbedding"
     mrope_section: [24, 20, 20]
-    model_spec: ["aiak_training_omni.models.foundation.qwen3.qwen_layer_spec", "get_qwen3_vl_layer_with_te_spec"]
+    model_spec: ["omni_training.models.foundation.qwen3.qwen_layer_spec", "get_qwen3_vl_layer_with_te_spec"]
   image_encoder:
-    model_spec: ["aiak_training_omni.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec", 
+    model_spec: ["omni_training.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec", 
                  "get_qwen3_vl_vision_model_layer_with_te_spec"]
   image_projector:
     activation_func: ${act:gelu}
     normalization: "LayerNorm"
     bias_activation_fusion: False
     gated_linear_unit: False
-    model_spec: ["aiak_training_omni.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec",
+    model_spec: ["omni_training.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec",
      "get_adapeter_layer_with_te_spec"]

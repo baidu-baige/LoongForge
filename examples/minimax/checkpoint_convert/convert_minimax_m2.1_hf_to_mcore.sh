@@ -1,11 +1,11 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-LLM"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/aiak-training-llm/mini_max/MiniMax-M2.1/
-SAVE=/mnt/cluster/aiak-training-llm/mini_max/MiniMax_mcore_tp8pp4ep8etp1/
+LOAD=/mnt/cluster/OmniTraining/mini_max/MiniMax-M2.1/
+SAVE=/mnt/cluster/OmniTraining/mini_max/MiniMax_mcore_tp8pp4ep8etp1/
 
 MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/minimax/minimax_m2_1.yaml
 CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml

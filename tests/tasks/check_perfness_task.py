@@ -60,7 +60,7 @@ class PerfnessCheckTask(BaseTask):
 
                     # Step2:
                     step2_name = "Step2"
-                    self.start_aiak_training_omni(index, step2_name, scenario_name, training_type_name)
+                    self.start_omni_training(index, step2_name, scenario_name, training_type_name)
                     step2_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step2_name, self.master_addr, f"{self.rank_name}_lock.txt")
                     self.wait_async_pod_complete(step2_scenario_lock_file, model_name, f"{scenario_name}_{step2_name}")
                     logger.info(f"{self.class_name} Model [{model_name}] - [{scenario_name}] - [{step2_name}] Completed \n")

@@ -1,12 +1,12 @@
 # Quick Start: VLM SFT
 
-This document will guide you through the quick start process for Vision-Language Model (VLM) fine-tuning under the AIAK-Training-Omni framework.
+This document will guide you through the quick start process for Vision-Language Model (VLM) fine-tuning under the OmniTraining framework.
 
 ## 1. Data Preparation
 
 ### 1.1 Dataset Configuration and Processing
 
-In VLM instruction fine-tuning scenarios, the **multimodal ShareGPT** format (containing `messages` and `images`) is used. AIAK-Training-Omni parses this format through AIAK-Training-Omni/configs/data/sft_dataset_config.yaml. Below is the **ShareGPT format example**:
+In VLM instruction fine-tuning scenarios, the **multimodal ShareGPT** format (containing `messages` and `images`) is used. OmniTraining parses this format through OmniTraining/configs/data/sft_dataset_config.yaml. Below is the **ShareGPT format example**:
 
 ```yaml
 multimodal:
@@ -55,7 +55,7 @@ This section is the same as the pre-training section, see section 2 in [7.1. Qui
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting open-source Megatron parameters, AIAK-Training-Omni adds more convenient training startup parameters. Detailed configuration can be found in the aiak_training_omni/train/arguments.py file. Main parameter descriptions are as follows:
+Based on supporting open-source Megatron parameters, OmniTraining adds more convenient training startup parameters. Detailed configuration can be found in the omni_training/train/arguments.py file. Main parameter descriptions are as follows:
 
 * `--training-phase sft`: Explicitly enable SFT training phase.
 * `--chat-template qwen2-vl`: Specify SFT conversation template as qwen2-vl for concatenating multi-round dialogue samples into model input
@@ -63,7 +63,7 @@ Based on supporting open-source Megatron parameters, AIAK-Training-Omni adds mor
 
 ### 3.2 SFT Training Script
 
-AIAK-Training-Omni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples/{model}/finetuning/` directory. Below is an example using Qwen3_vl_30b_a3b SFT training script:
+OmniTraining currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples/{model}/finetuning/` directory. Below is an example using Qwen3_vl_30b_a3b SFT training script:
 
 ```bash
 #!/bin/bash
@@ -71,7 +71,7 @@ AIAK-Training-Omni currently provides SFT training example scripts for various m
 
 # Codebase roots added to PYTHONPATH.
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 # Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}
@@ -190,7 +190,7 @@ fi
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

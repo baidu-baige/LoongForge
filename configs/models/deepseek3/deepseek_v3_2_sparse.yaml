@@ -1,5 +1,5 @@
 # deepseek_v3 model config
-_target_: aiak_training_omni.models.foundation.DeepseekConfig
+_target_: omni_training.models.foundation.DeepseekConfig
 
 num_layers: 61
 hidden_size: 7168

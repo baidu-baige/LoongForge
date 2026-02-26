@@ -8,6 +8,6 @@ ARG INSTALL_TransformerEngine_FLAG="true"
 ARG INSTALL_LEROBOT="false"
 
 RUN mkdir -p /workspace 
-COPY ./AIAK-Training-Omni /workspace/AIAK-Training-Omni
-RUN bash /workspace/AIAK-Training-Omni/docker/install_opensource.sh ${COMPILE_ENV} \
+COPY ./OmniTraining /workspace/OmniTraining
+RUN bash /workspace/OmniTraining/docker/install_opensource.sh ${COMPILE_ENV} \
     ${INSTALL_TransformerEngine_FLAG} ${INSTALL_LEROBOT}

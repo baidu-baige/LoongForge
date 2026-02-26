@@ -1,16 +1,16 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/LLaVA-OneVision-1.5-4B-stage0
-SAVE=/mnt/cluster/aiak-training-llm/llavaov1.5/LLaVA-OneVision-1.5-4B-tp2-pp2-Dec11
+SAVE=/mnt/cluster/OmniTraining/llavaov1.5/LLaVA-OneVision-1.5-4B-tp2-pp2-Dec11
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/aiak-training-llm/tmp/language-mcore
-SAVE_VISION_MODEL=/mnt/cluster/aiak-training-llm/tmp/vision-model-mcore
-SAVE_ADAPTER=/mnt/cluster/aiak-training-llm/tmp/adapter-mcore
-SAVE_PATCH=/mnt/cluster/aiak-training-llm/tmp/patch-mcore
+SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-mcore
+SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-mcore
+SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-mcore
+SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-mcore
 
 MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/llavaov1.5/llavaov_1_5_4b.yaml
 

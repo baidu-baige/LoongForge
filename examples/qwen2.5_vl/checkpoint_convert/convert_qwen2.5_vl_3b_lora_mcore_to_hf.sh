@@ -1,20 +1,20 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-hf-Dec22
-LOAD=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Original/release
-OMNI_LOAD=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15/release
+SAVE=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-3b-hf-Dec22
+LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Original/release
+OMNI_LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15/release
 
-LOAD_LORA=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Original/iter_0000010
-OMNI_LOAD_LORA=/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15/iter_0000010
+LOAD_LORA=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Original/iter_0000010
+OMNI_LOAD_LORA=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15/iter_0000010
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/aiak-training-llm/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/aiak-training-llm/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/aiak-training-llm/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/aiak-training-llm/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
 
 MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml
 

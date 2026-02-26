@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "AIAK-Training-Omni"
+name = "OmniTraining"
 version = "0.1.0"
-description = "AIAK-Training-Omni framework: an all-scenario training framework"
+description = "OmniTraining framework: an all-scenario training framework"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -32,23 +32,23 @@ test = [
 ]
 
 [project.urls]
-Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master"
+Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/OmniTraining/tree/master"
 Changelog = "CHANGELOG.md"
 
 [project.scripts]
-AIAK-Training-Omni = "aiak_training_omni.train:main"
+OmniTraining = "omni_training.train:main"
 
 [tool.hatch.build]
-packages = ["aiak_training_omni"]
+packages = ["omni_training"]
 include = [
-    "aiak_training_omni/conf/*",
-    "aiak_training_omni/data/*",
-    "aiak_training_omni/**/*.yaml",
-    "aiak_training_omni/**/*.json"
+    "omni_training/conf/*",
+    "omni_training/data/*",
+    "omni_training/**/*.yaml",
+    "omni_training/**/*.json"
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["aiak_training_omni"]
+packages = ["omni_training"]
 output-dir = "output/dist"
 
 [tool.hatch.build.targets.sdist]

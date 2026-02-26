@@ -1,4 +1,4 @@
-_target_: aiak_training_omni.models.encoder.RiceVisionConfig
+_target_: omni_training.models.encoder.RiceVisionConfig
 
 num_layers: 24
 hidden_size: 1024

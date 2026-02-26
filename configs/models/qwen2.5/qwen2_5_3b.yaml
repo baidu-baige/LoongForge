@@ -1,4 +1,4 @@
-_target_: aiak_training_omni.models.foundation.Qwen2Config
+_target_: omni_training.models.foundation.Qwen2Config
 
 num_layers: 36
 hidden_size: 2048

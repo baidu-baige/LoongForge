@@ -27,7 +27,7 @@ function install_base_env() {
     install_pip_config
 
     # 设置系统源和时区（基础环境，保留）
-    rm -rf /etc/apt/sources.list && cp /workspace/AIAK-Training-Omni/docker/sources.list /etc/apt/sources.list
+    rm -rf /etc/apt/sources.list && cp /workspace/OmniTraining/docker/sources.list /etc/apt/sources.list
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install tzdata && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
     apt-get install bc tree pwgen nodejs iproute2 -y
 }
@@ -41,11 +41,11 @@ function install_requirements() {
         > "$source_file"
     fi
 
-    # 仅保留AIAK-Training-Omni自身的requirements
-    requirements_file="/workspace/AIAK-Training-Omni/requirements.txt"
+    # 仅保留OmniTraining自身的requirements
+    requirements_file="/workspace/OmniTraining/requirements.txt"
 
     if [[ "$COMPILE_ENV" == "p800" ]];then
-        requirements_file="/workspace/AIAK-Training-Omni/requirements_xpu.txt"
+        requirements_file="/workspace/OmniTraining/requirements_xpu.txt"
 
         echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh
         echo "source /etc/profile.d/alias.sh" >> ~/.bashrc
@@ -58,7 +58,7 @@ function install_requirements() {
     
     # ======================== 核心修复：-e . 路径问题 ========================
     local original_pwd=$(pwd)
-    cd /workspace/AIAK-Training-Omni/
+    cd /workspace/OmniTraining/
     # 添加 -q --no-cache-dir 避免进度条线程问题
     # 添加 --root-user-action=ignore 避免 root 用户警告
     pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com
@@ -110,7 +110,7 @@ function update_flash_attn3_import_path_for_te() {
 
 function install_deepep() {
     cd ${CURRENT_DIR}
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/bzz_deepep/nvshmem.tar.gz
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/bzz_deepep/nvshmem.tar.gz
 
     tar -zxvf nvshmem.tar.gz
     cp -rf nvshmem /usr/local/nvshmem
@@ -122,7 +122,7 @@ function install_deepep() {
     rm -rf nvshmem
     rm -f nvshmem.tar.gz
 
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/bzz_deepep/deep_ep-1.2.1+9af0e0d-cp312-cp312-linux_x86_64.whl
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/bzz_deepep/deep_ep-1.2.1%2B9af0e0d-cp312-cp312-linux_x86_64.whl
 
     TORCH_CUDA_ARCH_LIST="10.0" pip install deep_ep-1.2.1+9af0e0d-cp312-cp312-linux_x86_64.whl
     rm -rf deep_ep-1.2.1+9af0e0d-cp312-cp312-linux_x86_64.whl
@@ -130,7 +130,7 @@ function install_deepep() {
 
 function upgrade_cudnn_9_16_0() {
     cd ${CURRENT_DIR}
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/cudnn-local-repo-ubuntu2404-9.16.0_1.0-1_amd64.deb
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/cudnn-local-repo-ubuntu2404-9.16.0_1.0-1_amd64.deb
     dpkg -i cudnn-local-repo-ubuntu2404-9.16.0_1.0-1_amd64.deb
     cp /var/cudnn-local-repo-ubuntu2404-9.16.0/cudnn-*-keyring.gpg /usr/share/keyrings/
     apt-get update
@@ -143,7 +143,7 @@ function install_aiak_fp8_quant() {
     cd ${CURRENT_DIR}
 
     # 基于 https://console.cloud.baidu-int.com/devops/icode/repos/baidu/hac-aiacc/AIAK-FP8-Quantization/commits/2c5bdacec6f850fef16e016e89bdf5624aaeb4e3/setup.py
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/AIAK-FP8-Quantization.tar.gz
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/AIAK-FP8-Quantization.tar.gz
 
     tar -zxvf AIAK-FP8-Quantization.tar.gz
 
@@ -160,12 +160,12 @@ function install_aiak_fp8_quant() {
 }
 
 function clear_unused_file() {
-    # 仅清理AIAK-Training-Omni自身的无用文件，删除外部库清理逻辑
+    # 仅清理OmniTraining自身的无用文件，删除外部库清理逻辑
     rm -rf /tmp/* ~/.bash_history
-    rm -rf /workspace/AIAK-Training-Omni/.git
-    rm -rf /workspace/AIAK-Training-Omni/build.sh
-    rm -rf /workspace/AIAK-Training-Omni/ci.yml
-    rm -rf /workspace/AIAK-Training-Omni/docker/ci || true
+    rm -rf /workspace/OmniTraining/.git
+    rm -rf /workspace/OmniTraining/build.sh
+    rm -rf /workspace/OmniTraining/ci.yml
+    rm -rf /workspace/OmniTraining/docker/ci || true
     
     rm -rf /workspace/TransformerEngine
 
@@ -202,9 +202,9 @@ function apply_transformerEngine() {
     unset http_proxy https_proxy
     
     # 3. Apply patches from omni
-    if [ -f "/workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh" ]; then
-        bash /workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh \
-            /workspace/AIAK-Training-Omni/patches/TransformerEngine \
+    if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then
+        bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+            /workspace/OmniTraining/patches/TransformerEngine \
             $transformerEngine_dir
     else
         echo "Warning: apply_two_repo.sh not found, skipping patch application"
@@ -215,9 +215,9 @@ function apply_transformerEngine() {
     rm -rf ${thirdparty_path} && mkdir -p ${thirdparty_path}
     cd ${thirdparty_path}
 
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/cudnn-frontend.tar.gz && tar -zxvf cudnn-frontend.tar.gz
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/cutlass.tar.gz && tar -zxvf cutlass.tar.gz
-    wget -q https://cce-ai-datasets.bj.bcebos.com/hac-aiacc/aiak-training-llm/ngc2506_torch28_cuda129_tev29/googletest.tar.gz && tar -zxvf googletest.tar.gz
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/cudnn-frontend.tar.gz && tar -zxvf cudnn-frontend.tar.gz
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/cutlass.tar.gz && tar -zxvf cutlass.tar.gz
+    wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/googletest.tar.gz && tar -zxvf googletest.tar.gz
 
     rm -rf cudnn-frontend.tar.gz googletest.tar.gz cutlass.tar.gz
 
@@ -263,9 +263,9 @@ function apply_megatron() {
     unset http_proxy https_proxy
     
     # 3. Apply patches from omni repo
-    if [ -f "/workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh" ]; then
-        bash /workspace/AIAK-Training-Omni/tools/apply_patches/apply_two_repo.sh \
-            /workspace/AIAK-Training-Omni/patches/Megatron-LM \
+    if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then
+        bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+            /workspace/OmniTraining/patches/Megatron-LM \
             $megatron_dir
     else
         echo "Warning: apply_two_repo.sh not found, skipping patch application"
@@ -347,7 +347,7 @@ if [[ "$COMPILE_ENV" == "p800" ]];then
         XPYTORCH_URL="$XPYTORCH_URL_ARG"
         echo "使用指定的 xpytorch 版本: $XPYTORCH_URL"
     else
-        xpytorch_info="/workspace/AIAK-Training-Omni/xpytorch_info.txt"
+        xpytorch_info="/workspace/OmniTraining/xpytorch_info.txt"
 
         if [[ ! -f "$xpytorch_info" ]]; then
             echo "xpytorch配置文件不存在: $xpytorch_info"

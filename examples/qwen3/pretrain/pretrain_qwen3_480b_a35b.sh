@@ -15,7 +15,7 @@ nvidia-smi -L                 # check that all 8 GPUs are listed
 echo $CUDA_VISIBLE_DEVICES    # should list 8 comma-separated indices
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 DATA_PATH=${DATA_PATH:-"/ssd3/qwen/qwen3_data/pile-qwen_text_document"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/ssd3/qwen/Qwen3-Coder-480B-A35B-tokenizer"}
@@ -140,7 +140,7 @@ NSYS_ARGS="nsys profile \
     # $NSYS_ARGS \
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

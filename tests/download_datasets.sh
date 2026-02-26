@@ -52,7 +52,7 @@ done
 
 checkpoint_dir=${PFS_DIR}/megatron_checkpoint
 huggingface_dir=${PFS_DIR}/huggingface.co
-datasets_dir=${PFS_DIR}/omni_datasets/aiak-training-omni/
+datasets_dir=${PFS_DIR}/omni_datasets/OmniTraining/
 
 mkdir -p $checkpoint_dir $huggingface_dir $datasets_dir
 

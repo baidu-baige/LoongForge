@@ -1,4 +1,4 @@
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 AIAK_MAGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 TP="${1:-1}"
 PP="${2:-1}"
@@ -6,7 +6,7 @@ SEQ_LEN="${3:-32768}"
 MBS="${4:-1}"
 GBS="${5:-8}"
 NSTEP="${6:-2500}"
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/dataset/mllm/demo/wds/"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/mllm/demo/wds/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVision-1.5-4B-stage0_mcore_tp1_pp1"}
 
@@ -179,7 +179,7 @@ export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
 PYTHONPATH="$AIAK_MAGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$AIAK_TRAINING_PATH/aiak_training_omni/train.py" \
+    "$AIAK_TRAINING_PATH/omni_training/train.py" \
     "${DATA_ARGS[@]}" \
     ${IMG_ARGS:+${IMG_ARGS[@]}} \
     "${MODEL_CONFIG_ARGS[@]}" \

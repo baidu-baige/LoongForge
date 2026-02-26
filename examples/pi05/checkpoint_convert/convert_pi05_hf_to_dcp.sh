@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PYTHON_BIN=${PYTHON_BIN:-"python3"}
 

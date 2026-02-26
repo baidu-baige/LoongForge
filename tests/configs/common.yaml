@@ -2,7 +2,7 @@ pfs_path: /workspace
 load_hf_ckpt_path_pre: $pfs_path/huggingface.co/
 save_mcore_ckpt_path_pre: $pfs_path/megatron_checkpoint/
 megatron_path: /workspace/AIAK-Megatron
-aiak_training_path: /workspace/AIAK-Training-Omni/
+aiak_training_path: /workspace/OmniTraining/
 
 
 scripts_root_path: $aiak_training_path/tests

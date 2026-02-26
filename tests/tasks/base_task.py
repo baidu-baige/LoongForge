@@ -431,8 +431,8 @@ class BaseTask(object):
     
 
     
-    def assert_aiak_training_omni(self, training_log_file, training_type=None, **kwargs):
-        logger.info(f"Start assert_aiak_training_omni ...")
+    def assert_omni_training(self, training_log_file, training_type=None, **kwargs):
+        logger.info(f"Start assert_omni_training ...")
 
         if not self.is_final_pod:
             return
@@ -458,7 +458,7 @@ class BaseTask(object):
             self.save_baseline_from_log(training_log_file, training_type)
         # Unified validation of accuracy and performance metrics
         self.validate_metrics(self.model_name, training_type)
-        logger.info(f"End assert_aiak_training_omni")
+        logger.info(f"End assert_omni_training")
 
     def validate_metrics(self, model_name, training_type=None):
         """
@@ -1064,7 +1064,7 @@ class BaseTask(object):
 
         logger.info(f"{step_stage} End reverse_{step_name}")
 
-    def start_aiak_training_omni(self, index, step_stage, scenario_name, training_type_name):
+    def start_omni_training(self, index, step_stage, scenario_name, training_type_name):
         """
         Start executing training task
         Args:
@@ -1073,7 +1073,7 @@ class BaseTask(object):
             scenario_name: Scenario name
             training_type_name: Training type name (e.g. pretrain, sft)
         """
-        step_name = "aiak_training_omni"
+        step_name = "omni_training"
         logger.info(f"{step_stage} {step_name} Start Running ...")
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
@@ -1112,7 +1112,7 @@ class BaseTask(object):
                 model_name,
                 f"{scenario_name}_{step_name}",
                 is_function=True,
-                function=self.assert_aiak_training_omni,
+                function=self.assert_omni_training,
                 raise_on_error=True,
                 training_log_file=training_log_file,
                 training_type=training_type_name

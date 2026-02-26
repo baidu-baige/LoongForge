@@ -6,9 +6,9 @@ TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True
 
-# aiak-training-omni training parameters
+# OmniTraining training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/meta-llama/Llama-2-7b-hf
-PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/aiak-training-omni/llama2/pile_test/pile-llama_text_document
+PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/OmniTraining/llama2/pile_test/pile-llama_text_document
 SFT_DATA_PATH: $scripts_root_path/datasets/llm/sft_aplaca_zh_data.json
 TOKENIZER_PATH: $pfs_path/huggingface.co/meta-llama/Llama-2-7b-hf
 CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/llama2/$model_name

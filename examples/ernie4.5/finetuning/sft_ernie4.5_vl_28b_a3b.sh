@@ -3,10 +3,10 @@
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=/workspace/ernie/AIAK-Megatron
-AIAK_TRAINING_PATH=/workspace/ernie/AIAK-Training-Omni/
+AIAK_TRAINING_PATH=/workspace/ernie/OmniTraining/
 DATASET_PATH=/workspace/ernie/dataset/dataset.jsonl
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/aiak-training-llm/tensorboard-log/ernie4.5vl/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/ernie4.5vl/"}
 CHECKPOINT_LOAD_PATH=/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_hg2mcore/
 CHECKPOINT_SAVE_PATH=/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_save/
 
@@ -118,7 +118,7 @@ echo "llm path: "  $AIAK_TRAINING_PATH, "megatron path: " $MEGATRON_PATH
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
+    $AIAK_TRAINING_PATH/omni_training/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
