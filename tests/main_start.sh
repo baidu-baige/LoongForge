@@ -43,6 +43,11 @@ include_optional=false
 # optional_subdir="internvl2.5"
 # include_optional=true
 
+# Mode 5: Run all models under configs/ and optional_configs/.
+# model_names=""                                    
+# optional_subdir=""
+# include_optional=true
+
 # Test Configuration
 TIMEOUT=3600
 

@@ -38,8 +38,10 @@ def prepare_models_list(args):
         if args.optional_subdir or args.extra_models:
             args.models = []
         elif args.include_optional:
-            args.models = ConfigManager.get_models_from_dir("optional_configs", recursive=True)
-            logger.info("Running all models from optional_configs (Method 5)...")
+            default_models = ConfigManager.get_all_models(args.configs_dir)
+            optional_models = ConfigManager.get_models_from_dir("optional_configs", recursive=True)
+            args.models = list(default_models) + list(optional_models)
+            logger.info("Running all models from configs + optional_configs (Method 5)...")
         else:
             args.models = ConfigManager.get_all_models(args.configs_dir)
     
