@@ -203,7 +203,6 @@ scenarios:
             --moe-grouped-gemm
             --moe-router-dtype fp32
             --empty-unused-memory-level 2
-            --moe-router-score-function sigmoid
             --moe-token-dispatcher-type alltoall'
           MODEL_PARALLEL_ARGS: '
             --attention-backend flash

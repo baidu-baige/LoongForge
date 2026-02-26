@@ -16,7 +16,7 @@ TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 
 # ckpt convert configuration
-ENCODER_TENSOR_MODEL_PARALLER_SIZE: 4
+ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
 NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK: 2
 CUSTOM_PIPELINE_LAYERS: 6,8,6,8
@@ -226,6 +226,7 @@ scenarios:
             --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            +model.image_encoder.tensor_model_parallel_size=2
             --num-virtual-stages-per-pipeline-rank ${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --use-distributed-optimizer
             --overlap-grad-reduce
@@ -287,6 +288,7 @@ scenarios:
             --attention-backend flash
             --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
             --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            +model.image_encoder.tensor_model_parallel_size=2
             --num-virtual-stages-per-pipeline-rank ${NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK}
             --use-distributed-optimizer
             --overlap-grad-reduce
