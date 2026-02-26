@@ -92,7 +92,7 @@ def save_parallel_state(module_name):
     }
     _ParallelStatesDict.setdefault(module_name, {}).update(state_snapshot)
 
-def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False, freeze=False):
+def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False):
     """
     Create the parallel state of the model and save it
     """
@@ -103,7 +103,6 @@ def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False
 
     if enable_encoder_hetero_dp:
         assert tp_size == 1, f"encoder_tp_size must be 1 when enable_encoder_hetero_dp is True, but got {tp_size}"
-        assert not freeze, f"freeze encoder parameters is not supported when enable_encoder_hetero_dp is True"
         if module_name == "image_encoder":
             global _ImageEncoderDataParallelSize
             _ImageEncoderDataParallelSize = _DecoderTensorParallelSize // tp_size
@@ -206,21 +205,18 @@ def initialize_aiak_megatron(
                 'image_encoder', 
                 model_config.image_encoder.tensor_model_parallel_size, 
                 args.enable_encoder_hetero_dp,
-                model_config.image_encoder.freeze,
             )
         if hasattr(model_config, "video_encoder") and model_config.video_encoder is not None:
             create_parallel_state(
                 'video_encoder', 
                 model_config.video_encoder.tensor_model_parallel_size, 
                 args.enable_encoder_hetero_dp,
-                model_config.video_encoder.freeze
             )
         if hasattr(model_config, "audio_encoder") and model_config.audio_encoder is not None:
             create_parallel_state(
                 'audio_encoder', 
                 model_config.audio_encoder.tensor_model_parallel_size, 
                 args.enable_encoder_hetero_dp,
-                model_config.audio_encoder.freeze
             )
 
         change_parallel_state('text_decoder')

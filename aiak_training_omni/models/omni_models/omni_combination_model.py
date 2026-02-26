@@ -333,7 +333,6 @@ class OmniCombinationModel(BaseMegatronModule):
                     if inner_group_id == _ImageEncoderDataParallelSize - 1:
                         ctx["local_embedding"].backward(
                             gradient=ctx["grads"], 
-                            inputs=list(self.encoder_model.parameters())
                         )
                         del vit_contexts[forward_group_id]
                         
