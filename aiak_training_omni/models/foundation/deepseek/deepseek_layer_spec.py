@@ -5,12 +5,6 @@ from omegaconf import ListConfig
 
 from megatron.core.models.gpt.gpt_layer_specs import get_gpt_mtp_block_spec
 from megatron.core.transformer.enums import AttnMaskType, LayerType
-from megatron.core.transformer.experimental_attention_variant.dsa import (
-    DSAIndexer,
-    DSAIndexerSubmodules,
-    DSAttention,
-    DSAttentionSubmodules,
-)
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
@@ -56,6 +50,12 @@ def _get_deepseek_layer_with_te_spec(
 
     if experimental_attention_variant is not None:
         if experimental_attention_variant == "dsa":
+            from megatron.core.transformer.experimental_attention_variant.dsa import (
+                DSAIndexer,
+                DSAIndexerSubmodules,
+                DSAttention,
+                DSAttentionSubmodules,
+            )
             core_attention = ModuleSpec(
                 module=DSAttention,
                 submodules=DSAttentionSubmodules(

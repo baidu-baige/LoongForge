@@ -65,7 +65,6 @@ from megatron.core.optimizer import get_megatron_optimizer, OptimizerConfig
 from megatron.core.rerun_state_machine import get_rerun_state_machine
 from megatron.core.transformer.moe import upcycling_utils
 from megatron.core.transformer.moe.moe_utils import track_moe_metrics
-from megatron.core.transformer.experimental_attention_variant.dsa import DSAIndexerLossLoggingHelper
 from megatron.training.global_vars import get_energy_monitor
 
 from megatron.core.parallel_state import (
@@ -1173,6 +1172,7 @@ def training_log(
     # Track sparse attention indexer loss
     if args.dsa_indexer_loss_coeff is not None and args.dsa_indexer_loss_coeff > 0:
         indexer_loss_scale = 1 / get_num_microbatches()
+        from megatron.core.transformer.experimental_attention_variant.dsa import DSAIndexerLossLoggingHelper
         DSAIndexerLossLoggingHelper.track_indexer_metrics(
             loss_scale=indexer_loss_scale,
             iteration=iteration,
