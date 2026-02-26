@@ -348,11 +348,11 @@ class TransformerBlock(MegatronTransformerBlock):
                             **kwargs,
                         )
                         
-                        # vision deepstack
-                        if self.has_deepstack and l_no in deepstack_visual_indexes:
-                                merger = deepstack_merger_list[deepstack_visual_indexes.index(l_no)]
-                                deepstack_feature = merger(hidden_states)
-                                deepstack_feature_lists.append(deepstack_feature)
+                    # vision deepstack
+                    if self.has_deepstack and l_no in deepstack_visual_indexes:
+                            merger = deepstack_merger_list[deepstack_visual_indexes.index(l_no)]
+                            deepstack_feature = merger(hidden_states)
+                            deepstack_feature_lists.append(deepstack_feature)
 
                     if (
                         torch.is_grad_enabled()
