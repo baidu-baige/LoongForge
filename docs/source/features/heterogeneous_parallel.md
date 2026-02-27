@@ -1,4 +1,6 @@
-# Heterogeneous Tensor Parallel
+# Heterogeneous Parallel
+
+## 1.Heterogeneous TP Parallel
 
 AIAK-Training-Omni supports heterogeneous Tensor Parallel (TP) configuration for encoder and decoder, meaning encoder and decoder can use different TP sizes for parallel computation.
 
@@ -8,7 +10,7 @@ This heterogeneous TP mechanism enables the model to flexibly select the most ap
 
 ![heterogeneous_tp](../../../assets/_images/tp_pic1.png)
 
-## 1. Usage Method
+### 1.1 Usage Method
 Set `tensor-model-parallel-size` in the corresponding model's vit.yaml to specify the vit tp size. For example, adding `tensor_model_parallel_size: 2` in qwen3_vit specifies the vit's tp size:
 
 ```yaml
@@ -56,9 +58,62 @@ MODEL_PARALLEL_ARGS=(
 )
 ```
 
-## 2. Performance Results
+### 1.2 Performance Results
 Based on qwen2.5vl7b testing with decoder tp = 4 and encoder tp of 1, 2, and 4, different settings show different performance characteristics. Specific performance for different models requires testing.
 
 ![heterogeneous_tp_res](../../../assets/_images/tp_pic2.png)
 
 For small-scale encoders like Vit (0.6b), a 5% performance improvement was achieved in the qwen2.5vl 7b model.
+
+## 2.Heterogeneous DP Parallel
+
+Heterogeneous tensor parallelism (TP) alone does not necessarily improve end-to-end performance. Therefore, aiak-training-omni supports a heterogeneous data-parallel mechanism. The core idea is that after applying heterogeneous TP to the encoder and decoder, we can leverage multi-GPU parallelism by feeding different inputs to different encoder replicas, allowing them to compute simultaneously and thus reduce overall latency.
+
+### 2.1 Usage Method
+Add `--enable-encoder-hetero-dp` to the shell training script to enable heterogeneous data parallelism:
+```bash
+MODEL_PARALLEL_ARGS=(
+    --attention-backend flash
+    --pipeline-model-parallel-size 2
+    --tensor-model-parallel-size 4
+    --use-distributed-optimizer
+    --overlap-grad-reduce
+    --overlap-param-gather
+    --distributed-backend nccl
+    --enable-encoder-hetero-dp
+)
+```
+
+Add `tensor_model_parallel_size: 1` to the corresponding model’s `vit.yaml`. Currently, when heterogeneous DP is enabled, only encoder TP size of 1 is supported.
+```yaml
+_target_: aiak_training_omni.models.encoder.Qwen2VisionRMSNormConfig
+
+num_layers: 32
+hidden_size: 1280
+kv_channels: 80
+ffn_hidden_size: 3420
+patch_size: 14
+num_attention_heads: 16
+num_query_groups: 16
+image_size: [1344, 1344]
+activation_func: ${act:silu}
+add_bias_linear: true
+add_qkv_bias: true
+swiglu: true
+gated_linear_unit: true
+position_embedding_type: "none"
+bias_activation_fusion: False
+hidden_dropout: 0
+attention_dropout: 0
+normalization: "RMSNorm"
+apply_rope_fusion: true
+tensor_model_parallel_size: 1
+model_type: "qwen2_5_vit"
+```
+
+Note: Heterogeneous DP and heterogeneous TP are sensitive to the learning rate. A smaller learning rate, such as 1e-5, is recommended.
+
+### 2.2 Performance Results
+Based on qwen2.5vl7b testing with decoder tp = 4 and encoder tp = 1, enabling heterogeneous DP yields significant performance improvements.
+
+![heterogeneous_dp_res](../../../assets/_images/tp_pic3.png)
