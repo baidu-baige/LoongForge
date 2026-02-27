@@ -63,6 +63,12 @@ def get_encoder_dp_size(name):
     else:
         raise ValueError(f'Unknown encoder type: {name}')
 
+def destroy_model_parallel_without_destroy_gloo_group():
+    """Set the groups to none."""
+    for k, v in vars((mpu)).items():
+        if k.startswith('_') and not k.startswith('__') and not inspect.isfunction(v):
+            setattr(mpu, k, None)
+
 def change_parallel_state(module_name):
     """
     Change the parallel state of the model to the state saved in _ParallelStatesDict
@@ -75,10 +81,10 @@ def change_parallel_state(module_name):
     if _CurrentParallelStateModel in _ParallelStatesDict:
         current_globals = _ParallelStatesDict[_CurrentParallelStateModel]
         for k in current_globals:
-            if k in target_globals and "_GLOO" not in k:
+            if k in target_globals:
                 current_globals[k] = target_globals[k]
     for k, v in source_globals.items():
-        if k in target_globals and "_GLOO" not in k:
+        if k in target_globals:
             target_globals[k] = v
     _CurrentParallelStateModel = module_name
 
@@ -99,7 +105,7 @@ def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False
     if tp_size == 0:
         tp_size = _DecoderTensorParallelSize
     assert tp_size <= _DecoderTensorParallelSize and _DecoderTensorParallelSize % tp_size == 0
-    mpu.destroy_model_parallel()
+    destroy_model_parallel_without_destroy_gloo_group()
 
     if enable_encoder_hetero_dp:
         assert tp_size == 1, f"encoder_tp_size must be 1 when enable_encoder_hetero_dp is True, but got {tp_size}"
