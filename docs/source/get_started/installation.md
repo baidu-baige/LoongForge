@@ -2,18 +2,21 @@
 
 ## 1. Build & Run with Docker Image (Recommended)
 ### 1.1 Env requirements
-* Ubuntu 22.04
-* NVIDIA GPU (Ampere / Hopper or newer)
+* Ubuntu 24.04
+* NVIDIA GPU (Ampere / Hopper / Blackwell or newer)
 * NVIDIA Driver (version must meet the CUDA requirement)
 * Docker ≥ 20.10
 * nvidia-container-toolkit
 
 ### 1.2 Build the docker image
-From the project root run:
+Go to the directory where the project is located and run:
 
 ```bash
-docker build -t OmniTraining:latest -f ./docker/Dockerfile .
+docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
+  -t OmniTraining:latest -f ./OmniTraining/docker/Dockerfile .
 ```
+- `COMPILE_ENV` is used to specify the type of GPU (options: ampere, hopper, blackwell).
+- `INSTALL_LEROBOT` is used to determine whether to install lerobot (options: true, false). 
 
 After the build finishes, verify the image:
 
@@ -27,10 +30,9 @@ docker images | grep OmniTraining
 The example below starts a container and mounts the project code, data, etc.:
 
 ```bash
-docker run --gpus all -it --rm \
-  -v /path/to/your/hf/tokenizer:/workspace/tokenizer \
-  -v /path/to/data:/workspace/data \
-  -v /path/to/checkpoints:/workspace/checkpoints \
+docker run --runtime --nvidia --gpus all -itd --rm \
+  -v /path/to/your/hf/tokenizer:/mnt/cluster/huggingface.co/ \
+  -v /path/to/data:/mnt/cluster/OmniTraining/ \
   OmniTraining:latest /bin/bash
 ```
 
@@ -49,9 +51,9 @@ The project contains the following key directories:
 ### 2.3 Automated Environment Setup
 We provide a helper script `setup_env.py` to automate the entire process, including cloning repositories, switching tags, applying patches, building TransformerEngine, and installing dependencies.
 
-**Important: Recommended versions:**
-- **Megatron-LM**: `0.15.0` (ensure the tag matches the remote repository, e.g., `core_v0.15.0`)
-- **TransformerEngine**: `2.9` (e.g., `v2.9`)
+**Recommended versions:**
+- **Megatron-LM**: `core_v0.15.0` (ensure the tag matches the remote repository)
+- **TransformerEngine**: `v2.9`
 
 **Usage:**
 
@@ -71,7 +73,7 @@ python setup_env.py --megatron-tag core_v0.15.0 --te-tag v2.9
 This script will automatically:
 1. Clone `Megatron-LM` and `TransformerEngine` if they don't exist.
 2. Checkout the specified tags and create local branches (`aiak_<tag>`).
-3. Apply AIAK-Omni patches to both repositories.
+3. Apply patches to both repositories.
 4. Compile and install `TransformerEngine`.
 5. Install all python dependencies for `OmniTraining`.
 

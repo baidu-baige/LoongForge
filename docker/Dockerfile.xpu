@@ -1,0 +1,127 @@
+ARG BASE_IMAGE="iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33"
+FROM ${BASE_IMAGE}
+
+# =========================================================
+# Build Arguments
+# =========================================================
+ARG INSTALL_LEROBOT="false"
+ARG XPYTORCH_URL_ARG=""
+
+WORKDIR /workspace
+
+# =========================================================
+# Base System Configuration + APT Source Replacement
+# =========================================================
+COPY ./AIAK-Training-Omni /workspace/OmniTraining
+
+# ======================== Install XPU Requirements ========================
+RUN set -exuo pipefail && \
+    download_xpytorch() { \
+        local XPYTORCH_URL=$1; \
+        local XPYTORCH_FILE=$(basename "${XPYTORCH_URL}"); \
+        echo "download xpytorch package: ${XPYTORCH_URL}" && \
+        wget "${XPYTORCH_URL}" && \
+        bash "${XPYTORCH_FILE}" && \
+        rm "${XPYTORCH_FILE}"; \
+    }; \
+    . /root/miniconda/etc/profile.d/conda.sh && \
+    conda activate python310_torch25_cuda && \
+    if [ -n "${XPYTORCH_URL_ARG}" ]; then \
+        XPYTORCH_URL="${XPYTORCH_URL_ARG}"; \
+        echo "use specified xpytorch version: ${XPYTORCH_URL}"; \
+    else \
+        xpytorch_info="/workspace/OmniTraining/xpytorch_info.txt"; \
+        if [ ! -f "${xpytorch_info}" ]; then \
+            echo "xpytorch info file not exist: ${xpytorch_info}" && exit 1; \
+        fi; \
+        DEFAULT_XPYTORCH_URL=$(cat "${xpytorch_info}" | tr -d '[:space:]'); \
+        if [ -z "${DEFAULT_XPYTORCH_URL}" ]; then \
+            echo "Error: xpytorch_info.txt file content is empty" && exit 1; \
+        fi; \
+        XPYTORCH_URL="${DEFAULT_XPYTORCH_URL}" \
+        echo "use default xpytorch version: ${XPYTORCH_URL}"; \
+    fi && \
+    download_xpytorch "${XPYTORCH_URL}"
+
+# ======================== Install Base Requirements ========================
+RUN set -exuo pipefail && \
+    install_requirements() { \
+        local requirements_file="/workspace/OmniTraining/requirements_xpu.txt" && \
+        # for deepspeed cpu adam
+        DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U && \
+        echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
+        echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
+        cd /workspace/OmniTraining/ && \
+        pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
+            -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
+    }; \
+    install_requirements && \
+    echo "y" | pip uninstall nvidia-modelopt || true
+
+# =========================================================
+# Megatron / Lerobot
+# =========================================================
+RUN set -exuo pipefail && \
+    install_megatron() { \
+        local megatron_dir=/workspace/AIAK-Megatron; \
+        local MEGATRON_TAGS="core_v0.15.0" && \
+        echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
+        cd /workspace && \
+        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/mcore_v0.15.0/megatron.tar.gz && \
+        tar -zxvf megatron.tar.gz && \
+        mv Megatron-LM AIAK-Megatron && \
+        cd ${megatron_dir} && \
+        git config --global --add safe.directory ${megatron_dir}; \
+        git restore . && \
+        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
+            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+                /workspace/OmniTraining/patches/Megatron-LM \
+                ${megatron_dir}; \
+        fi && \
+        echo "Megatron-LM setup completed"; \
+    }; \
+    install_lerobot() { \
+        echo "Installing lerobot..." && \
+        cd /workspace && \
+        if [ -d "lerobot" ]; then \
+            rm -rf lerobot; \
+        fi && \
+        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lerobot.tar.gz && \
+        tar -zxvf lerobot.tar.gz && \
+        cd lerobot && \
+        if [ -f "requirements-ubuntu.txt" ]; then \
+            sed -i '/evdev/d' requirements-ubuntu.txt; \
+        fi && \
+        pip install --no-build-isolation ".[pi]" && \
+        echo "Lerobot installation completed"; \
+    }; \
+    install_megatron && \
+    if [ "$INSTALL_LEROBOT" = "true" ]; then \
+        install_lerobot; \
+    else \
+        echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"; \
+    fi
+
+# =========================================================
+# Jupyter Configuration
+# =========================================================
+RUN mkdir -p /root/.jupyter && \
+    touch /root/.jupyter/enterpoint.sh && \
+    chmod +x /root/.jupyter/enterpoint.sh
+
+# =========================================================
+# Clean Up Unused Files (Consistent with install.sh)
+# =========================================================
+RUN rm -rf /tmp/* ~/.bash_history && \
+    rm -rf /workspace/OmniTraining/.git && \
+    rm -rf /workspace/OmniTraining/build.sh && \
+    rm -rf /workspace/OmniTraining/ci.yml && \
+    rm -rf /workspace/OmniTraining/docker/ci && \
+    rm -rf /workspace/AIAK-Megatron/.git && \
+    rm -rf /workspace/AIAK-Megatron/.github && \
+    rm -rf /workspace/AIAK-Megatron/output && \
+    rm -rf /workspace/*.tar.gz && \
+    rm -f /workspace/README.md /workspace/license.txt && \
+    rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot
+
+WORKDIR /workspace
