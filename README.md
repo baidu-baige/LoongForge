@@ -1,22 +1,34 @@
-# Overview
-![OmniTraining Logo](assets/_images/Image_20260117_204343.jpg)
+<div align="center">
+
+![OmniTraining Logo](assets/_images/omni_logo.jpg)
+<h3> Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h3>
+
+
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)
 [![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/OmniTraining)
 [![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/OmniTraining/blob/master/LICENSE)
 [![stars](https://img.shields.io/github/stars/baidu-baige/OmniTraining=social)](https://github.com/baidu-baige/OmniTraining/tree/master)
 [![open issues](https://img.shields.io/github/issues-raw/baidu-baige/OmniTraining)](https://github.com/baidu-baige/OmniTraining/issues)
+
+</div>
+
 ## Introduction
-The AIAK-Omni framework is an all-scenario training framework built on Megatron, covering LLM, VLM, VLA, Diffusion, supporting large-scale training of various models and scenarios, with training performance reaching SOTA.
 
-* Excellent performance, achieving SOTA training performance across multiple models, suitable for both large-scale training (&gt;1000 GPUs) and fine-tuning of small-scale models.
-* Coverage of mainstream models and tasks, supporting over 10 types of LLM/VLM, and tasks including model pretraining and fine-tuning.
-* Model combination, allowing flexible replacement of model components in VLM to achieve flexible networking.
-* Rich tools provided, including efficient and scalable data components, weight conversion, etc.
+**OmniTraining** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is an efficient, user-friendly, and production-hardened toolchain for training large-scale transformer models across diverse modalities and scales. By continuously adapting to emerging architectures and tackling performance bottlenecks through deep optimization, it provides full-scenario support for a highly efficient, seamless training experience.
 
-## Latest News
-[2026/01/31] 🔥We have released the OmniTraining framework! A brand-new multimodal large model training framework.
+* **🚀 Broad Model Support**: Natively supports mainstream model architectures, including LLMs, VLMs, VLAs, and Diffusion Models. It covers the full pipeline from pre-training and mid-training to sft, with core strategies fully validated in production environments.
 
-## Features
+* **⚡ High-Performance Optimization**: Built upon Megatron with in-depth enhancements while preserving compatibility with its existing optimization strategies. It further delivers more optimizations across communication, computation, and memory management, and resolves several critical issues in the original version. Effective performance optimization can significantly reduce training costs.
+
+* **🧪 Heterogeneous Hardware Compatibility**: Designed for heterogeneous hardware environments, OmniTraining provides native, high-performance support for both NVIDIA GPUs and Baidu Kunlun NPUs, ensuring seamless migration and stable training across different hardware backends.
+
+
+## Latest News 🔥
+- [2026/02] We have released the OmniTraining framework! An advanced large model training framework.
+- [2025/09] AIAK-Training-LLM (earlier version of OmniTraining) powered the training of the official **[LLaVA-OneVision-1.5](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)** release.
+
+## ✨ Key Features
+
 * Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See [model_combination.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/model_combination.md) for details.
 * Heterogeneous TP, supporting different TP size splitting for different components in VLM to cope with various model sizes, see [heterogeneous_tp_parallel.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/heterogeneous_tp_parallel.md) for details.
 * DP data balance, optimizing the data parallel load imbalance problem introduced by data packing, see [data_parallel_balance.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/data_parallel_balancing.md) for details.
@@ -95,6 +107,7 @@ The AIAK-Omni framework is an all-scenario training framework built on Megatron,
 |||internvl3.5_241b_a28b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl3.5/internvl3_5_241b_a28b.yaml)|
 |Wan|Wan2.1|wan2.1_i2v_14b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/wan/pretrain_wan2.1_i2v_14b_480p.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/wan/wan2_1_i2v.yaml)|
 ||Wan2.2|wan2.2_i2v_a14b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/wan/pretrain_wan2.2_i2v_a14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/wan/wan2_2_i2v.yaml)|
+
 
 ## Quick Start
 
