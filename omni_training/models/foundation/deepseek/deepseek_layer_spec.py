@@ -29,7 +29,7 @@ from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.enums import Fp8Recipe
 
 from omni_training.models.dispatch import multiacc_modules
-
+from omni_training.utils import get_args
 
 def _get_deepseek_layer_with_te_spec(
     num_experts: Optional[int] = None,
@@ -48,20 +48,54 @@ def _get_deepseek_layer_with_te_spec(
         moe_grouped_gemm=moe_grouped_gemm,
     )
 
+    # Default specs for attention module and its submodules, which can be overridden by experimental attention variants.
+    mla_attention_module = MLASelfAttention
+    core_attention = multiacc_modules.DotProductAttention
+    linear_q_up_proj = (multiacc_modules.TELayerNormColumnParallelLinear if qk_layernorm
+                        else multiacc_modules.TEColumnParallelLinear)
+    linear_kv_up_proj = (multiacc_modules.TELayerNormColumnParallelLinear if qk_layernorm
+                         else multiacc_modules.TEColumnParallelLinear)
+    q_layernorm = IdentityOp
+    kv_layernorm = IdentityOp
+
+    # Override the attention module and its submodules if using experimental attention variant.
     if experimental_attention_variant is not None:
+        # Deepseek Sparse Attention (DSA)
         if experimental_attention_variant == "dsa":
-            from megatron.core.transformer.experimental_attention_variant.dsa import (
-                DSAIndexer,
-                DSAIndexerSubmodules,
-                DSAttention,
-                DSAttentionSubmodules,
-            )
+            use_dsa_fused = getattr(get_args(), "use_dsa_fused", False)
+            # By default, use the naive MegatronLM implementation of DSA.
+            if not use_dsa_fused:
+                from megatron.core.transformer.experimental_attention_variant.dsa import (
+                    DSAIndexer,
+                    DSAIndexerSubmodules,
+                    DSAttention,
+                    DSAttentionSubmodules,
+                )
+                indexer_module = DSAIndexer
+                indexer_submodules = DSAIndexerSubmodules
+                attention_module = DSAttention
+                attention_submodules = DSAttentionSubmodules
+            # Use Omni optimized fused implementation of DSA, which has better performance.
+            else:
+                from omni_training.models.common.experimental_attention_variant import (
+                    DSAIndexerFused,
+                    DSAIndexerFusedSubmodules,
+                    DSAttentionFused,
+                    DSAttentionFusedSubmodules,
+                    MLASelfAttentionFused,
+                )
+                indexer_module = DSAIndexerFused
+                indexer_submodules = DSAIndexerFusedSubmodules
+                attention_module = DSAttentionFused
+                attention_submodules = DSAttentionFusedSubmodules
+                mla_attention_module = MLASelfAttentionFused
+
             core_attention = ModuleSpec(
-                module=DSAttention,
-                submodules=DSAttentionSubmodules(
+                module=attention_module,
+                submodules=attention_submodules(
                     indexer=ModuleSpec(
-                        module=DSAIndexer,
-                        submodules=DSAIndexerSubmodules(
+                        module=indexer_module,
+                        submodules=indexer_submodules(
                             linear_wq_b=multiacc_modules.TELinear,
                             linear_wk=multiacc_modules.TELinear,
                             k_norm=multiacc_modules.TENorm,
@@ -74,25 +108,15 @@ def _get_deepseek_layer_with_te_spec(
             linear_kv_up_proj = multiacc_modules.TEColumnParallelLinear
             q_layernorm = (multiacc_modules.TENorm if qk_layernorm else IdentityOp)
             kv_layernorm = (multiacc_modules.TENorm if qk_layernorm else IdentityOp)
+
+        # Currently not support other experimental attention variants.
         else:
             raise ValueError(
                 f"Invalid experimental attention variant: {experimental_attention_variant}"
             )
-    else:
-        core_attention = multiacc_modules.DotProductAttention
-        linear_q_up_proj = (
-            multiacc_modules.TELayerNormColumnParallelLinear if qk_layernorm
-            else multiacc_modules.TEColumnParallelLinear
-        )
-        linear_kv_up_proj = (
-            multiacc_modules.TELayerNormColumnParallelLinear if qk_layernorm
-            else multiacc_modules.TEColumnParallelLinear
-        )
-        q_layernorm = IdentityOp
-        kv_layernorm = IdentityOp
 
     attention = ModuleSpec(
-        module=MLASelfAttention,
+        module=mla_attention_module,
         params={"attn_mask_type": AttnMaskType.causal},
         submodules=MLASelfAttentionSubmodules(
             linear_q_proj=multiacc_modules.TEColumnParallelLinear,

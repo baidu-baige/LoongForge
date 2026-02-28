@@ -174,6 +174,17 @@ def _validate_extra_sft_args(args):
 def _validate_extra_training_args(args):
     """Validate training arguments"""
 
+    if args.use_dsa_fused:
+        current_variant = getattr(args, "experimental_attention_variant", None)
+        if current_variant != "dsa":
+            raise ValueError(
+                "--use-dsa-fused requires experimental_attention_variant='dsa'. "
+                f"Got experimental_attention_variant={current_variant!r}."
+            )
+        print_rank_0(
+            "INFO: --use-dsa-fused is enabled; Omni fused DSA modules will be used.",
+            args.rank,
+        )
     if args.num_experts is None and args.moe_token_dispatcher_type in ['allgather', 'alltoall_seq']:
         args.moe_token_dispatcher_type = 'alltoall'
         warnings.warn(

@@ -634,6 +634,11 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         choices=[constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT],
         help="Which phase to train. Default: pretrain",
     )
+    group.add_argument(
+        "--use-dsa-fused",
+        action="store_true",
+        help="Force Omni fused DSA path for DSA-based DeepSeek configs.",
+    )
 
     group.add_argument(
         "--no-detail-log",

@@ -39,10 +39,10 @@ name_map:
     attention.kv_down: self_attn.kv_a_proj_with_mqa
     attention.kv_up: self_attn.kv_b_proj
     attention.kv_up_layernorm: self_attn.kv_a_layernorm
-    attention.lightning_indexer.k_norm: self_attn.indexer.k_norm
-    attention.lightning_indexer.weights_proj: self_attn.indexer.weights_proj
-    attention.lightning_indexer.wk: self_attn.indexer.wk
-    attention.lightning_indexer.wq_b: self_attn.indexer.wq_b
+    attention.indexer.k_norm: self_attn.indexer.k_norm
+    attention.indexer.weights_proj: self_attn.indexer.weights_proj
+    attention.indexer.wk: self_attn.indexer.wk
+    attention.indexer.wq_b: self_attn.indexer.wq_b
     attention.dense: self_attn.o_proj
     post_attention_layernorm: post_attention_layernorm
     moe.gate: mlp.gate
@@ -82,8 +82,8 @@ name_map:
       extra: true
       fp8: true
     attention.q_up_layernorm:
-      name: self_attention.linear_q_up_proj
-      is_layernorm: true
+      name: self_attention.q_layernorm
+      extra: true
     attention.kv_down:
       name: self_attention.linear_kv_down_proj
       extra: true
@@ -94,19 +94,20 @@ name_map:
       extra: true
       fp8: true
     attention.kv_up_layernorm:
-      name: self_attention.linear_kv_up_proj
-      is_layernorm: true
-    attention.lightning_indexer.k_norm:
-      name: self_attention.lightning_indexer.indexer_k_layernorm
-    attention.lightning_indexer.weights_proj:
-      name: self_attention.lightning_indexer.linear_indexer_weights_proj
+      name: self_attention.kv_layernorm
       extra: true
-    attention.lightning_indexer.wk:
-      name: self_attention.lightning_indexer.linear_indexer_k_proj
+    attention.indexer.k_norm:
+      name: self_attention.core_attention.indexer.k_norm
+      extra: true
+    attention.indexer.weights_proj:
+      name: self_attention.core_attention.indexer.linear_weights_proj
+      extra: true
+    attention.indexer.wk:
+      name: self_attention.core_attention.indexer.linear_wk
       fp8: true
       extra: true
-    attention.lightning_indexer.wq_b:
-      name: self_attention.lightning_indexer.linear_indexer_q_proj
+    attention.indexer.wq_b:
+      name: self_attention.core_attention.indexer.linear_wq_b
       fp8: true
       extra: true
     attention.dense:
@@ -150,4 +151,3 @@ name_map:
     mtp_shared_head_head: output_head
     mtp_name_prefix_for_layer: transformer_layer
 torch_dtype: bfloat16
-
