@@ -1,12 +1,12 @@
+<div align="center">
+
 ![OmniTraining Logo](assets/_images/omni.jpg)
 
-<h4 align="center"> Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h4>
+<h4> Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h4>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)
-[![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/OmniTraining)
-[![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/OmniTraining/blob/master/LICENSE)
-[![stars](https://img.shields.io/github/stars/baidu-baige/OmniTraining=social)](https://github.com/baidu-baige/OmniTraining/tree/master)
-[![open issues](https://img.shields.io/github/issues-raw/baidu-baige/OmniTraining)](https://github.com/baidu-baige/OmniTraining/issues)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/OmniTraining)[![license](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/OmniTraining/blob/master/LICENSE)[![stars](https://img.shields.io/github/stars/baidu-baige/OmniTraining=social)](https://github.com/baidu-baige/OmniTraining/tree/master)[![open issues](https://img.shields.io/github/issues-raw/baidu-baige/OmniTraining)](https://github.com/baidu-baige/OmniTraining/issues)
+
+</div>
 
 ## Introduction
 
@@ -21,7 +21,14 @@
 
 ## Latest News 🔥
 - [2026/02] We have released the OmniTraining framework! An advanced large model training framework.
+
+<details>
+<summary>More</summary>
+
 - [2025/09] AIAK-Training-LLM (earlier version of OmniTraining) powered the training of the official **[LLaVA-OneVision-1.5](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)** release.
+
+</details>
+
 
 ## ✨ Key Features
 
