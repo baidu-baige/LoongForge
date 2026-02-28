@@ -1170,7 +1170,7 @@ def training_log(
             mtp_loss_scale, iteration, writer, wandb_writer, total_loss_dict
         )
     # Track sparse attention indexer loss
-    if args.dsa_indexer_loss_coeff is not None and args.dsa_indexer_loss_coeff > 0:
+    if getattr(args, "dsa_indexer_loss_coeff", None) is not None and args.dsa_indexer_loss_coeff > 0:
         indexer_loss_scale = 1 / get_num_microbatches()
         from megatron.core.transformer.experimental_attention_variant.dsa import DSAIndexerLossLoggingHelper
         DSAIndexerLossLoggingHelper.track_indexer_metrics(
