@@ -1,8 +1,8 @@
+![OmniTraining Logo](assets/_images/omni.jpg)
+
 <div align="center">
 
-![OmniTraining Logo](assets/_images/omni_logo.jpg)
 <h3> Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h3>
-
 
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)
 [![arxive](https://img.shields.io/badge/cs.AI-XXXXX-B31C1C?logo=arxiv&logoColor=B31C1C)](https://github.com/baidu-baige/OmniTraining)
