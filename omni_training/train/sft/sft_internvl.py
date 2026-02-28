@@ -198,6 +198,7 @@ def forward_step(data_iterator, model):
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):
     """Train_valid_test_datasets_provider """
+    import omni_training.data.dp_balance.adaptor
     args = get_args()
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None

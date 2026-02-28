@@ -121,6 +121,11 @@ from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelpe
 
 from omni_training.utils import get_args, constants
 from .initialize import initialize_aiak_megatron
+from omni_training.data.dp_balance.wrapper.dp_balance.training_wrapper import (
+    train_step_decorator,
+    train_log_decorator
+)
+
 
 try:
     from inspector.hooks import register_hooks
@@ -784,6 +789,7 @@ def save_checkpoint_and_time(
     timers("interval-time", log_level=0).start(barrier=True)
 
 
+@train_step_decorator
 def train_step(
     forward_step_func, data_iterator, model, optimizer, opt_param_scheduler, config, forward_backward_func
 ):
@@ -938,6 +944,7 @@ def train_step(
     )
 
 
+@train_log_decorator
 def training_log(
     loss_dict,
     total_loss_dict,
