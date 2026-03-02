@@ -1,8 +1,6 @@
 # =====================
 # Core / Toolchain
 # =====================
---index-url https://pip.baidu-int.com/simple/
---trusted-host pip.baidu.com
 setuptools>=65.5
 wheel>=0.42
 packaging>=23.2,<25
@@ -25,12 +23,6 @@ accelerate==1.12.0
 tokenizers==0.21.1
 sentencepiece>=0.2.0
 safetensors==0.4.5
-
-# flash-attn 包替换离线安装，解决无外网的问题
-# flash-attn2
-https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_attn-2.8.1-cp312-cp312-linux_x86_64.whl
-# flash-attn3, 基于 https://github.com/Dao-AILab/flash-attention/commit/d063b333baae9c6066fe003be18c426eb602cbf3
-https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_attn_3-3.0.0b1-cp39-abi3-linux_x86_64.whl
 
 tiktoken==0.5.2
 
@@ -63,10 +55,11 @@ swanlab
 opencv-python-headless==4.11.0.86
 
 # =====================
-# Megatron / Qwen
+# Megatron / Qwen / DeepSpeed
 # =====================
 megatron-energon==5.0.0
 qwen-vl-utils==0.0.11
+deepspeed==0.17.6
 
 # =====================
 # Dev / Notebook (optional but kept from old project)

@@ -14,7 +14,7 @@ Profiles:
       tools:
         - python: 3.12.0
     build:
-      command: pip3 install -r requirements.txt && python3 -m build && sh ./build.sh
+      command: sh ./build.sh
     artifacts:
       release: true
 
@@ -26,6 +26,6 @@ Profiles:
       tools:
         - python: 3.12.0
     build:
-      command: pip3 install -r requirements.txt && python3 -m build && sh ./build.sh
+      command: sh ./build.sh
     artifacts:
       release: true
