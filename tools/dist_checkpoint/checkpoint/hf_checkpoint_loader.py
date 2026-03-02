@@ -207,6 +207,9 @@ def load_hf_checkpoint_online(
             # Each rank prints its own unexpected keys warning
             print(f"[Rank {rank}] Warning: Unexpected keys: {unexpected_keys[:5]}... "
                   f"(total {len(unexpected_keys)})")
+        
+    
+    optimizer.reload_model_params()
 
     # Step 8: Synchronize all ranks
     print_rank_0("Synchronizing all ranks...")

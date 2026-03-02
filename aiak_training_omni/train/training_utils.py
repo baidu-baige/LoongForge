@@ -1801,7 +1801,7 @@ def train(
             train_data_iterator,
         )
         # FIX NEEDED: 这边我不知道最后保存成HF这个逻辑要放在哪里，先临时放在这边
-        if iteration == args.training_iters:
+        if iteration == args.train_iters:
             save_hf_checkpoint_online(model, args)
         if should_exit:
             break
