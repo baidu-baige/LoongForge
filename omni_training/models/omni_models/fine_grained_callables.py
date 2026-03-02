@@ -3,7 +3,7 @@
 import weakref
 from contextlib import nullcontext
 from functools import partial
-from typing import Optional
+from typing import Optional, Callable
 
 import torch
 
@@ -137,6 +137,8 @@ class PreProcessNode(ScheduleNode):
         
         has_encoder_model = hasattr(model, "encoder_model")
         combined_embeddings = None
+        visual_pos_masks = None
+        deepstack_visual_embeds = None
         # if the model chunk has encoder model, we should first preprocess the encoder info
 
         # TODO: remove inference_params?
@@ -149,7 +151,7 @@ class PreProcessNode(ScheduleNode):
             if use_inference_kv_cache:
                 vision_embeddings = None
             if model.add_encoder:
-                combined_embeddings, decode_input, _, _ = model.encoder_model(
+                combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = model.encoder_model(
                     input_ids=input_ids,
                     image_inputs=image_inputs,
                     video_inputs=video_inputs,
@@ -221,6 +223,8 @@ class PreProcessNode(ScheduleNode):
         
         # saved for later use
         self.chunk_state.decoder_input = decoder_input
+        self.chunk_state.visual_pos_masks = visual_pos_masks
+        self.chunk_state.deepstack_visual_embeds = deepstack_visual_embeds
         self.chunk_state.rotary_pos_emb = rotary_pos_emb
         self.chunk_state.rotary_pos_cos = rotary_pos_cos
         self.chunk_state.rotary_pos_sin = rotary_pos_sin
@@ -331,6 +335,7 @@ class TransformerLayerNode(ScheduleNode):
         enable_deepep = extra_args.get("enable_deepep", False)
         free_input = should_free_input(name, is_moe, enable_deepep)
         self.delay_wgrad_compute = extra_args.get("delay_wgrad_compute", False)
+        self.layer_idx = extra_args.get("layer_idx", None)
 
         super().__init__(
             weak_method(self.forward_impl),
@@ -438,7 +443,7 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         sequence_len_offset = node.chunk_state.sequence_len_offset
 
         if layer.a2a_overlap_attn_recompute:
-            def custom_forward(hidden_states, attention_mask, rotary_pos_emb, packed_seq_params):
+            def custom_forward(hidden_states, attention_mask, rotary_pos_emb):
                 output_, _ = layer._forward_attention(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
@@ -451,7 +456,7 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                 return output_    
 
             hidden_states = tensor_parallel.checkpoint(
-                    custom_forward, False, hidden_states, attention_mask, rotary_pos_emb, packed_seq_params)                        
+                    custom_forward, False, hidden_states, attention_mask, rotary_pos_emb)                        
         else:
             hidden_states, _ = layer._forward_attention(
                 hidden_states=hidden_states,
@@ -635,6 +640,25 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         node.layer_state.residual = None
         node.layer_state.shared_expert_output = None
         return output
+    
+    def submodule_deepstack_forward_wrapper(_deepstack_process: Callable):
+        """
+        Adds deepstack_visual_embeds to the transformer layer output.
+        """
+        def submodule_deepstack_forward(node: ScheduleNode, output: torch.Tensor):
+        
+            deepstack_visual_embeds = node.chunk_state.deepstack_visual_embeds
+            visual_pos_masks = node.chunk_state.visual_pos_masks
+
+            output = _deepstack_process(
+                output.clone(),
+                visual_pos_masks,
+                deepstack_visual_embeds[node.layer_idx].detach(),
+            )
+
+            return output
+
+        return submodule_deepstack_forward
 
     def mlp_wrapper(node: ScheduleNode, *args, **kwargs):
         """Wrapper for Dense forward."""
@@ -651,8 +675,11 @@ def build_transformer_layer_callables(layer: TransformerLayer):
     mlp_func = submodule_moe_forward if is_moe else mlp_wrapper
     combine_func = submodule_combine_forward if is_moe else raise_not_implemented
     post_combine_func = submodule_post_combine_forward if is_moe else raise_not_implemented
+    deepstack_func = submodule_deepstack_forward_wrapper
 
-    forward_funcs = [attn_func, post_attn_func, dispatch_func, mlp_func, combine_func, post_combine_func, None]
+    forward_funcs = [
+        attn_func, post_attn_func, dispatch_func, mlp_func, combine_func, post_combine_func, None, deepstack_func
+    ]
     backward_dw = {"attn": layer.self_attention, "mlp": layer.mlp}
     return forward_funcs, backward_dw
 
