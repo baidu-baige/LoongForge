@@ -22,6 +22,7 @@ ETP=1
 DTP=1
 PP=8
 EP=1
+EXPERT_TP=1
 
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
@@ -33,6 +34,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --tensor_model_parallel_size=$DTP \
     --pipeline_model_parallel_size=$PP \
     --expert_parallel_size=$EP \
+    --expert_tensor_parallel_size=$EXPERT_TP \
     --load_ckpt_path=$LOAD \
     --save_ckpt_path=$SAVE_LANGUAGE_MODEL \
     --safetensors \
