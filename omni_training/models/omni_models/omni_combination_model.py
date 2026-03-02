@@ -182,6 +182,48 @@ class OmniCombinationModel(BaseMegatronModule):
                     param.offloading_activation = False
             self.disable_param_offloading = False
 
+    def hetero_dp_get_tensor_shape(self, group, src, local_rank, forward_group_id, tensor_name, idx=None):
+        """Broadcast the shape of a tensor from src rank to all ranks in the group.
+        
+        Src rank reads the actual shape from vit_contexts; non-src ranks allocate
+        a zero tensor of the same ndim. Supports indexed access via idx.
+        """
+        local_tensor = self.vit_contexts[forward_group_id][tensor_name]
+        if idx is not None:
+            local_tensor = local_tensor[idx]
+        if local_rank == src:
+            shape = torch.tensor(local_tensor.shape, dtype=torch.long, device='cuda')
+        else:
+            shape = torch.zeros(local_tensor.dim(), dtype=torch.long, device='cuda')
+        
+        torch.distributed.broadcast(shape, group=group, src=src)
+
+        return shape
+
+    def hetero_dp_get_tensor(
+        self, group, src, local_rank, forward_group_id, tensor_name, 
+        shape, needs_grad=True, idx=None
+    ):
+        """Broadcast a tensor from src rank to all ranks in the group.
+        
+        Src rank detaches the tensor from vit_contexts; non-src ranks allocate
+        a zero tensor. Optionally enables grad and supports indexed access.
+        """
+        local_tensor = self.vit_contexts[forward_group_id][tensor_name]
+        if idx is not None:
+            local_tensor = local_tensor[idx]
+        if local_rank == src:
+            tensor = local_tensor.detach()
+        else:
+            tensor = torch.zeros(tuple(shape.tolist()), dtype=local_tensor.dtype, device='cuda')
+        
+        if needs_grad:
+            tensor.requires_grad_(needs_grad)
+
+        torch.distributed.broadcast(tensor, group=group, src=src)
+
+        return tensor
+
     def forward(
         self,
         image_inputs: Optional[Dict[str, torch.Tensor]] = None,
@@ -279,15 +321,16 @@ class OmniCombinationModel(BaseMegatronModule):
                     enable_encoder_hetero_dp=enable_encoder_hetero_dp,
                 )
 
-                if self.config.context_parallel_size > 1:
-                    combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
-
-                if self.config.sequence_parallel:
-                    combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
-
                 self.vit_contexts.setdefault(forward_group_id, {
                     "local_embedding": combined_embeddings,
                     "grads": None,
+                    "local_visual_pos_masks": visual_pos_masks,
+                    "local_deepstack_visual_embeds": deepstack_visual_embeds,
+                    "local_deepstack_visual_embeds_grads": (
+                        [None for _ in deepstack_visual_embeds] 
+                        if deepstack_visual_embeds is not None 
+                        else None
+                    ),
                 })
         if not self.pre_process:
             combined_embeddings = None
@@ -297,31 +340,12 @@ class OmniCombinationModel(BaseMegatronModule):
             src = torch.distributed.get_global_rank(group, inner_group_id)
             local_rank = torch.distributed.get_rank()
 
-            if local_rank == src:
-                shape = torch.tensor(
-                    self.vit_contexts[forward_group_id]["local_embedding"].shape, 
-                    dtype=torch.long, 
-                    device='cuda'
-                )
-            else:
-                shape = torch.zeros(3, dtype=torch.long, device='cuda')
-            
-            torch.distributed.broadcast(shape, group=group, src=src)
-
-            if local_rank == src:
-                combined_embeddings = (
-                    self.vit_contexts[forward_group_id]["local_embedding"]
-                    .detach()
-                    .requires_grad_(True)
-                )
-            else:
-                combined_embeddings = torch.zeros(
-                    tuple(shape.tolist()), 
-                    dtype=self.vit_contexts[forward_group_id]["local_embedding"].dtype, 
-                    device='cuda'
-                ).requires_grad_(True)
-
-            torch.distributed.broadcast(combined_embeddings, group=group, src=src)
+            # combined_embeddings communication
+            shape = self.hetero_dp_get_tensor_shape(group, src, local_rank, forward_group_id, "local_embedding")
+            combined_embeddings = self.hetero_dp_get_tensor(
+                group, src, local_rank, forward_group_id, 
+                "local_embedding", shape
+            )
 
             def vit_grad_hook_factory(forward_group_id, inner_group_id, vit_contexts):
                 def hook(grad):
@@ -331,8 +355,18 @@ class OmniCombinationModel(BaseMegatronModule):
                         ctx["grads"] = grad.clone()
 
                     if inner_group_id == _ImageEncoderDataParallelSize - 1:
-                        ctx["local_embedding"].backward(
-                            gradient=ctx["grads"], 
+                        torch.autograd.backward(
+                            tensors=(
+                                [ctx["local_embedding"]] + ctx["local_deepstack_visual_embeds"] 
+                                if ctx["local_deepstack_visual_embeds"] is not None 
+                                else [ctx["local_embedding"]]
+                            ),
+                            grad_tensors=(
+                                [ctx["grads"]] + ctx["local_deepstack_visual_embeds_grads"] 
+                                if ctx["local_deepstack_visual_embeds_grads"] is not None 
+                                else [ctx["grads"]]
+                            ),
+                            retain_graph=False
                         )
                         del vit_contexts[forward_group_id]
                         
@@ -344,6 +378,54 @@ class OmniCombinationModel(BaseMegatronModule):
                                     self.vit_contexts
                 )
             )
+
+            if self.config.context_parallel_size > 1:
+                combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+            if self.config.sequence_parallel:
+                combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+
+            # visual positional encoding communication
+            if self.vit_contexts[forward_group_id]["local_visual_pos_masks"] is not None:
+                shape = self.hetero_dp_get_tensor_shape(
+                    group, src, local_rank, 
+                    forward_group_id, "local_visual_pos_masks"
+                )
+                visual_pos_masks = self.hetero_dp_get_tensor(
+                    group, src, local_rank, forward_group_id, 
+                    "local_visual_pos_masks", shape, needs_grad=False
+                )
+
+            if self.vit_contexts[forward_group_id]["local_deepstack_visual_embeds"] is not None:
+                len_deepstack_visual_embeds = len(self.vit_contexts[forward_group_id]["local_deepstack_visual_embeds"])
+                shape = self.hetero_dp_get_tensor_shape(
+                    group, src, local_rank, forward_group_id, 
+                    "local_deepstack_visual_embeds", idx=0
+                )
+                deepstack_visual_embeds = []
+                for i in range(len_deepstack_visual_embeds):
+                    tmp_deepstack_visual_embeds = self.hetero_dp_get_tensor(
+                        group, src, local_rank, forward_group_id, 
+                        "local_deepstack_visual_embeds", shape, idx=i
+                    )
+                    
+                    def deepstack_visual_embeds_grad_hook_factory(forward_group_id, inner_group_id, vit_contexts, idx):
+                        def hook(grad):
+                            ctx = vit_contexts[forward_group_id]
+                            tp_id = mpu.get_tensor_model_parallel_rank()
+                            if tp_id == inner_group_id:
+                                ctx["local_deepstack_visual_embeds_grads"][idx] = grad.clone()
+                                
+                        return hook
+
+                    tmp_deepstack_visual_embeds.register_hook(
+                        deepstack_visual_embeds_grad_hook_factory(forward_group_id, 
+                                                                inner_group_id, 
+                                                                self.vit_contexts,
+                                                                i
+                        )
+                    )
+                    deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
         extra_kwargs = {
             "visual_pos_masks": visual_pos_masks,
