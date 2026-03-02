@@ -266,6 +266,7 @@ GLOBAL_TRAIN_DATASET_SIZE = None
 
 def train_valid_test_dataset_provider(train_val_test_num_samples):
     """Provides the datasets used by the trainer"""
+    import omni_training.data.dp_balance.adaptor
     global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
 

@@ -849,4 +849,10 @@ def _add_extra_parallel_args(parser):
                        'For example 19,20,20,21. If we have two virtual chunks in one pp stage, '
                        '19 for stage0 virtual chunk0 layers, 20 for stage1 virtual chunk0 layers...')
     group.add_argument('--enable-encoder-hetero-dp', default=False, action="store_true")
+    group.add_argument('--use-dp-balance', action='store_true',
+                       help='use this flag to enable dp computation balance.')
+    group.add_argument('--dp-balance-warmup-iters',
+                       nargs='+', type=int, default=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                       help='To store the warmup of dp balance coef for training iteration'
+                       )
     return parser
