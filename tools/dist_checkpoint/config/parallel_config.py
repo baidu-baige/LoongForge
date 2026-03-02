@@ -9,6 +9,7 @@ class ParallelConfig:
     Parallel config for distributed training
     """
     tp_size: int = 1
+    encode_tp_size: int = 1
     pp_size: int = 1
     ep_size: Optional[int] = None
     etp_size: Optional[int] = None
@@ -28,4 +29,7 @@ class ParallelConfig:
     fp8_force_no_requant: bool = False
     force_pow_2_scales: bool = False
     amax_epsilon: float = 0.0
-    mtp_num_layers: int = None
+    mtp_num_layers: int = 0
+    lora_alpha: int = None
+    lora_dim: int = None
+

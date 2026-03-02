@@ -20,7 +20,6 @@ args:
     mixer_value_head_dim: ${module.linear_value_head_dim}
     vocab_size: ${module.vocab_size_in_config_file}
     num_experts: ${module.num_experts}
-    aiak_version: 0.15
   huggingface:
     mtp_layer_id: 0
   mcore:

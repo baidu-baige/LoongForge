@@ -109,6 +109,9 @@ def _add_checkpoint_args(parser):
     group.add_argument('--load_lora_ckpt_path', type=str, default=None, help='path to load lora checkpoint')
     group.add_argument('--lora_alpha', type=int, help="Lora alpha for LoRA fine tuning.")
     group.add_argument('--lora_dim', type=int, help="Lora dim for LoRA fine tuning.")
+    group.add_argument('--adapter_convert_file', type=str, default=None, help="Convert file for adapter.")
+    group.add_argument('--vision_patch_convert_file', type=str, default=None, help="Convert file for vision_patch.")
+    group.add_argument("--encoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for encoder.")
 
 def _add_common_args(parser):
     group = parser.add_argument_group(title='common')

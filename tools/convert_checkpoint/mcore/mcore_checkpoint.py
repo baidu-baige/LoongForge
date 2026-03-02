@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 import concurrent.futures
 from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import VISION_MAP, CommonCheckpoint
 from convert_checkpoint.mcore.mcore_base import McoreBase
 from convert_checkpoint.mcore.mcore_moe import McoreMoe
 from convert_checkpoint.utils.utils import (
@@ -32,11 +32,15 @@ class McoreCheckpoint(AbstractCheckpoint):
         McoreCheckpoint
     """
 
-    def __init__(self, c_config, args):
+    def __init__(self, c_config, args, tp, pp, vpp=None, ep=None, etp=None):
         super().__init__(c_config)
         self.args = args
-        self.m_base = McoreBase(c_config, args)
-        self.m_moe = McoreMoe(c_config, args)
+        self.tp = tp
+        self.pp = pp
+        self.ep = ep
+        self.etp = etp
+        self.m_base = McoreBase(c_config, args, tp, pp, ep, etp)
+        self.m_moe = McoreMoe(c_config, args, tp, pp, ep, etp)
         self.iteration = 0
         self.checkpoint_version = 3.0
         self.rng_state = None
@@ -45,12 +49,9 @@ class McoreCheckpoint(AbstractCheckpoint):
         num_layers = cargs["num_layers"]
         num_layers_per_stage = self.args.num_layers_per_virtual_pipeline_stage
 
-        self.tp = self.args.tensor_model_parallel_size
-        self.pp = self.args.pipeline_model_parallel_size
-        self.ep = self.args.expert_parallel_size
-        self.etp = self.args.expert_tensor_parallel_size if hasattr(self.args, 'expert_tensor_parallel_size') else None
-
-        if num_layers_per_stage:
+        if vpp is not None:
+            stage = vpp
+        elif num_layers_per_stage:
             stage = num_layers // self.pp // num_layers_per_stage
         else:
             stage = self.args.num_virtual_stages_per_pipeline_rank or 1
@@ -178,6 +179,9 @@ class McoreCheckpoint(AbstractCheckpoint):
                 t_name = self.get_transformer_name(0)
                 for c_name in FIRST_LAYER_NAMES:
                     self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                for c_name in name_map.keys():
+                    if c_name.startswith(VISION_MAP):
+                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
@@ -431,6 +435,9 @@ class McoreCheckpoint(AbstractCheckpoint):
                 t_name = self.get_transformer_name(0)
                 for c_name in FIRST_LAYER_NAMES:
                     self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
+                for c_name in name_map.keys():
+                    if c_name.startswith(VISION_MAP):
+                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
@@ -589,6 +596,52 @@ class McoreCheckpoint(AbstractCheckpoint):
         checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
         torch.save(state_dict_node, checkpoint_path)
         logging.info(f"Saving mcore checkpoint {state_dict_node.keys()} to: {checkpoint_path}, {saved_models_str}")
+
+    @staticmethod
+    def convert_from_common_vlm(m_ckpt, m_vision_ckpt, c_vision_patch_config, c_ckpt, c_vision_ckpt, target_c_config,
+                            target_c_vision_config, save_path, layer_dict, expert_dict, save_file=True):
+        vision_num_layers = c_vision_patch_config.get_args("common")["num_layers"]
+        vision_layer_dict = {}
+        vision_layer_dict[0] = list(range(vision_num_layers))
+        encoder_tp = m_vision_ckpt.tp
+        state_dict = m_ckpt.convert_from_common(c_ckpt, target_c_config, layer_dict, expert_dict=expert_dict, save_file=False)
+        vision_dict = m_vision_ckpt.convert_from_common(c_vision_ckpt, target_c_vision_config, vision_layer_dict, save_file=False)
+        if save_file:
+            done_dir = os.path.join(save_path, "dones")
+            need_check_dones, done_keys = McoreCheckpoint.get_need_check_dones(done_dir, layer_dict, expert_dict)
+            if need_check_dones:
+                if 0 in done_keys:
+                    logging.info(f"> p: 0 already converted. pass...")
+                    return
+            release_dir, save_margs = m_ckpt.pre_save(save_path, target_c_config)
+        layer_ids = layer_dict[0]
+        if expert_dict is None:
+            for t in state_dict[0].keys():
+                encode_t = t % encoder_tp
+                for model in state_dict[0][t].keys():
+                    if model in ("model", "model0"):
+                        state_dict[0][t][model].update(vision_dict[0][encode_t]["model"])
+                if save_file:
+                    m_ckpt.save_model_file(
+                        release_dir, save_margs, 0, t, None, state_dict[0][t], None, layer_ids)
+            if save_file:
+                touch_file(done_dir=done_dir, p=0, ep_id=None)
+                logging.info(f"Finish saving p=0 ep_id=None {layer_ids=}.")
+        else:
+            for e, t_v in state_dict[0].items():
+                for t in t_v.keys():
+                    encode_t = t % encoder_tp
+                    for model in state_dict[0][e][t].keys():
+                        if model in ("model", "model0"):
+                            state_dict[0][e][t][model].update(vision_dict[0][encode_t]["model"])
+                    if save_file:
+                        m_ckpt.save_model_file(
+                            release_dir, save_margs, 0, t, e, state_dict[0][e][t], None, layer_ids)
+                if save_file:
+                    touch_file(done_dir=done_dir, p=0, ep_id=e)
+                    logging.info(f"Finish saving p=0 ep_id={e} {layer_ids=}.")
+        if not save_file:
+            return state_dict
 
 if __name__ == "__main__":
     pass

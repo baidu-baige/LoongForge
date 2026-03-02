@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 import concurrent.futures
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
 from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import VISION_MAP, CommonCheckpoint
 
 from convert_checkpoint.utils.utils import (
     get_done_keys,
@@ -42,6 +42,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     mtp_layer_id = hargs.get("mtp_layer_id", None)
 
     filenames_in_the_layer = set()
+
     if 0 in layer_ids or num_layers - 1 in layer_ids:
         for c_name in FIRST_LAYER_NAMES:
             if c_name in name_map:
@@ -167,20 +168,11 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     logging.info(f"> p: {p}, ep_id: {ep_ids} already converted. pass...")
                     return True
         else:
-            from megatron.core import parallel_state
-            rank_id = parallel_state.get_tensor_model_parallel_rank()
-            # rank_id = int(os.getenv('RANK', '0'))
-            if rank_id == 0:
-                os.makedirs(done_dir, exist_ok=True)
-            else:
-                import time
-                while(not os.path.exists(done_dir)):
-                    time.sleep(10)
-                    logging.info(f"Rank {rank_id} waiting for done file dir: {done_dir}.")
+            os.makedirs(done_dir, exist_ok=True)
         return False
 
 
-    def convert_from_common(self, c_ckpt, layer_dict, expert_dict=None, save_path=None):
+    def convert_from_common(self, c_ckpt, layer_dict, expert_dict=None, save_path=None, save_file=True):
         """
         Convert HuggingFace checkpoint to common checkpoint.
         """
@@ -199,12 +191,15 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         layer_ids = layer_dict[p]
         ep_ids = list(expert_dict.keys()) if expert_dict is not None else None
 
-        if self.check_done_files(save_path, layer_dict, expert_dict=expert_dict):
+        if save_file and self.check_done_files(save_path, layer_dict, expert_dict=expert_dict):
             return
 
         if 0 in layer_ids:
             for c_name in FIRST_LAYER_NAMES:
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
+            for c_name in name_map.keys():
+                if c_name.startswith(VISION_MAP):
+                    self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
             hf_layer_id = mtp_layer_id + (layer_id - num_layers) if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
@@ -238,13 +233,19 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             for c_name in LAST_LAYER_NAMES:
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_prefix=layer_prefix)
 
+        if save_file:
+            self.save_ckpt_file(save_path, p, ep_ids, self.state_dict)
+        else:
+            return self.state_dict
+
+    def save_ckpt_file(self, save_path, p, ep_ids, state_dict):
         done_dir = os.path.join(save_path, "dones")
         if ep_ids is None or len(ep_ids) == 0:
-            self.save(f"{save_path}/sub_checkpoint/{p}", None)
+            self.save(f"{save_path}/sub_checkpoint/{p}", state_dict, None)
             touch_file(done_dir=done_dir, p=p)
             logging.info(f"touch file: {done_dir=}, {p=}")
         else:
-            self.save(f"{save_path}/sub_checkpoint/{p * 1000 + ep_ids[0]}", None)
+            self.save(f"{save_path}/sub_checkpoint/{p * 1000 + ep_ids[0]}", state_dict, None)
             for ep_id in ep_ids:
                 touch_file(done_dir=done_dir, p=p, ep_id=ep_id)
                 logging.info(f"touch file: {done_dir=}, {p=}, {ep_id=}")
@@ -272,6 +273,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         if 0 in layer_ids:
             for c_name in FIRST_LAYER_NAMES:
                 self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
+            for c_name in name_map.keys():
+                if c_name.startswith(VISION_MAP):
+                    self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
             hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
@@ -321,12 +325,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                if isinstance(c_config, list):
-                    checkpoint_names = []
-                    for one_c_config in c_config:
-                        checkpoint_names.append(get_hf_checkpoint_names(one_c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers))
-                else:
-                    checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
+                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
+                                                           mtp_num_layers=mtp_num_layers)
                 self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
         else:
@@ -341,12 +341,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                if isinstance(c_config, list):
-                    checkpoint_names = []
-                    for one_c_config in c_config:
-                        checkpoint_names.append(get_hf_checkpoint_names(one_c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers))
-                else:
-                    checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
+                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
+                                                           mtp_num_layers=mtp_num_layers)
                 self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, max_workers=self.args.max_workers)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
@@ -357,21 +353,21 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         mem = process.memory_info().rss / 1024**2  # 转为 MB
         logging.info(f"{desc}内存占用: {mem:.2f} MB")
 
-    def save(self, save_path, h_config=None, save_optim=False):
+    def save(self, save_path, state_dict, h_config=None, save_optim=False):
         """ save ckpt """
         from huggingface_hub import split_torch_state_dict_into_shards
         from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME
         from safetensors.torch import save_file
         os.makedirs(save_path, exist_ok=True)
-        state_dict_split = split_torch_state_dict_into_shards(self.state_dict)
+        state_dict_split = split_torch_state_dict_into_shards(state_dict)
         self.print_memory_usage(f"before save {save_path}")
         has_safetensor_file = False
 
         def save_hf_shard(tensors, shard_file):
             shard = {}
             for tensor in tensors:
-                shard[tensor] = self.state_dict[tensor].contiguous()
-                del self.state_dict[tensor]
+                shard[tensor] = state_dict[tensor].contiguous()
+                del state_dict[tensor]
             shard_path = os.path.join(save_path, shard_file)
             save_file(shard, shard_path, metadata={"format": "pt"})
             logging.info(f"Saving HuggingFace shard to: {shard_path}")
@@ -431,3 +427,17 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 sorted_items = sorted(value.items())
                 tensors = [tensor for _, tensor in sorted_items]
                 state_dict[key] = torch.stack(tensors, dim=0)
+
+    @staticmethod
+    def save_vlm_checkpoint(hf_ckpt, hf_vision_ckpt, c_vision_patch_config, c_ckpt, c_vision_ckpt, save_path, layer_dict, expert_dict=None):
+        if hf_ckpt.check_done_files(save_path, layer_dict, expert_dict=expert_dict):
+            return
+        vision_num_layers = c_vision_patch_config.get_args("common")["num_layers"]
+        vision_layer_dict = {}
+        vision_layer_dict[0] = list(range(vision_num_layers)) 
+        state_dict = hf_ckpt.convert_from_common(c_ckpt, layer_dict, expert_dict=expert_dict, save_path=save_path, save_file=False)
+        vision_ckpt = hf_vision_ckpt.convert_from_common(c_vision_ckpt, vision_layer_dict, save_file=False)
+        state_dict.update(vision_ckpt)
+        # save checkpoint file
+        ep_ids = list(expert_dict.keys()) if expert_dict is not None else None
+        hf_ckpt.save_ckpt_file(save_path, 0, ep_ids, state_dict)

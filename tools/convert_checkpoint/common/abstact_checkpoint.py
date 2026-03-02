@@ -32,12 +32,6 @@ class AbstractCheckpoint(ABC):
         """
         raise NotImplementedError()
 
-    def load(self, ckpt_path):
-        """
-            load checkpoint
-        """
-        raise NotImplementedError()
-    
     def save(self, ckpt_path):
         """
             save checkpoint

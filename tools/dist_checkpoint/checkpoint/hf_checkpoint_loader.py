@@ -156,16 +156,12 @@ def load_hf_checkpoint_online(
         # LLM: single mapping config
         print_rank_0("Processing LLM checkpoint...")
 
-        # Set mapping config first
-        converter.set_mapping_cfg(mapping_cfgs[0])
-
         # Load HF checkpoint
         print_rank_0(f"Loading HF checkpoint from {args.load}...")
         mem_before = 0.0
         if torch.cuda.is_available():
             mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
             torch.cuda.reset_peak_memory_stats()
-        converter.load_hf(args.load, mapping_cfgs[0])
         if torch.cuda.is_available():
             peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
             mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
@@ -178,7 +174,7 @@ def load_hf_checkpoint_online(
         if torch.cuda.is_available():
             mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
             torch.cuda.reset_peak_memory_stats()
-        mcore_dict = converter.get_mcore_ckpt()
+        mcore_dict = converter.get_mcore_ckpt(args.load)
         if torch.cuda.is_available():
             peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
             mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
