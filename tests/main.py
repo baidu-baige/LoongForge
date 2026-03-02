@@ -11,6 +11,7 @@ from tools.arguments import parse_args
 from tools.color_logger import create_color_logger
 from tools.config_manager import ConfigManager
 from tasks.base_task import BaseTask
+from utils.resume_state import load_state, save_state, mark_model, get_completed_models
 from tqdm import tqdm
 import time
 import sys
@@ -78,6 +79,15 @@ def main() -> None:
     # Prepare model list (apply filtering rules)
     prepare_models_list(args)
 
+    resume_state = None
+    completed_models = set()
+    resume_enabled = bool(args.resume_state_file)
+    if resume_enabled and os.getenv("RANK", "0") == "0":
+        resume_state = load_state(args.resume_state_file)
+        completed_models = get_completed_models(resume_state, args.resume_policy)
+        if completed_models:
+            logger.info(f"Resume enabled: skip {len(completed_models)} completed models")
+
     model_configer = ConfigManager(args=args)
     total_scenarios_num = model_configer.get_scenarios_num()
 
@@ -89,6 +99,9 @@ def main() -> None:
     for index, model in enumerate(model_configer.all_model_configs):
         model_name = model_configer.get_model_name(model)
         model_description = model_configer.get_model_description(model)
+        if model_name in completed_models:
+            logger.info(f"Skip {model_name} (already completed)")
+            continue
         logger.info(f"Run {model_name} test, {index + 1} / {total_scenarios_num}")
 
         # Loop through all supported tasks
@@ -103,6 +116,21 @@ def main() -> None:
                                 model_configer=model_configer,
                                 args=args)()
             scenario_result.append(result)
+
+        if resume_enabled and os.getenv("RANK", "0") == "0":
+            model_results = [item for item in BaseTask._validation_results if item.get("model_name") == model_name]
+            model_passed = all(item.get("passed") for item in model_results) if model_results else True
+            mark_model(
+                resume_state,
+                model_name,
+                passed=model_passed,
+                meta={
+                    "tasks": list(args.tasks),
+                    "training_type": list(args.training_type),
+                    "category": BaseTask._get_diff_category(model),
+                },
+            )
+            save_state(args.resume_state_file, resume_state)
 
         logger.info(f"Finish {model_name} test, {index + 1} / {total_scenarios_num}.\n")
 

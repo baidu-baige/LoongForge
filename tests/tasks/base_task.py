@@ -98,14 +98,25 @@ class BaseTask(object):
         try:
             common_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "common.yaml"))
             if os.path.exists(common_yaml):
-                with open(common_yaml, "r") as f:
-                    cfg = yaml.safe_load(f) or {}
-                pfs_path = cfg.get("pfs_path")
-                if pfs_path:
-                    return os.path.join(pfs_path, "E2E", "diff", category)
+                training_log_path = cls._resolve_training_log_path(common_yaml)
+                if training_log_path:
+                    return os.path.join(training_log_path, "E2E", "diff", category)
         except Exception:
             pass
         return os.path.join(os.getcwd(), "E2E", "diff", category)
+
+    @staticmethod
+    def _resolve_training_log_path(common_yaml: str) -> str:
+        with open(common_yaml, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+        training_log_path = cfg.get("training_log_path")
+        if not training_log_path:
+            return ""
+        pfs_path = cfg.get("pfs_path", "")
+        if pfs_path:
+            training_log_path = training_log_path.replace("${pfs_path}", pfs_path)
+            training_log_path = training_log_path.replace("$pfs_path", pfs_path)
+        return training_log_path
 
     @classmethod
     def _record_case_result(cls, model_name: str, training_type: str, category: str, passed: bool, failed_metrics: List[str], error_message: str = ""):
@@ -744,11 +755,9 @@ class BaseTask(object):
                 category = "optional"
             common_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "common.yaml"))
             if os.path.exists(common_yaml):
-                with open(common_yaml, "r") as f:
-                    cfg = yaml.safe_load(f) or {}
-                pfs_path = cfg.get("pfs_path")
-                if pfs_path:
-                    output_dir = os.path.join(pfs_path, "E2E", "diff", category, model_name)
+                training_log_path = self._resolve_training_log_path(common_yaml)
+                if training_log_path:
+                    output_dir = os.path.join(training_log_path, "E2E", "diff", category, model_name)
             save_loss_diff_plots(
                 baseline_list=expected_loss_list,
                 current_list=actual_loss_list,
@@ -771,11 +780,9 @@ class BaseTask(object):
                 category = "optional"
             common_yaml = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "configs", "common.yaml"))
             if os.path.exists(common_yaml):
-                with open(common_yaml, "r") as f:
-                    cfg = yaml.safe_load(f) or {}
-                pfs_path = cfg.get("pfs_path")
-                if pfs_path:
-                    output_dir = os.path.join(pfs_path, "E2E", "diff", category, model_name)
+                training_log_path = self._resolve_training_log_path(common_yaml)
+                if training_log_path:
+                    output_dir = os.path.join(training_log_path, "E2E", "diff", category, model_name)
             save_metric_compare_plot(
                 baseline_list=expected_list,
                 current_list=actual_list,
@@ -972,6 +979,8 @@ class BaseTask(object):
                 break
             script = new_script
 
+        # Ensure directory exists before creating file
+        os.makedirs(os.path.dirname(new_script_path), exist_ok=True)
         with open(new_script_path, "w") as file:
             file.write(script)
     

@@ -8,7 +8,7 @@ MODEL_RUNNABLE: True
 
 # OmniTraining training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct/  
-DATA_PATH: $pfs_path/omni_datasets/qwen3_vl/qwen3vl_30b_a3b_data/  
+DATA_PATH: $pfs_path/omni_datasets/OmniTraining/qwen3_vl/qwen3vl_30b_a3b_data  
 TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct/
 CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/qwen3_vl/$model_name
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
