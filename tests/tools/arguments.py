@@ -193,6 +193,16 @@ def parse_args():
                         action='store_true',
                         help="Automatically collect baseline from training logs and save into tests/baseline.")
 
+    parser.add_argument("--resume_state_file",
+                        type=str,
+                        default=None,
+                        help="Path to resume state file. If set, completed models will be skipped on restart.")
+    parser.add_argument("--resume_policy",
+                        type=str,
+                        default="skip_completed",
+                        choices=["skip_completed", "skip_passed"],
+                        help="Resume policy: skip_completed skips all completed models; skip_passed skips only passed models.")
+
     args = parser.parse_args()
     print_args(args)
     return args

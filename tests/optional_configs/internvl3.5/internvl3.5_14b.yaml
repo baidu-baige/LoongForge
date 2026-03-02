@@ -3,7 +3,7 @@ description: $model_name
 huggingface_path: https://huggingface.co/OpenGVLab/InternVL3_5-14B
 bos_path: bos:/ai-data/InternVL3_5-14B
 TOTAL_K8S_NODES: 1
-MODEL_RUNNABLE: True
+MODEL_RUNNABLE: False
 
 # OmniTraining training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-14B/

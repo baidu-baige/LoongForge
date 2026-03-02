@@ -1,4 +1,4 @@
-pfs_path: /workspace
+pfs_path: /mnt/cfs/OmniTrainingCI/
 load_hf_ckpt_path_pre: $pfs_path/huggingface.co/
 save_mcore_ckpt_path_pre: $pfs_path/megatron_checkpoint/
 megatron_path: /workspace/AIAK-Megatron
@@ -6,7 +6,7 @@ aiak_training_path: /workspace/OmniTraining/
 
 
 scripts_root_path: $aiak_training_path/tests
-training_log_path: /workspace/logs
+training_log_path: $pfs_path/logs
 
 convert_checkpoint_path: $aiak_training_path/tools/convert_checkpoint
 

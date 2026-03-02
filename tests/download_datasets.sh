@@ -2,7 +2,7 @@
 set -e
 
 # Install bcecmd
-PFS_DIR="/workspace"
+PFS_DIR="/mnt/cfs/OmniTrainingCI"
 
 # Define bcecmd wrapper function with retry mechanism
 REAL_BCECMD="/usr/local/bin/bcecmd"
@@ -147,7 +147,7 @@ elif [ "$DOWNLOAD_MODE" == "optional" ]; then
 
     # qwen2.5_vl_7b
     bcecmd bos sync bos:/ai-data/Qwen/Qwen2.5-VL-7B-Instruct ${huggingface_dir}/Qwen/Qwen2.5-VL-7B-Instruct/
-    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen2.5_vl_7b/tp1pp1/  ${checkpoint_dir}/qwen2.5_vl_7b/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen2.5_vl_7b/tp1pp1/  ${checkpoint_dir}/qwen2.5_vl/qwen2.5_vl_7b/
 
     # qwen3_8b
     bcecmd bos sync bos:/ai-data/Qwen/Qwen3-8B ${huggingface_dir}/Qwen/Qwen3-8B/
@@ -161,7 +161,7 @@ elif [ "$DOWNLOAD_MODE" == "optional" ]; then
     # qwen3_vl_30b_a3b
     bcecmd bos sync bos:/ai-data/Qwen3-VL-30B-A3B-Instruct ${huggingface_dir}/Qwen/Qwen3-VL-30B-A3B-Instruct/
     bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen_vl/qwen3vl_30b_a3b_data/ ${datasets_dir}/qwen3_vl/qwen3vl_30b_a3b_data
-    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_vl_30b_a3b/tp1pp2ep8/  ${checkpoint_dir}/qwen3/qwen3_vl_30b_a3b/
+    bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/megatron_checkpoint/qwen3_vl_30b_a3b/tp1pp2ep8/  ${checkpoint_dir}/qwen3_vl/qwen3_vl_30b_a3b/
 
 fi
 
