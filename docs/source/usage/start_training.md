@@ -1,7 +1,3 @@
-Below is the full English Markdown translation of your “start_training” section.
-
----
-
 ## Parameter Management
 The framework combines Megatron-LM arguments with Hydra configs, keeping full CLI compatibility while enabling fine-grained module-level control for multimodal models.
 
@@ -20,7 +16,6 @@ All native Megatron flags are supported:
 | model_args | `--model-name` | Select model | Family name (e.g. *llama2*) or exact arch (e.g. *llama2-7b*). Family → you must specify all hyper-params; arch → AIAK auto-fills them to match open-source checkpoints. |
 |  | `--config-path` | Model config file | Path to YAML/JSON config |
 |  | `--specify-overwrite-model` | Override policy | Controls whether external config overwrites built-in defaults. Default: *foundation_model* |
-|  | `--mtp-loss-coef` | DeepSeek-V3 | MTP auxiliary loss coefficient (float, default 0.1) |
 |  | `--enable-fa-within-mla` | MLA | Deprecated; use `--attention-backend=flash` instead. When enabled, pads Q/K/V to allow FlashAttention inside MLA. |
 | tokenizer_args | `--tokenizer-type` | Tokenizer class | *NullTokenizer*, *HFTokenizer*; auto-inferred if empty |
 |  | `--hf-tokenizer-path` | HF model id or local path |  |
@@ -87,12 +82,29 @@ All native Megatron flags are supported:
 ### Hydra Config
 Model-specific Hydra configs live in `configs/`.  
 Every model inherits from Megatron-Core’s [TransformerConfig](https://github.com/NVIDIA/Megatron-LM/blob/bcdd405f1cc31904cce6434110d4724b3119e0a5/megatron/core/transformer/transformer_config.py#L34), letting you override any submodule with fine-grained control.  
-Typical CLI usage:
-
+#### Modify Model Parameters
+If you need to modify model-related parameters, you can pass them through the CLI. For example, to change the number of layers and the number of MTP layers in DeepSeek V3:
 ```bash
-+model.image_encoder.freeze=True
-+model.foundation.recompute_num_layers=28
+# examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh
+...
+PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+  torchrun ${DISTRIBUTED_ARGS[@]} \
+  $AIAK_TRAINING_PATH/omni_training/train.py \
+  ${MODEL_ARGS[@]} \
+  ${DATA_ARGS[@]} \
+  ${TRAINING_ARGS[@]} \
+  ${MOE_ARGS[@]} \
+  ${MODEL_PARALLEL_ARGS[@]} \
+  ${LOGGING_ARGS[@]} \
+  ${MTP_ARGS[@]} \
+  # Add
+  model.num_layers=16 \
+  model.mtp_num_layers=3
 ```
+OmniTraining first parses the CLI args and Hydra overrides from user shell script.
+The Hydra overrides are then applied to the corresponding model YAML configuration.
+Next, the updated model YAML is used to update args.
+Finally, the model is instantiated as a Python dataclass using both the model YAML and the merged args.
 
 #### Customising VLM Modules
 The framework decomposes VLMs into:
