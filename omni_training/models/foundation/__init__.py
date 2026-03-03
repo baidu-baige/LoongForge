@@ -9,6 +9,7 @@ from .qwen3_next.qwen3_next_model import Qwen3NextModel
 from .deepseek.deepseek_config import DeepseekConfig
 from .deepseek.deepseek_model import DeepseekModelWithMTP
 from .mimo.mimo_config import MimoConfig
+from .mimo.mimo_model import MimoModelWithMTP
 from .minimax.minimax_config import MinimaxConfig
 from .minimax.minimax_model import MinimaxModelWithMTP
 
@@ -28,6 +29,7 @@ AutoModel.register(Qwen3Config, Qwen3Model, exist_ok=True)  # overwrite existing
 AutoModel.register(Qwen3NextConfig, Qwen3NextModel, exist_ok=True)
 AutoModel.register(InternLMConfig, InternLMModel)
 AutoModel.register(DeepseekConfig, DeepseekModelWithMTP)
+AutoModel.register(MimoConfig, MimoModelWithMTP)
 AutoModel.register(MinimaxConfig, MinimaxModelWithMTP)
 AutoModel.register(LLaMAConfig, LLaMAModel)
 AutoModel.register(ErnieMoeConfig, ErnieMoeModel)

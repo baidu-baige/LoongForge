@@ -1,13 +1,11 @@
 """register mimo model with different config"""
 
 from dataclasses import dataclass
-
-from omni_training.utils.constants import LanguageModelFamilies
-from omni_training.models.factory import register_model_config
+from omni_training.models.common.base_model_config import BaseModelConfig
 
 
 @dataclass
-class MimoConfig:
+class MimoConfig(BaseModelConfig):
     """config for mimo model"""
     num_layers: int
     hidden_size: int

@@ -531,3 +531,13 @@ _register_chat_template(
     format_user=StringFormatter(slots=["{{content}}"]),
     format_prefix=EmptyFormatter(slots=[{"bos_token"}]),
 )
+
+_register_chat_template(
+    name="mimo",
+    format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
+    format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
+    format_separator=EmptyFormatter(slots=["\n"]),
+    default_system="You are a helpful assistant.",
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+)
