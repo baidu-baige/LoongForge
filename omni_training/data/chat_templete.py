@@ -26,7 +26,7 @@ from typing import (
 )
 
 from omni_training.utils.constants import DataRoles
-from .mm_plugin import MMPlugin, Qwen2VLPlugin
+from .mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
 
 
 if TYPE_CHECKING:
@@ -486,6 +486,17 @@ _register_chat_template(
     stop_words=["<|im_end|>"],
     replace_eos=True,
     mm_plugin=Qwen2VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="qwen3-vl",
+    format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
+    format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
+    format_separator=EmptyFormatter(slots=["\n"]),
+    default_system="You are a helpful assistant.",
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+    mm_plugin=Qwen3VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
 )
 
 _register_chat_template(

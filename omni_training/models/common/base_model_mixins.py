@@ -107,8 +107,18 @@ class BaseMegatronVisionModule(MegatronModule):
 
     def get_dummy_input(self, device):
         """Get dummy inputs for vision models"""
-        return (torch.randn((4, 3 * 2 * 14 * 14), dtype=torch.bfloat16, device=device), \
-                torch.tensor([[1, 2, 2]], dtype=torch.int32, device=device))
+        # Build patch_dim from config instead of hardcoding 3*2*14*14.
+        # This keeps dummy forward compatible with different vision backbones
+        # (e.g., non-default patch_size / temporal_patch_size / in_channels).
+        patch_size = getattr(self.config, "patch_size", 14)
+        temporal_patch_size = getattr(self.config, "temporal_patch_size", 2)
+        in_channels = getattr(self.config, "in_channels", 3)
+        patch_dim = in_channels * temporal_patch_size * patch_size * patch_size
+        # Keep a minimal valid [t, h, w] = [1, 2, 2] so token count is 4.
+        return (
+            torch.randn((4, patch_dim), dtype=torch.bfloat16, device=device),
+            torch.tensor([[1, 2, 2]], dtype=torch.int32, device=device),
+        )
 
 class BaseDecoderModelMixin(PreTrainedModel, ABC):
     """Unified decoder model mixin class."""

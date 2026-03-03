@@ -39,7 +39,7 @@ DATA_ARGS=(
     --dataloader-type external
     --split 100,0,0
     --num-workers 16
-    --chat-template qwen2-vl
+    --chat-template qwen3-vl
 )
 
 TRAINING_ARGS=(
