@@ -25,7 +25,7 @@ from megatron.core.utils import (
 )
 
 from megatron.core import tensor_parallel
-from megatron.core.transformer.mlp import MLP
+from megatron.core.transformer.mlp import MLP, apply_swiglu_sharded_factory
 from megatron.core.transformer.moe.experts import SequentialMLP as MegaSequentialMLP
 from megatron.core.transformer.moe.shared_experts import SharedExpertMLP as MegaSharedExpertMLP
 from megatron.core.process_groups_config import ProcessGroupCollection
@@ -103,7 +103,7 @@ class ErnieMLP(MLP):
             tp_group=tp_group,
         )
 
-    def forward(self, hidden_states, per_token_scale=None):
+    def forward(self, hidden_states, per_token_scale=None, idx=0):
         """Perform the forward pass through the MLP block."""
         # [s, b, 4 * h/p]
         nvtx_range_push(suffix="linear_fc1")
@@ -186,11 +186,11 @@ class ErnieMLP(MLP):
                     intermediate_parallel = glu(intermediate_parallel)
                 else:
                     intermediate_parallel = self.activation_func(intermediate_parallel)
-
-                if per_token_scale is not None:
-                    original_dtype = intermediate_parallel.dtype
-                    intermediate_parallel = intermediate_parallel * per_token_scale.unsqueeze(-1)
-                    intermediate_parallel = intermediate_parallel.to(original_dtype)
+                # trick: no multiply at here, we combine with torch.matmul
+                # if per_token_scale is not None:
+                #     original_dtype = intermediate_parallel.dtype
+                #     intermediate_parallel = intermediate_parallel * per_token_scale.unsqueeze(-1)
+                #     intermediate_parallel = intermediate_parallel.to(original_dtype)
             nvtx_range_pop(suffix="activation")
             return intermediate_parallel
 
@@ -217,12 +217,16 @@ class ErnieMLP(MLP):
             output, output_bias = self.linear_fc2(intermediate_parallel)
             nvtx_range_pop(suffix="linear_fc2")
 
+            # if per_token_scale is not None:
+            #     original_dtype = output.dtype
+            #     output = output * per_token_scale.unsqueeze(-1)
+            #     output = output.to(original_dtype)
+
         if per_token_scale is not None and output_bias is not None:
             # if this MLP is an expert, and bias is required, we add the bias to output directly
             # without doing bda later.
             output += output_bias.unsqueeze(0) * per_token_scale.unsqueeze(-1)
             output_bias = None
-
         return output, output_bias
 
     # pylint: disable=missing-function-docstring

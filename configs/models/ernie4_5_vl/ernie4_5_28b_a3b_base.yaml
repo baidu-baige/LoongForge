@@ -26,7 +26,7 @@ dense_layer_index: [0,]
 moe_layer_start_index: [1,1]
 add_position_embedding: false
 rotary_interleaved: false
-normalization: "Apex_RMSNorm"
+normalization: "Torch_RMSNorm"
 swiglu: true
 attention_dropout: 0
 hidden_dropout: 0
