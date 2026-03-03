@@ -2,25 +2,23 @@
 # The script needs to be run on at least 1 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export TORCH_NCCL_AVOID_RECORD_STREAMS=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
 DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-0.5B-Instruct"}
-#TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-syh"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-Coder-30B-A3B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-tp2-pp2"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/ssd1/sunyuehang/qwen3-coder-30b-a3b-tp2-pp2-ep2-bridge"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen2.5-0.5b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen3-coder"}
 
-#SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-1"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-syh"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen3-coder-hf-bridge"}
 
-
-GPUS_PER_NODE=4
+GPUS_PER_NODE=8
 
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -37,7 +35,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name qwen2.5-0.5b # qwen2.5 options: 0.5b, 1.5b, 3b, 7b, 14b, 32b, 72b
+    --model-name qwen3-coder-30b-a3b
     --rotary-base 1000000
     --rotary-seq-len-interpolation-factor 1
 )
@@ -53,9 +51,9 @@ DATA_ARGS=(
 TRAINING_ARGS=(
     --training-phase pretrain # options: pretrain, sft
     --seq-length 4096
-    --max-position-embeddings 32768
+    --max-position-embeddings 4096
     --init-method-std 0.006
-    --micro-batch-size 4
+    --micro-batch-size 1
     --global-batch-size 16
     --lr 1.0e-5
     --min-lr 1.0e-6
@@ -72,28 +70,41 @@ TRAINING_ARGS=(
     --lr-warmup-fraction 0.002
     --initial-loss-scale 65536
     --bf16
-    --load $TOKENIZER_PATH  # Load from HF checkpoint directly
+    --load $TOKENIZER_PATH
     --save $CHECKPOINT_PATH
     --save-hf-path $SAVE_HF_PATH
-    --save-interval 5
+    --save-interval 20
     --eval-interval 1000
     --eval-iters 10
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/llm_demo.yaml  # HF to Mcore mapping config (same as hf_debug.sh)
+    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/moe_demo.yaml
     #--ckpt-step 0
     #--no-load-optim
     #--no-load-rng
     #--num-workers 8
 )
 
+MOE_ARGS=(
+    --moe-router-load-balancing-type aux_loss
+    --moe-router-topk 8
+    --moe-aux-loss-coeff 0
+    --moe-grouped-gemm
+    --moe-router-dtype fp32
+    --empty-unused-memory-level 2
+)
+
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
+    --expert-model-parallel-size 2
+    --moe-token-dispatcher-type allgather
     --use-distributed-optimizer
-    --overlap-grad-reduce
-    --overlap-param-gather
+    # --overlap-grad-reduce
+    # --overlap-param-gather
     --distributed-backend nccl
-    #--sequence-parallel
+    --sequence-parallel
+    # --tp-comm-overlap
+    # --tp-comm-overlap-bootstrap-backend nccl # or: gloo, mpi
 )
 
 LOGGING_ARGS=(
@@ -115,5 +126,6 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
+    ${MOE_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${LOGGING_ARGS[@]}

@@ -1,0 +1,10 @@
+# Configuration file paths
+config:
+  model_config_file: configs/models/qwen3/qwen3_coder_30b_a3b.yaml
+  convert_file: configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml
+
+# Parallel strategy parameters
+param_dict:
+  tp_size: 2
+  pp_size: 2
+  ep_size: 2

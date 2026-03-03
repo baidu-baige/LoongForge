@@ -12,12 +12,11 @@ DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_docume
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-0.5B-Instruct"}
 #TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-syh"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-tp2-pp2"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/qwen2.5-0.5b-tp2-pp2-compare-1"}
+#CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-tp2-pp2"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen2.5-0.5b"}
 
-#SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-1"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-syh"}
 
 
 GPUS_PER_NODE=4
@@ -72,13 +71,11 @@ TRAINING_ARGS=(
     --lr-warmup-fraction 0.002
     --initial-loss-scale 65536
     --bf16
-    --load $TOKENIZER_PATH  # Load from HF checkpoint directly
+    --load $CHECKPOINT_PATH
     --save $CHECKPOINT_PATH
-    --save-hf-path $SAVE_HF_PATH
-    --save-interval 5
+    --save-interval 20
     --eval-interval 1000
     --eval-iters 10
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/llm_demo.yaml  # HF to Mcore mapping config (same as hf_debug.sh)
     #--ckpt-step 0
     #--no-load-optim
     #--no-load-rng
