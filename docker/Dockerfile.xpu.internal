@@ -13,6 +13,7 @@ WORKDIR /workspace
 # Base System Configuration + APT Source Replacement
 # =========================================================
 COPY ./AIAK-Training-Omni /workspace/OmniTraining
+SHELL ["/bin/bash", "-c"]
 
 # ======================== Basic Environment Setup ========================
 RUN set -exuo pipefail && \
@@ -76,7 +77,7 @@ RUN set -exuo pipefail && \
         if [ -z "${DEFAULT_XPYTORCH_URL}" ]; then \
             echo "Error: xpytorch_info.txt file content is empty" && exit 1; \
         fi; \
-        XPYTORCH_URL="${DEFAULT_XPYTORCH_URL}" \
+        XPYTORCH_URL="${DEFAULT_XPYTORCH_URL}"; \
         echo "use default xpytorch version: ${XPYTORCH_URL}"; \
     fi && \
     download_xpytorch "${XPYTORCH_URL}"
@@ -85,6 +86,8 @@ RUN set -exuo pipefail && \
 RUN set -exuo pipefail && \
     install_requirements() { \
         local requirements_file="/workspace/OmniTraining/requirements_xpu.txt" && \
+        . /root/miniconda/etc/profile.d/conda.sh && \
+        conda activate python310_torch25_cuda && \
         # for deepspeed cpu adam
         DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U -i http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com && \
         echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
@@ -97,7 +100,7 @@ RUN set -exuo pipefail && \
     echo "y" | pip uninstall nvidia-modelopt || true
 
 # =========================================================
-# TransformerEngine / Megatron / Lerobot
+# Megatron / Lerobot
 # =========================================================
 RUN set -exuo pipefail && \
     install_megatron() { \
@@ -133,6 +136,8 @@ RUN set -exuo pipefail && \
         pip install --no-build-isolation ".[pi]" && \
         echo "Lerobot installation completed"; \
     }; \
+    . /root/miniconda/etc/profile.d/conda.sh && \
+    conda activate python310_torch25_cuda && \
     install_megatron && \
     if [ "$INSTALL_LEROBOT" = "true" ]; then \
         install_lerobot; \
