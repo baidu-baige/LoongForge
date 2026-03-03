@@ -354,6 +354,9 @@ class Qwen3Model(BaseGPTModel):
                 # decoder will get hidden_states from encoder.input_tensor
                 decoder_input = None
 
+        rotary_pos_cos = None
+        rotary_pos_sin = None
+        sequence_len_offset = None        
         # Rotary positional embeddings (embedding is None for PP intermediate devices)
         if (
             rotary_pos_emb is None
@@ -386,6 +389,9 @@ class Qwen3Model(BaseGPTModel):
         preproc_output = (
             decoder_input,
             rotary_pos_emb,
+            rotary_pos_cos,
+            rotary_pos_sin,
+            sequence_len_offset,
         )
 
         return preproc_output
@@ -425,8 +431,8 @@ class Qwen3Model(BaseGPTModel):
             rotary_pos_emb=rotary_pos_emb,
         )
 
-        (decoder_input, rotary_pos_emb) = (
-            preproc_output[:2]
+        (decoder_input, rotary_pos_emb, rotary_pos_cos, rotary_pos_sin, sequence_len_offset) = (
+            preproc_output[:5]
         )
 
         # Run decoder.
@@ -435,7 +441,10 @@ class Qwen3Model(BaseGPTModel):
             attention_mask=attention_mask,
             inference_params=inference_params,
             rotary_pos_emb=rotary_pos_emb,
+            rotary_pos_cos=rotary_pos_cos,
+            rotary_pos_sin=rotary_pos_sin,
             packed_seq_params=packed_seq_params,
+            sequence_len_offset=sequence_len_offset,
             **(extra_block_kwargs or {}),
         )
 
@@ -445,11 +454,14 @@ class Qwen3Model(BaseGPTModel):
             position_ids=position_ids,
             labels=labels,
             rotary_pos_emb=rotary_pos_emb,
+            rotary_pos_cos=rotary_pos_cos,
+            rotary_pos_sin=rotary_pos_sin,
             loss_mask=loss_mask,
             decoder_input=decoder_input,
             attention_mask=attention_mask,
             inference_params=inference_params,
             packed_seq_params=packed_seq_params,
             runtime_gather_output=runtime_gather_output,
+            sequence_len_offset=sequence_len_offset,
             extra_block_kwargs=extra_block_kwargs,
         )
