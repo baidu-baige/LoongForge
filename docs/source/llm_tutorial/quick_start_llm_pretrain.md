@@ -266,8 +266,7 @@ MODEL_PARALLEL_ARGS=(
 )
 
 MTP_ARGS=(
-  --num-nextn-predict-layers 1
-  --mtp-loss-coef 0.1
+  --mtp-loss-scaling-factor 0.1
 )
 
 LOGGING_ARGS=(

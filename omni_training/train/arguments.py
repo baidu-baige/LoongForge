@@ -117,12 +117,6 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
         help="The model name to use. This name should match the key in the model config registry.",
     )
 
-
-    # use for deepseek v3
-    group.add_argument(
-        "--mtp-loss-coef", type=float, default=0.1, help="The coefficient of MTP loss."
-    )
-
     # use for mla
     group.add_argument(
         "--enable-fa-within-mla",
