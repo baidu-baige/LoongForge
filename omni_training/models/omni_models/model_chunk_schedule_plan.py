@@ -61,6 +61,7 @@ class TransformerLayerSchedulePlan:
     mlp = None
     moe_combine = None
     post_combine = None
+    deepstack = None
     mtp_post_process = None
 
     def __init__(self, layer, event, chunk_state, comp_stream, comm_stream, extra_args={}):
@@ -114,6 +115,7 @@ class TransformerLayerSchedulePlan:
             else isinstance(self.layer.mlp, MoELayer)
         )
         enable_deepep = self.layer.config.moe_enable_deepep
+        deepstack_handler = extra_args.pop("deepstack_handler")
         extra_args["enable_deepep"] = enable_deepep
         extra_args["is_moe"] = is_moe
         extra_args["delay_wgrad_compute"] = self.layer.config.delay_wgrad_compute
@@ -141,6 +143,7 @@ class TransformerLayerSchedulePlan:
             moe_combine_module,
             post_combine_module,
             mtp_post_process_module,
+            deepstack_module_wrapper
         ) = fwd_callables
 
         # Create nodes for different operations in the layer
@@ -164,6 +167,11 @@ class TransformerLayerSchedulePlan:
             )
         else:
             self.mtp_post_process = NoopScheduleNode()
+
+        if deepstack_handler is not None:
+            self.deepstack = create_node(comp_stream, deepstack_module_wrapper(deepstack_handler), "deepstack")
+        else:
+            self.deepstack = NoopScheduleNode()
 
     def get_fp8_context(self):
         """
@@ -225,6 +233,7 @@ class TransformerLayerSchedulePlan:
 
         if b_layer is not None:
             b_grad = b_layer.mtp_post_process.backward(b_grad)
+            b_grad = b_layer.deepstack.backward(b_grad)
             b_grad = b_layer.post_combine.backward(b_grad)
             b_grad = b_layer.moe_combine.backward(b_grad)
 
@@ -265,6 +274,7 @@ class TransformerLayerSchedulePlan:
         if f_layer is not None:
             with f_layer.get_fp8_context():
                 f_input = f_layer.post_combine.forward(f_input)
+                f_input = f_layer.deepstack.forward(f_input)
                 f_input = f_layer.mtp_post_process.forward(f_input)
 
         # Delay the last attn_bwd in backward pass
@@ -369,6 +379,11 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
 
         # build preprocess
         self.pre_process = PreProcessNode(model, self._model_chunk_state, self._event, comp_stream)
+
+        # check if encoder model has deepstack
+        deepstack_indexes = None
+        if getattr(model, "encoder_model", None) is not None:
+            deepstack_indexes = getattr(model.encoder_model.image_encoder, "deepstack_visual_indexes", None)
         
         # if has foundation, use foundation as model
         if hasattr(model, "foundation_model"):
@@ -379,9 +394,13 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
 
         # build layer schedule plan for each layer
         for layer_idx in range(transformer_num_layers):
+            extra_args = {
+                "layer_idx": layer_idx,
+                "deepstack_handler": self._get_deepstack_handler(model, deepstack_indexes, layer_idx)
+            }
             layer = model.decoder._get_layer(layer_idx)
             layer_plan = TransformerLayerSchedulePlan(
-                layer, self._event, self._model_chunk_state, comp_stream, comm_stream
+                layer, self._event, self._model_chunk_state, comp_stream, comm_stream, extra_args
             )
             self._transformer_layers.append(layer_plan)
 
@@ -402,6 +421,19 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
             self.post_process = PostProcessNode(
                 model, self._model_chunk_state, self._event, comp_stream
             )
+
+    def _get_deepstack_handler(self, model, deepstack_indexes, layer_idx):
+        """ return deepstack process function if transformer layer has deepstack connection """
+        if (
+            deepstack_indexes is not None 
+            and len(deepstack_indexes) > 0
+            and self.vp_stage == 0
+            and layer_idx in range(len(deepstack_indexes))
+        ):
+            deepstack_handler = getattr(model.decoder, "_deepstack_process", None)
+            assert deepstack_handler is not None
+            return deepstack_handler
+        return None
 
     @property
     def event(self):
