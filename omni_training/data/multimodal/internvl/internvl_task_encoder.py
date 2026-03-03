@@ -65,7 +65,16 @@ class InternVLTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> MixQATaskSample:
         """Encode multi_mix_qa sample."""
-        data_item = sample.messages
+        # Convert standardized messages (role/content) back to internvl's expected format (from/value)
+        _role_map: dict[str, str] = {"user": "human", "assistant": "gpt", "system": "system"}
+        texts = []
+        if sample.system is not None:
+            texts.append({"from": "system", "value": sample.system})
+        texts += [
+            {"from": _role_map.get(msg["role"], msg["role"]), "value": msg["content"]}
+            for msg in sample.messages
+        ]
+        data_item = {"texts": texts}
         # text + images
         if sample.image is not None:
             assert (
