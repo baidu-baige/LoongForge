@@ -19,6 +19,7 @@ from megatron.training.utils import unwrap_model
 from tools.dist_checkpoint.core.parser import Parser
 from tools.dist_checkpoint.core.topo_sharder import TopoSharder
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from tools.dist_checkpoint.utils import time_checkpoint_operation, MemoryTracker
 
 def _is_hf_checkpoint(checkpoint_path: str) -> bool:
     """
@@ -47,6 +48,7 @@ def _is_hf_checkpoint(checkpoint_path: str) -> bool:
     return has_config and (has_safetensors or has_pytorch_bin)
 
 
+@time_checkpoint_operation
 def load_hf_checkpoint_online(
     model,
     optimizer,
@@ -122,13 +124,8 @@ def load_hf_checkpoint_online(
     if etp_rank is not None:
         parallel_config.etp_ranks = [etp_rank]
 
-    # Each rank prints its own coordinates
-    print(f"[Rank {rank}] Coordinates: tp={tp_rank}, pp={pp_rank}, "
-          f"ep={ep_rank}, etp={etp_rank}")
-
     # Step 3: Create HF converter
     print_rank_0("Creating HF checkpoint converter...")
-    print(parallel_config)
     converter = HfCheckpointConverter(
         parallel_config=parallel_config,
         mapping_cfg=mapping_cfgs[0]
@@ -141,18 +138,31 @@ def load_hf_checkpoint_online(
 
         # Set mapping config first
         converter.set_mapping_cfg(mapping_cfgs[0])
-        
+
         # Load HF checkpoint
         print_rank_0(f"Loading HF checkpoint from {args.load}...")
+        mem_before = 0.0
+        if torch.cuda.is_available():
+            mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+            torch.cuda.reset_peak_memory_stats()
         converter.load_hf(args.load, mapping_cfgs[0])
-
-
-        print_rank_0("HF checkpoint loaded successfully")
+        if torch.cuda.is_available():
+            peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+            mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+            print_rank_0(f"HF checkpoint loaded successfully. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
+        else:
+            print_rank_0("HF checkpoint loaded successfully")
 
         # Convert to Mcore format
-        print(f"[Rank {rank}] Converting and sharding for current rank...")
-        
+        mem_before = 0.0
+        if torch.cuda.is_available():
+            mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+            torch.cuda.reset_peak_memory_stats()
         mcore_dict = converter.get_mcore_ckpt()
+        if torch.cuda.is_available():
+            peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+            mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+            print_rank_0(f"Mcore conversion completed. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
         if mcore_dict is None:
             raise RuntimeError("Failed to convert HF checkpoint to Mcore format")
@@ -169,9 +179,6 @@ def load_hf_checkpoint_online(
 
 
     # Step 6: Extract shard for current rank
-    # Each rank prints its own shard extraction info
-    print(f"[Rank {rank}] Extracting shard for tp={tp_rank}, pp={pp_rank}")
-
     # Get state_dict corresponding to current rank's coordinates
     if pp_rank not in mcore_dict:
         raise KeyError(f"PP rank {pp_rank} not found in mcore_dict")
@@ -181,14 +188,14 @@ def load_hf_checkpoint_online(
     if etp_rank is not None and etp_rank in current_rank_state_dict:
         current_rank_state_dict = current_rank_state_dict[etp_rank]
 
-    # Each rank prints its own tensor count
-    print(f"[Rank {rank}] Got {len(current_rank_state_dict['model'])} tensors")
-
     # Step 7: Load to model
-    # Each rank prints its own loading progress
-    print(f"[Rank {rank}] Loading state_dict to model...")
-
+    print_rank_0("Loading model state_dict...")
     unwrapped_model = unwrap_model(model)
+
+    mem_before = 0.0
+    if torch.cuda.is_available():
+        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+        torch.cuda.reset_peak_memory_stats()
 
     # Load to each model shard
     for model_module in unwrapped_model:
@@ -198,17 +205,13 @@ def load_hf_checkpoint_online(
             strict=False
         )
 
-        if missing_keys:
-            # Each rank prints its own missing keys warning
-            print(f"[Rank {rank}] Warning: Missing keys: {missing_keys[:5]}... "
-                  f"(total {len(missing_keys)})")
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+        print_rank_0(f"Model state_dict loaded successfully. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
+    else:
+        print_rank_0("Model state_dict loaded successfully")
 
-        if unexpected_keys:
-            # Each rank prints its own unexpected keys warning
-            print(f"[Rank {rank}] Warning: Unexpected keys: {unexpected_keys[:5]}... "
-                  f"(total {len(unexpected_keys)})")
-        
-    
     optimizer.reload_model_params()
 
     # Step 8: Synchronize all ranks

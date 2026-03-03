@@ -20,6 +20,7 @@ from tools.dist_checkpoint.core.parser import Parser
 from tools.dist_checkpoint.core.topo_sharder import TopoSharder
 from tools.dist_checkpoint.core.tp_gather import TPGather
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from tools.dist_checkpoint.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
 from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints
 
@@ -98,6 +99,7 @@ def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_pat
     print_rank_0("Checkpoint consolidation completed!")
 
 
+@time_checkpoint_operation
 def save_hf_checkpoint_online(
     model,
     args
@@ -171,29 +173,38 @@ def save_hf_checkpoint_online(
     topo_sharder = TopoSharder(parallel_config)
     tp_rank, pp_rank, ep_rank, etp_rank = topo_sharder.get_current_rank_coordinates()
 
-    # Each rank prints its own coordinates
-    print(f"[Rank {rank}] Coordinates: tp={tp_rank}, pp={pp_rank}, "
-          f"ep={ep_rank}, etp={etp_rank}")
-
     # Step 3: Extract model state_dict
-    print(f"[Rank {rank}] Extracting model state_dict...")
+    print_rank_0("Extracting model state_dict...")
     from megatron.training.utils import unwrap_model
+
+    mem_before = 0.0
+    if torch.cuda.is_available():
+        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+        torch.cuda.reset_peak_memory_stats()
 
     unwrapped_model = unwrap_model(model)
     model_state_dict = {}
     for model_module in unwrapped_model:
         model_state_dict.update(model_module.state_dict())
 
-    print(f"[Rank {rank}] Extracted {len(model_state_dict)} parameters")
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+        print_rank_0(f"State_dict extracted. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
     # Ensure all tensors are on GPU (required for dist.gather with NCCL backend)
+    mem_before = 0.0
     if torch.cuda.is_available():
+        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+        torch.cuda.reset_peak_memory_stats()
         device = torch.cuda.current_device()
         model_state_dict = {
             k: v.to(device) if isinstance(v, torch.Tensor) else v
             for k, v in model_state_dict.items()
         }
-        print(f"[Rank {rank}] Moved state_dict tensors to GPU device {device}")
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+        print_rank_0(f"Moved state_dict to GPU. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
     # Step 4: Initialize TPGather
     print_rank_0("Initializing TPGather...")
@@ -205,16 +216,19 @@ def save_hf_checkpoint_online(
     dist.barrier()
 
     # Step 5: Gather state_dicts within TP group to TP rank 0
-    print(f"[Rank {rank}] About to call gather_state_dicts, tp_rank={tp_rank}...")
-
+    print_rank_0("Gathering state_dicts within TP group...")
+    mem_before = 0.0
+    if torch.cuda.is_available():
+        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+        torch.cuda.reset_peak_memory_stats()
     gathered_state_dicts = tp_gather.gather_state_dicts(model_state_dict)
-
-    print(f"[Rank {rank}] Returned from gather_state_dicts")
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+        print_rank_0(f"State_dicts gathered within TP group. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
     # Step 6: TP rank 0 saves checkpoint using HfCheckpointConverter
     if tp_rank == 0:
-        print(f"[Rank {rank}] TP rank 0 starting HF checkpoint conversion and saving...")
-
         # Type check: gathered_state_dicts should be a list for tp_rank == 0
         # (dist.gather ensures only tp_rank==0 receives the list)
         assert gathered_state_dicts is not None and isinstance(gathered_state_dicts, list), \
@@ -240,7 +254,6 @@ def save_hf_checkpoint_online(
             pp_parallel_config.etp_ranks = [etp_rank]
 
         # Create HF converter
-        print(f"[Rank {rank}] Creating HF checkpoint converter...")
         converter = HfCheckpointConverter(
             parallel_config=pp_parallel_config,
             mapping_cfg=mapping_cfgs[0]
@@ -252,10 +265,11 @@ def save_hf_checkpoint_online(
         # gathered_state_dicts is a list: [state_dict_tp0, state_dict_tp1, ...]
         # Convert to format: {pp_rank: {tp_rank: {"model": state_dict, "checkpoint_version": 3.0}}}
         # Note: state_dict must be wrapped in {"model": ...} for McoreCheckpoint
-        print(f"[Rank {rank}] Debug: gathered_state_dicts length = {len(gathered_state_dicts)}")
-        for tp_idx, sd in enumerate(gathered_state_dicts):
-            print(f"[Rank {rank}] Debug: TP {tp_idx} has {len(sd)} parameters")
-            print(f"[Rank {rank}] Debug: TP {tp_idx} sample keys: {list(sd.keys())[:5]}")
+        print_rank_0("Preparing mcore_dict...")
+        mem_before = 0.0
+        if torch.cuda.is_available():
+            mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+            torch.cuda.reset_peak_memory_stats()
 
         mcore_dict = {
             pp_rank: {
@@ -267,25 +281,35 @@ def save_hf_checkpoint_online(
             }
         }
 
-        print(f"[Rank {rank}] Prepared mcore_dict with {len(gathered_state_dicts)} TP shards")
+        if torch.cuda.is_available():
+            peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+            mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+            print_rank_0(f"Mcore_dict prepared. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
         # Create save directory
         os.makedirs(args.save_hf_path, exist_ok=True)
 
         # Convert from Mcore format to HF format and save
+        print_rank_0("Converting to HF format and saving...")
+        mem_before = 0.0
+        if torch.cuda.is_available():
+            mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+            torch.cuda.reset_peak_memory_stats()
         try:
-            print(f"[Rank {rank}] Converting to HF format and saving to {args.save_hf_path}...")
             converter.save_hf_ckpt(mcore_dict, args.save_hf_path)
-            print(f"[Rank {rank}] HF checkpoint saved successfully to {args.save_hf_path}")
+            if torch.cuda.is_available():
+                peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+                mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+                print_rank_0(f"HF checkpoint saved successfully. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
         except Exception as e:
-            print(f"[Rank {rank}] Error saving HF checkpoint: {e}")
+            print_rank_0(f"Error saving HF checkpoint: {e}")
             import traceback
             traceback.print_exc()
             raise
 
     else:
         # Non-TP rank 0 ranks in the same TP group just exit after gathering
-        print(f"[Rank {rank}] TP rank {tp_rank} completed gathering and exiting")
+        pass
 
     # Step 7: Synchronize all ranks
     print_rank_0("Synchronizing all ranks...")
