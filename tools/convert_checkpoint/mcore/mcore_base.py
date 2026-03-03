@@ -350,7 +350,7 @@ class McoreBase:
         if lora_in_weight_list is not None and lora_out_weight_list is not None:
             # Merge lora weight
             lora_out_weight, _, _ = self.get_cat_weight(
-                name, self.tp, lora_out_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
+                name, self.tp, lora_out_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, chunk_dim=0)
             lora_in_weight, _, _ = self.get_cat_weight(
                 name, self.tp, lora_in_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
             weight = self.lora_merge(weight, lora_out_weight, lora_in_weight, self.lora_alpha, self.lora_dim)
@@ -408,10 +408,10 @@ class McoreBase:
         source = transpose_shape0(source, m_tp, 2) if need_transpose else source
         return source
 
-    def get_cat_weight(self, name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=False):
+    def get_cat_weight(self, name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=False, chunk_dim=None):
         need_transpose = (m_tp > 1 and self.transpose_mlp_dense and \
                 name in [MLP_DENSE_H_TO_4H, MOE_EXPERT_H_TO_4H])
-        chunk_dim = self.tensor_parallel_dim.get(f"{name}.{WEIGHT}", None)
+        chunk_dim = self.tensor_parallel_dim.get(f"{name}.{WEIGHT}", None) if chunk_dim is None else chunk_dim
         if chunk_dim is None or m_tp == 1 or ignore_tp:
             # need not chunk
             weight = weight_list[0] if weight_list is not None else None
