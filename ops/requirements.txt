@@ -1,0 +1,7 @@
+--index-url https://pip.baidu-int.com/simple/
+--trusted-host pip.baidu.com
+hatchling>=1.18.0
+build>=1.0.3
+pytest
+mock
+-e .

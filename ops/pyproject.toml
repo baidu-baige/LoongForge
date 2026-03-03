@@ -1,0 +1,85 @@
+# 构建系统配置
+# PEP 517 规定的构建系统配置，指定构建工具和后端
+[build-system]
+# 构建时需要的依赖
+requires = ["hatchling"]
+# 构建后端，使用 hatchling 替代传统的 setuptools
+build-backend = "hatchling.build"
+
+# 项目元数据配置
+# PEP 621 规定的项目核心元数据
+[project]
+# 项目名称，将用于发布和安装
+name = "DeepTraining"
+# 项目版本，1.0.0 以上版本被视为正式发布版本
+# 修改版本号时请遵循：https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/tjIp17bwPd/CHf1I_vIs4/9lX58wB6nSUjI_
+version = "0.1.0"
+# 项目简介，不支持非英文字符
+description = "Hello world"
+# README 文件路径，用于生成长描述
+readme = "README.md"
+# Python 版本要求
+requires-python = ">=3.12"
+# 许可证信息
+license = { text = "MIT" }
+# 作者信息列表
+authors = [
+    { name = "xiaojunping", email = "xiaojunping@baidu.com" }
+]
+# 关键词，用于包索引和搜索
+keywords = ["baidu", "demo"]
+# 项目分类，用于 PyPI 分类（如果项目不打算开源可以忽略）
+# 完整分类列表：https://pypi.org/pypi?%3Aaction=list_classifiers
+classifiers = [
+    "Private :: Do Not Upload",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12"
+]
+# 项目依赖列表
+dependencies = [
+    "build>=1.0.3"
+]
+
+# 可选依赖配置，可通过 pip install package[test] 安装
+[project.optional-dependencies]
+# 测试相关依赖
+test = [
+    "pytest",
+    "mock"
+]
+
+# 项目相关 URL 配置
+[project.urls]
+# 项目主页，通常是项目的 icode 地址
+Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/DeepTraining/tree/master"
+# 更新日志文件链接
+Changelog = "CHANGELOG.md"
+
+# 命令行入口点配置
+[project.scripts]
+# 格式：命令名 = 模块路径:函数名
+DeepTraining = "deeptraining.cmdline:main"
+
+# Hatch 构建工具配置
+[tool.hatch.build]
+# 要包含的 Python 包
+packages = ["deeptraining"]
+# 要包含的数据文件
+# 支持通配符模式
+include = [
+    "deeptraining/conf/*",
+    "deeptraining/data/*"
+]
+
+# wheel 包构建配置
+[tool.hatch.build.targets.wheel]
+# 指定要打包的 Python 包
+packages = ["deeptraining"]
+# wheel 包输出目录
+output-dir = "output/dist"
+
+# 源码包构建配置
+[tool.hatch.build.targets.sdist]
+# 源码包输出目录
+output-dir = "output/dist"
