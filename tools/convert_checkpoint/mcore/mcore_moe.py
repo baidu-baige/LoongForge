@@ -120,14 +120,17 @@ class McoreMoe(McoreBase):
                 e_m_dict, t_name, mcore_weight_path, mcore_bias_path)
         lora_in_weight_list, _, _ = self.get_mcore_e_weight_list(e_m_dict, t_name, mcore_lora_in_path, None)
         lora_out_weight_list, _, _ = self.get_mcore_e_weight_list(e_m_dict, t_name, mcore_lora_out_path, None)
-        if lora_in_weight_list is not None and lora_out_weight_list is not None:
-            # Merge lora weight
-            for i in range(len(weight_list)):
-                weight_list[i] = self.lora_merge(weight_list[i], lora_out_weight_list[i], lora_in_weight_list[i], self.lora_alpha, self.lora_dim)
 
         m_tp = self.etp if self.etp is not None else self.tp
         weight, bias, weight_scale = self.get_cat_weight(
                 name, m_tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
+        if lora_in_weight_list is not None and lora_out_weight_list is not None:
+            # Merge lora weight
+            lora_out_weight, _, _ = self.get_cat_weight(
+                name, self.tp, lora_out_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
+            lora_in_weight, _, _ = self.get_cat_weight(
+                name, self.tp, lora_in_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
+            weight = self.lora_merge(weight, lora_out_weight, lora_in_weight, self.lora_alpha, self.lora_dim)
 
         log_flag = (expert_id is None or expert_id == 0)
         c_ckpt.set(common_key, weight, bias=bias, weight_scale=weight_scale, log_flag=log_flag)
@@ -148,4 +151,3 @@ class McoreMoe(McoreBase):
         bias_list = None if all(x is None for x in bias_list) else bias_list
         weight_scale_list = None if all(x is None for x in weight_scale_list) else weight_scale_list
         return weight_list, bias_list, weight_scale_list
-
