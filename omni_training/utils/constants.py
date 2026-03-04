@@ -84,6 +84,7 @@ class LanguageModelFamilies(_BaseFamilies):
     DEEPSEEK = "deepseek"
     INTERNLM2_5 = "internlm2.5"
     MINIMAX2_1 = "minimax2.1"
+    MIMO = "mimo"
 
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""

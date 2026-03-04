@@ -362,7 +362,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         def save_hf_shard(tensors, shard_file):
             shard = {}
             for tensor in tensors:
-                shard[tensor] = self.state_dict[tensor].contiguous()
+                shard[tensor] = self.state_dict[tensor].clone().contiguous()
                 del self.state_dict[tensor]
             shard_path = os.path.join(save_path, shard_file)
             save_file(shard, shard_path, metadata={"format": "pt"})

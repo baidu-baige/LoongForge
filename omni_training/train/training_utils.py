@@ -197,14 +197,26 @@ def freeze_parameters(model, freeze_parameters, freeze_parameters_regex):
 
     # Only log checking info if freezing enable
     if freeze_parameters or freeze_parameters_regex:
+        frozen_params = sorted(
+            f"FROZEN: {n}"
+            for m in model
+            for n, p in m.named_parameters()
+            if not p.requires_grad
+        )
+        trainable_params = sorted(
+            f"TRAINABLE: {n}"
+            for m in model
+            for n, p in m.named_parameters()
+            if p.requires_grad
+        )
         logging.info(
             "<Freezing model parameters> \n"
-            + [sorted(f"FROZEN: {n}" for m in model for n, p in m.named_parameters() if not p.requires_grad)]
+            + "\n".join(frozen_params)
             + "\n</Freezing model parameters>"
             + "\n\n"
-            + "<Trainable model parmeters> \n"
-            + [sorted(f"TRAINABLE: {n}" for m in model for n, p in m.named_parameters() if p.requires_grad)]
-            + "\n</Trainable model parmeters>"
+            + "<Trainable model parameters> \n"
+            + "\n".join(trainable_params)
+            + "\n</Trainable model parameters>"
         )
 
 
