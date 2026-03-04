@@ -15,7 +15,7 @@ TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-30B-A3B/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $aiak_training_path/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
-SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.json
+SFT_DATASET_CONFIG: $aiak_training_path/configs/data/sft_dataset_config.yaml
 
 # ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
@@ -198,7 +198,8 @@ scenarios:
             --tensorboard-dir $TENSORBOARD_PATH
             --log-timers-to-tensorboard'
           SFT_ARGS: '
-            --sft-dataset-config $SFT_DATASET_CONFIG'
+            --sft-dataset-config $SFT_DATASET_CONFIG
+            --sft-dataset multimodal_sharegpt'
 
 tasks:
   check_correctness_task: True

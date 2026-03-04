@@ -137,21 +137,40 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def _resize_video(self, vision: AVData, image_factor=28, frame_factor=2):
         """Resize video: frame number, height, width"""
-        total_frames = len(vision.frames)
-        video_fps = vision.info["video_fps"]
-        vision.info["fps"] = self.fps
-        vision.info["min_frames"] = self.fps_min_frames
-        vision.info["max_frames"] = self.fps_max_frames
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            total_frames = len(vision.frames)                     
+            video_fps = vision.info["video_fps"]                  
+            vision.info["fps"] = self.fps                         
+            vision.info["min_frames"] = self.fps_min_frames       
+            vision.info["max_frames"] = self.fps_max_frames      
 
-        # resize frame
-        nframes = smart_nframes(
-            vision.info, total_frames=total_frames, video_fps=video_fps
-        )
-        idx = torch.linspace(0, total_frames - 1, nframes).round().long()
-        video = vision.frames[idx]
+            nframes = smart_nframes(                              
+                vision.info, total_frames=total_frames, video_fps=video_fps         
+            )
+            idx = torch.linspace(0, total_frames - 1, nframes).round().long()   
+            video = vision.frames[idx]                                  
+        else:
+            _, total_frames = vision.get_video_duration(get_frame_count=True)
+            video_fps = vision.get_video_fps()
+            if not hasattr(vision, "info") or vision.info is None:
+                vision.info = {}
+
+            vision.info["video_fps"] = video_fps
+            vision.info["fps"] = self.fps
+            vision.info["min_frames"] = self.fps_min_frames
+            vision.info["max_frames"] = self.fps_max_frames
+
+            # resize frame
+            nframes = smart_nframes(
+                vision.info, total_frames=total_frames, video_fps=video_fps
+            )
+            idx = torch.linspace(0, total_frames - 1, nframes).round().long()
+            frame_ranges = [(int(i), int(i) + 1) for i in idx.tolist()]
+            clips = vision.get_clips(video_clip_ranges=frame_ranges, video_unit="frames")
+            video = torch.stack([clip[0] for clip in clips.video_clips], dim=0)
         # resize height, width
-        nframes, _, height, width = video.shape
-        resized_height, resized_width = smart_resize(
+        nframes, _, height, width = video.shape                       
+        resized_height, resized_width = smart_resize(                 
             height,
             width,
             factor=image_factor,
@@ -305,20 +324,34 @@ class VLMTaskEncoder(BaseTaskEncoder):
             assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
         else:
             assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
-
-        return VLMTaskSample(
-            __key__=sample.__key__,
-            __restore_key__=sample.__restore_key__,
-            __subflavor__=None,
-            __subflavors__=sample.__subflavors__,
-            imgs=imgs,
-            image_grid_thw=image_grid_thw,
-            num_tiles=num_tiles,
-            tokens=input_ids,
-            labels=target,
-            attn_mask=attn_mask,
-            total_len=len(input_ids),
-        )
+        
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            return VLMTaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavor__=None,
+                __subflavors__=sample.__subflavors__,
+                imgs=imgs,
+                image_grid_thw=image_grid_thw,
+                num_tiles=num_tiles,
+                tokens=input_ids,
+                labels=target,
+                attn_mask=attn_mask,
+                total_len=len(input_ids),
+            )
+        else:
+            return VLMTaskSample(
+                __key__=sample.__key__,
+                __restore_key__=sample.__restore_key__,
+                __subflavors__=sample.__subflavors__,
+                imgs=imgs,
+                image_grid_thw=image_grid_thw,
+                num_tiles=num_tiles,
+                tokens=input_ids,
+                labels=target,
+                attn_mask=attn_mask,
+                total_len=len(input_ids),
+            )
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""

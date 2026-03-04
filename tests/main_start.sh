@@ -37,11 +37,9 @@ gpu_nums=8
 
 # Mode 1: Run one/multiple/all models under tests/configs (space-separated; all models: model_names="")
 # model_names="qwen3_14b" 
-# model_names="deepseek_v2_lite llama3_8b qwen3_14b" 
-# model_names="internvl2.5_8b internvl3.5_30b_a3b llama2_7b llama3_8b llavaov_1.5_4b qwen3_14b qwen2.5_vl_7b"   
-model_names="deepseek_v2_lite llama3_8b"                                                   
+# model_names="deepseek_v2_lite llama3_8b qwen3_14b"  
+model_names=""                                                   
 optional_subdir=""
-# include_optional=true
 include_optional=false
 
 # Mode 2: Run one/multiple/all models under tests/optional/ (space-separated; all models: model_names="NONE")
