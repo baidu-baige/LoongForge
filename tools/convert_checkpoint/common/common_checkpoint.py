@@ -80,6 +80,8 @@ MOE_EXPERT = "moe.expert"
 MOE_GROUPED_GEMM_EXPERT = "moe.groupedgemm.expert"
 MOE_EXPERT_H_TO_4H = "moe.expert_h_to_4h"
 MOE_EXPERT_4H_TO_H = "moe.expert_4h_to_h"
+MOE_SHARED_EXPERT_H_TO_4H = "moe.shared_expert_h_to_4h"
+MOE_SHARED_EXPERT_4H_TO_H = "moe.shared_expert_4h_to_h"
 
 # shared expert
 MOE_SHARED_EXPERT = "moe.shared_expert"
@@ -100,8 +102,12 @@ MTP_HNORM = "mtp_hnorm"
 MTP_EH_PROJ = "mtp_eh_proj"
 MTP_SHARED_HEAD_NORM = "mtp_shared_head_norm"
 MTP_SHARED_HEAD_HEAD = "mtp_shared_head_head"
-
 MTP_NAME_PREFIX_FOR_LAYER = "mtp_name_prefix_for_layer"
+
+MTP_MOE_EXPERT_H_TO_4H = "mtp_moe.expert_h_to_4h"
+MTP_MOE_EXPERT_4H_TO_H = "mtp_moe.expert_4h_to_h"
+MTP_MOE_SHARED_EXPERT_H_TO_4H = "mtp_moe.shared_expert_h_to_4h"
+MTP_MOE_SHARED_EXPERT_4H_TO_H = "mtp_moe.shared_expert_4h_to_h"
 
 
 FIRST_LAYER_NAMES = [WORD_EMBEDDINGS, WORD_POSITION_EMBEDDINGS, WORD_BLOCK_POSITION_EMBEDDINGS] # in the first layer
