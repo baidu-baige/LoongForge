@@ -381,40 +381,20 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
         self.pre_process = PreProcessNode(model, self._model_chunk_state, self._event, comp_stream)
 
         # check if encoder model has deepstack
-        deepstack_indexes = None
+        self._deepstack_indexes = None
         if getattr(model, "encoder_model", None) is not None:
-            deepstack_indexes = getattr(model.encoder_model.image_encoder, "deepstack_visual_indexes", None)
-        
+            self._deepstack_indexes = getattr(model.encoder_model.image_encoder, "deepstack_visual_indexes", None)
+
         # if has foundation, use foundation as model
         if hasattr(model, "foundation_model"):
             model = model.foundation_model
 
-        transformer_num_layers = model.decoder.num_layers_per_pipeline_rank
-        mtp_num_layers = get_mtp_num_layers_to_build(model.config, vp_stage=self.vp_stage)
 
-        # build layer schedule plan for each layer
-        for layer_idx in range(transformer_num_layers):
-            extra_args = {
-                "layer_idx": layer_idx,
-                "deepstack_handler": self._get_deepstack_handler(model, deepstack_indexes, layer_idx)
-            }
-            layer = model.decoder._get_layer(layer_idx)
-            layer_plan = TransformerLayerSchedulePlan(
-                layer, self._event, self._model_chunk_state, comp_stream, comm_stream, extra_args
-            )
-            self._transformer_layers.append(layer_plan)
-
-        # build mtp layers
-        for layer_idx in range(mtp_num_layers):
-            extra_args = {
-                "is_first_layer": layer_idx == 0,
-                "is_last_layer": layer_idx == mtp_num_layers - 1,
-            }
-            layer = model.mtp.layers[layer_idx]
-            layer_plan = TransformerLayerSchedulePlan(
-                layer, self.event, self.state, comp_stream, comm_stream, extra_args
-            )
-            self._transformer_layers.append(layer_plan)
+        # build layer schedule plan for each layer.
+        # The methods to obtain layers are different for MTP so we need the other build plan for
+        # MTP. Also, this can help annotate MTP layer so that it can know where MTP is.
+        self._build_layer_schedule_plan(model, model.decoder, comp_stream, comm_stream)
+        self._build_layer_schedule_plan(model, getattr(model, "mtp", None), comp_stream, comm_stream)
 
         # build post process
         if model.post_process:
@@ -422,18 +402,40 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
                 model, self._model_chunk_state, self._event, comp_stream
             )
 
-    def _get_deepstack_handler(self, model, deepstack_indexes, layer_idx):
+    def _build_layer_schedule_plan(self, model, module, comp_stream, comm_stream):
+        if module is None:
+            return
+        num_layers = len(module.layers)
+        for layer_idx in range(num_layers):
+            extra_args = {
+                "layer_idx": layer_idx,
+                "is_first_layer": layer_idx == 0,
+                "is_last_layer": layer_idx == num_layers - 1,
+                "deepstack_handler": self._get_deepstack_handler(model, layer_idx),
+            }
+            layer_plan = TransformerLayerSchedulePlan(
+                module.layers[layer_idx],
+                self.event,
+                self.state,
+                comp_stream,
+                comm_stream,
+                extra_args,
+            )
+            self._transformer_layers.append(layer_plan)
+
+    def _get_deepstack_handler(self, model, layer_idx):
         """ return deepstack process function if transformer layer has deepstack connection """
         if (
-            deepstack_indexes is not None 
-            and len(deepstack_indexes) > 0
+            self._deepstack_indexes is not None 
+            and len(self._deepstack_indexes) > 0
             and self.vp_stage == 0
-            and layer_idx in range(len(deepstack_indexes))
+            and layer_idx in range(len(self._deepstack_indexes))
         ):
             deepstack_handler = getattr(model.decoder, "_deepstack_process", None)
             assert deepstack_handler is not None
             return deepstack_handler
         return None
+
 
     @property
     def event(self):

@@ -265,7 +265,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 tp_group=self.pg_collection.tp,
             )
 
-        if self.pre_process or self.post_process:
+        if self.pre_process or self.post_process or self.mtp_process:
             self.setup_embeddings_and_output_layer()
 
         if has_config_logger_enabled(self.config):
@@ -578,7 +578,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         if not self.post_process:
             return hidden_states
 
-        if getattr(self, 'mtp_process', False):
+        if self.config.mtp_num_layers is not None:
             mtp_labels = labels.clone()
             hidden_states_list = torch.chunk(hidden_states, 1 + self.config.mtp_num_layers, dim=0)
             hidden_states = hidden_states_list[0]
@@ -818,27 +818,14 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             output_extra_state and output_extra_state.data
         ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
 
-        # Multi-Token Prediction (MTP) need both embedding layer and output layer in
-        # mtp process stage.
+        # Multi-Token Prediction (MTP) need embedding layer in mtp process stage.
         # If MTP is not placed in the pre processing stage, we need to maintain a copy of
         # embedding layer in the mtp process stage and tie it to the embedding in the pre
         # processing stage.
-        # Also, if MTP is not placed in the post processing stage, we need to maintain a copy
-        # of output layer in the mtp process stage and tie it to the output layer in the post
-        # processing stage.
-        if getattr(self, 'mtp_process', False) and not self.pre_process:
+        # Now MTP loss is computed in post processing stage, so the output_layer is not needed.
+        if self.mtp_process and not self.pre_process:
             emb_weight_key = f'{prefix}embedding.word_embeddings.weight'
             emb_weight = self.embedding.word_embeddings.weight
             tie_word_embeddings_state_dict(sharded_state_dict, emb_weight, emb_weight_key)
-        if getattr(self, 'mtp_process', False) and not self.post_process:
-            # We only need to tie the output layer weight if share_embeddings_and_output_weights
-            # is False. Because if share_embeddings_and_output_weights is True, the shared weight
-            # will be stored in embedding layer, and output layer will not have any weight.
-            if not self.share_embeddings_and_output_weights:
-                output_layer_weight_key = f'{prefix}output_layer.weight'
-                output_layer_weight = self.output_layer.weight
-                tie_output_layer_state_dict(
-                    sharded_state_dict, output_layer_weight, output_layer_weight_key
-                )
 
         return sharded_state_dict

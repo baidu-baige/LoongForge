@@ -415,7 +415,8 @@ def pretrain(
         for i in range(len(model)):
             mpu.set_virtual_pipeline_model_parallel_rank(i)
             iterators = build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider
+                train_valid_test_dataset_provider,
+                vp_stage=i,
             )
             train_data_iterator.append(iterators[0])
             valid_data_iterator.append(iterators[1])
