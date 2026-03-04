@@ -79,12 +79,6 @@ class TPGather:
         # Get global rank
         self.rank = dist.get_rank()
 
-        # Log output (current rank only)
-        print(f"[TPGather] Rank {self.rank} initialized:")
-        print(f"  Coordinates: tp={self.tp_rank}, pp={self.pp_rank}, "
-              f"ep={self.ep_rank}, etp={self.etp_rank}")
-        print(f"  TP size: {self.tp_size}, PP size: {self.pp_size}")
-
     def gather_state_dicts(
         self,
         state_dict: Dict[str, torch.Tensor]
@@ -118,7 +112,6 @@ class TPGather:
         # Step 1: Sort keys and filter tensor-only keys
         # (all ranks have identical model architecture)
         local_keys = sorted([k for k, v in state_dict.items() if isinstance(v, torch.Tensor)])
-        print(f"[TPGather] Rank {self.rank} (tp={self.tp_rank}) gathering {len(local_keys)} tensors")
 
         # Step 2: Gather each tensor from all TP ranks
         if self.tp_rank == 0:
@@ -129,12 +122,8 @@ class TPGather:
                 gathered_dict[key] = [torch.zeros_like(state_dict[key]) for _ in range(self.tp_size)]
 
             # Gather each tensor one by one
-            for idx, key in enumerate(local_keys):
+            for key in local_keys:
                 dist.gather(state_dict[key], gathered_dict[key], dst=tp_rank_0_global, group=tp_group)
-                if (idx + 1) % max(1, len(local_keys) // 10) == 0:
-                    print(f"[TPGather] Rank {self.rank} gathered {idx + 1}/{len(local_keys)} tensors")
-
-            print(f"[TPGather] Rank {self.rank} (tp=0) gathered all {len(local_keys)} tensors")
 
             # Step 3: Reconstruct as list of state_dicts
             result = []
@@ -145,10 +134,7 @@ class TPGather:
             return result
         else:
             # Other TP ranks: only send data, no receiving
-            for idx, key in enumerate(local_keys):
+            for key in local_keys:
                 dist.gather(state_dict[key], None, dst=tp_rank_0_global, group=tp_group)
-                if (idx + 1) % max(1, len(local_keys) // 10) == 0:
-                    print(f"[TPGather] Rank {self.rank} sent {idx + 1}/{len(local_keys)} tensors")
 
-            print(f"[TPGather] Rank {self.rank} (tp={self.tp_rank}) sent all {len(local_keys)} tensors")
             return None
