@@ -6,7 +6,8 @@ from megatron.core.transformer.moe.router import TopKRouter as MegatronTopKRoute
 from megatron.core.transformer.moe.moe_utils import (
     apply_router_token_dropping,
     compute_routing_scores_for_aux_loss,
-    group_limited_topk
+    group_limited_topk,
+    apply_random_logits
 )
 
 try:
@@ -129,7 +130,7 @@ def topk_routing_with_score_function(
         routing_probs = torch.zeros_like(logits).scatter(1, top_indices, probs)
         routing_map = torch.zeros_like(logits).int().scatter(1, top_indices, 1).bool()
 
-    return routing_probs, routing_map
+    return routing_probs, routing_map, probs, top_indices
 
 
 class TopKRouter(MegatronTopKRouter):
@@ -189,7 +190,7 @@ class TopKRouter(MegatronTopKRouter):
         if self.routing_type == "sinkhorn":
             probs, routing_map = self.sinkhorn_load_balancing(logits)
         else:
-            probs, routing_map = topk_routing_with_score_function(
+            probs, routing_map, raw_probs, top_indices = topk_routing_with_score_function(
                 logits,
                 self.topk,
                 use_pre_softmax=self.config.moe_router_pre_softmax,
@@ -232,4 +233,25 @@ class TopKRouter(MegatronTopKRouter):
             with torch.no_grad():
                 self.local_tokens_per_expert += routing_map.sum(dim=0)
 
-        return probs, routing_map
+        return probs, routing_map, raw_probs, top_indices
+
+    def forward(self, input: torch.Tensor):
+        """
+        Forward pass of the router.
+
+        Args:
+            input (torch.Tensor): Input tensor.
+        """
+        self._maintain_float32_expert_bias()
+
+        # Apply input jitter
+        input = self.apply_input_jitter(input)
+        logits = self.gating(input)
+
+        if self.config.moe_router_force_load_balancing:
+            # Apply force load balancing with random logits for benchmark
+            logits = apply_random_logits(logits)
+
+        probs, routing_map, raw_probs, top_indices = self.routing(logits)
+
+        return probs, routing_map, raw_probs, top_indices

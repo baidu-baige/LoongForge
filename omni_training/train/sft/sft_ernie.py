@@ -52,7 +52,7 @@ def get_batch(data_iterator):
         data = next(data_iterator)
         for key in data:
             ori_shape = data[key].shape
-            data[key] = data[key].squeeze(dim=0)
+            data[key] = data[key].squeeze(dim=0).cuda()
 
         global_rank = torch.distributed.get_rank()
         # print(f"data_iterator is on current rank: {global_rank}")
@@ -75,11 +75,9 @@ def get_batch(data_iterator):
     # slice batch along sequence dimension for context parallelism
     assert mpu.get_context_parallel_world_size() == 1, "not implemented"
     data_i["attention_mask"] = data_i['input_ids'].logical_not()
-    attn_mask_type = AttnMaskType.padding_causal if data_i["attention_mask"].any(
-    ) else AttnMaskType.causal
+    attn_mask_type = AttnMaskType.causal
 
-    loss_mask = torch.roll(1 - data_i['token_type_ids'], shifts=-1, dims=1)
-    loss_mask[: , -1] = 0
+    loss_mask = (data_i['labels'] != -100).float()
     data_i, loss_mask = pad_to_len(data_i, loss_mask)
     batch = (
         data_f['images'],

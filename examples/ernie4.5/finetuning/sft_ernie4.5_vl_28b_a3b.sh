@@ -4,7 +4,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=/workspace/ernie/AIAK-Megatron
 AIAK_TRAINING_PATH=/workspace/ernie/OmniTraining/
-DATASET_PATH=/workspace/ernie/dataset/dataset.jsonl
+DATASET_PATH=/workspace/ernie/dataset/dataset.txt
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"}
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/ernie4.5vl/"}
 CHECKPOINT_LOAD_PATH=/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_hg2mcore/
@@ -42,6 +42,7 @@ DATA_ARGS=(
 
 TRAINING_ARGS=(
     --use-fp32-dtype-for-param-pattern "router"
+    #--custom-pipeline-layers 4,4,4,4,4,4,2,2
     --training-phase sft
     --chat-template empty
     --seq-length 8192
@@ -87,10 +88,10 @@ MOE_ARGS=(
 )
 
 MODEL_PARALLEL_ARGS=(
-    --tensor-model-parallel-size 2
+    --tensor-model-parallel-size 4
     # --sequence-parallel
-    --pipeline-model-parallel-size 1
-    --expert-model-parallel-size 4
+    --pipeline-model-parallel-size 2
+    --expert-model-parallel-size 1
     --use-precision-aware-optimizer
     --use-distributed-optimizer
     # --distributed-backend nccl

@@ -40,7 +40,7 @@ class ErnieMoeConfig(BaseModelConfig):
     moe_layer_start_index: tuple[int] = (1, 1)
     add_position_embedding: bool = False
     rotary_interleaved: bool = False
-    normalization: str = "Apex_RMSNorm"
+    normalization: str = "Torch_RMSNorm"
     swiglu: bool = True
     attention_dropout: float = 0
     hidden_dropout: float = 0
