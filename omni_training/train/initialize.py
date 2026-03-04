@@ -63,7 +63,7 @@ def get_encoder_dp_size(name):
     else:
         raise ValueError(f'Unknown encoder type: {name}')
 
-def destroy_model_parallel_without_destroy_gloo_group():
+def destroy_model_parallel_group():
     """Set the groups to none."""
     for k, v in vars((mpu)).items():
         if k.startswith('_') and not k.startswith('__') and not inspect.isfunction(v):
@@ -96,6 +96,17 @@ def save_parallel_state(module_name):
         k: v for k, v in vars((mpu)).items()
         if k.startswith('_') and not k.startswith('__') and not inspect.isfunction(v)
     }
+    
+    # The gloo communication groups of image_encoder, video_encoder, and audio_encoder
+    # are kept consistent with text_decoder.
+    if module_name in ['image_encoder', 'video_encoder', 'audio_encoder']:
+        for k in ["_DATA_PARALLEL_GROUP_GLOO", 
+            "_EXPERT_DATA_PARALLEL_GROUP_GLOO", 
+            "_INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO",
+            "_DATA_PARALLEL_GROUP_WITH_CP_GLOO",
+            "_INTRA_PARTIAL_DATA_PARALLEL_GROUP_WITH_CP_GLOO"]:
+                state_snapshot[k] = _ParallelStatesDict["text_decoder"][k]
+
     _ParallelStatesDict.setdefault(module_name, {}).update(state_snapshot)
 
 def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False):
@@ -105,7 +116,7 @@ def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False
     if tp_size == 0:
         tp_size = _DecoderTensorParallelSize
     assert tp_size <= _DecoderTensorParallelSize and _DecoderTensorParallelSize % tp_size == 0
-    destroy_model_parallel_without_destroy_gloo_group()
+    destroy_model_parallel_group()
 
     if enable_encoder_hetero_dp:
         assert tp_size == 1, f"encoder_tp_size must be 1 when enable_encoder_hetero_dp is True, but got {tp_size}"
