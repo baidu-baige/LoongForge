@@ -293,7 +293,7 @@ def create_metadataset_yaml(data_paths, data_weights, split="train"):
 def get_train_loader(train_ds, collator=None):
     """Get the training loader"""
     args = get_args()
-    train_dataloader = energon.get_savable_loader(train_ds)
+    train_dataloader = energon.get_savable_loader(train_ds, watchdog_initial_timeout_seconds=600)
     if args.load is not None:
         if getattr(args, "dataloader_save", None):
             dp_rank = parallel_state.get_data_parallel_rank()
