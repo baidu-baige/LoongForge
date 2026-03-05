@@ -133,7 +133,10 @@ def build_model_config(args, config):
                 merged = deepcopy(args_dict)
                 merged = convert_megatron_transformer_config_args(merged)
                 merged.update(OmegaConf.to_container(config_values, resolve=True))
-                model_cfgs[name] = instantiate(config_values, **merged)
+                if name == "peft_config":
+                    model_cfgs[name] = instantiate(config_values)
+                else:
+                    model_cfgs[name] = instantiate(config_values, **merged)
             else:
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)

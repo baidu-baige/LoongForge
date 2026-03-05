@@ -5,7 +5,18 @@ from transformers import PretrainedConfig
 from megatron.core.transformer import TransformerConfig
 from megatron.core.transformer.transformer_config import MLATransformerConfig
 import dataclasses
-from typing import Optional, List
+from typing import Optional, List, Dict, Set
+import torch
+from collections import defaultdict
+
+@dataclasses.dataclass
+class BasePeftModelConfig():    
+    """configuration class for the peft transformer"""
+    target_modules: List[str] = dataclasses.field(
+        default_factory=lambda: ["linear_qkv", "linear_proj", "linear_fc1", "linear_fc2"]
+    )
+    exclude_modules: List[str] = dataclasses.field(default_factory=list)
+    canonical_mapping: Dict[str, Set] = dataclasses.field(default_factory=lambda: defaultdict(set))
 
 @dataclasses.dataclass
 class BaseModelConfig(TransformerConfig, PretrainedConfig):
@@ -14,7 +25,7 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     freeze: bool = False
     model_type: str = None
     model_spec: Optional[List[str]] = None
-
+    peft_config: Optional[BasePeftModelConfig] = None
     def __post_init__(self):
         PretrainedConfig.__init__(self)
         TransformerConfig.__post_init__(self)
@@ -27,7 +38,7 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     freeze: bool = False
     model_type: str = None
     model_spec: Optional[List[str]] = None
-
+    peft_config: Optional[BasePeftModelConfig] = None
     def __post_init__(self):
         PretrainedConfig.__init__(self)
         MLATransformerConfig.__post_init__(self)

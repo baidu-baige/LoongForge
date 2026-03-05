@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from omni_training.utils.constants import VisionLanguageModelFamilies
-from omni_training.models.common.base_model_config import BaseModelConfig
+from omni_training.models.common.base_model_config import BaseModelConfig, BasePeftModelConfig
 
 
 @dataclass
@@ -15,6 +15,7 @@ class VLMModelConfig:
     video_projector: BaseModelConfig = None
     foundation: BaseModelConfig = None
 
+    peft_class: BasePeftModelConfig = None
     model_type: str = None
 
     def __init__(
@@ -24,6 +25,7 @@ class VLMModelConfig:
         video_encoder=None,
         video_projector=None,
         foundation=None,
+        peft_class=None,
         model_type=VisionLanguageModelFamilies.VLM,
         **kwargs,
     ):
@@ -32,6 +34,7 @@ class VLMModelConfig:
         self.video_encoder = video_encoder
         self.video_projector = video_projector
         self.foundation = foundation
+        self.peft_class = peft_class
         self.model_type = model_type
         for k, v in kwargs.items():
             setattr(self, k, v)
