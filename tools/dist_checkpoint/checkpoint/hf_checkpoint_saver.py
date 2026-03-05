@@ -4,7 +4,7 @@ Implements online saving of model to HF checkpoint format based on tools/dist_ch
 """
 import os
 import sys
-from typing import Dict, Optional
+from typing import Optional
 import shutil
 
 # Add project root to Python path
@@ -95,6 +95,15 @@ def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_pat
             print_rank_0(f"Warning: original_hf_path {original_hf_path} does not exist, skipping file copy")
         else:
             print_rank_0("Note: original_hf_path not provided, skipping additional file copy")
+
+    # Step 3: Clean up dones/ subdirectory
+    dones_dir = os.path.join(save_hf_path, "dones")
+    if os.path.exists(dones_dir):
+        try:
+            shutil.rmtree(dones_dir)
+            print_rank_0("Removed dones/ directory")
+        except Exception as e:
+            print_rank_0(f"Warning: Failed to remove dones/ directory: {e}")
 
     print_rank_0("Checkpoint consolidation completed!")
 
@@ -237,25 +246,16 @@ def save_hf_checkpoint_online(
 
         # Create a new parallel config for this specific PP rank only
         # IMPORTANT: Keep original pp_size but only set pp_ranks to [pp_rank]
-        from tools.dist_checkpoint.config.parallel_config import ParallelConfig
-        pp_parallel_config = ParallelConfig(
-            tp_size=len(gathered_state_dicts),
-            pp_size=parallel_config.pp_size,  # Keep original pp_size
-            ep_size=parallel_config.ep_size,
-            etp_size=parallel_config.etp_size,
-            vpp_size=parallel_config.vpp_size,
-            custom_pipeline_layers=parallel_config.custom_pipeline_layers
-        )
-        pp_parallel_config.tp_ranks = list(range(len(gathered_state_dicts)))
-        pp_parallel_config.pp_ranks = [pp_rank]  # Only current pp_rank
+        parallel_config.tp_ranks = list(range(len(gathered_state_dicts)))
+        parallel_config.pp_ranks = [pp_rank]  # Only current pp_rank
         if ep_rank is not None:
-            pp_parallel_config.ep_ranks = [ep_rank]
+            parallel_config.ep_ranks = [ep_rank]
         if etp_rank is not None:
-            pp_parallel_config.etp_ranks = [etp_rank]
+            parallel_config.etp_ranks = [etp_rank]
 
         # Create HF converter
         converter = HfCheckpointConverter(
-            parallel_config=pp_parallel_config,
+            parallel_config=parallel_config,
             mapping_cfg=mapping_cfgs[0]
         )
 
@@ -271,15 +271,19 @@ def save_hf_checkpoint_online(
             mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
             torch.cuda.reset_peak_memory_stats()
 
-        mcore_dict = {
-            pp_rank: {
-                tp_idx: {
-                    "model": state_dict,
-                    "checkpoint_version": 3.0,
-                }
-                for tp_idx, state_dict in enumerate(gathered_state_dicts)
+        # For dense models: {pp_rank: {tp_idx: {"model": state_dict, ...}}}
+        # For MoE models:   {pp_rank: {ep_rank: {tp_idx: {"model": state_dict, ...}}}}
+        tp_shards = {
+            tp_idx: {
+                "model": state_dict,
+                "checkpoint_version": 3.0,
             }
+            for tp_idx, state_dict in enumerate(gathered_state_dicts)
         }
+        if ep_rank is None:
+            mcore_dict = {pp_rank: tp_shards}
+        else:
+            mcore_dict = {pp_rank: {ep_rank: tp_shards}}
 
         if torch.cuda.is_available():
             peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)

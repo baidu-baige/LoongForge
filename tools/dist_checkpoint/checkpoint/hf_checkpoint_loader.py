@@ -183,10 +183,11 @@ def load_hf_checkpoint_online(
     if pp_rank not in mcore_dict:
         raise KeyError(f"PP rank {pp_rank} not found in mcore_dict")
 
-    current_rank_state_dict = mcore_dict[pp_rank].get(tp_rank, {})
-
-    if etp_rank is not None and etp_rank in current_rank_state_dict:
-        current_rank_state_dict = current_rank_state_dict[etp_rank]
+    if ep_rank is None:
+        current_rank_state_dict = mcore_dict[pp_rank].get(tp_rank, {})
+    else:
+        if ep_rank in mcore_dict[pp_rank]:
+            current_rank_state_dict = mcore_dict[pp_rank][ep_rank].get(tp_rank, {})
 
     # Step 7: Load to model
     print_rank_0("Loading model state_dict...")
@@ -212,7 +213,8 @@ def load_hf_checkpoint_online(
     else:
         print_rank_0("Model state_dict loaded successfully")
 
-    optimizer.reload_model_params()
+    if optimizer is not None:
+        optimizer.reload_model_params()
 
     # Step 8: Synchronize all ranks
     print_rank_0("Synchronizing all ranks...")
