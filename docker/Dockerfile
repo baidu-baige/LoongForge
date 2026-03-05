@@ -127,7 +127,7 @@ RUN set -exuo pipefail && \
         git restore . && \
         if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
             bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
-                /workspace/OmniTraining/patches/TransformerEngine \
+                /workspace/OmniTraining/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
         git submodule update --init --recursive && \
@@ -154,7 +154,7 @@ RUN set -exuo pipefail && \
         git restore . && \
         if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
             bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
-                /workspace/OmniTraining/patches/Megatron-LM \
+                /workspace/OmniTraining/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
                 ${megatron_dir}; \
         fi && \
         echo "Megatron-LM setup completed"; \
