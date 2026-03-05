@@ -11,9 +11,6 @@ ARG INSTALL_LEROBOT="false"
 # =========================================================
 # Environment Variables
 # =========================================================
-ENV NVSHMEM_DIR=/usr/local/nvshmem
-ENV LD_LIBRARY_PATH=${NVSHMEM_DIR}/lib:${LD_LIBRARY_PATH}
-ENV PATH=${NVSHMEM_DIR}/bin:${PATH}
 ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /workspace
@@ -22,6 +19,8 @@ WORKDIR /workspace
 # Base System Configuration + APT Source Replacement
 # =========================================================
 COPY ./AIAK-Training-Omni /workspace/OmniTraining
+COPY ./AIAK-Megatron /workspace/AIAK-Megatron
+COPY ./TransformerEngine /workspace/TransformerEngine
 
 # ======================== Basic Environment Setup ========================
 RUN set -exuo pipefail && \
@@ -95,6 +94,9 @@ RUN set -exuo pipefail && \
         wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/bzz_deepep/nvshmem.tar.gz && \
         tar -zxf nvshmem.tar.gz && \
         cp -rf nvshmem /usr/local/nvshmem && \
+        export NVSHMEM_DIR=/usr/local/nvshmem; \
+        export LD_LIBRARY_PATH=${NVSHMEM_DIR}/lib:${LD_LIBRARY_PATH}; \
+        export PATH=${NVSHMEM_DIR}/bin:${PATH} && \
         rm -rf nvshmem nvshmem.tar.gz && \
         wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/bzz_deepep/deep_ep-1.2.1+9af0e0d-cp312-cp312-linux_x86_64.whl && \
         TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" DISABLE_SM90_FEATURES="${disable_sm90}" pip install deep_ep-1.2.1+9af0e0d-cp312-cp312-linux_x86_64.whl && \
@@ -150,15 +152,9 @@ RUN set -exuo pipefail && \
         local transformerEngine_dir=/workspace/TransformerEngine; \
         local TE_TAGS="v2.9" && \
         echo "Installing TransformerEngine ${TE_TAGS}..." && \
-        cd /workspace && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/te_v2.9/te.tar.gz && \
-        tar -zxf te.tar.gz && \
-        find ${transformerEngine_dir} -type f -name '._*' -delete && \
         cd ${transformerEngine_dir} && \
-        git config --global --add safe.directory ${transformerEngine_dir}; \
-        git restore . && \
-        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+        if [ -f "/workspace/OmniTraining/patches/apply_patches.sh" ]; then \
+            bash /workspace/OmniTraining/patches/apply_patches.sh \
                 /workspace/OmniTraining/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
@@ -188,15 +184,9 @@ RUN set -exuo pipefail && \
         local megatron_dir=/workspace/AIAK-Megatron; \
         local MEGATRON_TAGS="core_v0.15.0" && \
         echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
-        cd /workspace && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/mcore_v0.15.0/megatron.tar.gz && \
-        tar -zxf megatron.tar.gz && \
-        mv Megatron-LM AIAK-Megatron && \
         cd ${megatron_dir} && \
-        git config --global --add safe.directory ${megatron_dir}; \
-        git restore . && \
-        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
+        if [ -f "/workspace/OmniTraining/patches/apply_patches.sh" ]; then \
+            bash /workspace/OmniTraining/patches/apply_patches.sh \
                 /workspace/OmniTraining/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
                 ${megatron_dir}; \
         fi && \
