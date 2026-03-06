@@ -1,8 +1,8 @@
-transformers==4.55.2
+transformers==4.57.1
 einops==0.7.0
 accelerate==0.25.0
 sentencepiece==0.1.99
-datasets==2.15.0
+datasets==2.20.0
 py-cpuinfo==9.0.0
 numpy
 Cython
