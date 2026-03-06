@@ -748,10 +748,23 @@ def get_model(
             param_pattern = [param_pattern]
 
         config = get_model_config(model[0])
-        model = [
-            Float16Module(config, model_module, keep_fp32_params=param_pattern)
-            for model_module in model
-        ]
+       
+        model = [Float16Module(config, model_module) for model_module in model]
+        fp32_training_weights = param_pattern
+        #covert fp32
+        if fp32_training_weights:
+            for module in zip(model):
+                if not isinstance(module, list):
+                    module = module[0]
+                for name, buf in module.module.named_parameters():
+                    if any(fp32_weight in name for fp32_weight in fp32_training_weights):
+                        buf.data = buf.data.to(dtype=torch.float32)
+                        print(f'verl check update param precison {name}')
+
+                for name, buf in module.module.named_buffers():
+                    if any(fp32_weight in name for fp32_weight in fp32_training_weights):
+                        buf.data = buf.data.to(dtype=torch.float32)
+                        print(f'verl check update buffer precison {name}')
 
         if param_pattern:
             print_rank_0("> model param_dtypes:")
