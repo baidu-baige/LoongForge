@@ -214,6 +214,9 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int | None = N
     if getattr(config, "device", None) is None:
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    if not hasattr(config, "tokenizer_name") or config.tokenizer_name == "":
+        config.tokenizer_name = getattr(args, "hf_tokenizer_path")
+
     return provider(pre_process, post_process, vp_stage, config=config)
 
 
