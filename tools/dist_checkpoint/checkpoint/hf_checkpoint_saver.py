@@ -22,7 +22,7 @@ from tools.dist_checkpoint.core.tp_gather import TPGather
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from tools.dist_checkpoint.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
-from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints
+from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints, get_etp_map
 
 
 def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_path: Optional[str] = None) -> None:
@@ -111,7 +111,7 @@ def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_pat
 @time_checkpoint_operation
 def save_hf_checkpoint_online(
     model,
-    args
+    args,
 ) -> None:
     """
     Save model to HF checkpoint online with distributed gathering
@@ -119,13 +119,13 @@ def save_hf_checkpoint_online(
     Uses tools/dist_checkpoint modules:
     1. Parser to parse config
     2. TopoSharder to initialize parallel topology
-    3. TPGather to gather TP shards to TP rank 0
+    3. TPGather to gather TP shards to TP rank 0 (NCCL backend with CPU offload)
     4. HfCheckpointConverter to convert and save to pp{pp_rank}/ subdirectory
     5. Global rank 0 consolidates all PP checkpoints to final location
 
     Args:
         model: Megatron distributed model
-        args: Command line arguments with save_hf_path and yaml_file
+        args: Command line arguments with save_hf_path, yaml_file
 
     Returns:
         None
@@ -134,7 +134,6 @@ def save_hf_checkpoint_online(
     world_size = dist.get_world_size()
 
     # Set GPU device for NCCL backend
-    # Required by gather_object when using NCCL for tensor communication
     if torch.cuda.is_available():
         local_rank = int(os.environ.get('LOCAL_RANK', 0))
         torch.cuda.set_device(local_rank)
@@ -201,7 +200,7 @@ def save_hf_checkpoint_online(
         mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
         print_rank_0(f"State_dict extracted. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
-    # Ensure all tensors are on GPU (required for dist.gather with NCCL backend)
+    # Prepare state_dict: ensure tensors are on GPU for NCCL gather
     mem_before = 0.0
     if torch.cuda.is_available():
         mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
@@ -244,23 +243,6 @@ def save_hf_checkpoint_online(
             "gathered_state_dicts should be a list for tp_rank == 0"
         assert len(gathered_state_dicts) > 0, "gathered_state_dicts should not be empty"
 
-        # Create a new parallel config for this specific PP rank only
-        # IMPORTANT: Keep original pp_size but only set pp_ranks to [pp_rank]
-        parallel_config.tp_ranks = list(range(len(gathered_state_dicts)))
-        parallel_config.pp_ranks = [pp_rank]  # Only current pp_rank
-        if ep_rank is not None:
-            parallel_config.ep_ranks = [ep_rank]
-        if etp_rank is not None:
-            parallel_config.etp_ranks = [etp_rank]
-
-        # Create HF converter
-        converter = HfCheckpointConverter(
-            parallel_config=parallel_config,
-            mapping_cfg=mapping_cfgs[0]
-        )
-
-        converter.set_mapping_cfg(mapping_cfgs[0])
-
         # Prepare mcore_dict from gathered state_dicts
         # gathered_state_dicts is a list: [state_dict_tp0, state_dict_tp1, ...]
         # Convert to format: {pp_rank: {tp_rank: {"model": state_dict, "checkpoint_version": 3.0}}}
@@ -273,17 +255,72 @@ def save_hf_checkpoint_online(
 
         # For dense models: {pp_rank: {tp_idx: {"model": state_dict, ...}}}
         # For MoE models:   {pp_rank: {ep_rank: {tp_idx: {"model": state_dict, ...}}}}
-        tp_shards = {
-            tp_idx: {
-                "model": state_dict,
-                "checkpoint_version": 3.0,
-            }
-            for tp_idx, state_dict in enumerate(gathered_state_dicts)
-        }
+        # For MoE with ETP: use tp_to_ep mapping to organize shards
         if ep_rank is None:
+            # Dense model: flat tp_shards under pp_rank
+            tp_shards = {
+                tp_idx: {
+                    "model": state_dict,
+                    "checkpoint_version": 3.0,
+                }
+                for tp_idx, state_dict in enumerate(gathered_state_dicts)
+            }
             mcore_dict = {pp_rank: tp_shards}
         else:
-            mcore_dict = {pp_rank: {ep_rank: tp_shards}}
+            # MoE model: need to organize by EP rank
+            if etp_rank is not None and args.tensor_model_parallel_size is not None \
+                and args.expert_model_parallel_size is not None:
+                tp_size = args.tensor_model_parallel_size
+                ep_size = args.expert_model_parallel_size
+                etp_size = args.expert_tensor_parallel_size
+                # ETP enabled: use tp_to_ep mapping
+                _, tp_to_ep = get_etp_map(
+                    tp_size,
+                    ep_size,
+                    etp_size
+                )
+                # Group tp_shards by their corresponding EP rank
+                ep_shards = {}
+                ep_ids = []
+                for tp_idx, state_dict in enumerate(gathered_state_dicts):
+                    ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_idx]
+                    if ep_id not in ep_ids:
+                        ep_ids.append(ep_id)
+                    if ep_id not in ep_shards:
+                        ep_shards[ep_id] = {}
+                    ep_shards[ep_id][tp_idx] = {
+                        "model": state_dict,
+                        "checkpoint_version": 3.0,
+                    }
+                mcore_dict = {pp_rank: ep_shards}
+                
+            else:
+                # ETP disabled: all tp_shards under current ep_rank
+                tp_shards = {
+                    tp_idx: {
+                        "model": state_dict,
+                        "checkpoint_version": 3.0,
+                    }
+                    for tp_idx, state_dict in enumerate(gathered_state_dicts)
+                }
+                mcore_dict = {pp_rank: {ep_rank: tp_shards}}
+
+        # Create a new parallel config for this specific PP rank only
+        # IMPORTANT: Keep original pp_size but only set pp_ranks to [pp_rank]
+        parallel_config.tp_ranks = list(range(len(gathered_state_dicts)))
+        parallel_config.pp_ranks = [pp_rank]  # Only current pp_rank
+        if ep_rank is not None and etp_rank is not None:
+            parallel_config.ep_ranks = ep_ids 
+        elif ep_rank is not None and etp_rank is None:
+            parallel_config.ep_ranks = [ep_rank]
+
+        # Create HF converter
+        converter = HfCheckpointConverter(
+            parallel_config=parallel_config,
+            mapping_cfg=mapping_cfgs[0]
+        )
+
+        converter.set_mapping_cfg(mapping_cfgs[0])
 
         if torch.cuda.is_available():
             peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
