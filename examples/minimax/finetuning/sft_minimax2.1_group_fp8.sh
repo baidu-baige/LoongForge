@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script is used for pre-training Deepseek-v3 in FP8 mixed precision.
+# This script is used for SFT training Minimax2.1 in FP8 mixed precision.
 
 
 
@@ -9,7 +9,7 @@ AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/sft/think/sampled.jsonl"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co//MiniMax-M2.1"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/minimax_m2/MiniMax_mcore_tp8pp4ep8etp1/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/minimax_m2.1/MiniMax_mcore_tp8pp4ep8etp1/"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/minimax_m2"}
 
@@ -50,7 +50,7 @@ DISTRIBUTED_ARGS=(
 
 
 SFT_ARGS=(
-  --chat-template minimax-m2.1
+  --chat-template minimax-m2
   --sft-num-preprocess-workers 16
   --no-check-for-nan-in-loss-and-grad
   --packing-sft-data
@@ -61,7 +61,7 @@ MODEL_ARGS=(
   --rotary-percent 0.5
   --norm-epsilon 1e-6
   --rotary-base 5000000
-  --use-fp32-dtype-for-param-pattern '^expert_bias$' '.+\.expert_bias$'
+  --use-fp32-dtype-for-param-pattern expert_bias
   --attention-backend fused
   
 )

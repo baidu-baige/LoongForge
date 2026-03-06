@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script is used for pre-training Deepseek-v3 in FP8 mixed precision.
+# This script is used for pre-training Minimax2.1 in FP8 mixed precision.
 
 
 
@@ -9,7 +9,7 @@ AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 
 DATA_PATH=${DATA_PATH:-""}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co//MiniMax-M2.1"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/minimax_m2/MiniMax_mcore_tp8pp4ep8etp1/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/minimax_m2.1/MiniMax_mcore_tp8pp4ep8etp1/"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/minimax_m2"}
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
@@ -52,7 +52,7 @@ MODEL_ARGS=(
   --rotary-percent 0.5
   --norm-epsilon 1e-6
   --rotary-base 5000000
-  --use-fp32-dtype-for-param-pattern '^expert_bias$' '.+\.expert_bias$'
+  --use-fp32-dtype-for-param-pattern expert_bias
   --attention-backend fused
   
 )
