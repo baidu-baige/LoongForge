@@ -99,6 +99,7 @@ class MLASelfAttentionFused(MLASelfAttention):
         self.register_load_state_dict_post_hook(self.initialize_kv_absorb_weights)
         self.register_state_dict_pre_hook(self.update_linear_kv_up_proj)
         self.absorb_weights_initialized = False
+        self.linear_kv_up_proj.weight.requires_grad = False
 
     def initialize_kv_absorb_weights(self, module, incompatible_keys):
         """Initialize absorb weights from linear_kv_up_proj for checkpoint compatibility."""
