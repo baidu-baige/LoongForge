@@ -9,3 +9,4 @@ param_dict:
   pp_size: 2
   ep_size: 2
   moe_grouped_gemm: True
+  # etp_size: 1
