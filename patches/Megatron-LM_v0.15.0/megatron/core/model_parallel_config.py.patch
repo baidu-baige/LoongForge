@@ -1,5 +1,5 @@
 diff --git a/megatron/core/model_parallel_config.py b/megatron/core/model_parallel_config.py
-index 2758c9c07..77bea09ff 100644
+index 2758c9c07..62ecc2f71 100644
 --- a/megatron/core/model_parallel_config.py
 +++ b/megatron/core/model_parallel_config.py
 @@ -1,7 +1,8 @@
@@ -12,7 +12,15 @@ index 2758c9c07..77bea09ff 100644
  
  import torch
  
-@@ -349,6 +350,15 @@ class ModelParallelConfig:
+@@ -245,6 +246,7 @@ class ModelParallelConfig:
+     delay_wgrad_compute: bool = False
+     """Delay the weight gradient computation to improve batch-level communication overlapping"""
+ 
++
+     ###################
+     # Pipeline Parallel
+     ###################
+@@ -349,6 +351,15 @@ class ModelParallelConfig:
         the user adds a level 1 timer that is not called by all ranks.
      """
  

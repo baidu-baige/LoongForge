@@ -1,5 +1,5 @@
 diff --git a/megatron/core/optimizer/distrib_optimizer.py b/megatron/core/optimizer/distrib_optimizer.py
-index 2925edcce..19f557a3b 100644
+index 2925edcce..b0fdfd51b 100644
 --- a/megatron/core/optimizer/distrib_optimizer.py
 +++ b/megatron/core/optimizer/distrib_optimizer.py
 @@ -33,6 +33,7 @@ except ImportError:
@@ -63,7 +63,7 @@ index 2925edcce..19f557a3b 100644
                              else:
                                  shard_main_param = model_param.float().view(-1)[
                                      param_range.start : param_range.end
-@@ -412,6 +428,13 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -412,9 +428,19 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                      shard_float16_params_this_group.append(shard_model_param)
                      shard_fp32_from_float16_params_this_group.append(shard_main_param)
  
@@ -76,8 +76,15 @@ index 2925edcce..19f557a3b 100644
 +
                  # fp32 params.
                  elif model_param.type() == 'torch.cuda.FloatTensor':
-                     shard_model_param = model_param.view(-1)[param_range.start : param_range.end]
-@@ -450,7 +473,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+-                    shard_model_param = model_param.view(-1)[param_range.start : param_range.end]
++                    shard_model_param = model_param.detach().view(-1)[
++                        param_range.start : param_range.end
++                    ]
++
+                     model_fp32_params_this_group.append(model_param)
+                     shard_fp32_params_this_group.append(shard_model_param)
+                     tensor_parallel.copy_tensor_model_parallel_attributes(
+@@ -450,7 +476,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
              shard_float16_groups,
              shard_fp32_groups,
              shard_fp32_from_float16_groups,
@@ -86,7 +93,7 @@ index 2925edcce..19f557a3b 100644
  
      def __init__(
          self,
-@@ -508,10 +531,10 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -508,10 +534,10 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
          self.distributed_optimizer_instance_id = distributed_optimizer_instance_id
  
          assert (
@@ -99,7 +106,7 @@ index 2925edcce..19f557a3b 100644
              "due to checkpointing requirements."
          )
  
-@@ -591,7 +614,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -591,7 +617,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
              self.shard_float16_groups,
              self.shard_fp32_groups,
              self.shard_fp32_from_float16_groups,
@@ -108,7 +115,7 @@ index 2925edcce..19f557a3b 100644
              self.gbuf_ranges, self.model_param_gbuf_map, self.opt_group_ranges, config
          )
  
-@@ -599,10 +622,32 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -599,10 +625,50 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
              self.optimizer = HybridDeviceOptimizer(
                  params=[g["orig_group"] for g in self.opt_group_ranges], **self.optimizer.defaults
              )
@@ -138,10 +145,28 @@ index 2925edcce..19f557a3b 100644
 +                    dist_metas,
 +                )
 +
++        # Rebuild model_param_group_index_map to reflect parameter reordering.
++        # The _build_model_and_main_param_groups method reorders parameters by dtype
++        # (FP32 first, then FP16/BF16), so we need to update the mapping to match
++        # the new positions in optimizer.param_groups.
++        
++        for group_index, group_range in enumerate(self.opt_group_ranges):
++            param_order = 0
++            # First, add FP32 params (in the same order as they appear in group_range["params"])
++            for model_param in group_range["params"]:
++                if model_param.type() == 'torch.cuda.FloatTensor':
++                    self.model_param_group_index_map[model_param] = (group_index, param_order)
++                    param_order += 1
++            # Then, add FP16/BF16 params (in the same order as they appear in group_range["params"])
++            for model_param in group_range["params"]:
++                if model_param.type() in ['torch.cuda.HalfTensor', 'torch.cuda.BFloat16Tensor']:
++                    self.model_param_group_index_map[model_param] = (group_index, param_order)
++                    param_order += 1
++
      def _get_model_param_range_map(self, param: torch.nn.Parameter):
          """
          Given a model param, get the index sub-range of the param that this
-@@ -647,6 +692,13 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -647,6 +713,13 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                      assert len(steps) == 1, f"steps: {optimizer.state}"
                      step = steps[0]
                      break
@@ -155,7 +180,7 @@ index 2925edcce..19f557a3b 100644
          elif USING_TE_OPTIMIZER or USING_APEX_OPTIMIZER:
              # Extract 'step', for TE FusedAdam support.
              steps = list(
-@@ -784,8 +836,8 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -784,8 +857,8 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                              # Allocate dummy tensors.
                              numel = len(param_range_map["gbuf_world"])
                              init_shard = lambda dtype=torch.float32: torch.empty(
@@ -166,7 +191,7 @@ index 2925edcce..19f557a3b 100644
  
                              # For precision_aware_optimizer, the empty tensors should also be
                              #  initialized with the correct dtype.
-@@ -793,6 +845,15 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -793,6 +866,15 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                                  "exp_avg": init_shard(self.config.exp_avg_dtype),
                                  "exp_avg_sq": init_shard(self.config.exp_avg_sq_dtype),
                              }
@@ -182,7 +207,7 @@ index 2925edcce..19f557a3b 100644
                              if self.config.use_precision_aware_optimizer_no_fp8_or_ds_fp8:
                                  if self.config.store_param_remainders and self.config.bf16:
                                      tensors["master_param"] = init_shard(torch.int16)
-@@ -894,6 +955,17 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -894,6 +976,17 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
              main_param = self.optimizer.param_groups[group_index]["params"][group_order]
              optim_state = self.optimizer.state[main_param]
              tensors = {"param": main_param, **optim_state}
@@ -200,7 +225,7 @@ index 2925edcce..19f557a3b 100644
          return tensors
  
      def _set_main_param_and_optimizer_states(self, model_param, tensors):
-@@ -907,25 +979,50 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -907,25 +1000,50 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
          }
          """
          group_index, group_order = self.model_param_group_index_map[model_param]
@@ -254,7 +279,7 @@ index 2925edcce..19f557a3b 100644
  
      def get_parameter_state_dp_reshardable(self):
          """Get internal representation of parameter state without any copies and modifications.
-@@ -962,6 +1059,23 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -962,6 +1080,23 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
              state[gbuf_idx] = dtype_state
          return state
  
@@ -278,7 +303,7 @@ index 2925edcce..19f557a3b 100644
      def get_parameter_state_dp_zero(
          self,
          use_gloo_comm: bool = True,
-@@ -1018,7 +1132,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -1018,7 +1153,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                  if data_parallel_rank == 0 or return_on_all_ranks:
                      world_tensors = {
                          key: torch.zeros(
@@ -287,7 +312,7 @@ index 2925edcce..19f557a3b 100644
                          )
                          for key in ("param", "exp_avg", "exp_avg_sq")
                      }
-@@ -1041,7 +1155,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -1041,7 +1176,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                          assert gbuf_world_numel_unpadded <= gbuf_world_numel
  
                          local_shards = {
@@ -296,7 +321,7 @@ index 2925edcce..19f557a3b 100644
                              for key in ("param", "exp_avg", "exp_avg_sq")
                          }
  
-@@ -1065,7 +1179,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -1065,7 +1200,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                                  device = "cpu" if use_gloo_comm else torch.cuda.current_device()
                                  recv_tensors = [
                                      torch.zeros(
@@ -305,7 +330,7 @@ index 2925edcce..19f557a3b 100644
                                      )
                                      for _ in range(data_parallel_world_size)
                                  ]
-@@ -1882,7 +1996,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -1882,7 +2017,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
  
                          # Contiguous local shards (received from DP rank 0).
                          recv_tensor = torch.zeros(
@@ -314,7 +339,7 @@ index 2925edcce..19f557a3b 100644
                          )
  
                          # Scatter tensor list.
-@@ -1996,7 +2110,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -1996,7 +2131,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
  
                          # Contiguous local shards (received from DP rank 0).
                          recv_tensor = torch.zeros(
@@ -323,7 +348,7 @@ index 2925edcce..19f557a3b 100644
                          )
  
                          # Scatter tensor list.
-@@ -2043,6 +2157,9 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -2043,6 +2178,9 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                  for model_param, tensors in recv_tensors.items():
                      self._set_main_param_and_optimizer_states(model_param, tensors)
  
@@ -333,7 +358,7 @@ index 2925edcce..19f557a3b 100644
      @torch.no_grad()
      def load_parameter_state_from_fully_reshardable(self, state_dict: dict):
          """Load counterpart of sharded_param_state_fully_reshardable.
-@@ -2523,17 +2640,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -2523,17 +2661,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
          the model params. This copy does not make use of the grad buffer as
          an intermediary.
          """
@@ -351,7 +376,7 @@ index 2925edcce..19f557a3b 100644
  
          if state_dict is not None:
              # Build a mapping from the model params to the corresponding tensors in the state dict,
-@@ -2558,15 +2664,45 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
+@@ -2558,15 +2685,45 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                          model_param = model_param_to_state_dict_param_map[model_param]
  
                      if is_float8tensor(model_param):

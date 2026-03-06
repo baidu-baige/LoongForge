@@ -1,5 +1,5 @@
 diff --git a/megatron/core/transformer/multi_token_prediction.py b/megatron/core/transformer/multi_token_prediction.py
-index bd3aa9c8c..0b93d51e0 100755
+index bd3aa9c8c..c6bc709e2 100755
 --- a/megatron/core/transformer/multi_token_prediction.py
 +++ b/megatron/core/transformer/multi_token_prediction.py
 @@ -3,16 +3,20 @@
@@ -237,12 +237,62 @@ index bd3aa9c8c..0b93d51e0 100755
              )
          else:
              hidden_states = self._proj_and_transformer_layer(
-@@ -901,6 +1016,8 @@ class MultiTokenPredictionBlock(MegatronModule):
+@@ -859,12 +974,19 @@ class MultiTokenPredictionBlock(MegatronModule):
+                 )
+             return module
+ 
+-        self.layers = torch.nn.ModuleList(
+-            [
+-                build_layer(layer_spec, i + 1)
+-                for i, layer_spec in enumerate(self.submodules.layer_specs)
+-            ]
+-        )
++        if self.config.mtp_shared_layers:
++            # Build a single MTP layer and reuse it for all prediction depths.
++            shared_layer = build_layer(self.submodules.layer_specs[0], 1)
++            self.layers = torch.nn.ModuleList([shared_layer])
++            self.mtp_num_forward_passes = len(self.submodules.layer_specs)
++        else:
++            self.layers = torch.nn.ModuleList(
++                [
++                    build_layer(layer_spec, i + 1)
++                    for i, layer_spec in enumerate(self.submodules.layer_specs)
++                ]
++            )
++            self.mtp_num_forward_passes = len(self.layers)
+ 
+     def forward(
+         self,
+@@ -899,9 +1021,14 @@ class MultiTokenPredictionBlock(MegatronModule):
+         # get hidden states from previous mtp stages
+         offset = get_mtp_layer_offset(self.config)
          hidden_states_list = list(torch.chunk(hidden_states, 1 + offset, dim=0))
-         hidden_states = hidden_states_list[offset]
-         for layer_number in range(len(self.layers)):
+-        hidden_states = hidden_states_list[offset]
+-        for layer_number in range(len(self.layers)):
+-            (hidden_states, input_ids, position_ids) = self.layers[layer_number](
++        hidden_states_main = hidden_states_list[offset]
++        hidden_states = hidden_states_main
++        for layer_number in range(self.mtp_num_forward_passes):
 +            if self.config.fine_grained_activation_offloading:
-+                fine_grained_offloading_set_last_layer(layer_number == len(self.layers) - 1)
-             (hidden_states, input_ids, position_ids) = self.layers[layer_number](
++                fine_grained_offloading_set_last_layer(layer_number == self.mtp_num_forward_passes - 1)
++            # When layers are shared, always use self.layers[0]; otherwise index normally.
++            layer = self.layers[0] if self.config.mtp_shared_layers else self.layers[layer_number]
++            (layer_hidden_states, input_ids, position_ids) = layer(
                  input_ids=input_ids,
                  position_ids=position_ids,
+                 hidden_states=hidden_states,
+@@ -918,7 +1045,13 @@ class MultiTokenPredictionBlock(MegatronModule):
+ 
+             # append the output hidden states of the current mtp layer
+             # to the hidden_states_list
+-            hidden_states_list.append(hidden_states)
++            hidden_states_list.append(layer_hidden_states)
++            # sequential: chain hidden states through MTP layers;
++            # parallel: every MTP layer receives the main model's hidden states.
++            if self.config.mtp_connection_type == 'parallel':
++                hidden_states = hidden_states_main
++            else:
++                hidden_states = layer_hidden_states
+ 
+         # concat the hidden states of all mtp layers
+         hidden_states = torch.cat(hidden_states_list, dim=0)

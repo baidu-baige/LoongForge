@@ -1,8 +1,28 @@
 diff --git a/megatron/core/tensor_parallel/random.py b/megatron/core/tensor_parallel/random.py
-index 54cac0e41..2a2789978 100644
+index 54cac0e41..4985a0207 100644
 --- a/megatron/core/tensor_parallel/random.py
 +++ b/megatron/core/tensor_parallel/random.py
-@@ -510,10 +510,11 @@ class CheckpointWithoutOutputFunction(torch.autograd.Function):
+@@ -442,11 +442,14 @@ class CheckpointFunction(torch.autograd.Function):
+     @staticmethod
+     def backward(ctx, *args):
+         """Backward pass."""
+-        if not torch.autograd._is_checkpoint_valid():
+-            raise RuntimeError(
+-                "Checkpointing is not compatible with .grad(), "
+-                "please use .backward() if possible"
+-            )
++        # This is commented out so that manually calling backward works correctly
++        # when enabling recomputation in heterogeneous DP.
++        #
++        # if not torch.autograd._is_checkpoint_valid():
++        #     raise RuntimeError(
++        #         "Checkpointing is not compatible with .grad(), "
++        #         "please use .backward() if possible"
++        #     )
+         inputs = ctx.saved_tensors
+         if ctx.distribute_saved_activations:
+             safely_set_viewless_tensor_data(
+@@ -510,10 +513,11 @@ class CheckpointWithoutOutputFunction(torch.autograd.Function):
      @staticmethod
      def backward(ctx, *args):
          """Backward pass."""
@@ -15,7 +35,7 @@ index 54cac0e41..2a2789978 100644
          grads = tuple(inp.grad if isinstance(inp, torch.Tensor) else inp for inp in inputs)
          return (None, None) + grads
  
-@@ -573,8 +574,9 @@ class CheckpointWithoutOutput(object):
+@@ -573,8 +577,9 @@ class CheckpointWithoutOutput(object):
                  recompute_ctx = contextlib.nullcontext()
                  fp8_ctx = contextlib.nullcontext()
  
@@ -26,7 +46,7 @@ index 54cac0e41..2a2789978 100644
  
          self.run_function = None
          self.rng_states = None
-@@ -590,6 +592,7 @@ class CheckpointWithoutOutput(object):
+@@ -590,6 +595,7 @@ class CheckpointWithoutOutput(object):
                  output.untyped_storage().copy_(recomputation_output.untyped_storage())
  
          self.ctx.outputs = outputs

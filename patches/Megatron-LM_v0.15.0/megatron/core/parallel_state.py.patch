@@ -1,0 +1,20 @@
+diff --git a/megatron/core/parallel_state.py b/megatron/core/parallel_state.py
+index 1e41bf9d8..b256a4b2b 100644
+--- a/megatron/core/parallel_state.py
++++ b/megatron/core/parallel_state.py
+@@ -1590,6 +1590,15 @@ def get_virtual_pipeline_model_parallel_world_size():
+     return _VIRTUAL_PIPELINE_MODEL_PARALLEL_WORLD_SIZE
+ 
+ 
++def get_context_parallel_src_rank():
++    """Calculate the global rank corresponding to the first local rank
++    in the context parallel group."""
++    assert (
++        _CONTEXT_PARALLEL_GLOBAL_RANKS is not None
++    ), "Context model parallel group is not initialized"
++    return _CONTEXT_PARALLEL_GLOBAL_RANKS[0]
++
++
+ def get_tensor_model_parallel_src_rank():
+     """Calculate the global rank corresponding to the first local rank
+     in the tensor model parallel group."""

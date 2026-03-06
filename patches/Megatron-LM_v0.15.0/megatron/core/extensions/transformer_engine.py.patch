@@ -1,8 +1,22 @@
 diff --git a/megatron/core/extensions/transformer_engine.py b/megatron/core/extensions/transformer_engine.py
-index e95409e08..9a5c3c3c0 100644
+index e95409e08..d3307823d 100644
 --- a/megatron/core/extensions/transformer_engine.py
 +++ b/megatron/core/extensions/transformer_engine.py
-@@ -1040,8 +1040,19 @@ class TEDotProductAttention(te.pytorch.DotProductAttention):
+@@ -236,6 +236,13 @@ class TENorm:
+         else:
+             raise Exception("Only LayerNorm and RMSNorm are curently supported")
+ 
++        from megatron.core.transformer.module import restore_fp16module_inputs_to_fp32
++
++        restore_fp16module_inputs_to_fp32(
++            instance, config, 
++            weight_is_fp32=lambda module: module.weight.dtype == torch.float32
++        )
++
+         return instance
+ 
+ 
+@@ -1040,8 +1047,19 @@ class TEDotProductAttention(te.pytorch.DotProductAttention):
              ):
                  #  need to change mask type for SWA inference decode stage.
                  attn_mask_type = AttnMaskType.causal_bottom_right
@@ -23,7 +37,7 @@ index e95409e08..9a5c3c3c0 100644
                  # thd format uses flash attention with cuDNN kernel which requires is_padding=True,
                  # so the only acceptable mask types are `padding_causal` and `padding`. These do not
                  # necessarily indicate there are padded tokens in the sequence.
-@@ -2116,3 +2127,11 @@ def set_save_original_input(module):
+@@ -2116,3 +2134,11 @@ def set_save_original_input(module):
              "set_save_original_input is only needed on transformer-engine modules that save "
              "quantized tensors by default. It needs transformer-engine>=2.6.0dev0."
          )
@@ -35,4 +49,3 @@ index e95409e08..9a5c3c3c0 100644
 +except ImportError:
 +    Float8Tensor = None
 +    cpu_offload = None
-\ No newline at end of file

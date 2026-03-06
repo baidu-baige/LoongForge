@@ -1,5 +1,5 @@
 diff --git a/megatron/core/transformer/transformer_config.py b/megatron/core/transformer/transformer_config.py
-index 147c5b23b..445c14f26 100644
+index 147c5b23b..855456787 100644
 --- a/megatron/core/transformer/transformer_config.py
 +++ b/megatron/core/transformer/transformer_config.py
 @@ -21,6 +21,7 @@ from ..utils import (
@@ -10,17 +10,55 @@ index 147c5b23b..445c14f26 100644
  
  try:
      from packaging.version import Version as PkgVersion
-@@ -51,6 +52,9 @@ class TransformerConfig(ModelParallelConfig):
+@@ -51,6 +52,18 @@ class TransformerConfig(ModelParallelConfig):
      mtp_loss_scaling_factor: Optional[float] = None
      """Weighting factor of Multi-Token Prediction (MTP) loss."""
  
 +    mtp_loss_scaling_factor_decay_ratio: Optional[float] = None
 +    """Weighting factor decay ratio for Multi-Token Prediction (MTP) loss."""
 +
++    mtp_shared_layers: bool = False
++    """Share (tie) all MTP layers. A single MTP layer is created and recurrently
++    forwarded multiple times instead of creating multiple independent layers."""
++
++    mtp_connection_type: str = 'sequential'
++    """Connection type of Multi-Token Prediction (MTP). 
++    'sequential': each MTP layer takes the previous MTP layer's hidden states as input (chain).
++    'parallel': every MTP layer takes the main model's hidden states as input (fan-out)."""
++
      num_layers_in_first_pipeline_stage: Optional[int] = None
      """Number of transformer layers on first pipeline stage.
      None implies equal layer division across PP ranks."""
-@@ -325,7 +329,8 @@ class TransformerConfig(ModelParallelConfig):
+@@ -208,6 +221,28 @@ class TransformerConfig(ModelParallelConfig):
+     no_rope=4 means RoPE is applied for 3 layers, then skipped for 1 layer, repeating this pattern.
+     A list of integers: Defines a custom pattern where 1 means skip RoPE and 0 means apply RoPE.
+     For example, [0,1,1,0] means: apply RoPE, skip RoPE, skip RoPE, apply RoPE."""
++    
++    ####################
++    # attention variant
++    ####################
++    experimental_attention_variant: Optional[str] = None
++    """Type of attention variant to use. Currently support gated_delta_net and dsa."""
++
++    dsa_indexer_n_heads: Optional[int] = None
++    """Number of DSA indexer heads."""
++
++    dsa_indexer_head_dim: Optional[int] = None
++    """Dimension per DSA indexer head."""
++
++    dsa_indexer_topk: Optional[int] = None
++    """Number of top-k tokens to select in DSA indexer."""
++
++    dsa_indexer_loss_coeff: Optional[float] = None
++    """Coefficient for the DSA indexer KL divergence loss. Set to 0 to disable indexer loss."""
++
++    dsa_indexer_use_sparse_loss: bool = False
++    """Whether to use sparse DSA indexer loss. If True, the indexer loss will be computed using the
++    top-k indices."""
+ 
+     moe_deepep_num_sms: int = 20
+     """Number of SMs to use for DeepEP."""
+@@ -325,7 +360,8 @@ class TransformerConfig(ModelParallelConfig):
  
      recompute_modules: Optional[List[str]] = None
      """The submodules to recompute.
@@ -30,7 +68,7 @@ index 147c5b23b..445c14f26 100644
      default: ["core_attn"].
      "core_attn": recompute the core attention part of the transformer layer.
      "moe_act": recompute the MoE MLP activation function.
-@@ -336,8 +341,10 @@ class TransformerConfig(ModelParallelConfig):
+@@ -336,8 +372,10 @@ class TransformerConfig(ModelParallelConfig):
      "shared_experts": recompute the shared experts in the MoE layer.
      "moe_act", "layernorm", and "mla_up_proj" use output-discarding checkpointing,
      "core_attn", "mlp", "moe", and "shared_experts" use normal checkpointing.
@@ -42,7 +80,7 @@ index 147c5b23b..445c14f26 100644
      ####################
      # fp8 related
      ####################
-@@ -420,6 +427,10 @@ class TransformerConfig(ModelParallelConfig):
+@@ -420,6 +458,10 @@ class TransformerConfig(ModelParallelConfig):
      together with fp4 mode (i.e., TransformerConfig.fp4 is not None). Note that not all parameters
      will be converted to fp4; for example, biases will remain unchanged."""
  
@@ -53,7 +91,7 @@ index 147c5b23b..445c14f26 100644
      ####################
      # MoE related
      ####################
-@@ -588,6 +599,19 @@ class TransformerConfig(ModelParallelConfig):
+@@ -588,6 +630,19 @@ class TransformerConfig(ModelParallelConfig):
      moe_apply_probs_on_input: bool = False
      """Apply probs on input of experts instead of applying after activation and glu."""
  
@@ -73,7 +111,7 @@ index 147c5b23b..445c14f26 100644
      ##################
      # Context Parallel
      ##################
-@@ -725,6 +749,44 @@ class TransformerConfig(ModelParallelConfig):
+@@ -725,6 +780,46 @@ class TransformerConfig(ModelParallelConfig):
      """Transformer implementation to use.
      Options are 'transformer_engine' for Transformer Engine and 'local' for MCore."""
  
@@ -82,7 +120,6 @@ index 147c5b23b..445c14f26 100644
 +    """If enabled, all the lengths of p2p data will be padding to fixed lengths;
 +    It can be uesed for sft, to reduce communication shape of  variable seq.
 +    the fixed lengths is seq-length-per-rank + 1."""
-+
 +    micro_batch_size: int = 1
 +    """The micro batch size to use for training."""
 +
@@ -115,10 +152,13 @@ index 147c5b23b..445c14f26 100644
 +    """The minimum size of the tensor to be offloaded."""
 +
 +
++    use_fp32_dtype_for_param_pattern: Optional[List[str]] = None
++    """The module list for fp32 param training"""
++
      def __post_init__(self):
          """Python dataclass method that is used to modify attributes after initialization.
          See https://docs.python.org/3/library/dataclasses.html#post-init-processing for more
-@@ -824,6 +886,12 @@ class TransformerConfig(ModelParallelConfig):
+@@ -824,6 +919,12 @@ class TransformerConfig(ModelParallelConfig):
              if self.moe_token_dispatcher_type != "flex":
                  raise ValueError("DeepEP backend is only supported with flex token dispatcher.")
  
@@ -131,7 +171,7 @@ index 147c5b23b..445c14f26 100644
          if self.moe_token_dispatcher_type == "flex":
              if self.moe_pad_expert_input_to_capacity:
                  raise ValueError(
-@@ -890,6 +958,9 @@ class TransformerConfig(ModelParallelConfig):
+@@ -890,6 +991,9 @@ class TransformerConfig(ModelParallelConfig):
              raise ValueError(
                  f"CPU offloading can be done only for layers less than {self.num_layers}"
              )
@@ -141,7 +181,7 @@ index 147c5b23b..445c14f26 100644
  
          if self.cpu_offloading and self.pipeline_model_parallel_size > 1:
              raise ValueError(
-@@ -948,11 +1019,17 @@ class TransformerConfig(ModelParallelConfig):
+@@ -948,11 +1052,17 @@ class TransformerConfig(ModelParallelConfig):
                  allowed_modules = {
                      "core_attn",
                      "moe_act",
@@ -159,7 +199,7 @@ index 147c5b23b..445c14f26 100644
                  }
                  invalid_modules = set(self.recompute_modules) - allowed_modules
                  assert not invalid_modules, (
-@@ -987,6 +1064,18 @@ class TransformerConfig(ModelParallelConfig):
+@@ -987,6 +1097,18 @@ class TransformerConfig(ModelParallelConfig):
                      raise ValueError(
                          "shared_experts recompute cannot work with --moe-shared-expert-overlap."
                      )
@@ -178,7 +218,7 @@ index 147c5b23b..445c14f26 100644
  
              if self.fp8:
                  if "moe_act" in self.recompute_modules or "layernorm" in self.recompute_modules:
-@@ -1015,6 +1104,63 @@ class TransformerConfig(ModelParallelConfig):
+@@ -1015,6 +1137,63 @@ class TransformerConfig(ModelParallelConfig):
              if "moe" not in self.recompute_modules:
                  self.recompute_modules.append("moe")
  
@@ -242,7 +282,47 @@ index 147c5b23b..445c14f26 100644
          if (
              self.num_layers_in_first_pipeline_stage is not None
              or self.num_layers_in_last_pipeline_stage is not None
-@@ -1601,6 +1747,9 @@ class MLATransformerConfig(TransformerConfig):
+@@ -1303,11 +1482,11 @@ class TransformerConfig(ModelParallelConfig):
+                 self.expert_tensor_parallel_size == 1
+             ), "Bias in Moe is only supported when ETP==1"
+ 
+-        if self.moe_router_enable_expert_bias and self.moe_router_score_function != "sigmoid":
+-            raise ValueError(
+-                "Expert bias for aux-loss-free routing only supports sigmoid score function."
+-                "Please set --moe-router-score-function sigmoid for sigmoid score function."
+-            )
++        #if self.moe_router_enable_expert_bias and self.moe_router_score_function != "sigmoid":
++        #    raise ValueError(
++        #        "Expert bias for aux-loss-free routing only supports sigmoid score function."
++        #        "Please set --moe-router-score-function sigmoid for sigmoid score function."
++        #    )
+ 
+         if self.num_moe_experts and self.fp8:
+             # TE version below 1.7.0 will raise Error when handle zeros tokens for expert
+@@ -1540,7 +1719,21 @@ class TransformerConfig(ModelParallelConfig):
+                     f"the number of layers ({self.num_layers})"
+                 )
+ 
+-
++        if self.use_fp32_dtype_for_param_pattern is not  None:
++            allowed_modules = {
++                "expert_bias",
++                "output_layer",
++                "final_layernorm",
++                "input_layernorm",
++                "pre_mlp_layernorm",
++                "router"
++            }
++            invalid_modules = set(self.use_fp32_dtype_for_param_pattern) - allowed_modules
++            assert not invalid_modules, (
++                f"Invalid choices for recompute_modules: {invalid_modules}. "
++                f"Allowed modules are: {allowed_modules}"
++            )
++        
+ @dataclass
+ class MLATransformerConfig(TransformerConfig):
+     """Configuration object for megatron-core Multi-Latent Attention (MLA) transformers.
+@@ -1601,6 +1794,9 @@ class MLATransformerConfig(TransformerConfig):
      """Cache the low dimensional tensors for MLA rather than full KV cache.
         This is only for the dynamic inference backend and requires that 
         Flash MLA is installed."""

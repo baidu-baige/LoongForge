@@ -1,0 +1,13 @@
+diff --git a/megatron/core/distributed/fsdp/src/megatron_fsdp/param_and_grad_buffer.py b/megatron/core/distributed/fsdp/src/megatron_fsdp/param_and_grad_buffer.py
+index a987ec2ce..55882a782 100644
+--- a/megatron/core/distributed/fsdp/src/megatron_fsdp/param_and_grad_buffer.py
++++ b/megatron/core/distributed/fsdp/src/megatron_fsdp/param_and_grad_buffer.py
+@@ -2427,6 +2427,8 @@ class ParamAndGradBuffer:
+             optimizer_grad = group.main_grad_buffer.get_item(
+                 item_id, only_shard=sharded_optimizer_state
+             )
++            if self.ddp_config.use_precision_aware_optimizer:
++                setattr(self, "use_precision_aware_optimizer", True)
+             if group.main_weight_buffer is not None:
+                 # Convert the gradient to the main weight buffer dtype.
+                 optimizer_grad = optimizer_grad.to(param.dtype)
