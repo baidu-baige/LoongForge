@@ -94,18 +94,30 @@ RUN set -exuo pipefail && \
         rm -f cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
         rm -rf /var/lib/apt/lists/*; \
     }; \
+    install_deepgemm() { \
+        echo "Installing DeepGEMM..." && \
+        wget -q https://github.com/deepseek-ai/DeepGEMM/releases/download/v2.1.1.post3/deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
+        pip install -v deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
+        rm deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl; \
+    }; \
+    install_flashmla() { \
+        echo "Installing FlashMLA..." && \
+        git clone https://github.com/deepseek-ai/FlashMLA.git flash-mla && \
+        cd flash-mla && \
+        git submodule update --init --recursive && \
+        pip install -v . && \
+        rm -rf flash-mla; \
+    }; \
+    update_flash_attn3_path_for_te && \
+    upgrade_cudnn_9_16_0 && \
+    install_deepgemm && \
+    install_flashmla && \
     if [ "${COMPILE_ENV}" = "ampere" ]; then \
-        update_flash_attn3_path_for_te && \
-        install_deepep "8.0" "1" && \
-        upgrade_cudnn_9_16_0; \
+        install_deepep "8.0" "1"; \
     elif [ "${COMPILE_ENV}" = "hopper" ]; then \
-        update_flash_attn3_path_for_te && \
-        install_deepep "9.0" "0" && \
-        upgrade_cudnn_9_16_0; \
+        install_deepep "9.0" "0"; \
     elif [ "${COMPILE_ENV}" = "blackwell" ]; then \
-        update_flash_attn3_path_for_te && \
-        install_deepep "10.0" "0" && \
-        upgrade_cudnn_9_16_0; \
+        install_deepep "10.0" "0"; \
     else \
         echo "[ERROR] Unsupported COMPILE_ENV value: ${COMPILE_ENV}" && \
         exit 1; \

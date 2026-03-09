@@ -23,6 +23,7 @@ except ImportError as exc:
 try:
     import deep_gemm
     import flashinfer
+    import lightning_indexer_bwd
 except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 
@@ -40,7 +41,7 @@ except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 
 try:
-    from flash_mla import flash_mla_sparse_fwd
+    from flash_mla_fwd import flash_mla_sparse_fwd
 except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 from .sparse_mla_bwd import sparse_mla_bwd_interface
@@ -555,7 +556,7 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
         """
         q_fp8, k_fp8, q_scale, k_scale, weight_scaled, topk_indices, ks, ke = ctx.saved_tensors
 
-        d_q, d_k, d_weights = deep_gemm.fp8_mqa_logits_bwd(
+        d_q, d_k, d_weights = lightning_indexer_bwd.fp8_mqa_logits_bwd(
             grad_score.contiguous(),
             q_fp8,
             (k_fp8, k_scale),

@@ -35,6 +35,7 @@ timm==1.0.3
 pandarallel
 webdataset==0.2.111
 regex
+natsort==8.4.0
 
 # =====================
 # NLP / dataset utils
@@ -61,6 +62,16 @@ opencv-python-headless==4.11.0.86
 megatron-energon==5.0.0
 qwen-vl-utils==0.0.11
 deepspeed==0.17.6
+
+# =====================
+# FlashInfer / TileLang
+# =====================
+flashinfer-python==0.6.2
+flashinfer-cubin==0.6.2
+tilelang==0.1.7post1
+
+
+
 
 # =====================
 # Dev / Notebook (optional but kept from old project)
