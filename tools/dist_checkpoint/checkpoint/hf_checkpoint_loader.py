@@ -215,13 +215,24 @@ def load_hf_checkpoint_online(
         mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
         torch.cuda.reset_peak_memory_stats()
 
-    # Load to each model shard
-    for model_module in unwrapped_model:
-        # Use strict=False because some parameters may not be in checkpoint
-        missing_keys, unexpected_keys = model_module.load_state_dict(
+    if len(unwrapped_model) == 1:
+        missing_keys, unexpected_keys = unwrapped_model[0].load_state_dict(
             current_rank_state_dict['model'],
             strict=False
         )
+    else: # vpp
+        missing_keys = []
+        unexpected_keys = []
+        for i in range(len(unwrapped_model)):
+            model_key = f"model{i}"
+            tmp_missing_keys, tmp_unexpected_keys = unwrapped_model[i].load_state_dict(
+                current_rank_state_dict[model_key],
+                strict=False
+            )
+            if len(tmp_missing_keys) > 0:
+                missing_keys.extend(tmp_missing_keys)
+            if len(tmp_unexpected_keys) > 0:
+                unexpected_keys.extend(tmp_unexpected_keys)
 
     if torch.cuda.is_available():
         peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)

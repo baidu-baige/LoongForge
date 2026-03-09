@@ -191,9 +191,13 @@ def save_hf_checkpoint_online(
         torch.cuda.reset_peak_memory_stats()
 
     unwrapped_model = unwrap_model(model)
-    model_state_dict = {}
-    for model_module in unwrapped_model:
-        model_state_dict.update(model_module.state_dict())
+    num_vpp_stages = len(unwrapped_model)
+
+    # Extract state_dict(s): non-VPP uses single dict, VPP uses list of dicts
+    if num_vpp_stages == 1:
+        model_state_dict = unwrapped_model[0].state_dict()
+    else:
+        model_state_dict = [m.state_dict() for m in unwrapped_model]
 
     if torch.cuda.is_available():
         peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
@@ -206,10 +210,16 @@ def save_hf_checkpoint_online(
         mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
         torch.cuda.reset_peak_memory_stats()
         device = torch.cuda.current_device()
-        model_state_dict = {
-            k: v.to(device) if isinstance(v, torch.Tensor) else v
-            for k, v in model_state_dict.items()
-        }
+        if num_vpp_stages == 1:
+            model_state_dict = {
+                k: v.to(device) if isinstance(v, torch.Tensor) else v
+                for k, v in model_state_dict.items()
+            }
+        else:
+            model_state_dict = [
+                {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in sd.items()}
+                for sd in model_state_dict
+            ]
         peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
         mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
         print_rank_0(f"Moved state_dict to GPU. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
@@ -229,7 +239,17 @@ def save_hf_checkpoint_online(
     if torch.cuda.is_available():
         mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
         torch.cuda.reset_peak_memory_stats()
-    gathered_state_dicts = tp_gather.gather_state_dicts(model_state_dict)
+
+    if num_vpp_stages == 1:
+        # Non-VPP: single gather
+        gathered_state_dicts = tp_gather.gather_state_dicts(model_state_dict)
+    else:
+        # VPP: gather each stage separately
+        gathered_state_dicts = []
+        for vpp_idx, sd in enumerate(model_state_dict):
+            print_rank_0(f"Gathering state_dict for VPP stage {vpp_idx}...")
+            gathered_state_dicts.append(tp_gather.gather_state_dicts(sd))
+
     if torch.cuda.is_available():
         peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
         mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
@@ -237,65 +257,27 @@ def save_hf_checkpoint_online(
 
     # Step 6: TP rank 0 saves checkpoint using HfCheckpointConverter
     if tp_rank == 0:
-        # Type check: gathered_state_dicts should be a list for tp_rank == 0
-        # (dist.gather ensures only tp_rank==0 receives the list)
-        assert gathered_state_dicts is not None and isinstance(gathered_state_dicts, list), \
-            "gathered_state_dicts should be a list for tp_rank == 0"
-        assert len(gathered_state_dicts) > 0, "gathered_state_dicts should not be empty"
-
         # Prepare mcore_dict from gathered state_dicts
-        # gathered_state_dicts is a list: [state_dict_tp0, state_dict_tp1, ...]
+        # Non-VPP: gathered_state_dicts is a list of state_dicts (one per TP rank)
+        # VPP: gathered_state_dicts is a list of lists (outer: VPP stage, inner: TP rank)
         # Convert to format: {pp_rank: {tp_rank: {"model": state_dict, "checkpoint_version": 3.0}}}
-        # Note: state_dict must be wrapped in {"model": ...} for McoreCheckpoint
+        # For VPP: {pp_rank: {tp_rank: {"model0": ..., "model1": ..., "checkpoint_version": 3.0}}}
         print_rank_0("Preparing mcore_dict...")
         mem_before = 0.0
         if torch.cuda.is_available():
             mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
             torch.cuda.reset_peak_memory_stats()
 
-        # For dense models: {pp_rank: {tp_idx: {"model": state_dict, ...}}}
-        # For MoE models:   {pp_rank: {ep_rank: {tp_idx: {"model": state_dict, ...}}}}
-        # For MoE with ETP: use tp_to_ep mapping to organize shards
-        if ep_rank is None:
-            # Dense model: flat tp_shards under pp_rank
-            tp_shards = {
-                tp_idx: {
-                    "model": state_dict,
-                    "checkpoint_version": 3.0,
-                }
-                for tp_idx, state_dict in enumerate(gathered_state_dicts)
-            }
-            mcore_dict = {pp_rank: tp_shards}
-        else:
-            # MoE model: need to organize by EP rank
-            if etp_rank is not None and args.tensor_model_parallel_size is not None \
-                and args.expert_model_parallel_size is not None:
-                tp_size = args.tensor_model_parallel_size
-                ep_size = args.expert_model_parallel_size
-                etp_size = args.expert_tensor_parallel_size
-                # ETP enabled: use tp_to_ep mapping
-                _, tp_to_ep = get_etp_map(
-                    tp_size,
-                    ep_size,
-                    etp_size
-                )
-                # Group tp_shards by their corresponding EP rank
-                ep_shards = {}
-                ep_ids = []
-                for tp_idx, state_dict in enumerate(gathered_state_dicts):
-                    ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_idx]
-                    if ep_id not in ep_ids:
-                        ep_ids.append(ep_id)
-                    if ep_id not in ep_shards:
-                        ep_shards[ep_id] = {}
-                    ep_shards[ep_id][tp_idx] = {
-                        "model": state_dict,
-                        "checkpoint_version": 3.0,
-                    }
-                mcore_dict = {pp_rank: ep_shards}
-                
-            else:
-                # ETP disabled: all tp_shards under current ep_rank
+        if num_vpp_stages == 1:
+            # Non-VPP: gathered_state_dicts is List[state_dict]
+            assert gathered_state_dicts is not None and isinstance(gathered_state_dicts, list), \
+                "gathered_state_dicts should be a list for tp_rank == 0"
+            assert len(gathered_state_dicts) > 0, "gathered_state_dicts should not be empty"
+
+            # For dense models: {pp_rank: {tp_idx: {"model": state_dict, ...}}}
+            # For MoE models:   {pp_rank: {ep_rank: {tp_idx: {"model": state_dict, ...}}}}
+            if ep_rank is None:
+                # Dense model: flat tp_shards under pp_rank
                 tp_shards = {
                     tp_idx: {
                         "model": state_dict,
@@ -303,7 +285,104 @@ def save_hf_checkpoint_online(
                     }
                     for tp_idx, state_dict in enumerate(gathered_state_dicts)
                 }
-                mcore_dict = {pp_rank: {ep_rank: tp_shards}}
+                mcore_dict = {pp_rank: tp_shards}
+            else:
+                # MoE model: need to organize by EP rank
+                if etp_rank is not None and args.tensor_model_parallel_size is not None \
+                    and args.expert_model_parallel_size is not None:
+                    tp_size = args.tensor_model_parallel_size
+                    ep_size = args.expert_model_parallel_size
+                    etp_size = args.expert_tensor_parallel_size
+                    # ETP enabled: use tp_to_ep mapping
+                    _, tp_to_ep = get_etp_map(
+                        tp_size,
+                        ep_size,
+                        etp_size
+                    )
+                    # Group tp_shards by their corresponding EP rank
+                    ep_shards = {}
+                    ep_ids = []
+                    for tp_idx, state_dict in enumerate(gathered_state_dicts):
+                        ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_idx]
+                        if ep_id not in ep_ids:
+                            ep_ids.append(ep_id)
+                        if ep_id not in ep_shards:
+                            ep_shards[ep_id] = {}
+                        ep_shards[ep_id][tp_idx] = {
+                            "model": state_dict,
+                            "checkpoint_version": 3.0,
+                        }
+                    mcore_dict = {pp_rank: ep_shards}
+                else:
+                    # ETP disabled: all tp_shards under current ep_rank
+                    tp_shards = {
+                        tp_idx: {
+                            "model": state_dict,
+                            "checkpoint_version": 3.0,
+                        }
+                        for tp_idx, state_dict in enumerate(gathered_state_dicts)
+                    }
+                    mcore_dict = {pp_rank: {ep_rank: tp_shards}}
+        else:
+            # VPP: gathered_state_dicts is List[List[state_dict]]
+            assert gathered_state_dicts is not None and isinstance(gathered_state_dicts, list), \
+                "gathered_state_dicts should be a list for tp_rank == 0"
+            assert len(gathered_state_dicts) == num_vpp_stages, \
+                f"gathered_state_dicts should have {num_vpp_stages} VPP stages"
+            assert all(isinstance(g, list) and len(g) > 0 for g in gathered_state_dicts), \
+                "Each VPP stage should contain a non-empty list of state_dicts"
+
+            # Transpose: from [vpp_stage][tp_rank] to [tp_rank][vpp_stage]
+            num_tp = len(gathered_state_dicts[0])
+            transposed = [[gathered_state_dicts[v][t] for v in range(num_vpp_stages)] for t in range(num_tp)]
+
+            # For dense models: {pp_rank: {tp_idx: {"model0": ..., "model1": ..., "checkpoint_version": 3.0}}}
+            # For MoE models:   {pp_rank: {ep_rank: {tp_idx: {"model0": ..., ...}}}}
+            if ep_rank is None:
+                # Dense model: flat tp_shards under pp_rank
+                tp_shards = {}
+                for tp_idx, vpp_state_dicts in enumerate(transposed):
+                    shard = {"checkpoint_version": 3.0}
+                    for vpp_idx, state_dict in enumerate(vpp_state_dicts):
+                        shard[f"model{vpp_idx}"] = state_dict
+                    tp_shards[tp_idx] = shard
+                mcore_dict = {pp_rank: tp_shards}
+            else:
+                # MoE model: need to organize by EP rank
+                if etp_rank is not None and args.tensor_model_parallel_size is not None \
+                    and args.expert_model_parallel_size is not None:
+                    tp_size = args.tensor_model_parallel_size
+                    ep_size = args.expert_model_parallel_size
+                    etp_size = args.expert_tensor_parallel_size
+                    # ETP enabled: use tp_to_ep mapping
+                    _, tp_to_ep = get_etp_map(
+                        tp_size,
+                        ep_size,
+                        etp_size
+                    )
+                    # Group tp_shards by their corresponding EP rank
+                    ep_shards = {}
+                    ep_ids = []
+                    for tp_idx, vpp_state_dicts in enumerate(transposed):
+                        ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_idx]
+                        if ep_id not in ep_ids:
+                            ep_ids.append(ep_id)
+                        if ep_id not in ep_shards:
+                            ep_shards[ep_id] = {}
+                        shard = {"checkpoint_version": 3.0}
+                        for vpp_idx, state_dict in enumerate(vpp_state_dicts):
+                            shard[f"model{vpp_idx}"] = state_dict
+                        ep_shards[ep_id][tp_idx] = shard
+                    mcore_dict = {pp_rank: ep_shards}
+                else:
+                    # ETP disabled: all tp_shards under current ep_rank
+                    tp_shards = {}
+                    for tp_idx, vpp_state_dicts in enumerate(transposed):
+                        shard = {"checkpoint_version": 3.0}
+                        for vpp_idx, state_dict in enumerate(vpp_state_dicts):
+                            shard[f"model{vpp_idx}"] = state_dict
+                        tp_shards[tp_idx] = shard
+                    mcore_dict = {pp_rank: {ep_rank: tp_shards}}
 
         # Create a new parallel config for this specific PP rank only
         # IMPORTANT: Keep original pp_size but only set pp_ranks to [pp_rank]
