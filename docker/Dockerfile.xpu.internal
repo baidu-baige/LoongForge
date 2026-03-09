@@ -14,7 +14,6 @@ WORKDIR /workspace
 # =========================================================
 COPY ./AIAK-Training-Omni /workspace/OmniTraining
 COPY ./AIAK-Megatron /workspace/AIAK-Megatron
-COPY ./TransformerEngine /workspace/TransformerEngine
 SHELL ["/bin/bash", "-c"]
 
 # ======================== Basic Environment Setup ========================
@@ -99,8 +98,7 @@ RUN set -exuo pipefail && \
         pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
             -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
     }; \
-    install_requirements && \
-    echo "y" | pip uninstall nvidia-modelopt || true
+    install_requirements
 
 # =========================================================
 # Megatron / Lerobot
