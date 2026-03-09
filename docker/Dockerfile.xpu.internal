@@ -13,6 +13,8 @@ WORKDIR /workspace
 # Base System Configuration + APT Source Replacement
 # =========================================================
 COPY ./AIAK-Training-Omni /workspace/OmniTraining
+COPY ./AIAK-Megatron /workspace/AIAK-Megatron
+COPY ./TransformerEngine /workspace/TransformerEngine
 SHELL ["/bin/bash", "-c"]
 
 # ======================== Basic Environment Setup ========================
