@@ -36,4 +36,4 @@ class MinimaxConfig(BaseModelConfig):
     num_query_groups: int = None
     apply_rope_fusion: bool = True
     group_query_attention: bool = False
-    model_type = LanguageModelFamilies.MINIMAX2_1
+    model_type = LanguageModelFamilies.MINIMAX
