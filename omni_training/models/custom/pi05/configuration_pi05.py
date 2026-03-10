@@ -111,6 +111,20 @@ class PI05Config(PreTrainedConfig):
 
     # Megatron pipeline scheduler flag; default to False for pi05.
     deallocate_pipeline_outputs: bool = False
+    use_fp32_dtype_for_param_pattern: list[str] | None = field(
+        default_factory=lambda: [
+            "vision_tower.vision_model.embeddings.patch_embedding.weight",
+            "vision_tower.vision_model.embeddings.patch_embedding.bias",
+            "vision_tower.vision_model.embeddings.position_embedding.weight",
+            "input_layernorm",
+            "post_attention_layernorm",
+            "model.norm",
+            "action_in_proj",
+            "time_mlp_in",
+            "time_mlp_out",
+            "action_out_proj",
+        ]
+    )
     # MoE router flag used by Megatron finalize_model_grads; keep False for non-MoE pi05.
     moe_router_enable_expert_bias: bool = False
     # MoE load-balancing strategy; default matches Megatron transformer config.

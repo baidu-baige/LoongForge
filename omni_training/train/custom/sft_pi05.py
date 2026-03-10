@@ -189,6 +189,8 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int | None = N
         config.fp8 = getattr(args, "fp8", None)
     if not hasattr(config, "fp4"):
         config.fp4 = getattr(args, "fp4", None)
+    if getattr(args, "use_fp32_dtype_for_param_pattern", None) is None:
+        args.use_fp32_dtype_for_param_pattern = getattr(config, "use_fp32_dtype_for_param_pattern", None)
     if not hasattr(config, "enable_autocast"):
         config.enable_autocast = bool(getattr(args, "enable_autocast", False))
     if not hasattr(config, "calculate_per_token_loss"):
@@ -319,7 +321,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     dataset_stats = get_lerobot_dataset_stats(base_dataset)
     preprocess_cfg = deepcopy(lr_policy_cfg)
     preprocess_cfg.device = "cpu"
-
     preprocessor, _postprocessor = make_pi05_pre_post_processors(
         config=preprocess_cfg,
         dataset_stats=dataset_stats,
