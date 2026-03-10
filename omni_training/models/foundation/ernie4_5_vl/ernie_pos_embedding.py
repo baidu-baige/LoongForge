@@ -140,7 +140,15 @@ def apply_rotary_3d(
 ):
     """
     rope 3d rotary
+
+    Supports both BSHD format (4D: [seq, batch, heads, dim]) and
+    THD packed format (3D: [total_tokens, heads, dim]).
     """
+    # Handle 3D (THD packed) by adding a batch dim
+    squeezed = q.ndim == 3
+    if squeezed:
+        q = q.unsqueeze(1)  # (seq, 1, heads, dim)
+
     sin_cos = sin_cos.permute(1, 0, 2, 3).to(q.device)
     sin_pos, cos_pos = torch.split(sin_cos, 1, dim=1)
     # rotate_half_query_layer [-q1,q0,-q3,q2......,-qd-1,qd-2]
@@ -151,4 +159,7 @@ def apply_rotary_3d(
         rotate_half_q.to(torch.float32) * sin_pos
     )
     query = query.to(q.dtype)
+
+    if squeezed:
+        query = query.squeeze(1)  # back to (seq, heads, dim)
     return query

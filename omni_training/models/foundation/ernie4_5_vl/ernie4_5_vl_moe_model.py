@@ -173,7 +173,7 @@ class ErnieMoeModel(BaseGPTModel):
             context_mask=~all_image_mask,
             inference_params=None,
             rotary_pos_emb=rotary_pos_emb,
-            packed_seq_params=None,
+            packed_seq_params=packed_seq_params,
             **(extra_block_kwargs or {}),
         )
 
@@ -187,7 +187,7 @@ class ErnieMoeModel(BaseGPTModel):
             decoder_input=decoder_input,
             attention_mask=attention_mask,
             inference_params=None,
-            packed_seq_params=None,
+            packed_seq_params=packed_seq_params,
             runtime_gather_output=runtime_gather_output,
             extra_block_kwargs=extra_block_kwargs,
         )
