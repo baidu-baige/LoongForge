@@ -68,7 +68,7 @@ class TPGather:
         self.topo_sharder = topo_sharder
 
         # Get parallel information from topo_sharder
-        self.tp_rank, self.pp_rank, self.ep_rank, self.etp_rank = (
+        self.tp_rank, self.pp_rank, self.ep_rank, self.etp_rank, self.dp_rank = (
             topo_sharder.get_current_rank_coordinates()
         )
         self.tp_size = topo_sharder.tp_size

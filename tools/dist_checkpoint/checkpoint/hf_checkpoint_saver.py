@@ -143,8 +143,14 @@ def save_hf_checkpoint_online(
     print_rank_0("="*80)
     print_rank_0(f"Save path: {args.save_hf_path}")
     print_rank_0(f"World size: {world_size}")
-    print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
-                f"PP={args.pipeline_model_parallel_size}")
+    ep_size = getattr(args, 'expert_model_parallel_size', None)
+    etp_size = getattr(args, 'expert_tensor_parallel_size', None)
+    if ep_size is not None and ep_size > 1:
+        print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
+                    f"PP={args.pipeline_model_parallel_size}, EP={ep_size}, ETP={etp_size}")
+    else:
+        print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
+                    f"PP={args.pipeline_model_parallel_size}")
 
     # Step 1: Parse config file
     if args.yaml_file is None:
@@ -179,7 +185,7 @@ def save_hf_checkpoint_online(
     # Note: parallel_state is already set up by training initialization
     print_rank_0("Initializing TopoSharder...")
     topo_sharder = TopoSharder(parallel_config)
-    tp_rank, pp_rank, ep_rank, etp_rank = topo_sharder.get_current_rank_coordinates()
+    tp_rank, pp_rank, ep_rank, etp_rank, dp_rank = topo_sharder.get_current_rank_coordinates()
 
     # Step 3: Extract model state_dict
     print_rank_0("Extracting model state_dict...")
@@ -256,7 +262,17 @@ def save_hf_checkpoint_online(
         print_rank_0(f"State_dicts gathered within TP group. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
     # Step 6: TP rank 0 saves checkpoint using HfCheckpointConverter
-    if tp_rank == 0:
+    # Dense model: tp_rank == 0 and dp_rank == 0
+    # MoE model: tp_rank == 0 and dp_rank // ep_size == 0
+    # This handles multi-node case where each node has its own dp_rank=0
+    if ep_rank is None:
+        # Dense model
+        should_save = (tp_rank == 0 and dp_rank == 0)
+    else:
+        # MoE model: use ep_size from earlier (default to 1 if not set)
+        should_save = (tp_rank == 0 and dp_rank // (ep_size or 1) == 0)
+
+    if should_save:
         # Prepare mcore_dict from gathered state_dicts
         # Non-VPP: gathered_state_dicts is a list of state_dicts (one per TP rank)
         # VPP: gathered_state_dicts is a list of lists (outer: VPP stage, inner: TP rank)

@@ -25,7 +25,7 @@ except ImportError:
 from tools.dist_checkpoint.config.parallel_config import ParallelConfig
 
 # Type definitions
-RankTopoTuple = Tuple[Optional[int], Optional[int], Optional[int], Optional[int]]
+RankTopoTuple = Tuple[Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]]
 RankTopoList = List[RankTopoTuple]
 
 
@@ -112,10 +112,11 @@ class TopoSharder:
         Get coordinates for current rank
 
         Returns:
-            (tp_rank, pp_rank, ep_rank, etp_rank) for current process
+            (tp_rank, pp_rank, ep_rank, etp_rank, dp_rank) for current process
         """
         tp_rank = parallel_state.get_tensor_model_parallel_rank()
         pp_rank = parallel_state.get_pipeline_model_parallel_rank()
+        dp_rank = parallel_state.get_data_parallel_rank()
 
         # Get expert parallel ranks if available
         if self.ep_size > 1:
@@ -128,6 +129,6 @@ class TopoSharder:
         else:
             etp_rank = None
 
-        return (tp_rank, pp_rank, ep_rank, etp_rank)
+        return (tp_rank, pp_rank, ep_rank, etp_rank, dp_rank)
 
 

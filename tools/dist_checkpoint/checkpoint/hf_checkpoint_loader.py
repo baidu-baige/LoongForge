@@ -83,8 +83,14 @@ def load_hf_checkpoint_online(
     print_rank_0("="*80)
     print_rank_0(f"Checkpoint path: {args.load}")
     print_rank_0(f"World size: {world_size}")
-    print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
-                f"PP={args.pipeline_model_parallel_size}")
+    ep_size = getattr(args, 'expert_model_parallel_size', None)
+    etp_size = getattr(args, 'expert_tensor_parallel_size', None)
+    if ep_size is not None and ep_size > 1:
+        print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
+                    f"PP={args.pipeline_model_parallel_size}, EP={ep_size}, ETP={etp_size}")
+    else:
+        print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
+                    f"PP={args.pipeline_model_parallel_size}")
 
     # Step 1: Parse config file
     if args.yaml_file is None:
@@ -118,7 +124,7 @@ def load_hf_checkpoint_online(
     # Step 2: Initialize TopoSharder (parallel_state already initialized by training, only get coordinates here)
     # Note: parallel_state is already set up by training initialization, TopoSharder only used to get coordinates
     topo_sharder = TopoSharder(parallel_config)
-    tp_rank, pp_rank, ep_rank, etp_rank = topo_sharder.get_current_rank_coordinates()
+    tp_rank, pp_rank, ep_rank, etp_rank, dp_rank = topo_sharder.get_current_rank_coordinates()
     parallel_config.tp_ranks = [tp_rank]
     parallel_config.pp_ranks = [pp_rank]
     if ep_rank is not None:
