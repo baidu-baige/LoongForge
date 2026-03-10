@@ -4,9 +4,13 @@ accelerate==0.25.0
 sentencepiece==0.1.99
 datasets==2.20.0
 py-cpuinfo==9.0.0
+scipy
+pybind11
 numpy
 Cython
 opencv-python==4.11.0.86
 megatron-energon==5.0.0
 botocore==1.41.6
 hydra-core==1.3.2
+wandb==0.21.4
+swanlab
