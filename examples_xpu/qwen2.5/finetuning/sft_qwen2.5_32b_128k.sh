@@ -41,8 +41,8 @@ export XMLIR_ENABLE_FAST_FC_FWD_OUT=true
 export XMLIR_ENABLE_FAST_FC_BWD_DW=true
 export XMLIR_ENABLE_FAST_FC_BWD_DX=true
 export SAVE_LOG_FILE_WITH_RANK_ID=true # 为true的话, 训练日志会按rank_id分开存储
-export XMLIR_LOG_PATH="./qwen3-8b" # 指定训练日志的存储目录
-export XMLIR_LOG_PREFIX="sft_tp1pp1dp8" # 指定训练日志文件名的前缀
+export XMLIR_LOG_PATH="log-path" # 指定训练日志的存储目录
+export XMLIR_LOG_PREFIX="log-file-prefix" # 指定训练日志文件名的前缀
 export P800_DEBUG=false # 为true的话, 训练grad norm出nan会保存ckpt后退出
 export P800_DUMP_DIR="ckpt-dump-dir-path" # 指定训练grad norm出nan会保存ckpt等信息dump的目录
 export XMLIR_DIST_ASYNC_ISEND_IRECV=1 # 设为true表示send/recv会走异步逻辑，默认为同步
@@ -94,7 +94,7 @@ SFT_ARGS=(
 TRAINING_ARGS=(
     --training-phase sft
     --init-method-std 0.006
-    --micro-batch-size 8
+    --micro-batch-size 1
     --global-batch-size 128
     --seq-length 131072
     --max-position-embeddings 131072
