@@ -43,6 +43,7 @@ except ImportError as exc:
 
 try:
     from flash_mla_fwd import flash_mla_sparse_fwd
+    from flash_mla_bwd import flash_mla_sparse_bwd
 except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 from .sparse_mla_bwd import sparse_mla_bwd_interface
@@ -233,7 +234,6 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
         indices_flash = indices
 
         sq = q.size(0)
-        log2e = 1.44269504
         
         out, _, lse, *p_out = flash_mla_sparse_fwd(
             q_flash,  # q: [s_q, h_q, d_qk], bfloat16
@@ -245,7 +245,7 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
             write_p_out=return_p_out
         )
 
-        ctx.save_for_backward(q_flash, kv_flash, indices_flash, out, lse / log2e)
+        ctx.save_for_backward(q_flash, kv_flash, indices_flash, out, lse)
         ctx.sm_scale = sm_scale
         ctx.chunk_offset = chunk_offset
         ctx.sq = sq
@@ -264,24 +264,32 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
         """
 
         q, kv, indices, out, lse = ctx.saved_tensors
-
-        offsets = torch.tensor([0, ctx.sq], dtype=torch.int32, device="cuda")
         grad_out = grad_out.squeeze(0).contiguous()
+        major, _ = torch.cuda.get_device_capability()
 
-        grad_q, grad_kv = sparse_mla_bwd_interface(
-            q,
-            kv,
-            out,
-            grad_out,
-            indices,
-            lse,
-            offsets,
-            chunk_offset=ctx.chunk_offset,
-            sm_scale=ctx.sm_scale,
-            return_kernel=False,
-            delta=None
-        )
-        
+        if major == 10:
+            grad_q, grad_kv = flash_mla_sparse_bwd(
+                q, kv, out, grad_out, indices, lse,
+                sm_scale=ctx.sm_scale,
+                q_start_index_s=ctx.chunk_offset,
+            )
+        else:
+            log2e = 1.44269504
+            offsets = torch.tensor([0, ctx.sq], dtype=torch.int32, device="cuda")
+            grad_q, grad_kv = sparse_mla_bwd_interface(
+                q,
+                kv,
+                out,
+                grad_out,
+                indices,
+                lse / log2e,
+                offsets,
+                chunk_offset=ctx.chunk_offset,
+                sm_scale=ctx.sm_scale,
+                return_kernel=False,
+                delta=None
+            )
+            
         return grad_q, grad_kv, None, None, None, None, None, None
 
 
