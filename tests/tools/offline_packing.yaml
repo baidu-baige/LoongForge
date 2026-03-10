@@ -1,7 +1,7 @@
 # Data path configuration
 data:
   # Webdataset sample directory - corresponds to vlm task output directory
-  wds_dir: "/workspace/omni_datasets/OmniTraining/offline_packing_data/"
+  wds_dir: "/mnt/cfs/OmniTrainingCI/omni_datasets/OmniTraining/offline_packing_data/"
   # Text field name
   template_text_key: "messages"
   # Directory for intermediate json results
@@ -13,7 +13,7 @@ model:
   model_type: "qwenvl"
   processor_kwargs:
     # Pretrained Model/Tokenizer path
-    pretrained_model_name_or_path: "/workspace/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
+    pretrained_model_name_or_path: "/mnt/cfs/OmniTrainingCI/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/"
     min_pixels: 3136   # 4*28*28
     max_pixels: 4014080 # 5120*28*28(4014080,8192)
     trust_remote_code: True

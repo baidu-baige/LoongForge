@@ -451,7 +451,10 @@ if __name__ == "__main__":
 
         from tqdm import tqdm
 
-        tty = open(os.devnull, "w") if os.name == "nt" else open("/dev/tty", "w")
+        try:
+            tty = open(os.devnull, "w") if os.name == "nt" else open("/dev/tty", "w")
+        except OSError:
+            tty = None
         for future in tqdm(
             as_completed(futures),
             total=len(futures),
