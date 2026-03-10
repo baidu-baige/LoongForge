@@ -153,11 +153,6 @@ RUN set -exuo pipefail && \
         local TE_TAGS="v2.9" && \
         echo "Installing TransformerEngine ${TE_TAGS}..." && \
         cd ${transformerEngine_dir} && \
-        if [ -f "/workspace/OmniTraining/patches/apply_patches.sh" ]; then \
-            bash /workspace/OmniTraining/patches/apply_patches.sh \
-                /workspace/OmniTraining/patches/TransformerEngine_${TE_TAGS} \
-                ${transformerEngine_dir}; \
-        fi && \
         local thirdparty_path="${transformerEngine_dir}/3rdparty" && \
         rm -rf ${thirdparty_path} && \
         mkdir -p ${thirdparty_path} && \
@@ -185,11 +180,6 @@ RUN set -exuo pipefail && \
         local MEGATRON_TAGS="core_v0.15.0" && \
         echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
         cd ${megatron_dir} && \
-        if [ -f "/workspace/OmniTraining/patches/apply_patches.sh" ]; then \
-            bash /workspace/OmniTraining/patches/apply_patches.sh \
-                /workspace/OmniTraining/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
-                ${megatron_dir}; \
-        fi && \
         echo "Megatron-LM setup completed"; \
     }; \
     install_lerobot() { \
