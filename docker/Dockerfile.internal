@@ -196,7 +196,7 @@ RUN set -exuo pipefail && \
         fi && \
         pip install "numpy==1.26" && \
         pip install "transformers@http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/aiak-training-llm/transformers-fix-lerobot_openpi-20251001-dcddb970.tar.gz" && \
-        pip install --no-build-isolation ".[pi]" && \
+        pip install --no-build-isolation . && \
         echo "Lerobot installation completed"; \
     }; \
     install_transformer_engine && \

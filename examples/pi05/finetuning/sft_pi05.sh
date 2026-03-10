@@ -9,7 +9,7 @@ set -euo pipefail
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
+export TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
 
 # Distributed launch (defaults single node)
@@ -33,6 +33,7 @@ DATA_ARGS=(
   --data-path $DATA_PATH
   --split 100,0,0
   --chat-template empty
+  --num-workers 16
 )
 
 # Core training args — pi05 trainer only needs minimal Megatron flags
@@ -40,11 +41,11 @@ TRAINING_ARGS=(
     --use-megatron-fsdp
     --data-parallel-sharding-strategy optim
     --training-phase sft
-    --micro-batch-size 12
-    --global-batch-size 96
+    --micro-batch-size 16
+    --global-batch-size 128
     --train-iters 30000
-    --seq-length 1024
-    --max-position-embeddings 1024
+    --seq-length 762
+    --max-position-embeddings 762
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 1
     --no-masked-softmax-fusion
@@ -57,7 +58,7 @@ TRAINING_ARGS=(
     --min-lr 0
     --lr-decay-style cosine
     --lr-warmup-iters 0
-    --lr-decay-iters $TRAIN_ITERS
+    --lr-decay-iters 30000
     --clip-grad 1.0
     --adam-beta1 0.9
     --adam-eps 1e-8
@@ -73,6 +74,7 @@ TRAINING_ARGS=(
     --main-grads-dtype bf16
     --num-distributed-optimizer-instances 1
     --save $CHECKPOINT_PATH
+    --save-interval 30000
 )
 
 MODEL_CONFIG_ARGS=(
