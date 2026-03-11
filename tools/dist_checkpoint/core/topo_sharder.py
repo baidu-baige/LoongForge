@@ -5,7 +5,8 @@ This module initializes Megatron-Core parallel_state with ParallelConfig
 and provides a unified interface to query rank information.
 """
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
+import torch
 import torch.distributed as dist
 
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -130,5 +131,40 @@ class TopoSharder:
             etp_rank = None
 
         return (tp_rank, pp_rank, ep_rank, etp_rank, dp_rank)
+
+    def build_rank_mapping_table(self) -> dict:
+        """
+        Build a mapping table from (pp, tp, ep) coordinates to list of global ranks.
+
+        All ranks report their coordinates using gather_object, rank 0 builds lookup table.
+        When DP > 1, multiple ranks share the same (pp, tp, ep) coordinates, so value is a list.
+
+        Returns:
+            dict: {(pp_rank, tp_rank, ep_rank): [global_rank, ...], ...}
+                   Only valid on rank 0. Other ranks receive empty dict.
+        """
+        rank = dist.get_rank()
+
+        # Get current rank's coordinates
+        tp_rank, pp_rank, ep_rank, etp_rank, dp_rank = self.get_current_rank_coordinates()
+
+        # Prepare coordinate data: (global_rank, pp, tp, ep)
+        coord_tuple = (rank, pp_rank, tp_rank, ep_rank)
+
+        # Gather all coordinates to rank 0
+        gather_list = [None] * self.world_size if rank == 0 else None
+        dist.gather_object(coord_tuple, gather_list if rank == 0 else None, dst=0)
+
+        if rank == 0:
+            # Build lookup table: (pp, tp, ep) -> list of global_ranks
+            lookup_table = {}
+            for global_rank, pp, tp, ep in gather_list:
+                key = (pp, tp, ep)
+                if key not in lookup_table:
+                    lookup_table[key] = []
+                lookup_table[key].append(global_rank)
+            return lookup_table
+        else:
+            return {}
 
 
