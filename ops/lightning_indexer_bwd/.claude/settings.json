@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport json, sys, os\ntry:\n    result = json.load(sys.stdin)\nexcept Exception:\n    sys.exit(0)\ntool = result.get('tool_name', '')\nif tool not in ('Edit', 'Write'):\n    sys.exit(0)\npath = ''\nif tool == 'Edit':\n    path = result.get('tool_input', {}).get('file_path', '')\nelif tool == 'Write':\n    path = result.get('tool_input', {}).get('file_path', '')\nif path.endswith('CLAUDE.md') and not path.endswith('CLAUDE.zh.md'):\n    print('[sync-reminder] CLAUDE.md was modified -- remember to also update CLAUDE.zh.md', flush=True)\n\""
+          }
+        ]
+      }
+    ]
+  }
+}

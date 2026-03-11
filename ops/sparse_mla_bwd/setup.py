@@ -1,5 +1,5 @@
 """
-setup sparse_mla_forward.
+setup sparse_mla_backward.
 """
 import os
 from pathlib import Path
@@ -46,7 +46,7 @@ def get_arch_flags():
     print(f'Compiling using NVCC {major}.{minor}')
 
     if major < 12 or (major == 12 and minor <= 8):
-        raise RuntimeError("sm100 compilation for Flash MLA FWD requires NVCC 12.9 or higher. "
+        raise RuntimeError("sm100 compilation for Flash MLA BWD requires NVCC 12.9 or higher. "
                            "Please update your environment.")
 
     arch_flags = ["-gencode", "arch=compute_100f,code=sm_100f"]
@@ -71,10 +71,10 @@ else:
 ext_modules = []
 ext_modules.append(
     CUDAExtension(
-        name="flash_mla_fwd.cuda",
+        name="flash_mla_bwd.cuda",
         sources=[
               "src/pybind.cpp",
-              "src/sm100/sparse_mla_fwd.cu",
+              "src/sm100/sparse_mla_bwd.cu",
         ],
         extra_compile_args={
             "cxx": cxx_args + get_features_args(),
@@ -115,9 +115,9 @@ except Exception as _:
 
 
 setup(
-    name="flash_mla_fwd",
+    name="flash_mla_bwd",
     version="1.0.0" + rev,
-    packages=find_packages(include=['flash_mla_fwd']),
+    packages=find_packages(include=['flash_mla_bwd']),
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExtension},
 )

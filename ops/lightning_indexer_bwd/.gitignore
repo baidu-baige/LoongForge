@@ -1,0 +1,24 @@
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# Auto-generated vendor directory (populated at build time)
+vendor/
+
+# Local dev reference sources (not for distribution)
+third_party/
+
+# Kernel refactor/optimize sandbox (deleted after graduating to main library)
+workspace/
+
+# Chinese CLAUDE (local reading only; English CLAUDE.md is committed)
+CLAUDE.zh.md
+
+# Compiled artifacts
+*.so
+*.o
+*.a

@@ -16,6 +16,7 @@ def flash_mla_sparse_fwd(
     d_v: int = 512,
     q_start_index_s: int = 0,
     write_p_out: bool = False,
+    topk_length: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Sparse attention prefill kernel
@@ -38,7 +39,7 @@ def flash_mla_sparse_fwd(
         - p_out: [s_q, h_q, topk], float32, probability（write_p_out=False 时为None）
     """
     results = flash_mla_cuda.sparse_prefill_fwd(
-        q, kv, indices, sm_scale, d_v, q_start_index_s, write_p_out
+        q, kv, indices, sm_scale, d_v, q_start_index_s, write_p_out, topk_length
     )
     return results
 

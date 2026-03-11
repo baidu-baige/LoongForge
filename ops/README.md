@@ -36,8 +36,22 @@ Sparse MLA forward is dependent on FlashMLA. Please manually clone FlashMLA firs
 
 ```bash
 cd sparse_mla_fwd
-git clone --revision ebf30641e27b777c22c38968b8c0aa38da1bac19 https://github.com/deepseek-ai/FlashMLA.git FlashMLA
+git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA
 cd FlashMLA
+git checkout 47c35a712362f11bc235854ead51819ad76f5a81
+git submodule update --init --recursive
+cd ../
+pip install -v .
+```
+
+### Install sparse mla bwd
+Sparse MLA backward is dependent on FlashMLA. Please manually clone FlashMLA first:
+
+```bash
+cd sparse_mla_bwd
+git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA
+cd FlashMLA
+git checkout 47c35a712362f11bc235854ead51819ad76f5a81
 git submodule update --init --recursive
 cd ../
 pip install -v .
