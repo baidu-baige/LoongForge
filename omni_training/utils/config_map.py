@@ -17,6 +17,15 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3",
     },
+    "deepseek-v3.2-sparse": {
+        "config_path": "configs/models/deepseek3",
+        "config_name": "deepseek_v3_2_sparse",
+    },
+    "deepseek-v3.2-warmup": {
+        "config_path": "configs/models/deepseek3",
+        "config_name": "deepseek_v3_2_warmup",
+    },
+
     # llama
     "llama2-7b": {
         "config_path": "configs/models/llama2",
@@ -50,6 +59,7 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/llama3",
         "config_name": "llama3_1_405b",
     },
+
     # qwen
     "qwen-1.8b": {
         "config_path": "configs/models/qwen",
@@ -179,42 +189,117 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/qwen3",
         "config_name": "qwen3_coder_30b_a3b",
     },
+
     # qwen3-next-80b-a3b
     "qwen3-next-80b-a3b": {
         "config_path": "configs/models/qwen3_next",
         "config_name": "qwen3_next_80b_a3b",
     },
+
     # qwen2.5-vl
-    "qwen2_5-vl-7b": {
+    "qwen2.5-vl-3b": {
+        "config_path": "configs/models/qwen2.5_vl",
+        "config_name": "qwen2_5_vl_3b",
+    },
+    "qwen2.5-vl-3b-lora": {
+        "config_path": "configs/models/qwen2.5_vl",
+        "config_name": "qwen2_5_vl_3b_lora",
+    },
+    "qwen2.5-vl-7b": {
         "config_path": "configs/models/qwen2.5_vl",
         "config_name": "qwen2_5_vl_7b",
     },
+    "qwen2.5-vl-32b": {
+        "config_path": "configs/models/qwen2.5_vl",
+        "config_name": "qwen2_5_vl_32b",
+    },
+    "qwen2.5-vl-72b": {
+        "config_path": "configs/models/qwen2.5_vl",
+        "config_name": "qwen2_5_vl_72b",
+    },
 
-    #qwen3-vl
-    "qwen3_vl_30b_a3b": {
+    # internvl 2.5
+    "internvl2.5-8b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_8b",
+    },
+    "internvl2.5-26b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_26b",
+    },
+    "internvl2.5-38b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_38b",
+    },
+    "internvl2.5-78b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_78b",
+    },
+
+    # internvl 3.5
+    "internvl3.5-8b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_8b",
+    },
+    "internvl3.5-14b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_14b",
+    },
+    "internvl3.5-30b-a3b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_30b_a3b",
+    },
+    "internvl3.5-38b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_38b",
+    },
+    "internvl3.5-241b-a28b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_241b_a28b",
+    },
+
+    # llavaov 1.5
+    "llava-onevision-1.5-4b": {
+        "config_path": "configs/models/llava_onevision",
+        "config_name": "llava_onevision_1_5_4b",
+    },
+
+    # qwen3-vl
+    "qwen3-vl-30b-a3b": {
         "config_path": "configs/models/qwen3_vl",
         "config_name": "qwen3_vl_30b_a3b",
     },
-    #wan2.2
-    "wan2_2_i2v": {
-        "config_path": "configs/models/wan",
-        "config_name": "wan2_2_i2v",
+    "qwen3-vl-235b-a22b": {
+        "config_path": "configs/models/qwen3_vl",
+        "config_name": "qwen3_vl_235b_a22b",
     },
-    #wan2.1
-    "wan2_1_i2v": {
+
+    # wan2.1
+    "wan2-1-i2v": {
         "config_path": "configs/models/wan",
         "config_name": "wan2_1_i2v",
     },
 
+    # wan2.2
+    "wan2-2-i2v": {
+        "config_path": "configs/models/wan",
+        "config_name": "wan2_2_i2v",
+    },
+
+    # pi05
     "pi05": {
         # Hydra expects the directory, config name selects the file.
         "config_path": "configs/models/pi05",
         "config_name": "pi05",
     },
+
+    # mimo
     "mimo": {
         "config_path": "configs/models/mimo",
         "config_name": "mimo_7b",
     },
+
+    # minimax
     "minimax2.1-230b": {
         "config_path": "configs/models/minimax",
         "config_name": "minimax_m2_1",
@@ -223,10 +308,15 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/minimax",
         "config_name": "minimax_m2_5",
     },
+
     # ernie4.5-vl
-    "ernie4_5_28b_a3b_base": {
+    "ernie4.5-28b-a3b-base": {
         "config_path": "configs/models/ernie4.5vl",
         "config_name": "ernie4_5_28b_a3b_base",
+    },
+    "ernie4.5-vl-28b-a3b": {
+        "config_path": "configs/models/ernie4.5vl",
+        "config_name": "ernie4_5_vl_28b_a3b",
     },
 }
 

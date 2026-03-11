@@ -2,12 +2,12 @@ AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 AIAK_MAGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 TP="${1:-1}"
 PP="${2:-1}"
-SEQ_LEN="${3:-9192}"
+SEQ_LEN="${3:-32768}"
 MBS="${4:-1}"
-GBS="${5:-32}"
-NSTEP="${6:-21000}"
+GBS="${5:-8}"
+NSTEP="${6:-2500}"
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/mllm/demo/wds/"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/llava_ov_1.5/rice_vl_30b_a3b_init_hf_1600px"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVision-1.5-4B-stage0_mcore_tp1_pp1"}
 
 #! /bin/bash
@@ -71,6 +71,7 @@ else
 fi
 # --- End of Multi-node configuration ---
 
+
 SAVE_CKPT_PATH=$(basename "$0" .sh)
 TENSORBOARD_PATH="${SAVE_CKPT_PATH}/tensorboard"
 
@@ -97,8 +98,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llavaov1.5/llavaov_1_5_30b_a3b.yaml
-
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path "$TOKENIZER_PATH"
@@ -112,65 +112,44 @@ DATA_ARGS=(
 
 TRAINING_ARGS=(
     --training-phase pretrain
-    --seq-length ${SEQ_LEN}
-    --max-position-embeddings 9192
+    --seq-length "${SEQ_LEN}"
+    --max-position-embeddings 32768
     --init-method-std 0.02
-    --micro-batch-size ${MBS}
-    --global-batch-size ${GBS}
-    --lr 1.0e-5
+    --micro-batch-size "${MBS}"
+    --global-batch-size "${GBS}"
+    --lr 1.0e-4
     --min-lr 1.0e-6
     --clip-grad 1.0
-    --weight-decay 0.0 # gai 0.01
+    --weight-decay 0
     --optimizer adam
     --adam-beta1 0.9
-    --adam-beta2 0.95
+    --adam-beta2 0.99
     --adam-eps 1e-05
     --norm-epsilon 1e-6
-    --train-iters $NSTEP
-    --lr-decay-iters $NSTEP
+    --train-iters "$NSTEP"
+    --lr-decay-iters "$NSTEP"
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
     --initial-loss-scale 65536
     --bf16
-    --load $CHECKPOINT_PATH
-    #--save $SAVE_CKPT_PATH
-    --save-interval 1000
+    --load "$CHECKPOINT_PATH"
+    --save "$SAVE_CKPT_PATH"
+    --save-interval 2000
     --ckpt-format torch
-    # --no-save-optim
+    --dataloader-save "${SAVE_CKPT_PATH}/dataloader"
 
     --ckpt-fully-parallel-load
     --recompute-granularity full
     --recompute-method uniform
-    --recompute-num-layers 1
+    --recompute-num-layers 4
 )
 
 MODEL_PARALLEL_ARGS=(
-    --pipeline-model-parallel-size 2
-    --expert-model-parallel-size 8
-    #--sequence-parallel
     --attention-backend flash
+    --pipeline-model-parallel-size "${PP}"
+    --tensor-model-parallel-size "${TP}"
     --use-distributed-optimizer
-    --overlap-grad-reduce
-    --overlap-param-gather
     --distributed-backend nccl
-)
-
-MOE_ARGS=(
-    --moe-token-dispatcher-type alltoall
-    --moe-router-load-balancing-type aux_loss
-    --moe-router-topk 8
-    --moe-aux-loss-coeff 0.01
-    --moe-router-dtype fp32
-    --no-masked-softmax-fusion
-    --disable-bias-linear
-    --position-embedding-type rope
-    --no-rope-fusion
-    --normalization RMSNorm
-    --swiglu
-    --no-bias-swiglu-fusion
-    --rotary-base 10000000
-    --use-mcore-models
-    --moe-per-layer-logging
 )
 
 MODEL_CONFIG_ARGS=(
@@ -193,17 +172,17 @@ fi
 TM=$(date "+%Y-%m-%d_%H:%M:%S")
 logfile="${SAVE_CKPT_PATH}/run_${TM}_tp${TP}_pp${PP}_seqlen${SEQ_LEN}_mbs${MBS}_gbs${GBS}_${NSTEP}steps.log"
 
-# export OFFLINE_PACKED_DATA='1'
-# export OFFLINE_PACKING_VQA='1'
-# export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
-# export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
+export OFFLINE_PACKED_DATA='1'
+export OFFLINE_PACKING_VQA='1'
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
 PYTHONPATH="$AIAK_MAGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
     "$AIAK_TRAINING_PATH/omni_training/train.py" \
     "${DATA_ARGS[@]}" \
+    ${IMG_ARGS:+${IMG_ARGS[@]}} \
     "${MODEL_CONFIG_ARGS[@]}" \
-    "${MOE_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
     "${MODEL_PARALLEL_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \

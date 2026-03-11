@@ -43,10 +43,10 @@ Once inside the container, navigate to `/workspace/OmniTraining/examples/` and l
 You already have a stable local installation of Megatron-LM / TransformerEngine and want to do secondary development or debugging on top of the upstream code.
 
 ### 2.2 Patch files overview
-The project contains the following key directories:
+The project contains the following key directories, the suffix of the folder name corresponds to the community tag.
 
-* `patches/Megatron-LM/` – patches for the community Megatron-LM
-* `patches/TransformerEngine/` – patches for the community TransformerEngine
+* `patches/Megatron-LM_v0.15.0/` – patches for the community Megatron-LM
+* `patches/TransformerEngine_v2.9/` – patches for the community TransformerEngine
 
 ### 2.3 Automated Environment Setup
 We provide a helper script `setup_env.py` to automate the entire process, including cloning repositories, switching tags, applying patches, building TransformerEngine, and installing dependencies.

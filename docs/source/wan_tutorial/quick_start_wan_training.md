@@ -214,7 +214,7 @@ torchrun --nproc_per_node $GPUS_PER_NODE \
          --nnodes $NNODES --node_rank $NODE_RANK \
          --master_addr $MASTER_ADDR --master_port $MASTER_PORT \
   $AIAK_TRAINING_PATH/omni_training/train.py \
-  --model-name wan2_1_i2v \
+  --model-name wan2-1-i2v \
   --tokenizer-type NullTokenizer --vocab-size 0 \
   --data-path $METADATA_PATH --dataset-base-path $DATASET_BASE_PATH \
   --dataloader-type external \

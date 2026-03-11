@@ -28,7 +28,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name wan2_2_i2v
+    --model-name wan2-2-i2v
 )
 
 DATA_ARGS=(

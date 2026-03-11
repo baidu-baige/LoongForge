@@ -86,7 +86,7 @@ DISTRIBUTED_ARGS=(
 )
  
 MODEL_ARGS=(
-    --model-name qwen3_vl_30b_a3b
+    --model-name qwen3-vl-30b-a3b
 )
  
 DATA_ARGS=(
