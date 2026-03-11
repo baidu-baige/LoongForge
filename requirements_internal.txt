@@ -33,6 +33,15 @@ https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch2
 # flash-attn3, 基于 https://github.com/Dao-AILab/flash-attention/commit/d063b333baae9c6066fe003be18c426eb602cbf3
 https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_attn_3-3.0.0b1-cp39-abi3-linux_x86_64.whl
 
+# fast-hadamard-transform
+https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/fast_hadamard_transform-1.0.4.post1-cp312-cp312-linux_x86_64.whl
+
+# flash-mla-fwd
+https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_fwd-1.0.0+2026.3.10.19.18.23-cp312-cp312-linux_x86_64.whl
+
+# lightning-indexer-bwd
+https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lightning_indexer_bwd-1.0.0-cp312-cp312-linux_x86_64.whl
+
 tiktoken==0.5.2
 
 # =====================
@@ -43,6 +52,7 @@ timm==1.0.3
 pandarallel
 webdataset==0.2.111
 regex
+natsort==8.4.0
 
 # =====================
 # NLP / dataset utils
@@ -62,6 +72,13 @@ swanlab
 # Vision / misc
 # =====================
 opencv-python-headless==4.11.0.86
+
+# =====================
+# FlashInfer / TileLang
+# =====================
+flashinfer-python==0.6.2
+flashinfer-cubin==0.6.2
+tilelang==0.1.7post1
 
 # =====================
 # Megatron / Qwen

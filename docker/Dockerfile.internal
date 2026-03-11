@@ -124,21 +124,38 @@ RUN set -exuo pipefail && \
         cd .. && \
         rm -rf AIAK-FP8-Quantization AIAK-FP8-Quantization.tar.gz; \
     }; \
+    install_deepgemm() { \
+        echo "Installing DeepGEMM..." && \
+        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/DeepGEMM.tar.gz && \
+        tar -zxf DeepGEMM.tar.gz && \
+        cd DeepGEMM && \
+        git status && \
+        git reset --hard HEAD && \
+        git submodule foreach --recursive 'git reset --hard HEAD || true' && \
+        git submodule foreach --recursive 'git clean -fdx || true' && \
+        git clean -fdx && \
+        pip install -v . && \
+        cd .. && \
+        rm -rf DeepGEMM DeepGEMM.tar.gz; \
+    }; \
+    install_flashmla() { \
+        echo "Installing FlashMLA..." && \
+        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/FlashMLA.tar.gz && \
+        tar -zxf FlashMLA.tar.gz && \
+        pip install -v ./FlashMLA; \
+        rm -rf FlashMLA FlashMLA.tar.gz; \
+    }; \
+    update_flash_attn3_path_for_te && \
+    install_aiak_fp8_quant && \
+    upgrade_cudnn_9_16_0 && \
+    install_deepgemm && \
+    install_flashmla && \
     if [ "${COMPILE_ENV}" = "ampere" ]; then \
-        update_flash_attn3_path_for_te && \
-        install_deepep "8.0" "1" && \
-        install_aiak_fp8_quant && \
-        upgrade_cudnn_9_16_0; \
+        install_deepep "8.0" "1"; \
     elif [ "${COMPILE_ENV}" = "hopper" ]; then \
-        update_flash_attn3_path_for_te && \
-        install_deepep "9.0" "0" && \
-        install_aiak_fp8_quant && \
-        upgrade_cudnn_9_16_0; \
+        install_deepep "9.0" "0"; \
     elif [ "${COMPILE_ENV}" = "blackwell" ]; then \
-        update_flash_attn3_path_for_te && \
-        install_deepep "10.0" "0" && \
-        install_aiak_fp8_quant && \
-        upgrade_cudnn_9_16_0; \
+        install_deepep "10.0" "0"; \
     else \
         echo "[ERROR] Unsupported COMPILE_ENV value: ${COMPILE_ENV}" && \
         exit 1; \
