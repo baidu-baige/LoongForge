@@ -15,12 +15,13 @@
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
+export NCCL_DEBUG=WARNING
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/ssd1/sunyuehang/Qwen2.5-7B-Instruct/"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/ssd1/sunyuehang/qwen2.5-7b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-7B-Instruct/"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-7b-roundtrip-output"}
 
 GPUS_PER_NODE=4
 
@@ -63,7 +64,7 @@ TRAINING_ARGS=(
     --no-load-rng            # skip RNG state
     --load $TOKENIZER_PATH   # original HF checkpoint
     --save-hf-path $SAVE_HF_PATH
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen2.5_7b.yaml
+    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_7b.yaml
 )
 
 MODEL_PARALLEL_ARGS=(

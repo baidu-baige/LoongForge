@@ -1,29 +1,17 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test
-# Based on bridge_debug.sh — removes training loop, adds roundtrip comparison.
-#
-# Usage:
-#   bash bridge_roundtrip.sh
-#
-# What it does:
-#   1. Builds the Megatron model (same as training)
-#   2. Loads the HF checkpoint into the model (load_hf_checkpoint_online)
-#   3. Saves model weights back to HF format  (save_hf_checkpoint_online)
-#   4. Compares original vs roundtripped weights tensor-by-tensor
-#   Report is written to $SAVE_HF_PATH/roundtrip_comparison.json
+# HF Checkpoint Roundtrip Test for Qwen2.5-32B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-export CUDA_VISIBLE_DEVICES=4,5,6,7
 export NCCL_DEBUG=WARNING
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-0.5B-Instruct"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-32B-Instruct/"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-32b-roundtrip-output"}
 
-GPUS_PER_NODE=4
+GPUS_PER_NODE=8
 
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"12345"}
@@ -39,12 +27,11 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name qwen2.5-0.5b
+    --model-name qwen2.5-32b
     --rotary-base 1000000
     --rotary-seq-len-interpolation-factor 1
 )
 
-# Tokenizer is needed by initialize_aiak_megatron → set_aiak_extra_global_vars
 TOKENIZER_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path $TOKENIZER_PATH
@@ -58,24 +45,24 @@ TRAINING_ARGS=(
     --global-batch-size 1
     --bf16
     --norm-epsilon 1e-6
-    # --- roundtrip-specific ---
-    --train-iters 0          # no training, only load + save
-    --no-load-optim          # skip optimizer state
-    --no-load-rng            # skip RNG state
-    --load $TOKENIZER_PATH   # original HF checkpoint
+    --train-iters 0
+    --no-load-optim
+    --no-load-rng
+    --load $TOKENIZER_PATH
     --save-hf-path $SAVE_HF_PATH
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_0.5b.yaml
+    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_32b.yaml
 )
 
+# For 32B model: tp_size=2, pp_size=4
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 2
-    --pipeline-model-parallel-size 2
+    --pipeline-model-parallel-size 4
     --distributed-backend nccl
 )
 
 echo "========================================"
-echo "HF Roundtrip Test"
+echo "HF Roundtrip Test for Qwen2.5-32B"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"

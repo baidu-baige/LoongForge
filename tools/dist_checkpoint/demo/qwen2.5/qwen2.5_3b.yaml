@@ -1,0 +1,9 @@
+# Configuration file paths
+config:
+  model_config_file: configs/models/qwen2.5/qwen2_5_3b.yaml
+  convert_file: configs/models/qwen2.5/ckpt_convert/qwen2_5_convert_llm.yaml
+
+# Parallel strategy parameters
+param_dict:
+  tp_size: 2
+  pp_size: 2
