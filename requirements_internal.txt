@@ -37,7 +37,10 @@ https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch2
 https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/fast_hadamard_transform-1.0.4.post1-cp312-cp312-linux_x86_64.whl
 
 # flash-mla-fwd
-https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_fwd-1.0.0+2026.3.10.19.18.23-cp312-cp312-linux_x86_64.whl
+https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_fwd-1.0.0+2026.3.11.14.1.21-cp312-cp312-linux_x86_64.whl
+
+# flash-mla-bwd
+https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_bwd-1.0.0+10a2cc4-cp312-cp312-linux_x86_64.whl
 
 # lightning-indexer-bwd
 https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lightning_indexer_bwd-1.0.0-cp312-cp312-linux_x86_64.whl
