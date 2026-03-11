@@ -1,5 +1,17 @@
 """
+Adjusted from megatron.core.transformer.experimental_attention_variant.dsa (MegatronLM).
+
 Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
+Fused DSA (DeepSeek Sparse Attention) implementation. Avoids materializing full [sq, sk] tensors
+to reduce memory for long-sequence training. Key differences from the original:
+
+1. Fused indexer kernel (CUDA) replaces einsum-based [b, sq, sk] score materialization.
+2. Fused attention kernel (CUDA + TileLang) replaces bmm-based [b, np, sq, skv] computation.
+3. Packed sequence (thd format) support with cu_seqlens sharding.
+4. Sparse KL loss on [s/TP, topk] subset via triton_attn_dist, with immediate backward().
+5. MQA absorbed KV layout: query [sq, b, h, kv_lora_rank], key [skv, b, kv_lora_rank], no value.
+6. RoPE splits [pe, nope] (PE-first) vs original's [nope, pe].
 """
 
 import copy
