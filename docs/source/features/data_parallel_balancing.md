@@ -84,7 +84,7 @@ After every `get_batch`:
 Fixed **tensor-parallel = 4**, InternVL on *** dataset.  
 Average tokens / GPU / sec (TGS) vs. DP size:
 
-![Average TGS vs. DP size with and without data reorganization](../../../assets/_images/dp_balancing.png)
+![Average TGS vs. DP size with and without data reorganization](../../assets/images/dp_balancing.png)
 
 * **Small DP (4 / 8 / 16)**  
   – With or without reordering: almost identical TGS → imbalance is negligible.

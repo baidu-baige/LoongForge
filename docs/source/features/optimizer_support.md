@@ -69,9 +69,9 @@ export OMP_NUM_THREADS=8
 ## 4. Performance Tuning for Low-Precision Optimizers  
 We ship an optimized version of TransformerEngine’s low-precision optimizer (BF16 only).  
 *Original TE step time ≈ 1.34 s*  
-![origin_te](../../../assets/_images/ori_te_optimizer.png)
+![origin_te](../../assets/images/ori_te_optimizer.png)
 *Optimized step time ≈ 358 ms*
-![after_opt](../../../assets/_images/now_optimizer.png)
+![after_opt](../../assets/images/now_optimizer.png)
 
 The faster path is enabled automatically when a low-precision optimizer is used.  
 To force the original TE implementation:

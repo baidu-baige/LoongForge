@@ -37,7 +37,7 @@ In long-context training the activation memory grows rapidly with sequence lengt
 However, the 1F1B A2A overlap strategy relies on module-wise interleaving of adjacent batches, making traditional full-layer recomputation incompatible.
 
 To solve this, the framework introduces **module-level selective recomputation plus fine-grained activation offload**, approximating the memory savings of full-layer recomputation while preserving the overlap schedule (see figure).
-![offload_stream](../../../assets/_images/offload.png)
+![offload_stream](../../assets/images/offload.png)
 
 ### Features
 * Activation offload & reload hidden behind compute  

@@ -1,6 +1,6 @@
 <div align="center">
 
-![OmniTraining Logo](assets/_images/omni.jpg)
+![OmniTraining Logo](docs/assets/images/omni.jpg)
 
 <h4> Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h4>
 
@@ -8,127 +8,129 @@
 
 </div>
 
-## Introduction
+## About
 
-**OmniTraining** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is an efficient, user-friendly, and production-hardened toolchain for training large-scale transformer models across diverse modalities and scales. By continuously adapting to emerging architectures and tackling performance bottlenecks through deep optimization, it provides full-scenario support for a highly efficient, seamless training experience.
+**OmniTraining** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is a high-efficiency training framework designed for large-scale transformer models across diverse modalities and architectures.Through continuous adaptation to emerging model structures and deep optimization of performance, OmniTraining delivers a comprehensive, production-ready training solution.
 
-* **🚀 Broad Model Support**: Natively supports mainstream model architectures, including LLMs, VLMs, VLAs, and Diffusion Models. It covers the full pipeline from pre-training and mid-training to sft, with core strategies fully validated in production environments.
+* **🚀 Comprehensive Model Coverage**: Natively supports mainstream model architectures including LLMs (Large Language Models), VLMs (Vision-Language Models), VLAs (Vision-Language-Action Models), and Diffusion Models. It covers key training workflows including pre-training, continued pre-training, and SFT (Supervised Fine-Tuning), with core strategies validated in production environments.
 
-* **⚡ High-Performance Optimization**: Built upon Megatron with in-depth enhancements while preserving compatibility with its existing optimization strategies. It further delivers more optimizations across communication, computation, and memory management, and resolves several critical issues in the original version. Effective performance optimization can significantly reduce training costs.
+* **⚡ Performance-Driven Optimization**: Built on Megatron with additional enhancements while maintaining full compatibility with existing optimization strategies. OmniTraining delivers advanced optimizations across communication, computation, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
 
-* **🧪 Heterogeneous Hardware Compatibility**: Designed for heterogeneous hardware environments, OmniTraining provides native, high-performance support for both NVIDIA GPUs and Baidu Kunlun NPUs, ensuring seamless migration and stable training across different hardware backends.
+* **🧪 Heterogeneous Hardware Support**: OmniTraining provides native, high-performance support for both NVIDIA GPUs and Kunlun XPUs, enabling seamless migration and stable training across different hardware backends.
 
 
 ## Latest News 🔥
-- [2026/02] We have released the OmniTraining framework! An advanced large model training framework.
-
-<details>
-<summary>More</summary>
-
-- [2025/09] AIAK-Training-LLM (earlier version of OmniTraining) powered the training of the official **[LLaVA-OneVision-1.5](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)** release.
-
-</details>
-
+- [2026/03] Initial release of OmniTraining framework!
 
 ## ✨ Key Features
 
-* Flexible networking, we support flexible combination of different components in VLM, such as LLM/VIT, etc. See [model_combination.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/model_combination.md) for details.
-* Heterogeneous TP, supporting different TP size splitting for different components in VLM to cope with various model sizes, see [heterogeneous_tp_parallel.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/heterogeneous_tp_parallel.md) for details.
-* DP data balance, optimizing the data parallel load imbalance problem introduced by data packing, see [data_parallel_balance.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/data_parallel_balancing.md) for details.
-* Offline data packing, supporting offline data packing to reduce the number of padding tokens during training, see [offline_data_packing.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/offline_data_packing.md) for details.
-* FP8 training, supporting FP8 precision training, see [fp8_training.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/fp8_training.md) and [fp8_training_for_vlm](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/fp8_training_for_vlm.md) for details.
-* MOE optimization, the framework optimizes the training performance of MOE models, see [moe_all2all_overlap.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/moe_all2all_overlap.md) for details.
+* **Training Backends**: Supports Megatron and Megatron-FSDP training backends.
+* **Model Support**: Extensive open-source model coverage with built-in configs and scripts for quick deployment.
+* **Flexible Composition**: Enable custom VLMs by combining ViT, LLM, and other components through configuration. [Details](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/model_combination.md)
+* **Training Methods**: Supports Pretrain, MidTrain, SFT, and LoRA.
+* **Data Processing**: Tools for building datasets, including data packing to reduce padding tokens during training.
+* **Weight Conversion**: Bidirectional Megatron ↔ HuggingFace weight conversion supporting FP8, BF16, and other precisions.
+* **FP8 Training**: Production-validated FP8 precision training for [LLM](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/fp8_training.md) and [VLM](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/fp8_training_for_vlm.md).
+* **MoE Optimization**: All2All communication + activation tensor offload + computation overlap for memory reduction and communication optimization in LLMs/VLMs. [Details](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/moe_all2all_overlap.md)
+* **Heterogeneous Parallelism**: Supports different TP/DP sizes per VLM component to improve training throughput. [Details](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/heterogeneous_tp_parallel.md)
+* **DP Load Balancing**: Optimizes data parallel load imbalance from data packing, improving multi-node speedup for VLM training. [Details](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/features/data_parallel_balancing.md)
+* **MTP Training**: Multi-head MTP features supporting different model design needs or MTP head extension, with weight sharing/independence options and cascade/serial computation modes.
+* **Custom Operators**: High-performance fused operators like FusedDSA, which integrates flashmla and indexer forward operators with custom backward operators (essential for training) to accelerate DSA model training.
+* **Heterogeneous Hardware**: Supports NVIDIA GPUs and Kunlun XPUs, with XPU_Plugin to minimize intrusive changes for XPU adaptation.
 
 
-## Documentation
-🔔🔔🔔Please refer to the [documentation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/) for detailed usage and features of the framework.
+🔔🔔🔔 Please refer to the [documentation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/) for detailed usage and features of the framework.
 
-## Support Model
+## Supported Models
 
-|**Model Type**|**Model Category**|**Model**|**Pretrain**|**SFT**|**Config**|
-|-|-|-|-|-|-|
-|LLM|DeepSeek-V2|deepseek_v2|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_group.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_group.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/deepseek2/deepseek_v2.yaml)|
-|||deepseek_v2_lite|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v2/pretrain/pretrain_deepseek_v2_lite_group.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v2/finetuning/sft_deepseek_v2_lite_group.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/deepseek2/deepseek_v2_lite.yaml)|
-||DeepSeek-V3|deepseek_v3_bf16|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_bf16.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_bf16.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/deepseek3/deepseek_v3.yaml)|
-|||deepseek_v3_fp8|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/deepseek_v3/finetuning/sft_deepseek_v3_group_fp8.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/deepseek3/deepseek_v3.yaml)|
-||Llama2|llama2_7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama2/pretrain/pretrain_llama2_7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama2/finetuning/sft_llama2_7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama2/llama2_7b.yaml)|
-|||llama2_13b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama2/pretrain/pretrain_llama2_13b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama2/finetuning/sft_llama2_13b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama2/llama2_13b.yaml)|
-|||llama2_70b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama2/pretrain/pretrain_llama2_70b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama2/finetuning/sft_llama2_70b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama2/llama2_70b.yaml)|
-||Llama3|llama3_8b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3/pretrain/pretrain_llama3_8b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3/finetuning/sft_llama3_8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama3/llama3_8b.yaml)|
-|||llama3_70b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3/pretrain/pretrain_llama3_70b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3/finetuning/sft_llama3_70b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama3/llama3_70b.yaml)|
-||Llama3.1|llama3.1_8b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_8b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3.1/finetuning/sft_llama3.1_8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama3/llama3_1_8b.yaml)|
-|||llama3.1_70b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_70b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3.1/finetuning/sft_llama3.1_70b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama3/llama3_1_70b.yaml)|
-|||llama3.1_405b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3.1/pretrain/pretrain_llama3.1_405b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llama3.1/finetuning/sft_llama3.1_405b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llama3/llama3_1_405b.yaml)|
-||Qwen|qwen_1.8b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/pretrain/pretrain_qwen_1.8b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/finetuning/sft_qwen_1.8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen_1_8b.yaml)|
-|||qwen_7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/pretrain/pretrain_qwen_7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/finetuning/sft_qwen_7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen_7b.yaml)|
-|||qwen_14b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/pretrain/pretrain_qwen_14b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/finetuning/sft_qwen_14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen_14b.yaml)|
-|||qwen_72b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/pretrain/pretrain_qwen_72b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen/finetuning/sft_qwen_72b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen_72b.yaml)|
-||Qwen1.5|qwen1.5_0.5b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_0.5b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_0.5b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_0_5b.yaml)|
-|||qwen1.5_1.8b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_1.8b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_1.8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_1_8b.yaml)|
-|||qwen1.5_4b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_4b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_4b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_4b.yaml)|
-|||qwen1.5_7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_7b.yaml)|
-|||qwen1.5_14b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_14b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_14b.yaml)|
-|||qwen1.5_32b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_32b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_32b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_32b.yaml)|
-|||qwen1.5_72b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/pretrain/pretrain_qwen1.5_72b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen1.5/finetuning/sft_qwen1.5_72b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen/qwen1_5_72b.yaml)|
-||Qwen2|qwen2_0.5b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/pretrain/pretrain_qwen2_0.5b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/finetuning/sft_qwen2_0.5b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2/qwen2_0_5b.yaml)|
-|||qwen2_1.5b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/pretrain/pretrain_qwen2_1.5b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/finetuning/sft_qwen2_1.5b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2/qwen2_1_5b.yaml)|
-|||qwen2_7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/pretrain/pretrain_qwen2_7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/finetuning/sft_qwen2_7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2/qwen2_7b.yaml)|
-|||qwen2_72b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/pretrain/pretrain_qwen2_72b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2/finetuning/sft_qwen2_72b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2/qwen2_72b.yaml)|
-||Qwen2.5|qwen2.5_0.5b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_0.5b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_0.5b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_0_5b.yaml)|
-|||qwen2.5_1.5b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_1.5b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_1.5b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_1_5b.yaml)|
-|||qwen2.5_3b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_3b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_3b.yaml)|
-|||qwen2.5_7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_7b.yaml)|
-|||qwen2.5_14b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_14b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_14b.yaml)|
-|||qwen2.5_32b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_32b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_32b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_32b.yaml)|
-|||qwen2.5_72b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/pretrain/pretrain_qwen2.5_72b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5/finetuning/sft_qwen2.5_72b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5/qwen2_5_72b.yaml)|
-||Qwen3|qwen3_0.6b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_0.6b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_0.6b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_0_6b.yaml)|
-|||qwen3_1.7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_1.7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_1.7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_1_7b.yaml)|
-|||qwen3_4b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_4b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_4b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_4b.yaml)|
-|||qwen3_8b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_8b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_8b.yaml)|
-|||qwen3_14b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_14b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_14b.yaml)|
-|||qwen3_32b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_32b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_32b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_32b.yaml)|
-|||qwen3_30b_a3b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_30b_a3b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_30b_a3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_30b_a3b.yaml)|
-|||qwen3_235b_a22b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_235b_a22b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_235b_a22b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_235b_a22b.yaml)|
-|||qwen3_480b_a35b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_480b_a35b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_480b_a35b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_480b_a35b.yaml)|
-|||qwen3_coder_30b_a3b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/pretrain/pretrain_qwen3_coder_30b_a3b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3/finetuning/sft_qwen3_coder_30b_a3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3/qwen3_coder_30b_a3b.yaml)|
-|VLM|Qwen2.5-VL|qwen2.5_vl_3b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_3b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml)|
-|||qwen2.5_vl_7b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_7b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_7b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml)|
-|||qwen2.5_vl_32b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_32b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_32b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5vl/qwen2_5_vl_32b.yaml)|
-|||qwen2.5_vl_72b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/pretrain/pretrain_qwen2_5_vl_72b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen2.5_vl/sft/sft_qwen2_5_vl_72b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen2.5vl/qwen2_5_vl_72b.yaml)|
-||Qwen3-VL|qwen3_vl_30b_a3b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_30b_a3b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_30b_a3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml)|
-|||qwen3_vl_235b_a22b|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3_vl/pretrain/pretrain_qwen3_vl_235b_a22b.sh  ))|✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/qwen3_vl/sft/sft_qwen3_vl_235b_a22b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/qwen3_vl/qwen3_vl_235b_a22b.yaml)|
-||LLava-OV-1.5|llava_ov_4b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_4b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llavaov1.5/llavaov_1_5_4b.yaml)|
-|||llava_ov_30b_a3b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/llavaov_1.5/pretrain/stage_1_alignment_llava_ov_30b_a3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/llavaov1.5/llavaov_1_5_30b_a3b.yaml)|
-||InternVL-2.5|internvl2.5_8b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl2.5/sft_internvl2_5_8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl2.5/internvl2_5_8b.yaml)|
-|||internvl2.5_26b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl2.5/sft_internvl2_5_26b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl2.5/internvl2_5_26b.yaml)|
-|||internvl2.5_38b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl2.5/sft_internvl2_5_38b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl2.5/internvl2_5_38b.yaml)|
-|||internvl2.5_78b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl2.5/sft_internvl2_5_78b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl2.5/internvl2_5_78b.yaml)|
-||InternVL-3.5|internvl3.5_8b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_8b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl3.5/internvl3_5_8b.yaml)|
-|||internvl3.5_14b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl3.5/internvl3_5_14b.yaml)|
-|||internvl3.5_38b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_38b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl3.5/internvl3_5_38b.yaml)|
-|||internvl3.5_30b_a3b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_30b_a3b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml)|
-|||internvl3.5_241b_a28b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/internvl3.5/finetuning/sft_internvl3_5_241b_a28b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/internvl3.5/internvl3_5_241b_a28b.yaml)|
-|Wan|Wan2.1|wan2.1_i2v_14b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/wan/pretrain_wan2.1_i2v_14b_480p.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/wan/wan2_1_i2v.yaml)|
-||Wan2.2|wan2.2_i2v_a14b||✅([example](https://github.com/baidu-baige/OmniTraining/tree/master/examples/wan/pretrain_wan2.2_i2v_a14b.sh  ))|[model config](https://github.com/baidu-baige/OmniTraining/tree/master/configs/models/wan/wan2_2_i2v.yaml)|
+For model configurations, refer to `configs/models/`. Training launch script examples are available in `examples/`. Visit the [documentation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/) for more details.
+
+| **Model Type** | **Model Category** | **Models** |
+|----------------|-------------------|------------|
+| **LLM** | DeepSeek-V2 | deepseek-v2-lite, deepseek-v2 |
+| | DeepSeek-V3 | deepseek-v3, deepseek-v32 |
+| | LLaMA2 | llama2-7b, llama2-13b, llama2-70b |
+| | LLaMA3 | llama3-8b, llama3-70b |
+| | LLaMA3.1 | llama3.1-8b, llama3.1-70b, llama3.1-405b |
+| | Qwen | qwen-1.8b, qwen-7b, qwen-14b, qwen-72b |
+| | Qwen1.5 | qwen1.5-0.5b, qwen1.5-1.8b, qwen1.5-4b, qwen1.5-7b, qwen1.5-14b, qwen1.5-32b, qwen1.5-72b |
+| | Qwen2 | qwen2-0.5b, qwen2-1.5b, qwen2-7b, qwen2-72b |
+| | Qwen2.5 | qwen2.5-0.5b, qwen2.5-1.5b, qwen2.5-3b, qwen2.5-7b, qwen2.5-14b, qwen2.5-32b, qwen2.5-72b |
+| | Qwen3 | qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b, qwen3-14b, qwen3-32b, qwen3-30b-a3b, qwen3-235b-a22b, qwen3-480b-a35b, qwen3-coder-30b-a3b |
+| | Qwen3-Next | qwen3-next-80b-a3b |
+| | MiniMax | minimax-m2.1, minimax-m2.5 |
+| | MIMO | mimo-7b |
+| **VLM** | Qwen2.5-VL | qwen2.5-vl-3b, qwen2.5-vl-7b, qwen2.5-vl-32b, qwen2.5-vl-72b |
+| | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
+| | Qwen3.5 | qwen3.5-35B-A3B, qwen3.5-397B-A17B |
+| | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
+| | LLaVA-OneVision-1.5 | llava-onevision-1.5-4B |
+| | InternVL2.5 | internvl2.5-8b, internvl2.5-26b, internvl2.5-38b, internvl2.5-78b |
+| | InternVL3.5 | internvl3.5-8b, internvl3.5-14b, internvl3.5-38b, internvl3.5-30b-a3b, internvl3.5-241b-a28b |
+| | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/OmniTraining/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
+| **Diffusion** | WAN2.1 | wan2.1_i2v_14b |
+| | WAN2.2 | wan2.2_i2v_a14b |
+| **VLA** | Pi | pi0.5 |
 
 
-## Quick Start
+## Getting Started
 
-### Quick Start for LLM Model Training
-Refer to the [Quick Start for LLM Pretrain](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md) and [Quick Start for LLM SFT](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/llm_tutorial/quick_start_llm_sft.md) document for details.
+* Quick Start:
+  * [Installation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/get_started/installation.html)
+  * [Quick Start for LLM Pretrain](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/llm_tutorial/quick_start_llm_pretrain.html)
+  * [Quick Start for LLM SFT](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/llm_tutorial/quick_start_llm_sft.html)
+  * [Quick Start for VLM Pretrain](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/vlm_tutorial/quick_start_vlm_pretrain.html)
+  * [Quick Start for VLM SFT](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/vlm_tutorial/quick_start_vlm_sft.html)
+  * [Quick Start for VLA Training](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/vla_tutorial/quick_start_vla_training.html)
+  * [Quick Start for WAN Training](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/wan_tutorial/quick_start_wan_training.html)
 
-### Quick Start for VLM Model Training
-Refer to the [Quick Start for VLM Pretrain](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/vlm_tutorial/quick_start_vlm_pretrain.md) and [Quick Start for VLM SFT](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md) document for details.
+* Kunlun XPU Training:
+  * [Installation]()
+  * [Quick Start]()
 
-### Quick Start for VLA Model Training
-Refer to the [Quick Start for VLA Training](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/vla_tutorial/quick_start_vla_training.md) document for details.
+## Architecture
 
-### Quick Start for Diffusion Model Training
-Refer to the [Quick Start for WAN Training](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/wan_tutorial/quick_start_wan_training.md) document for details.
+```
+AIAK-Training-Omni/
+├── omni_training/                # Core training framework
+│   ├── train/                    # Training entry modules
+│   │   ├── pretrain/             # Pretrain entry
+│   │   ├── sft/                  # SFT entry
+│   │   └── custom/               # Custom task entry
+│   ├── models/                   # Model system
+│   │   ├── foundation/           # LLM backbones (LLaMA, Qwen, DeepSeek, etc.)
+│   │   ├── encoder/              # Vision encoders (ViT, Qwen-VL, InternVL, etc.)
+│   │   ├── omni_models/          # Multi-modal model composition
+│   │   ├── common/               # Shared layers (norm, projector, etc.)
+│   │   ├── custom/               # Custom models (WAN, Pi0.5, etc.)
+│   │   └── peft/                 # PEFT support (LoRA)
+│   ├── data/                     # Data pipeline
+│   │   ├── dp_balance/           # Data parallel load balancing
+│   │   ├── multimodal/           # Multimodal data modules
+│   │   ├── video/                # Video data processing
+│   │   └── lerobot/              # LeRobot data support
+│   ├── tokenizer/                # Tokenizer modules
+│   └── utils/                    # Utility functions
+├── configs/                      # Hydra YAML configurations
+│   ├── models/                   # Model configs
+│   └── data/                     # Data configs
+├── examples/                     # GPU training scripts
+├── examples_xpu/                 # Kunlun XPU training scripts
+├── tools/                        # Utility tools
+├── ops/                          # Custom kernel operators
+├── patches/                      # Patches for Megatron-LM and TransformerEngine
+│   ├── Megatron-LM_v0.15.0/      # Megatron patches
+│   │   ├── megatron/             # Megatron core and training patches
+│   │   └── xpu_plugin/           # XPU plugin patches
+│   └── TransformerEngine_v2.9/   # TransformerEngine patches
+├── tests/                        # Test suite
+└── docs/                         # Documentation
+```
 
-## References
-- [qianfan-vl](https://github.com/baidubce/Qianfan-VL) – is a general-purpose multimodal model enhanced for enterprise-level multimodal applications.   
-- [llava-ov-1.5](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5) – is a family of fully open-source large multimodal models (LMMs) that operate on native-resolution images, achieve state-of-the-art performance, and require comparatively lower training costs.
+
+## Awesome Projects Built with OmniTraining
+- [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
+- [LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)
 
 ## Contributing
 Please read [CONTRIBUTING.md](https://github.com/baidu-baige/OmniTraining/tree/master/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.

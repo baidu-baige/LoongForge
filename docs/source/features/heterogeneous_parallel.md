@@ -8,7 +8,7 @@ In this design, encoder and decoder are treated as two sub-modules with differen
 
 This heterogeneous TP mechanism enables the model to flexibly select the most appropriate parallel granularity based on differences in computational intensity, parameter scale, activation size, and communication patterns between encoder and decoder, rather than being constrained by a unified TP configuration for the entire model.
 
-![heterogeneous_tp](../../../assets/_images/tp_pic1.png)
+![heterogeneous_tp](../../assets/images/tp_pic1.png)
 
 ### 1.1 Usage Method
 Set `tensor-model-parallel-size` in the corresponding model's vit.yaml to specify the vit tp size. For example, adding `tensor_model_parallel_size: 2` in qwen3_vit specifies the vit's tp size:
@@ -61,7 +61,7 @@ MODEL_PARALLEL_ARGS=(
 ### 1.2 Performance Results
 Based on qwen2.5vl7b testing with decoder tp = 4 and encoder tp of 1, 2, and 4, different settings show different performance characteristics. Specific performance for different models requires testing.
 
-![heterogeneous_tp_res](../../../assets/_images/tp_pic2.png)
+![heterogeneous_tp_res](../../assets/images/tp_pic2.png)
 
 For small-scale encoders like Vit (0.6b), a 5% performance improvement was achieved in the qwen2.5vl 7b model.
 
@@ -116,4 +116,4 @@ Note: Heterogeneous DP and heterogeneous TP are sensitive to the learning rate. 
 ### 2.2 Performance Results
 Based on qwen2.5vl7b testing with decoder tp = 4 and encoder tp = 1, enabling heterogeneous DP yields significant performance improvements.
 
-![heterogeneous_dp_res](../../../assets/_images/tp_pic3.png)
+![heterogeneous_dp_res](../../assets/images/tp_pic3.png)
