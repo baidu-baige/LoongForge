@@ -128,13 +128,32 @@ RUN set -exuo pipefail && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lerobot.tar.gz && \
-        tar -zxf lerobot.tar.gz && \
+        git clone --branch refs/tags/v0.4.3 https://github.com/huggingface/lerobot.git && \
         cd lerobot && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
-        pip install --no-build-isolation ".[pi]" && \
+        pip install func_timeout pytest-xdist prettytable==3.11.0 peft==0.17.0 scipy==1.14.1 && \
+        sed -i -e '/"torch[>=<]/d' \
+           -e 's/"torchvision[^"]*",/"torchvision==0.20.1",/' \
+           -e '/python-can/d' \
+           -e '/lerobot\[can-dep\]/d' \
+           -e '/lerobot\[damiao\]/d' \
+           -e '/unitree_g1 = \[/,/\]/ { /matplotlib/d; /pin/d; /meshcat/d; /casadi/d; }' \
+           -e '/lerobot-setup-can/d' \
+           -e '/\[tool.setuptools.package-data\]/d' \
+           -e '/lerobot = \["envs\/\*\.json"\]/d' \
+           -e '/"OT_VALUE"/d' \
+           pyproject.toml && \
+        pip install "transformers@http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/aiak-training-llm/transformers-fix-lerobot_openpi-20251001-dcddb970.tar.gz" && \
+        pip install --no-build-isolation -e . && \
+        sed -i 's|tokenizer_name="google/paligemma-3b-pt-224",|tokenizer_name=config.tokenizer_name,|g' ./src/lerobot/policies/pi05/processor_pi05.py && \
+        FUSED_ADAM_PY=$(python -c "import transformer_engine; import os; print(os.path.join(os.path.dirname(transformer_engine.__file__), 'pytorch/optimizers/fused_adam.py'))") && \
+        sed -i '/#[[:space:]]*tensor_lists = \[g_of_f32_model/,/^[[:space:]]*)/ { \
+        s|^\([[:space:]]*\)#[[:space:]]*\(tensor_lists = \[g_of_f32_model\)|\1\2|; \ 
+        s|^\([[:space:]]*\)#[[:space:]]*\(apply_multi_tensor_adam\)|\1\2|; \
+        /adamw(/,/^[[:space:]]*)/ s|^[[:space:]]*[^#]|#&|; \
+        }' "${FUSED_ADAM_PY}" && \
         echo "Lerobot installation completed"; \
     }; \
     . /root/miniconda/etc/profile.d/conda.sh && \
@@ -166,6 +185,6 @@ RUN rm -rf /tmp/* ~/.bash_history && \
     rm -rf /workspace/AIAK-Megatron/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
-    rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot
+    rm -rf /workspace/docker-examples /workspace/tutorials
 
 WORKDIR /workspace
