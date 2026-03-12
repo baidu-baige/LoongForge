@@ -199,9 +199,9 @@ RUN set -exuo pipefail && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
-        pip install "numpy==1.26" && \
         pip install "transformers@http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/aiak-training-llm/transformers-fix-lerobot_openpi-20251001-dcddb970.tar.gz" && \
         pip install --no-build-isolation . && \
+        pip install "numpy==1.26" && \
         echo "Lerobot installation completed"; \
     }; \
     install_transformer_engine && \

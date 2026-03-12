@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Pi05 sanity SFT launcher. This leverages the lightweight pi05 trainer
-# (dummy data, single forward/backward) to verify the wiring inside the Omni
-# framework. Adjust paths if your repo layout differs.
 
 set -euo pipefail
 
@@ -11,6 +8,10 @@ AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 export TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
+
+export CUDA_DEVICE_MAX_CONNECTIONS=8 # mfsdp require CUDA_DEVICE_MAX_CONNECTIONS != 1
+export USE_BF16_BUFFER=false #Dtensor not support
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True # avoid OOM
 
 # Distributed launch (defaults single node)
 GPUS_PER_NODE=${GPUS_PER_NODE:-1}
