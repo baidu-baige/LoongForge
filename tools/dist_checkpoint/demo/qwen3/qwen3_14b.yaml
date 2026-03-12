@@ -5,6 +5,6 @@ config:
 
 # Parallel strategy parameters
 param_dict:
-  tp_size: 1
+  tp_size: 2
   pp_size: 1
 

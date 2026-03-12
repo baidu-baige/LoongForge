@@ -1,5 +1,5 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test
+# HF Checkpoint Roundtrip Test — DeepSeek-V2-Lite
 # Based on bridge_debug.sh — removes training loop, adds roundtrip comparison.
 #
 # Usage:
@@ -14,14 +14,15 @@
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-#export CUDA_VISIBLE_DEVICES=4,5,6,7
+export TORCH_NCCL_AVOID_RECORD_STREAMS=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export NCCL_DEBUG=WARNING
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-7B-Instruct/"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-7b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/DeepSeek-V2-Lite"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/deepseek-v2-lite-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -39,9 +40,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name qwen2.5-7b
-    --rotary-base 1000000
-    --rotary-seq-len-interpolation-factor 1
+    --model-name deepseek-v2-lite
 )
 
 # Tokenizer is needed by initialize_aiak_megatron → set_aiak_extra_global_vars
@@ -53,9 +52,9 @@ TOKENIZER_ARGS=(
 TRAINING_ARGS=(
     --training-phase pretrain
     --seq-length 4096
-    --max-position-embeddings 32768
+    --max-position-embeddings 4096
     --micro-batch-size 1
-    --global-batch-size 1
+    --global-batch-size 8
     --bf16
     --norm-epsilon 1e-6
     # --- roundtrip-specific ---
@@ -64,20 +63,29 @@ TRAINING_ARGS=(
     --no-load-rng            # skip RNG state
     --load $TOKENIZER_PATH   # original HF checkpoint
     --save-hf-path $SAVE_HF_PATH
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_7b.yaml
+    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/deekseek2/deepseek_v2_lite.yaml
+)
+
+MOE_ARGS=(
+    --moe-router-load-balancing-type aux_loss
+    --moe-router-topk 6
+    --moe-aux-loss-coeff 0
+    --moe-grouped-gemm
+    --moe-router-dtype fp32
+    --empty-unused-memory-level 2
 )
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
-    --tensor-model-parallel-size 2
-    --pipeline-model-parallel-size 4
-    --custom-pipeline-layers 6,8,6,8
-    #--num-virtual-stages-per-pipeline-rank 2
+    --tensor-model-parallel-size 1
+    --pipeline-model-parallel-size 1
+    --expert-model-parallel-size 8
+    --moe-token-dispatcher-type allgather
     --distributed-backend nccl
 )
 
 echo "========================================"
-echo "HF Roundtrip Test"
+echo "HF Roundtrip Test — DeepSeek-V2-Lite"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"
@@ -88,4 +96,6 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${MODEL_ARGS[@]} \
     ${TOKENIZER_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
+    ${MOE_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]}
+

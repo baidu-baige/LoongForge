@@ -2,24 +2,23 @@
 # The script needs to be run on at least 1 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+#export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
 DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-0.5B-Instruct"}
-#TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-hf-bridge-syh"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-7B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/qwen2.5-0.5b-tp2-pp2-compare-1"}
-#CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-0.5b-tp2-pp2"}
+#CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-7b-tp2-pp4-custom"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-7b-tp2-pp2-vpp"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen2.5-0.5b"}
-
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen2.5-7b"}
 
 
-GPUS_PER_NODE=4
+
+GPUS_PER_NODE=8
 
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -36,7 +35,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name qwen2.5-0.5b # qwen2.5 options: 0.5b, 1.5b, 3b, 7b, 14b, 32b, 72b
+    --model-name qwen2.5-7b # qwen2.5 options: 0.5b, 1.5b, 3b, 7b, 14b, 32b, 72b
     --rotary-base 1000000
     --rotary-seq-len-interpolation-factor 1
 )
@@ -54,8 +53,8 @@ TRAINING_ARGS=(
     --seq-length 4096
     --max-position-embeddings 32768
     --init-method-std 0.006
-    --micro-batch-size 4
-    --global-batch-size 16
+    --micro-batch-size 2
+    --global-batch-size 8
     --lr 1.0e-5
     --min-lr 1.0e-6
     --clip-grad 1.0
@@ -65,7 +64,7 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-08
     --norm-epsilon 1e-6
-    --train-iters 5
+    --train-iters 10 
     --lr-decay-iters 50000
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
@@ -86,6 +85,8 @@ MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
+    #--custom-pipeline-layers 6,8,6,8
+    --num-virtual-stages-per-pipeline-rank 2
     --use-distributed-optimizer
     --overlap-grad-reduce
     --overlap-param-gather

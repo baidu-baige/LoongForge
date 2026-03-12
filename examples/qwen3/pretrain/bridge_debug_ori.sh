@@ -12,7 +12,7 @@ DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_docume
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-Coder-30B-A3B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/ssd1/sunyuehang/qwen3-coder-30b-a3b-tp2-pp2-ep2"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen3-coder-30b-a3b-tp2-pp2-ep4-etp1"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen3-coder"}
 
@@ -54,7 +54,7 @@ TRAINING_ARGS=(
     --max-position-embeddings 4096
     --init-method-std 0.006
     --micro-batch-size 1
-    --global-batch-size 16
+    --global-batch-size 2 
     --lr 1.0e-5
     --min-lr 1.0e-6
     --clip-grad 1.0
@@ -64,7 +64,7 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-08
     --norm-epsilon 1e-6
-    --train-iters 5
+    --train-iters 10
     --lr-decay-iters 50000
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
@@ -94,7 +94,8 @@ MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
-    --expert-model-parallel-size 2
+    --expert-model-parallel-size 4
+    --expert-tensor-parallel-size 1
     --moe-token-dispatcher-type allgather
     --use-distributed-optimizer
     # --overlap-grad-reduce

@@ -54,7 +54,7 @@ TRAINING_ARGS=(
     --max-position-embeddings 4096
     --init-method-std 0.006
     --micro-batch-size 1
-    --global-batch-size 16
+    --global-batch-size 2 
     --lr 1.0e-5
     --min-lr 1.0e-6
     --clip-grad 1.0
@@ -64,7 +64,7 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-08
     --norm-epsilon 1e-6
-    --train-iters 5
+    --train-iters 10
     --lr-decay-iters 50000
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
@@ -76,7 +76,7 @@ TRAINING_ARGS=(
     --save-interval 20
     --eval-interval 1000
     --eval-iters 10
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/moe_demo.yaml
+    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen3/qwen3_coder_30b_a3b.yaml
     #--ckpt-step 0
     #--no-load-optim
     #--no-load-rng
@@ -97,6 +97,7 @@ MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 2
+#    --expert-tensor-parallel-size 1
     --moe-token-dispatcher-type allgather
     --use-distributed-optimizer
     # --overlap-grad-reduce

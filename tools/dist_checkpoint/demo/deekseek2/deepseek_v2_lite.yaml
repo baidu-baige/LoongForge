@@ -1,0 +1,11 @@
+# Configuration file paths
+config:
+  model_config_file: configs/models/deepseek2/deepseek_v2_lite.yaml
+  convert_file: configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
+
+# Parallel strategy parameters
+param_dict:
+  tp_size: 1
+  pp_size: 1
+  ep_size: 8
+  moe_grouped_gemm: True

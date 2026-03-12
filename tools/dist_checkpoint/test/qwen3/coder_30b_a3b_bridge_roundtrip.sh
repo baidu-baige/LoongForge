@@ -17,7 +17,6 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_NCCL_AVOID_RECORD_STREAMS=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 #export CUDA_VISIBLE_DEVICES=4,5,6,7
-export NCCL_DEBUG=WARNING
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
@@ -82,8 +81,8 @@ MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
-    --expert-model-parallel-size 2
-#    --expert-tensor-parallel-size 1
+    --expert-model-parallel-size 4
+    --expert-tensor-parallel-size 1
     --moe-token-dispatcher-type allgather
     --distributed-backend nccl
     --sequence-parallel
