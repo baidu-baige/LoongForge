@@ -26,6 +26,7 @@
   * Cherry-pick Muon Optimizer support
   * Add detailed time logger that prints timing logs every 20 steps by default
   * Add MoE memory monitoring with log output
+  * Cherry-pick Fused Linear Cross Entropy optimization from community Megatron, further adding a Generic (pure PyTorch) implementation that significantly reduces peak memory from output-layer logits tensors on non-Blackwell GPUs
 
 * **TE 2.9:**
   * Support customizable FP8 quantization `amax_eps` via environment variables: `FP8_QUANT_FWD_INP_AMAX_EPS`, `FP8_QUANT_FWD_WEIGHT_AMAX_EPS`, `FP8_QUANT_BWD_GRAD_AMAX_EPS`

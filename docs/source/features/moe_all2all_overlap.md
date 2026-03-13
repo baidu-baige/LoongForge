@@ -56,7 +56,7 @@ Enable **tensor-level activation offload**:
 
 ```bash
 --fine-grained-activation-offloading \
---offload-tensors dispatched_input
+--offload-tensors dispatched_input pre_mlp_layernorm_output
 ```
 
 Additionally, bind each process to the NUMA node local to its GPU to improve D2H/H2D bandwidth:

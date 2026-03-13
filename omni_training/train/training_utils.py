@@ -759,12 +759,12 @@ def get_model(
                 for name, buf in module.module.named_parameters():
                     if any(fp32_weight in name for fp32_weight in fp32_training_weights):
                         buf.data = buf.data.to(dtype=torch.float32)
-                        print(f'verl check update param precison {name}')
+                        print(f'check update param precison {name}')
 
                 for name, buf in module.module.named_buffers():
                     if any(fp32_weight in name for fp32_weight in fp32_training_weights):
                         buf.data = buf.data.to(dtype=torch.float32)
-                        print(f'verl check update buffer precison {name}')
+                        print(f'check update buffer precison {name}')
 
         if param_pattern:
             print_rank_0("> model param_dtypes:")

@@ -247,8 +247,9 @@ Four controlling flags:
 Supported modules:  
 `attn_norm`, `core_attn`, `attn_proj`, `mlp_norm`, `expert_fc1`, `moe_act`
 
-Supported tensor tags:  
-`dispatched_input` (MoE token-dispatch output)
+Supported tensor tags:
+- `dispatched_input` (MoE token-dispatch output)
+- `pre_mlp_layernorm_output` (pre-MLP LayerNorm output)
 
 ---
 
@@ -263,3 +264,27 @@ Can be combined with recompute, activation offload and communication overlap.
 ```
 
 * `fraction < 1.0` allows a trade-off between memory saving and overhead
+
+## 3.4 Fused Linear Cross Entropy
+
+Fuses the output-layer linear projection (`hidden @ weight.T`) with the cross-entropy loss into a single operation, combined with chunked computation along the vocabulary dimension, to eliminate the peak memory spike from the full logits tensor. For a typical configuration (num_tokens=16384, vocab_size=129280), this can save up to **~40 GB** of logits-related memory.
+
+The framework automatically selects the implementation based on GPU architecture:
+* **Blackwell (CC 10.x)**: deeply-fused CUTLASS/CuTe kernel — logits never written to global memory
+* **Other GPUs**: pure PyTorch implementation with buffer reuse and online Softmax — significantly reduces peak memory while outperforming the native Torch implementation
+
+```bash
+--cross-entropy-loss-fusion \
+--cross-entropy-fusion-impl linear
+```
+
+The vocabulary chunk size can be tuned via environment variable (default 3072):
+
+```bash
+export LCE_GENERIC_FWD_VOCAB_SPLIT_SIZE=3072
+export LCE_GENERIC_BWD_VOCAB_SPLIT_SIZE=3072
+```
+
+See [Fused Linear Cross Entropy](../features/fused_linear_cross_entropy.md) for details.
+
+---
