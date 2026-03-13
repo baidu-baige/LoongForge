@@ -100,8 +100,9 @@ class HuggingfaceBase:
 
     #========from commmon to hf===========
     def common_to_hf(self, name, c_ckpt, h_dict, layer_id=None, hf_layer_id=None,
-                     layer_prefix=None, expert_name=None, transformer=None):
-        is_valid_name = name in self.name_map and self.name_map[name] is not None
+                     layer_prefix=None, expert_name=None, transformer=None, spec_name=None):
+        spec_name = name if spec_name is None or spec_name not in self.name_map else spec_name
+        is_valid_name = spec_name in self.name_map and self.name_map[spec_name] is not None
         if not is_valid_name:
             return
         if name == MTP_WORD_EMBEDDING:
@@ -116,14 +117,14 @@ class HuggingfaceBase:
                     f"mcore args.use_rotary_position_embeddings is required to be set to True \
                     since we capture the rotary_emb op"
         hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key = \
-                self.get_hf_name_and_args(self.name_map[name])
+                self.get_hf_name_and_args(self.name_map[spec_name])
         if hf_layer_id is None or no_layer_id:
             if is_direct_name:
                 hf_weight_path = hf_name
             else:
                 hf_weight_path = f"{hf_name}.{WEIGHT}"
-            hf_bias_path = self.name_map[f"{name}.{BIAS}"] \
-                    if f"{name}.{BIAS}" in self.name_map else f"{hf_name}.{BIAS}"
+            hf_bias_path = self.name_map[f"{spec_name}.{BIAS}"] \
+                    if f"{spec_name}.{BIAS}" in self.name_map else f"{hf_name}.{BIAS}"
             hf_weight_scale_path = f"{hf_name}.{WEIGHT_SCALE}"
             self.update_tensor(h_dict, hf_weight_path, weight, hf_bias_path=hf_bias_path, bias=bias,
                     hf_weight_scale_path=hf_weight_scale_path, weight_scale=weight_scale)
@@ -144,7 +145,7 @@ class HuggingfaceBase:
                 if expert_name not in self.name_map:
                     return
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}.{self.name_map[expert_name]}"
-                self.update_h_to_4h(h_dict, name, hf_prefix_path, weight, bias, weight_scale)
+                self.update_h_to_4h(h_dict, spec_name, hf_prefix_path, weight, bias, weight_scale)
             else:
                 if expert_name is None:
                     hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}.{hf_name}"
@@ -226,14 +227,15 @@ class HuggingfaceBase:
     # === update tensor to huggingface state_dict end ===
 
     # ====== from hf to common ========
-    def hf_to_common(self, name, c_ckpt, h_dict, layer_id=None, hf_layer_id=None, layer_prefix=None, expert_name=None, transformer=None):
+    def hf_to_common(self, name, c_ckpt, h_dict, layer_id=None, hf_layer_id=None, layer_prefix=None, expert_name=None, transformer=None, spec_name=None):
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         transformer = self.transformer if transformer is None else transformer
-        is_valid_name = name in self.name_map and self.name_map[name] is not None
+        spec_name = name if spec_name is None or spec_name not in self.name_map else spec_name
+        is_valid_name = spec_name in self.name_map and self.name_map[spec_name] is not None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
             hf_name, is_direct_name, _, _, no_layer_id, depend_on_key = \
-                    self.get_hf_name_and_args(self.name_map[name])
+                    self.get_hf_name_and_args(self.name_map[spec_name])
             if depend_on_key is not None:
                 assert depend_on_key in self.name_map, f"depend_on_key {depend_on_key} is not in self.name_map"
                 d_hf_name, is_direct_name_2, no_layer_id_2, _, _, _ = self.get_hf_name_and_args(self.name_map[depend_on_key])
@@ -250,11 +252,12 @@ class HuggingfaceBase:
             is_direct_name = False
             no_layer_id = False
         weight, bias, weight_scale = self.get_weight(name, h_dict, layer_id, hf_layer_id, layer_prefix,
-                                                     expert_name, transformer, hf_name, is_direct_name, no_layer_id, is_valid_name)
+                                                     expert_name, transformer, hf_name, is_direct_name,
+                                                     no_layer_id, is_valid_name, spec_name=spec_name)
         c_ckpt.set(common_key, weight, bias, weight_scale)
 
     def get_weight(self, name, h_dict, layer_id, hf_layer_id, layer_prefix, expert_name,
-                   transformer, hf_name, is_direct_name, no_layer_id, is_valid_name):
+                   transformer, hf_name, is_direct_name, no_layer_id, is_valid_name, spec_name=None):
         weight = None
         bias = None
         weight_scale = None
@@ -294,7 +297,7 @@ class HuggingfaceBase:
                 if expert_name not in self.name_map:
                     return None, None, None
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}.{self.name_map[expert_name]}"
-                weight, bias, weight_scale = self.get_h_to_4h_from_state_dict(name, h_dict, hf_prefix_path)
+                weight, bias, weight_scale = self.get_h_to_4h_from_state_dict(spec_name, h_dict, hf_prefix_path)
             else:
                 if expert_name is None:
                     hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}.{hf_name}"

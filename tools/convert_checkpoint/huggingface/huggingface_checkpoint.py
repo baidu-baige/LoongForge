@@ -25,7 +25,9 @@ from convert_checkpoint.utils.utils import (
 
 from convert_checkpoint.common.common_checkpoint import (
     TRANSFORMER, MTP_TRANSFORMER, MTP_LAYER_PREFIX, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT, LAYER_IS_DICT_FOR_EXPERT,
-    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES, MTP_WORD_EMBEDDING
+    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES, MTP_WORD_EMBEDDING,
+    MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H, MOE_SHARED_EXPERT_H_TO_4H, MOE_SHARED_EXPERT_4H_TO_H,
+    MTP_MOE_EXPERT_H_TO_4H, MTP_MOE_EXPERT_4H_TO_H, MTP_MOE_SHARED_EXPERT_H_TO_4H, MTP_MOE_SHARED_EXPERT_4H_TO_H
 )
 
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
@@ -216,18 +218,26 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                                          hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
             # ====moe shared_expert
             for c_name in MOE_EXPERT_PROJS:
+                if c_name == MOE_EXPERT_H_TO_4H:
+                    spec_name = MTP_MOE_SHARED_EXPERT_H_TO_4H if layer_id >= num_layers else MOE_SHARED_EXPERT_H_TO_4H
+                else:
+                    spec_name = MTP_MOE_SHARED_EXPERT_4H_TO_H if layer_id >= num_layers else MOE_SHARED_EXPERT_4H_TO_H
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
                                          hf_layer_id=hf_layer_id, expert_name=MOE_SHARED_EXPERT,
-                                         transformer=transformer, layer_prefix=layer_prefix)
+                                         transformer=transformer, layer_prefix=layer_prefix, spec_name=spec_name)
 
             # EXPERT
             if expert_dict is not None:
                 for ep_id, expert_ids in expert_dict.items():
                     for expert_id in expert_ids:
                         for c_name in MOE_EXPERT_PROJS:
+                            if c_name == MOE_EXPERT_H_TO_4H:
+                                spec_name = MTP_MOE_EXPERT_H_TO_4H if layer_id >= num_layers else None
+                            else:
+                                spec_name = MTP_MOE_EXPERT_4H_TO_H if layer_id >= num_layers else None
                             self.h_moe.common_e_to_hf(MOE_EXPERT, c_name, c_ckpt, self.state_dict, layer_id=layer_id,
                                                       hf_layer_id=hf_layer_id, expert_id=expert_id,
-                                                      transformer=transformer, layer_prefix=layer_prefix)
+                                                      transformer=transformer, layer_prefix=layer_prefix, spec_name=spec_name)
             self.merge_dict_tensor(self.state_dict)
             # MTP
             if layer_id >= num_layers:
@@ -284,17 +294,25 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                                          hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
             # ====moe shared_expert
             for c_name in MOE_EXPERT_PROJS:
+                if c_name == MOE_EXPERT_H_TO_4H:
+                    spec_name = MTP_MOE_SHARED_EXPERT_H_TO_4H if layer_id >= num_layers else MOE_SHARED_EXPERT_H_TO_4H
+                else:
+                    spec_name = MTP_MOE_SHARED_EXPERT_4H_TO_H if layer_id >= num_layers else MOE_SHARED_EXPERT_4H_TO_H
                 self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id, hf_layer_id=hf_layer_id,
-                                         transformer=transformer, expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix)
+                                         transformer=transformer, expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix, spec_name=spec_name)
 
             # EXPERT
             if expert_dict is not None:
                 for ep_id, expert_ids in expert_dict.items():
                     for expert_id in expert_ids:
                         for c_name in MOE_EXPERT_PROJS:
+                            if c_name == MOE_EXPERT_H_TO_4H:
+                                spec_name = MTP_MOE_EXPERT_H_TO_4H if layer_id >= num_layers else None
+                            else:
+                                spec_name = MTP_MOE_EXPERT_4H_TO_H if layer_id >= num_layers else None
                             self.h_moe.hf_e_to_common(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
                                                       layer_id=layer_id, hf_layer_id=hf_layer_id,
-                                                      transformer=transformer, expert_id=expert_id, layer_prefix=layer_prefix)
+                                                      transformer=transformer, expert_id=expert_id, layer_prefix=layer_prefix, spec_name=spec_name)
 
             # MTP
             if layer_id >= num_layers:
