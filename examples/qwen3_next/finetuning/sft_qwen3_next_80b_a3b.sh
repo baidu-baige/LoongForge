@@ -9,6 +9,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # Disabling packing allows linear attention to achieve better computational efficiency and lower memory usage, 
 # but it also means that tokens from different sequences may attend to each other.
 export UNPACKING_HIDDEN_STATES_IN_GDN=1
+export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 
@@ -113,19 +114,19 @@ TRAINING_ARGS=(
     --no-load-rng
 
     --recompute-granularity full
-    --recompute-method uniform
-    --recompute-num-layers 1
-
+    --recompute-method block
+    --recompute-num-layers 12
+    
     --mtp-num-layers 1
 )
 
 MODEL_PARALLEL_ARGS=(
-    --tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 2
+    --tensor-model-parallel-size 2
+    --pipeline-model-parallel-size 4
     --expert-model-parallel-size 8
     --expert-tensor-parallel-size 1
     --use-distributed-optimizer
-    # --sequence-parallel
+    --sequence-parallel
     --attention-backend flash
     --cross-entropy-loss-fusion
     --cross-entropy-fusion-impl te
