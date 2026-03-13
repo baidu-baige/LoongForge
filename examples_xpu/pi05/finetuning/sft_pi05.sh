@@ -33,14 +33,17 @@ DATA_ARGS=(
   --data-path $DATA_PATH
   --split 100,0,0
   --chat-template empty
+  --num-workers 16
 )
 
 # Core training args — pi05 trainer only needs minimal Megatron flags
 TRAINING_ARGS=(
     --use-megatron-fsdp
+    --data-parallel-sharding-strategy optim
     --training-phase sft
     --micro-batch-size 1
     --global-batch-size 1
+    --train-iters 30000
     --seq-length 1024
     --max-position-embeddings 1024
     --tensor-model-parallel-size 1
@@ -50,16 +53,31 @@ TRAINING_ARGS=(
     --load $CHECKPOINT_PATH
     --no-load-optim
     --no-load-rng
+    --seed 1234
+    --lr 2.5e-8
+    --min-lr 0
+    --lr-decay-style cosine
+    --lr-warmup-iters 0
+    --lr-decay-iters 30000
+    --clip-grad 1.0
+    --adam-beta1 0.9
+    --adam-eps 1e-8
+    --adam-beta2 0.95
+    --weight-decay 0.01
     --no-strict-fsdp-dtensor-load
     --finetune
-    --seed 1234
+    --grad-reduce-in-bf16
+    --use-precision-aware-optimizer
+    --main-grads-dtype bf16
     --num-distributed-optimizer-instances 1
-    --save-interval 1000000
     --save $CHECKPOINT_PATH
+    --save-interval 30000
 )
 
 MODEL_CONFIG_ARGS=(
     --model-name pi05
+    --use-distributed-optimizer
+    --distributed-backend nccl
 )
 
 LOGGING_ARGS=(
