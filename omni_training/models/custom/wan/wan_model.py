@@ -1,4 +1,4 @@
-"""wan2.1 model"""
+"""wan model"""
 
 import torch
 import torch.nn as nn
@@ -318,8 +318,6 @@ class WanModel(VisionModule):
         """
         Wan forward
         """
-        if self.args.model_name == "wan2_1_i2v":
-            f, h, w = (21, 30, 52)
         if self.args.model_name == "wan2_2_i2v":
             f, h, w = (13, 30, 52)
         freqs = torch.cat(
@@ -350,8 +348,6 @@ class WanModel(VisionModule):
                     ).contiguous()
 
             x, (f, h, w) = self.patchify(x)
-            if self.args.model_name == "wan2_1_i2v":
-                assert (f, h, w) == (21, 30, 52)
             if self.args.model_name == "wan2_2_i2v":
                 assert (f, h, w) == (13, 30, 52)
 

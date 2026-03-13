@@ -38,10 +38,9 @@ from omni_training.models.custom.wan.wan_utils import (
     broadcast_on_tp_group,
     broadcast_on_cp_group,
 )
-from omni_training.models.custom.wan.wan_provider import wan2_1_i2v_model_provider, wan2_2_i2v_model_provider
+from omni_training.models.custom.wan.wan_provider import wan2_2_i2v_model_provider
 
 SUPPORTED_MODELS = [
-    CustomModelFamilies.WAN2_1_I2V,
     CustomModelFamilies.WAN2_2_I2V
 ]
 
@@ -62,16 +61,11 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     args = get_args()
     cp = args.context_parallel_ulysses_degree
     text_length = math.ceil(args.max_text_length / cp) * cp
-    if args.model_name == "wan2_1_i2v":
-        image_len = math.ceil(args.max_image_length / cp) * cp
-        args.seq_length = args.max_video_length + image_len + text_length + (6 + 1) * cp
     if args.model_name == "wan2_2_i2v":
         args.seq_length = args.max_video_length + text_length + (6 + 1) * cp
     args.max_position_embeddings = args.seq_length
     print_rank_0(f"> calculated seq_length:  {args.seq_length}")
 
-    if args.model_name == "wan2_1_i2v":
-        model_provider = wan2_1_i2v_model_provider
     if args.model_name == "wan2_2_i2v":
         model_provider = wan2_2_i2v_model_provider
 
@@ -99,8 +93,6 @@ def gen_time_steps(batch):
     """
     # torch.manual_seed(10086)
     args = get_args()
-    if args.model_name == "wan2_1_i2v":
-        latents = batch["latents"]
     if args.model_name == "wan2_2_i2v":
         latents = batch.pop("input_latents")
         if latents.size(0) == 1:

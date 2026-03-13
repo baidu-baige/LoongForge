@@ -46,7 +46,7 @@
 For model configurations, refer to `configs/models/`. Training launch script examples are available in `examples/`. Visit the [documentation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/) for more details.
 
 | **Model Type** | **Model Category** | **Models** |
-|----------------|-------------------|------------|
+|---------------|------------------|------------|
 | **LLM** | DeepSeek-V2 | deepseek-v2-lite, deepseek-v2 |
 | | DeepSeek-V3 | deepseek-v3, deepseek-v32 |
 | | LLaMA2 | llama2-7b, llama2-13b, llama2-70b |
@@ -68,8 +68,7 @@ For model configurations, refer to `configs/models/`. Training launch script exa
 | | InternVL2.5 | internvl2.5-8b, internvl2.5-26b, internvl2.5-38b, internvl2.5-78b |
 | | InternVL3.5 | internvl3.5-8b, internvl3.5-14b, internvl3.5-38b, internvl3.5-30b-a3b, internvl3.5-241b-a28b |
 | | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/OmniTraining/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
-| **Diffusion** | WAN2.1 | wan2.1_i2v_14b |
-| | WAN2.2 | wan2.2_i2v_a14b |
+| **Diffusion** | WAN2.2 | wan2.2_i2v_a14b |
 | **VLA** | Pi | pi0.5 |
 
 

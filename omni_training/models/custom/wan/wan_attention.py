@@ -292,7 +292,7 @@ class WanSelfAttention(SelfAttention):
 
 class WanCrossAttention(CrossAttention):
     """
-    CrossAttention for wan2.1
+    CrossAttention for wan
     """
 
     def __init__(

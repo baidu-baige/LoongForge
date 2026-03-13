@@ -12,7 +12,7 @@ import json
 
 parser = argparse.ArgumentParser(description="Process some checkpoints.")
 parser.add_argument(
-    "--model_name", type=str, required=True, help="Supported model name: [wan2_1_i2v, wan2_2_i2v]"
+    "--model_name", type=str, required=True, help="Supported model name: [wan2_2_i2v]"
 )
 parser.add_argument(
     "--load_path",
@@ -149,16 +149,6 @@ base_first_part_list = [
     "time_projection.1.bias",
 ]
 extra_first_part_dict = {
-    "wan2_1_i2v": [
-        "img_emb.proj.0.weight",
-        "img_emb.proj.0.bias",
-        "img_emb.proj.1.weight",
-        "img_emb.proj.1.bias",
-        "img_emb.proj.3.weight",
-        "img_emb.proj.3.bias",
-        "img_emb.proj.4.weight",
-        "img_emb.proj.4.bias",
-    ],
     "wan2_2_i2v": []
 }
 first_part_list = base_first_part_list + extra_first_part_dict.get(model_name, [])
@@ -200,16 +190,6 @@ second_part_dict = {
     "decoder.layers.0.cross_attn.q_layernorm.weight": "blocks.0.cross_attn.norm_q.weight",
     "decoder.layers.0.cross_attn.k_layernorm.weight": "blocks.0.cross_attn.norm_k.weight",
 }
-if model_name == "wan2_1_i2v":
-    second_part_dict["decoder.layers.0.cross_attn.linear_kv_img.weight"] = [
-        "blocks.0.cross_attn.k_img.weight",
-        "blocks.0.cross_attn.v_img.weight",
-    ]
-    second_part_dict["decoder.layers.0.cross_attn.linear_kv_img.bias"] = [
-        "blocks.0.cross_attn.k_img.bias",
-        "blocks.0.cross_attn.v_img.bias",
-    ]
-    second_part_dict["decoder.layers.0.cross_attn.k_img_layernorm.weight"] = "blocks.0.cross_attn.norm_k_img.weight"
 # Parts that do not need transpose inside
 inside_blk_replace_dict = {
     "blocks.0.ffn.0.weight": "decoder.layers.0.ffn.0.weight",
@@ -223,8 +203,6 @@ inside_blk_replace_dict = {
     "blocks.0.cross_attn.norm_q.weight": "decoder.layers.0.cross_attn.q_layernorm.weight",
     "blocks.0.cross_attn.norm_k.weight": "decoder.layers.0.cross_attn.k_layernorm.weight",
 }
-if model_name == "wan2_1_i2v":
-    inside_blk_replace_dict["blocks.0.cross_attn.norm_k_img.weight"] = "decoder.layers.0.cross_attn.k_img_layernorm.weight"
 # Model last part
 third_part_dict = {
     "head.modulation",
@@ -310,28 +288,6 @@ for i in range(num_layers):
     new_state_dict["blocks." + str(i) + ".cross_attn.k.bias"] = k_bias
     new_state_dict["blocks." + str(i) + ".cross_attn.v.weight"] = v_weight
     new_state_dict["blocks." + str(i) + ".cross_attn.v.bias"] = v_bias
-
-    if model_name == "wan2_1_i2v":
-        # cross_attention kv_img split
-        kv_img_weight = mcore_dict[
-            "decoder.layers." + str(shift) + ".cross_attn.linear_kv_img.weight"
-        ]
-        kv_img_weight = rearrange(
-            kv_img_weight, "(N R D) H -> (R N D) H", R=2, N=40, D=128, H=5120
-        )
-        k_img_weight, v_img_weight = torch.split(kv_img_weight, 5120, dim=0)
-
-        kv_img_bias = mcore_dict[
-            "decoder.layers." + str(shift) + ".cross_attn.linear_kv_img.bias"
-        ]
-        kv_img_bias = rearrange(
-            kv_img_bias, "(N R D H) -> (R N D H)", R=2, N=40, D=128, H=1
-        )
-        k_img_bias, v_img_bias = torch.split(kv_img_bias, 5120, dim=0)
-        new_state_dict["blocks." + str(i) + ".cross_attn.k_img.weight"] = k_img_weight
-        new_state_dict["blocks." + str(i) + ".cross_attn.k_img.bias"] = k_img_bias
-        new_state_dict["blocks." + str(i) + ".cross_attn.v_img.weight"] = v_img_weight
-        new_state_dict["blocks." + str(i) + ".cross_attn.v_img.bias"] = v_img_bias
 
     # cross_attention o
     cross_o_weight = mcore_dict[
