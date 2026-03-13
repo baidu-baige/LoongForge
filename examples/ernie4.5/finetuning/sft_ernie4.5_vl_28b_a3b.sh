@@ -45,7 +45,7 @@ TRAINING_ARGS=(
     --packing-sft-data
     --max-packed-tokens 8192
     --max-buffer-size 5
-    --packing-batch-size 20
+    --packing-buffer-size 20
     --use-fp32-dtype-for-param-pattern "router"
     #--custom-pipeline-layers 4,4,4,4,4,4,2,2
     --training-phase sft

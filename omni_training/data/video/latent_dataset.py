@@ -7,7 +7,6 @@ import torch
 import json
 from pathlib import Path
 from megatron.training import get_args
-from transformers import AutoProcessor
 
 class TensorDataset(torch.utils.data.Dataset):
     def __init__(self, metadata_path, steps_per_epoch=0):
@@ -61,40 +60,6 @@ class TensorDataset(torch.utils.data.Dataset):
         # used for generate timestep
         data["seed"] = seed
         return data
-
-    def __len__(self):
-        return self.steps_per_epoch
-
-
-class ErnieImageDataset(torch.utils.data.Dataset):
-    """Dataset for ernie-vl"""
-    def __init__(self, args, metadata_path, steps_per_epoch=0):
-        self.manual_seed = args.seed
-        self.steps_per_epoch = steps_per_epoch
-        self.processor = AutoProcessor.from_pretrained(args.hf_tokenizer_path,  trust_remote_code=True)
-        self.file_names = []
-
-        with open(metadata_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                self.file_names.append(line.strip())
-
-    def __getitem__(self, index):
-        seed = (self.manual_seed + index) % 2**32
-        numpy_random_state = np.random.RandomState(seed=seed)
-        data_id = numpy_random_state.randint(0, self.steps_per_epoch)
-        data_id = data_id % len(self.file_names)
-        data_name = self.file_names[data_id]
-        data = np.load(data_name)
-        data_item = {
-            "images": torch.from_numpy(data["images"]),
-            "input_ids": torch.from_numpy(data["input_ids"]),
-            "token_type_ids": torch.from_numpy(data["token_type_ids"])[:, :-1],
-            "position_ids": torch.from_numpy(data["position_ids"]),
-            "grid_thw": torch.from_numpy(data["grid_thw"]),
-            "image_type_ids": torch.from_numpy(data["image_type_ids"]),
-            "labels": torch.from_numpy(data["labels"])
-        }
-        return data_item
 
     def __len__(self):
         return self.steps_per_epoch

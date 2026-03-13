@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# convet_wds.sh — ERNIE 离线 JSONL -> WebDataset 转换脚本
+# convert2wds.sh — ERNIE 离线 JSONL -> WebDataset 转换脚本
 #
 # 流程:  原始格式 (Step 1) -> sharegpt 格式 (Step 2) -> WebDataset tar
 #

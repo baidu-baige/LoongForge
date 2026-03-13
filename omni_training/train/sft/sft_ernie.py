@@ -11,7 +11,7 @@ from megatron.training import get_timers
 
 from omni_training.utils import get_args, print_rank_0
 from omni_training.utils.constants import TrainingPhase, VisionLanguageModelFamilies
-from omni_training.data.video.latent_dataset import ErnieImageDataset
+from omni_training.data.multimodal.ernie.data_utils import ErnieTensorDataset
 from omni_training.train.megatron_trainer import MegatronTrainer
 from omni_training.train.trainer_builder import register_model_trainer
 from megatron.core import parallel_state
@@ -216,7 +216,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     if getattr(args, "task_encoder", None):
         return train_valid_test_datasets_provider_energon(train_val_test_num_samples)
 
-    dataset = ErnieImageDataset(
+    dataset = ErnieTensorDataset(
         args, args.data_path[0], args.train_iters * args.global_batch_size
     )
 
