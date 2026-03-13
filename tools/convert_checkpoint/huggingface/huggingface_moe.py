@@ -1,4 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """ Mcore_checkpoint converter for aiak megatron. """
+
 import logging
 
 logging.basicConfig(level=logging.INFO)

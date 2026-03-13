@@ -1,8 +1,10 @@
-"""RoPE (Rotary Positional Embedding) utilities for vision models.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
-This module provides functions for applying rotary positional embeddings
-to tensors in vision models, supporting both fused and unfused implementations.
-"""
+"""RoPE utilities for vision models."""
 
 from __future__ import annotations
 

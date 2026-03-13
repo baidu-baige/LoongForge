@@ -1,4 +1,8 @@
-"""OmniDecoderModel: Base decoder model class.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+OmniDecoderModel: Base decoder model class.
 Provides unified interface for image/video/audio generation tasks.
 """
 

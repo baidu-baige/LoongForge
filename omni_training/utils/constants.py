@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """constants"""
 
 from typing import List
@@ -72,15 +75,12 @@ class LanguageModelFamilies(_BaseFamilies):
     LLAMA2 = "llama2"
     LLAMA3 = "llama3"
     LLAMA3_1 = "llama3.1"
-    BAICHUAN = "baichuan"
-    BAICHUAN2 = "baichuan2"
     QWEN = "qwen"
     QWEN1_5 = "qwen1.5"
     QWEN2 = "qwen2"
     QWEN2_5 = "qwen2.5"
     QWEN3 = "qwen3"
     QWEN3_NEXT = "qwen3_next"
-    MIXTRAL = "mixtral"
     DEEPSEEK = "deepseek"
     INTERNLM2_5 = "internlm2.5"
     MINIMAX = "minimax"

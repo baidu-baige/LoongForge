@@ -1,13 +1,8 @@
-# Copyright (c) 2026 Baidu Inc
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This file is partially derived from:
-#   Megatron-LM
-#   Copyright (c) 2020-present NVIDIA CORPORATION
-#   Licensed under the Apache License, Version 2.0
-#
-# Original source:
-#   https://github.com/NVIDIA/Megatron-LM
-
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
 """Rerun state wrapper."""
 

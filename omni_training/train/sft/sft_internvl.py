@@ -1,4 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """ sft for internvl model """
+
 import torch.distributed as dist
 
 import math

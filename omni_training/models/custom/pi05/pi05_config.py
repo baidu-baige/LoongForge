@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Register pi05 config with the model factory."""
 
 from omni_training.models.factory import register_model_config

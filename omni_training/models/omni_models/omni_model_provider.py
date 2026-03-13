@@ -1,4 +1,8 @@
-"""Omni Model Provider.Provides model construction interfaces compatible with existing training frameworks.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Omni Model Provider.Provides model construction interfaces compatible with existing training frameworks.
 """
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Moe layer for Ernie"""
 
 from dataclasses import dataclass
@@ -48,6 +51,7 @@ class ErnieDispatcher(MoEAlltoAllTokenDispatcher):
         global_input_tokens = permutated_local_input_tokens
         global_probs = permuted_probs
         return global_input_tokens, global_probs
+
 
 class ErnieMoeLayer(MoELayer):
     """MoE Layer for Ernie"""
@@ -145,11 +149,6 @@ class ErnieMoeLayer(MoELayer):
         Returns:
             A tuple containing the output tensor and the MLP bias, if any.
         """
-        # if self.training and self.attn_tp_group.size() > 1 and not self.config.sequence_parallel:
-        #     raise ValueError(
-        #         "During training, performance may degrade if MoE and tensor parallelism"
-        #         "are enabled without also enabling sequence parallelism."
-        #     )
 
         # MoE forward: route -> dispatch -> compute -> combine -> post-combine
         def custom_forward(hidden_states, token_type_ids):
@@ -188,11 +187,6 @@ class ErnieMoeLayer(MoELayer):
             output = torch.matmul(raw_probs, reshaped_outs)  # [seq, 1, 2] @ [seq, 2, dim] -> [seq, 1, dim]
 
             return output, mlp_bias
-
-            # output = self.post_routed_experts_compute(expert_output)
-            # output = self.combine(output)
-            # output = self.post_combine(output, shared_expert_output)
-            # return output, mlp_bias
 
         def custom_forward_exclude_shared_experts(hidden_states, token_type_ids):
             # Add Mask tokens from different modalities

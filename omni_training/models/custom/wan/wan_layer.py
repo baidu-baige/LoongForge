@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 
 """tranformer layer."""
 

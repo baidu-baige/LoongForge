@@ -1,3 +1,10 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+
+
 """llavaov 1.5 layer spec."""
 
 import torch

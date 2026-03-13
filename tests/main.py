@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-################################################################################
-#
-# Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
-#
-################################################################################
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 
+"""Main entry point for the training script."""
 
 from tools.arguments import parse_args
 from tools.color_logger import create_color_logger

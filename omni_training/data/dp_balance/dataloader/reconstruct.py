@@ -1,6 +1,7 @@
-"""
-reconstruct funcs
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""reconstruct funcs"""
 
 import torch
 from megatron.training import get_args

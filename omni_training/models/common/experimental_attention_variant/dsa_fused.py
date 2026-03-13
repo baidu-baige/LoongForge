@@ -1,11 +1,16 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """
 Adjusted from megatron.core.transformer.experimental_attention_variant.dsa (MegatronLM).
 
-Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+Fused DSA (DeepSeek Sparse Attention) implementation. 
+Avoids materializing full [sq, sk] tensors to reduce memory for long-sequence training.
 
-Fused DSA (DeepSeek Sparse Attention) implementation. Avoids materializing full [sq, sk] tensors
-to reduce memory for long-sequence training. Key differences from the original:
-
+Key differences from the original:
 1. Fused indexer kernel (CUDA) replaces einsum-based [b, sq, sk] score materialization.
 2. Fused attention kernel (CUDA + TileLang) replaces bmm-based [b, np, sq, skv] computation.
 3. Packed sequence (thd format) support with cu_seqlens sharding.

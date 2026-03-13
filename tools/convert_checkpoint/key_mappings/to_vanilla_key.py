@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Transform OmniTraining checkpoint keys back to vanilla naming schemes."""
+
 def transform_key_forward(key, forward_mappings):
     """
     Transform key using forward mapping

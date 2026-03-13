@@ -1,4 +1,8 @@
-""" Mcore_checkpoint converter for aiak megatron. """
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Base utilities for converting common checkpoints to and from HuggingFace format."""
+
 import torch
 import logging
 

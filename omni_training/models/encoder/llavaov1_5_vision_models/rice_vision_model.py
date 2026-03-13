@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from LLaVA-OneVision-1.5 under the Apache-2.0 License.
+
 """VisionTransformer module"""
 
 import torch
@@ -42,8 +47,9 @@ class PatchEmbed(torch.nn.Module):
         
         return hidden_states
 
+
 class RiceViTModel(BaseVisionModel):
-    """"""
+    """Rice VIT Model"""
 
     config_class = RiceVisionConfig
 

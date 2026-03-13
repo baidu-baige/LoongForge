@@ -1,6 +1,7 @@
-"""
-Orchestrate the execution flow of encoder -> foundation -> decoder
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Orchestrate the execution flow of encoder -> foundation -> decoder"""
 
 from __future__ import annotations
 

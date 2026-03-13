@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """aiak train module"""
 
 from .parser import parse_train_args, parse_args_from_config, parse_args_from_config

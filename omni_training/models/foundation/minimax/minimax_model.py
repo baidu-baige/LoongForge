@@ -1,8 +1,9 @@
-"""DeepSeek model"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 
-from contextlib import nullcontext
+"""Minimax model"""
+
 import logging
-from collections import OrderedDict
 from typing import Dict, Literal, Optional, Any
 
 import torch

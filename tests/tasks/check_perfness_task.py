@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-################################################################################
-#
-# Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
-#
-################################################################################
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""check performance"""
 
 from tasks.base_task import BaseTask, TaskResut
 from tools.color_logger import create_color_logger

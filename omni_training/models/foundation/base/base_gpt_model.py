@@ -1,4 +1,11 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """Base GPT Model"""
+
 import torch
 from torch import Tensor
 import logging
@@ -38,6 +45,7 @@ from megatron.core.utils import WrappedTensor, deprecate_inference_params
 
 from omni_training.models.foundation.language_transformer_block import TransformerBlock
 from omni_training.models.common.base_model_mixins import BaseMegatronLanguageModule
+
 
 class BaseGPTModel(BaseMegatronLanguageModule):
     """Unified Base GPT Class for Language Models.

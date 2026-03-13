@@ -1,4 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Model utilities."""
+
 from typing import Tuple
 import torch
 from megatron.core.transformer import MLATransformerConfig, TransformerConfig

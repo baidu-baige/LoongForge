@@ -1,4 +1,5 @@
-# Copyright (c) 2026, AIAK team. All rights reserved.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 
 """data balance"""
 

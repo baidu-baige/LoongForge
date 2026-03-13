@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Script for converting packed samples to WebDataset format."""
 
 import json
 import logging

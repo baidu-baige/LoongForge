@@ -1,12 +1,8 @@
-# Copyright (c) 2026 Baidu Inc
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This file is partially derived from:
-#   PyTorch
-#   Copyright (c) 2016-present Facebook, Inc. and its affiliates
-#   Licensed under the Apache License, Version 2.0
-#
-# Original source:
-#   https://github.com/pytorch/pytorch
+# Modified from PyTorch under the BSD 3-Clause License.
+# Copyright (c) 2016-present, Facebook, Inc and respective contributors.
 
 
 r"""Contains definitions of the methods used by the _BaseDataLoaderIter to put fetched tensors into pinned memory.

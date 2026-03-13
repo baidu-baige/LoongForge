@@ -1,4 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Lora model config"""
+
 from ..common.base_model_config import BasePeftModelConfig
 from dataclasses import dataclass, field, fields
 from typing import List, Literal, Optional

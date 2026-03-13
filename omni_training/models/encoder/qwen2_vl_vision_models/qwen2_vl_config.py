@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """register qwen model with different config"""
 
 import torch
@@ -5,9 +8,6 @@ from dataclasses import dataclass, fields
 
 from megatron.core.activations import quick_gelu
 from ...common.base_model_config import BaseModelConfig
-from megatron.core.transformer import TransformerConfig
-from omni_training.models.factory import register_model_config
-from omni_training.utils.constants import VisionLanguageModelFamilies
 
 
 @dataclass
@@ -56,6 +56,8 @@ class Qwen2VisionRMSNormConfig(Qwen2VisionModelConfig):
     normalization: str = "RMSNorm"
 
     model_type = "qwen2_5_vit_rmsnorm"
+
+
 @dataclass
 class MLPAdapterConfig(BaseModelConfig):
     """configuration for adapter model

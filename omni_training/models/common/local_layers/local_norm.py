@@ -1,3 +1,9 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+
 """megatron local norm"""
 
 from megatron.core.transformer.transformer_config import TransformerConfig
@@ -95,6 +101,7 @@ class LocalNorm:
             raise Exception("Only LayerNorm and RMSNorm are curently supported")
 
         return instance
+
 
 class RMSNorm(nn.Module):
     """

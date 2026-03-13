@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-################################################################################
-#
-# Copyright (c) 2024 Baidu.com, Inc. All Rights Reserved
-#
-################################################################################
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Common checkpoint structures and shared checkpoint key definitions."""
 
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
 
@@ -13,7 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-""" Name of common checkpoint layers, matching key of name_map in {model}.json """
+# Name of common checkpoint layers, matching key of name_map in {model}.json
 
 WORD_EMBEDDINGS = "word_embeddings"
 WORD_POSITION_EMBEDDINGS = "word_position_embeddings"

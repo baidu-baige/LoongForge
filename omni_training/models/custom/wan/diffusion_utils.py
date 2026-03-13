@@ -14,106 +14,6 @@ import numpy as np
 import torch
 from megatron.core import mpu
 
-from omni_training.utils import get_args
-
-
-def send_batch(batch, broadcast):
-    """send batch"""
-
-    args = get_args()
-    video_shape = torch.tensor(batch["video"].shape, dtype=torch.int64).cuda(
-        non_blocking=True
-    )
-    broadcast(video_shape)
-    args.micro_batch_size = video_shape.tolist()[0]
-
-    broadcast(batch["video"])
-    broadcast(batch["video_noised"])
-    broadcast(batch["video_mask"])
-    broadcast(batch["labels"])
-    broadcast(batch["text_enc"])
-    broadcast(batch["text_mask"])
-    broadcast(batch["timestep"])
-    return batch
-
-
-def receive_batch(broadcast):
-    """receive batch"""
-
-    args = get_args()
-    device = torch.cuda.current_device()
-    video_shape = torch.empty(5, dtype=torch.int64, device=device)
-    broadcast(video_shape)
-    args.micro_batch_size = video_shape.tolist()[0]
-
-    video = torch.empty(video_shape.tolist(), dtype=torch.float32, device=device)
-    video_noised = torch.empty_like(video, dtype=torch.float32, device=device)
-    video_mask = torch.empty_like(video, dtype=torch.bool, device=device)
-    text_enc = torch.empty(
-        (args.micro_batch_size, 1, args.max_text_length, args.caption_channels),
-        dtype=torch.float32,
-        device=device,
-    )
-    text_mask = torch.empty(
-        (args.micro_batch_size, args.max_text_length), dtype=torch.bool, device=device
-    )
-    timestep = torch.empty((args.micro_batch_size,), dtype=torch.int64, device=device)
-    labels = torch.empty_like(video, dtype=torch.float32, device=device)
-
-    broadcast(video)
-    broadcast(video_noised)
-    broadcast(video_mask)
-    broadcast(labels)
-    broadcast(text_enc)
-    broadcast(text_mask)
-    broadcast(timestep)
-
-    batch = {
-        "video": video,
-        "video_noised": video_noised,
-        "video_mask": video_mask,
-        "labels": labels,
-        "text_enc": text_enc,
-        "text_mask": text_mask,
-        "timestep": timestep,
-    }
-
-    return batch
-
-
-def broadcast_on_cp_group(batch):
-    """broadcast_on_cp_group,"""
-
-    def _broadcast(item):
-        if item is not None:
-            torch.distributed.broadcast(
-                item,
-                mpu.get_context_parallel_src_rank(),
-                group=mpu.get_context_parallel_group(),
-            )
-
-    if mpu.get_context_parallel_rank() == 0:
-        return send_batch(batch, _broadcast)
-    else:
-        return receive_batch(_broadcast)
-
-
-def broadcast_on_tp_group(batch):
-    """get_batch_on_this_tp_rank,"""
-
-    def _broadcast(item):
-        if item is not None:
-            torch.distributed.broadcast(
-                item,
-                mpu.get_tensor_model_parallel_src_rank(),
-                group=mpu.get_tensor_model_parallel_group(),
-            )
-
-    if mpu.get_tensor_model_parallel_rank() == 0:
-        return send_batch(batch, _broadcast)
-    else:
-        return receive_batch(_broadcast)
-
 
 def normal_kl(mean1, logvar1, mean2, logvar2):
     """
@@ -152,23 +52,6 @@ def approx_standard_normal_cdf(x):
     return 0.5 * (
         1.0 + torch.tanh(np.sqrt(2.0 / torch.pi) * (x + 0.044715 * torch.pow(x, 3)))
     )
-
-
-def continuous_gaussian_log_likelihood(x, *, means, log_scales):
-    """
-    Compute the log-likelihood of a continuous Gaussian distribution.
-    :param x: the targets
-    :param means: the Gaussian mean Tensor.
-    :param log_scales: the Gaussian log stddev Tensor.
-    :return: a tensor like x of log probabilities (in nats).
-    """
-    centered_x = x - means
-    inv_stdv = torch.exp(-log_scales)
-    normalized_x = centered_x * inv_stdv
-    log_probs = torch.distributions.Normal(
-        torch.zeros_like(x), torch.ones_like(x)
-    ).log_prob(normalized_x)
-    return log_probs
 
 
 def discretized_gaussian_log_likelihood(x, *, means, log_scales):

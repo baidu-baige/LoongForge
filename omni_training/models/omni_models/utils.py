@@ -1,4 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """ Utils """
+
 import torch
 import torch.distributed as dist
 from torch import Tensor

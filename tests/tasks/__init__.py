@@ -1,13 +1,7 @@
-#!/usr/bin/env python3
-"""
-__init__.py
-"""
-# -*- coding: UTF-8 -*-
-################################################################################
-#
-# Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
-#
-################################################################################
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""init"""
 
 from tasks.base_task import BaseTask
 from tasks.check_correctness_task import CorrectnessCheckTask

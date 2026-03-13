@@ -1,4 +1,8 @@
-""" Mcore_checkpoint converter for aiak megatron. """
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Convert MoE checkpoint parameters between common and Megatron Core formats."""
+
 import io
 import torch
 import logging

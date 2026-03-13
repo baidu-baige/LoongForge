@@ -1,7 +1,7 @@
-#!/usr/bin/env python
-
-"""Model implementation for the PI05 policy, adapted from OpenPI."""
-
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from lerobot (https://github.com/huggingface/lerobot).
 # Copyright 2025 Physical Intelligence and The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""Model implementation for the PI05 policy, adapted from OpenPI."""
 
 import builtins
 import logging

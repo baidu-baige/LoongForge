@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Common utilities for offline data packing including config parsing, path helpers, and templates."""
+
 import yaml
 import os
 from pathlib import Path

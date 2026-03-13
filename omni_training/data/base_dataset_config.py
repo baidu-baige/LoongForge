@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """base dataset config"""
 
 from dataclasses import dataclass, fields, field

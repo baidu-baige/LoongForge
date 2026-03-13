@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Hash bucket processor for efficient data packing."""
+
 import os
 import sys
 import time

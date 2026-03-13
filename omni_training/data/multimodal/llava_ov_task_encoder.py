@@ -1,4 +1,9 @@
-"""Qwen2VLTaskEncoder class."""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from LLaVA-OneVision-1.5 under the Apache-2.0 License.
+
+"""LLavA-OneVision TaskEncoder class."""
 
 import math
 import re

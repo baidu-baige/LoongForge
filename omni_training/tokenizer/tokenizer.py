@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """AIAK Tokenizer"""
 
 from typing import TYPE_CHECKING, Optional
@@ -20,7 +23,11 @@ if TYPE_CHECKING:
 def _update_tokenizer_with_template(
     args, tokenizer: AutoTokenizerFromHF, chat_template: "ChatTemplate"
 ):
-    """Update tokenizer with chat template."""
+    """
+    Update tokenizer with chat template.
+    
+    Adapted from https://github.com/hiyouga/LlamaFactory/blob/v0.8.3/src/llamafactory/data/template.py#L341
+    """
     stop_words = chat_template.stop_words
     if chat_template.replace_eos:
         assert stop_words, "EOS replacement requires stop words."

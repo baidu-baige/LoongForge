@@ -1,3 +1,9 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """Ernie4.5vl model"""
 
 import torch
@@ -154,12 +160,10 @@ class ErnieMoeModel(BaseGPTModel):
         deepstack_visual_embeds: torch.Tensor = None,
         extra_block_kwargs: dict = None,
         runtime_gather_output: Optional[bool] = None,
-
     ) -> Dict: 
         """
         Forward func of Ernie4.5VLMoeModel.
         """
-
         # visual_pos_masks do not include <img_start> <img_end> token
         all_image_mask = extra_block_kwargs["token_type_ids"]
         rotary_pos_emb = self.rotary_pos_emb(position_ids)

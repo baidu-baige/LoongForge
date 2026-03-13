@@ -1,4 +1,11 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+
 """llm model provider"""
+
 import inspect
 from typing import Optional
 from contextlib import nullcontext

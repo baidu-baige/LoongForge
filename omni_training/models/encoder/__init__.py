@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """encoder models package."""
 
 from .base_vision_models.base_vision_model import BaseVisionModel

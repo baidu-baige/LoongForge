@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """wan model provider"""
 
 from megatron.core.transformer.spec_utils import import_module
@@ -9,6 +12,7 @@ from omni_training.models.common import BaseModelStditConfig
 from .wan_model import WanModel
 from .wan_layer_spec import get_wan_layer_with_te_spec
 import torch
+
 
 def wan2_2_i2v_model_provider(
     pre_process: bool = True,
