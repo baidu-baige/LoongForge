@@ -103,7 +103,7 @@ TRAINING_ARGS=(
   --no-bias-gelu-fusion
   --max-dynamic-patch 12
   --packing-sft-data
-  --packing-batch-size 200
+  --packing-buffer-size 200
   --energon-pack-algo sequential_max_images
   --allow-missing-adapter-checkpoint
 )

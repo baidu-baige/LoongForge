@@ -74,7 +74,7 @@ SFT_ARGS=(
     #--is-tokenized-data
     #--packing-sft-data
     #--sft-sort-batch
-    #--packing-batch-size 10000
+    #--packing-buffer-size 10000
     #--sft-data-streaming
 
     #--train-on-prompt

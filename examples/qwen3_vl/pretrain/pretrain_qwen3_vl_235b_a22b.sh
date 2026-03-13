@@ -42,7 +42,7 @@ DATA_ARGS=(
     --enable-discard-sample
     --num-workers 16
     # --packing-sft-data
-    # --packing-batch-size 500
+    # --packing-buffer-size 500
 )
 
 TRAINING_ARGS=(

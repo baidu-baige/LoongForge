@@ -98,7 +98,7 @@ DATA_ARGS=(
     --num-workers 8
     --chat-template qwen2-vl
     --packing-sft-data
-    --packing-batch-size 1000
+    --packing-buffer-size 1000
     --max-packed-tokens 4096
     --enable-discard-sample
 )

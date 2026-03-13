@@ -43,7 +43,7 @@ def build_sft_dataset(args):
         is_tokenized=False,
         packing=args.packing_sft_data,
         sort_batch=args.sft_sort_batch,
-        packing_batch_size=args.packing_batch_size,
+        packing_buffer_size=args.packing_buffer_size,
         context_parallel_size=args.context_parallel_size,
     )
     
@@ -143,7 +143,7 @@ def _add_arguments(parser: argparse.ArgumentParser):
                        action='store_true',
                        help="Whether to pack multiple sft data into one.")
 
-    group.add_argument("--packing-batch-size",
+    group.add_argument("--packing-buffer-size",
                        type=int,
                        default=10000,
                        help="Perform packing in batches, deciding how many samples each batch contains;"

@@ -33,7 +33,7 @@ multimodal:
 * `--data-path`: Dataset path (multiple paths can be specified for mixed training).
 * `--sft-dataset-config`: Dataset configuration file path, default is sft_dataset_config.yaml.
 * `--packing-sft-data`: Enable online packing mode
-* `--packing-batch-size`: Packing batch size, affecting packing efficiency and memory usage
+* `--packing-buffer-size`: Packing batch size, affecting packing efficiency and memory usage
 
 ### 1.3 Dataset Preprocessing
 
@@ -41,7 +41,7 @@ The process of converting to **Energon loading format** is the same as the pre-t
 
 * **Online Packing**
 
-Enable under DATA_ARGS in the training script: `--packing-sft-data`, `--packing-batch-size` to activate online packing mode. This concatenates multiple shorter samples into the same sequence to improve token utilization. The packing processing batch size indicates the number of samples processed in each packing operation. Larger values typically result in better packing effects but higher preprocessing overhead and memory usage.
+Enable under DATA_ARGS in the training script: `--packing-sft-data`, `--packing-buffer-size` to activate online packing mode. This concatenates multiple shorter samples into the same sequence to improve token utilization. The packing processing batch size indicates the number of samples processed in each packing operation. Larger values typically result in better packing effects but higher preprocessing overhead and memory usage.
 
 * **Offline Packing**
 
