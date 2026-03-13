@@ -89,7 +89,8 @@ def get_local_layer_specs(config, layer_specs, vp_stage=None):
         from megatron.core.transformer.enums import LayerType
         local_layer_specs = [
             layer_specs[layer_id] for layer_id in config.pipeline_model_parallel_layout.get_layer_id_list(
-                layer_type=LayerType.decoder)
+                layer_type=LayerType.decoder, vp_stage=vp_stage
+            )
         ]
     else:
         offset = get_transformer_layer_offset(config, vp_stage=vp_stage)
