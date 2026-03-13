@@ -61,7 +61,6 @@ class PI05Config(PreTrainedConfig):
     # Add empty images. Used to add empty cameras when no image features are present.
     empty_cameras: int = 0
 
-    tokenizer_max_length: int = 200  # see openpi `__post_init__`
     tokenizer_name: str = os.environ.get("TOKENIZER_PATH", "")
 
     tokenizer_local_files_only: bool = True  # Default to offline loading

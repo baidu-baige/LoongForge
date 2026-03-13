@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from collections import Counter
 from pprint import pformat
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 from megatron.core.enums import ModelType
@@ -18,11 +18,6 @@ from megatron.training import get_timers
 from megatron.training.utils import average_losses_across_data_parallel_group
 from torch.utils.data import Dataset, SubsetRandomSampler, Sampler, default_collate
 
-from omni_training.data.lerobot import (
-    LeRobotDatasetConfig,
-    build_lerobot_dataset,
-    get_lerobot_dataset_stats,
-)
 from omni_training.models import get_model_family, get_model_provider
 from omni_training.train.megatron_trainer import MegatronTrainer
 from omni_training.train.sft.utils import _build_cylic_iterator, _cyclic_iter
@@ -37,7 +32,7 @@ from lerobot.configs.default import DatasetConfig
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.datasets.factory import make_dataset
 from lerobot.policies.pi05.configuration_pi05 import PI05Config as LrPI05Config
-from lerobot.policies.factory import make_policy, make_pre_post_processors
+from omni_training.models.custom.pi05.processor_pi05 import make_pi05_pre_post_processors
 
 
 stimer = StragglerDetector()
@@ -165,6 +160,13 @@ def _ensure_megatron_defaults(train_args):
         for attr in ("main_grads_dtype", "main_params_dtype", "exp_avg_dtype", "exp_avg_sq_dtype"):
             setattr(train_args, attr, torch.float32)
 
+
+def get_lerobot_dataset_stats(dataset: Any) -> dict[str, Any] | None:
+    """Return LeRobot dataset stats if available."""
+
+    meta = getattr(dataset, "meta", None)
+    stats = getattr(meta, "stats", None) if meta is not None else None
+    return stats
 
 
 def model_provider(pre_process=True, post_process=True, vp_stage: int | None = None):
@@ -317,14 +319,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     dataset_stats = get_lerobot_dataset_stats(base_dataset)
     preprocess_cfg = deepcopy(lr_policy_cfg)
     preprocess_cfg.device = "cpu"
-    # Use lerobot factory so processor graph matches lerobot_train exactly
-    preprocessor, _postprocessor = make_pre_post_processors(
-        policy_cfg=preprocess_cfg,
+
+    preprocessor, _postprocessor = make_pi05_pre_post_processors(
+        config=preprocess_cfg,
         dataset_stats=dataset_stats,
     )
 
-    # Auto-fill config features from dataset metadata if the caller didn't set them,
-    # mirroring lerobot's factory logic so camera keys align with the dataset.
+
     ds_features = dataset_to_policy_features(base_dataset.meta.features)
     config.output_features = {k: ft for k, ft in ds_features.items() if ft.type is FeatureType.ACTION}
     if not config.input_features:

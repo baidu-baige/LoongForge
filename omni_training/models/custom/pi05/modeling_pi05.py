@@ -238,15 +238,7 @@ def compute_layer_complete(
         nvtx.range_push("pi05_llm_layer_qkv" if i == 0 else "pi05_action_expert_layer_qkv")
         layer = models[i].layers[layer_idx]
         # Newer adarms-enabled norms accept cond; vanilla GemmaRMSNorm does not.
-        norm_params = signature(layer.input_layernorm.forward).parameters
-        if "cond" in norm_params:
-            norm_out = layer.input_layernorm(hidden_states, cond=adarms_cond[i])
-        else:
-            norm_out = layer.input_layernorm(hidden_states)
-        if isinstance(norm_out, tuple):
-            hidden_states, gate = norm_out
-        else:
-            hidden_states, gate = norm_out, None  # backward-compatible when gate not returned
+        hidden_states, gate = layer.input_layernorm(hidden_states, cond=adarms_cond[i])  # noqa: PLW2901
         gates.append(gate)
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, layer.self_attn.head_dim)
