@@ -15,8 +15,6 @@ class TensorDataset(torch.utils.data.Dataset):
         self.metadata = []
         self.load_metadata(metadata_path)
         base_path = Path(args.data_path[0])
-        if args.model_name == "wan2_1_i2v":
-            self.path = [base_path / Path(data["video_path"]).name for data in self.metadata]
         if args.model_name == "wan2_2_i2v":
             self.path = [base_path / data["video"] for data in self.metadata]
 

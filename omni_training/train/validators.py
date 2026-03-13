@@ -208,9 +208,6 @@ def _validata_extra_custom_args(args):
     if args.model_family not in constants.CustomModelFamilies.names():
         return
 
-    if args.model_family == "wan2_1_i2v":
-        return
-
     # make text length divisible by cp size
     if args.max_text_length is not None and args.context_parallel_size > 1:
         while (args.max_text_length % args.context_parallel_size) != 0:

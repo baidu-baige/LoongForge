@@ -131,7 +131,6 @@ After successful registration, you can reference the model directly by name (e.g
 ## 3. Supporting Custom Models (Using Wan as Example)
 Wan series model configurations are located in `configs/models/wan/`, for example:
 
-* `configs/models/wan/wan2_1_i2v.yaml`
 * `configs/models/wan/wan2_2_i2v.yaml`
 
 ### 3.1 Adding New Wan Configuration
