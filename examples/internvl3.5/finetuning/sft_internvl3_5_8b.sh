@@ -105,7 +105,7 @@ TRAINING_ARGS=(
   --conv-style internvl2_5
   --max-dynamic-patch 12
   --packing-sft-data
-  --packing-batch-size 474 
+  --packing-buffer-size 474 
   --energon-pack-algo sequential_max_images
   --allow-missing-adapter-checkpoint
 )

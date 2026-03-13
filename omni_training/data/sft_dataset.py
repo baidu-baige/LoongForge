@@ -156,7 +156,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
     sort_batch: bool = False
     """Whether to sort batch or not"""
 
-    packing_batch_size: int = 10000
+    packing_buffer_size: int = 10000
     """Perform packing in batches, deciding how many samples each batch contains"""
 
     context_parallel_size: Optional[int] = None

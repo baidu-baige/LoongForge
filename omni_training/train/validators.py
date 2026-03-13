@@ -200,7 +200,7 @@ def _validate_extra_multimodal_args(args):
     
     args.variable_seq_lengths = True
     if not (args.packing_pretrain_data or args.packing_sft_data):
-        args.packing_batch_size = None
+        args.packing_buffer_size = None
 
 
 def _validata_extra_custom_args(args):

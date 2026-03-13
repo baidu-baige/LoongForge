@@ -379,7 +379,7 @@ def convert_to_tokenized_data(
         batched=True,
         remove_columns=columns,
         features=features,
-        batch_size=config.packing_batch_size,
+        batch_size=config.packing_buffer_size,
         **kwargs,
     )
 

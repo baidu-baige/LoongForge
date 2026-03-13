@@ -1,4 +1,9 @@
-"""AIAK arguments"""
+"""AIAK Training Arguments Module
+
+This module defines command-line arguments for AIAK training pipeline,
+including model configuration, tokenizer settings, SFT data processing,
+video processing, multimodal training, and parallel execution.
+"""
 
 import argparse
 
@@ -8,7 +13,17 @@ from omni_training.utils import constants
 
 
 def aiak_extra_train_args_provider(parser: argparse.ArgumentParser):
-    """Add AIAK arguments to parser"""
+    """Add AIAK-specific arguments to the argument parser.
+    
+    This function serves as the main entry point for adding all AIAK-specific
+    training arguments, organized by functional groups.
+    
+    Args:
+        parser: The base argument parser to extend.
+        
+    Returns:
+        The modified argument parser with all AIAK arguments added.
+    """
     parser.conflict_handler = "resolve"
     parser = _add_extra_model_args(parser)
     parser = _add_extra_tokenizer_args(parser)
@@ -17,285 +32,428 @@ def aiak_extra_train_args_provider(parser: argparse.ArgumentParser):
     parser = _add_extra_training_args(parser)
     parser = _add_extra_multimodal_args(parser)
     parser = _add_extra_parallel_args(parser)
-    # add args for debug infos;
+    # Debug and logging arguments
     parser = _add_log_tensor_args(parser)
-    # add args for rice vl 
+    # Rice-VL specific arguments
     parser = _add_extra_training_rice_vl_args(parser)
 
     return parser
 
 
+# =============================================================================
+# Tensor Logging Arguments (llm-inspector)
+# =============================================================================
+
 def _add_log_tensor_args(parser):
-    group = parser.add_argument_group(title="Arguments for Logging Tensor stats")
+    """Add arguments for tensor logging and debugging via llm-inspector.
+
+    These arguments interface with the llm-inspector library for debugging
+    model training. When enabled (via --enable-log-tensor), the system will
+    register hooks to capture tensor statistics during training.
+
+    Required dependency: llm-inspector (internal Baidu library)
+    Git path: /workspace/baidu/hac-aiacc/llm-inspector
+
+    Usage:
+        These arguments are typically used together:
+        1. --enable-log-tensor: Enable the tensor logging feature
+        2. --log-tensor-name-pattern: Filter which modules to log (regex)
+        3. --log-tensor-stage: Choose when to log (init/forward/backward)
+        4. --log-tensor-iter-pattern: Specific iterations to log
+        5. --log-tensor-mbs-pattern: Specific micro-batches to log
+        6. --log-tensor-layer-pattern: Specific layers to log
+        7. --log-tensor-rank: Which GPU ranks to log
+        8. --save-tensor: Save tensors to disk (vs just print norms)
+        9. --save-tensor-dir: Directory to save tensor files
+
+    Example:
+        python train.py --enable-log-tensor \\
+            --log-tensor-name-pattern ".*attention.*" \\
+            --log-tensor-stage "forward,backward" \\
+            --log-tensor-iter-pattern "0,100,1000" \\
+            --save-tensor \\
+            --save-tensor-dir "./tensor_logs"
+
+    Note: If llm-inspector is not installed, these arguments will be ignored
+    silently. The feature is controlled by HAS_INSPECTOR flag in training_utils.py.
+    """
+    group = parser.add_argument_group(
+        title="Tensor Logging (llm-inspector)",
+        description="Arguments for debugging tensor statistics via llm-inspector library. "
+                    "Requires llm-inspector package to be installed."
+    )
 
     group.add_argument(
-        "--enable-log-tensor", action="store_true", help="trace debug info & tensors."
+        "--enable-log-tensor",
+        action="store_true",
+        help="[llm-inspector] Enable tensor logging for debugging. When enabled, tensor statistics "
+             "will be traced during training using the llm-inspector library. "
+             "Requires llm-inspector to be installed. Default: False"
     )
-    # default value means log all module's info
+    
     group.add_argument(
         "--log-tensor-name-pattern",
         type=str,
         default=None,
-        help="The module name pattern by which log tensor is applied",
+        help="[llm-inspector] Regex pattern to filter module names for tensor logging. "
+             "When None (default), logs all modules. "
+             "Example: '.*attention.*' to log only attention modules. Default: None"
     )
+    
     group.add_argument(
         "--log-tensor-stage",
         type=str,
         default="forward",
         choices=["init", "forward", "backward"],
-        help="log tensor at which stage",
+        help="[llm-inspector] Training stage at which to log tensors. "
+             "'init': model initialization, 'forward': forward pass, 'backward': backward pass. "
+             "Multiple stages can be specified comma-separated, e.g., 'forward,backward'. "
+             "Default: forward"
     )
+    
     group.add_argument(
         "--log-tensor-iter-pattern",
         type=str,
         default=None,
-        help="for which iters to log tensors, value like 8,15,20",
+        help="[llm-inspector] Comma-separated iteration indices at which to log tensors. "
+             "Example: '8,15,20' logs tensors at iterations 8, 15, and 20. "
+             "When None, logs at all iterations. Default: None"
     )
+    
     group.add_argument(
         "--log-tensor-mbs-pattern",
         type=str,
         default=None,
-        help="for which mbs to log tensors, value like 8,15,20",
+        help="[llm-inspector] Comma-separated micro-batch indices at which to log tensors. "
+             "Example: '0,2,4' logs tensors for micro-batches 0, 2, and 4. "
+             "Default: None"
     )
+    
     group.add_argument(
         "--log-tensor-layer-pattern",
         type=str,
         default=None,
-        help="for which layer to log tensors, value like 8,15,20",
+        help="[llm-inspector] Comma-separated layer indices at which to log tensors. "
+             "Example: '0,5,10' logs tensors for layers 0, 5, and 10. "
+             "Default: None"
     )
+    
     group.add_argument(
         "--log-tensor-rank",
         type=str,
         default="0",
-        help="for which rank to log tensors, value like 0,1,2,4",
+        help="[llm-inspector] Comma-separated GPU ranks at which to log tensors. "
+             "Example: '0,1,2,4' logs tensors on ranks 0, 1, 2, and 4. "
+             "Default: 0"
     )
 
-    # Save Tensor options
+    # Tensor saving options
     group.add_argument(
-        "--save-tensor", action="store_true", help="Save tensors to files."
+        "--save-tensor",
+        action="store_true",
+        help="[llm-inspector] Save logged tensors to disk files for offline analysis. "
+             "When False, only prints tensor norms to log file. Default: False"
     )
+    
     group.add_argument(
-        "--save-tensor-dir", type=str, default="", help="Save tensor to directory"
+        "--save-tensor-dir",
+        type=str,
+        default="",
+        help="[llm-inspector] Directory path to save tensor files. Required when --save-tensor is enabled. "
+             "Default: '' (current directory)"
     )
 
     return parser
 
+
+# =============================================================================
+# Rice-VL Training Arguments
+# =============================================================================
+
 def _add_extra_training_rice_vl_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Create a dedicated group for Rice-VL arguments for better organization in the help message."""
+    """Add arguments specific to Rice-VL model training.
+    
+    Rice-VL is a vision-language model that requires special handling
+    for answer length during training.
+    """
     group = parser.add_argument_group(
         title='Training Rice-VL',
-        description='Arguments specific to the Rice-VL model training configuration.'
+        description='Arguments specific to Rice-VL vision-language model training'
     )
 
     group.add_argument(
         '--training-rice-vl-max-answer-length',
         type=int,
         default=4096,
-        help=(
-            "The maximum number of characters allowed in an answer during training. "
-            "Answers longer than this will be truncated."
-        )
+        help="Maximum character length allowed for answers during Rice-VL training. "
+             "Answers exceeding this length will be truncated. Default: 4096"
     )
     return parser
 
-def _add_extra_model_args(parser: argparse.ArgumentParser):
-    """Add model arguments"""
-    group = parser.add_argument_group(title="extra-model")
 
-    # only need to pass one argument
-    parser.add_argument(
-        "--config-file", 
-        type=str, 
+# =============================================================================
+# Model Arguments
+# =============================================================================
+
+def _add_extra_model_args(parser: argparse.ArgumentParser):
+    """Add arguments for model configuration and loading.
+    
+    These arguments control model architecture selection, parameter freezing,
+    and checkpoint handling.
+    """
+    group = parser.add_argument_group(
+        title="Model Configuration",
+        description="Arguments for model architecture and parameter management"
+    )
+
+    group.add_argument(
+        "--config-file",
+        type=str,
         required=False,
-        help="Path to YAML config file. Example: /path/to/.../config_name.yaml")
+        help="Path to YAML configuration file containing model and training settings. "
+             "Example: /path/to/config.yaml. When provided, other arguments may be "
+             "overridden by config file values. Default: None"
+    )
 
     group.add_argument(
         "--model-name",
         type=str,
         default=None,
         required=False,
-        help="The model name to use. This name should match the key in the model config registry.",
+        help="Name identifier for the model architecture. Must match a registered model "
+             "in the MODEL_CONFIG_REGISTRY. Example: 'llama2-7b', 'qwen2-7b'. Default: None"
     )
 
-    # use for mla
     group.add_argument(
         "--enable-fa-within-mla",
         action="store_true",
-        help="Since qk_head_dim != v_head_dim in MLA, fa cannot be used by default. Enable "
-        "this option, the head dimensions will be aligned by padding, so that fa can be used."
-        "Deprecated: use --attention-backend=flash",
+        help="Enable FlashAttention for Multi-Head Latent Attention (MLA) models. "
+             "Since MLA has different QK and V head dimensions, FlashAttention is disabled "
+             "by default. This option aligns head dimensions via padding to enable FlashAttention. "
+             "Default: False"
     )
 
-    # use for freeze parameters
-    group.add_argument('--freeze-parameters',
-                       type=str,
-                       nargs="*",
-                       default=[],
-                       help='Prefixes of parameters to freeze (default: [])'
+    group.add_argument(
+        '--freeze-parameters',
+        type=str,
+        nargs="*",
+        default=[],
+        help="List of parameter name prefixes to freeze during training. "
+             "Frozen parameters will not be updated by the optimizer. "
+             "Example: --freeze-parameters 'embed' 'lm_head' freezes embedding and output layers. "
+             "Default: [] (no freezing)"
     )
 
-    group.add_argument('--freeze-parameters-regex',
-                       type=str,
-                       default=None,
-                       help='Regular expression pattern to match parameters to freeze (default: None)'
+    group.add_argument(
+        '--freeze-parameters-regex',
+        type=str,
+        default=None,
+        help="Regular expression pattern to match parameter names to freeze. "
+             "Example: '.*bias.*' freezes all bias parameters. "
+             "Takes precedence over --freeze-parameters if both are specified. "
+             "Default: None"
     )
 
-    # adapter checkpoint control
     group.add_argument(
         "--allow-missing-adapter-checkpoint",
         action="store_true",
-        help="Allow missing adapter checkpoint during model loading. Default is False (not allowed)."
+        help="Allow model loading to proceed even when adapter checkpoint is missing. "
+             "Useful when starting training from a base model without adapter weights. "
+             "Default: False (missing adapter checkpoint raises error)"
     )
 
     return parser
 
 
+# =============================================================================
+# Tokenizer Arguments
+# =============================================================================
+
 def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
-    """Add data arguments"""
-    group = parser.add_argument_group(title="extra-tokenizer")
+    """Add arguments for tokenizer configuration.
+    
+    These arguments control tokenizer type selection, special token handling,
+    and vocabulary configuration.
+    """
+    group = parser.add_argument_group(
+        title="Tokenizer Configuration",
+        description="Arguments for tokenizer initialization and behavior"
+    )
+    
     group.add_argument(
         "--tokenizer-type",
         type=str,
         default=None,
-        choices=["NullTokenizer", "HFTokenizer"],  # recommended
-        help="What type of tokenizer to use. Default: None, and aiak automatically determines "
-        "the type of tokenizer required",
+        choices=["NullTokenizer", "HFTokenizer"],
+        help="Tokenizer implementation to use. "
+             "'NullTokenizer': no tokenization (data is pre-tokenized), "
+             "'HFTokenizer': HuggingFace tokenizers library. "
+             "When None, AIAK automatically determines the appropriate tokenizer. "
+             "Default: None"
     )
 
     group.add_argument(
         "--hf-tokenizer-path",
         type=str,
         default=None,
-        help="HuggingFace tokenizer path: "
-        "1) A string, the *model id* of a predefined tokenizer hosted inside a model repo "
-        "on huggingface.co"
-        "2) A path to a *directory* containing vocabulary files required by the tokenizer",
+        help="Path to HuggingFace tokenizer. Accepts either: "
+             "(1) Model ID from huggingface.co (e.g., 'meta-llama/Llama-2-7b-hf'), or "
+             "(2) Local directory path containing tokenizer files. "
+             "Default: None"
     )
 
     group.add_argument(
         "--use-fast-tokenizer",
         action="store_true",
-        help="Whether or not to use the fast tokenizer when --tokenizer-type=HFTokenizer."
-        "Default: False",
         dest="use_fast_tokenizer",
+        help="Use the fast (Rust-based) tokenizer implementation when --tokenizer-type=HFTokenizer. "
+             "Requires tokenizers library. Default: False"
     )
 
     group.add_argument(
         "--split-special-tokens",
         action="store_true",
-        help="Whether or not the special tokens should be split during the tokenization process "
-        "when --tokenizer-type=HFTokenizer. Default: False",
+        help="Split special tokens (e.g., <s>, </s>) into separate tokens during tokenization "
+             "when --tokenizer-type=HFTokenizer. Default: False"
     )
 
     group.add_argument(
         "--padding-side",
         default="right",
         choices=["left", "right"],
-        help=f"The side on which the padding should be applied when --tokenizer-type=HFTokenizer. "
-        "Default: right",
+        help="Side on which to add padding tokens. "
+                "'left': padding tokens are added before the sequence. "
+                "'right': padding tokens are added after the sequence. "
+                "For most training setups, right padding is preferred as it keeps "
+                "valid tokens aligned at the beginning of the sequence and simplifies "
+                "label masking and loss computation. "
+                "Default: right"
     )
 
     group.add_argument(
         "--additional-special-tokens",
         type=str,
         default=None,
-        help="Additional special tokens to add to the tokenizer. Use commas to separate multiple tokens",
+        help="Comma-separated list of additional special tokens to add to the tokenizer. "
+             "Example: '<|im_start|>,<|im_end|>'. Default: None"
     )
 
     group.add_argument(
         "--vocab-size-in-config-file",
         type=int,
         default=None,
-        help="Size of vocab from hf config file.",
+        help="Vocabulary size from HuggingFace config file. Used when the tokenizer's "
+             "vocab size differs from model's embedding size. Default: None"
     )
 
     group.add_argument(
-        "--padded-vocab-size", type=int, default=None, help="Specify padded vocab size."
+        "--padded-vocab-size",
+        type=int,
+        default=None,
+        help="Explicitly specify padded vocabulary size. Used for models with custom "
+             "vocabulary padding requirements. Default: None"
     )
 
     group.add_argument(
         "--task-encoder",
         type=str,
         default=None,
-        help="Task encoder class name for multimodal data pipeline "
-        "(e.g., VLMTaskEncoder, InternVLTaskEncoder).",
+        help="Task encoder class for multimodal data pipeline. Responsible for "
+             "encoding task-specific inputs (images, video, text). "
+             "Examples: 'VLMTaskEncoder', 'InternVLTaskEncoder'. Default: None"
     )
     return parser
 
 
+# =============================================================================
+# SFT (Supervised Fine-Tuning) Arguments
+# =============================================================================
+
 def _add_extra_sft_args(parser: argparse.ArgumentParser):
-    """Add SFT arguments"""
-    group = parser.add_argument_group(title="extra-sft")
+    """Add arguments for supervised fine-tuning data configuration.
+    
+    These arguments control dataset selection, preprocessing, packing,
+    and training behavior for SFT tasks.
+    """
+    group = parser.add_argument_group(
+        title="SFT Data Configuration",
+        description="Arguments for supervised fine-tuning data processing"
+    )
+    
     group.add_argument(
         "--chat-template",
         type=str,
         choices=get_support_templates(),
         default=None,
-        help="The template to apply to instruction data.",
+        help="Chat template name to format instruction data. Templates define "
+             "how prompts and responses are structured. "
+             "Examples: 'deepseek', 'qwen', 'llama3.1', 'empty'. Default: None"
     )
 
     group.add_argument(
         "--sft-dataset-config",
         type=str,
         default=None,
-        help="A yaml file that contains the dataset configuration."
-        "default: configs/data/sft_dataset_config.yaml",
+        help="Path to YAML file containing dataset configurations. "
+             "Defines dataset formats and processing rules. "
+             "Default: configs/data/sft_dataset_config.yaml"
     )
 
     group.add_argument(
         "--sft-dataset",
         nargs="*",
         default=None,
-        help="The name list for a set of dataset according to --data-path. Note that:"
-        "(1) the dataset name should be defined in the dataset config file (--sft-dataset-config). "
-        "(2) the accepted formats are: a single name or a list of names e.g. dataset1 dataset2. "
-        "(3) if multiple dataset are required, the order of names should be consistent with"
-        "--data-path. "
-        "This argument is exclusive to the other independent --sft-*-dataset arguments.",
+        help="List of dataset names for combined train/valid/test splits. "
+             "Names must be defined in --sft-dataset-config. "
+             "Examples: 'dataset1' or 'dataset1 dataset2'. "
+             "Mutually exclusive with --sft-train-dataset/--sft-valid-dataset/--sft-test-dataset. "
+             "Default: None"
     )
 
     group.add_argument(
         "--sft-train-dataset",
         nargs="*",
         default=None,
-        help="The name list for a set of independent train dataset according to --train-data-path. "
-        "Follows the same pattern rules as --sft-dataset",
+        help="List of training dataset names. Used with --train-data-path. "
+             "Follows same naming rules as --sft-dataset. Default: None"
     )
 
     group.add_argument(
         "--sft-valid-dataset",
         nargs="*",
         default=None,
-        help="The name list for a set of independent valid dataset according to --valid-data-path. "
-        "Follows the same pattern rules as --sft-dataset",
+        help="List of validation dataset names. Used with --valid-data-path. "
+             "Follows same naming rules as --sft-dataset. Default: None"
     )
 
     group.add_argument(
         "--sft-test-dataset",
         nargs="*",
         default=None,
-        help="The name list for a set of independent test dataset according to --test-data-path. "
-        "Follows the same pattern rules as --sft-dataset",
+        help="List of test dataset names. Used with --test-data-path. "
+             "Follows same naming rules as --sft-dataset. Default: None"
     )
 
     group.add_argument(
         "--sft-sort-batch",
         action="store_true",
-        help="Sort the entire dataset from smallest to largest; "
-        "if the --packing-sft-data option is enabled, sort the data after packing. Default: False",
+        help="Sort dataset samples by length (smallest to largest) for more efficient "
+             "padding. Sorting occurs after packing if --packing-sft-data is enabled. "
     )
 
     group.add_argument(
         "--sft-data-streaming",
         action="store_true",
-        help="enable data streaming. Default: False",
+        help="Enable streaming mode for large datasets that don't fit in memory. "
+             "Data is loaded on-demand during training. Default: False"
     )
 
     group.add_argument(
         "--streaming-buffer-size",
         type=int,
         default=16384,
-        help="The size of the buffer to randomly sample examples from in dataset streaming",
+        help="Buffer size for random sampling in streaming mode. Larger buffers "
+             "provide more randomization but use more memory. Default: 16384"
     )
 
     group.add_argument(
@@ -303,550 +461,757 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
         type=str,
         choices=["concat", "interleave_under", "interleave_over"],
         default="concat",
-        help="The strategy to mix the sft data. Default: concat",
+        help=(
+            "Strategy for mixing multiple SFT datasets: "
+            "'concat': concatenate datasets sequentially; "
+            "'interleave_under': interleave datasets and stop when the shortest dataset is exhausted; "
+            "'interleave_over': interleave datasets until the longest dataset is exhausted."
+        ),
     )
 
     group.add_argument(
         "--sft-num-preprocess-workers",
         type=int,
         default=None,
-        help="The number of workers to use for data preprocessing. Only support non-streaming mode.",
+        help="Number of worker processes for data preprocessing. Only applies to "
+             "non-streaming mode. More workers speed up preprocessing but use more memory. "
+             "Default: None (auto-detect)"
     )
 
     group.add_argument(
         "--train-on-prompt",
         action="store_true",
-        help="Whether compute loss on prompt. Default: False",
+        help="Include prompt tokens in loss computation. By default, loss is computed "
+             "only on response tokens. Default: False"
     )
 
     group.add_argument(
         "--history-mask-loss",
         action="store_true",
-        help="Only compute loss on last turn response, instead of full history. Default: False",
+        help="Compute loss only on the last turn response in multi-turn conversations, "
+             "masking the loss for tokens from previous turns. Default: False"
     )
 
     group.add_argument(
         "--is-tokenized-data",
         action="store_true",
-        help="Whether the data is already tokenized. Default: False.",
+        help="Indicate that input data is already tokenized. Skips tokenization step "
+             "in data processing pipeline. Default: False"
     )
 
     group.add_argument(
         "--packing-sft-data",
         action="store_true",
-        help="Whether to pack multiple sft data into one.",
+        help="Pack multiple short sequences into a single training sample to improve "
+             "GPU utilization. Default: False"
     )
 
     group.add_argument(
         "--enable-discard-sample",
         action="store_true",
-        help="Whether to discard sample when its length is greater than seq-length.",
+        help="Discard samples that exceed --seq-length instead of truncating. "
+             "Useful for ensuring consistent sequence lengths. Default: False"
     )
 
     group.add_argument(
-        "--packing-batch-size",
+        "--packing-buffer-size",
         type=int,
         default=10000,
-        help="Perform packing in batches, deciding how many samples each batch contains;"
-        "if the --sft-sort-batch option is enabled, the samples will be sorted after packing.",
-    )
+        help="Size of the sample buffer used for sequence packing. "
+            "Samples are first loaded into this buffer and then packed into sequences "
+            "by the packing algorithm. Effective only when --packing-sft-data is enabled."
+        )
 
     group.add_argument(
-        f"--use-fixed-seq-lengths",
+        "--use-fixed-seq-lengths",
         action="store_true",
-        help="If enabled, all input sequence lengths will be padding to --seq-length."
-        "Only support language models now.",
+        help="Pad all sequences to exactly --seq-length. Currently only supported "
+             "for language models. Default: False"
     )
 
     group.add_argument(
         "--sample-type",
         type=str,
         default=None,
-        help="Specify the default sample type for fallback cooker routing "
-        "when no specific cooker matches. "
-        "For example: 'multi_mix_vqa'. "
-        "This allows the dataloader to apply the corresponding cooker "
-        "to samples without explicit subflavors.",
+        help="Default sample type used for fallback cooker routing when no cooker "
+            "matches a sample. For example: 'multi_mix_vqa'. "
+            "This allows the dataloader to apply the corresponding cooker "
+            "to samples that do not specify a subflavor."
     )
     return parser
 
 
-def _add_extra_video_args(parser):
-    group = parser.add_argument_group(title="extra-video")
+# =============================================================================
+# Video Processing Arguments
+# =============================================================================
 
-    # use for stdit models
+def _add_extra_video_args(parser):
+    """Add arguments for video and vision task configuration.
+    
+    These arguments control video latent processing, frame handling,
+    and InternVL-specific vision settings.
+    """
+    group = parser.add_argument_group(
+        title="Video & Vision Configuration",
+        description="Arguments for video processing and vision model configuration"
+    )
+
+    # -------------------------------------------------------------------------
+    # Latent Space Configuration (for video diffusion models like STDiT)
+    # -------------------------------------------------------------------------
     group.add_argument(
-        "--latent-in-channels", type=int, help="Number of channels in input latent data"
+        "--latent-in-channels",
+        type=int,
+        default=None,
+        help="Number of input channels in latent space. Used by video diffusion models. "
+             "Default: None"
     )
 
     group.add_argument(
         "--latent-out-channels",
         type=int,
-        help="Number of channels in output latent data",
+        default=None,
+        help="Number of output channels in latent space. Used by video diffusion models. "
+             "Default: None"
     )
 
     group.add_argument(
-        "--caption-channels", type=int, help="Number of channels in caption data"
+        "--caption-channels",
+        type=int,
+        default=None,
+        help="Number of channels for caption/text embeddings in video models. Default: None"
     )
 
     group.add_argument(
         "--latent-patch-size",
         type=tuple,
         default=(1, 1, 1),
-        help="Patch size for vision task",
+        help="Patch size (time, height, width) for latent space tokenization. "
+             "Default: (1, 1, 1)"
     )
 
     group.add_argument(
         "--latent-space-scale",
         type=float,
         default=1.0,
-        help="Space scale for vision task",
+        help="Spatial scaling factor for latent space. Default: 1.0"
     )
 
     group.add_argument(
         "--latent-time-scale",
         type=float,
         default=1.0,
-        help="Time scale for vision task",
+        help="Temporal scaling factor for latent space. Default: 1.0"
     )
 
     group.add_argument(
-        "--num-latent-frames", type=int, help="Number of frames in video"
+        "--num-latent-frames",
+        type=int,
+        default=None,
+        help="Number of frames in the latent video representation. Default: None"
     )
-
-    group.add_argument("--max-latent-height", type=int, help="Maximum height of video")
-
-    group.add_argument("--max-latent-width", type=int, help="Maximum width of video")
 
     group.add_argument(
-        "--latent-frame-interval", type=int, default=1, help="Interval between frames"
+        "--max-latent-height",
+        type=int,
+        default=None,
+        help="Maximum height of video in latent space. Default: None"
     )
-
-    group.add_argument("--max-text-length", type=int, help="Maximum text length")
 
     group.add_argument(
-        "--max-video-length", type=int, default=32760, help="Maximum video length"
+        "--max-latent-width",
+        type=int,
+        default=None,
+        help="Maximum width of video in latent space. Default: None"
     )
 
-    group.add_argument("--max-image-length", type=int, help="Maximum image length")
+    group.add_argument(
+        "--latent-frame-interval",
+        type=int,
+        default=1,
+        help="Interval between consecutive frames in latent space. Default: 1"
+    )
+
+    group.add_argument(
+        "--max-text-length",
+        type=int,
+        default=None,
+        help="Maximum text/caption token length. Default: None"
+    )
+
+    group.add_argument(
+        "--max-video-length",
+        type=int,
+        default=32760,
+        help="Maximum video token length. Default: 32760"
+    )
+
+    group.add_argument(
+        "--max-image-length",
+        type=int,
+        default=None,
+        help="Maximum image token length. Default: None"
+    )
 
     group.add_argument(
         "--max-timestep-boundary",
         type=float,
-        default=1,
-        help="The maximum timestep boundary for dit, with a value range between 0 and 1.",
+        default=1.0,
+        help="Maximum diffusion timestep boundary (0-1 range) for DiT models. "
+             "Default: 1.0"
     )
 
     group.add_argument(
         "--min-timestep-boundary",
         type=float,
-        default=0,
-        help="The minimum timestep boundary for dit, with a value range between 0 and 1.",
+        default=0.0,
+        help="Minimum diffusion timestep boundary (0-1 range) for DiT models. "
+             "Default: 0.0"
     )
 
-    group.add_argument('--dataset-metadata-path', type=str, help='dataset metadata path')
+    group.add_argument(
+        '--dataset-metadata-path',
+        type=str,
+        default=None,
+        help="Path to dataset metadata file containing video/image information. "
+             "Default: None"
+    )
 
-    group.add_argument("--stdit-bucket-config", type=str, help="bucket config file")
+    group.add_argument(
+        "--stdit-bucket-config",
+        type=str,
+        default=None,
+        help="Path to bucket configuration file for STDiT models. Defines how "
+             "samples are grouped by resolution. Default: None"
+    )
 
     group.add_argument(
         "--num-bucket-build-workers",
         type=int,
         default=1,
-        help="Number of workers to build bucket",
+        help="Number of worker processes for building sample buckets. Default: 1"
     )
 
-    # arguments for InternVL
+    # -------------------------------------------------------------------------
+    # InternVL-specific Arguments
+    # -------------------------------------------------------------------------
     group.add_argument(
         "--loss-reduction-all-gather",
         action="store_true",
-        help="Whether to gather all during loss reduction. Default is False.",
+        help="Gather losses from all GPUs during loss reduction. Default: False"
     )
 
     group.add_argument(
         "--conv-style",
         type=str,
         default="internvl2_5",
-        help="Prompt style for a conversation.",
+        help="Conversation/prompt style format. Defines how multi-turn conversations "
+             "are structured. Default: internvl2_5"
     )
 
     group.add_argument(
         "--force-image-size",
         type=int,
         default=448,
-        help="Set the desired size for the image. Default is 448.",
+        help="Force resize images to this size (pixels). Default: 448"
     )
 
     group.add_argument(
         "--num-images-expected",
         type=int,
         default=48,
-        help="The maximum number of images per packed sample. Default is 48.",
+        help="Maximum number of images allowed in a single packed sample. Default: 48"
     )
 
     group.add_argument(
         "--pad2square",
         action="store_true",
-        help="Pad the image to a square shape if set to True. Default is False.",
+        help="Pad rectangular images to square shape with padding. Default: False"
     )
 
     group.add_argument(
         "--use-data-resampling",
         action="store_true",
-        help="Set to True to use data resampling. Default is False.",
+        help="Enable data resampling strategy for imbalanced datasets. Default: False"
     )
 
     group.add_argument(
         "--down-sample-ratio",
         type=float,
         default=0.5,
-        help="Set the desired down-sampling ratio for the image. Default is 0.5.",
+        help="Image down-sampling ratio for resolution reduction. Default: 0.5"
     )
 
     group.add_argument(
         "--max-buffer-size",
         type=int,
         default=20,
-        help="The buffer size of the packed dataset. Default is 20.",
+        help="Buffer size for packed dataset construction. Default: 20"
     )
 
     group.add_argument(
         "--max-packed-tokens",
         type=int,
         default=8192,
-        help="The required token length of per packed sample. Default is 8192.",
+        help="Target token length per packed sample. Default: 8192"
     )
 
     group.add_argument(
         "--log_freq",
         type=int,
         default=1000,
-        help="The log frequency of the packed dataset. Default is 1000.",
+        help="Logging frequency (iterations) for packed dataset statistics. Default: 1000"
     )
 
     group.add_argument(
         "--strict-mode",
         action="store_true",
-        help="Whether to pad the number of images to satisfy num_images_expected. Default is False.",
+        help="Pad images to exactly --num-images-expected when enabled. Default: False"
     )
 
     group.add_argument(
         "--replacement",
         action="store_true",
-        help="Whether to restart the dataset after it is exhausted. Default is False.",
+        help="Restart dataset iteration from beginning when exhausted. Default: False"
     )
 
     group.add_argument(
         "--allow-overflow",
         action="store_true",
-        help="Whether to drop the sample over the specified max_packed_tokens. Default is False.",
+        help="Drop samples that exceed --max-packed-tokens instead of error. Default: False"
     )
 
     group.add_argument(
         "--loss-reduction",
         type=str,
         default="square",
-        help="Loss reduction method. Default is square.",
+        help="Loss reduction method: 'square', 'mean', or 'sum'. Default: square"
     )
 
-    group.add_argument("--patch-size", type=int, default=14)
+    group.add_argument(
+        "--patch-size",
+        type=int,
+        default=14,
+        help="Vision encoder patch size for image tokenization. Default: 14"
+    )
 
-    group.add_argument("--group-by-length", action="store_true")
+    group.add_argument(
+        "--group-by-length",
+        action="store_true",
+        help="Group samples by sequence length for more efficient batching. Default: False"
+    )
 
     group.add_argument(
         "--min-num-frame",
         type=int,
         default=8,
-        help="The minimum number of frames for video data. Default is 8.",
+        help="Minimum number of frames to sample from video data. Default: 8"
     )
 
     group.add_argument(
         "--max-num-frame",
         type=int,
         default=32,
-        help="The maximum number of frames for video data. Default is 32.",
+        help="Maximum number of frames to sample from video data. Default: 32"
     )
 
     group.add_argument(
         "--dynamic-image-size",
         action="store_true",
-        help="Set to True to use dynamic high resolution strategy. Default is False.",
+        help="Enable dynamic high-resolution strategy for images. Default: False"
     )
 
     group.add_argument(
         "--min-dynamic-patch",
         type=int,
         default=1,
-        help="The minimum number of dynamic patches. Default is 1.",
+        help="Minimum number of dynamic patches per image. Default: 1"
     )
 
     group.add_argument(
         "--max-dynamic-patch",
         type=int,
         default=12,
-        help="The maximum number of dynamic patches. Default is 12.",
+        help="Maximum number of dynamic patches per image. Default: 12"
     )
 
     group.add_argument(
         "--use_thumbnail",
         action="store_true",
-        help="Set to True to add a thumbnail image. Default is False.",
+        help="Add thumbnail image alongside dynamic patches. Default: False"
     )
 
     group.add_argument(
         "--normalize_type",
         type=str,
         default="imagenet",
-        help="The normalization type for the image. Default is imagenet.",
+        help="Image normalization preset. Options: 'imagenet', 'clip', etc. Default: imagenet"
     )
 
-    group.add_argument("--use-packed-ds", action="store_true")
+    group.add_argument(
+        "--use-packed-ds",
+        action="store_true",
+        help="[DEPRECATED] Enable packed dataset mode for efficient multi-image training. Default: False"
+    )
 
-    group.add_argument("--communicate-dataset", action="store_true")
+    group.add_argument(
+        "--communicate-dataset",
+        action="store_true",
+        help="[DEPRECATED] Enable dataset state communication across ranks. Default: False"
+    )
 
-    group.add_argument("--save-dataset-state", action="store_true")
+    group.add_argument(
+        "--save-dataset-state",
+        action="store_true",
+        help="[DEPRECATED] Save dataset state for resumable training. Default: False"
+    )
 
     group.add_argument(
         "--dataloader-prefetch-factor",
         type=int,
         default=2,
-        help="the value of the prefetch_factor parameter of the dataloader",
+        help="Number of batches to prefetch per worker in dataloader. Default: 2"
     )
 
-    group.add_argument("--no-split-annotations", action="store_true")
+    group.add_argument(
+        "--no-split-annotations",
+        action="store_true",
+        help="[DEPRECATED] Disable splitting of annotation files across workers. Default: False"
+    )
 
     return parser
 
 
+# =============================================================================
+# Training Arguments
+# =============================================================================
+
 def _add_extra_training_args(parser: argparse.ArgumentParser):
-    """Add training arguments"""
-    group = parser.add_argument_group(title="extra-training")
+    """Add arguments for training configuration.
+    
+    These arguments control training phase, checkpointing, logging,
+    and EMA (Exponential Moving Average).
+    """
+    group = parser.add_argument_group(
+        title="Training Configuration",
+        description="Arguments for training loop and checkpoint management"
+    )
 
     group.add_argument(
         "--training-phase",
         type=str,
         default=constants.TrainingPhase.PRETRAIN,
         choices=[constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT],
-        help="Which phase to train. Default: pretrain",
+        help="Training phase: 'pretrain' for pre-training, 'sft' for supervised fine-tuning. "
+             "Default: pretrain"
     )
+    
     group.add_argument(
         "--use-dsa-fused",
         action="store_true",
-        help="Force Omni fused DSA path for DSA-based DeepSeek configs.",
+        help="Force use of Omni fused DSA implementation for DeepSeek models. "
+             "Default: False"
     )
 
     group.add_argument(
         "--no-detail-log",
         action="store_false",
-        help="If set, the detail-log-interval will no longer take effect.",
         dest="log_detail",
+        help="Disable detailed timing logs during training. Default: enabled"
     )
 
     group.add_argument(
         "--detail-log-interval",
         type=int,
         default=20,
-        help="Report timing interval."
-        " detail-log-interval will only take effect when the"
-        " timing-log-level is set to 0",
+        help="Interval (iterations) between detailed timing log reports. "
+             "Only effective when timing-log-level is 0. Default: 20"
     )
 
     group.add_argument(
         "--variable-seq-lengths",
         action="store_true",
-        help="DEPRECATED. This flag is ignored."
-        "Support for variable sequence lengths across microbatches.",
+        help="[DEPRECATED] This flag is ignored. Variable sequence length support "
+             "is now automatic. Default: False"
     )
 
+    # EMA (Exponential Moving Average) arguments
     group.add_argument(
         "--enable-ema",
         action="store_true",
-        help="enable Model EMA (Exponential Moving Average)"
-        " to maintain moving averages of the trained parameters",
+        help="Enable Exponential Moving Average (EMA) of model parameters. "
+             "EMA provides smoothed parameter estimates for more stable inference. "
+             "Default: False"
     )
 
-    group.add_argument("--ema-decay", type=float, default=0.9999, help="EMA decay rate")
+    group.add_argument(
+        "--ema-decay",
+        type=float,
+        default=0.9999,
+        help="Decay rate for EMA parameter updates. Higher values = slower update. "
+             "Default: 0.9999"
+    )
 
     group.add_argument(
         "--save-ema",
         type=str,
         default=None,
-        help="Output directory to save ema checkpoints to, default to ${args.save}/ema",
+        help="Directory path to save EMA checkpoints. Defaults to ${args.save}/ema. "
+             "Default: None"
     )
 
     group.add_argument(
         "--load-ema",
         type=str,
         default=None,
-        help="Directory containing a ema checkpoint, default to ${args.load}/ema",
+        help="Directory path to load EMA checkpoint from. Defaults to ${args.load}/ema. "
+             "Default: None"
     )
 
     group.add_argument(
         "--ckpt-format",
         default="torch",
         choices=["torch", "torch_dist", "zarr", "fsdp_dtensor"],
-        help="Checkpoint format to use. Default: torch",
+        help="Checkpoint format for saving/loading model weights: "
+             "'torch': standard PyTorch format, "
+             "'torch_dist': distributed checkpoint format, "
+             "'zarr': Zarr-based format for large models, "
+             "'fsdp_dtensor': FSDP with DTensor format. "
+             "Default: torch"
     )
     
     group.add_argument(
         "--log-memory-stats",
         action="store_true",
         default=False,
-        help="Log memory stats (allocated/peak) in training log output. Default: False.",
+        help="Log GPU memory statistics (allocated/peak) during training. "
+             "Default: False"
     )
 
     group.add_argument(
         "--legacy-reporting-loss-reduction",
         action="store_true",
-        help="Use legacy reporting loss reduction method. Default is False.",
+        help="Use legacy loss reduction method for backward compatibility. Default: False"
     )
+    
     group.add_argument(
         "--force-all-weight-decay",
         action="store_false",
         default=None,
-        help=(
-            "Override whether to force every parameter into the weight-decay group. "
-            "Not set keeps legacy behavior (force all). "
-        ),
+        help="Force all parameters into weight-decay group, overriding default "
+             "exclusions for bias and LayerNorm. Default: None (use model defaults)"
     )
     return parser
 
 
-def _add_extra_multimodal_args(parser):
-    """Add multimodal arguments"""
+# =============================================================================
+# Multimodal Arguments
+# =============================================================================
 
-    group = parser.add_argument_group(title="extra-multimodal")
+def _add_extra_multimodal_args(parser):
+    """Add arguments for multimodal model configuration.
+    
+    These arguments control vision-language model settings, image/video
+    processing parameters, and data packing strategies.
+    """
+    group = parser.add_argument_group(
+        title="Multimodal Configuration",
+        description="Arguments for vision-language and multimodal models"
+    )
+    
     group.add_argument(
         "--language-model-type",
         type=str,
         default=None,
         choices=get_support_model_archs(constants.LanguageModelFamilies.names()),
+        help="Language model backbone architecture for multimodal models. "
+             "Must be from supported language model families. Default: None"
     )
 
     group.add_argument(
         "--trainable-modules",
         default=["all"],
         nargs="*",
-        help="choices: all, language_model, adapter, vision_model, "
-        "language_expert_linear, vision_expert_linear",
-    ),
+        help="List of modules to train (unfrozen). Options: 'all', 'language_model', "
+             "'adapter', 'vision_model', 'language_expert_linear', 'vision_expert_linear'. "
+             "Default: ['all']"
+    )
 
     group.add_argument(
         "--dataloader-save",
         type=str,
         default=None,
-        help="Energon dataloader state save path",
+        help="Path to save Energon dataloader state for resumable training. Default: None"
     )
 
     group.add_argument(
         "--packing-pretrain-data",
         action="store_true",
-        help="Whether to pack multiple pretrain data into one.",
+        help="Pack multiple pretraining samples into single sequence. Default: False"
     )
 
     group.add_argument(
         "--add-question-in-pretrain",
         action="store_true",
-        help="Whether add question in pretrain VQASample",
+        help="Include question text in pretrain VQA samples. Default: False"
     )
 
-    # use for qwen2vl now
+    # Qwen2-VL specific image processing arguments
     group.add_argument(
-        "--image-resolution", type=int, help="Resolution of image inputs"
+        "--image-resolution",
+        type=int,
+        default=None,
+        help="Target resolution (height/width) for image inputs. Default: None"
     )
 
     group.add_argument(
-        "--min-pixels", type=int, default=4 * 28 * 28, help="Minimum image pixels"
+        "--min-pixels",
+        type=int,
+        default=4 * 28 * 28,
+        help="Minimum pixel count for image resizing. Images smaller than this "
+             "will be upscaled. Default: 3136 (4 * 28 * 28)"
     )
 
     group.add_argument(
-        "--max-pixels", type=int, default=16384 * 28 * 28, help="Maximum image pixels"
+        "--max-pixels",
+        type=int,
+        default=16384 * 28 * 28,
+        help="Maximum pixel count for image resizing. Images larger than this "
+             "will be downscaled. Default: 1286144 (16384 * 28 * 28)"
     )
 
     group.add_argument(
         "--frame-min-pixels",
         type=int,
         default=128 * 28 * 28,
-        help="Minimum frame pixels",
+        help="Minimum pixel count per video frame. Default: 100352 (128 * 28 * 28)"
     )
 
     group.add_argument(
         "--frame-max-pixels",
         type=int,
         default=768 * 28 * 28,
-        help="Maximum frame pixels",
+        help="Maximum pixel count per video frame. Default: 602112 (768 * 28 * 28)"
     )
 
     group.add_argument(
         "--video-max-pixels",
         type=int,
         default=65536 * 28 * 28,
-        help="Maximum video pixels",
+        help="Maximum total pixel count for video. Default: 51380224 (65536 * 28 * 28)"
     )
 
+    # Frame sampling arguments
     group.add_argument(
         "--fps",
         type=float,
         default=2.0,
-        help="The fps to extract frames for model inputs",
+        help="Frames per second to sample from video. Default: 2.0"
     )
 
     group.add_argument(
         "--fps-min-frames",
         type=int,
         default=4,
-        help="The minimum number of frames of the video",
+        help="Minimum number of frames to sample from video. Default: 4"
     )
 
     group.add_argument(
         "--fps-max-frames",
         type=int,
         default=768,
-        help="The maximum number of frames of the video",
+        help="Maximum number of frames to sample from video. Default: 768"
     )
 
-    group.add_argument('--energon-pack-algo', type=str, default="balanced",
+    group.add_argument(
+        '--energon-pack-algo',
+        type=str,
+        default="balanced",
         choices=["balanced", "sequential", "sequential_max_images"],
-        help="Energon sample packing algorithm (default: balanced). Options: "
-        "1) 'balanced': Greedy knapsack approach that sorts samples by length and"
-            "packs them while balancing computational load across GPUs."
-        "2) 'sequential': Fills buffers in order, minimizing training sequence disruption."
-        "3) 'sequential_max_images': Like sequential but prioritizes maximizing images"
-            "per buffer (may reorder samples).")
+        help="Sample packing algorithm for Energon dataloader: "
+             "'balanced': Greedy knapsack approach, balances computational load across GPUs, "
+             "'sequential': Fills buffers in order, minimizes sequence disruption, "
+             "'sequential_max_images': Sequential with priority on maximizing images per buffer. "
+             "Default: balanced"
+    )
     return parser
 
 
-def _add_extra_parallel_args(parser):
-    """Add parallel arguments"""
-    group = parser.add_argument_group(title="extra-parallel")
+# =============================================================================
+# Parallel Arguments
+# =============================================================================
 
-    # NOTE：In order to be compatible with the old version of AIAK,
-    # --context-parallel-ulysses-degree temporarily retained.
+def _add_extra_parallel_args(parser):
+    """Add arguments for distributed parallel execution.
+    
+    These arguments control model parallelism (tensor, pipeline, context),
+    data parallelism balancing, and distributed training configuration.
+    """
+    group = parser.add_argument_group(
+        title="Parallel Configuration",
+        description="Arguments for distributed and parallel training"
+    )
+
+    # Context parallelism (deprecated argument for backward compatibility)
     group.add_argument(
         "--context-parallel-ulysses-degree",
         type=int,
         default=1,
-        help="Degree of context parallelism in ulysses attention.",
+        help="[LEGACY] Degree of Ulysses-style context parallelism. "
+             "Retained for backward compatibility with older AIAK versions. Default: 1"
     )
+    
     group.add_argument(
         "--using-config-strategy",
         action="store_true",
-        help="Use the parallel configuration in the model configuration file.",
+        help="Use parallel configuration from model config file instead of "
+             "command-line arguments. Default: False"
     )
-    # NOTE: --custom-pipeline-layers and --custom-virtual-pipeline-layers will be deprecated in the future.
-    group.add_argument('--custom-pipeline-layers', type=str, default=None,
-                       help='DEPRECATED. Use --pipeline-model-parallel-layout.'
-                       'Add by aiak for pp layer imbalance.'
-                       'For example 19,20,20,21. 19 for stage0 layers, 20 for stage1 layers...')
-    group.add_argument('--custom-virtual-pipeline-layers', type=str, default=None,
-                       help='DEPRECATED. Use --pipeline-model-parallel-layout.'
-                       'Add by aiak for virtual pipeline layer imbalance.'
-                       'For example 19,20,20,21. If we have two virtual chunks in one pp stage, '
-                       '19 for stage0 virtual chunk0 layers, 20 for stage1 virtual chunk0 layers...')
-    group.add_argument('--enable-encoder-hetero-dp', default=False, action="store_true")
-    group.add_argument('--use-dp-balance', action='store_true',
-                       help='use this flag to enable dp computation balance.')
-    group.add_argument('--dp-balance-warmup-iters',
-                       nargs='+', type=int, default=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-                       help='To store the warmup of dp balance coef for training iteration'
-                       )
+
+    # Deprecated pipeline parallelism arguments
+    group.add_argument(
+        '--custom-pipeline-layers',
+        type=str,
+        default=None,
+        help="[DEPRECATED: Use --pipeline-model-parallel-layout] "
+             "Comma-separated layer counts per pipeline stage for imbalanced PP. "
+             "Example: '19,20,20,21' for 4 stages with different layer counts. "
+             "Default: None"
+    )
+    
+    group.add_argument(
+        '--custom-virtual-pipeline-layers',
+        type=str,
+        default=None,
+        help="[DEPRECATED: Use --pipeline-model-parallel-layout] "
+             "Layer counts for virtual pipeline with interleaved scheduling. "
+             "Example: '19,20,20,21' for 2 virtual chunks across 4 stages. "
+             "Default: None"
+    )
+
+    # Encoder heterogeneous data parallelism
+    group.add_argument(
+        '--enable-encoder-hetero-dp',
+        action="store_true",
+        default=False,
+        help="Enable heterogeneous data parallelism for encoder layers. "
+             "Allows different DP degrees for encoder vs decoder. Default: False"
+    )
+
+    # Data parallelism load balancing
+    group.add_argument(
+        '--use-dp-balance',
+        action='store_true',
+        help="Enable dynamic load balancing across data parallel ranks. "
+             "Adjusts computation distribution based on runtime statistics. Default: False"
+    )
+    
+    group.add_argument(
+        '--dp-balance-warmup-iters',
+        nargs='+',
+        type=int,
+        default=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        help="Iteration indices to collect statistics for DP balance coefficient warmup. "
+             "Default: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+    )
     return parser

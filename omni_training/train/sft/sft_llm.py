@@ -244,7 +244,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         is_tokenized=args.is_tokenized_data,
         packing=args.packing_sft_data,
         sort_batch=args.sft_sort_batch,
-        packing_batch_size=args.packing_batch_size,
+        packing_buffer_size=args.packing_buffer_size,
         context_parallel_size=args.context_parallel_size,
     )
 

@@ -154,7 +154,7 @@ scenarios:
             --conv-style internvl2_5
             --max-dynamic-patch 12
             --packing-sft-data
-            --packing-batch-size 2000
+            --packing-buffer-size 2000
             --energon-pack-algo sequential_max_images
             --allow-missing-adapter-checkpoint
             --log-memory-stats'

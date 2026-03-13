@@ -41,7 +41,7 @@ All native Megatron flags are supported:
 |  | `--is-tokenized-data` | Pre-tokenized inputs | Skip tokenization (default False) |
 |  | `--packing-sft-data` | Pack samples | Fit multiple samples into one sequence (default False) |
 |  | `--enable-discard-sample` | Drop long samples | Discard if > `--seq-length` (default False) |
-|  | `--packing-batch-size` | Pack buffer | Default 10 000 |
+|  | `--packing-buffer-size` | Pack buffer | Default 10 000 |
 |  | `--use-fixed-seq-lengths` | Fixed length | Pad every sample to `--seq-length`. **LLM only**. |
 | training_args | `--training-phase` | Stage | *pretrain* or *sft* (default pretrain) |
 |  | `--no-detail-log` | Verbose log | Disable detail-log-interval (default True) |
