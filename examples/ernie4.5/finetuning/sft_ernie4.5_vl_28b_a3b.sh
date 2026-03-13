@@ -4,7 +4,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=/workspace/ernie/AIAK-Megatron
 AIAK_TRAINING_PATH=/workspace/ernie/OmniTraining/
-DATASET_PATH=/workspace/ernie/dataset/dataset.txt
+DATASET_PATH=/workspace/dataset/wds/
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"}
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/ernie4.5vl/"}
 CHECKPOINT_LOAD_PATH=/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_hg2mcore/
@@ -41,6 +41,11 @@ DATA_ARGS=(
 )
 
 TRAINING_ARGS=(
+    --task-encoder ErnieTaskEncoder
+    --packing-sft-data
+    --max-packed-tokens 8192
+    --max-buffer-size 5
+    --packing-batch-size 20
     --use-fp32-dtype-for-param-pattern "router"
     #--custom-pipeline-layers 4,4,4,4,4,4,2,2
     --training-phase sft
@@ -116,7 +121,6 @@ fi
 
 
 echo "llm path: "  $AIAK_TRAINING_PATH, "megatron path: " $MEGATRON_PATH
-
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
     $AIAK_TRAINING_PATH/omni_training/train.py \

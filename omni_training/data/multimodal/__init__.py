@@ -16,6 +16,7 @@ TASK_ENCODER_REGISTRY = {
     "vlmtaskencoder": "omni_training.data.multimodal.vlm_task_encoder.VLMTaskEncoder",
     "internvltaskencoder": "omni_training.data.multimodal.internvl.internvl_task_encoder.InternVLTaskEncoder",
     "llavaov15taskencoder": "omni_training.data.multimodal.llava_ov_task_encoder.LLavaOv15TaskEncoder",
+    "ernietaskencoder": "omni_training.data.multimodal.ernie_task_encoder.ErnieTaskEncoder",
 }
 
 

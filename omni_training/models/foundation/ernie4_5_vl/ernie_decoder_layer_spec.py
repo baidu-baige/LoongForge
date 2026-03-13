@@ -82,7 +82,8 @@ def _get_ernie4_5_vl_moedecoderlayer_with_spec(num_experts=0, qk_layernorm: bool
                 params={"attn_mask_type": AttnMaskType.causal},
                 submodules=SelfAttentionSubmodules(
                     linear_qkv=multiacc_modules.TEColumnParallelLinear,
-                    core_attention=FlashAttentionCore,
+                    # core_attention=FlashAttentionCore,
+                    core_attention=multiacc_modules.DotProductAttention,
                     linear_proj=multiacc_modules.TERowParallelLinear,
                     apply_rotary_fn=apply_rotary_3d
 
