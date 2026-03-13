@@ -128,8 +128,10 @@ RUN set -exuo pipefail && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        git clone --branch refs/tags/v0.4.3 https://github.com/huggingface/lerobot.git && \
+        mkdir lerobot && \
         cd lerobot && \
+        wget http://ai-data.bj.bcebos.com/lerobotv0.4.3.tar.gz && \
+        tar -zxf lerobotv0.4.3.tar.gz && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
