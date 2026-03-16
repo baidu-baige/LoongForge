@@ -61,12 +61,12 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     args = get_args()
     cp = args.context_parallel_ulysses_degree
     text_length = math.ceil(args.max_text_length / cp) * cp
-    if args.model_name == "wan2_2_i2v":
+    if args.model_name == "wan2-2-i2v":
         args.seq_length = args.max_video_length + text_length + (6 + 1) * cp
     args.max_position_embeddings = args.seq_length
     print_rank_0(f"> calculated seq_length:  {args.seq_length}")
 
-    if args.model_name == "wan2_2_i2v":
+    if args.model_name == "wan2-2-i2v":
         model_provider = wan2_2_i2v_model_provider
 
     return model_provider(pre_process, post_process, vp_stage)
@@ -93,7 +93,7 @@ def gen_time_steps(batch):
     """
     # torch.manual_seed(10086)
     args = get_args()
-    if args.model_name == "wan2_2_i2v":
+    if args.model_name == "wan2-2-i2v":
         latents = batch.pop("input_latents")
         if latents.size(0) == 1:
             latents = latents.squeeze(0)
@@ -133,7 +133,7 @@ def get_batch(data_iterator):
         batch = next(data_iterator)
         batch["timestep"], batch["latents"], batch["training_target"], \
             batch["scale"] = gen_time_steps(batch)
-        if args.model_name == "wan2_2_i2v":
+        if args.model_name == "wan2-2-i2v":
             batch.setdefault("prompt_emb", {})["context"] = batch.pop("context")
             batch.setdefault("image_emb", {})["y"] = batch.pop("y")
     else:

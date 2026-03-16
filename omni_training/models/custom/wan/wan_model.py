@@ -318,7 +318,7 @@ class WanModel(VisionModule):
         """
         Wan forward
         """
-        if self.args.model_name == "wan2_2_i2v":
+        if self.args.model_name == "wan2-2-i2v":
             f, h, w = (13, 30, 52)
         freqs = torch.cat(
             [
@@ -348,7 +348,7 @@ class WanModel(VisionModule):
                     ).contiguous()
 
             x, (f, h, w) = self.patchify(x)
-            if self.args.model_name == "wan2_2_i2v":
+            if self.args.model_name == "wan2-2-i2v":
                 assert (f, h, w) == (13, 30, 52)
 
             x = rearrange(x, f"B S C ->S B C").contiguous()
