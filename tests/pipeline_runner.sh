@@ -2,38 +2,42 @@
 
 set -eo pipefail
 
-# 初始化环境变量
+# Initialize environment variables
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 export MASTER_PORT=${MASTER_PORT:-9999}
 export RANK=${RANK:-0}
 export WORLD_SIZE=${WORLD_SIZE:-1}
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-# 初始化节点参数
+# Initialize node parameters
 node_nums=1
 gpu_nums=8
 chip="A800" #A800, H800, BZZ
 
-# 设置指标参数
+# Set metric tolerances
 accuracy_relative_tolerance=0.02
 performance_relative_tolerance=0.05
 
-# 设置测试任务和训练类型
+# Set test tasks and training types
 tasks="check_correctness_task check_precess_data_task"
 training_type="pretrain sft"
 
-# 设置测试模式
+# Set test mode
 test_mode="developer_mode"
 model_in_configs=""
 model_in_optional_configs=""
 
-# 其他参数
+# Other parameters
 timeout=3600
 AK="default"
 SK="default"
-skip_env=false #是否跳过环境准备
+skip_env=false # Whether to skip environment preparation
 
-# 解析参数
+# Resume parameters (can be preset via env vars, or auto-read from common.yaml by this script)
+check_loss_only=true
+auto_collect_baseline=true
+
+# Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --timeout)
@@ -150,18 +154,63 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
 
+        --check_loss_only)
+            check_loss_only=true
+            shift
+            ;;
+
+        --auto_collect_baseline)
+            auto_collect_baseline=true
+            shift
+            ;;
+
+        --resume_state_file)
+            if [[ -n "$2" && ! "$2" =~ ^-- ]]; then
+                RESUME_STATE_FILE="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+
+        --resume_policy)
+            if [[ -n "$2" && ! "$2" =~ ^-- ]]; then
+                RESUME_POLICY="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+
         *)
-            echo "未知参数: $1"
-            echo "支持的参数: --timeout --precision --performance --release_mode --model_in_configs --model_in_optional_configs --time_flag --training_type --tasks --ak --sk"
+            echo "Unknown argument: $1"
+            echo "Supported arguments: --timeout --chip --precision --performance --release_mode --model_in_configs --model_in_optional_configs --time_flag --training_type --tasks --ak --sk --skip_env --check_loss_only --auto_collect_baseline --resume_state_file --resume_policy"
             exit 1
             ;;
     esac
 done
 
-# 根据测试模式设置模型参数
+# Auto-read Resume config from configs/common.yaml (only when not preset via env vars or arguments)
+if [ -z "${RESUME_STATE_FILE}" ]; then
+    SCRIPT_DIR_TMP=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    COMMON_YAML="${SCRIPT_DIR_TMP}/configs/common.yaml"
+    TRAINING_LOG_PATH=""
+    PFS_PATH=""
+    if [ -f "${COMMON_YAML}" ]; then
+        PFS_PATH=$(awk -F': *' '$1=="pfs_path" {print $2}' "${COMMON_YAML}")
+        TRAINING_LOG_PATH=$(awk -F': *' '$1=="training_log_path" {print $2}' "${COMMON_YAML}")
+    fi
+    if [ -n "${PFS_PATH}" ] && [[ "${TRAINING_LOG_PATH}" == *"$pfs_path"* ]]; then
+        TRAINING_LOG_PATH=${TRAINING_LOG_PATH//\$pfs_path/${PFS_PATH}}
+    fi
+    export RESUME_STATE_FILE="${TRAINING_LOG_PATH}/e2e_resume_state.json"
+fi
+export RESUME_POLICY=${RESUME_POLICY:-skip_completed}
+
+# Set model parameters based on test mode
 case "${test_mode}" in
     mode1|"")
-        echo "只运行configs下的所有模型"
+        echo "Run all models under configs only"
         model_names=""
         include_optional=false
         optional_subdir=""
@@ -169,7 +218,7 @@ case "${test_mode}" in
         download_mode="default"
         ;;
     mode2)
-        echo "运行configs、optional_configs下的所有模型"
+        echo "Run all models under configs and optional_configs"
         model_names=""
         include_optional=true
         optional_subdir=""
@@ -177,34 +226,34 @@ case "${test_mode}" in
         download_mode="default optional"
         ;;
     *)
-        echo "使用开发者模式，自定义测试模型"
+        echo "Using developer mode, custom test models"
         download_mode=""
 
-        # 检查是否至少指定了一个模型相关参数
+        # Check if at least one model-related parameter is specified
         if [ -z "${model_in_configs}" ] && [ -z "${model_in_optional_configs}" ]; then
-            echo "错误：开发者模式必须至少指定 --model_in_configs 或 --model_in_optional_configs 参数"
-            echo "请指定要测试的模型，或使用其他测试模式（mode1, mode2, mode3）"
+            echo "Error: developer mode requires at least --model_in_configs or --model_in_optional_configs"
+            echo "Please specify a model to test, or use another test mode (mode1, mode2, mode3)"
             exit 1
         fi
 
-        # 处理 configs/ 目录下的模型选择
+        # Handle model selection under configs/
         if [ -n "${model_in_configs}" ]; then
-            # 指定具体模型，多个模型用空格分隔
+            # Specify specific models, multiple models separated by spaces
             model_names="${model_in_configs}"
             download_mode+=" default"
         else
             model_names=""
         fi
 
-        # 处理 optional_configs/ 目录下的模型选择
+        # Handle model selection under optional_configs/
         if [ -n "${model_in_optional_configs}" ]; then
-            # 判断输入类型：路径结构（字符+/+字符）还是子目录名
+            # Determine input type: path structure (char+/+char) or subdirectory name
             if [[ "${model_in_optional_configs}" =~ ^[^/]+/[^/]+$ ]]; then
-                # 如果是路径结构（如"internvl2.5/internvl2.5_8b"），赋值给extra_models
+                # If path structure (e.g., "internvl2.5/internvl2.5_8b"), assign to extra_models
                 extra_models="${model_in_optional_configs}"
                 optional_subdir=""
             else
-                # 如果是子目录名（如"internvl2.5"），赋值给optional_subdir
+                # If subdirectory name (e.g., "internvl2.5"), assign to optional_subdir
                 optional_subdir="${model_in_optional_configs}"
                 extra_models=""
             fi
@@ -216,47 +265,47 @@ case "${test_mode}" in
             extra_models=""
         fi
 
-        # 去除多余的空格
+        # Remove extra leading spaces
         download_mode="${download_mode#"${download_mode%%[![:space:]]*}"}"
         ;;
 esac
 
-# 构建下载参数
+# Build download parameters
 if [[ ! "$skip_env" == true ]]; then
   SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   if [[ -f "${SCRIPT_DIR}/prepare_env.sh" ]]; then
-      echo "执行测试数据准备脚本: ${SCRIPT_DIR}/prepare_env.sh"
+      echo "Running environment preparation script: ${SCRIPT_DIR}/prepare_env.sh"
 
-      # 构建参数数组
+      # Build argument array
       args=("${SCRIPT_DIR}/prepare_env.sh")
 
-      # 只有当download_mode不为空时才添加这个参数
+      # Only add this parameter when download_mode is not empty
       if [[ -n "$download_mode" ]]; then
           args+=("--download_mode" "${download_mode}")
       else
-          echo "警告：未指定下载模式，将跳过数据下载或使用默认模式" >&2
+          echo "Warning: no download mode specified, will skip data download or use default mode" >&2
           exit 1
       fi
 
-      # 添加可选参数
+      # Add optional parameters
       if [[ "$AK" != "default" && "$SK" != "default" ]]; then
           args+=("--ak" "$AK" "--sk" "$SK")
       fi
 
-      echo "参数数组: ${args[@]}"
+      echo "Argument array: ${args[@]}"
 
-      # 安全执行
+      # Safe execution
       if ! bash "${args[@]}"; then
-          echo "错误：数据下载失败" >&2
+          echo "Error: data download failed" >&2
           exit 1
       fi
   else
-      echo "警告：未找到下载脚本 ${SCRIPT_DIR}/prepare_env.sh，跳过数据下载"
+      echo "Warning: download script ${SCRIPT_DIR}/prepare_env.sh not found, skipping data download"
   fi
 fi
 
-# 构建测试参数
-# 1. 基础必选参数
+# Build test parameters
+# 1. Base required parameters
 args=(
     "--node_nums" "${node_nums}"
     "--gpu_nums" "${gpu_nums}"
@@ -266,43 +315,63 @@ args=(
     "--performance_relative_tolerance" "${performance_relative_tolerance}"
 )
 
-# 2. 处理 tasks (nargs='+')
+# 2. Handle tasks (nargs='+')
 if [[ -n "${tasks}" ]]; then
     tasks=$(echo "${tasks}" | tr ',' ' ')
     args+=("--tasks" ${tasks})
 fi
 
-# 3. 处理 training_type (nargs='+')
+# 3. Handle training_type (nargs='+')
 if [[ -n "${training_type}" ]]; then
     training_type=$(echo "${training_type}" | tr ',' ' ')
     args+=("--training_type" ${training_type})
 fi
 
-# 4. 处理 models (nargs='+')
-# 注意：逻辑中 model_names 为 "NONE" 时不传递
+# 4. Handle models (nargs='+')
+# Note: skip passing model_names when it is "NONE"
 if [[ -n "${model_names}" && "${model_names}" != "NONE" ]]; then
     args+=("--models" ${model_names})
 fi
 
-# 5. 处理 include_optional (action='store_true')
+# 5. Handle include_optional (action='store_true')
 if [[ "${include_optional}" == "true" ]]; then
     args+=("--include_optional")
 fi
 
-# 6. 处理 optional_subdir (type=str, default=None)
-# 只有当变量不为空时才传递，避免 Python 接收到 "" 导致路径逻辑错误
+# 6. Handle optional_subdir (type=str, default=None)
+# Only pass when the variable is non-empty, to avoid empty string causing path logic errors in Python
 if [[ -n "${optional_subdir}" ]]; then
     args+=("--optional_subdir" "${optional_subdir}")
 fi
 
-# 7. 处理 extra_models (nargs='*')
+# 7. Handle extra_models (nargs='*')
 if [[ -n "${extra_models}" ]]; then
     args+=("--extra_models" ${extra_models})
 fi
 
-echo "最终执行参数: ${args[@]}"
+# 8. Handle check_loss_only (action='store_true')
+if [[ "${check_loss_only}" == "true" ]]; then
+    args+=("--check_loss_only")
+fi
 
-# 8. 安全执行
+# 9. Handle auto_collect_baseline (action='store_true')
+if [[ "${auto_collect_baseline}" == "true" ]]; then
+    args+=("--auto_collect_baseline")
+fi
+
+# 10. Handle resume_state_file
+if [[ -n "${RESUME_STATE_FILE}" ]]; then
+    args+=("--resume_state_file" "${RESUME_STATE_FILE}")
+fi
+
+# 11. Handle resume_policy
+if [[ -n "${RESUME_POLICY}" ]]; then
+    args+=("--resume_policy" "${RESUME_POLICY}")
+fi
+
+echo "Final execution arguments: ${args[@]}"
+
+# 12. Safe execution
 if [ "${KUBERNETES_SERVICE_HOST}" != "" ]; then
   mkdir -p /workspace/logs
 fi
@@ -310,4 +379,16 @@ fi
 # List all available models (optional, for debugging)
 # python3 main.py --list_available_models
 
+LOG_DIR="${TRAINING_LOG_PATH:-}"
+
 python3 /workspace/OmniTraining/tests/main.py "${args[@]}"
+ret=$?
+
+# After successful run, archive the log directory (with timestamp) and clear the canonical path for next resume
+if [ $ret -eq 0 ] && [ -n "${LOG_DIR}" ] && [ -d "${LOG_DIR}" ]; then
+    ts=$(date '+%Y%m%d_%H%M%S')
+    mv "${LOG_DIR}" "${LOG_DIR}_${ts}"
+    echo "[resume] run completed, archived logs to ${LOG_DIR}_${ts}"
+fi
+
+exit $ret

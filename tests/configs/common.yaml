@@ -6,6 +6,7 @@ aiak_training_path: /workspace/OmniTraining/
 
 
 scripts_root_path: $aiak_training_path/tests
+# In the pipeline, the logs path will be replaced by appending a suffix of name + pipeline ID
 training_log_path: $pfs_path/logs
 
 convert_checkpoint_path: $aiak_training_path/tools/convert_checkpoint
