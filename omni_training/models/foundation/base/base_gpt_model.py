@@ -161,12 +161,15 @@ class BaseGPTModel(BaseMegatronLanguageModule):
 
         if self.pre_process or self.mtp_process:
             if language_embedding is None:
+                _scatter_sp = scatter_embedding_sequence_parallel
+                if self.mtp_process and not self.pre_process:
+                    _scatter_sp = True
                 self.embedding = LanguageModelEmbedding(
                     config=self.config,
                     vocab_size=self.vocab_size,
                     max_sequence_length=self.max_sequence_length,
                     position_embedding_type=position_embedding_type,
-                    scatter_to_sequence_parallel=scatter_embedding_sequence_parallel,
+                    scatter_to_sequence_parallel=_scatter_sp,
                     tp_group=self.pg_collection.tp,
                 )
             else:
@@ -568,6 +571,9 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             output_weight = self.shared_embedding_or_output_weight()
 
         if mtp_in_postprocess:
+            if extra_block_kwargs is not None:
+                extra_block_kwargs.pop('visual_pos_masks', None)
+                extra_block_kwargs.pop('deepstack_visual_embeds', None)
             hidden_states = self.mtp(
                 input_ids=input_ids,
                 position_ids=position_ids,

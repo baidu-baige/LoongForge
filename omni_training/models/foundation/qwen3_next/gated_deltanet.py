@@ -361,7 +361,7 @@ class GatedDeltaNet(HuggingFaceModule):
         else:
             hidden_states = hidden_states.transpose(0, 1)
             if attention_mask is not None:
-                if attention_mask.shape[2] > 1:
+                if attention_mask.dim() >= 3 and attention_mask.shape[2] > 1:
                     attention_mask = (~attention_mask).sum(dim=(1, 2)) > 0
                 else:
                     attention_mask = ~(attention_mask.squeeze(1).squeeze(1))

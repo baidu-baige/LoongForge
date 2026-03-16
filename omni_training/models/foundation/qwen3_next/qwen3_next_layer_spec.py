@@ -151,8 +151,12 @@ def get_qwen3_next_transformer_layer_spec(config, vp_stage=None):
     block_spec = TransformerBlockSubmodules(layer_specs=local_layer_specs, layer_norm=layer_norm_impl)
     mtp_block_spec = None
     if config.mtp_num_layers is not None:
+        if hasattr(block_spec, 'layer_specs') and len(block_spec.layer_specs) == 0:
+            mtp_input_spec = layer_specs[-1]
+        else:
+            mtp_input_spec = block_spec
         mtp_block_spec = get_gpt_mtp_block_spec(
-            config, block_spec, use_transformer_engine=HAVE_TE, vp_stage=vp_stage
+            config, mtp_input_spec, use_transformer_engine=HAVE_TE, vp_stage=vp_stage
         )
         if mtp_block_spec is not None:
             for layer_spec in mtp_block_spec.layer_specs:

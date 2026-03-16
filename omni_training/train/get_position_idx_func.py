@@ -14,9 +14,21 @@ def get_rope_index_qwen3vl(batch_data):
     image_grid_thw = batch_data.get("image_grid_thw", None)
     video_grid_thw = batch_data.get("video_grid_thw", None)
     attention_mask = batch_data.get("attn_mask", None)
-    VISION_START_TOKEN_ID = getattr(model_config, "vision_start_token_id", 151652)
-    IMAGE_TOKEN_ID = getattr(model_config, "vision_token_id", 151655)
-    VIDEO_TOKEN_ID = getattr(model_config, "video_token_id", 151656)
+    VISION_START_TOKEN_ID = getattr(
+        getattr(model_config, "image_encoder", None), 
+        "vision_start_token_id", 
+        151652
+    )
+    IMAGE_TOKEN_ID = getattr(
+        getattr(model_config, "image_encoder", None), 
+        "image_token_id", 
+        151655
+    )
+    VIDEO_TOKEN_ID = getattr(
+        getattr(model_config, "image_encoder", None),
+        "video_token_id",
+        151656
+    )
 
     # Since we use timestamps to seperate videos, 
     # like <t1> <vision_start> <frame1> <vision_end> <t2> <vision_start> <frame2> <vision_end>,

@@ -60,8 +60,16 @@ stimer = StragglerDetector()
 def get_batch_on_this_tp_rank(data_iterator):
     """Get the current micro-batch on this rank."""
     model_config = get_model_config()
-    IMAGE_TOKEN_ID = getattr(model_config, "vision_token_id", 151655)
-    VIDEO_TOKEN_ID = getattr(model_config, "video_token_id", 151656)
+    IMAGE_TOKEN_ID = getattr(
+        getattr(model_config, "image_encoder", None), 
+        "image_token_id", 
+        151655
+    )
+    VIDEO_TOKEN_ID = getattr(
+        getattr(model_config, "image_encoder", None),
+        "video_token_id",
+        151656
+    )
     if data_iterator is not None and mpu.get_tensor_model_parallel_rank() == 0:
         data = next(data_iterator)
     else:

@@ -397,6 +397,10 @@ def _validate_custom_model_args(name, args, defaults={}):
         warnings.warn(f"WARNING: Now for {name}, we do not support tp_comm_overlap.")
         args.tp_comm_overlap = False
 
+    if getattr(args, 'pipeline_model_parallel_layout', None) is not None:
+        warnings.warn(f"WARNING: Now for {name}, we do not support pipeline_model_parallel_layout.")
+        args.pipeline_model_parallel_layout = None
+
     if args.num_query_groups is None:
         # To pass transformer config post init check
         warnings.warn(f"WARNING: Now for {name}, the num_query_groups is None, using default value"

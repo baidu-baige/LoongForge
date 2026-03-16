@@ -91,7 +91,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 post_process=self.post_process,
                 parallel_output=parallel_output,
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
-                language_embedding=self.encoder_model.text_encoder if add_encoder else True,
+                language_embedding=self.encoder_model.text_encoder if add_encoder else None,
                 rotary_dtype=language_rotary_dtype,
                 vp_stage=vp_stage,
             )
@@ -434,7 +434,7 @@ class OmniCombinationModel(BaseMegatronModule):
         }
         kwargs.update(extra_kwargs)
         output = self.foundation_model(
-            input_ids=None,
+            input_ids=input_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
             decoder_input=combined_embeddings,

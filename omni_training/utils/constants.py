@@ -96,6 +96,7 @@ class VisionLanguageModelFamilies(_BaseFamilies):
     VLM = "vlm"
     INTERN_VL = "intern_vl"
     ERNIE4_5_VL = "ernie4_5_vl"
+    QWEN3_5 = "qwen3_5"
 
 
 class CustomModelFamilies(_BaseFamilies):

@@ -14,6 +14,9 @@ from .qwen2_vl_vision_models.qwen2_vl_config import (
 from .qwen3_vl_vision_models.vision_model import Qwen3VisionModel
 from .qwen3_vl_vision_models.qwen3_vl_config import Qwen3VisionModelConfig
 
+from .qwen3_5_vision_models.vision_model import Qwen35VisionModel
+from .qwen3_5_vision_models.qwen3_5_vision_config import Qwen35VisionConfig
+
 from .llavaov1_5_vision_models.llavaov_1_5_config import RiceVisionConfig
 from .llavaov1_5_vision_models.rice_vision_model import RiceViTModel
 from transformers import AutoModel
@@ -32,6 +35,7 @@ from .ernie4_5_vl_vision_models.ernie_config import ErnieVisionConfig, ErnieAdap
 AutoModel.register(Qwen2VisionModelConfig, BaseVisionModel)
 AutoModel.register(Qwen2VisionRMSNormConfig, Qwen2VisionModelWithRMSNorm)
 AutoModel.register(Qwen3VisionModelConfig, Qwen3VisionModel)
+AutoModel.register(Qwen35VisionConfig, Qwen35VisionModel)
 AutoModel.register(MLPAdapterConfig, Adapter)
 AutoModel.register(RiceVisionConfig, RiceViTModel)
 AutoModel.register(InternVisionConfig, InternVisionModel)
