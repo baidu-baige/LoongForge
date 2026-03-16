@@ -365,7 +365,7 @@ def load_hf_checkpoint_online(
     if len(unwrapped_model) == 1:
         missing_keys, unexpected_keys = unwrapped_model[0].load_state_dict(
             current_rank_state_dict['model'],
-            strict=False
+            strict=True
         )
     else: # vpp
         missing_keys = []
@@ -374,7 +374,7 @@ def load_hf_checkpoint_online(
             model_key = f"model{i}"
             tmp_missing_keys, tmp_unexpected_keys = unwrapped_model[i].load_state_dict(
                 current_rank_state_dict[model_key],
-                strict=False
+                strict=True
             )
             if len(tmp_missing_keys) > 0:
                 missing_keys.extend(tmp_missing_keys)
