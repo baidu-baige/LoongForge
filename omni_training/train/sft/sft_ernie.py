@@ -121,7 +121,8 @@ def get_batch(data_iterator):
             max_seqlen_kv=max_lengths[0].item(),
         )
     # slice batch along sequence dimension for context parallelism
-    assert mpu.get_context_parallel_world_size() == 1, "not implemented"
+    assert mpu.get_context_parallel_world_size() == 1, "cp > 1 is not implemented"
+    assert mpu.get_expert_model_parallel_world_size() == 1, "ep > 1 is not implemented"
 
     if packed_seq_params is not None:
         attention_mask = None
