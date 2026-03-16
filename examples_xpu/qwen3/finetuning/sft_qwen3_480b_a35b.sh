@@ -1,4 +1,5 @@
 #!/bin/bash
+#The script needs to be run on at least 8 nodes
 #source activate && conda activate python310_torch25_cuda
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}

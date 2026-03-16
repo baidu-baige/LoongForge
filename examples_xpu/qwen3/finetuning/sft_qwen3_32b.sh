@@ -36,6 +36,7 @@ export BKCL_RDMA_VERBS=1
 export XMLIR_PARALLEL_SAVE_MEMORY=false # 为false显存占用会多, 但会有性能提升; 为true显存会少, 但性能会下降
 export XMLIR_BATCH_PARALLEL=false # 通信融合算子开启, USE_CAST_FC_FUSION在bf16下会自动失效
 export USE_FAST_BF16_FC=true # 仅bf16下用到
+export XMLIR_ENABLE_FAST_FC=true
 export SAVE_LOG_FILE_WITH_RANK_ID=false # 为true的话, 训练日志会按rank_id分开存储
 export XMLIR_LOG_PATH="qwen3-32b" # 指定训练日志的存储目录
 export XMLIR_LOG_PREFIX="sft-packing-tp4pp2" # 指定训练日志文件名的前缀

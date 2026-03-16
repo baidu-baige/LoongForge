@@ -121,7 +121,7 @@ MOE_ARGS=(
     --moe-router-topk 8
     --moe-router-dtype fp32
     --moe-aux-loss-coeff 1e-3
-    --moe-grouped-gemm
+    #--moe-grouped-gemm
     --empty-unused-memory-level 2
 )
 

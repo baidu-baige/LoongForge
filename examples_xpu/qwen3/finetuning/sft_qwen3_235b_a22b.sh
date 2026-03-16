@@ -1,5 +1,5 @@
 #! /bin/bash
-# The script needs to be run on at least 2 nodes.
+# The script needs to be run on at least 4 nodes.
 #source activate && conda activate python310_torch25_cuda
 set -x
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True

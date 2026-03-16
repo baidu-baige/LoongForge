@@ -1,5 +1,5 @@
 #! /bin/bash
-
+#The script needs to be run on at least 8 nodes
 set -x
 
 #source activate && conda activate python310_torch25_cuda
