@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import torch
 
+from megatron.training import get_args
 from omni_training.models.factory import register_model_provider
 from omni_training.utils.constants import VisionLanguageActionModelFamilies
 from omni_training.utils.global_vars import get_model_config
@@ -36,5 +37,9 @@ def pi05_model_provider(
     if getattr(model_config, "device", None) is None:
         model_config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    model = PI05Policy(model_config)
+    args = get_args()
+    if args.ckpt_format == "torch":
+        model = PI05Policy.from_pretrained(args.load, config=model_config)
+    else:
+        model = PI05Policy(model_config)
     return model
