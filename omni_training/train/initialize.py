@@ -207,15 +207,17 @@ def initialize_aiak_megatron(
     def finish_mpu_init():
         """torch.distributed initialization"""
 
+        from .parser import parse_args_from_config
+        # set model config from args and hydra config (must be before _initialize_distributed,
+        # because get_embedding_ranks may depend on get_model_config())
+        parse_args_from_config(args)
+
         # Pytorch distributed.
         _initialize_distributed(get_embedding_ranks, get_position_embedding_ranks, store)
 
         save_parallel_state('text_decoder')
         global _DecoderTensorParallelSize
         _DecoderTensorParallelSize = mpu.get_tensor_model_parallel_world_size()
-        from .parser import parse_args_from_config
-        # set model config from args and hydra config
-        parse_args_from_config(args)
         model_config = get_model_config()
         from megatron.training import print_rank_0
         print_rank_0(f"model_config: {model_config}")

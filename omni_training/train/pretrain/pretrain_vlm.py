@@ -13,6 +13,9 @@ import copy
 
 from megatron.training import get_timers
 
+from typing import List
+from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
+
 from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
 from megatron.core.packed_seq_params import PackedSeqParams
@@ -48,6 +51,8 @@ from omni_training.models.omni_models.omni_model_provider import (
 from omni_training.models.omni_models.utils import get_batch_on_this_cp_rank
 from omni_training.train.get_loss_func import default_loss_func
 from omni_training.train.initialize import change_parallel_state, get_encoder_dp_size
+
+from omni_training.utils.global_vars import get_model_config
 
 stimer = StragglerDetector()
 
@@ -270,7 +275,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
 GLOBAL_TRAIN_DATASET_SIZE = None
 
 
-def train_valid_test_dataset_provider(train_val_test_num_samples):
+def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None):
     """Provides the datasets used by the trainer"""
     import omni_training.data.dp_balance.adaptor
     global GLOBAL_TRAIN_DATASET_SIZE
@@ -301,6 +306,19 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
         return train_dataloader, None, None
 
 
+def get_embedding_ranks(pp_ranks: List[int]):
+    """Get the embedding ranks."""
+    embedding_ranks = [pp_ranks[0]]
+    if len(pp_ranks) > 1:
+        args = get_args()
+        if not args.untie_embeddings_and_output_weights:
+            embedding_ranks.append(pp_ranks[-1])
+        mtp_ranks = get_mtp_ranks(pp_ranks, config=get_model_config().foundation)
+        embedding_ranks.extend(mtp_ranks)
+    embedding_ranks = list(set(embedding_ranks))
+    embedding_ranks = sorted(embedding_ranks)
+    return embedding_ranks
+
 @register_model_trainer(
     model_family=constants.VisionLanguageModelFamilies.names(),
     training_phase=constants.TrainingPhase.PRETRAIN,
@@ -313,6 +331,7 @@ def default_vlm_pretrain_trainer(train_args):
         model_provider=omni_model_provider,
         model_type=ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
         forward_step_func=forward_step,
+        get_embedding_ranks=get_embedding_ranks,
     )
 
     return trainer

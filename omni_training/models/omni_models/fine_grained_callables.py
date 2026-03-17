@@ -262,25 +262,18 @@ class PostProcessNode(ScheduleNode):
         """Implements the forward pass for postprocessing.
 
         This method handles:
-        1. Final layer normalization
-        2. Output layer computation
-        3. Loss computation if labels are provided
+        1. Output layer computation
+        2. Loss computation if labels are provided
 
         Args:
             hidden_states: The hidden states from the transformer layers.
 
         Returns:
             The logits or loss depending on whether labels are provided.
+        Note:
+            Final layernorm now has been moved from the post-process stage to the
+            last decoder layer, so we don't need to run the final layer norm here.
         """
-        # Final layer norm from Decoder
-        if self.gpt_model.decoder.final_layernorm and not getattr(self.gpt_model, 'mtp_process', False):
-            hidden_states = self.gpt_model.decoder.final_layernorm(hidden_states)
-            # TENorm produces a "viewed" tensor. This will result in schedule.py's
-            # deallocate_output_tensor() throwing an error, so a viewless tensor is
-            # created to prevent this.
-            hidden_states = make_viewless_tensor(
-                inp=hidden_states, requires_grad=True, keep_graph=True
-            )
 
         # Run GPTModel._postprocess
         loss = self.gpt_model._postprocess(
@@ -356,6 +349,7 @@ class TransformerLayerNode(ScheduleNode):
         self.submodule = submodule
         self.detached = tuple()
         self.before_detached = tuple()
+        self.is_mtp = extra_args.get("is_mtp", False)
 
         # Create flags to indicate first and last layer
         self.is_first_layer = extra_args.get("is_first_layer", False)
@@ -645,6 +639,13 @@ def build_transformer_layer_callables(layer: TransformerLayer):
             shared_expert_output.untyped_storage().resize_(0)
         node.layer_state.residual = None
         node.layer_state.shared_expert_output = None
+
+        # final layer norm from decoder
+        final_layernorm = node.chunk_state.model.foundation_model.decoder.final_layernorm
+        if not node.is_mtp and final_layernorm and node.is_last_layer:
+            output = final_layernorm(output)
+            output = make_viewless_tensor(inp=output, requires_grad=True, keep_graph=True)
+
         return output
     
     def submodule_deepstack_forward_wrapper(_deepstack_process: Callable):
@@ -707,15 +708,7 @@ def build_mtp_layer_callables(layer):
     def submodule_mtp_attn_forward(node, hidden_states):
         # MTP Block Preprocess
         if node.is_first_layer:
-            # Final layer norm from Decoder
-            final_layernorm = node.chunk_state.model.decoder.final_layernorm
-            if final_layernorm:
-                hidden_states = final_layernorm(hidden_states)
-                hidden_states = make_viewless_tensor(
-                    inp=hidden_states, requires_grad=True, keep_graph=True
-                )
-                hidden_states = node.detach(hidden_states)
-            offset = get_mtp_layer_offset(layer.config)
+            offset = get_mtp_layer_offset(layer.config, node.chunk_state.model.vp_stage)
             node.chunk_state.mtp_hidden_states = list(torch.chunk(hidden_states, 1 + offset, dim=0))
             hidden_states = node.chunk_state.mtp_hidden_states[offset]
 

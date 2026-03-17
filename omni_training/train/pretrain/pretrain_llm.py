@@ -12,7 +12,7 @@ import torch
 from functools import partial
 
 from megatron.training import get_timers
-
+from typing import List, Optional, Tuple
 from megatron.core import mpu
 from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
@@ -31,7 +31,12 @@ from megatron.core.rerun_state_machine import get_rerun_state_machine
 from megatron.training.utils import (
     get_batch_on_this_cp_rank,
     get_batch_on_this_tp_rank,
+    get_blend_and_blend_per_split,
+    is_first_or_last_pipeline_stage,
 )
+from megatron.core.utils import get_attr_wrapped_model
+from megatron.core import parallel_state
+from megatron.core.transformer.multi_token_prediction import mtp_on_this_rank, get_mtp_ranks
 
 from omni_training.utils import constants, get_args, get_tokenizer, print_rank_0
 
@@ -41,18 +46,24 @@ from omni_training.train.megatron_trainer import MegatronTrainer
 from omni_training.train.trainer_builder import register_model_trainer
 from omni_training.models.foundation.llm_model_provider import llm_model_provider
 
+from omni_training.utils.global_vars import get_model_config
+
 
 stimer = StragglerDetector()
 
 
-def get_batch(data_iterator):
-    """Generate a batch"""
+def get_batch(data_iterator, vp_stage: Optional[int] = None):
+    """Generate a batch."""
     # TODO: this is pretty hacky, find a better way
-    if (not mpu.is_pipeline_first_stage()) and (not mpu.is_pipeline_last_stage()):
+    if not is_first_or_last_pipeline_stage(vp_stage) and (
+    (not mtp_on_this_rank(config=get_model_config(), ignore_virtual=False, vp_stage=vp_stage))):
         return None, None, None, None, None
 
     # get batches based on the TP rank you are on
-    batch = get_batch_on_this_tp_rank(data_iterator)
+    batch = get_batch_on_this_tp_rank(
+        data_iterator,
+        mtp_on_this_rank=mtp_on_this_rank(config=get_model_config(), ignore_virtual=False, vp_stage=vp_stage)
+        )
 
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
@@ -135,8 +146,10 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
 
     global stimer
     with stimer(bdata=True):
+        vp_stage = get_attr_wrapped_model(model, "vp_stage")
         tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
-            data_iterator
+            data_iterator,
+            vp_stage,
         )
 
     timers("batch-generator").stop()
@@ -157,7 +170,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     return output_tensor, partial(loss_func, loss_mask)
 
 
-def train_valid_test_datasets_provider(train_val_test_num_samples):
+def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     """Build the train test and validation datasets.
 
     For GPT-like models, if there are no special requirements, we should directly reuse the Megatron GPTDataset.
@@ -165,10 +178,12 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     args = get_args()
     tokenizer = get_tokenizer()
 
-    def _is_dataset_built_on_rank():
+    def _is_dataset_built_on_rank(vp_stage=None):
         return (
-            mpu.is_pipeline_first_stage() or mpu.is_pipeline_last_stage()
-        ) and mpu.get_tensor_model_parallel_rank() == 0
+            is_first_or_last_pipeline_stage(vp_stage)
+            or mtp_on_this_rank(config=get_model_config(), ignore_virtual=False, vp_stage=vp_stage)
+        ) and parallel_state.get_tensor_model_parallel_rank() == 0
+
 
     config = GPTDatasetConfig(
         random_seed=args.seed,
@@ -193,11 +208,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     print_rank_0(
         f"> building train, validation, and test datasets for {args.model_name} ..."
     )
+    
+    is_dataset_built = partial(_is_dataset_built_on_rank, vp_stage=vp_stage)
 
     train_ds, valid_ds, test_ds = BlendedMegatronDatasetBuilder(
         GPTDataset if not args.mock_data else MockGPTDataset,
         train_val_test_num_samples,
-        _is_dataset_built_on_rank,
+        partial(_is_dataset_built_on_rank, vp_stage=vp_stage),
         config,
     ).build()
 
@@ -205,6 +222,18 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
     return train_ds, valid_ds, test_ds
 
+def get_embedding_ranks(pp_ranks: List[int]):
+    """Get the embedding ranks."""
+    embedding_ranks = [pp_ranks[0]]
+    if len(pp_ranks) > 1:
+        args = get_args()
+        if not args.untie_embeddings_and_output_weights:
+            embedding_ranks.append(pp_ranks[-1])
+        mtp_ranks = get_mtp_ranks(pp_ranks, config=get_model_config())
+        embedding_ranks.extend(mtp_ranks)
+    embedding_ranks = list(set(embedding_ranks))
+    embedding_ranks = sorted(embedding_ranks)
+    return embedding_ranks
 
 @register_model_trainer(
     model_family=constants.LanguageModelFamilies.names(),
@@ -218,6 +247,7 @@ def default_pretrain_trainer(train_args):
         model_provider=llm_model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
+        get_embedding_ranks=get_embedding_ranks,
     )
 
     return trainer
