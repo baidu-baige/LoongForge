@@ -1,6 +1,7 @@
-"""Wan layer spec."""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 
-# from .fused_bias_dropout import get_bias_dropout_add
+"""Wan layer spec."""
 
 from megatron.core.extensions.transformer_engine import (
     TEColumnParallelLinear,

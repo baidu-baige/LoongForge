@@ -1,4 +1,8 @@
-""" convert_checkpoint """
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Megatron Core checkpoint conversion package."""
+
 import os
 import sys
 from os.path import dirname

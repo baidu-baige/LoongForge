@@ -1,6 +1,7 @@
-"""
-warmup tools for dp balance
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""warmup tools for dp balance"""
 
 import torch
 import torch.distributed as dist

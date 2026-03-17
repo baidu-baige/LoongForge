@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
-"""
-Metric class.
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Metric class."""
 from dataclasses import dataclass, field
+
 
 @dataclass
 class Metric:

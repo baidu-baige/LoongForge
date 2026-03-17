@@ -1,4 +1,8 @@
-"""OmniEncoderModel: A multimodal encoder that produces input embeddings.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+OmniEncoderModel: A multimodal encoder that produces input embeddings.
 
 This model integrates various modality encoders (text, image, video, audio)
     and projects their features into a unified embedding space and returns:

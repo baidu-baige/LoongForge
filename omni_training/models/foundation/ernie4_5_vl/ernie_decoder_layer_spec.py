@@ -1,3 +1,9 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """Ernie-VL layer spec."""
 
 from typing import Optional, Tuple
@@ -6,7 +12,6 @@ from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.attention import SelfAttentionSubmodules, SelfAttention
 from megatron.core.transformer.mlp import MLPSubmodules
-# from megatron.core.transformer.dot_product_attention import DotProductAttention
 from megatron.core.transformer.moe.moe_layer import MoESubmodules
 from megatron.core.transformer.transformer_block import TransformerBlockSubmodules, get_num_layers_to_build
 from megatron.core.transformer.transformer_layer import TransformerLayerSubmodules, get_transformer_layer_offset
@@ -18,7 +23,6 @@ from .ernie_config import ErnieMoeConfig
 from .ernie_moe_layer import ErnieMultiTypeMoE, MultiTypeMoeSubmodules, ErnieMoeLayer
 from .ernie_experts import ErnieMLP, SequentialMLP, ErnieSharedExpertMLP
 from .ernie_pos_embedding import apply_rotary_3d
-from .ernie_attention import FlashAttentionCore
 
 
 def _get_mlp_module_spec(
@@ -82,7 +86,6 @@ def _get_ernie4_5_vl_moedecoderlayer_with_spec(num_experts=0, qk_layernorm: bool
                 params={"attn_mask_type": AttnMaskType.causal},
                 submodules=SelfAttentionSubmodules(
                     linear_qkv=multiacc_modules.TEColumnParallelLinear,
-                    # core_attention=FlashAttentionCore,
                     core_attention=multiacc_modules.DotProductAttention,
                     linear_proj=multiacc_modules.TERowParallelLinear,
                     apply_rotary_fn=apply_rotary_3d

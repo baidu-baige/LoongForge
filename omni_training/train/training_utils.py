@@ -1,7 +1,10 @@
-"""
-Pretrain utilities.
-Modified from Megatron-LM/megatron/training.py, https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/training.py
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
+"""Pretrain utilities."""
 
 import os
 import dataclasses

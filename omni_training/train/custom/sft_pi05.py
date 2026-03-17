@@ -1,4 +1,7 @@
-"""Megatron SFT entrypoint for VLA models like pi05."""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""SFT entrypoint for VLA models like pi05."""
 
 from __future__ import annotations
 
@@ -326,7 +329,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         dataset_stats=dataset_stats,
     )
 
-
     ds_features = dataset_to_policy_features(base_dataset.meta.features)
     config.output_features = {k: ft for k, ft in ds_features.items() if ft.type is FeatureType.ACTION}
     if not config.input_features:
@@ -343,7 +345,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     ]
     if missing_visuals:
         print_rank_0(message=f"[sft_vla] Warning: missing visual keys were not added: {missing_visuals}")
-
 
     # Optional debug hook: force the first sample index to match a reference run (e.g., lerobot).
     sampler = None

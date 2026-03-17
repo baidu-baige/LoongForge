@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Script for preparing raw samples using packed bins."""
+
 import bisect
 import os
 import json

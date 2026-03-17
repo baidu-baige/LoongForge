@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Configuration loading and parsing utilities for checkpoint conversion."""
+
 import os
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
@@ -7,12 +12,12 @@ from omegaconf import OmegaConf
 def load_config(config_path, config_name=None, hydra_overrides=None):
     """
     Load configuration using the Hydra API, supports both directory+name and full path.
-    
+
     Args:
         config_path: Either a directory path or full yaml file path
         config_name: Config file name without .yaml (required if config_path is directory)
         hydra_overrides: Optional list of override strings
-    
+
     Returns:
         Hydra config object
     """

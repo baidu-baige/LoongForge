@@ -1,24 +1,28 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from InternVL.
 # --------------------------------------------------------
 # InternVL
 # Copyright (c) 2024 OpenGVLab
-# Licensed under The MIT License [see LICENSE for details]
+# Licensed under The MIT License
 # --------------------------------------------------------
+
+
 """Intern Vision model."""
+
 from typing import Optional
 import logging
 import warnings
 import torch
 from torch import nn
 import torch.nn.functional as F
-from megatron.core.models.common.vision_module.vision_module import VisionModule
-from megatron.core.transformer.enums import ModelType, AttnMaskType
-from megatron.core.transformer.spec_utils import ModuleSpec
+from megatron.core.transformer.enums import ModelType
 from omni_training.models.encoder.vision_transformer_block import TransformerBlock
 
 from .internvl_config import InternVisionConfig
 from omni_training.models.common import BaseMegatronVisionModule
-from transformers.modeling_outputs import BaseModelOutputWithPooling
-from megatron.core import parallel_state, tensor_parallel
+from megatron.core import tensor_parallel
 from omni_training.models.utils import import_module
 
 
@@ -64,11 +68,11 @@ class InternVisionEmbeddings(nn.Module):
         class_embeds = self.class_embedding.expand(batch_size, 1, -1).to(target_dtype)
         embeddings = torch.cat([class_embeds, patch_embeds], dim=1)
         if self.config.model_type == 'intern_vit_300m':
-            position_embedding = torch.cat([
-                self.position_embedding[:, :1, :],
-                self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)
-            ],
-                                           dim=1)
+            position_embedding = torch.cat(
+                [
+                    self.position_embedding[:, :1, :],
+                    self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)
+                ], dim=1)
         else:
             position_embedding = self.position_embedding
         embeddings = embeddings + position_embedding.to(target_dtype)
@@ -202,9 +206,7 @@ class InternVisionModel(BaseMegatronVisionModule):
 
         if self.config.sequence_parallel:
             hidden_states = tensor_parallel.scatter_to_sequence_parallel_region(hidden_states)
-            #hidden_states = hidden_states.transpose(0, 1).contiguous()  # [b, s, h] -> [s, b, h]
             hidden_states, _ = self.encoder(hidden_states, attention_mask=attention_mask)
-            #hidden_states = hidden_states.transpose(0, 1).contiguous()
             hidden_states = tensor_parallel.gather_from_sequence_parallel_region(hidden_states)
             hidden_states = hidden_states.transpose(0, 1).contiguous()
         else:

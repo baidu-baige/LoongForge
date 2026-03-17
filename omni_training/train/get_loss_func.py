@@ -1,4 +1,10 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+
 """Generic loss function"""
+
 from omni_training.utils import get_args
 import torch
 import os

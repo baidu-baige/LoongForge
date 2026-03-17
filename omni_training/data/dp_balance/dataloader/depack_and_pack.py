@@ -1,6 +1,7 @@
-"""
-depack and pack data
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""depack and pack data"""
 
 from typing import Dict, Tuple, List, Any
 

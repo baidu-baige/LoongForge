@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """qwen3_next model"""
 
 from .qwen3_next_model import Qwen3NextModel

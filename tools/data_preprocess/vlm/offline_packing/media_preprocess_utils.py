@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Media preprocessing utilities for images and videos."""
+
 from PIL import Image
 
 # ----------------- image_preprocess -----------------

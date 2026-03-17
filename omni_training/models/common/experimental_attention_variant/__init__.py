@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Omni-owned experimental attention variants for DeepSeek."""
 
 from .dsa_fused import (

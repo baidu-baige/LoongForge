@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-################################################################################
-#
-# Copyright (c) 2024 Baidu.com, Inc. All Rights Reserved
-#
-################################################################################
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Transform external checkpoint keys into OmniTraining naming schemes."""
 
 def transform_key(module, prefix_mapping, pipeline_model_parallel_size=1, tensor_model_parallel_size=1):
     """

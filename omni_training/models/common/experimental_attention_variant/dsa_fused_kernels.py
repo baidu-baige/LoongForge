@@ -1,6 +1,7 @@
-"""
-Kernels for Deepseek Sparse Attention.
-"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Kernels for Deepseek Sparse Attention."""
 
 import dataclasses
 from typing import Optional, Tuple, Any

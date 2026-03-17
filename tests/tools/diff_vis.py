@@ -1,3 +1,8 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""plot loss diff"""
+
 import os
 from typing import List, Union, Optional
 

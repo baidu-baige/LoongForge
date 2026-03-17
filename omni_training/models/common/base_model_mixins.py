@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Omni Foundation Mixin Class: Abstract Base Class for Encoders/Foundation Models/Decoders
 Alternative translations"""
 

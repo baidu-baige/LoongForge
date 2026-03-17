@@ -1,5 +1,8 @@
-# Copyright 2025 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All rights reserved.
-# Copyright 2026 AIAK Training Omni, All rights reserved.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from https://github.com/huggingface/transformers.
+# Copyright 2025 The Qwen team, Alibaba Group and the HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +15,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Some of this code was adopted from https://github.com/huggingface/transformers
 
 """GatedDeltaNet"""
+
 import os
 from dataclasses import dataclass, replace
 from typing import List, Optional, Tuple, Union

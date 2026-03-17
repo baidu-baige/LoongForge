@@ -1,3 +1,10 @@
+# Copyright (c) 2024 DiffSynth-Studio
+# Modifications Copyright (c) 2026 OmniTraining Team.
+#
+# Derived from: DiffSynth-Studio
+# Source: https://github.com/modelscope/DiffSynth-Studio
+# See repository NOTICE for license details.
+
 """noise generation scheduler"""
 
 import torch

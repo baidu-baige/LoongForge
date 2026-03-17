@@ -1,4 +1,7 @@
-"""attention module for aiak"""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""attention module"""
 
 import torch
 

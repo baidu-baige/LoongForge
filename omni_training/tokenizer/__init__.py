@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """tokenizer module"""
 
 from .tokenizer import build_tokenizer

@@ -1,13 +1,7 @@
-#!/usr/bin/env python3
-"""
-base_task.py
-"""
-# -*- coding: UTF-8 -*-
-################################################################################
-#
-# Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
-#
-################################################################################
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""base_task.py"""
 
 import os, time
 from typing import Any, Dict, List

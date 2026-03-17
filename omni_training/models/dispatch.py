@@ -1,4 +1,6 @@
-# Copyright (c) 2024, BAIDU CORPORATION.  All rights reserved.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Dispatch Module"""
 
 from typing import Any

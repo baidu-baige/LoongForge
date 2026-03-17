@@ -1,4 +1,11 @@
-""" intern vision attention module for aiak """
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+
+""" intern vision attention module """
+
 import torch
 
 from megatron.core.utils import divide

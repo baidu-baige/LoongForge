@@ -1,7 +1,11 @@
-# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# Copyright (c) 2026 AIAK Training Omni, All rights reserved.
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 
 """GatedSoftmaxAttention"""
+
 import torch
 from torch import Tensor
 

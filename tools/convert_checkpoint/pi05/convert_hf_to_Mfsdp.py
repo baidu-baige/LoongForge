@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""HuggingFace to FSDP checkpoint conversion utilities."""
+
 import argparse
 import glob
 import os

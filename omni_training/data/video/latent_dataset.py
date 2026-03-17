@@ -1,3 +1,5 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
 
 """latent dataset"""
 
@@ -7,6 +9,7 @@ import torch
 import json
 from pathlib import Path
 from megatron.training import get_args
+
 
 class TensorDataset(torch.utils.data.Dataset):
     def __init__(self, metadata_path, steps_per_epoch=0):

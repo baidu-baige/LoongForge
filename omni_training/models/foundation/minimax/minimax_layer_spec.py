@@ -1,3 +1,9 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """Minimax layer spec."""
 
 from typing import Tuple, Optional
@@ -18,15 +24,9 @@ from megatron.core.transformer.transformer_layer import (
     get_transformer_layer_offset,
     TransformerLayerSubmodules
 )
-from megatron.core.transformer.multi_latent_attention import (
-    MLASelfAttention,
-    MLASelfAttentionSubmodules,
-)
 
 from megatron.core.transformer.moe.experts import SequentialMLP, TEGroupedMLP
-from megatron.core.transformer.moe.shared_experts import SharedExpertMLP
 from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
-from megatron.core.enums import Fp8Recipe
 
 from .attention import MinimaxSelfAttention, MinimaxSelfAttentionSubmodules
 from omni_training.models.dispatch import multiacc_modules

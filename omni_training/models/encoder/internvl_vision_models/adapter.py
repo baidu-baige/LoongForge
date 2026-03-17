@@ -1,12 +1,12 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """ Adapters """
 
 import torch
 import math
-from dataclasses import dataclass
 import transformer_engine as te
-from typing import Union
-from megatron.core.transformer.module import MegatronModule
-from megatron.core.transformer.spec_utils import ModuleSpec, build_module
+from megatron.core.transformer.spec_utils import build_module
 from .internvl_config import InternMLPAdapterConfig
 from omni_training.models.common import BaseMegatronModule
 from omni_training.models.utils import import_module
@@ -56,7 +56,6 @@ class InternAdapter(BaseMegatronModule):
             bias=config.add_bias_linear,
         )
 
-        # ActivationFuncModule is removed in newer Megatron versions; use config activation directly.
         self.activation_func = self.config.activation_func
         self.linear_fc2 = build_module(
             submodules.linear_fc2,

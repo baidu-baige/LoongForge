@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """AIAK Training Arguments Module
 
 This module defines command-line arguments for AIAK training pipeline,

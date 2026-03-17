@@ -1,3 +1,6 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """ErnieTaskEncoder — Energon TaskEncoder for ERNIE-VL models.
 
 Bridges the ERNIE-VL offline preprocessing pipeline into the Megatron Energon

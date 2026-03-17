@@ -1,17 +1,19 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """support MinimaxSelfAttention"""
+
 from megatron.core.process_groups_config import ProcessGroupCollection
-from megatron.core.transformer.identity_op import IdentityOp
-from megatron.core.transformer.attention import Attention, SelfAttention, SelfAttentionSubmodules
+from megatron.core.transformer.attention import Attention
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import NoReturn, Optional, Tuple, Union
 
 import torch
-from torch import Tensor
 
-from megatron.core import InferenceParams, parallel_state, tensor_parallel
-from megatron.core.models.common.embeddings.rope_utils import apply_rotary_pos_emb_with_cos_sin
 from megatron.core.parallel_state import (
     get_data_parallel_group,
     get_data_parallel_rank,
@@ -20,13 +22,11 @@ from megatron.core.parallel_state import (
     get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
 )
-from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
-from megatron.core.utils import divide, is_te_min_version
 
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.extensions.transformer_engine import SplitAlongDim, TELinear, set_save_original_input
+from megatron.core.extensions.transformer_engine import SplitAlongDim
 try:
     from flash_attn import flash_attn_with_kvcache
 except:
@@ -34,8 +34,6 @@ except:
 
 from megatron.core.tensor_parallel.mappings import (
     gather_from_tensor_model_parallel_region,
-    scatter_to_sequence_parallel_region,
-    gather_from_sequence_parallel_region,
     scatter_to_tensor_model_parallel_region,
 )
 

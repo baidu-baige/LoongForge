@@ -1,3 +1,7 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 """Processing large data for pretraining."""
@@ -206,8 +210,7 @@ def get_args():
     group.add_argument('--model-family', type=str,
                        choices=["llama", "llama2", "llama3", "llama3.1",
                                 "baichuan", "baichuan2",
-                                "qwen", "qwen1.5", "qwen2",
-                                "mixtral"],
+                                "qwen", "qwen1.5", "qwen2",],
                        help='model family name. note: for the qwen model, this parameter needs to be passed, '
                             'otherwise an error will be reported')
     group.add_argument('--tokenizer-type', type=str, required=True,

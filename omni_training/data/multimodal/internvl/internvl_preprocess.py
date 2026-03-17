@@ -1,3 +1,14 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from InternVL.
+# --------------------------------------------------------
+# InternVL
+# Copyright (c) 2024 OpenGVLab
+# Licensed under The MIT License
+# --------------------------------------------------------
+
+
 """Internvl preprocessing"""
 
 from typing import Dict, Tuple, List, Union

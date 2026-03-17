@@ -1,11 +1,33 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from transformers.
+# Copyright 2025 The Qwen Team and The HuggingFace Inc. team. All rights reserved.
+#
+# This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
+# and OPT implementations in this library. It has been modified from its
+# original forms to accommodate minor architectural differences compared
+# to GPT-NeoX and OPT used by the Meta AI team that trained the model.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """VisionTransformer module"""
+
 import torch
 import torch.nn.functional as F
 from typing import Optional
 
-from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.transformer.enums import ModelType, AttnMaskType
-from megatron.core.transformer.transformer_config import TransformerConfig
+from megatron.core.transformer.enums import ModelType
 
 from omni_training.models.encoder.vision_transformer_block import TransformerBlock
 from omni_training.models.encoder.qwen2_vl_vision_models.qwen2_vl_config import (
@@ -15,8 +37,9 @@ from omni_training.models.common import BaseMegatronVisionModule
 from omni_training.models.utils import import_module
 
 
+# adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen2_5_vl/modeling_qwen2_5_vl.py # pylint: disable=line-too-long
 class PatchEmbed(torch.nn.Module):
-    """ " Patch Embedding"""
+    """ Patch Embedding"""
 
     def __init__(
         self,
@@ -58,7 +81,7 @@ class PatchEmbed(torch.nn.Module):
 
 
 class VisionRotaryEmbedding(torch.nn.Module):
-    """ " Rotary Position Embedding"""
+    """ Rotary Position Embedding"""
 
     def __init__(self, dim: int, theta: float = 10000.0) -> None:
         super().__init__()

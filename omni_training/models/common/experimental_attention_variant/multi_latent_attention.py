@@ -1,3 +1,9 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
 """Omni MLA wrapper carrying DSA absorb logic with CLI-gated fused routing."""
 
 import copy

@@ -1,6 +1,8 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
-# Copyright (c) 2024, AIAK team. All rights reserved.
-# This code was adopted from https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/training/initialize.py
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 
 """OmniTraining initialization."""
 

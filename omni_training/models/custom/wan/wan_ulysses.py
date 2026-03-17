@@ -1,3 +1,9 @@
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from DeepSpeed under the Apache-2.0 License.
+# Copyright (c) Microsoft Corporation.
+
 """all to all operation"""
 
 import torch

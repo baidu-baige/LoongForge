@@ -1,4 +1,10 @@
-"""tranformer layer for aiak."""
+# Copyright 2026 The OmniTraining Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Megatron-LM under the BSD 3-Clause License.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+
+"""tranformer layer"""
 
 from dataclasses import dataclass
 
@@ -81,19 +87,19 @@ class TransformerLayerIntern(TransformerLayer):
                                                 config.initializer_factor)
 
     def forward(
-            self,
-            hidden_states,
-            attention_mask=None,
-            context=None,
-            context_mask=None,
-            rotary_pos_emb=None,
-            rotary_pos_cos=None,
-            rotary_pos_sin=None,
-            attention_bias=None,
-            inference_params=None,
-            packed_seq_params=None,
-            sequence_len_offset=None,
-            **kwargs,
+        self,
+        hidden_states,
+        attention_mask=None,
+        context=None,
+        context_mask=None,
+        rotary_pos_emb=None,
+        rotary_pos_cos=None,
+        rotary_pos_sin=None,
+        attention_bias=None,
+        inference_params=None,
+        packed_seq_params=None,
+        sequence_len_offset=None,
+        **kwargs,
     ):
         """ intern vit transforemr layer forward """
         # hidden_states: [s, b, h]
