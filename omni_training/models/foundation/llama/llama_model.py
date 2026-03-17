@@ -14,9 +14,9 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
 
-from omni_training.models.foundation import LLaMAConfig
 from omni_training.models.foundation.base import BaseGPTModel
 from omni_training.models.utils import import_module
+from .llama_config import LLaMAConfig
 
 
 class LLaMAModel(BaseGPTModel):

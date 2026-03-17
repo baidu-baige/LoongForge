@@ -15,9 +15,9 @@ from megatron.core import InferenceParams
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
-from omni_training.models.foundation import DeepseekConfig
 from omni_training.models.utils import import_module
 from omni_training.models.foundation.base import BaseGPTModel
+from .deepseek_config import DeepseekConfig
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):

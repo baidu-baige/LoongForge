@@ -15,10 +15,10 @@ from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEm
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 
-from omni_training.models.foundation import Qwen3Config
 from omni_training.models.foundation.base import BaseGPTModel
 from omni_training.models.utils import import_module
 from omni_training.models.omni_models.utils import get_pos_emb_on_this_cp_rank
+from .qwen_config import Qwen3Config
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):

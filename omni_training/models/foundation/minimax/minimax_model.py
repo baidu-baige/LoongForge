@@ -13,9 +13,9 @@ from megatron.core import InferenceParams
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
-from omni_training.models.foundation import MinimaxConfig
 from omni_training.models.utils import import_module
 from omni_training.models.foundation.base import BaseGPTModel
+from .minimax_config import MinimaxConfig
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):

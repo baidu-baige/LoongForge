@@ -14,8 +14,8 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 
 from omni_training.models.foundation.base import BaseGPTModel
-from omni_training.models.foundation import MimoConfig
 from omni_training.models.utils import import_module
+from .mimo_config import MimoConfig
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):

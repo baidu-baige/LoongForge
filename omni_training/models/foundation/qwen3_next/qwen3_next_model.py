@@ -16,7 +16,7 @@ from megatron.core.process_groups_config import ProcessGroupCollection
 
 from omni_training.models.utils import import_module
 from omni_training.models.foundation.base import BaseGPTModel
-from omni_training.models.foundation import Qwen3NextConfig
+from .qwen3_next_config import Qwen3NextConfig
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
