@@ -4,3 +4,4 @@
 """qwen model"""
 
 from .qwen_model import Qwen2Model
+from .qwen_config import Qwen2Config

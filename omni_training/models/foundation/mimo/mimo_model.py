@@ -14,7 +14,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 
 from omni_training.models.foundation.base import BaseGPTModel
-from omni_training.models.foundation.mimo.mimo_config import MimoConfig
+from omni_training.models.foundation import MimoConfig
 from omni_training.models.utils import import_module
 
 

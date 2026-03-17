@@ -17,8 +17,8 @@ from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.process_groups_config import ProcessGroupCollection
 from omni_training.models.foundation.base import BaseGPTModel
+from omni_training.models.foundation import ErnieMoeConfig
 from .ernie_decoder_layer_spec import get_ernie4_5_vl_decoder_spec
-from .ernie_config import ErnieMoeConfig
 from .ernie_pos_embedding import ErnieRopeEmbedding
 
 

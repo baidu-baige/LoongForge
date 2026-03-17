@@ -11,7 +11,7 @@ from datasets import DatasetDict
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
 from omni_training.data.sft_dataset import SFTDatasetConfig, SFTDataset
-from omni_training.data import ChatTemplate
+from omni_training.data import ChatTemplate, get_support_templates
 from omni_training.tokenizer import build_tokenizer
 from omni_training.utils import constants
 from omni_training.utils.utils import get_default_sft_dataset_config
@@ -116,23 +116,7 @@ def _add_arguments(parser: argparse.ArgumentParser):
 
     group = parser.add_argument_group(title='extra-sft')
     group.add_argument('--chat-template', type=str, required=True,
-                       choices=[
-                                "empty",
-                                "llama2",
-                                "llama2_zh",
-                                "llama3",
-                                "llama3.1",
-                                "baichuan",
-                                "baichuan2",
-                                "qwen",
-                                "mistral",
-                                "qwen2-vl",
-                                "alpaca",
-                                "deepseek",
-                                "deepseek3",
-                                "deepseek3.1-nothink",
-                                "no-template",
-                                ],
+                       choices=get_support_templates(),
                        help='The template to apply to instruction data.')
 
     group.add_argument('--sft-dataset-config', type=str, default=None,

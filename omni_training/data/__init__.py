@@ -8,7 +8,7 @@ from .blended_hf_dataset_builder import BlendedHuggingFaceDatasetBuilder
 
 from .sft_dataset import SFTDataset, SFTDatasetConfig
 
-from .chat_templete import ChatTemplate, get_support_templates
+from .chat_template import ChatTemplate, get_support_templates
 
 from .mm_plugin import MMPlugin
 

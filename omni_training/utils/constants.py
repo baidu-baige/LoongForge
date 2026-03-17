@@ -106,3 +106,16 @@ class CustomModelFamilies(_BaseFamilies):
 class VisionLanguageActionModelFamilies(_BaseFamilies):
     """Vision language action model families"""
     PI05 = "pi05"
+
+
+def get_all_model_families() -> List[str]:
+    """
+    Get all model families defined in the constants file dynamically.
+    Returns a flattened list of all string names from all subclasses of _BaseFamilies.
+    """
+    all_families = []
+
+    for family_class in _BaseFamilies.__subclasses__():
+        all_families.extend(family_class.names())
+        
+    return all_families

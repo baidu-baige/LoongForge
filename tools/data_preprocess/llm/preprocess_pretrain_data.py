@@ -27,6 +27,7 @@ except ImportError:
 from omni_training.tokenizer import build_tokenizer
 from megatron.core.datasets import indexed_dataset
 from omni_training.utils import constants
+from omni_training.utils.constants import get_all_model_families
 
 
 # https://stackoverflow.com/questions/33139531/preserve-empty-lines-with-nltks-punkt-tokenizer
@@ -208,9 +209,7 @@ def get_args():
 
     group = parser.add_argument_group(title='tokenizer')
     group.add_argument('--model-family', type=str,
-                       choices=["llama", "llama2", "llama3", "llama3.1",
-                                "baichuan", "baichuan2",
-                                "qwen", "qwen1.5", "qwen2",],
+                       choices=get_all_model_families(),
                        help='model family name. note: for the qwen model, this parameter needs to be passed, '
                             'otherwise an error will be reported')
     group.add_argument('--tokenizer-type', type=str, required=True,

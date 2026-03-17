@@ -14,6 +14,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
 
+from omni_training.models.foundation import LLaMAConfig
 from omni_training.models.foundation.base import BaseGPTModel
 from omni_training.models.utils import import_module
 
@@ -41,7 +42,7 @@ class LLaMAModel(BaseGPTModel):
         seq_len_interpolation_factor (Optional[float], optional): scale of linearly interpolating RoPE for longer
             sequences. The value must be a float larger than 1.0. Defaults to None.
     """
-    from .llama_config import LLaMAConfig
+
     config_class = LLaMAConfig
 
     def __init__(

@@ -10,12 +10,12 @@ from typing import Optional
 
 import torch
 from torch import Tensor
-from .qwen_config import Qwen2Config
 from megatron.core import InferenceParams, parallel_state
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 
+from omni_training.models.foundation import Qwen2Config
 from omni_training.models.utils import import_module
 from omni_training.models.omni_models.utils import get_pos_emb_on_this_cp_rank
 from omni_training.models.foundation.base import BaseGPTModel

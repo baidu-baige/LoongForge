@@ -6,13 +6,13 @@ from typing import Optional
 
 import torch
 from torch import Tensor
-from .internlm_config import InternLMConfig
 from megatron.core import InferenceParams
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 
+from omni_training.models.foundation import InternLMConfig
 from omni_training.models.utils import import_module
 from omni_training.models.foundation.base import BaseGPTModel
 

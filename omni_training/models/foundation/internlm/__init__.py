@@ -4,3 +4,4 @@
 """internlm model"""
 
 from .internlm_model import InternLMModel
+from .internlm_config import InternLMConfig

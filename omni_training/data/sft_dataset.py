@@ -26,7 +26,7 @@ from omni_training.utils.constants import (
 
 from .blended_hf_dataset_config import BlendedHuggingFaceDatasetConfig
 from .hf_dataset import HuggingFaceDataset
-from .chat_templete import ChatTemplate
+from .chat_template import ChatTemplate
 from .sft_format_utils import convert_to_unified_format
 from .sft_supervised_utils import convert_to_tokenized_data
 
