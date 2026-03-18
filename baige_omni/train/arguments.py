@@ -166,6 +166,14 @@ def _add_log_tensor_args(parser):
              "Default: '' (current directory)"
     )
 
+    group.add_argument(
+        "--random-fallback-cpu",
+        action="store_true",
+        help="Generate random numbers on CPU then move to target device. "
+             "Useful for hardware that has issues with on-device random number generation. "
+             "Default: False"
+    )
+
     return parser
 
 

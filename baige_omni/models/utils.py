@@ -169,7 +169,7 @@ def build_model_config(args, config):
             # DictConfig / OmegaConf path
             vla_config = OmegaConf.create(OmegaConf.to_container(vla_config, resolve=True))
             vla_config.pop("model_type", None)
-
+        vla_config.random_fallback_cpu = args.random_fallback_cpu
         model_cfgs = instantiate(vla_config)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
