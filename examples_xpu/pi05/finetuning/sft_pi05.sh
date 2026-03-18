@@ -12,8 +12,20 @@ DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
 
+export XMLIR_ENABLE_FAST_FC=true
+export XMLIR_MATMUL_FAST_MODE=1
+export XMLIR_ENABLE_LINEAR_FC_FUSION=1
+export XMLIR_PARALLEL_SAVE_MEMORY=false
+export XDNN_USE_FAST_GELU=true
+export BKCL_FORCE_SYNC=1
+export BKCL_TREE_THRESHOLD=0
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_VERBS=1
+export BKCL_RDMA_NICS=eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4
+export XTE_USE_MULTI_TENSOR_ADAMW=True
+
 # Distributed launch (defaults single node)
-GPUS_PER_NODE=${GPUS_PER_NODE:-1}
+GPUS_PER_NODE=${GPUS_PER_NODE:-8}
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
@@ -41,11 +53,11 @@ TRAINING_ARGS=(
     --use-megatron-fsdp
     --data-parallel-sharding-strategy optim
     --training-phase sft
-    --micro-batch-size 1
-    --global-batch-size 1
+    --micro-batch-size 16
+    --global-batch-size 128
     --train-iters 30000
-    --seq-length 1024
-    --max-position-embeddings 1024
+    --seq-length 762
+    --max-position-embeddings 762
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 1
     --no-masked-softmax-fusion
@@ -66,6 +78,7 @@ TRAINING_ARGS=(
     --weight-decay 0.01
     --no-strict-fsdp-dtensor-load
     --finetune
+    --bf16
     --grad-reduce-in-bf16
     --use-precision-aware-optimizer
     --main-grads-dtype bf16

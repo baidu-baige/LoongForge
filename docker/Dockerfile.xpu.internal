@@ -150,12 +150,12 @@ RUN set -exuo pipefail && \
         pip install "transformers@http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/aiak-training-llm/transformers-fix-lerobot_openpi-20251001-dcddb970.tar.gz" && \
         pip install --no-build-isolation -e . && \
         sed -i 's|tokenizer_name="google/paligemma-3b-pt-224",|tokenizer_name=config.tokenizer_name,|g' ./src/lerobot/policies/pi05/processor_pi05.py && \
-        FUSED_ADAM_PY=$(python -c "import transformer_engine; import os; print(os.path.join(os.path.dirname(transformer_engine.__file__), 'pytorch/optimizers/fused_adam.py'))") && \
-        sed -i '/#[[:space:]]*tensor_lists = \[g_of_f32_model/,/^[[:space:]]*)/ { \
-        s|^\([[:space:]]*\)#[[:space:]]*\(tensor_lists = \[g_of_f32_model\)|\1\2|; \ 
-        s|^\([[:space:]]*\)#[[:space:]]*\(apply_multi_tensor_adam\)|\1\2|; \
-        /adamw(/,/^[[:space:]]*)/ s|^[[:space:]]*[^#]|#&|; \
-        }' "${FUSED_ADAM_PY}" && \
+        #FUSED_ADAM_PY=$(python -c "import transformer_engine; import os; print(os.path.join(os.path.dirname(transformer_engine.__file__), 'pytorch/optimizers/fused_adam.py'))") && \
+        #sed -i '/#[[:space:]]*tensor_lists = \[g_of_f32_model/,/^[[:space:]]*)/ { \
+        #s|^\([[:space:]]*\)#[[:space:]]*\(tensor_lists = \[g_of_f32_model\)|\1\2|; \ 
+        #s|^\([[:space:]]*\)#[[:space:]]*\(apply_multi_tensor_adam\)|\1\2|; \
+        #/adamw(/,/^[[:space:]]*)/ s|^[[:space:]]*[^#]|#&|; \
+        #}' "${FUSED_ADAM_PY}" && \
         echo "Lerobot installation completed"; \
     }; \
     . /root/miniconda/etc/profile.d/conda.sh && \
