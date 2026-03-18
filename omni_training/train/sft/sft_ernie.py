@@ -212,7 +212,7 @@ def train_valid_test_datasets_provider_energon(train_val_test_num_samples):
     return train_dataloader, None, None
 
 
-def train_valid_test_datasets_provider(train_val_test_num_samples):
+def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     """Build the train test and validation datasets."""
     args = get_args()
 

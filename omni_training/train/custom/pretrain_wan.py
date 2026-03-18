@@ -230,7 +230,7 @@ def forward_step(diffusion, data_iterator, model):
     return noise_pred, partial(loss_func, training_target, timestep, scale)
 
 
-def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples):
+def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp_stage=None):
     """Build the train test and validation datasets."""
     args = get_args()
 

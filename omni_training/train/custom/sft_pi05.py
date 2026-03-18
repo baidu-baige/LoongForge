@@ -270,7 +270,7 @@ def forward_step(data_iterator, model):
     return output_loss, partial(loss_func, loss_dict)
 
 
-def train_valid_test_datasets_provider(train_val_test_num_samples):
+def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     """Build train/valid/test datasets."""
     args = get_args()
     config = get_model_config()
