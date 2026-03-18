@@ -26,6 +26,8 @@ from convert_checkpoint.common.common_checkpoint import (
     ATTENTION_QUERY_KEY_VALUE,
     ATTENTION_QUERY_GATE_KEY_VALUE,
     MIXER_ATT_IN_PROJ,
+    MIXER_ATT_IN_PROJ_QKVZ,
+    MIXER_ATT_IN_PROJ_BA,
     MIXER_ATT_CONV1D,
     ATTENTION_DENSE,
     ATTENTION_QNORM,
@@ -142,6 +144,12 @@ class HuggingfaceBase:
             elif name == MIXER_ATT_IN_PROJ:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
                 self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, weight_scale, self.hf_mixer_attn_converter.split_mixer_in_proj)
+            elif name == MIXER_ATT_IN_PROJ_QKVZ and isinstance(self.name_map.get(name), (list, ListConfig)):
+                hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
+                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, weight_scale, self.hf_mixer_attn_converter.split_qkvz_to_qkv_z)
+            elif name == MIXER_ATT_IN_PROJ_BA and isinstance(self.name_map.get(name), (list, ListConfig)):
+                hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
+                self.update_list_to_hf(h_dict, name, hf_prefix_path, weight, bias, weight_scale, self.hf_mixer_attn_converter.split_ba_to_b_a)
             elif name == MLP_DENSE_H_TO_4H:
                 hf_prefix_path= f"{transformer}.{layer_prefix}.{hf_layer_id}"
                 self.update_h_to_4h(h_dict, name, hf_prefix_path, weight, bias, weight_scale)
@@ -294,6 +302,12 @@ class HuggingfaceBase:
             elif name == MIXER_ATT_IN_PROJ:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
                 weight, bias, weight_scale = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_mixer_attn_converter.cat_mixer_in_proj)
+            elif name == MIXER_ATT_IN_PROJ_QKVZ and isinstance(self.name_map.get(name), (list, ListConfig)):
+                hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
+                weight, bias, weight_scale = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_mixer_attn_converter.cat_qkv_z_to_qkvz)
+            elif name == MIXER_ATT_IN_PROJ_BA and isinstance(self.name_map.get(name), (list, ListConfig)):
+                hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
+                weight, bias, weight_scale = self.get_list_from_state_dict(name, h_dict, hf_prefix_path, self.hf_mixer_attn_converter.cat_b_a_to_ba)
             elif name == MLP_DENSE_H_TO_4H:
                 hf_prefix_path = f"{transformer}.{layer_prefix}.{hf_layer_id}"
                 weight, bias, weight_scale = self.get_h_to_4h_from_state_dict(name, h_dict, hf_prefix_path)

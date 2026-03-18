@@ -17,6 +17,7 @@ from convert_checkpoint.common.common_checkpoint import (
     BIAS,
     WEIGHT_SCALE,
     MOE_EXPERT_H_TO_4H,
+    LAYER_IS_DICT_FOR_EXPERT,
 )
 
 
@@ -50,7 +51,7 @@ class HuggingfaceMoe(HuggingfaceBase):
             weight = weight.t() if weight is not None and need_transpose else weight
             if expert_id is None or is_dict_for_expert:
                 hf_path = f"{transformer}.{layer_prefix}.{hf_layer_id}."\
-                        f"{self.name_map[expert_name]}{hf_name}"
+                        f"{self.name_map[expert_name]}.{hf_name}"
             else:
                 hf_path = f"{transformer}.{layer_prefix}.{hf_layer_id}."\
                         f"{self.name_map[expert_name]}.{expert_id}.{hf_name}"
@@ -75,7 +76,7 @@ class HuggingfaceMoe(HuggingfaceBase):
             return
         if is_dict_for_expert:
             assert expert_id is not None, "expert_id must be specified when is_dict_for_expert"
-            h_dict[hf_weight_path] = {} if hf_weight_path not in h_dict else h_dict[hf_weight_path]
+            h_dict[hf_weight_path] = {LAYER_IS_DICT_FOR_EXPERT: True} if hf_weight_path not in h_dict else h_dict[hf_weight_path]
             h_dict[hf_weight_path][expert_id] = weight
         else:
             h_dict[hf_weight_path] = weight

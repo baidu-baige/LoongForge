@@ -15,6 +15,28 @@ from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NA
 from typing import List, Dict, Tuple
 
 
+def _detect_shard_pattern(path):
+    """
+    Detect which sharded safetensors naming pattern is used in the directory.
+
+    Returns:
+        A format string with two positional slots for (shard_index, total_shards).
+        E.g. "model-{:05d}-of-{:05d}.safetensors" or
+             "model.safetensors-{:05d}-of-{:05d}.safetensors"
+    """
+    for name in os.listdir(path):
+        # Pattern 1: model-00001-of-00016.safetensors  (split_torch_state_dict_into_shards)
+        if re.match(r"^model-\d+-of-\d+\.safetensors$", name):
+            return "model-{:05d}-of-{:05d}.safetensors"
+        # Pattern 2: model.safetensors-00001-of-00016.safetensors  (original HF hub)
+        if re.match(r"^model\.safetensors-\d+-of-\d+\.safetensors$", name):
+            return "model.safetensors-{:05d}-of-{:05d}.safetensors"
+    raise FileNotFoundError(
+        f"No sharded safetensors files found in {path}. "
+        "Expected files matching 'model-*-of-*.safetensors' or 'model.safetensors-*-of-*.safetensors'."
+    )
+
+
 def merge_transformers_sharded_states(path, num_checkpoints):
     """
     Merge sharded checkpoints from transformers into a single checkpoint.
@@ -23,9 +45,10 @@ def merge_transformers_sharded_states(path, num_checkpoints):
         path (str): the path to the sharded checkpoints
         num_checkpoints (int): the number of checkpoints to merge
     """
+    pattern = _detect_shard_pattern(path)
     state_dict = {}
     for i in range(1, num_checkpoints + 1):
-        checkpoint_path = os.path.join(path, f"model-{i:05d}-of-{num_checkpoints:05d}.safetensors")
+        checkpoint_path = os.path.join(path, pattern.format(i, num_checkpoints))
         current_chunk = load_file(checkpoint_path)
         state_dict.update(current_chunk)
     return state_dict
@@ -35,8 +58,9 @@ def load_huggingface_checkpoint(load_path):
     state_dict = {}
     sub_dirs = [x for x in os.listdir(load_path) if x.endswith("safetensors")]
     if len(sub_dirs) == 1:
-        checkpoint_name = "model.safetensors"
-        state_dict = load_file(os.path.join(load_path, checkpoint_name), device="cpu")
+        # Single shard — could be "model.safetensors" or a single split file
+        checkpoint_path = os.path.join(load_path, sub_dirs[0])
+        state_dict = load_file(checkpoint_path, device="cpu")
     else:
         num_checkpoints = len(sub_dirs)
         state_dict = merge_transformers_sharded_states(load_path, num_checkpoints)

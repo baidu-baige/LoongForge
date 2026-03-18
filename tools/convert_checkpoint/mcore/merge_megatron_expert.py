@@ -120,7 +120,8 @@ for sub_dir in sub_dirs:
             else:
                 omni_key_model[key] = value
         ckpt['model'] = omni_key_model
-        if 'foundation_model.embedding.word_embeddings.weight' in ckpt['model']:
+        if (args.pipeline_model_parallel_size == 1 or int(splits[3]) == 0) and \
+                'foundation_model.embedding.word_embeddings.weight' in ckpt['model']:
             ckpt['model']['encoder_model.text_encoder.word_embeddings.weight'] = \
             ckpt['model']['foundation_model.embedding.word_embeddings.weight']
     else:
@@ -135,7 +136,8 @@ for sub_dir in sub_dirs:
                 else:
                     omni_key_model[key] = value
             ckpt[cur_model] = omni_key_model
-        if 'foundation_model.embedding.word_embeddings.weight' in ckpt['model0']:
+        if (args.pipeline_model_parallel_size == 1 or int(splits[3]) == 0) and \
+                'foundation_model.embedding.word_embeddings.weight' in ckpt['model0']:
             ckpt['model0']['encoder_model.text_encoder.word_embeddings.weight'] = \
             ckpt['model0']['foundation_model.embedding.word_embeddings.weight']
 
