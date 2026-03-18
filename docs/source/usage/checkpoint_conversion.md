@@ -1,7 +1,7 @@
 # Model Checkpoint Conversion
 
 ## Overview
-AIAK-Omni supports bidirectional conversion between Mcore and Hugging Face (HF) formats for various models. Users can leverage the built-in conversion tools and scripts within the framework to quickly convert model weights and proceed with training or validation.
+BaigeOmni supports bidirectional conversion between Mcore and Hugging Face (HF) formats for various models. Users can leverage the built-in conversion tools and scripts within the framework to quickly convert model weights and proceed with training or validation.
 
 ## Supported Models for Conversion
 
@@ -121,7 +121,7 @@ sh examples/qwen3/checkpoint_convert/convert_qwen3_14b_mcore_to_hf.sh
 | `model_type_custom` | Custom model type | Any string | `None` |
 | `safetensors` | Use safetensors format | `True`/`False` | `False` |
 | `convert_to_fp8` | Convert float16 weights to fp8 | `True`/`False` | `False` |
-| `quant_method` | Quantization method | `te`, `pt`, `aiak` | `te` |
+| `quant_method` | Quantization method | `te`, `pt`, `baige` | `te` |
 | `fp8_force_no_requant` | Skip dequantize + re-quantize in FP8 conversion | `True`/`False` | `False` |
 | `force_pow_2_scales` | Force destination checkpoint's scale to be power-of-two | `True`/`False` | `False` |
 | `amax_epsilon` | Epsilon value for amax calculation in FP8 conversion | Any float | `0.0` |
@@ -161,4 +161,4 @@ sh examples/qwen3/checkpoint_convert/convert_qwen3_14b_mcore_to_hf.sh
 | `sub-num-layers-for-save` | Number of layers to save each time | Any positive integer | `None` |
 | `save-sub-checkpoint-by-pp` | Save sub-checkpoints by pipeline parallelism | `True`/`False` | `False` |
 
-You can add new model weight conversions based on AIAK-Omni’s conversion tools.
+You can add new model weight conversions based on BaigeOmni’s conversion tools.

@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """Argument definitions for checkpoint conversion tools."""
@@ -18,7 +18,7 @@ def parse_args(title=None):
     if _GLOBAL_ARGS is not None:
         return _GLOBAL_ARGS
     """Parse all arguments."""
-    parser = argparse.ArgumentParser(description='Aiak-Tool Arguments',
+    parser = argparse.ArgumentParser(description='Baige-Tool Arguments',
                                      allow_abbrev=False)
     _add_checkpoint_args(parser)
     _add_common_args(parser)
@@ -67,8 +67,8 @@ def _add_checkpoint_args(parser):
                        help='Use [safetensors](https://huggingface.co/docs/safetensors).')
     group.add_argument('--convert_to_fp8', action='store_true',
                        help='Convert float16 weights to fp8')
-    group.add_argument('--quant_method', type=str, default='te', choices=['te', 'pt', 'aiak'],
-                       help='The quantization method to use. Choices: [te, pt, aiak].')
+    group.add_argument('--quant_method', type=str, default='te', choices=['te', 'pt', 'baige'],
+                       help='The quantization method to use. Choices: [te, pt, baige].')
 
     # Arguments for defining manner of converting FP8 checkpoint
     group.add_argument('--fp8_force_no_requant', action='store_true',
@@ -166,7 +166,7 @@ def _add_megatron_args(parser):
                             'This value must be greater than the initial size of the tokenizer'
                             ', needs to be divisible by TP size and `make-vocab-size-divisible-by`.')
     group.add_argument('--custom_pipeline_layers', type=str, default=None,
-                       help='add by aiak for pp layer imbalance.For example 19,20,20,21.'
+                       help='add by baige for pp layer imbalance.For example 19,20,20,21.'
                        '19 for stage0 layers, 20 for stage1 layers...')
     group.add_argument('--pipeline_model_parallel_layout',
                        type=str, default=None,

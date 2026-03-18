@@ -1,5 +1,5 @@
 
-_target_: omni_training.models.encoder.InternMLPAdapterConfig
+_target_: baige_omni.models.encoder.InternMLPAdapterConfig
 
 normalization: LayerNorm
 model_type: "intern_adapter"

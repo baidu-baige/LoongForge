@@ -1,5 +1,5 @@
 # mimo_7b model config
-_target_: omni_training.models.foundation.MimoConfig
+_target_: baige_omni.models.foundation.MimoConfig
 
 num_layers: 36
 hidden_size: 4096

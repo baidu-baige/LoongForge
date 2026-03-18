@@ -1,23 +1,23 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/OmniTraining/llavaov1.5/LLaVA-OneVision-1.5-4B-hf-Dec22
-LOAD=/mnt/cluster/OmniTraining/llavaov1.5/LLaVA-OneVision-1.5-4B-tp2-pp2-Original/release
-OMNI_LOAD=/mnt/cluster/OmniTraining/llavaov1.5/LLaVA-OneVision-1.5-4B-tp2-pp2-Dec17/release
+SAVE=/mnt/cluster/BaigeOmni/llava_onevision/LLaVA-OneVision-1.5-4B-hf-Dec22
+LOAD=/mnt/cluster/BaigeOmni/llava_onevision/LLaVA-OneVision-1.5-4B-tp2-pp2-Original/release
+OMNI_LOAD=/mnt/cluster/BaigeOmni/llava_onevision/LLaVA-OneVision-1.5-4B-tp2-pp2-Dec17/release
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/llavaov1.5/llavaov_1_5_4b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
 
 
 PP=2 
@@ -110,7 +110,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/huggingface/merge_huggingface.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL\

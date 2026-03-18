@@ -1,7 +1,7 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-""" Mcore_checkpoint converter for aiak megatron. """
+""" Mcore_checkpoint converter for megatron lm. """
 
 import logging
 

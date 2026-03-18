@@ -1,4 +1,4 @@
-_target_: omni_training.models.foundation.Qwen2Config
+_target_: baige_omni.models.foundation.Qwen2Config
 
 num_layers: 24
 hidden_size: 896

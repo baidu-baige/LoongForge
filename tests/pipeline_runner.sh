@@ -381,7 +381,7 @@ fi
 
 LOG_DIR="${TRAINING_LOG_PATH:-}"
 
-python3 /workspace/OmniTraining/tests/main.py "${args[@]}"
+python3 /workspace/BaigeOmni/tests/main.py "${args[@]}"
 ret=$?
 
 # After successful run, archive the log directory (with timestamp) and clear the canonical path for next resume

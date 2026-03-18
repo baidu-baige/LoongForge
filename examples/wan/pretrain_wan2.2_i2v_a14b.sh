@@ -2,13 +2,13 @@
 # The script needs to be run on at least 4 nodes.
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron/"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM/"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 DATASET_PATH=${DATASET_PATH:-"data/preprocessed"}
 #Configure the path to the high noise model and low noise model
-HIGH_NOISE_CHECKPOINT_PATH=${HIGH_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/wan2.2/hg2mcore/high_noise_release/"}
-LOW_NOISE_CHECKPOINT_PATH=${LOW_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/wan2.2/hg2mcore/low_noise_release/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/wan2.2/"}
+HIGH_NOISE_CHECKPOINT_PATH=${HIGH_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/wan2.2/hg2mcore/high_noise_release/"}
+LOW_NOISE_CHECKPOINT_PATH=${LOW_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/wan2.2/hg2mcore/low_noise_release/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/wan2.2/"}
 
 GPUS_PER_NODE=8
 
@@ -110,9 +110,9 @@ HIGH_NOISE_TIMESTEP_BOUNDARY=(
 )
 
 # Train the high noise model of wan2.2 I2V
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
@@ -132,9 +132,9 @@ LOW_NOISE_TIMESTEP_BOUNDARY=(
 )
 
 # Train the low noise model of wan2.2 I2V
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

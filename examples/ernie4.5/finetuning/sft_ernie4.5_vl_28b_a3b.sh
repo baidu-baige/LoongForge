@@ -2,11 +2,11 @@
 # The script needs to be run on at least 1 nodes.
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-MEGATRON_PATH=/workspace/ernie/AIAK-Megatron
-AIAK_TRAINING_PATH=/workspace/ernie/OmniTraining/
+MEGATRON_PATH=/workspace/ernie/Megatron-LM
+OMNI_PATH=/workspace/ernie/BaigeOmni/
 DATASET_PATH=/workspace/dataset/wds/
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/ernie4.5vl/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/ernie4.5vl/"}
 CHECKPOINT_LOAD_PATH=/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_hg2mcore/
 CHECKPOINT_SAVE_PATH=/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_save/
 
@@ -30,7 +30,7 @@ MODEL_ARGS=(
     --position-embedding-type rope
 )
 
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/ernie4_5_vl/ernie4_5_vl_28b_a3b.yaml
+MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/ernie4_5_vl/ernie4_5_vl_28b_a3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -120,10 +120,10 @@ if [ -n "${WANDB_API_KEY}" ]; then
 fi
 
 
-echo "llm path: "  $AIAK_TRAINING_PATH, "megatron path: " $MEGATRON_PATH
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+echo "llm path: "  $OMNI_PATH, "megatron path: " $MEGATRON_PATH
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \

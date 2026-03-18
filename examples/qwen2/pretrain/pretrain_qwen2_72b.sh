@@ -2,16 +2,16 @@
 # The script needs to be run on at least 4 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/qwen2/pile_test/pile-qwen_text_document"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/qwen2/pile_test/pile-qwen_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen2-72B/"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/qwen2/Qwen2_72B_mcore_tp4pp8"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2/Qwen2_72B_mcore_tp4pp8"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen2-72b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen2-72b"}
 
 GPUS_PER_NODE=8
 
@@ -101,9 +101,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

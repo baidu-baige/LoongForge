@@ -4,15 +4,15 @@ set -eo pipefail
 # Accept config file path as argument
 CONFIG="$1"
 
-# Ensure AIAK_TRAINING_PATH environment variable exists
-# if [ -z "${AIAK_TRAINING_PATH}" ]; then
-#     echo "Error: AIAK_TRAINING_PATH is not set."
+# Ensure OMNI_PATH environment variable exists
+# if [ -z "${OMNI_PATH}" ]; then
+#     echo "Error: OMNI_PATH is not set."
 #     echo "It should process by run.sh"
 #     exit 1
 # fi
 
 # Locate original python tool scripts directory
-TOOLS_DIR="/workspace/OmniTraining/tools/data_preprocess/vlm/offline_packing"
+TOOLS_DIR="/workspace/BaigeOmni/tools/data_preprocess/vlm/offline_packing"
 
 if [ ! -d "$TOOLS_DIR" ]; then
     echo "Error: Python scripts directory not found at $TOOLS_DIR"

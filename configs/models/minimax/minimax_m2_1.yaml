@@ -1,4 +1,4 @@
-_target_: omni_training.models.foundation.MinimaxConfig
+_target_: baige_omni.models.foundation.MinimaxConfig
 
 num_layers: 62
 hidden_size: 3072

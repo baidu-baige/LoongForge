@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.abspath('../..')) 
 
 
-project = 'OmniTraining'
+project = 'BaigeOmni'
 copyright = '2026, Baidu'
 author = 'Baidu'
 

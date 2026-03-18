@@ -3,14 +3,14 @@
 #source activate && conda activate python310_torch25_cuda
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/OmniTraining/qwen3/sft_aplaca_zh_data_cache"}
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/OmniTraining/configs/sft_dataset_config.json"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_data_cache"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/sft_dataset_config.json"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-30B-A3B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen3-30b-a3b-sft"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-30b-a3b-sft"}
 GPUS_PER_NODE=8
 
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
@@ -41,8 +41,8 @@ export XMLIR_CUDNN_ENABLED=1                    # true为使用cuDNN，支持con
 # LINEAR 开关
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # 允许某些场景下linear不走xblas fcfusion, 比如走addmm，默认为1
 export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE 走 int32_with_ll, 可选
-export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
-XFLAGS --disable megatron_core_aiak
+export XMLIR_MEGATRON_CORE_BAIGE_PLUGIN=1
+
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
 ######################################################
@@ -145,9 +145,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
         --wandb-exp-name ${WANDB_NAME}
     )
 fi
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

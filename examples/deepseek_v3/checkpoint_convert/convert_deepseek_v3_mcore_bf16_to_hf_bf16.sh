@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/aiak-omni-ckpt/deepseek3/DeepSeek-V3-bf16-tp8pp8ep32etp1/release  # the converted checkpoint will be in MCore BF16 format
+LOAD=/mnt/cluster/baige-omni-ckpt/deepseek3/DeepSeek-V3-bf16-tp8pp8ep32etp1/release  # the converted checkpoint will be in MCore BF16 format
 SAVE=/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3-bf16-hf  # the BF16 format checkpoint, converted via fp8_to_bf16 casting script
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

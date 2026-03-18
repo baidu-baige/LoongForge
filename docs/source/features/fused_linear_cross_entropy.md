@@ -1,13 +1,13 @@
 # Fused Linear Cross Entropy
 
-OmniTraining provides a memory optimization solution for the model output layer. By fusing the `hidden @ weight.T` linear projection with the cross-entropy loss into a single operation, combined with chunked computation, it significantly reduces peak memory usage during the vocabulary projection stage.
+BaigeOmni provides a memory optimization solution for the model output layer. By fusing the `hidden @ weight.T` linear projection with the cross-entropy loss into a single operation, combined with chunked computation, it significantly reduces peak memory usage during the vocabulary projection stage.
 
 In standard training, the output layer produces a complete logits tensor of shape `(num_tokens, vocab_size)`, which is retained again during the backward pass, resulting in doubled memory overhead. For a typical configuration (num_tokens=16384, vocab_size=129280), logits-related memory alone can reach **~40 GB**. This optimization addresses the problem through a two-step progressive approach:
 
 - **Step 1 (Operator Fusion)**: Fuses the linear projection and cross-entropy into a single autograd Function, with the backward controlled by the framework, saving only lightweight statistics (per-token max and sum-of-exp), eliminating the need to store complete logits between forward and backward passes
 - **Step 2 (Chunked Computation)**: Splits weight along the vocabulary dimension into small chunks (default `vocab_per_split=3072`), computes and immediately discards each chunk using an online Softmax algorithm, so the complete logits tensor is **never instantiated**
 
-OmniTraining provides two implementation paths, and the framework **automatically selects based on GPU architecture**;
+BaigeOmni provides two implementation paths, and the framework **automatically selects based on GPU architecture**;
 
 ## Usage
 Add the following parameters to the training launch script:
@@ -25,7 +25,7 @@ Different implementation paths are automatically selected based on GPU architect
 
 ## 1. Generic Implementation
 
-OmniTraining implements a pure PyTorch generic version using strategies such as mixed precision, buffer reuse, in-place operations, and Autograd, enabling this optimization to run on **any CUDA GPU** while also achieving notable performance advantages over the native Torch implementation.
+BaigeOmni implements a pure PyTorch generic version using strategies such as mixed precision, buffer reuse, in-place operations, and Autograd, enabling this optimization to run on **any CUDA GPU** while also achieving notable performance advantages over the native Torch implementation.
 
 Core design: Pre-allocate a small buffer of width `vocab_per_split`, write each matmul directly into this buffer (via the `out=` parameter), the result is immediately consumed by online softmax within the same loop iteration, and overwritten in the next round — the complete logits never accumulate at the Python level:
 

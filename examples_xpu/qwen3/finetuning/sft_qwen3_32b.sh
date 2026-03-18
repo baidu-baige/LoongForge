@@ -1,18 +1,18 @@
 #! /bin/bash
 # The script needs to be run on at least 2 nodes.
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/OmniTraining/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/OmniTraining/configs/sft_dataset_config.json"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/sft_dataset_config.json"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-32B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/qwen3/Qwen3_32B_mcore_tp4pp2"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen3-32b-sft"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3/Qwen3_32B_mcore_tp4pp2"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-32b-sft"}
 GPUS_PER_NODE=8
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 #export DIST_MULTI_STREAM=true # 开启多流
@@ -46,8 +46,8 @@ export XMLIR_DIST_ASYNC_ISEND_IRECV=false # 设为true表示send/recv会走异�
 
 export XMLIR_CUDNN_ENABLED=1 # true为使用cuDNN，支持conv3d等，false为不使用cuDNN
 # LINEAR 开关
-export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
-XFLAGS --disable megatron_core_aiak
+export XMLIR_MEGATRON_CORE_BAIGE_PLUGIN=1
+
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
 # Change for multinode config
@@ -149,9 +149,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -70,7 +70,7 @@ When performing LLM weight conversion, it is recommended to pass parameters usin
 |max_workers|thread for checkpoint converting|
 |moe-grouped-gemm|use grouped gemm in moe|
 |amax_epsilon|Epsilon value for amax calculation in FP8 conversion; used for FP8 quantization scale, aligned with the FP8 EPS environment variable set during training|
-|quant_method|The quantization method to use. Choices: [te, pt, aiak]. When using Nvidia B-series GPUs (Blackwell) for weight conversion, this value needs to be set to `pt`|
+|quant_method|The quantization method to use. Choices: [te, pt, baige]. When using Nvidia B-series GPUs (Blackwell) for weight conversion, this value needs to be set to `pt`|
 |fp8_force_no_requant|skip dequantize + re-quantize in FP8 conversion|
 
 For descriptions of other parameters, please refer to [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc).
@@ -85,15 +85,15 @@ If the user is using the **Nvidia B-series GPUs**, the `--quant_method pt` param
 ```bash
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/path/to/hf_checkpoint  # the original DeepSeek-V3 checkpoint is FP8 format
 SAVE=/path/to/your/save  # the converted checkpoint will be in MCore FP8 format
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
@@ -121,15 +121,15 @@ Below is an example script for converting **DeepSeek V3.1** model weights from *
 ```bash
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/path/to/mcore_checkpoint  # the converted checkpoint will be in MCore FP8 format
 SAVE=/path/to/your/save  # the original DeepSeek-V3 checkpoint is FP8 format
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

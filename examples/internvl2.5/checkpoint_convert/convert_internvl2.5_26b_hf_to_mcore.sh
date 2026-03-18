@@ -1,22 +1,22 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/InternVL2_5-26B
-SAVE=/mnt/cluster/OmniTraining/internvl2.5/internvl2.5-26b-tp4-pp2-Dec19
+SAVE=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-26b-tp4-pp2-Dec19
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-mcore
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-mcore
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-mcore
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-mcore
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-mcore
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/internvl2.5/internvl2_5_26b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/internvl2.5/internvl2_5_26b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 
 ETP=4
 DTP=4
@@ -79,7 +79,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL/release \

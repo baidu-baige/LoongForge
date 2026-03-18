@@ -2,7 +2,7 @@
 set -e
 
 # Install bcecmd
-PFS_DIR="/mnt/cfs/OmniTrainingCI"
+PFS_DIR="/mnt/cfs/BaigeOmniCI"
 
 # Define bcecmd wrapper function with retry mechanism
 REAL_BCECMD="/usr/local/bin/bcecmd"
@@ -52,7 +52,7 @@ done
 
 checkpoint_dir=${PFS_DIR}/megatron_checkpoint
 huggingface_dir=${PFS_DIR}/huggingface.co
-datasets_dir=${PFS_DIR}/omni_datasets/OmniTraining/
+datasets_dir=${PFS_DIR}/omni_datasets/BaigeOmni/
 
 mkdir -p $checkpoint_dir $huggingface_dir $datasets_dir
 

@@ -1,6 +1,6 @@
 # Parallelism Strategies & Optimization Guide
 
-OmniTraining is built on Megatron-LM and is fully compatible with all existing Megatron-LM optimization strategies.  
+BaigeOmni is built on Megatron-LM and is fully compatible with all existing Megatron-LM optimization strategies.  
 On top of that we have added several enhancements. This document describes the basic parallelism strategies and how to enable their optimizations.  
 They can be combined as needed to efficiently train **billion- to trillion-parameter** models on **hundreds to thousands of GPUs**.
 

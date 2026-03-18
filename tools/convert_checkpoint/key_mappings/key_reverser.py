@@ -1,7 +1,7 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate reverse key mappings between OmniTraining and external checkpoint names."""
+"""Generate reverse key mappings between BaigeOmni and external checkpoint names."""
 
 import os
 import sys

@@ -1,14 +1,14 @@
 #!/bin/bash
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 echo "Using MEGATRON_PATH: ${MEGATRON_PATH}"
-echo "Using AIAK_TRAINING_PATH: ${AIAK_TRAINING_PATH}"
+echo "Using OMNI_PATH: ${OMNI_PATH}"
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/sb.jsonl"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/OmniTraining/checkpoints/MiMo-7B-SFT-tokenizer"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/sb.jsonl"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/BaigeOmni/checkpoints/MiMo-7B-SFT-tokenizer"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/checkpoints/MiMo-7B-RL-tp1pp2"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/checkpoints/MiMo-7B-RL-tp1pp2"}
 CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"CHECKPOINT_PATH_SAVE"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"TENSORBOARD_PATH"}
@@ -128,9 +128,9 @@ LOGGING_ARGS=(
   --log-memory-to-tensorboard
 )
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/omni_training/train.py \
+  $OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

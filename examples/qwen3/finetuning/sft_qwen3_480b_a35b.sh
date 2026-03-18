@@ -1,8 +1,8 @@
 #!/bin/bash
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=${DATA_PATH:-"/ssd1/deepseek-ai/data_v3/sampled.jsonl"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/ssd3/qwen/Qwen3-Coder-480B-A35B-tokenizer"}
@@ -112,9 +112,9 @@ LOGGING_ARGS=(
     --log-timers-to-tensorboard
 )
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

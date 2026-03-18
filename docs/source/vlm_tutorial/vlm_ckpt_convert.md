@@ -46,7 +46,7 @@ model:
   mix_used_vision_projector: true
   foundation: 
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["omni_training.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["baige_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
     tensor_model_parallel_size: 2
@@ -107,25 +107,25 @@ Below are conversion scripts for Dense and MoE models with parameter explanation
 ```bash
 #!/bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"} # Specify OmniTraining path
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"} # Specify Megatron backend path
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint" # convert_checkpoint module path, no modification needed
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"} # Specify BaigeOmni path
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"} # Specify Megatron backend path
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint" # convert_checkpoint module path, no modification needed
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/ # Specify target model HF weights path
-SAVE=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12 # Specify target model converted Mcore weights path
+SAVE=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12 # Specify target model converted Mcore weights path
 
 # Specify temporary save paths
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-mcore # Temporary path for saving language model, will be deleted after conversion
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-mcore # Temporary path for saving vision model, will be deleted after conversion
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-mcore # Temporary path for saving adapter, will be deleted after conversion
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-mcore # Temporary path for saving vision patch, will be deleted after conversion
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-mcore # Temporary path for saving language model, will be deleted after conversion
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore # Temporary path for saving vision model, will be deleted after conversion
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore # Temporary path for saving adapter, will be deleted after conversion
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore # Temporary path for saving vision patch, will be deleted after conversion
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml # Specify model configuration file path after model construction
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml # Specify model configuration file path after model construction
 
 # Specify checkpoint conversion configuration file paths for each module
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml # Specify foundation model checkpoint conversion configuration file path
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml # Specify image encoder checkpoint conversion configuration file path
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml # Specify image projector checkpoint conversion configuration file path
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml # Specify foundation model checkpoint conversion configuration file path
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml # Specify image encoder checkpoint conversion configuration file path
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml # Specify image projector checkpoint conversion configuration file path
 
 ETP=4 # encoder tp, encoder tensor parallelism degree
 DTP=4 # decoder tp, decoder tensor parallelism degree, when ETP and DTP are different, heterogeneous TP is enabled
@@ -189,7 +189,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -214,24 +214,24 @@ rm -rf $SAVE_PATCH
 ```bash
 #!/bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22 # Final saved HF path
-LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release # Intermediate temporary result of key mapping, used for OmniTraining training, can be deleted if not needed
-OMNI_LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12/release # Mcore checkpoint path to be converted
+SAVE=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22 # Final saved HF path
+LOAD=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release # Intermediate temporary result of key mapping, used for BaigeOmni training, can be deleted if not needed
+OMNI_LOAD=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12/release # Mcore checkpoint path to be converted
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
 
 PP=2 
 ETP=4 
@@ -324,7 +324,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/huggingface/merge_huggingface.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL\
@@ -349,23 +349,23 @@ rm -rf $SAVE_PATCH
 ```bash
 #!/bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/InternVL3_5-30B-A3B
-SAVE=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15
+SAVE=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-mcore
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-mcore
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-mcore
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-mcore
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-mcore
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 
 ETP=2
 DTP=2
@@ -431,7 +431,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 # merge
 if [ $EP -gt 1 ]; then
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py \ # MoE needs different merge script
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -445,7 +445,7 @@ if [ $EP -gt 1 ]; then
         --save_ckpt_path $SAVE/release \
         --config_file $MODEL_CONFIG_FILE 
 else
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \ # MoE needs different merge script
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -470,24 +470,24 @@ rm -rf $SAVE_PATCH
 ```bash
 #!/bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-30b-a3b-hf-Dec23
-LOAD=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Original/release
-OMNI_LOAD=/mnt/cluster/OmniTraining/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15/release
+SAVE=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-hf-Dec23
+LOAD=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Original/release
+OMNI_LOAD=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15/release
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 
 ETP=2
 DTP=2
@@ -588,7 +588,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/huggingface/merge_huggingface.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL\
@@ -640,12 +640,12 @@ SAVE=# Converted Mcore weights save path
 
 ...
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/... # Specify custom model construction configuration file path
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/... # Specify custom model construction configuration file path
 
 # Specify checkpoint conversion configuration file paths for each module
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/.../ckpt_convert/..._convert.yaml # Specify foundation model checkpoint conversion configuration file path
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/..._convert.yaml # Specify image encoder checkpoint conversion configuration file path
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/..._convert.yaml # Specify image projector checkpoint conversion configuration file path
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/.../ckpt_convert/..._convert.yaml # Specify foundation model checkpoint conversion configuration file path
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/..._convert.yaml # Specify image encoder checkpoint conversion configuration file path
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/..._convert.yaml # Specify image projector checkpoint conversion configuration file path
 
 ...
 
@@ -674,7 +674,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     ...
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \
     ...
 

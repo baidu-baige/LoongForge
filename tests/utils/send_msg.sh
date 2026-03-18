@@ -7,7 +7,7 @@ set -eo pipefail
 # hi_robot=db19f337899039eb2d225f25f99cfe2ce
 # AGILE_PIPELINE_TRIGGER_USER=lijipeng01
 # AGILE_COMPILE_BRANCH=main
-# AGILE_COMMENTS='[{"Commit":"6d076e977738e9ff1d306c591b675cd0c4239a00","author":"lijipeng01","comment":"aiak-train-273[Engineering Efficiency] Megatron pipeline multi-model support\n\nChange-Id: I1843b97273cd883e81266004dcd8e80e854fb4f5\n","committer":"lijipeng01"}]'
+# AGILE_COMMENTS='[{"Commit":"6d076e977738e9ff1d306c591b675cd0c4239a00","author":"lijipeng01","comment":"baige-train-273[Engineering Efficiency] Megatron pipeline multi-model support\n\nChange-Id: I1843b97273cd883e81266004dcd8e80e854fb4f5\n","committer":"lijipeng01"}]'
 
 module="${AGILE_MODULE_NAME}"
 PIPELINE_NAME="${AGILE_PIPELINE_NAME}"

@@ -2,16 +2,16 @@
 # The script needs to be run on at least 4 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/mllm/demo/wds/"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/mllm/demo/wds/"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-VL-30B-A3B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/qwen3-vl/qwen3-vl-30b-tp2pp2ep4"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3-vl/qwen3-vl-30b-tp2pp2ep4"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen3-vl-30b-a3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-vl-30b-a3b"}
 
 GPUS_PER_NODE=8
 
@@ -30,7 +30,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
+MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -40,7 +40,7 @@ DATA_ARGS=(
     --split 100,0,0
     --num-workers 16
     --chat-template qwen3-vl
-    --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/data/sft_dataset_config.yaml
+    --sft-dataset-config ${OMNI_PATH}/configs/data/sft_dataset_config.yaml
     --sft-dataset multimodal_sharegpt
 )
 
@@ -114,9 +114,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

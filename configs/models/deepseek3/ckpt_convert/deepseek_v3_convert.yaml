@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file://${oc.env:AIAK_TRAINING_PATH}/configs/models/
+    - file://${oc.env:OMNI_PATH}/configs/models/
 
 defaults:
   - deepseek3@module: ???
@@ -17,7 +17,7 @@ args:
     vocab_size: ${module.vocab_size_in_config_file}
     num_experts: ${module.num_experts}
     mtp_num_layers: ${module.mtp_num_layers}
-    aiak_version: 0.15
+    baige_version: 0.15
   huggingface:
     mtp_layer_id: 61                                                                         
   mcore:

@@ -1,4 +1,4 @@
-_target_: omni_training.models.encoder.ErnieVisionConfig
+_target_: baige_omni.models.encoder.ErnieVisionConfig
 
 attn_implementation: "flash"
 num_layers: 32

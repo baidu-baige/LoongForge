@@ -18,4 +18,4 @@ model:
   foundation: 
     rotary_emb_func: "DynamicRotaryEmbedding"
     rotary_base: 1000000
-    model_spec: ["omni_training.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]
+    model_spec: ["baige_omni.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]

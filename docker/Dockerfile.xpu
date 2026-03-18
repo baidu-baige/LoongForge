@@ -10,7 +10,7 @@ ARG XPYTORCH_URL_ARG=""
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./AIAK-Training-Omni /workspace/OmniTraining
+COPY ./AIAK-Training-Omni /workspace/BaigeOmni
 SHELL ["/bin/bash", "-c"]
 ENV PATH=/opt/omni_kunlun/bin:${PATH}
 
@@ -36,7 +36,7 @@ RUN set -exuo pipefail && \
         XPYTORCH_URL="${XPYTORCH_URL_ARG}"; \
         echo "use specified xpytorch version: ${XPYTORCH_URL}"; \
     else \
-        xpytorch_info="/workspace/OmniTraining/xpytorch_info.txt"; \
+        xpytorch_info="/workspace/BaigeOmni/xpytorch_info.txt"; \
         if [ ! -f "${xpytorch_info}" ]; then \
             echo "xpytorch info file not exist: ${xpytorch_info}" && exit 1; \
         fi; \
@@ -52,13 +52,13 @@ RUN set -exuo pipefail && \
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
     install_requirements() { \
-        local requirements_file="/workspace/OmniTraining/requirements_xpu.txt" && \
+        local requirements_file="/workspace/BaigeOmni/requirements_xpu.txt" && \
         source /opt/omni_kunlun/bin/activate && \
         # for deepspeed cpu adam
         DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U && \
         echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
         echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
-        cd /workspace/OmniTraining/ && \
+        cd /workspace/BaigeOmni/ && \
         python -m pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
             -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
     }; \
@@ -69,19 +69,18 @@ RUN set -exuo pipefail && \
 # =========================================================
 RUN set -exuo pipefail && \
     install_megatron() { \
-        local megatron_dir=/workspace/AIAK-Megatron; \
+        local megatron_dir=/workspace/Megatron-LM; \
         local MEGATRON_TAGS="core_v0.15.0" && \
         echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
         cd /workspace && \
         wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/mcore_v0.15.0/megatron.tar.gz && \
         tar -zxvf megatron.tar.gz && \
-        mv Megatron-LM AIAK-Megatron && \
         cd ${megatron_dir} && \
         git config --global --add safe.directory ${megatron_dir}; \
         git restore . && \
-        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
-                /workspace/OmniTraining/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
+        if [ -f "/workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh" ]; then \
+            bash /workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh \
+                /workspace/BaigeOmni/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
                 ${megatron_dir}; \
         fi && \
         echo "Megatron-LM setup completed"; \
@@ -120,13 +119,13 @@ RUN mkdir -p /root/.jupyter && \
 # Clean Up Unused Files (Consistent with install.sh)
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
-    rm -rf /workspace/OmniTraining/.git && \
-    rm -rf /workspace/OmniTraining/build.sh && \
-    rm -rf /workspace/OmniTraining/ci.yml && \
-    rm -rf /workspace/OmniTraining/docker/ci && \
-    rm -rf /workspace/AIAK-Megatron/.git && \
-    rm -rf /workspace/AIAK-Megatron/.github && \
-    rm -rf /workspace/AIAK-Megatron/output && \
+    rm -rf /workspace/BaigeOmni/.git && \
+    rm -rf /workspace/BaigeOmni/build.sh && \
+    rm -rf /workspace/BaigeOmni/ci.yml && \
+    rm -rf /workspace/BaigeOmni/docker/ci && \
+    rm -rf /workspace/Megatron-LM/.git && \
+    rm -rf /workspace/Megatron-LM/.github && \
+    rm -rf /workspace/Megatron-LM/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

@@ -1,5 +1,5 @@
 # deepseek_v2_lite model config
-_target_: omni_training.models.foundation.DeepseekConfig
+_target_: baige_omni.models.foundation.DeepseekConfig
 
 num_layers: 27
 hidden_size: 2048

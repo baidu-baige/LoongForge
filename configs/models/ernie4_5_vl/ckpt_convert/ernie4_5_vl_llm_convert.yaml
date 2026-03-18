@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file:///workspace/OmniTraining/configs/models/
+    - file:///workspace/BaigeOmni/configs/models/
 
 defaults:
   - ernie4_5_vl@module: ???

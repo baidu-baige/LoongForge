@@ -1,5 +1,5 @@
 # qwen3 model configuration
-_target_: omni_training.models.foundation.Qwen3Config
+_target_: baige_omni.models.foundation.Qwen3Config
 
 defaults:
   - ../../models/lora@peft_config: lora

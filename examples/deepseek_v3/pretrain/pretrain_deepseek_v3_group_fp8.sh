@@ -2,17 +2,17 @@
 # This script is used for pre-training Deepseek-v3 in FP8 mixed precision.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/deepseek3/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/deepseek3/pile_test/pile-deepseek_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/deepseek3/DeepSeek-V3-tp8pp8ep32etp1"}
-CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/OmniTraining/deepseek3/save/DeepSeek-V3-tp8pp8ep32etp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/deepseek3/DeepSeek-V3-tp8pp8ep32etp1"}
+CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/BaigeOmni/deepseek3/save/DeepSeek-V3-tp8pp8ep32etp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/deepseek-v3"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/deepseek-v3"}
 
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
 export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
@@ -154,9 +154,9 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/omni_training/train.py \
+  $OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

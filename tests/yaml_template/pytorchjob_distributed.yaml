@@ -8,7 +8,7 @@ spec:
     cleanPodPolicy: None
     schedulingPolicy:
       priorityClass: high
-      queue: aiak-dev
+      queue: baige-dev
   pytorchReplicaSpecs:
     Master:
       replicas: 1

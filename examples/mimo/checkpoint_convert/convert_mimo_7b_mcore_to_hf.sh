@@ -1,11 +1,11 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/mimo/mimo_7b.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/mimo/mimo_7b.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml
 
 LOAD=/models/ckpt/XiaomiMiMo/MiMo-7B-SFT-tp1pp2/release
 SAVE=/models/ckpt/XiaomiMiMo/MiMo-7B-SFT-hf/

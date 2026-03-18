@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """check correctness"""
@@ -59,7 +59,7 @@ class CorrectnessCheckTask(BaseTask):
                         if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step1_name] or \
                                 ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step1_name] and \
                                     self.model["scenarios"][index][scenario_name][training_type_name][step1_name]["RUNNABLE_FLAG"] == "true"):
-                            self.start_aiak_convert_ckpt(index, step1_name, scenario_name, training_type_name)
+                            self.start_baige_convert_ckpt(index, step1_name, scenario_name, training_type_name)
                             step1_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step1_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step1_scenario_lock_file, model_name, f"{scenario_name}_{step1_name}")
                             logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] - [{step1_name}] Completed \n")
@@ -70,7 +70,7 @@ class CorrectnessCheckTask(BaseTask):
                         if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step1_5_name] or \
                                 ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step1_5_name] and \
                                     self.model["scenarios"][index][scenario_name][training_type_name][step1_5_name]["RUNNABLE_FLAG"] == "true"):
-                            self.start_aiak_reverse_convert_ckpt(index, step1_5_name, scenario_name, training_type_name)
+                            self.start_baige_reverse_convert_ckpt(index, step1_5_name, scenario_name, training_type_name)
                             step1_5_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step1_5_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step1_5_scenario_lock_file, model_name, f"{scenario_name}_{step1_5_name}")
                             logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] - [{step1_5_name}] Completed \n")
@@ -81,7 +81,7 @@ class CorrectnessCheckTask(BaseTask):
                         if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step2_name] or \
                                 ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step2_name] and \
                                     self.model["scenarios"][index][scenario_name][training_type_name][step2_name]["RUNNABLE_FLAG"] == "true"):
-                            self.start_omni_training(index, step2_name, scenario_name, training_type_name)
+                            self.start_baige_omni(index, step2_name, scenario_name, training_type_name)
                             step2_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step2_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step2_scenario_lock_file, model_name, f"{scenario_name}_{step2_name}")
                             logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{training_type_name}] - [{step2_name}] Completed \n")
@@ -92,7 +92,7 @@ class CorrectnessCheckTask(BaseTask):
                         if "RUNNABLE_FLAG" not in self.model["scenarios"][index][scenario_name][training_type_name][step3_name] or \
                                 ("RUNNABLE_FLAG" in self.model["scenarios"][index][scenario_name][training_type_name][step3_name] and \
                                     self.model["scenarios"][index][scenario_name][training_type_name][step3_name]["RUNNABLE_FLAG"] == "true"):
-                            self.start_omni_training(index, step3_name, scenario_name, training_type_name)
+                            self.start_baige_omni(index, step3_name, scenario_name, training_type_name)
                             step3_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step3_name, self.master_addr, f"{self.rank_name}_lock.txt")
                             self.wait_async_pod_complete(step3_scenario_lock_file, model_name, f"{scenario_name}_{step3_name}")
                             logger.info(f"CorrectnessCheckTask Model [{model_name}] - [{scenario_name}] - [{step3_name}] Completed \n")

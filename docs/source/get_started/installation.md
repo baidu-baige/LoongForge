@@ -13,7 +13,7 @@ Go to the directory where the project is located and run:
 
 ```bash
 docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
-  -t OmniTraining:latest -f ./OmniTraining/docker/Dockerfile .
+  -t BaigeOmni:latest -f ./BaigeOmni/docker/Dockerfile .
 ```
 - `COMPILE_ENV` is used to specify the type of GPU (options: ampere, hopper, blackwell).
 - `INSTALL_LEROBOT` is used to determine whether to install lerobot (options: true, false). 
@@ -21,7 +21,7 @@ docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
 After the build finishes, verify the image:
 
 ```bash
-docker images | grep OmniTraining
+docker images | grep BaigeOmni
 ```
 
 ---
@@ -32,11 +32,11 @@ The example below starts a container and mounts the project code, data, etc.:
 ```bash
 docker run --runtime --nvidia --gpus all -itd --rm \
   -v /path/to/your/hf/tokenizer:/mnt/cluster/huggingface.co/ \
-  -v /path/to/data:/mnt/cluster/OmniTraining/ \
-  OmniTraining:latest /bin/bash
+  -v /path/to/data:/mnt/cluster/BaigeOmni/ \
+  BaigeOmni:latest /bin/bash
 ```
 
-Once inside the container, navigate to `/workspace/OmniTraining/examples/` and launch the desired training script.
+Once inside the container, navigate to `/workspace/BaigeOmni/examples/` and launch the desired training script.
 
 ## 2. Manual Patch Application
 ### 2.1 When to use
@@ -72,9 +72,9 @@ python setup_env.py --megatron-tag core_v0.15.0 --te-tag v2.9
 
 This script will automatically:
 1. Clone `Megatron-LM` and `TransformerEngine` if they don't exist.
-2. Checkout the specified tags and create local branches (`aiak_<tag>`).
+2. Checkout the specified tags and create local branches (`baige<tag>`).
 3. Apply patches to both repositories.
 4. Compile and install `TransformerEngine`.
-5. Install all python dependencies for `OmniTraining`.
+5. Install all python dependencies for `BaigeOmni`.
 
-All dependencies are now installed; you can run the training scripts under `OmniTraining/examples/`.
+All dependencies are now installed; you can run the training scripts under `BaigeOmni/examples/`.

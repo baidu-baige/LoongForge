@@ -3,13 +3,13 @@
 #source activate && conda activate python310_torch25_cuda
 set -x
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/OmniTraining/configs/sft_dataset_config.json"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/sft_dataset_config.json"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-235B-A22B/"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/Qwen3_235B_A22B_mcore_tp4pp4ep8etp1"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen3-235b-a22b"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/Qwen3_235B_A22B_mcore_tp4pp4ep8etp1"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-235b-a22b"}
 
 GPUS_PER_NODE=8
 
@@ -43,8 +43,8 @@ export XMLIR_CUDNN_ENABLED=1                    # true为使用cuDNN，支持con
 export XDNN_FC_GEMM_DTYPE=int32_with_ll
 # LINEAR 开关
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # 允许某些场景下linear不走xblas fcfusion, 比如走addmm
-export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
-XFLAGS --disable megatron_core_aiak
+export XMLIR_MEGATRON_CORE_BAIGE_PLUGIN=1
+
 #XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
 #### P800 environment end #### 
@@ -147,9 +147,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -1,23 +1,23 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22
-LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release
-OMNI_LOAD=/mnt/cluster/OmniTraining/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12/release
+SAVE=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22
+LOAD=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release
+OMNI_LOAD=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12/release
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/OmniTraining/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/OmniTraining/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/OmniTraining/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/OmniTraining/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-hf
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
 
 
 PP=2 
@@ -115,7 +115,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/huggingface/merge_huggingface.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL\

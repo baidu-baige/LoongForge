@@ -1,15 +1,15 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/Qwen3-Coder-30B-A3B-Instruct
-SAVE=/mnt/cluster/OmniTraining/qwen3/qwen3-coder-30b-a3b-tp2-pp2-ep4-Dec15
+SAVE=/mnt/cluster/BaigeOmni/qwen3/qwen3-coder-30b-a3b-tp2-pp2-ep4-Dec15
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/qwen3_coder_30b_a3b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen3/qwen3_coder_30b_a3b.yaml
 
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml
 
 TP=2
 PP=2

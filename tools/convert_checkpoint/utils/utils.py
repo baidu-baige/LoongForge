@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """General utilities."""
@@ -616,14 +616,14 @@ def per_block_dequant_from_fp8(fp8_blocks: torch.Tensor,
 
 def per_block_cast_to_fp8(
     x: torch.Tensor,
-    method: Literal["te", "pt", "aiak"] = 'te',
+    method: Literal["te", "pt", "baige"] = 'te',
     fp8_dtype: torch.dtype = torch.float8_e4m3fn,
     **kwargs,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Args:
         x: 2d tensor, the model parameter what will be block-wise quantize to fp8.
-        method: one of the ["te", "pt", "aiak"], means using TransformerEngine, naive PyTorch, aiak-fp8-quantizer
+        method: one of the ["te", "pt", "baige"], means using TransformerEngine, naive PyTorch, baige-fp8-quantizer
             to do the quantization respectively. Defaults to "te".
         fp8_dtype: the dtype of the output fp8 tensor. Defaults to torch.float8_e4m3fn.
         **kwargs: kwargs pass to the `te` method. Take no effect in other quantization methods. Belows are the args:
@@ -648,9 +648,9 @@ def per_block_cast_to_fp8(
         return x_scaled.view_as(x_padded)[:m, :n].contiguous().cpu(), \
             (x_amax / 448.0).view(x_view.size(0), x_view.size(2)).cpu()
 
-    elif method == "aiak":
-        import aiak_fp8_quantizer
-        weight, weight_scale_inv, *_ = aiak_fp8_quantizer.per_block_cast_to_fp8_fprop_vector(x)
+    elif method == "baige":
+        import baige_fp8_quantizer
+        weight, weight_scale_inv, *_ = baige_fp8_quantizer.per_block_cast_to_fp8_fprop_vector(x)
         return weight.view(fp8_dtype).cpu(), weight_scale_inv.cpu()
 
     elif method == "te":

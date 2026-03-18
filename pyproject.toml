@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "OmniTraining"
+name = "BaigeOmni"
 version = "0.1.0"
-description = "OmniTraining framework: an all-scenario training framework"
+description = "BaigeOmni framework: an all-scenario training framework"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -32,23 +32,23 @@ test = [
 ]
 
 [project.urls]
-Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/OmniTraining/tree/master"
+Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/BaigeOmni/tree/master"
 Changelog = "CHANGELOG.md"
 
 [project.scripts]
-OmniTraining = "omni_training.train:main"
+BaigeOmni = "baige_omni.train:main"
 
 [tool.hatch.build]
-packages = ["omni_training"]
+packages = ["baige_omni"]
 include = [
-    "omni_training/conf/*",
-    "omni_training/data/*",
-    "omni_training/**/*.yaml",
-    "omni_training/**/*.json"
+    "baige_omni/conf/*",
+    "baige_omni/data/*",
+    "baige_omni/**/*.yaml",
+    "baige_omni/**/*.json"
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["omni_training"]
+packages = ["baige_omni"]
 output-dir = "output/dist"
 
 [tool.hatch.build.targets.sdist]

@@ -1,6 +1,6 @@
 # Quick Start: VLM Pre-training
 
-This document will guide you through the quick start process for Vision-Language Model (VLM) pre-training under the OmniTraining framework.
+This document will guide you through the quick start process for Vision-Language Model (VLM) pre-training under the BaigeOmni framework.
 
 ## 1. Data Preparation
 
@@ -47,7 +47,7 @@ Considering the diversity of multimodal datasets, the framework adopts the **Ene
 The conversion script to **WebDataset and adapt to Energon loading format** is as follows:
 
 ```bash
-python /workspace/OmniTraining/tools/data_preprocess/vlm/convert_to_webdataset.py \
+python /workspace/BaigeOmni/tools/data_preprocess/vlm/convert_to_webdataset.py \
     --output_dir /tmp/mllm/wds \
     --json_file /tmp/mllm/mllm_demo.json \
     --image_dir /tmp/mllm/ \
@@ -92,14 +92,14 @@ Take Qwen3-VL-30B-A3B as an example, please download model weights from Hugging 
 
 ### 2.2 Convert Weight Format
 
-AIAK provides a unified weight conversion tool `tools/convert_checkpoint` for supported models, which can conveniently convert between Huggingface and Mcore formats. Taking Qwen3-VL-30B-A3B as an example, if you need to convert Huggingface weights to MegatronCore format supported by AIAK, you can refer to the following example:
+Baige provides a unified weight conversion tool `tools/convert_checkpoint` for supported models, which can conveniently convert between Huggingface and Mcore formats. Taking Qwen3-VL-30B-A3B as an example, if you need to convert Huggingface weights to MegatronCore format supported by Baige, you can refer to the following example:
 
 ```bash
 #!/bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="${AIAK_TRAINING_PATH}/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="${OMNI_PATH}/tools/convert_checkpoint"
 
 LOAD=/path/to/hf_checkpoint  # the original Qwen3-VL-30B-A3B checkpoint path
 SAVE=/path/to/your/save  # the converted checkpoint save path
@@ -109,11 +109,11 @@ SAVE_VISION_MODEL=${SAVE}/tmp/vision-model-mcore
 SAVE_ADAPTER=${SAVE}/tmp/adapter-mcore
 SAVE_PATCH=${SAVE}/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_qwen3vl.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_qwen3vl.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
 
 ETP=1
 DTP=1
@@ -177,7 +177,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 # merge
 if [ $EP -gt 1 ]; then
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py\
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -191,7 +191,7 @@ if [ $EP -gt 1 ]; then
         --save_ckpt_path $SAVE/release \
         --config_file $MODEL_CONFIG_FILE 
 else
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -222,7 +222,7 @@ For further understanding of various parameters and detailed functions of weight
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting parameters provided by open-source Megatron, OmniTraining adds more convenient training startup parameters. Detailed configuration can be found in the omni_training/train/arguments.py file. Main parameter descriptions are as follows:
+Based on supporting parameters provided by open-source Megatron, BaigeOmni adds more convenient training startup parameters. Detailed configuration can be found in the baige_omni/train/arguments.py file. Main parameter descriptions are as follows:
 
 * `--training-phase`: Specify the training phase as pretrain
 * `--add-question-in-pretrain`: When enabled, questions will be concatenated and added to the input for training; when disabled, only answers or other default text fields will be used for training
@@ -232,15 +232,15 @@ Based on supporting parameters provided by open-source Megatron, OmniTraining ad
 
 ### 3.2 Pre-training Script
 
-OmniTraining currently provides pre-training example scripts for various models. After entering the container, you can find relevant scripts in the examples/{model}/pretrain/ directory. Below is an example using Qwen3-VL-30B-A3B pre-training script:
+BaigeOmni currently provides pre-training example scripts for various models. After entering the container, you can find relevant scripts in the examples/{model}/pretrain/ directory. Below is an example using Qwen3-VL-30B-A3B pre-training script:
 
 ```bash
 #!/bin/bash
 # The script needs to be run on at least 2 nodes.
 
 # Codebase roots added to PYTHONPATH.
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
 # Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}
@@ -273,7 +273,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
+MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
 
 # Data & tokenizer setup
 DATA_ARGS=(
@@ -360,9 +360,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

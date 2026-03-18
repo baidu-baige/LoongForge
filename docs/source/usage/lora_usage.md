@@ -16,7 +16,7 @@ To enable LoRA in the model, simply include the LoRA configuration in the model'
 
 ```yaml
 # qwen3 model configuration
-_target_: omni_training.models.foundation.Qwen3Config
+_target_: baige_omni.models.foundation.Qwen3Config
 
 defaults:
   - ../../models/lora@peft_config: lora
@@ -122,7 +122,7 @@ model:
   mix_used_vision_projector: true
   foundation: 
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["omni_training.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["baige_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
   image_projector:
@@ -143,8 +143,8 @@ In the training script, you need to specify additional parameters:
 For example, add the following to the Qwen2.5-vl-3b model training configuration:
 
 ```bash
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1"}
-LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-lora"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1"}
+LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-lora"}
 
 TRAINING_ARGS=(
     --norm-epsilon 1e-6
@@ -184,17 +184,17 @@ Using the offline checkpoint conversion tool provided by the framework, you can 
 ```bash
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/OmniTraining/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
-SAVE=/mnt/cluster/OmniTraining/qwen3/qwen3-1.7b-hf-Dec24
-LOAD_LORA=/mnt/cluster/OmniTraining/qwen3/qwen3-1.7b-tp1-pp1-Dec24/iter_0000010/
+LOAD=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
+SAVE=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-hf-Dec24
+LOAD_LORA=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/iter_0000010/
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
 
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
 
 TP=1
 PP=1

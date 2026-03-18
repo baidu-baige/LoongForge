@@ -3,14 +3,14 @@
 set -x
 
 #source activate && conda activate python310_torch25_cuda
-AIAK_MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/fuhaohan/qianfan/datasets/128k_tokenized_qianfan_code_data"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen2.5-32B-Instruct"}
-CHECKPOINT_LOAD_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/OmniTraining/qwen2.5/Qwen2.5_32B_mcore_tp8pp1"}
-CHECKPOINT_SAVE_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/OmniTraining/qwen2.5/Qwen2.5_32B_mcore_tp8pp1_saved"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen2.5-32b"}
+CHECKPOINT_LOAD_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/BaigeOmni/qwen2.5/Qwen2.5_32B_mcore_tp8pp1"}
+CHECKPOINT_SAVE_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/BaigeOmni/qwen2.5/Qwen2.5_32B_mcore_tp8pp1_saved"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen2.5-32b"}
 
 
 mkdir -p ${TENSORBOARD_PATH}
@@ -49,9 +49,9 @@ export XMLIR_DIST_ASYNC_ISEND_IRECV=1 # 设为true表示send/recv会走异步逻
 export XMLIR_CUDNN_ENABLED=1 # true为使用cuDNN，支持conv3d等，false为不使用cuDNN
 # LINEAR 开关
 export XMLIR_ENABLE_LINEAR_FC_FUSION=0 # 允许某些场景下linear不走xblas fcfusion, 比如走addmm，默认为1
-export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
+export XMLIR_MEGATRON_CORE_BAIGE_PLUGIN=1
 export XTE_DISABLE_FAST_BF16_CACHE=1
-XFLAGS --disable megatron_core_aiak
+
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
 ##################################
@@ -155,9 +155,9 @@ LOGGING_ARGS=(
 #  )
 #fi
 
-PYTHONPATH=$AIAK_MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${SFT_ARGS[@]} \

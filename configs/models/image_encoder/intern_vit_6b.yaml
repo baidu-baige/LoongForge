@@ -1,4 +1,4 @@
-_target_: omni_training.models.encoder.InternVisionConfig
+_target_: baige_omni.models.encoder.InternVisionConfig
 
 num_layers: 45
 hidden_size: 3200

@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file:///workspace/OmniTraining/configs/models/
+    - file:///workspace/BaigeOmni/configs/models/
 
 defaults:
   - image_encoder@module: ???

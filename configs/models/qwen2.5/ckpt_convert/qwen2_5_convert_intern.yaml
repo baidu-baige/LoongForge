@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file://${oc.env:AIAK_TRAINING_PATH}/configs/models/
+    - file://${oc.env:OMNI_PATH}/configs/models/
 
 defaults:
   - qwen2.5@module: ??? 

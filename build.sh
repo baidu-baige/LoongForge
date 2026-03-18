@@ -12,7 +12,7 @@ echo_cmd() {
     $1
 }
 
-echo "========= build OmniTraining ========="
+echo "========= build BaigeOmni ========="
 
 echo_cmd "rm -rf output"
 echo_cmd "mkdir -p output"

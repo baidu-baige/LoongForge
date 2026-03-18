@@ -1,7 +1,7 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transform OmniTraining checkpoint keys back to vanilla naming schemes."""
+"""Transform BaigeOmni checkpoint keys back to vanilla naming schemes."""
 
 def transform_key_forward(key, forward_mappings):
     """

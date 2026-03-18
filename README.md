@@ -1,23 +1,23 @@
 <div align="center">
 
-![OmniTraining Logo](docs/assets/images/omni.jpg)
+![BaigeOmni Logo](docs/assets/images/omni.jpg)
 
 <h4> A Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h4>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/OmniTraining/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/OmniTraining=social)](https://github.com/baidu-baige/OmniTraining/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/OmniTraining)](https://github.com/baidu-baige/OmniTraining/issues)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/BaigeOmni/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/BaigeOmni=social)](https://github.com/baidu-baige/BaigeOmni/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/BaigeOmni)](https://github.com/baidu-baige/BaigeOmni/issues)
 
 </div>
 
 ## 📖 About
 
-**OmniTraining** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and Supervised Fine-Tuning (SFT). Through continuous adaptation and performance optimization, OmniTraining delivers an efficient, easy-to-use, and highly extensible solution for model training.
+**BaigeOmni** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and Supervised Fine-Tuning (SFT). Through continuous adaptation and performance optimization, BaigeOmni delivers an efficient, easy-to-use, and highly extensible solution for model training.
 
 * **🚀 Comprehensive Model Coverage**: Natively supports mainstream model architectures including LLMs (Large Language Models), VLMs (Vision-Language), VLAs (Vision-Language-Action), and Diffusion Models. Its flexible composition abstraction makes adding new multi-modal variants effortless.
-* **⚡ Performance-Driven Optimization**: Built upon Megatron-LM with significant enhancements. OmniTraining introduces advanced optimizations in communication, computation overlap, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
+* **⚡ Performance-Driven Optimization**: Built upon Megatron-LM with significant enhancements. BaigeOmni introduces advanced optimizations in communication, computation overlap, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
 * **🧪 Heterogeneous Hardware Support**: Provides native, high-performance support for both NVIDIA GPUs and Kunlun XPUs, ensuring seamless migration and stable training at scale across diverse hardware clusters.
 
 ## 🔥 Latest News
-- **[2026/03]** 🎉 Initial release of the OmniTraining framework!
+- **[2026/03]** 🎉 Initial release of the BaigeOmni framework!
 
 ## ✨ Key Features
 
@@ -31,7 +31,7 @@
 * **Versatile Pipeline & Tools**: Out-of-the-box support for Pretrain, MidTrain, SFT, and LoRA. Includes tools for dataset processing (e.g., format conversion, packing..) and bidirectional Megatron ↔ HuggingFace weight conversion.
 * **Heterogeneous Hardware**: Supports training on both NVIDIA GPUs and Kunlun XPUs via a minimally intrusive plugin design.
 
-*(🔔🔔🔔 Please refer to our [Official Documentation](https://baidu-baige.github.io/OmniTraining/) for detailed tutorials.)*
+*(🔔🔔🔔 Please refer to our [Official Documentation](https://baidu-baige.github.io/BaigeOmni/) for detailed tutorials.)*
 
 ## 🚀 Ongoing & Upcoming
 
@@ -59,7 +59,7 @@
 
 ## 🏛️ Supported Models
 
-OmniTraining supports a massive array of state-of-the-art models. Check out `configs/models/` for YAML configurations and `examples/` for launch scripts.
+BaigeOmni supports a massive array of state-of-the-art models. Check out `configs/models/` for YAML configurations and `examples/` for launch scripts.
 
 
 | **Modality** | **Architectures** | **Models** |
@@ -84,7 +84,7 @@ OmniTraining supports a massive array of state-of-the-art models. Check out `con
 | | LLaVA-OneVision-1.5 | llava-onevision-1.5-4B |
 | | InternVL2.5 | internvl2.5-8b, internvl2.5-26b, internvl2.5-38b, internvl2.5-78b |
 | | InternVL3.5 | internvl3.5-8b, internvl3.5-14b, internvl3.5-38b, internvl3.5-30b-a3b, internvl3.5-241b-a28b |
-| | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/OmniTraining/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
+| | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/BaigeOmni/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
 | **Diffusion** | WAN2.2 | wan2.2_i2v_a14b |
 | **VLA** | Pi | pi0.5 |
 
@@ -92,8 +92,8 @@ OmniTraining supports a massive array of state-of-the-art models. Check out `con
 ## 🏗️ Architecture Overview
 
 ```
-OmniTraining/
-├── omni_training/                # Core training framework
+BaigeOmni/
+├── baige_omni/                # Core training framework
 │   ├── train/                    # Entry points (Pretrain, SFT, Custom)
 │   ├── models/                   # Unified model abstractions (LLM, Encoder, VLM, PEFT)
 │   │   ├── foundation/           # LLM backbones (LLaMA, Qwen, DeepSeek, etc.)
@@ -118,7 +118,7 @@ OmniTraining/
 ```
 
 
-## 🌟 Awesome Projects Built with OmniTraining
+## 🌟 Awesome Projects Built with BaigeOmni
 - [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
 - [LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)
 
@@ -128,23 +128,23 @@ We heartily welcome community contributions! Whether it's reporting bugs, propos
 
 ## 📄 License
 
-OmniTraining is released under the [Apache License 2.0](LICENSE). 
+BaigeOmni is released under the [Apache License 2.0](LICENSE). 
 
 Some files in this repository are derived from third-party open-source projects. Please refer to the specific file headers for their respective copyright, license notices, and attribution requirements.
 
 ## 📝 Citation
 
-If you find OmniTraining helpful in your research or production, please consider citing our repository:
+If you find BaigeOmni helpful in your research or production, please consider citing our repository:
 
 ```bibtex
-@software{omnitraining2026,
-      title={OmniTraining: A Modular, Scalable & High-Efficiency Training Library for Multi Modal Models}, 
-      author={{The OmniTraining Authors}},
+@software{BaigeOmni2026,
+      title={BaigeOmni: A Modular, Scalable & High-Efficiency Training Library for Multi Modal Models}, 
+      author={{The BaigeOmni Authors}},
       year={2026},
-      url={https://github.com/baidu-baige/OmniTraining},
+      url={https://github.com/baidu-baige/BaigeOmni},
 }
 ```
 
 ## 🙏 Acknowledgments
 
-OmniTraining is built upon excellent open-source projects including but not limited to Megatron-LM, PyTorch, and Transformers. We thank the open-source community for their invaluable foundational work.
+BaigeOmni is built upon excellent open-source projects including but not limited to Megatron-LM, PyTorch, and Transformers. We thank the open-source community for their invaluable foundational work.

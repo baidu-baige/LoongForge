@@ -19,4 +19,4 @@ model:
     rotary_emb_func: "RotaryEmbedding"
     rotary_base: 1000000
     vocab_size_in_config_file: 151674
-    model_spec: ["omni_training.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_layer_with_te_spec"]
+    model_spec: ["baige_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_layer_with_te_spec"]

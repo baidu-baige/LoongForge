@@ -9,13 +9,13 @@ ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-DATA_PATH=/mnt/cluster/OmniTraining/dataset/internvl/webdataset
+DATA_PATH=/mnt/cluster/BaigeOmni/dataset/internvl/webdataset
 TOKENIZER_PATH=/mnt/cluster/huggingface.co/internvl/InternVL2_5-78B/
-CHECKPOINT_LOAD_PATH=/mnt/cluster/OmniTraining/internvl2.5/internvl2.5-78b-tp8-pp4/
-CHECKPOINT_SAVE_PATH=/mnt/cluster/OmniTraining/internvl2.5/internvl2.5-78b-tp8-pp4-save/
+CHECKPOINT_LOAD_PATH=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-78b-tp8-pp4/
+CHECKPOINT_SAVE_PATH=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-78b-tp8-pp4-save/
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl2.5/internvl2.5-78b/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
@@ -24,7 +24,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl2.5/internvl2_5_78b.yaml
+MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/internvl2.5/internvl2_5_78b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -137,11 +137,11 @@ if [ -n "${WANDB_API_KEY}" ]; then
   )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/omni_training/train.py \
+  $OMNI_PATH/baige_omni/train.py \
   ${MODEL_CONFIG_ARGS[@]} \
-  --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/sft_dataset_config.json \
+  --sft-dataset-config ${OMNI_PATH}/configs/sft_dataset_config.json \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \

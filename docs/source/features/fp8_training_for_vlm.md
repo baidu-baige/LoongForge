@@ -1,5 +1,5 @@
 # FP8 Training for VLM  
-OmniTraining provides FP8 low-precision training for various models. By editing the corresponding YAML config files you can turn FP8 on/off independently for the vision/audio **Encoder** and the language **Foundation** model, achieving the best training efficiency.
+BaigeOmni provides FP8 low-precision training for various models. By editing the corresponding YAML config files you can turn FP8 on/off independently for the vision/audio **Encoder** and the language **Foundation** model, achieving the best training efficiency.
 
 ---
 
@@ -85,14 +85,14 @@ model:
     rotary_emb_func: "Qwen3VLRotaryEmbedding"
     mrope_section: [24, 20, 20]
     rotary_base: 1000000
-    model_spec: ["omni_training.models.foundation.qwen3.qwen_layer_spec",
+    model_spec: ["baige_omni.models.foundation.qwen3.qwen_layer_spec",
                  "get_qwen3_vl_layer_with_te_spec"]
     # <-- FP8 block-wise GEMM & weights -->
     fp8: "e4m3"
     fp8_recipe: "blockwise"
     fp8_param: True
   image_encoder:
-    model_spec: ["omni_training.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec",
+    model_spec: ["baige_omni.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec",
                  "get_qwen3_vl_vision_model_layer_with_te_spec"]
     # <-- FP8 block-wise GEMM & weights -->
     fp8: "e4m3"

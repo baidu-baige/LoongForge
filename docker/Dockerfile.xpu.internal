@@ -12,8 +12,8 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./AIAK-Training-Omni /workspace/OmniTraining
-COPY ./AIAK-Megatron /workspace/AIAK-Megatron
+COPY ./AIAK-Training-Omni /workspace/BaigeOmni
+COPY ./AIAK-Megatron /workspace/Megatron-LM
 SHELL ["/bin/bash", "-c"]
 
 # ======================== Basic Environment Setup ========================
@@ -24,11 +24,11 @@ RUN set -exuo pipefail && \
     }; \
     install_pip_config() { \
         mkdir -p /tmp && chmod -R 777 /tmp && \
-        if [ -f /workspace/OmniTraining/docker/pip.conf ]; then \
-            cp /workspace/OmniTraining/docker/pip.conf /etc/pip.conf && \
-            cp /workspace/OmniTraining/docker/pip.conf /usr/pip.conf && \
-            mkdir -p /root/.pip && cp /workspace/OmniTraining/docker/pip.conf /root/.pip/pip.conf && \
-            mkdir -p /etc/xdg/pip && cp /workspace/OmniTraining/docker/pip.conf /etc/xdg/pip/pip.conf; \
+        if [ -f /workspace/BaigeOmni/docker/pip.conf ]; then \
+            cp /workspace/BaigeOmni/docker/pip.conf /etc/pip.conf && \
+            cp /workspace/BaigeOmni/docker/pip.conf /usr/pip.conf && \
+            mkdir -p /root/.pip && cp /workspace/BaigeOmni/docker/pip.conf /root/.pip/pip.conf && \
+            mkdir -p /etc/xdg/pip && cp /workspace/BaigeOmni/docker/pip.conf /etc/xdg/pip/pip.conf; \
         fi; \
     }; \
     remove_pip_constraints() { \
@@ -40,9 +40,9 @@ RUN set -exuo pipefail && \
         fi; \
     }; \
     setup_system_env() { \
-        if [ -f /workspace/OmniTraining/docker/sources.list ]; then \
+        if [ -f /workspace/BaigeOmni/docker/sources.list ]; then \
             rm -rf /etc/apt/sources.list && \
-            cp /workspace/OmniTraining/docker/sources.list /etc/apt/sources.list; \
+            cp /workspace/BaigeOmni/docker/sources.list /etc/apt/sources.list; \
         fi && \
         rm -f /etc/apt/sources.list.d/ubuntu.sources && \
         apt-get update && \
@@ -71,7 +71,7 @@ RUN set -exuo pipefail && \
         XPYTORCH_URL="${XPYTORCH_URL_ARG}"; \
         echo "use specified xpytorch version: ${XPYTORCH_URL}"; \
     else \
-        xpytorch_info="/workspace/OmniTraining/xpytorch_info.txt"; \
+        xpytorch_info="/workspace/BaigeOmni/xpytorch_info.txt"; \
         if [ ! -f "${xpytorch_info}" ]; then \
             echo "xpytorch info file not exist: ${xpytorch_info}" && exit 1; \
         fi; \
@@ -87,14 +87,14 @@ RUN set -exuo pipefail && \
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
     install_requirements() { \
-        local requirements_file="/workspace/OmniTraining/requirements_xpu.txt" && \
+        local requirements_file="/workspace/BaigeOmni/requirements_xpu.txt" && \
         . /root/miniconda/etc/profile.d/conda.sh && \
         conda activate python310_torch25_cuda && \
         # for deepspeed cpu adam
         DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U -i http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com && \
         echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
         echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
-        cd /workspace/OmniTraining/ && \
+        cd /workspace/BaigeOmni/ && \
         pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
             -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
     }; \
@@ -105,21 +105,10 @@ RUN set -exuo pipefail && \
 # =========================================================
 RUN set -exuo pipefail && \
     install_megatron() { \
-        local megatron_dir=/workspace/AIAK-Megatron; \
+        local megatron_dir=/workspace/Megatron-LM; \
         local MEGATRON_TAGS="core_v0.15.0" && \
         echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
-        cd /workspace && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/mcore_v0.15.0/megatron.tar.gz && \
-        tar -zxf megatron.tar.gz && \
-        mv Megatron-LM AIAK-Megatron && \
         cd ${megatron_dir} && \
-        git config --global --add safe.directory ${megatron_dir}; \
-        git restore . && \
-        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
-                /workspace/OmniTraining/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
-                ${megatron_dir}; \
-        fi && \
         echo "Megatron-LM setup completed"; \
     }; \
     install_lerobot() { \
@@ -178,13 +167,13 @@ RUN mkdir -p /root/.jupyter && \
 # Clean Up Unused Files (Consistent with install.sh)
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
-    rm -rf /workspace/OmniTraining/.git && \
-    rm -rf /workspace/OmniTraining/build.sh && \
-    rm -rf /workspace/OmniTraining/ci.yml && \
-    rm -rf /workspace/OmniTraining/docker/ci && \
-    rm -rf /workspace/AIAK-Megatron/.git && \
-    rm -rf /workspace/AIAK-Megatron/.github && \
-    rm -rf /workspace/AIAK-Megatron/output && \
+    rm -rf /workspace/BaigeOmni/.git && \
+    rm -rf /workspace/BaigeOmni/build.sh && \
+    rm -rf /workspace/BaigeOmni/ci.yml && \
+    rm -rf /workspace/BaigeOmni/docker/ci && \
+    rm -rf /workspace/Megatron-LM/.git && \
+    rm -rf /workspace/Megatron-LM/.github && \
+    rm -rf /workspace/Megatron-LM/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials

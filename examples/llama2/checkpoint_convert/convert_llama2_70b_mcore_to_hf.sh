@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/aiak-omni-ckpt/llama2/mcore_llama2_70b_tp4_pp4_omni/release
-SAVE=/mnt/cluster/aiak-omni-ckpt/huggingface.co/meta-llama/Llama-2-70b-hf/
+LOAD=/mnt/cluster/baige-omni-ckpt/llama2/mcore_llama2_70b_tp4_pp4_omni/release
+SAVE=/mnt/cluster/baige-omni-ckpt/huggingface.co/meta-llama/Llama-2-70b-hf/
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/llama2/llama2_70b.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/llama2/ckpt_convert/llama2_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/llama2/llama2_70b.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/llama2/ckpt_convert/llama2_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

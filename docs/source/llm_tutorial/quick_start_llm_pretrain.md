@@ -1,6 +1,6 @@
 # Quick Start: LLM Pre-training
 
-This guide walks you through launching a Large-Language-Model (LLM) pre-training job in the OmniTraining framework.
+This guide walks you through launching a Large-Language-Model (LLM) pre-training job in the BaigeOmni framework.
 
 ---
 
@@ -19,15 +19,15 @@ Before training you usually need to transform massive raw corpora into a format 
 2. Launch the container and run the built-in tool:
 
 ```bash
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
 TOKENIZER_PATH=/path/to/your/tokenizer
 input_data=/path/to/your/json
 output_prefix=/path/to/your/output_prefix
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
-  python ${AIAK_TRAINING_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+  python ${OMNI_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
       --input ${input_data} \
       --output-prefix ${output_prefix} \
       --tokenizer-type HFTokenizer \
@@ -51,20 +51,20 @@ Take DeepSeek-V3.1 as an example:
 https://huggingface.co/deepseek-ai/DeepSeek-V3.1
 
 ### 2.2 Convert the checkpoint
-AIAK provides a unified converter `tools/convert_checkpoint`.  
+Baige provides a unified converter `tools/convert_checkpoint`.  
 Below we convert the original FP8 HF checkpoint to MCore FP8:
 
 ```bash
 #!/bin/bash
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/path/to/hf_checkpoint          # FP8 HF checkpoint
 SAVE=/path/to/your/save              # will be MCore FP8
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
   python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
@@ -92,14 +92,14 @@ Key flags:
   If VPP is enabled (`--num-virtual-stages-per-pipeline-rank`), list the layers of every vPP chunk in order, e.g.  
   `--custom_pipeline_layers 4,3,4,4,4,4,4,3,4,4,4,4,4,4,4,3` for 2 virtual stages.
 
-See [llm_ckpt_convert.md](https://github.com/baidu-baige/OmniTraining/tree/master/docs/source/llm_tutorial/llm_ckpt_convert.md) for full details.
+See [llm_ckpt_convert.md](https://github.com/baidu-baige/BaigeOmni/tree/master/docs/source/llm_tutorial/llm_ckpt_convert.md) for full details.
 
 ---
 
 ## 3. Launch pre-training
 
-### 3.1 Extra arguments provided by OmniTraining
-Besides the native Megatron flags, the framework adds convenient options (defined in `omni_training/train/arguments.py`):
+### 3.1 Extra arguments provided by BaigeOmni
+Besides the native Megatron flags, the framework adds convenient options (defined in `baige_omni/train/arguments.py`):
 
 * `--config-file` – path to a YAML file that contains all model hyper-params, e.g. `configs/models/deepseek3/deepseek_v3.yaml`.  
 * `--model-name` – short name such as `deepseek-v3`; the system looks up the YAML automatically.  
@@ -125,8 +125,8 @@ Below is the FP8 pre-training script for DeepSeek-V3.1 (comments added for clari
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1   # allow non-weights-only loading
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=/path/to/your/dataset
 TOKENIZER_PATH=/path/to/your/hf/tokenizer
@@ -278,9 +278,9 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/omni_training/train.py \
+  $OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

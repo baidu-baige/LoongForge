@@ -22,13 +22,13 @@ export GPU_NUMS="$gpu_nums"
 
 # The root directory where PFS data exists in K8S cluster mode
 export TRAIN_DATA_DIR="/mnt/pfs/leoli"
-export IMAGE=${IMAGE:-"registry.baidubce.com/hac_test/aiak-transformer:dev_20240204_130244"}
+export IMAGE=${IMAGE:-"registry.baidubce.com/hac_test/baige-transformer:dev_20240204_130244"}
 # export SPECIFIC_PYTORCHJOB_COMMAND="sleep 1d" # Can be used for single-machine debugging
 export TIMEOUT=${TIMEOUT:-"7200"}
 export SCHEDULE_TIMEOUT=${SCHEDULE_TIMEOUT:-"600"}
 export CHECK_PYTORCHJOB_TIMEOUT=${CHECK_PYTORCHJOB_TIMEOUT:-"86400"} # Distributed training, default 1 day
 # export specific_model_name="llama-2-7b" # Run specific model
-# export NAME_PREFIX_AGILE="a800-test-lijipeng-aiak-transformer"
+# export NAME_PREFIX_AGILE="a800-test-lijipeng-baige-transformer"
 export accuracy_relative_tolerance=${accuracy_relative_tolerance:-"0.02"}
 export performance_relative_tolerance=${performance_relative_tolerance:-"0.05"}
 # check_correctness_task, check_perfness_task
@@ -36,6 +36,6 @@ export tasks=${tasks:-"check_perfness_task"}
 export use_nccl=${use_nccl:-"false"}
 export training_type=${training_type:-"pretrain sft"}
 
-# export BOS_SYNC_AIAK_TRANSFORMER_ADDR=${BOS_SYNC_AIAK_TRANSFORMER_ADDR:-""}
+# export BOS_SYNC_Baige_TRANSFORMER_ADDR=${BOS_SYNC_Baige_TRANSFORMER_ADDR:-""}
 
 run_all_ipipe_case

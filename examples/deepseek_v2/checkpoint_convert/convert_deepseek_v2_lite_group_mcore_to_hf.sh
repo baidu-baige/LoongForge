@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/aiak-omni-ckpt/deepseek2/DeepSeek_V2_Lite_group_tp1pp1ep8/release
-SAVE=/mnt/cluster/aiak-omni-ckpt/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
+LOAD=/mnt/cluster/baige-omni-ckpt/deepseek2/DeepSeek_V2_Lite_group_tp1pp1ep8/release
+SAVE=/mnt/cluster/baige-omni-ckpt/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek2/deepseek_v2_lite.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek2/deepseek_v2_lite.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="$AIAK_TRAINING_PATH/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/aiak-omni-ckpt/qwen2/Qwen2_1.5B_mcore_tp1pp1_omni/release
-SAVE=/mnt/cluster/aiak-omni-ckpt/huggingface.co/Qwen/Qwen2-1.5B/
+LOAD=/mnt/cluster/baige-omni-ckpt/qwen2/Qwen2_1.5B_mcore_tp1pp1_omni/release
+SAVE=/mnt/cluster/baige-omni-ckpt/huggingface.co/Qwen/Qwen2-1.5B/
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2/qwen2_1_5b.yaml
-CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen2/ckpt_convert/qwen2_convert.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen2/qwen2_1_5b.yaml
+CONVERT_FILE=${OMNI_PATH}/configs/models/qwen2/ckpt_convert/qwen2_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

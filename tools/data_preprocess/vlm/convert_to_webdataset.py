@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """ Convert dataset into WebDataset (WDS) format """

@@ -13,8 +13,8 @@ TOKENIZER_PATH=/mnt/cluster/models/InternVL3_5-8B/
 CHECKPOINT_LOAD_PATH=/mnt/cluster/models/internvl/ckpt-megatron/Internvl3_5-8B-tp4-pp1
 CHECKPOINT_SAVE_PATH=/mnt/cluster/models/internvl/ckpt-megatron/Internvl3_5-8B-tp4-pp1-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6020"}
@@ -26,7 +26,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/internvl3.5/internvl3_5_8b.yaml
+MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/internvl3.5/internvl3_5_8b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -132,10 +132,10 @@ if [ -n "${WANDB_API_KEY}" ]; then
   )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $AIAK_TRAINING_PATH/omni_training/train.py \
-  --sft-dataset-config ${AIAK_TRAINING_PATH}/configs/sft_dataset_config.json \
+  $OMNI_PATH/baige_omni/train.py \
+  --sft-dataset-config ${OMNI_PATH}/configs/sft_dataset_config.json \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

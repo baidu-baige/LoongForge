@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve OmniTraining
+about: Create a report to help us improve BaigeOmni
 title: "[BUG] "
 labels: 'bug'
 assignees: ''

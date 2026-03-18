@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """preprocess sft data"""
@@ -10,12 +10,12 @@ from datasets import DatasetDict
 
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
-from omni_training.data.sft_dataset import SFTDatasetConfig, SFTDataset
-from omni_training.data import ChatTemplate, get_support_templates
-from omni_training.tokenizer import build_tokenizer
-from omni_training.utils import constants
-from omni_training.utils.utils import get_default_sft_dataset_config
-from omni_training.train.sft.utils import get_dataset_blend_from_list
+from baige_omni.data.sft_dataset import SFTDatasetConfig, SFTDataset
+from baige_omni.data import ChatTemplate, get_support_templates
+from baige_omni.tokenizer import build_tokenizer
+from baige_omni.utils import constants
+from baige_omni.utils.utils import get_default_sft_dataset_config
+from baige_omni.train.sft.utils import get_dataset_blend_from_list
 
 
 def build_sft_dataset(args):

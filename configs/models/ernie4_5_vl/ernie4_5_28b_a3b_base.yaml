@@ -1,4 +1,4 @@
-_target_: omni_training.models.foundation.ErnieMoeConfig
+_target_: baige_omni.models.foundation.ErnieMoeConfig
 
 num_layers: 28
 hidden_size: 2560

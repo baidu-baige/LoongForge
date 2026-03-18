@@ -1,5 +1,5 @@
 # Optimizer Support  
-OmniTraining offers optimizer off-loading and low-precision optimizers to cut memory usage when training in reduced precision.
+BaigeOmni offers optimizer off-loading and low-precision optimizers to cut memory usage when training in reduced precision.
 
 ---
 

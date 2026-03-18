@@ -1,6 +1,6 @@
-# OmniTraining Automated Test Guide
+# BaigeOmni Automated Test Guide
 
-This document explains how to use the automated test scripts and configurations for OmniTraining CI and functional validation.
+This document explains how to use the automated test scripts and configurations for BaigeOmni CI and functional validation.
 
 ## Directory Structure
 

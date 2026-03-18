@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """base_task.py"""
@@ -436,8 +436,8 @@ class BaseTask(object):
     
 
     
-    def assert_omni_training(self, training_log_file, training_type=None, **kwargs):
-        logger.info(f"Start assert_omni_training ...")
+    def assert_baige_omni(self, training_log_file, training_type=None, **kwargs):
+        logger.info(f"Start assert_baige_omni ...")
 
         if not self.is_final_pod:
             return
@@ -463,7 +463,7 @@ class BaseTask(object):
             self.save_baseline_from_log(training_log_file, training_type)
         # Unified validation of accuracy and performance metrics
         self.validate_metrics(self.model_name, training_type)
-        logger.info(f"End assert_omni_training")
+        logger.info(f"End assert_baige_omni")
 
     def validate_metrics(self, model_name, training_type=None):
         """
@@ -978,7 +978,7 @@ class BaseTask(object):
         with open(new_script_path, "w") as file:
             file.write(script)
     
-    def start_aiak_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
+    def start_baige_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
         """
         Start executing ckpt conversion task
         Args:
@@ -987,7 +987,7 @@ class BaseTask(object):
             scenario_name: Scenario name
             training_type_name: Training type name (e.g. pretrain, sft)
         """
-        step_name = "aiak_convert_ckpt"
+        step_name = "baige_convert_ckpt"
         logger.info(f"{step_stage} {step_name} Start Running ...")
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
@@ -1021,11 +1021,11 @@ class BaseTask(object):
 
         logger.info(f"{step_stage} End {step_name}")
 
-    def start_aiak_reverse_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
+    def start_baige_reverse_convert_ckpt(self, index, step_stage, scenario_name, training_type_name):
         """
         Execute mcore -> hf reverse conversion and verify consistency between converted hf checkpoint and source hf checkpoint
         """
-        step_name = "aiak_convert_ckpt"
+        step_name = "baige_convert_ckpt"
         logger.info(f"{step_stage} reverse_{step_name} Start Running ...")
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
 
@@ -1067,7 +1067,7 @@ class BaseTask(object):
 
         logger.info(f"{step_stage} End reverse_{step_name}")
 
-    def start_omni_training(self, index, step_stage, scenario_name, training_type_name):
+    def start_baige_omni(self, index, step_stage, scenario_name, training_type_name):
         """
         Start executing training task
         Args:
@@ -1076,7 +1076,7 @@ class BaseTask(object):
             scenario_name: Scenario name
             training_type_name: Training type name (e.g. pretrain, sft)
         """
-        step_name = "omni_training"
+        step_name = "baige_omni"
         logger.info(f"{step_stage} {step_name} Start Running ...")
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage, training_type_name)
@@ -1115,7 +1115,7 @@ class BaseTask(object):
                 model_name,
                 f"{scenario_name}_{step_name}",
                 is_function=True,
-                function=self.assert_omni_training,
+                function=self.assert_baige_omni,
                 raise_on_error=True,
                 training_log_file=training_log_file,
                 training_type=training_type_name

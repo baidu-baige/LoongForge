@@ -44,7 +44,7 @@
 # =============================================================================
 set -e
 
-omni=/workspace/OmniTraining
+omni=/workspace/BaigeOmni
 input_jsonl=/workspace/dataset/ERNIE/examples/data/sft_vl-demo.jsonl
 converted_jsonl=/workspace/dataset/ERNIE/examples/data/sft_vl-demo_sharegpt.jsonl
 image_dir=/workspace/dataset/ERNIE/examples/data/

@@ -1,7 +1,7 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transform external checkpoint keys into OmniTraining naming schemes."""
+"""Transform external checkpoint keys into BaigeOmni naming schemes."""
 
 def transform_key(module, prefix_mapping, pipeline_model_parallel_size=1, tensor_model_parallel_size=1):
     """

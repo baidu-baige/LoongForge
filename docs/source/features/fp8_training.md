@@ -4,7 +4,7 @@ DeepSeek-V3 models adopt **Blockwise FP8** training:
 * Finer-grained scaling (tile-wise for activations, block-wise for weights) replaces per-tensor quantisation, cutting quantisation noise.  
 * Up-to-date amax statistics reduce distribution-shift error that plagues delayed updates.  
 
-This section lists the feature flags / environment variables required to turn the scheme on in AIAK-Omni, gives a proven recipe, and collects troubleshooting hints.
+This section lists the feature flags / environment variables required to turn the scheme on in BaigeOmni, gives a proven recipe, and collects troubleshooting hints.
 
 ---
 
@@ -77,4 +77,4 @@ export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 | Checkpoint reload failure | Ensure the same FP8 flags & epsilon values were used when the checkpoint was saved. |
 | Blackwell runtime error with `NVTE_FP8_BLOCK_SCALING_FP32_SCALES=1` | Remove the variable (keep E8M0 scales). |
 
-With the above switches and epsilon guards, Blockwise FP8 training in AIAK-Omni is ready for production-scale runs.
+With the above switches and epsilon guards, Blockwise FP8 training in BaigeOmni is ready for production-scale runs.

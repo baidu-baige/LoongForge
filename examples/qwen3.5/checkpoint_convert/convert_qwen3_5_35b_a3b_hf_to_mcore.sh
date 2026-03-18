@@ -2,9 +2,9 @@
 # Copyright 2026 The OmniTraining Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-CONVERT_CHECKPOINT_PATH="${AIAK_TRAINING_PATH}/tools/convert_checkpoint"
+export OMNI_PATH=${OMNI_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+CONVERT_CHECKPOINT_PATH="${OMNI_PATH}/tools/convert_checkpoint"
 
 LOAD=/workspace/Qwen3.5-35B-A3B
 SAVE=/workspace/qwen3.5-35B-A3B-TP1PP2EP4
@@ -14,11 +14,11 @@ SAVE_VISION_MODEL=${SAVE}/tmp/vision-model-mcore
 SAVE_ADAPTER=${SAVE}/tmp/adapter-mcore
 SAVE_PATCH=${SAVE}/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3.5/qwen3_5_35b_a3b.yaml
+MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen3.5/qwen3_5_35b_a3b.yaml
 
-FOUNDATION_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/qwen3.5/ckpt_convert/qwen3_5_moe_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_5_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${AIAK_TRAINING_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3.5/ckpt_convert/qwen3_5_moe_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
 
 TP=1
 PP=2
@@ -84,7 +84,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 # merge
 if [ $EP -gt 1 ]; then
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py\
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -98,7 +98,7 @@ if [ $EP -gt 1 ]; then
         --save_ckpt_path $SAVE/release \
         --config_file $MODEL_CONFIG_FILE 
 else
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \

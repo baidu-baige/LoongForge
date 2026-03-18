@@ -63,7 +63,7 @@ One `.pth` file per video containing three keys:
 
 ### 2. Checkpoint Conversion (HF → Megatron)
 
-Inside **OmniTraining** repo:
+Inside **BaigeOmni** repo:
 
 **Step-1** Generate **random Megatron checkpoints** with correct PP split (needed as scaffold).  
 - Pick an empty folder, e.g. `<base>/wan2.2/hg2mcore_pp4/high_noise/Megatron_Random`  
@@ -131,4 +131,4 @@ bash examples/wan/convert_wan2.2.sh mcore2hg
 
 ### 5. Argument Reference
 
-Full argument list → see `omni_training/train/arguments.py`.
+Full argument list → see `baige_omni/train/arguments.py`.

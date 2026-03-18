@@ -1,5 +1,5 @@
 # llama2_13b model config
-_target_: omni_training.models.foundation.LLaMAConfig
+_target_: baige_omni.models.foundation.LLaMAConfig
 
 num_layers: 40
 hidden_size: 5120

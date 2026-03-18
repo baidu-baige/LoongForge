@@ -1,5 +1,5 @@
 # MoE All-to-All Overlap  
-OmniTraining provides communication-oriented optimizations for MoE models. By adding the corresponding Megatron launch flags, the All-to-All traffic in Expert Parallel (EP) can be overlapped with computation, delivering the best training throughput.
+BaigeOmni provides communication-oriented optimizations for MoE models. By adding the corresponding Megatron launch flags, the All-to-All traffic in Expert Parallel (EP) can be overlapped with computation, delivering the best training throughput.
 
 ---
 

@@ -1,4 +1,4 @@
-# Copyright 2026 The OmniTraining Authors.
+# Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """config manager"""
@@ -293,7 +293,7 @@ class ConfigManager(object):
         # Regular expression: match ${var} or $var
         # Group 1: match var in {var}
         # Group 2: match var
-        variable_pattern = r'\$(?:\{([a-z_][a-z0-9_]*)\}|([a-z_][a-z0-9_]*))'
+        variable_pattern = r'\$(?:\{([a-zA-Z_][a-zA-Z0-9_]*)\}|([a-zA-Z_][a-zA-Z0-9_]*))'
 
         # Recursively replace all placeholders
         for _ in range(10):  # Set maximum iteration count to 10

@@ -20,7 +20,7 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./AIAK-Training-Omni /workspace/OmniTraining
+COPY ./AIAK-Training-Omni /workspace/BaigeOmni
 
 # ======================== Basic Environment Setup ========================
 RUN set -exuo pipefail && \
@@ -33,8 +33,8 @@ RUN set -exuo pipefail && \
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
     install_requirements() { \
-        local requirements_file="/workspace/OmniTraining/requirements.txt"; \
-        cd /workspace/OmniTraining/ && \
+        local requirements_file="/workspace/BaigeOmni/requirements.txt"; \
+        cd /workspace/BaigeOmni/ && \
         pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
             -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
     }; \
@@ -135,11 +135,11 @@ RUN set -exuo pipefail && \
         git clone https://github.com/NVIDIA/TransformerEngine.git && \
         cd ${transformerEngine_dir} && \
         git fetch --all --tags && \
-        git checkout ${TE_TAGS} -b aiak_${TE_TAGS} && \
+        git checkout ${TE_TAGS} -b baige_${TE_TAGS} && \
         git restore . && \
-        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
-                /workspace/OmniTraining/patches/TransformerEngine_${TE_TAGS} \
+        if [ -f "/workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh" ]; then \
+            bash /workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh \
+                /workspace/BaigeOmni/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
         git submodule update --init --recursive && \
@@ -154,19 +154,18 @@ RUN set -exuo pipefail && \
         cd /workspace && rm -rf ${transformerEngine_dir}; \
     }; \
     install_megatron() { \
-        local megatron_dir=/workspace/AIAK-Megatron; \
+        local megatron_dir=/workspace/Megatron-LM; \
         local MEGATRON_TAGS="core_v0.15.0" && \
         echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
         cd /workspace && \
         git clone https://github.com/NVIDIA/Megatron-LM.git && \
-        mv Megatron-LM AIAK-Megatron && \
         cd ${megatron_dir} && \
         git fetch --all --tags && \
-        git checkout ${MEGATRON_TAGS} -b aiak_${MEGATRON_TAGS} && \
+        git checkout ${MEGATRON_TAGS} -b baige_${MEGATRON_TAGS} && \
         git restore . && \
-        if [ -f "/workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/OmniTraining/tools/apply_patches/apply_two_repo.sh \
-                /workspace/OmniTraining/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
+        if [ -f "/workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh" ]; then \
+            bash /workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh \
+                /workspace/BaigeOmni/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
                 ${megatron_dir}; \
         fi && \
         echo "Megatron-LM setup completed"; \
@@ -204,13 +203,13 @@ RUN mkdir -p /root/.jupyter && \
 # Clean Up Unused Files (Consistent with install.sh)
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
-    rm -rf /workspace/OmniTraining/.git && \
-    rm -rf /workspace/OmniTraining/build.sh && \
-    rm -rf /workspace/OmniTraining/ci.yml && \
-    rm -rf /workspace/OmniTraining/docker/ci && \
-    rm -rf /workspace/AIAK-Megatron/.git && \
-    rm -rf /workspace/AIAK-Megatron/.github && \
-    rm -rf /workspace/AIAK-Megatron/output && \
+    rm -rf /workspace/BaigeOmni/.git && \
+    rm -rf /workspace/BaigeOmni/build.sh && \
+    rm -rf /workspace/BaigeOmni/ci.yml && \
+    rm -rf /workspace/BaigeOmni/docker/ci && \
+    rm -rf /workspace/Megatron-LM/.git && \
+    rm -rf /workspace/Megatron-LM/.github && \
+    rm -rf /workspace/Megatron-LM/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

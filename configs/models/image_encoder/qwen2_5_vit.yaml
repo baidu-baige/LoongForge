@@ -1,4 +1,4 @@
-_target_: omni_training.models.encoder.Qwen2VisionRMSNormConfig
+_target_: baige_omni.models.encoder.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280

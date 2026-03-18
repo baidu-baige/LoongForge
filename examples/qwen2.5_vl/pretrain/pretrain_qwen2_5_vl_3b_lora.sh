@@ -2,17 +2,17 @@
 # The script needs to be run on at least 1 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/aiak-training-llm/dataset/mllm/demo/wds/"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/mllm/demo/wds/"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1"}
-LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/aiak-training-llm/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-lora"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1"}
+LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-lora"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/aiak-training-llm/tensorboard-log/qwen2_5-vl-3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen2_5-vl-3b"}
 
 GPUS_PER_NODE=8
 
@@ -31,7 +31,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # or you can setup qwen2_5-vl-3b by using the following command
-MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b_lora.yaml
+MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b_lora.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -101,9 +101,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
