@@ -4,8 +4,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron/"}
 AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
-METADATA_PATH=${METADATA_PATH:-"/mnt/cluster/agidriod_validation_1k/metadata.jsonl"}
-DATASET_BASE_PATH=${DATASET_BASE_PATH:-"/mnt/cluster/agidriod_validation_1k/"}
+DATASET_PATH=${DATASET_PATH:-"data/preprocessed"}
 #Configure the path to the high noise model and low noise model
 HIGH_NOISE_CHECKPOINT_PATH=${HIGH_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/wan2.2/hg2mcore/high_noise_release/"}
 LOW_NOISE_CHECKPOINT_PATH=${LOW_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/wan2.2/hg2mcore/low_noise_release/"}
@@ -35,8 +34,7 @@ DATA_ARGS=(
     --tokenizer-type NullTokenizer
     --vocab-size 0
     --seed 42
-    --dataset-metadata-path $METADATA_PATH
-    --data-path $DATASET_BASE_PATH
+    --data-path $DATASET_PATH
     --dataloader-type external
 )
 
