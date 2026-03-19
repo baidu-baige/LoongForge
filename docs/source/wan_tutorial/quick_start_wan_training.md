@@ -4,59 +4,60 @@ This section walks through the **Wan Pre-train** pipeline end-to-end.
 ---
 ## Quick Start Wan2.2 Model Training
 ### 1. Data Pre-processing
-#### Background  
-- DiffSynth-Studio community produces training data **online**.  
-- AIAK expects **offline** pre-processed data.  
-→ Apply the provided patch `launch_data_process_v118.patch` to community tag `v1.1.8` to enable offline generation.
 
-#### Expected data layout  
-Same as the DiffSynth-Studio community format:
+#### Background
 
+- OmniTraining expects **offline** pre-processed data.
+
+#### Expected dataset example
 ```
-data/example_video_dataset/
+dataset
 ├── metadata.csv
-├── video1.mp4
-└── video2.mp4
+└── train
+    ├── EGO_1.mp4
+    ├── EGO_2.mp4
+    ├── EGO_3.mp4
 ```
+**metadata.csv example**
 
-**metadata.csv example**  
 ```
 video,prompt
-video1.mp4,"from sunset to night, a small town, light, house, river"
-video2.mp4,"a dog is running"
+train/EGO_1.mp4,"places the bag of clothes on the floor\nPlan:\n pick up the bag of clothes. Put the bag of clothes on the floor.\nactions :\n1. pick up(bag of clothes)\n2. put on(bag of clothes, floor)"
 ```
 
-#### Steps  
-**Step-1** Clone DiffSynth-Studio and switch to v1.1.8  
+#### Steps
+
+**Step-1** Install dependencies and download model weights
+
 ```bash
-git checkout -b v1118 v1.1.8
+pip install diffsynth==1.1.8
+pip install "huggingface_hub[cli]"
+huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ./Wan-AI/Wan2.2-I2V-A14B
 ```
 
-**Step-2** Copy `OmniTraining/examples/wan/patch/launch_data_process_v118.patch` into the DiffSynth-Studio repo root.
+**Step-2** Process the input
 
-**Step-3** Apply the patch  
 ```bash
-git apply launch_data_process_v118.patch
+MODEL_T5=/ssd1/models/Wan-AI/Wan2.2-I2V-A14B/models_t5_umt5-xxl-enc-bf16.pth
+MODEL_VAE=/ssd1/models/Wan-AI/Wan2.2-I2V-A14B/Wan2.1_VAE.pth
+accelerate launch wan_preprocess.py \
+  --dataset_base_path fake_dataset \
+  --dataset_metadata_path fake_dataset/metadata.csv \
+  --height 480 --width 832 --num_frames 49 \
+  --model_paths "${MODEL_T5},${MODEL_VAE}" \
+  --tokenizer_local_path "/ssd1/models/Wan-AI/Wan2.2-I2V-A14B/google/umt5-xxl" \
+  --output_path ./data/preprocessed \
+  --max_timestep_boundary 0.358 --min_timestep_boundary 0
+
 ```
 
-**Step-4** Edit `examples/wanvideo/model_training/full/Wan2.2-I2V-A14B-DataProcess.sh`  
-- `--dataset_base_path` → `<base_path>/data/example_video_dataset`  
-- `--dataset_metadata_path` → same folder + `/metadata.csv`  
-- `--output_path` → `<base_path>/data_preprocess/Wan2.2-I2V-A14B_full`  
-- `--model_paths` → point to **your Hugging-Face high-/low-noise Wan2.2 weights**
+#### Output
+One `.pth` file per video containing three keys:
+- `input_latents` – VAE latent of the whole video
+- `y` – VAE latent of the **first frame**
+- `context` – text encoder embedding
 
-**Step-5** Run (8 GPUs recommended – no DeepSpeed in this stage, OOM risk on smaller setups)  
-```bash
-bash examples/wanvideo/model_training/full/Wan2.2-I2V-A14B-DataProcess.sh
-```
-
-#### Output  
-One `.tensors.pth` file per video containing three keys:  
-- `input_latents` – VAE latent of the whole video  
-- `y` – VAE latent of the **first frame**  
-- `context` – text encoder embedding  
-
-(High-/low-noise tensors are **NOT** separated; AIAK adds noise online later.)
+(High-/low-noise tensors are **NOT** separated; OmniTraining adds noise online later.)
 
 ---
 
@@ -96,14 +97,13 @@ Multi-node – scale by **data parallelism**:
 dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 ```
 
-**Step-1** Tune `examples/wan/pretrain_wan2.2_i2v_a14b.sh`  
-- `HIGH_NOISE_CHECKPOINT_PATH` → `<base>/hg2mcore_pp4/high_noise/Megatron_Release/`  
-- `LOW_NOISE_CHECKPOINT_PATH` → analogous  
-- `METADATA_PATH` → original `metadata.csv`  
-- `DATASET_BASE_PATH` → `<base>/data_preprocess/Wan2.2-I2V-A14B_full`  
-- `--context-parallel-size 2`  
-- `--context-parallel-ulysses-degree 2`  
+**Step-1** Tune `examples/wan/pretrain_wan2.2_i2v_a14b.sh`
+- `HIGH_NOISE_CHECKPOINT_PATH` → path to high-noise Megatron checkpoint (from Section 2)
+- `LOW_NOISE_CHECKPOINT_PATH` → path to low-noise Megatron checkpoint (from Section 2)
+- `DATASET_PATH` → output path from Section 1 (e.g. `./data/preprocessed`)
 - `--pipeline-model-parallel-size 4`
+- `--context-parallel-size 2`
+- `--context-parallel-ulysses-degree 2`
 
 **Step-2** Start  
 - Single-node:  

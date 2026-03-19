@@ -235,7 +235,7 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
     args = get_args()
 
     dataset = TensorDataset(
-        args.dataset_metadata_path, args.train_iters * args.global_batch_size
+        args.data_path[0], args.train_iters * args.global_batch_size
     )
 
     dp_rank = parallel_state.get_data_parallel_rank()

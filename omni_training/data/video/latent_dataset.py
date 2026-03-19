@@ -12,51 +12,30 @@ from megatron.training import get_args
 
 
 class TensorDataset(torch.utils.data.Dataset):
-    def __init__(self, metadata_path, steps_per_epoch=0):
+    def __init__(self, data_path, steps_per_epoch=0):
         args = get_args()
-        self.metadata = []
-        self.load_metadata(metadata_path)
-        base_path = Path(args.data_path[0])
-        if args.model_name == "wan2-2-i2v":
-            self.path = [base_path / data["video"] for data in self.metadata]
-
-        self.path = [
-            p.with_suffix(p.suffix + ".tensors.pth")
-            for p in self.path
-            if (p.with_suffix(p.suffix + ".tensors.pth")).exists()
-        ]
+        self.data_paths = []
+        self.load_data(data_path)
         self.steps_per_epoch = steps_per_epoch
         print(
-            f"self.steps_per_epoch: {self.steps_per_epoch}, total_samples: {len(self.metadata)}"
+            f"self.steps_per_epoch: {self.steps_per_epoch}, total_samples: {len(self.data_paths)}"
         )
-        assert len(self.path) > 0
+        assert len(self.data_paths) > 0
         self.manual_seed = args.seed
 
-    def load_metadata(self, metadata_path):
-        """load metadata from different types of files"""
-        if metadata_path is None:
-            print("No metadata_path. Please provide metadata_path.")
-        elif metadata_path.endswith(".json"):
-            with open(metadata_path, "r") as f:
-                metadata = json.load(f)
-            self.metadata = metadata
-        elif metadata_path.endswith(".jsonl"):
-            metadata = []
-            with open(metadata_path, 'r') as f:
-                for line in f:
-                    metadata.append(json.loads(line.strip()))
-            self.metadata = metadata
-        else:
-            metadata = pd.read_csv(metadata_path)
-            self.metadata = [metadata.iloc[i].to_dict() for i in range(len(metadata))]
+    def load_data(self, data_path):
+        """load data files, collect all file absolute paths from data_path directory"""
+        base_path = Path(data_path).resolve()
+        assert base_path.is_dir(), f"data_path must be a directory: {data_path}"
+        self.data_paths = sorted([str(p) for p in base_path.rglob("*") if p.is_file()])
 
     def __getitem__(self, index):
         seed = (self.manual_seed + index) % 2**32
         numpy_random_state = np.random.RandomState(seed=seed)
         data_id = numpy_random_state.randint(0, self.steps_per_epoch)
-        data_id = data_id % len(self.path)
+        data_id = data_id % len(self.data_paths)
         # data_id = 0
-        path = self.path[data_id]
+        path = self.data_paths[data_id]
         data = torch.load(path, weights_only=False, map_location="cpu")
         # used for generate timestep
         data["seed"] = seed
