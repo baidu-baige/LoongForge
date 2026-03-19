@@ -695,18 +695,20 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         help="Log memory stats (allocated/peak) in training log output. Default: False.",
     )
 
+
     group.add_argument(
-        "--yaml-file",
+        "--save-hf",
         type=str,
-        default=None,
-        help="Path to YAML file for specific configuration needs"
+        default='true',
+        choices=['true', 'false'],
+        help="Save HF checkpoint at the end of training. Choices: [true, false]. Default: true."
     )
 
     group.add_argument(
         "--save-hf-path",
         type=str,
         default=None,
-        help="Path to save the HF model checkpoint"
+        help="Path to save the HF model checkpoint. If not specified, will save to <save>/release_hf_weights/"
     )
 
     group.add_argument(

@@ -1,6 +1,5 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test — DeepSeek-V2-Lite
-# Based on bridge_debug.sh — removes training loop, adds roundtrip comparison.
+# HF Checkpoint Online Loading Training — DeepSeek-V2-Lite
 #
 # Usage:
 #   bash bridge_roundtrip.sh
@@ -8,9 +7,8 @@
 # What it does:
 #   1. Builds the Megatron model (same as training)
 #   2. Loads the HF checkpoint into the model (load_hf_checkpoint_online)
-#   3. Saves model weights back to HF format  (save_hf_checkpoint_online)
-#   4. Compares original vs roundtripped weights tensor-by-tensor
-#   Report is written to $SAVE_HF_PATH/roundtrip_comparison.json
+#   3. Trains the model
+#   4. Saves HF checkpoint at the end (if --save-hf is enabled)
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
@@ -21,8 +19,10 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
+DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/DeepSeek-V2-Lite"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/deepseek-v2-lite-roundtrip-output"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/DeepSeek-V2-Lite"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard/deepseek-v2-lite"}
 
 GPUS_PER_NODE=8
 
@@ -41,59 +41,87 @@ DISTRIBUTED_ARGS=(
 
 MODEL_ARGS=(
     --model-name deepseek-v2-lite
+    #--enable-fa-within-mla
+    --norm-epsilon 1e-6
+    --rotary-scaling-factor 40
+    --mscale 0.707
+    --mscale-all-dim 0.707
 )
 
-# Tokenizer is needed by initialize_aiak_megatron → set_aiak_extra_global_vars
-TOKENIZER_ARGS=(
+DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path $TOKENIZER_PATH
+    --data-path ${DATA_PATH:-""}
+    --split 99990,8,2
 )
 
 TRAINING_ARGS=(
     --training-phase pretrain
-    --seq-length 4096
-    --max-position-embeddings 4096
+    --seq-length 2048
+    --max-position-embeddings 2048
+    --init-method-std 0.01
+    --no-masked-softmax-fusion
     --micro-batch-size 1
     --global-batch-size 8
+    --lr 1e-4
+    --train-iters 50
+    --lr-decay-iters 320000
+    --lr-decay-style cosine
+    --min-lr 1.0e-5
+    --weight-decay 0.1
+    --lr-warmup-iters 500
+    --clip-grad 1.0
     --bf16
-    --norm-epsilon 1e-6
-    # --- roundtrip-specific ---
-    --train-iters 0          # no training, only load + save
-    --no-load-optim          # skip optimizer state
-    --no-load-rng            # skip RNG state
-    --load $TOKENIZER_PATH   # original HF checkpoint
-    --save-hf-path $SAVE_HF_PATH
+    --load $CHECKPOINT_PATH
+    --save $CHECKPOINT_PATH
+    --save-interval 40
+    --eval-interval 1000
+    --eval-iters 10
+    --no-load-optim
+    --no-load-rng
+    --enable-experimental
+    # --save-hf  # true or false, default is true, can be omitted
+    # --save-hf-path $SAVE_HF_PATH  # If not specified, will save to <save>/release_hf_weights/
 )
 
 MOE_ARGS=(
     --moe-router-load-balancing-type aux_loss
     --moe-router-topk 6
-    --moe-aux-loss-coeff 0
+    --moe-aux-loss-coeff 1e-3
     --moe-grouped-gemm
     --moe-router-dtype fp32
     --empty-unused-memory-level 2
 )
 
 MODEL_PARALLEL_ARGS=(
-    --attention-backend fused
+    --attention-backend unfused
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 1
     --expert-model-parallel-size 8
+    --sequence-parallel
     --moe-token-dispatcher-type allgather
+    --use-distributed-optimizer
     --distributed-backend nccl
 )
 
+LOGGING_ARGS=(
+    --log-interval 1
+    --tensorboard-dir ${TENSORBOARD_PATH}
+    --log-timers-to-tensorboard
+)
+
 echo "========================================"
-echo "HF Roundtrip Test — DeepSeek-V2-Lite"
-echo "  Source : $TOKENIZER_PATH"
-echo "  Output : $SAVE_HF_PATH"
+echo "HF Online Loading Training — DeepSeek-V2-Lite"
+echo "  Checkpoint : $CHECKPOINT_PATH"
+echo "  Tokenizer  : $TOKENIZER_PATH"
 echo "========================================"
 
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/tools/dist_checkpoint/checkpoint/hf_roundtrip_test.py \
+    $AIAK_TRAINING_PATH/aiak_training_omni/train.py \
     ${MODEL_ARGS[@]} \
-    ${TOKENIZER_ARGS[@]} \
+    ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
     ${MOE_ARGS[@]} \
-    ${MODEL_PARALLEL_ARGS[@]}
+    ${MODEL_PARALLEL_ARGS[@]} \
+    ${LOGGING_ARGS[@]}

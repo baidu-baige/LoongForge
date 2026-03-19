@@ -1,5 +1,6 @@
 """Training Entry"""
-
+import logging
+logging.basicConfig(level=logging.WARNING)
 from aiak_training_omni.train import parse_train_args
 from aiak_training_omni.train import build_model_trainer
 

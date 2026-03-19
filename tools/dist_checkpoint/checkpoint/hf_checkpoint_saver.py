@@ -152,15 +152,9 @@ def save_hf_checkpoint_online(
         print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
                     f"PP={args.pipeline_model_parallel_size}")
 
-    # Step 1: Parse config file
-    if args.yaml_file is None:
-        raise ValueError(
-            "--yaml-file is required when saving HF checkpoint\n"
-            "Please provide a YAML config file with Mcore to HF mapping"
-        )
-
-    print_rank_0(f"Parsing mapping config from {args.yaml_file}")
-    parser = Parser(yaml_file=args.yaml_file)
+    # Step 1: Parse args to get config
+    print_rank_0("Parsing config from args")
+    parser = Parser(args)
 
     # Get parallel config
     parallel_config = parser.get_parallel_config()

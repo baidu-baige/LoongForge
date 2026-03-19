@@ -51,7 +51,6 @@ TRAINING_ARGS=(
     --no-load-rng
     --load $TOKENIZER_PATH
     --save-hf-path $SAVE_HF_PATH
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_3b.yaml
 )
 
 # For 3B model: tp_size=2, pp_size=2

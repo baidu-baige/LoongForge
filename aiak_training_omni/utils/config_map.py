@@ -186,7 +186,7 @@ MODEL_CONFIG_REGISTRY = {
     },
     # qwen2.5-vl
     "qwen2_5-vl-7b": {
-        "config_path": "configs/models/qwen2.5_vl",
+        "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_7b",
     },
 

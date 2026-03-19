@@ -509,6 +509,16 @@ def pretrain(
             write_to_tensorboard=not args.skip_train,
             non_loss_data_func=non_loss_data_func,
         )
+    
+    # Save HF checkpoint at the end of training if --save-hf is enabled
+    save_hf_enabled = getattr(args, 'save_hf', 'true').lower() == 'true'
+    if save_hf_enabled and iteration == args.train_iters:
+        # Set default save_hf_path if not specified
+        if getattr(args, 'save_hf_path', None) is None and args.save is not None:
+            args.save_hf_path = os.path.join(args.save, "release_hf_weights/")
+
+        # Save HF checkpoint
+        save_hf_checkpoint_online(model, args)
 
     wandb_writer = get_wandb_writer()
     if wandb_writer:
@@ -629,12 +639,34 @@ def setup_model_and_optimizer(
     ) and not args.moe_use_upcycling:
         timers("load-checkpoint", log_level=0).start(barrier=True)
 
-        args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
-            model,
-            optimizer,
-            opt_param_scheduler,
-            args
-        )
+        # Check if it's offline (pre-converted sharded checkpoint) or online (HF checkpoint)
+        # by checking if latest_checkpointed_iteration.txt exists in load path
+        def _is_offline_checkpoint(load_path):
+            if load_path is None:
+                return False
+            import os
+            latest_file = os.path.join(load_path, "latest_checkpointed_iteration.txt")
+            return os.path.exists(latest_file)
+
+        if _is_offline_checkpoint(args.load):
+            # Offline checkpoint loading (pre-converted sharded checkpoint)
+            args.iteration, args.num_floating_point_operations_so_far = load_checkpoint(
+                model,
+                optimizer,
+                opt_param_scheduler,
+                checkpointing_context=checkpointing_context,
+                skip_load_to_model_and_opt=HAVE_FSDP2
+                and getattr(args, "use_torch_fsdp2", False)
+                and args.ckpt_format == "torch_dist",
+            )
+        else:
+            # Online HF checkpoint loading
+            args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
+                model,
+                optimizer,
+                opt_param_scheduler,
+                args
+            )     
 
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
@@ -1800,9 +1832,6 @@ def train(
             checkpointing_context,
             train_data_iterator,
         )
-        # FIX NEEDED: 这边我不知道最后保存成HF这个逻辑要放在哪里，先临时放在这边
-        if iteration == args.train_iters:
-            save_hf_checkpoint_online(model, args)
         if should_exit:
             break
 

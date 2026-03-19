@@ -14,6 +14,7 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     freeze: bool = False
     model_type: str = None
     model_spec: Optional[List[str]] = None
+    convert_file: str = None
 
     def __post_init__(self):
         PretrainedConfig.__init__(self)
@@ -27,6 +28,7 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     freeze: bool = False
     model_type: str = None
     model_spec: Optional[List[str]] = None
+    convert_file: str = None
 
     def __post_init__(self):
         PretrainedConfig.__init__(self)

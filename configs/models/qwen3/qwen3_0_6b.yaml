@@ -28,3 +28,5 @@ rotary_emb_func: "RotaryEmbedding"
 rotary_base: 1000000
 model_type: "qwen"
 # variable_seq_lengths: true
+
+convert_file: "configs/models/qwen3/ckpt_convert/qwen3_convert.yaml"

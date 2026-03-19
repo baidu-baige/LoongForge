@@ -326,6 +326,7 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
 def main():
     # ── Step 1: Parse args (identical to training entry) ──────────────────
     args = parse_train_args()
+    ### 转换的parse和训练的分开？？？？
 
     # ── Step 2: Initialize Megatron (identical to training) ───────────────
     initialize_aiak_megatron(args=args)
@@ -335,7 +336,6 @@ def main():
     print_rank_0("=" * 80)
     print_rank_0(f"  Original HF : {args.load}")
     print_rank_0(f"  Output dir  : {args.save_hf_path}")
-    print_rank_0(f"  YAML file   : {args.yaml_file}")
 
     # ── Step 3: Build model (identical to training) ───────────────────────
     # Using the real Megatron model guarantees that model.state_dict() has
@@ -350,7 +350,32 @@ def main():
     print_rank_0("=" * 80)
     print_rank_0("Phase 2: Load HF Checkpoint")
     print_rank_0("=" * 80)
+
+    # Profiler for performance analysis
+    import cProfile
+    import pstats
+    import io
+    pr = cProfile.Profile()
+    pr.enable()
     load_hf_checkpoint_online(model, None, None, args)
+    pr.disable()
+
+    # Print profiler results (rank 0 only)
+    if dist.get_rank() == 0:
+        s = io.StringIO()
+        ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+        ps.print_stats(40)  # 打印前40行
+        print(s.getvalue())
+
+        # Print callers/callees
+        s2 = io.StringIO()
+        ps2 = pstats.Stats(pr, stream=s2).sort_stats('cumulative')
+        ps2.print_callers(30)  # 打印调用关系
+        print("\n=== Callers ===")
+        print(s2.getvalue())
+        # Save to file
+        ps.dump_stats("profile_stats.prof")
+        print("Profile saved to profile_stats.prof")
 
     dist.barrier()
 

@@ -55,7 +55,6 @@ TRAINING_ARGS=(
     --no-load-rng            # skip RNG state
     --load $TOKENIZER_PATH   # original HF checkpoint
     --save-hf-path $SAVE_HF_PATH
-    --yaml-file $AIAK_TRAINING_PATH/tools/dist_checkpoint/demo/qwen3/qwen3_14b.yaml
 )
 
 MODEL_PARALLEL_ARGS=(
