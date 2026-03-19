@@ -383,7 +383,7 @@ class TEFusedLoRALinear(LoRALinear):
     ) -> te.ops.Sequential:
         """Construct fused module for LoRA branch (linear_in + linear_out + add)"""
 
-        from megatron.bridge.peft.utils import ParallelLinearAdapter
+        from baige_omni.models.common.peft.utils import ParallelLinearAdapter
 
         # Extract params from LoRA adapter
         linear_in_weight = None
