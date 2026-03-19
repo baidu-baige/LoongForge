@@ -2,9 +2,9 @@
 # The script needs to be run on at least 4 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/mllm/demo/wds/"}
 
@@ -31,7 +31,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # or you can setup qwen2.5-vl-72b by using the following command
-MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_72b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_72b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -106,9 +106,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

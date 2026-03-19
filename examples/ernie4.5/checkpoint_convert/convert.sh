@@ -5,10 +5,10 @@ if [ $# -eq 0 ]; then
 fi
 input_string=$1
 
-MEGATRON_PATH=/workspace/ernie/Megatron-LM/
-OMNI_PATH=/workspace/ernie/BaigeOmni/
+MEGATRON_PATH=/workspace/ernie/Baige-Megatron/
+BAIGE_OMNI_PATH=/workspace/ernie/BaigeOmni/
 
-export PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH 
+export PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH 
 
 if [ "$input_string" == "hg2mcore" ] || [ "$input_string" == "mcore2hg" ]; then
     python ./ernie4.5vl_hg2mcore.py  --load_mcore_path="/workspace/ernie/ckpt/ERNIE-4.5-VL-28B-A3B-MCORE_save/iter_0000002/" \

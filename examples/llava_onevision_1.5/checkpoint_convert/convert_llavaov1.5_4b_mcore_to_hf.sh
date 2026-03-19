@@ -1,8 +1,8 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 SAVE=/mnt/cluster/BaigeOmni/llava_onevision/LLaVA-OneVision-1.5-4B-hf-Dec22
 LOAD=/mnt/cluster/BaigeOmni/llava_onevision/LLaVA-OneVision-1.5-4B-tp2-pp2-Original/release
@@ -13,11 +13,11 @@ SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
 SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
 SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
 
-FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
-IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
+IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
 
 
 PP=2 
@@ -110,7 +110,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/huggingface/merge_huggingface.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL\

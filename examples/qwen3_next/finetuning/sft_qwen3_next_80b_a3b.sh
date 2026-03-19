@@ -11,9 +11,9 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export UNPACKING_HIDDEN_STATES_IN_GDN=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/sft_aplaca_zh_data.json"}
 
@@ -43,7 +43,7 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
-MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
 
 MODEL_CONFIG_ARGS=(
     --config-file $MODEL_CONFIG_PATH
@@ -148,9 +148,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

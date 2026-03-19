@@ -2,8 +2,8 @@
 # This script is used for SFT training Deepseek-v3.2 in FP8 mixed precision.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=${DATA_PATH:-"DATA_PATH"}
 
@@ -51,7 +51,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-  --config-file ${OMNI_PATH}/configs/models/deepseek3/deepseek_v3_2_sparse.yaml
+  --config-file ${BAIGE_OMNI_PATH}/configs/models/deepseek3/deepseek_v3_2_sparse.yaml
   --multi-latent-attention
   --rotary-base 10000
   --original-max-position-embeddings 4096
@@ -165,9 +165,9 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $OMNI_PATH/baige_omni/train.py \
+  $BAIGE_OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

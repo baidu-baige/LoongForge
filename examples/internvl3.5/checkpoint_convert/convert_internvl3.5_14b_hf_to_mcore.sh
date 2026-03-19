@@ -1,8 +1,8 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/InternVL3_5-14B/
 SAVE=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-14b-tp4-pp1-Dec16
@@ -12,11 +12,11 @@ SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
 SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
 SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/internvl3.5/internvl3_5_14b.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_14b.yaml
 
-FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
+IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 
 ETP=4
 DTP=4
@@ -77,7 +77,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL/release \

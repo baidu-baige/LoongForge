@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file://${oc.env:OMNI_PATH}/configs/models/
+    - file://${oc.env:BAIGE_OMNI_PATH}/configs/models/
 
 defaults:
   - qwen@module: ???

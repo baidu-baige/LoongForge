@@ -1,5 +1,5 @@
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 TP="${1:-1}"
 PP="${2:-1}"
 SEQ_LEN="${3:-32768}"
@@ -98,7 +98,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path "$TOKENIZER_PATH"
@@ -177,9 +177,9 @@ export OFFLINE_PACKING_VQA='1'
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
 export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
-PYTHONPATH="$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH" \
+PYTHONPATH="$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$OMNI_PATH/baige_omni/train.py" \
+    "$BAIGE_OMNI_PATH/baige_omni/train.py" \
     "${DATA_ARGS[@]}" \
     ${IMG_ARGS:+${IMG_ARGS[@]}} \
     "${MODEL_CONFIG_ARGS[@]}" \

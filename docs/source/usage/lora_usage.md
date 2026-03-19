@@ -1,18 +1,18 @@
 # LoRA Feature Usage Guide
 
-The Omni-Training framework supports LoRA (Low-Rank Adaptation) training to reduce GPU memory consumption and lower the computational resources required for training.
+The BaigeOmni framework supports LoRA (Low-Rank Adaptation) training to reduce GPU memory consumption and lower the computational resources required for training.
 
 ## Using LoRA in LLM
 1. Modify the configuration file to enable LoRA
 
-Add LoRA-related configurations to the model configuration file you want to train. The LLM LoRA configuration file is located at `${Omni-Training}/configs/models/lora/lora.yaml`. The configurable parameters include:
+Add LoRA-related configurations to the model configuration file you want to train. The LLM LoRA configuration file is located at `${BaigeOmni}/configs/models/lora/lora.yaml`. The configurable parameters include:
 
 * **target_modules**: Wildcard patterns for target modules to be replaced with LoRA. The framework matches each module in the model, and modules that match successfully will be replaced with LoRA modules.
 * **dim**: Controls the dimension of low-rank matrices.
 * **alpha**: Controls the scaling factor of LoRA updates to adjust the adaptation strength.
 * **dropout**: Applies dropout during the training of LoRA layers to prevent overfitting.
 
-To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen3-1.7b model, modify `${Omni-Training}/configs/models/qwen3/qwen3_1_7b_lora.yaml` as follows:
+To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen3-1.7b model, modify `${BaigeOmni}/configs/models/qwen3/qwen3_1_7b_lora.yaml` as follows:
 
 ```yaml
 # qwen3 model configuration
@@ -98,13 +98,13 @@ TRAINING_ARGS=(
 ## Using LoRA in VLM
 1. Modify the configuration file to enable LoRA
 
-Add LoRA-related configurations to the model configuration file you want to train. The VLM LoRA configuration file is located at `${Omni-Training}/configs/models/lora/vlm_lora.yaml`. In addition to the LoRA configurable parameters mentioned above, it also includes:
+Add LoRA-related configurations to the model configuration file you want to train. The VLM LoRA configuration file is located at `${BaigeOmni}/configs/models/lora/vlm_lora.yaml`. In addition to the LoRA configurable parameters mentioned above, it also includes:
 
 * **apply_to_foundation**: Enable LoRA training on the foundation model.
 * **apply_to_image_projector**: Enable LoRA training on the image projector.
 * **apply_to_image_encoder**: Enable LoRA training on the image encoder.
 
-To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${Omni-Training}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` as follows:
+To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${BaigeOmni}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` as follows:
 
 ```yaml
 defaults:
@@ -184,17 +184,17 @@ Using the offline checkpoint conversion tool provided by the framework, you can 
 ```bash
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
 SAVE=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-hf-Dec24
 LOAD_LORA=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/iter_0000010/
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
 
-CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
+CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
 
 TP=1
 PP=1

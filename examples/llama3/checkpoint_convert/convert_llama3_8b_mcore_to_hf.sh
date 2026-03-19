@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/baige-omni-ckpt/llama3/mcore_llama3_8b_tp2_pp2_omni/release
 SAVE=/mnt/cluster/baige-omni-ckpt/huggingface.co/meta-llama/Meta-Llama-3-8B
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/llama3/llama3_1_8b.yaml
-CONVERT_FILE=${OMNI_PATH}/configs/models/llama3/ckpt_convert/llama3_convert.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/llama3/llama3_1_8b.yaml
+CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/llama3/ckpt_convert/llama3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

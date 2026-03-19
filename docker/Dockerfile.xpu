@@ -10,7 +10,7 @@ ARG XPYTORCH_URL_ARG=""
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./AIAK-Training-Omni /workspace/BaigeOmni
+COPY ./BaigeOmni /workspace/BaigeOmni
 SHELL ["/bin/bash", "-c"]
 ENV PATH=/opt/omni_kunlun/bin:${PATH}
 

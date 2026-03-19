@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PYTHON_BIN=${PYTHON_BIN:-"python3"}
 
@@ -16,7 +16,7 @@ fi
 
 mkdir -p "${SAVE}/release"
 
-"${PYTHON_BIN}" "${OMNI_PATH}/tools/convert_checkpoint/pi05/convert_hf_to_Mfsdp.py" \
+"${PYTHON_BIN}" "${BAIGE_OMNI_PATH}/tools/convert_checkpoint/pi05/convert_hf_to_Mfsdp.py" \
     --model-dir "${LOAD}" \
     --dcp-output-dir "${SAVE}/release" \
     "${EXTRA_ARGS[@]}"

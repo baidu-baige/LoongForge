@@ -5,10 +5,10 @@ if [ $# -eq 0 ]; then
 fi
 input_string=$1
 
-export MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM/"}
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+export MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
-export PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH
+export PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH
 
 if [ "$input_string" == "hg2mcore" ]; then
     echo "convert weight from huggingface to megatron"

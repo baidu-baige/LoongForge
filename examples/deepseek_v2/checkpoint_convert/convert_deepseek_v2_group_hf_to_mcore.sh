@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V2
 SAVE=/mnt/cluster/baige-omni-ckpt/deepseek2/DeepSeek_V2_group_tp1pp16ep8/
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek2/deepseek_v2.yaml
-CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek2/ckpt_convert/deepseek_v2_convert.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek2/deepseek_v2.yaml
+CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek2/ckpt_convert/deepseek_v2_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

@@ -1,8 +1,8 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/InternVL3_5-30B-A3B
 SAVE=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15
@@ -12,11 +12,11 @@ SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
 SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
 SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
 
-FOUNDATION_CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE=${OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
+IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 
 ETP=2
 DTP=2
@@ -82,7 +82,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 # merge
 if [ $EP -gt 1 ]; then
-    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py \
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -96,7 +96,7 @@ if [ $EP -gt 1 ]; then
         --save_ckpt_path $SAVE/release \
         --config_file $MODEL_CONFIG_FILE
 else
-    PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \

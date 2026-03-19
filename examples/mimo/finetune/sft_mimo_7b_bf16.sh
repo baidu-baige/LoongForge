@@ -1,9 +1,9 @@
 #!/bin/bash
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 echo "Using MEGATRON_PATH: ${MEGATRON_PATH}"
-echo "Using OMNI_PATH: ${OMNI_PATH}"
+echo "Using BAIGE_OMNI_PATH: ${BAIGE_OMNI_PATH}"
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/sb.jsonl"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/BaigeOmni/checkpoints/MiMo-7B-SFT-tokenizer"}
@@ -128,9 +128,9 @@ LOGGING_ARGS=(
   --log-memory-to-tensorboard
 )
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $OMNI_PATH/baige_omni/train.py \
+  $BAIGE_OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

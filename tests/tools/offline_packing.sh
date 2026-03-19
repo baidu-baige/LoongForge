@@ -4,9 +4,9 @@ set -eo pipefail
 # Accept config file path as argument
 CONFIG="$1"
 
-# Ensure OMNI_PATH environment variable exists
-# if [ -z "${OMNI_PATH}" ]; then
-#     echo "Error: OMNI_PATH is not set."
+# Ensure BAIGE_OMNI_PATH environment variable exists
+# if [ -z "${BAIGE_OMNI_PATH}" ]; then
+#     echo "Error: BAIGE_OMNI_PATH is not set."
 #     echo "It should process by run.sh"
 #     exit 1
 # fi

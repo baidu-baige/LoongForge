@@ -94,15 +94,15 @@ Run the helper script once:
 
 ```bash
 #!/bin/bash
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 TOKENIZER_PATH=/path/to/hf/tokenizer
 input_data=/path/to/custom_dataset_name.json
 output_path=/path/to/save_dir
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
-  python ${OMNI_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+  python ${BAIGE_OMNI_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
       --input ${input_data} \
       --output ${output_path} \
       --seq-length 2048 \
@@ -161,8 +161,8 @@ Below is the FP8 SFT script for DeepSeek-V3.1 (comments added in English):
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 # ------------- data -------------
 DATA_PATH=/path/to/your/data
@@ -343,9 +343,9 @@ LOGGING_ARGS=(
 )
 
 # ------------- launch -------------
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $OMNI_PATH/baige_omni/train.py \
+  $BAIGE_OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

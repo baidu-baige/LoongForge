@@ -2,8 +2,8 @@
 # The script needs to be run on at least 1 nodes.
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-MEGATRON_PATH=/workspace/ernie/Megatron-LM
-OMNI_PATH=/workspace/ernie/BaigeOmni/
+MEGATRON_PATH=/workspace/ernie/Baige-Megatron
+BAIGE_OMNI_PATH=/workspace/ernie/BaigeOmni/
 DATASET_PATH=/workspace/dataset/wds/
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"}
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/ernie4.5vl/"}
@@ -30,7 +30,7 @@ MODEL_ARGS=(
     --position-embedding-type rope
 )
 
-MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/ernie4_5_vl/ernie4_5_vl_28b_a3b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/ernie4_5_vl/ernie4_5_vl_28b_a3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -120,10 +120,10 @@ if [ -n "${WANDB_API_KEY}" ]; then
 fi
 
 
-echo "llm path: "  $OMNI_PATH, "megatron path: " $MEGATRON_PATH
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+echo "llm path: "  $BAIGE_OMNI_PATH, "megatron path: " $MEGATRON_PATH
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \

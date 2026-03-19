@@ -18,8 +18,9 @@ echo_cmd "rm -rf output"
 echo_cmd "mkdir -p output"
 
 rm -rf output/.scm/
-# NOTE: 适配icode项目名
-tar -zcvf ../AIAK-Training-Omni.tar.gz ../AIAK-Training-Omni/
-mv ../AIAK-Training-Omni.tar.gz ./output/
+# NOTE: icode repo name cannot change now
+cp -r ../AIAK-Training-Omni ../BaigeOmni
+tar -zcvf ../BaigeOmni.tar.gz ../BaigeOmni/
+mv ../BaigeOmni.tar.gz ./output/
 
 echo "========= build exit ========="

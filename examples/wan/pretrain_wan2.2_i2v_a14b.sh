@@ -2,8 +2,8 @@
 # The script needs to be run on at least 4 nodes.
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM/"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 DATASET_PATH=${DATASET_PATH:-"data/preprocessed"}
 #Configure the path to the high noise model and low noise model
 HIGH_NOISE_CHECKPOINT_PATH=${HIGH_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/wan2.2/hg2mcore/high_noise_release/"}
@@ -110,9 +110,9 @@ HIGH_NOISE_TIMESTEP_BOUNDARY=(
 )
 
 # Train the high noise model of wan2.2 I2V
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
@@ -132,9 +132,9 @@ LOW_NOISE_TIMESTEP_BOUNDARY=(
 )
 
 # Train the low noise model of wan2.2 I2V
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -4,15 +4,15 @@ set -eo pipefail
 
 ############################################ Preprocess dataset parameters ############################################
 
-MEGATRON_PATH=${megatron_path:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${megatron_path:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 PREPROCESS_DATA_PATH="${PREPROCESS_DATA_PATH}"
 
 PREPROCESS_DATA_ARGS=(
     ${PREPROCESS_DATA_ARGS}
 )
 
-export PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH
+export PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH
 
 # Select execution method based on script type
 if [[ "${PREPROCESS_DATA_PATH}" == *.sh ]]; then

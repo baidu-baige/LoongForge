@@ -1,15 +1,15 @@
 #!/bin/bash
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3"}
 
 input_data=/mnt/cluster/BaigeOmni/dataset/sft_aplaca_zh_data.json
 output_path=/mnt/cluster/BaigeOmni/deepseek2/sft_aplaca_zh_tokenized
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
-    python ${OMNI_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+    python ${BAIGE_OMNI_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
         --input ${input_data} \
         --output ${output_path} \
         --seq-length 2048 \

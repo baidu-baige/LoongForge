@@ -1,15 +1,15 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/models/ckpt/Qwen3-Next-80B-A3B-Instruct
 SAVE=/models/ckpt/Qwen3-Next-80B-A3B-tp2pp2ep8etp1
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
 
-CONVERT_FILE=${OMNI_PATH}/configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml
+CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml
 
 TP=1
 PP=4

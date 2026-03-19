@@ -42,7 +42,8 @@
 * **Further enhanced kernel performance** (e.g., DSA, GatedAttention).
 * **Adaptive FP8 precision** schemes.
 * **Advanced MoE load-balancing** strategies.
-* **Experimental MTP scaling** to improve speculative decoding acceptance rates.
+* **Real-world application of MTP scaling** to improve speculative decoding acceptance rates.
+* **Native Huggingface checkpoint load & save support**, eliminating the need for Megatron offline conversion.
 * ...
 
 ## 🛠️ Getting Started
@@ -124,7 +125,7 @@ BaigeOmni/
 └── docs/                         # Documentation
 ```
 
-## 🌟 Powered by OmniTraining
+## 🌟 Powered by BaigeOmni
 
 **Open-Source Ecosystem:**
 * [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
@@ -132,7 +133,7 @@ BaigeOmni/
 
 **Enterprise Scale & Performance:**
 
-Before becoming an open-source project, OmniTraining had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
+Before becoming an open-source project, BaigeOmni had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
 * Powers proprietary large-scale models across diverse industries, including **Education, Code Generation, and Embodied AI**.
 * Typically achieves a **30%+ average speedup** over standard customer baselines through systemic optimizations.
 * Seamlessly supports ultra-large cluster training scaling up to **5,000 XPUs**.

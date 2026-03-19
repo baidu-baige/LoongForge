@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen1.5-4B-Chat/
 SAVE=/mnt/cluster/baige-omni-ckpt/qwen1.5/Qwen1.5_4B_mcore_tp1pp1_omni
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/qwen/qwen1_5_4b.yaml
-CONVERT_FILE=${OMNI_PATH}/configs/models/qwen/ckpt_convert/qwen1_5_convert.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen/qwen1_5_4b.yaml
+CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen/ckpt_convert/qwen1_5_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

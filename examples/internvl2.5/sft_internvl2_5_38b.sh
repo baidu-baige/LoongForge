@@ -14,8 +14,8 @@ TOKENIZER_PATH=/mnt/cluster/huggingface.co/internvl/InternVL2_5-38B/
 CHECKPOINT_LOAD_PATH=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-38b-tp4-pp2/
 CHECKPOINT_SAVE_PATH=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-38b-tp4-pp2-save/
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl2.5/internvl2.5-38b/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -25,7 +25,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/internvl2.5/internvl2_5_38b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl2.5/internvl2_5_38b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -131,11 +131,11 @@ if [ -n "${WANDB_API_KEY}" ]; then
   )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $OMNI_PATH/baige_omni/train.py \
+  $BAIGE_OMNI_PATH/baige_omni/train.py \
   ${MODEL_CONFIG_ARGS[@]} \
-  --sft-dataset-config ${OMNI_PATH}/configs/sft_dataset_config.json \
+  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/sft_dataset_config.json \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \

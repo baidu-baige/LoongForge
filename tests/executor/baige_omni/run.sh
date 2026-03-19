@@ -11,8 +11,8 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 ############################################ Model Training Parameters ############################################
 
-MEGATRON_PATH=${megatron_path:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${megatron_path:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 DATA_PATH=${DATA_PATH}
 TOKENIZER_PATH=${TOKENIZER_PATH}
 CHECKPOINT_PATH=${CHECKPOINT_PATH}
@@ -77,10 +77,10 @@ fi
 
 ############################################ Model Training Parameters ############################################
 
-export PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH
+export PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH
 
 command="torchrun ${DISTRIBUTED_ARGS[@]} \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \

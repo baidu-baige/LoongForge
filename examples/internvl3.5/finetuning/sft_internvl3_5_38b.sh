@@ -13,8 +13,8 @@ TOKENIZER_PATH=/mnt/cluster/models/InternVL3_5-38B/
 CHECKPOINT_LOAD_PATH=/mnt/cluster/models/internvl/ckpt-megatron/Internvl3_5-38B-tp4-pp2-5-59
 CHECKPOINT_SAVE_PATH=/mnt/cluster/models/internvl/ckpt-megatron/Internvl3_5-38B-tp4-pp2-5-59-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl3.5/internvl3.5-38b/stage2-16k-gbs32-1node/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
@@ -25,7 +25,7 @@ GPUS_PER_NODE=8
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 # To specify the model config file
-MODEL_CONFIG_PATH=${OMNI_PATH}/configs/models/internvl3.5/internvl3_5_38b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_38b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -137,10 +137,10 @@ if [ -n "${WANDB_API_KEY}" ]; then
   )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $OMNI_PATH/baige_omni/train.py \
-  --sft-dataset-config ${OMNI_PATH}/configs/sft_dataset_config.json \
+  $BAIGE_OMNI_PATH/baige_omni/train.py \
+  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/sft_dataset_config.json \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

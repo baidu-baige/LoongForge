@@ -20,7 +20,7 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./AIAK-Training-Omni /workspace/BaigeOmni
+COPY ./BaigeOmni /workspace/BaigeOmni
 
 # ======================== Basic Environment Setup ========================
 RUN set -exuo pipefail && \

@@ -4,12 +4,12 @@ set -eo pipefail
 
 ############################################ Model Training Parameters ############################################
 
-MEGATRON_PATH=${megatron_path:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$OMNI_PATH/tools/convert_checkpoint"}
+MEGATRON_PATH=${megatron_path:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$BAIGE_OMNI_PATH/tools/convert_checkpoint"}
 
-export OMNI_PATH
-export PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH
+export BAIGE_OMNI_PATH
+export PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH
 
 CONVERT_ARGS=(
     ${CONVERT_ARGS}

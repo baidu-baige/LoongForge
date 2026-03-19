@@ -7,7 +7,7 @@ This section walks through the **Wan Pre-train** pipeline end-to-end.
 
 #### Background
 
-- OmniTraining expects **offline** pre-processed data.
+- BaigeOmni expects **offline** pre-processed data.
 
 #### Expected dataset example
 ```
@@ -57,7 +57,7 @@ One `.pth` file per video containing three keys:
 - `y` – VAE latent of the **first frame**
 - `context` – text encoder embedding
 
-(High-/low-noise tensors are **NOT** separated; OmniTraining adds noise online later.)
+(High-/low-noise tensors are **NOT** separated; BaigeOmni adds noise online later.)
 
 ---
 

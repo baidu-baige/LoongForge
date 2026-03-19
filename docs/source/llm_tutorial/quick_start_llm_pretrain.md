@@ -19,15 +19,15 @@ Before training you usually need to transform massive raw corpora into a format 
 2. Launch the container and run the built-in tool:
 
 ```bash
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 TOKENIZER_PATH=/path/to/your/tokenizer
 input_data=/path/to/your/json
 output_prefix=/path/to/your/output_prefix
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
-  python ${OMNI_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+  python ${BAIGE_OMNI_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
       --input ${input_data} \
       --output-prefix ${output_prefix} \
       --tokenizer-type HFTokenizer \
@@ -56,15 +56,15 @@ Below we convert the original FP8 HF checkpoint to MCore FP8:
 
 ```bash
 #!/bin/bash
-export OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-CONVERT_CHECKPOINT_PATH="$OMNI_PATH/tools/convert_checkpoint"
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
 LOAD=/path/to/hf_checkpoint          # FP8 HF checkpoint
 SAVE=/path/to/your/save              # will be MCore FP8
 
-MODEL_CONFIG_FILE=${OMNI_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
   python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
@@ -125,8 +125,8 @@ Below is the FP8 pre-training script for DeepSeek-V3.1 (comments added for clari
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1   # allow non-weights-only loading
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Megatron-LM"}
-OMNI_PATH=${OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=/path/to/your/dataset
 TOKENIZER_PATH=/path/to/your/hf/tokenizer
@@ -278,9 +278,9 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $OMNI_PATH/baige_omni/train.py \
+  $BAIGE_OMNI_PATH/baige_omni/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

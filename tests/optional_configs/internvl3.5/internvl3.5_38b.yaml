@@ -11,15 +11,15 @@ DATA_PATH: $pfs_path/omni_datasets/BaigeOmni/internvl2.5_8b/webdataset_image
 TOKENIZER_PATH: $pfs_path/huggingface.co/internvl/InternVL3_5-38B/
 CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/internvl3.5/$model_name
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $OMNI_PATH/configs/models/internvl3.5/internvl3_5_38b.yaml
-SFT_DATASET_CONFIG: $OMNI_PATH/configs/data/sft_dataset_config.json
+MODEL_CONFIG_PATH: $BAIGE_OMNI_PATH/configs/models/internvl3.5/internvl3_5_38b.yaml
+SFT_DATASET_CONFIG: $BAIGE_OMNI_PATH/configs/data/sft_dataset_config.json
 
 # ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 4
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
-FOUNDATION_CONVERT_FILE: $OMNI_PATH/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE: $OMNI_PATH/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE: $OMNI_PATH/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
+IMAGE_ENCODER_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 LANGUAGE_MODEL_PATH: $CHECKPOINT_PATH/language-mcore
 VISION_MODEL_PATH: $CHECKPOINT_PATH/vision-model-mcore
 ADAPTER_PATH: $CHECKPOINT_PATH/adapter-mcore

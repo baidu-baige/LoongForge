@@ -53,9 +53,9 @@ pytest tests/
 Training scripts use `torchrun` for distributed execution. The PYTHONPATH must include both Megatron-LM and BaigeOmni:
 
 ```bash
-PYTHONPATH=$MEGATRON_PATH:$OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun --nproc_per_node 8 --nnodes $NNODES ... \
-    $OMNI_PATH/baige_omni/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     --model-name <model-name> \
     --training-phase pretrain|sft \
     ...
