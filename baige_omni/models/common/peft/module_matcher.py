@@ -22,8 +22,8 @@ from typing import Dict, List, Optional, Set
 from megatron.core.tensor_parallel import ColumnParallelLinear, RowParallelLinear
 from torch import nn
 
-from baige_omni.models.peft.utils import wildcard_match
-from baige_omni.models.peft.utils import safe_import_from
+from baige_omni.models.common.peft.utils import wildcard_match
+from baige_omni.models.common.peft.utils import safe_import_from
 
 
 TEColumnParallelLinear, HAVE_TE_COL_LINEAR = safe_import_from(

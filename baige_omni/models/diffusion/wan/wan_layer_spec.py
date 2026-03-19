@@ -24,8 +24,6 @@ from megatron.core.models.common.embeddings.rotary_pos_embedding import (
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.identity_op import IdentityOp
-from megatron.core.utils import get_te_version, is_te_min_version
 
 from .wan_layer import (
     WanLayer,
@@ -35,13 +33,7 @@ from .wan_layer import (
 from .wan_attention import WanSelfAttention, WanCrossAttention
 from .wan_utils import wan_rope_apply
 
-from baige_omni.models.common.local_layers.local_norm import LocalNorm
 
-# qk_norm = TENorm if is_te_min_version("1.9.0") else LocalNorm
-qk_norm = TENorm
-
-
-# TODO: add multi acc support
 def get_wan_layer_with_te_spec() -> ModuleSpec:
     """
     Use this spec to use lower level Transformer Engine modules (required for fp8 training)
@@ -74,8 +66,8 @@ def get_wan_layer_with_te_spec() -> ModuleSpec:
                     core_attention=TEDotProductAttention,
                     linear_proj=TERowParallelLinear,
                     apply_rotary_fn=wan_rope_apply,
-                    q_layernorm=qk_norm,
-                    k_layernorm=qk_norm,
+                    q_layernorm=TENorm,
+                    k_layernorm=TENorm,
                 ),
             ),
             cross_attention=ModuleSpec(
@@ -96,8 +88,8 @@ def get_wan_layer_with_te_spec() -> ModuleSpec:
                     linear_kv=TEColumnParallelLinear,
                     core_attention=TEDotProductAttention,
                     linear_proj=TERowParallelLinear,
-                    q_layernorm=qk_norm,
-                    k_layernorm=qk_norm,
+                    q_layernorm=TENorm,
+                    k_layernorm=TENorm,
                 ),
             ),
         ),

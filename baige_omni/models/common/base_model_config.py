@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Set
 import torch
 from collections import defaultdict
 
+
 @dataclasses.dataclass
 class BasePeftModelConfig():    
     """configuration class for the peft transformer"""
@@ -20,6 +21,7 @@ class BasePeftModelConfig():
     )
     exclude_modules: List[str] = dataclasses.field(default_factory=list)
     canonical_mapping: Dict[str, Set] = dataclasses.field(default_factory=lambda: defaultdict(set))
+
 
 @dataclasses.dataclass
 class BaseModelConfig(TransformerConfig, PretrainedConfig):

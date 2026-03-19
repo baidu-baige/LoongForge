@@ -1,4 +1,4 @@
-_target_: baige_omni.models.custom.WanConfig
+_target_: baige_omni.models.diffusion.WanConfig
 num_layers: 40
 hidden_size: 5120
 ffn_hidden_size: 13824

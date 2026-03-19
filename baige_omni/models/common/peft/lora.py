@@ -27,8 +27,8 @@ from megatron.core import parallel_state
 from megatron.core.transformer.moe.router import TopKRouter
 from megatron.core.utils import unwrap_model
 
-from baige_omni.models.peft.base import PEFT
-from baige_omni.models.peft.lora_layers import (
+from baige_omni.models.common.peft.base import PEFT
+from baige_omni.models.common.peft.lora_layers import (
     LinearAdapter,
     LoRALinear,
     LoRATopKRouter,
@@ -36,8 +36,8 @@ from baige_omni.models.peft.lora_layers import (
     TELinearAdapter,
     patch_linear_module,
 )
-from baige_omni.models.peft.module_matcher import ModuleMatcher
-from baige_omni.models.peft.utils import (
+from baige_omni.models.common.peft.module_matcher import ModuleMatcher
+from baige_omni.models.common.peft.utils import (
     ParallelLinearAdapter,
     get_adapter_attributes_from_linear,
     is_expert_linear,

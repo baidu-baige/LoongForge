@@ -20,7 +20,7 @@ from baige_omni.utils.constants import TrainingPhase, CustomModelFamilies
 from baige_omni.data.video.latent_dataset import TensorDataset
 
 from baige_omni.models import get_model_provider, get_model_family
-from baige_omni.models.custom.wan.wan_flow_match import FlowMatchScheduler
+from baige_omni.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 
 from baige_omni.train.megatron_trainer import MegatronTrainer
 from baige_omni.train.trainer_builder import register_model_trainer
@@ -29,7 +29,7 @@ from megatron.core import parallel_state
 import numpy as np
 import math
 
-from baige_omni.models.custom.wan.gaussian_diffusion import (
+from baige_omni.models.diffusion.wan.gaussian_diffusion import (
     ModelMeanType,
     ModelVarType,
     LossType,
@@ -37,11 +37,11 @@ from baige_omni.models.custom.wan.gaussian_diffusion import (
     get_named_beta_schedule,
 )
 
-from baige_omni.models.custom.wan.wan_utils import (
+from baige_omni.models.diffusion.wan.wan_utils import (
     broadcast_on_tp_group,
     broadcast_on_cp_group,
 )
-from baige_omni.models.custom.wan.wan_provider import wan2_2_i2v_model_provider
+from baige_omni.models.diffusion.wan.wan_provider import wan2_2_i2v_model_provider
 
 SUPPORTED_MODELS = [
     CustomModelFamilies.WAN2_2_I2V

@@ -123,6 +123,7 @@ class BaseMegatronVisionModule(MegatronModule):
             torch.tensor([[1, 2, 2]], dtype=torch.int32, device=device),
         )
 
+
 class BaseDecoderModelMixin(PreTrainedModel, ABC):
     """Unified decoder model mixin class."""
 

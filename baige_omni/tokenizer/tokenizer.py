@@ -8,13 +8,11 @@ from typing import TYPE_CHECKING, Optional
 from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
 from megatron.training.tokenizer.tokenizer import _vocab_size_with_padding
-
 from megatron.training.tokenizer import build_tokenizer as build_megatron_tokenizer
 
 from baige_omni.utils import constants, print_rank_0
 
 from .tokenization_hf import AutoTokenizerFromHF
-
 
 if TYPE_CHECKING:
     from baige_omni.data import ChatTemplate

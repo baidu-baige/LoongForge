@@ -24,11 +24,11 @@ from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.transformer.moe.router import TopKRouter
 from torch import nn
 
-from baige_omni.models.peft.adapter_wrapper import AdapterWrapper
-from baige_omni.models.peft.base import PEFT
-from baige_omni.models.peft.lora_layers import LinearAdapter, LoRALinear, LoRATopKRouter
-from baige_omni.models.peft.module_matcher import ModuleMatcher
-from baige_omni.models.peft.utils import ParallelLinearAdapter, get_adapter_attributes_from_linear, is_expert_linear
+from baige_omni.models.common.peft.adapter_wrapper import AdapterWrapper
+from baige_omni.models.common.peft.base import PEFT
+from baige_omni.models.common.peft.lora_layers import LinearAdapter, LoRALinear, LoRATopKRouter
+from baige_omni.models.common.peft.module_matcher import ModuleMatcher
+from baige_omni.models.common.peft.utils import ParallelLinearAdapter, get_adapter_attributes_from_linear, is_expert_linear
 
 
 logger = logging.getLogger(__name__)

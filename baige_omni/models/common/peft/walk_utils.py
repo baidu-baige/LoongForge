@@ -80,16 +80,6 @@ def map(  # noqa: A001
     Returns:
         The transformed module or collection of modules.
 
-    Examples:
-        >>> import torch.nn as nn
-        >>> from megatron.bridge.peft.walk_utils import map
-
-        # Example: Adding a custom attribute to all modules
-        >>> model = nn.Sequential(nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 10))
-        >>> def add_id(m, module_id=0):
-        ...     m.custom_id = module_id
-        ...     return m
-        >>> model = map(model, add_id, module_id=42)
     """
     if not kwargs.pop("_skip_map", False) and hasattr(module, "map"):
         return module.map(func, leaf_only=leaf_only, **kwargs)
@@ -123,18 +113,6 @@ def walk(
 
     Returns:
         The transformed module or collection.
-
-    Examples:
-        >>> import torch.nn as nn
-        >>> from megatron.bridge.peft.walk_utils import walk
-
-        # Example: Freezing all parameters in a model
-        >>> model = nn.Sequential(nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 10))
-        >>> def freeze_params(m):
-        ...     for param in m.parameters(recurse=False):
-        ...         param.requires_grad = False
-        ...     return m
-        >>> frozen_model = walk(model, freeze_params)
     """
     return map(
         module,
@@ -163,15 +141,6 @@ def forall(module: nn.Module, func: ModulePredicate, recurse: bool = False) -> b
 
     Returns:
         bool: True if all modules satisfy the predicate, False otherwise.
-
-    Examples:
-        >>> import torch.nn as nn
-        >>> from megatron.bridge.peft.walk_utils import forall
-
-        >>> model = nn.Sequential(nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 10))
-        >>> predicate = lambda m: isinstance(m, (nn.Linear, nn.Sequential, nn.ReLU))
-        >>> print(forall(model, predicate, recurse=True))
-        True
     """
 
     def apply_predicate(m):

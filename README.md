@@ -21,7 +21,7 @@
 
 ## ✨ Key Features
 
-* **Flexible Composition**: A configuration-driven approach to assemble custom VLMs using interchangeable ViT and LLM components.
+* **Flexible Composition**: A configuration-driven approach to assemble VLMs using interchangeable ViT and LLM components.
 * **Heterogeneous Strategies**: Enables assigning independent configurations—such as Tensor/Data Parallel sizes and recomputation layers—to different model components (e.g., Vision Encoder vs. LLM) for optimal throughput and memory efficiency.
 * **MoE Optimization**: Integrates All2All communication, activation offloading, and computation overlap to optimize memory usage and communication in large-scale MoE models.
 * **DP Load Balancing**: Optimizes data parallel imbalances caused by data packing, improving multi-node scaling efficiency.
@@ -35,11 +35,13 @@
 
 ## 🚀 Ongoing & Upcoming
 
-* **Expanding model support** (e.g., Kimi 2.5 and more).
-* **Decoupled Encoder-Decoder training** for accelerated VLM workflows.
-* **Advanced architecture & kernel optimizations** (e.g., DSA, GatedAttention).
-* **Enhanced support for Video Gen (I2V/T2V) and VLA** models.
-* **Adaptive FP8 precision** and advanced **MoE load-balancing** strategies.
+* **Enhanced support for VLA and Video Gen (I2V/T2V)** models.
+* **Expanded foundation model support** (e.g., Kimi 2.5, GLM5).
+* **Decoupled Encoder-Decoder training** to accelerate VLM workflows.
+* **Further enhanced kernel performance** (e.g., DSA, GatedAttention).
+* **Adaptive FP8 precision** schemes.
+* **Advanced MoE load-balancing** strategies.
+* **Experimental MTP scaling** to improve speculative decoding acceptance rates.
 * ...
 
 ## 🛠️ Getting Started
@@ -90,37 +92,44 @@ BaigeOmni supports a massive array of state-of-the-art models. Check out `config
 
 
 ## 🏗️ Architecture Overview
-
 ```
 BaigeOmni/
-├── baige_omni/                # Core training framework
-│   ├── train/                    # Entry points (Pretrain, SFT, Custom)
-│   ├── models/                   # Unified model abstractions (LLM, Encoder, VLM, PEFT)
-│   │   ├── foundation/           # LLM backbones (LLaMA, Qwen, DeepSeek, etc.)
-│   │   ├── encoder/              # Vision encoders (ViT, Qwen-VL, InternVL, etc.)
+├── baige_omni/                   # Core training framework
+│   ├── train/                    # Training entry points
+│   ├── models/                   # Unified model abstractions (LLM, Encoder, VLM)
+│   │   ├── common/               # Shared layers and utilities
+│   │   ├── encoder/              # Vision encoders (ViT, Qwen-VL, InternVL, Ernie4.5VL, LLaVA-OneVision, etc.)
+│   │   ├── foundation/           # LLM backbones (LLaMA, Qwen, DeepSeek, InternLM, etc.)
 │   │   ├── omni_models/          # Multi-modal model composition
-│   │   ├── common/               # Shared layers (norm, projector, etc.)
-│   │   ├── custom/               # Custom models (WAN, Pi0.5, etc.)
-│   │   └── peft/                 # PEFT support (LoRA)
-│   ├── data/                     # Data pipelines & Load balancing
+│   │   ├── diffusion/            # Diffusion model support
+│   │   └── embodied/             # Embodied AI model support
+│   ├── data/                     # Data pipelines and load balancing
 │   ├── tokenizer/                # Tokenizer modules
 │   └── utils/                    # Utility functions
 ├── configs/                      # Hydra-based YAML configurations
 │   ├── models/                   # Model configs
 │   └── data/                     # Data configs
-├── examples/                     # Launch scripts for NVIDIA GPUs
-├── examples_xpu/                 # Launch scripts for Kunlun XPUs
+├── examples/                     # GPU launch scripts
+├── examples_xpu/                 # Kunlun XPU launch scripts
 ├── tools/                        # Utility tools
 ├── ops/                          # Custom fused CUDA/C++ operators
 ├── patches/                      # Framework adaptations (Megatron, TransformerEngine)
 ├── tests/                        # Test suite
-└── docs/                         # Extensive documentation
+└── docs/                         # Documentation
 ```
 
+## 🌟 Powered by OmniTraining
 
-## 🌟 Awesome Projects Built with BaigeOmni
-- [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
-- [LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)
+**Open-Source Ecosystem:**
+* [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
+* [LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)
+
+**Enterprise Scale & Performance:**
+
+Before becoming an open-source project, OmniTraining had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
+* Powers proprietary large-scale models across diverse industries, including **Education, Code Generation, and Embodied AI**.
+* Typically achieves a **30%+ average speedup** over standard customer baselines through systemic optimizations.
+* Seamlessly supports ultra-large cluster training scaling up to **5,000 XPUs**.
 
 ## 🤝 Contributing
 

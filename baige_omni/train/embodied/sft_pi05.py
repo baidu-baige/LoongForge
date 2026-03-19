@@ -30,12 +30,12 @@ from baige_omni.utils.global_vars import get_model_config
 from lerobot.configs.types import FeatureType
 from lerobot.datasets.utils import dataset_to_policy_features
 from lerobot.utils.constants import OBS_LANGUAGE_ATTENTION_MASK, OBS_LANGUAGE_TOKENS
-from baige_omni.models.custom.pi05.configuration_pi05 import PI05Config
+from baige_omni.models.embodied.pi05.configuration_pi05 import PI05Config
 from lerobot.configs.default import DatasetConfig
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.datasets.factory import make_dataset
 from lerobot.policies.pi05.configuration_pi05 import PI05Config as LrPI05Config
-from baige_omni.models.custom.pi05.processor_pi05 import make_pi05_pre_post_processors
+from baige_omni.models.embodied.pi05.processor_pi05 import make_pi05_pre_post_processors
 
 
 stimer = StragglerDetector()

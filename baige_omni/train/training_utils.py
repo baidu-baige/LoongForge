@@ -126,8 +126,8 @@ from megatron.training.training import (
     post_training_step_callbacks,
     checkpoint_and_decide_exit,
 )
-from baige_omni.models.peft.lora import LoRA, VLMLoRA
-from baige_omni.models.peft.utils import apply_peft_transformation
+from baige_omni.models.common.peft.lora import LoRA, VLMLoRA
+from baige_omni.models.common.peft.utils import apply_peft_transformation
 from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelper
 from dataclasses import asdict
 from baige_omni.utils import get_args, constants, global_vars

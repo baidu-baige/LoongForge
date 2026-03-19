@@ -30,8 +30,8 @@ from transformers import AutoTokenizer
 from lerobot.configs.types import PipelineFeatureType, PolicyFeature
 
 # Depend on the local pi05 config and pad helper to avoid missing symbols in the lerobot release.
-from baige_omni.models.custom.pi05.configuration_pi05 import PI05Config
-from baige_omni.models.custom.pi05.modeling_pi05 import pad_vector
+from baige_omni.models.embodied.pi05.configuration_pi05 import PI05Config
+from baige_omni.models.embodied.pi05.modeling_pi05 import pad_vector
 from lerobot.processor import (
     AddBatchDimensionProcessorStep,
     DeviceProcessorStep,

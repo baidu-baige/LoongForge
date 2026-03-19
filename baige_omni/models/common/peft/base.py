@@ -25,8 +25,8 @@ import torch
 import torch.nn as nn
 from megatron.core.transformer.module import MegatronModule
 
-from baige_omni.models.peft.recompute import maybe_enable_recompute_inputs_grad
-from baige_omni.models.peft.walk_utils import walk
+from baige_omni.models.common.peft.recompute import maybe_enable_recompute_inputs_grad
+from baige_omni.models.common.peft.walk_utils import walk
 
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -42,17 +42,6 @@ class PEFT(ABC):
     large language models efficiently by modifying only a small subset of the model's
     parameters.
 
-    Example:
-        class MyPEFT(PEFT):
-            def transform(self, module, name=None, prefix=None):
-                # Implement the transform logic
-                pass
-
-        from megatron.bridge.models import get_base_model
-
-        peft = MyPEFT()
-        base_model = get_base_model(model_config)  # Returns list[MegatronModule]
-        adapted_model = peft(base_model, training=True)
     """
 
     # Runtime state that should not be serialized in checkpoints

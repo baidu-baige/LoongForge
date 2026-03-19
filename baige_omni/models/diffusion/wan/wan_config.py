@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 from baige_omni.models.common import BaseModelStditConfig
 
+
 @dataclass
 class WanConfig(BaseModelStditConfig):
     """configuration for Wan model

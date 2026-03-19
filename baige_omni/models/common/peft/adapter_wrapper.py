@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 import torch
 import torch.nn as nn
 import re
-from baige_omni.models.peft.utils import ParallelLinearAdapter
+from baige_omni.models.common.peft.utils import ParallelLinearAdapter
 
 
 if TYPE_CHECKING:

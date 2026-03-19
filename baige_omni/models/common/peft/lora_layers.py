@@ -23,8 +23,8 @@ import torch.nn as nn
 import transformer_engine.pytorch as te
 from megatron.core.transformer.moe.moe_utils import apply_random_logits
 
-from baige_omni.models.peft.adapter_wrapper import AdapterWrapper
-from baige_omni.models.peft.utils import safe_import
+from baige_omni.models.common.peft.adapter_wrapper import AdapterWrapper
+from baige_omni.models.common.peft.utils import safe_import
 
 
 if torch.cuda.is_available():

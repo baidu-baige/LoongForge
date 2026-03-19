@@ -50,7 +50,7 @@ else:
 from lerobot.configs.policies import PreTrainedConfig
 
 # Use the local pi05 config to avoid missing symbols in the lerobot release.
-from baige_omni.models.custom.pi05.configuration_pi05 import DEFAULT_IMAGE_SIZE, PI05Config
+from baige_omni.models.embodied.pi05.configuration_pi05 import DEFAULT_IMAGE_SIZE, PI05Config
 from lerobot.policies.pretrained import PreTrainedPolicy, T
 from lerobot.policies.rtc.modeling_rtc import RTCProcessor
 from lerobot.utils.constants import (

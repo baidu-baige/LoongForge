@@ -41,7 +41,7 @@ from megatron.training.global_vars import get_args
 from megatron.training.one_logger_utils import on_save_checkpoint_start, on_save_checkpoint_success
 from megatron.training.utils import append_to_progress_log, is_last_rank, print_rank_0, unwrap_model
 
-from baige_omni.models.peft.utils import apply_peft_adapter_filter_to_state_dict
+from baige_omni.models.common.peft.utils import apply_peft_adapter_filter_to_state_dict
 try:
     from megatron.core.distributed.fsdp.src.megatron_fsdp.uneven_dtensor import (
         preprocess_state_dict_for_uneven_dtensor,
