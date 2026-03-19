@@ -17,7 +17,6 @@ args:
     vocab_size: ${module.vocab_size_in_config_file}
     num_experts: ${module.num_experts}
     mtp_num_layers: ${module.mtp_num_layers}
-    baige_version: 0.15
   huggingface:
     mtp_layer_id: 61                                                                         
   mcore:
