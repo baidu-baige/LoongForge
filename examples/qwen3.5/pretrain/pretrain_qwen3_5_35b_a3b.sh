@@ -43,6 +43,7 @@ DATA_ARGS=(
     --data-path $DATA_PATH
     --dataloader-type external
     --split 100,0,0
+    --add-question-in-pretrain
     --enable-discard-sample
     --num-workers 32
     --rotary-percent 0.25

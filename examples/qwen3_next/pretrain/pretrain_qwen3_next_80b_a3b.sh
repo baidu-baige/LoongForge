@@ -1,5 +1,7 @@
-#! /bin/bash
-# The script needs to be run on at least 2 nodes.
+#!/usr/bin/env bash
+# Copyright 2026 The BaigeOmnni Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 export TORCH_COMPILE=0
 export TORCHDYNAMO_DISABLE=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
@@ -66,10 +68,10 @@ MOE_ARGS=(
 TRAINING_ARGS=(
     --seed 42
     --training-phase pretrain # options: pretrain, sft
-    --seq-length 32768
-    --max-position-embeddings 32768
+    --seq-length 4096
+    --max-position-embeddings 4096
     --micro-batch-size 1
-    --global-batch-size 64
+    --global-batch-size 256
     --lr 1.0e-5
     --min-lr 1.0e-6
     --weight-decay 0.1
@@ -97,8 +99,8 @@ TRAINING_ARGS=(
     --no-load-rng
 
     --recompute-granularity full
-    --recompute-method uniform
-    --recompute-num-layers 1
+    --recompute-method block
+    --recompute-num-layers 12
 
     --mtp-num-layers 1
 )
@@ -140,4 +142,4 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     ${MOE_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${MODEL_CONFIG_ARGS[@]} \
-    ${LOGGING_ARGS[@]} 2>&1 | tee /workspace/pretrain_qwen3_next_80b_a3b.log
+    ${LOGGING_ARGS[@]}
