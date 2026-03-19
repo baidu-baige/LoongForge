@@ -15,7 +15,9 @@ BaigeOmni Documentation
    vlm_tutorial/index
    vla_tutorial/index
    wan_tutorial/index
+   kunlun_tutorial/index
    advance/index
    CONTRIBUTING
+   HEADER_GUIDELINES
    faqs
 

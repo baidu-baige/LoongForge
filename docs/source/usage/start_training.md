@@ -1,3 +1,5 @@
+# Start Training
+
 ## Parameter Management
 The framework combines Megatron-LM arguments with Hydra configs, keeping full CLI compatibility while enabling fine-grained module-level control for multimodal models.
 

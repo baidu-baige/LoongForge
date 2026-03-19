@@ -1,5 +1,5 @@
 VLM Training Tutorial
-===========
+======================
 
 .. toctree::
    :maxdepth: 2

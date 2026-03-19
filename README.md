@@ -1,3 +1,4 @@
+# README
 <div align="center">
 
 ![BaigeOmni Logo](docs/assets/images/omni.jpg)
@@ -47,17 +48,22 @@
 ## 🛠️ Getting Started
 
 **Quick Start Guides:**
-* [Installation](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/get_started/installation.html)
-* [Supported Models](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/get_started/support_model.html)
-* [Quick Start for LLM Pretrain](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/llm_tutorial/quick_start_llm_pretrain.html)
-* [Quick Start for LLM SFT](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/llm_tutorial/quick_start_llm_sft.html)
-* [Quick Start for VLM Pretrain](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/vlm_tutorial/quick_start_vlm_pretrain.html)
-* [Quick Start for VLM SFT](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/vlm_tutorial/quick_start_vlm_sft.html)
-* [Quick Start for VLA Training](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/vla_tutorial/quick_start_vla_training.html)
-* [Quick Start for WAN Training](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/wan_tutorial/quick_start_wan_training.html)
+* [Installation](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/get_started/installation.md)
+* [Supported Models](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/get_started/support_model.md)
+* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md)
+* [Quick Start for LLM SFT](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md)
+* [Quick Start for VLM Pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vlm_tutorial/quick_start_vlm_pretrain.md)
+* [Quick Start for VLM SFT](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md)
+* [Quick Start for VLA Training](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vla_tutorial/quick_start_vla_training.md)
+* [Quick Start for WAN Training](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/wan_tutorial/quick_start_wan_training.md)
 
 **Kunlun XPU Platform:**
-* *Documentation coming soon.*
+* [README](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/README.md)
+* [Installation](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/install_p800.md)
+* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
+* [Quick Start for LLM SFT](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_llm_sft_p800.md)
+* [Quick Start for VLM](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_vlm_p800.md)
+* [Quick Start for VLA](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_vla_p800.md)
 
 ## 🏛️ Supported Models
 
@@ -137,7 +143,7 @@ We heartily welcome community contributions! Whether it's reporting bugs, propos
 
 ## 📄 License
 
-BaigeOmni is released under the [Apache License 2.0](LICENSE). 
+BaigeOmni is released under the [Apache License 2.0](https://github.com/baidu-baige/BaigeOmni/blob/master/LICENSE). 
 
 Some files in this repository are derived from third-party open-source projects. Please refer to the specific file headers for their respective copyright, license notices, and attribution requirements.
 

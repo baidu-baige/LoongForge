@@ -1,5 +1,5 @@
 Advanced Features
-========
+==================
 
 .. toctree::
    :maxdepth: 2
@@ -9,4 +9,5 @@ Advanced Features
    ../features/model_combination.md
    ../features/fp8_training_for_vlm.md
    ../features/moe_all2all_overlap.md
-   ../features/heterogeneous_tp_parallel.rst
+   ../features/heterogeneous_parallel.rst
+   ../usage/lora_usage.md

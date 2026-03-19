@@ -1,5 +1,5 @@
 Diffusion Training Tutorial
-========
+============================
 
 .. toctree::
    :maxdepth: 2

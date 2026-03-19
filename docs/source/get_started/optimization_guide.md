@@ -4,7 +4,7 @@ BaigeOmni is built on Megatron-LM and is fully compatible with all existing Mega
 On top of that we have added several enhancements. This document describes the basic parallelism strategies and how to enable their optimizations.  
 They can be combined as needed to efficiently train **billion- to trillion-parameter** models on **hundreds to thousands of GPUs**.
 
-# 1. Parallelism Strategies
+## 1. Parallelism Strategies
 
 |Strategy|Parallel Dimension|Primary Use-Case|
 |--------|------------------|----------------|
@@ -16,14 +16,14 @@ They can be combined as needed to efficiently train **billion- to trillion-param
 
 ---
 
-## 1.1 Data Parallelism (DP)
+### 1.1 Data Parallelism (DP)
 
 * **What is parallelised**: different mini-batch samples  
 * **Key idea**: every rank keeps a full copy of the model; gradients are synchronised
 
 In DP each GPU processes a **subset of the batch**. Depending on the configuration, model-related states can be **fully replicated** or **sharded across the DP dimension** to save memory.
 
-### Standard DP (no sharding)
+#### Standard DP (no sharding)
 
 ```bash
 torchrun --nproc_per_node=8 pretrain_gpt.py \
@@ -34,7 +34,7 @@ torchrun --nproc_per_node=8 pretrain_gpt.py \
 * Each GPU processes only part of the batch  
 * Gradients are synchronised with All-Reduce
 
-### Sharded Data Parallel
+#### Sharded Data Parallel
 
 Use `--data-parallel-sharding-strategy` to shard some states along the DP dimension and reduce per-GPU memory.
 
@@ -51,7 +51,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## 1.2 Tensor Parallelism (TP)
+### 1.2 Tensor Parallelism (TP)
 
 * **What is parallelised**: matrix computations inside one layer  
 * **Key idea**: split large matrices along a dimension across GPUs
@@ -65,7 +65,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## 1.3 Pipeline Parallelism (PP)
+### 1.3 Pipeline Parallelism (PP)
 
 * **What is parallelised**: model depth (layer dimension)  
 * **Key idea**: different GPUs own different stages; execute with micro-batch pipeline
@@ -77,7 +77,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## 1.4 Context Parallelism (CP)
+### 1.4 Context Parallelism (CP)
 
 * **What is parallelised**: sequence length (token dimension)  
 * **Key idea**: split a long sequence across GPUs
@@ -89,7 +89,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## 1.5 Expert Parallelism (EP)
+### 1.5 Expert Parallelism (EP)
 
 * **What is parallelised**: experts in an MoE layer  
 * **Key idea**: different GPUs hold different experts; tokens are dispatched with All-to-All
@@ -100,9 +100,9 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-# 2. Performance Optimisations
+## 2. Performance Optimisations
 
-## 2.1 Communication Optimisations
+### 2.1 Communication Optimisations
 
 1. **Gradient-Reduction Overlap**
    ```bash
@@ -144,7 +144,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
 
 ---
 
-## 2.2 Pipeline Load Balancing
+### 2.2 Pipeline Load Balancing
 
 **Pipeline-load-balancing** is an advanced partitioning mechanism for **PP / VPP** that lets users specify exactly how each layer is mapped to pipeline stages via an explicit layout string.  
 It solves:
@@ -170,9 +170,9 @@ Use `--pipeline-model-parallel-layout` to assign layer types and counts per stag
 
 ---
 
-## 2.3 Operator Fusion
+### 2.3 Operator Fusion
 
-### MoE permute fusion
+#### MoE permute fusion
 ```bash
 --moe-permute-fusion
 ```
@@ -180,9 +180,9 @@ Fuses token-reordering kernels to reduce memory traffic.
 
 ---
 
-# 3. Memory Optimisations
+## 3. Memory Optimisations
 
-## 3.1 Re-computation (Activation Checkpointing)
+### 3.1 Re-computation (Activation Checkpointing)
 
 Trade extra backward compute for lower activation memory when GPU memory is tight.
 
@@ -194,26 +194,26 @@ Controlled by **three orthogonal knobs**:
 |Granularity|`--recompute-granularity`|`full` / `selective`|
 |Layers|`--recompute-num-layers`|positive integer|
 
-### Method
+#### Method
 ```bash
 --recompute-method uniform   # split model into equal checkpoint units
 --recompute-method block     # only recompute selected Transformer layers
 ```
 
-### Granularity
+#### Granularity
 ```bash
 --recompute-granularity full       # checkpoint whole Transformer layer
 --recompute-granularity selective  # checkpoint only listed sub-modules
 ```
 
-### Number of layers
+#### Number of layers
 ```bash
 --recompute-num-layers N
 ```
 * `uniform`: layers per checkpoint unit  
 * `block`: number of layers to checkpoint on each rank / PP stage
 
-### Selective sub-modules (only with `selective`)
+#### Selective sub-modules (only with `selective`)
 ```bash
 --recompute-modules core_attn moe_act mlp
 ```
@@ -224,7 +224,7 @@ Supported modules:
 
 ---
 
-## 3.2 Activation Offloading
+### 3.2 Activation Offloading
 
 Offloads selected activation tensors to CPU during forward and brings them back on demand during backward to reduce peak GPU memory.
 
@@ -253,7 +253,7 @@ Supported tensor tags:
 
 ---
 
-## 3.3 Optimiser-State CPU Offload
+### 3.3 Optimiser-State CPU Offload
 
 Moves optimiser states (e.g. Adam momentum/variance) from GPU to CPU memory, greatly reducing GPU memory at the cost of extra CPU↔GPU traffic.  
 Can be combined with recompute, activation offload and communication overlap.
@@ -265,7 +265,7 @@ Can be combined with recompute, activation offload and communication overlap.
 
 * `fraction < 1.0` allows a trade-off between memory saving and overhead
 
-## 3.4 Fused Linear Cross Entropy
+### 3.4 Fused Linear Cross Entropy
 
 Fuses the output-layer linear projection (`hidden @ weight.T`) with the cross-entropy loss into a single operation, combined with chunked computation along the vocabulary dimension, to eliminate the peak memory spike from the full logits tensor. For a typical configuration (num_tokens=16384, vocab_size=129280), this can save up to **~40 GB** of logits-related memory.
 
@@ -286,5 +286,3 @@ export LCE_GENERIC_BWD_VOCAB_SPLIT_SIZE=3072
 ```
 
 See [Fused Linear Cross Entropy](../features/fused_linear_cross_entropy.md) for details.
-
----

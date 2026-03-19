@@ -2,7 +2,7 @@
 
 The Omni-Training framework supports LoRA (Low-Rank Adaptation) training to reduce GPU memory consumption and lower the computational resources required for training.
 
-## 1. Using LoRA in LLM
+## Using LoRA in LLM
 1. Modify the configuration file to enable LoRA
 
 Add LoRA-related configurations to the model configuration file you want to train. The LLM LoRA configuration file is located at `${Omni-Training}/configs/models/lora/lora.yaml`. The configurable parameters include:
@@ -95,7 +95,7 @@ TRAINING_ARGS=(
 )
 ```
 
-## 2. Using LoRA in VLM
+## Using LoRA in VLM
 1. Modify the configuration file to enable LoRA
 
 Add LoRA-related configurations to the model configuration file you want to train. The VLM LoRA configuration file is located at `${Omni-Training}/configs/models/lora/vlm_lora.yaml`. In addition to the LoRA configurable parameters mentioned above, it also includes:
@@ -177,7 +177,7 @@ TRAINING_ARGS=(
 )
 ```
 
-## 3. Merging Base Model and LoRA Weights and Converting to HF Format
+## Merging Base Model and LoRA Weights and Converting to HF Format
 
 Using the offline checkpoint conversion tool provided by the framework, you can merge LoRA into the base model and convert it to Hugging Face format for saving. Here is a usage example:
 

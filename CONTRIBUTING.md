@@ -71,4 +71,4 @@ By contributing to BaigeOmni, you agree that your original contributions will be
 
 Please note that some files in this repository include or are derived from third-party open-source projects. For such files, contributors must retain the original copyright, license, and attribution notices required by the upstream project, and add modification notices where appropriate. See the corresponding file headers for additional details.
 
-For practical file header templates and examples, please refer to our **[License and File Header Guidelines](docs/source/get_started/license_guidelines.md)**.
+For practical file header templates and examples, please refer to our **[License and File Header Guidelines](https://github.com/baidu/BaigeOmni/blob/master/docs/source/HEADER_GUIDELINES.md)**.

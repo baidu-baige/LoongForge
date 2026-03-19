@@ -88,7 +88,7 @@ Text field requirements for different `sample_type` (aligned with script-generat
 
 In multimodal scenarios, sequence offline packing processing methods are provided
 
-See [Offline Data Packing Guide](offline_packing/README.md) for details
+See [Offline Data Packing Guide](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/features/offline_data_packing.md) for details
 
 ---
 
