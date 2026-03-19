@@ -1,0 +1,200 @@
+---
+ alwaysApply: true 
+---
+# BaigeOmni 项目开发规则
+
+本文档基于代码库分析提炼，旨在指导开发者在 BaigeOmni 项目中编写符合项目约定的代码。所有规则均基于可验证的真实代码和文档。
+
+## 项目概览与技术栈
+
+**核心定位**: 多模态训练框架，支持大型 Transformer 模型的预训练、持续预训练及监督微调（SFT），覆盖 LLM（语言模型）、VLM（视觉-语言模型）、VLA（视觉-语言-动作模型）和扩散模型。
+
+**技术栈特征**:
+- **基础框架**: 基于 Megatron-LM 深度定制，通过 `patches/` 目录应用通信、计算重叠、内存管理等优化
+- **跨硬件兼容性**: 原生支持 NVIDIA GPU 和百度昆仑 XPU，实现异构硬件无缝迁移
+- **配置管理**: 使用 Hydra/OmegaConf 统一管理模型与数据配置，YAML 文件集中于 `configs/models/` 和 `configs/data/`
+- **分布式训练**: 依赖 DeepSpeed 和 megatron-energon，训练脚本通过 `torchrun` 启动
+- **自定义算子**: CUDA/C++ 实现高性能融合算子（如 FusedDSA、Sparse MLA），位于 `ops/` 目录
+
+## 模块架构与职责划分
+
+### 核心模块组织
+- **`baige_omni/train/`**: 训练流水线入口（`train.py`），参数解析，通过注册机制分发训练器
+- **`baige_omni/models/`**: 统一模型抽象
+  - `foundation/`: LLM 主干（LLaMA、Qwen、DeepSeek 等）
+  - `encoder/`: 视觉编码器（ViT、InternVL、ERNIE-VL 等）
+  - `omni_models/`: 多模态组合（视觉 + LLM 流水线）
+  - `peft/`: 参数高效微调（LoRA）
+- **`configs/models/`**: Hydra YAML 配置，定义模型架构参数
+- **`tools/`**: 检查点转换、数据预处理、FP8 量化等工具
+- **`ops/`**: 自定义 CUDA 内核（如稀疏 MLA 注意力优化）
+
+### 模块依赖模式
+- `train.py` 依赖 `models/factory.py` 进行模型注册，依赖 `data/` 获取数据集流水线
+- `models/dispatch.py` 抽象硬件特定实现（GPU/XPU），在训练和模型层间复用
+- `config_map.py` 映射 CLI `--model-name` 到 YAML 配置，集中化模型查找
+
+## 项目级开发契约
+
+### 注册式扩展机制
+项目采用装饰器注册模式实现插件式架构：
+```python
+# 模型配置注册
+@register_model_config(family, arch)
+
+# 模型提供者注册
+@register_model_provider(family)
+
+# 训练器注册
+@register_model_trainer(family, training_phase)
+```
+
+新增模型通常需要：
+1. 在 `baige_omni/models/foundation/` 或 `encoder/` 中定义配置数据类
+2. 通过装饰器注册配置、提供者和训练器
+3. 在 `config_map.py` 中添加条目
+4. 添加 YAML 配置到 `configs/models/<family>/`
+5. 在 `examples/` 或 `examples_xpu/` 下添加启动脚本
+
+### 配置管理规范
+- **配置合并**: CLI 参数与 YAML 配置通过 `parse_train_args()` 动态合并
+- **模型名称映射**: 使用 `--model-name` 时自动通过 `config_map.py` 查找对应配置
+- **直接配置指定**: 也可使用 `--config-file` 直接指定 YAML 文件路径
+
+### 常量与全局状态管理
+- **常量集中化**: `constants.py` 统一定义模型家族、数据格式、训练阶段等枚举类型
+- **全局状态**: `global_vars.py` 提供单例式全局变量，通过 `_ensure_var_is_initialized` 机制确保初始化唯一性
+- **配置路径解析**: `get_config_from_model_name()` 封装路径解析逻辑，自动计算项目根目录
+
+### 硬件抽象与兼容性
+- **设备抽象层**: `MultiAccModules` 统一调度 TransformerEngine 或本地实现
+- **架构检测**: `get_device_arch_version()` 封装 GPU 架构检测逻辑
+- **补丁管理**: 所有上游依赖修改通过 `patches/` 目录维护，确保可追溯性
+
+## 代码结构与命名规范
+
+### 命名约定
+- **类名**: 使用 CamelCase（如 `MegatronTrainer`、`OmniCombinationModel`）
+- **方法/函数名**: 使用 snake_case（如 `register_model_trainer`、`run_command`）
+- **目录名**: 小写 snake_case（如 `baige_omni/`、`tests/`、`patches/`）
+- **文件名**: Python 文件使用 snake_case，YAML 配置遵循 `configs/models/<family>/<model>.yaml` 模式
+- **提交信息**: 遵循 Conventional Commits 格式（如 `feat: add new model`、`fix: resolve X issue`）
+
+### 代码组织
+- **导入规范**: 使用从根包的绝对导入（如 `from baige_omni.train.parser import parse_train_args`）
+- **路径要求**: 需要设置 `PYTHONPATH` 包含项目根目录以解析模块
+- **许可头**: 文件使用 SPDX-based Apache-2.0 头部，符合 CONTRIBUTING.md 指南
+
+### 工具类组织模式
+- **处理器基类**: `processor_base.py` 定义 `ProcessorBase`，通过 `get_processors()` 动态收集子处理器
+- **检查点工具**: `ckpt_util.py` 提供 HuggingFace 与 Megatron 格式互转工具
+- **分布式打印**: `utils.py` 的 `print_rank_0` 统一处理分布式环境下的日志输出
+
+## 差异化架构特征
+
+### 多模态组合系统
+- **组件解耦**: 视觉编码器（`encoder/`）和 LLM 主干（`foundation/`）分离设计
+- **动态组装**: `OmniCombinationModel` 通过流水线调度（`model_chunk_schedule_plan.py`）灵活组合多模态工作流
+- **异构并行**: 允许独立配置不同模型组件的张量/数据并行，优化内存和吞吐量
+
+### 性能优化特征
+- **FP8 精度训练**: 验证 LLM/VLM 的 FP8 训练流水线，通过 `fp8_quantization/` 工具支持
+- **数据并行负载均衡**: `dp_balance/` 工具处理序列打包不平衡，提升多节点训练扩展效率
+- **MoE 特定优化**: 集成 All2All 通信和激活卸载，支持大规模专家混合模型
+
+### 错误处理与日志
+- **错误处理**: 主要使用标准异常（`FileNotFoundError`、`KeyError`），关键路径操作前显式检查文件存在性
+- **日志规范**: 统一使用 `print_rank_0` 处理分布式日志，仅 Rank 0 输出，其他进程静默 [需人工确认是否使用标准 logging 模块]
+- **异常模式**: 基类方法抛出 `NotImplementedError` 强制子类实现，配置映射失败时提供明确错误提示
+
+## 关键开发命令
+
+### 环境设置与构建
+```bash
+# 环境设置（克隆并补丁依赖）
+python setup_env.py --megatron-tag core_v0.15.0 --te-tag v2.9
+
+# 安装依赖
+pip install -r requirements.txt       # GPU (NVIDIA)
+pip install -r requirements_xpu.txt   # XPU (昆仑)
+
+# 构建包
+sh build.sh    # 创建输出压缩包
+```
+
+### 训练启动模式
+```bash
+# 基础训练启动模式
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+    torchrun --nproc_per_node 8 --nnodes $NNODES \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    --model-name <model-name> \
+    --training-phase pretrain|sft
+```
+
+**关键参数**:
+- `--model-name`: 通过 `config_map.py` 映射到配置
+- `--config-file`: 直接指定 YAML 配置路径
+- `--training-phase`: `pretrain` 或 `sft`
+
+### 测试执行
+```bash
+# 下载测试数据集
+bash tests/download_datasets.sh
+
+# 运行默认 CI 测试套件
+bash tests/main_start.sh
+
+# 运行可选回归测试
+bash tests/main_start.sh --optional
+
+# 单元测试
+pytest tests/
+```
+
+测试配置通过 `tests/main_start.sh` 中的变量管理：`model_names`、`optional_subdir`、`include_optional`、`tasks`、`training_type`、`chip`。
+
+## 编码指导原则
+
+### 新增模型开发流程
+1. **定义配置**: 在 `baige_omni/models/foundation/` 或 `encoder/` 中创建配置数据类
+2. **注册组件**: 使用装饰器注册配置、模型提供者和训练器
+3. **添加配置**: 在 `configs/models/<family>/` 下创建 YAML 配置文件
+4. **更新映射**: 在 `config_map.py` 的 `MODEL_CONFIG_REGISTRY` 中添加条目
+5. **创建示例**: 在 `examples/` 或 `examples_xpu/` 下添加启动脚本
+
+### 数据管道修改
+- **多模态处理**: 修改 `data/mm_plugin.py` 处理图像/视频数据
+- **负载平衡**: 修改 `data/dp_balance/` 实现数据并行负载均衡
+- **格式支持**: 通过 `constants.py` 中的 `SFTDataFormats` 枚举扩展数据格式
+
+### 性能关键算子开发
+- **CUDA 内核**: 在 `ops/` 目录中实现，通过 `models/dispatch.py` 注册
+- **硬件调度**: 实现硬件特定版本，通过 `MultiAccModules` 抽象层统一访问
+
+### 配置开发模式
+- **配置驱动**: 优先通过 YAML 配置定义模型参数，避免硬编码
+- **参数合并**: CLI 参数覆盖 YAML 配置，支持灵活的实验配置
+- **模型家族常量**: 使用 `constants.py` 中的枚举（如 `LanguageModelFamilies`）驱动分发逻辑
+
+## 注意事项与不确定性
+
+### 需要人工确认的事项
+- **日志模块使用**: 项目主要使用 `print_rank_0` 处理分布式日志，是否使用 Python 标准 `logging` 模块需进一步确认
+- **构建工具细节**: 项目使用 `build.sh` 生成发布包，但具体构建工具（`pyproject.toml` 或 `setup.py`）未明确提及
+- **自适应 FP8 方案**: 文档提到的"自适应 FP8 精度方案"可能需要验证当前实现状态
+- **命名一致性**: 项目在设置脚本中使用"BaigeOmni"，但 Python 包名为"baige_omni"，可能存在大小写不一致
+
+### 避免的常见错误
+- **硬编码路径**: 避免在代码中硬编码文件路径，使用 `get_config_from_model_name()` 等工具函数
+- **忽略硬件差异**: 新增算子需考虑 GPU/XPU 兼容性，通过 `dispatch.py` 抽象层实现
+- **破坏注册机制**: 新增模型组件必须通过装饰器注册，否则无法被框架发现
+- **配置映射缺失**: 新增模型后必须在 `config_map.py` 中添加映射条目
+
+---
+
+## 规则使用说明
+
+本文档中的规则均基于对真实代码库的分析，旨在帮助开发者在 BaigeOmni 项目中编写符合项目约定的代码。对于不确定的内容已标注`[需人工确认]`，在实际开发中应进行验证。
+
+所有回答均使用中文
