@@ -18,8 +18,8 @@
         check_for_infer $i
     done
     #################################### Path Configuration ####################################
-    MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-    AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+    MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+    BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/OmniTraining"}
     DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/v_xuweiye/datasets/64k_tokenized_byrepo-11000-13000"}
     TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/v_xuweiye/models/DeepSeek-V3.1-Terminus-bf16"}
     TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/v_xuweiye/tensorboard-log/deepseek-v31-term-sft"}
@@ -52,9 +52,8 @@
     export BKCL_RING_HOSTID_USE_RANK=1
     export BKCL_RDMA_VERBS=1
     export BKCL_QPS_PER_CONNECTION=4
-    export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
+    export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
     GPUS_PER_NODE=8
-    XFLAGS --disable megatron_core_aiak
     export CUDA_DEVICE_MAX_CONNECTIONS=1
     export TORCH_NCCL_AVOID_RECORD_STREAMS=1
     export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -176,9 +175,9 @@
     --log-validation-ppl-to-tensorboard
     )
 
-    PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $BAIGE_OMNI_PATH/omni_training/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -18,16 +18,16 @@ set -x
 source /root/.bashrc
 #source activate && conda activate python310_torch25_cuda
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-LLM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/aiak-training-llm/qwen3/pile_test/pile-qwen_text_document"}
+DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/BaigeOmni/qwen3/pile_test/pile-qwen_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/models/Qwen3-30B-A3B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/aiak-training-llm/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/BaigeOmni/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/aiak-training-llm/tensorboard-log/qwen3-30b-a3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/BaigeOmni/tensorboard-log/qwen3-30b-a3b"}
 
 mkdir -p ${TENSORBOARD_PATH}
 
@@ -68,9 +68,8 @@ export XMLIR_CUDNN_ENABLED=1                    # true: use cuDNN, supports conv
 # LINEAR switches
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # Allow linear to bypass xblas fcfusion in certain scenarios, e.g., use addmm, default is 1
 export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE uses int32_with_ll, optional
-export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
 
-XFLAGS --disable megatron_core_aiak
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
 ######################################################
@@ -170,9 +169,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/aiak_training_llm/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

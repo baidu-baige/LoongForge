@@ -16,7 +16,7 @@ docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
   -t BaigeOmni:latest -f ./BaigeOmni/docker/Dockerfile .
 ```
 - `COMPILE_ENV` is used to specify the type of GPU (options: ampere, hopper, blackwell).
-- `INSTALL_LEROBOT` is used to determine whether to install lerobot (options: true, false). 
+- `INSTALL_LEROBOT` is used to determine whether to install lerobot (options: true, false).
 
 After the build finishes, verify the image:
 
@@ -38,43 +38,55 @@ docker run --runtime --nvidia --gpus all -itd --rm \
 
 Once inside the container, navigate to `/workspace/BaigeOmni/examples/` and launch the desired training script.
 
-## 2. Manual Patch Application
+## 2. Manual Environment Setup
 ### 2.1 When to use
-You already have a stable local installation of Megatron-LM / TransformerEngine and want to do secondary development or debugging on top of the upstream code.
+You already have a stable local environment and want to do secondary development or debugging.
 
-### 2.2 Patch files overview
-The project contains the following key directories, the suffix of the folder name corresponds to the community tag.
+### 2.2 Dependency overview
 
-* `patches/Megatron-LM_v0.15.0/` – patches for the community Megatron-LM
-* `patches/TransformerEngine_v2.9/` – patches for the community TransformerEngine
+BaigeOmni uses two different strategies to manage its key dependencies:
+
+| Dependency | Strategy | Location |
+|---|---|---|
+| **Megatron-LM** | git submodule → Baige fork | `third_party/Baige-Megatron/` |
+| **TransformerEngine** | patch against upstream NVIDIA tag | `patches/TransformerEngine_<tag>/` |
+
+**Megatron-LM** is pinned to a specific commit of the Baige fork via git submodule.
+No patches are applied — all Baige-specific changes live directly in the fork branch.
+
+**TransformerEngine** is cloned from the upstream NVIDIA repository, checked out at the
+specified community tag, and then patched with Baige-specific fixes.
+The patch directory suffix matches the upstream tag it targets (e.g. `patches/TransformerEngine_v2.9/`).
 
 ### 2.3 Automated Environment Setup
-We provide a helper script `setup_env.py` to automate the entire process, including cloning repositories, switching tags, applying patches, building TransformerEngine, and installing dependencies.
+We provide a helper script `setup_env.py` to automate the entire process: initializing the
+Megatron-LM submodule, cloning TransformerEngine, applying TE patches, building
+TransformerEngine, and installing dependencies.
 
 **Recommended versions:**
-- **Megatron-LM**: `core_v0.15.0` (ensure the tag matches the remote repository)
+- **Megatron-LM**: locked by submodule commit (see `third_party/Baige-Megatron/`)
 - **TransformerEngine**: `v2.9`
 
 **Usage:**
 
-Run the following command from the project root (replace tags with the actual versions you need):
+Run the following command from the project root:
 
 ```bash
-python setup_env.py --megatron-tag <MEGATRON_TAG> --te-tag <TE_TAG>
+python setup_env.py --te-tag <TE_TAG>
 ```
 
 **Example:**
 
 ```bash
-# Example for specific versions
-python setup_env.py --megatron-tag core_v0.15.0 --te-tag v2.9
+python setup_env.py --te-tag v2.9
 ```
 
 This script will automatically:
-1. Clone `Megatron-LM` and `TransformerEngine` if they don't exist.
-2. Checkout the specified tags and create local branches (`baige<tag>`).
-3. Apply patches to both repositories.
-4. Compile and install `TransformerEngine`.
-5. Install all python dependencies for `BaigeOmni`.
+1. Initialize the `Baige-Megatron` submodule at `third_party/Baige-Megatron/`.
+2. Clone `TransformerEngine` from the upstream NVIDIA repository.
+3. Checkout the specified TE tag and create a local branch (`baige<tag>`).
+4. Apply patches from `patches/TransformerEngine_<tag>/` to TransformerEngine.
+5. Compile and install `TransformerEngine`.
+6. Install all Python dependencies for `BaigeOmni`.
 
 All dependencies are now installed; you can run the training scripts under `BaigeOmni/examples/`.

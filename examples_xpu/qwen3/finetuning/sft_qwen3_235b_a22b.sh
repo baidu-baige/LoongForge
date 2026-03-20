@@ -43,7 +43,7 @@ export XMLIR_CUDNN_ENABLED=1                    # true为使用cuDNN，支持con
 export XDNN_FC_GEMM_DTYPE=int32_with_ll
 # LINEAR 开关
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # 允许某些场景下linear不走xblas fcfusion, 比如走addmm
-export XMLIR_MEGATRON_CORE_BAIGE_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
 
 #XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13

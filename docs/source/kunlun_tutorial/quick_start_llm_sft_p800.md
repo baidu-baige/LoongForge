@@ -14,8 +14,8 @@ OmniTraining currently provides SFT training example scripts for various models.
 # ! /bin/bash
 # The script needs to be run on at least 2 nodes.
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/OmniTraining"}
 
 # DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/sft_aplaca_zh_data.json"}
 
@@ -60,9 +60,8 @@ export XMLIR_CUDNN_ENABLED=1                    # true: use cuDNN, supports conv
 # LINEAR switches
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # Allow linear to bypass xblas fcfusion in certain scenarios, e.g., use addmm, default is 1
 export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE uses int32_with_ll, optional
-export XMLIR_MEGATRON_CORE_AIAK_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
 
-XFLAGS --disable megatron_core_aiak
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
 ######################################################
@@ -166,9 +165,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $BAIGE_OMNI_PATH/omni_training/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

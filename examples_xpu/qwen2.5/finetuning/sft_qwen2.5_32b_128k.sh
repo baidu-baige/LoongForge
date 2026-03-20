@@ -49,7 +49,7 @@ export XMLIR_DIST_ASYNC_ISEND_IRECV=1 # 设为true表示send/recv会走异步逻
 export XMLIR_CUDNN_ENABLED=1 # true为使用cuDNN，支持conv3d等，false为不使用cuDNN
 # LINEAR 开关
 export XMLIR_ENABLE_LINEAR_FC_FUSION=0 # 允许某些场景下linear不走xblas fcfusion, 比如走addmm，默认为1
-export XMLIR_MEGATRON_CORE_BAIGE_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
 export XTE_DISABLE_FAST_BF16_CACHE=1
 
 XFLAGS --disable transformer_engine_1_7

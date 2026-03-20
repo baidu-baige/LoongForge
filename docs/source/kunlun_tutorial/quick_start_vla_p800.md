@@ -21,8 +21,8 @@ OmniTraining currently provides SFT training example scripts for various models.
 set -euo pipefail
 
 # Paths
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/OmniTraining"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/OmniTraining"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
@@ -81,9 +81,9 @@ LOGGING_ARGS=(
     --log-interval 1
 )
 
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:${PYTHONPATH:-} \
+PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:${PYTHONPATH:-} \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/omni_training/train.py \
+    $BAIGE_OMNI_PATH/omni_training/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

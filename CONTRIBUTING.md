@@ -25,34 +25,106 @@ When opening a new issue, please provide as much information as possible, such a
 The more context you provide, the easier it will be for maintainers to diagnose and resolve the issue.
 
 ## Pull Requests
-We strongly welcome pull requests to help improve BaigeOmni. 
+We strongly welcome pull requests to help improve BaigeOmni.
 
 All pull requests will be reviewed by the maintainers. Automated checks and tests will be run as part of the review process. Once all checks pass and the review is approved, the pull request will be accepted. Please note that merging into the `main` branch may not happen immediately and could be subject to scheduling.
 
-### Standard GitHub Workflow
+### Repository Structure
 
-1. **Fork** the BaigeOmni repository to your own GitHub account.
-2. **Clone** your fork to your local machine:
-   ```bash
-   git clone [https://github.com/](https://github.com/)<YOUR_USERNAME>/BaigeOmni.git
-   cd BaigeOmni
-   ```
-3. **Create a new branch** from `main` for your changes:
-   ```bash
-   git checkout -b dev_your_feature_branch
-   ```
-4. **Add and commit** your changes:
-   ```bash
-   git add .
-   git commit -m "feat: add your commit message"
-   ```
-5. **Sync with upstream and push** to your fork:
-   ```bash
-   # (Optional but recommended) Pull latest from upstream main before pushing
-   git pull --rebase [https://github.com/baidu-baige/BaigeOmni.git](https://github.com/baidu-baige/BaigeOmni.git) main
-   git push -u origin dev_your_feature_branch
-   ```
-6. **Create a Pull Request** on GitHub from your branch to the original BaigeOmni `main` branch.
+BaigeOmni manages its dependencies using two strategies:
+
+| Repository | Strategy | Where changes land |
+|---|---|---|
+| **BaigeOmni** (this repo) | fork → PR | `Baige/BaigeOmni` |
+| **Baige-Megatron** | fork → PR | `Baige/Baige-Megatron` |
+| **TransformerEngine** | patch files | `patches/TransformerEngine_<tag>/` in BaigeOmni |
+
+### Step 0 — Fork the repositories
+
+Fork the repositories you intend to modify on GitHub:
+
+```
+Baige/BaigeOmni        →  your-name/BaigeOmni
+Baige/Baige-Megatron   →  your-name/Baige-Megatron   # only if modifying Megatron
+```
+
+### Step 1 — Clone BaigeOmni and initialize submodules
+
+```bash
+git clone https://github.com/your-name/BaigeOmni.git
+cd BaigeOmni
+
+# Initialize the Megatron-LM submodule
+git submodule update --init third_party/Baige-Megatron
+```
+
+### Step 2 — Configure remotes
+
+```bash
+# BaigeOmni — add your fork as a push target
+git remote add my-fork https://github.com/your-name/BaigeOmni.git
+
+# Baige-Megatron — inside the submodule directory
+cd third_party/Baige-Megatron
+# origin already points to Baige/Baige-Megatron (fetch)
+git remote add my-fork https://github.com/your-name/Baige-Megatron.git
+
+# Verify
+git remote -v
+# origin    https://github.com/Baige/Baige-Megatron.git   (fetch)
+# my-fork   https://github.com/your-name/Baige-Megatron.git (push)
+```
+
+### Step 3 — Create a development branch
+
+```bash
+# BaigeOmni
+cd BaigeOmni
+git checkout main
+git pull origin main
+git checkout -b feature/your-feature-name
+
+# Baige-Megatron (only if modifying Megatron)
+cd third_party/Baige-Megatron
+git checkout baige_mcore_v0.15.0
+git pull origin baige_mcore_v0.15.0
+git checkout -b feature/your-feature-name
+```
+
+### Step 4 — Develop and commit your changes
+
+Make your changes, then commit:
+
+```bash
+git add .
+git commit -m "feat: add your commit message"
+```
+
+### Step 5 — Sync with upstream and push to your fork
+
+```bash
+# (Optional but recommended) Rebase on the latest upstream main before pushing
+git pull --rebase https://github.com/baidu-baige/BaigeOmni.git main
+git push -u my-fork feature/your-feature-name
+```
+
+For Baige-Megatron changes, push to your Megatron fork instead:
+
+```bash
+cd third_party/Baige-Megatron
+git pull --rebase https://github.com/Baige/Baige-Megatron.git baige_mcore_v0.15.0
+git push -u my-fork feature/your-feature-name
+```
+
+### Step 6 — Create a Pull Request
+
+Open a PR on GitHub from your feature branch to the target upstream branch:
+
+- **BaigeOmni changes**: `your-name/BaigeOmni:feature/xxx` → `Baige/BaigeOmni:main`
+- **Megatron changes**: `your-name/Baige-Megatron:feature/xxx` → `Baige/Baige-Megatron:baige_mcore_v0.15.0`
+- **TE changes**: commit the patch file to BaigeOmni, then open a PR as in the BaigeOmni flow above
+
+---
 
 ### Pre-Submission Checklist
 

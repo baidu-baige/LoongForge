@@ -1,4 +1,11 @@
-"""Setup BaigeOmni environment."""
+"""Setup BaigeOmni environment.
+
+Dependency management strategy:
+  - Megatron-LM : managed as a git submodule (third_party/Baige-Megatron),
+                  version is locked by the submodule commit pointer — no patching needed.
+  - TransformerEngine : cloned from upstream NVIDIA repo, checked out at the
+                        specified tag, then patched from patches/TransformerEngine_<tag>/.
+"""
 import os
 import subprocess
 import sys
@@ -11,7 +18,7 @@ def run_command(command, cwd=None, shell=True, check=True, env=None):
     try:
         subprocess.check_call(command, cwd=cwd, shell=shell, env=env)
         return True
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         if check:
             print(f"Error executing command: {command}")
             sys.exit(1)
@@ -22,8 +29,6 @@ def main():
     """main process"""
     parser = argparse.ArgumentParser(
         description="Setup BaigeOmni development environment.")
-    parser.add_argument("--megatron-tag", required=True,
-                        help="Tag for Megatron-LM (e.g., core_v0.15.0)")
     parser.add_argument("--te-tag", required=True,
                         help="Tag for TransformerEngine (e.g., v2.9)")
     parser.add_argument("--workspace", default=os.getcwd(),
@@ -32,99 +37,80 @@ def main():
     args = parser.parse_args()
 
     workspace = os.path.abspath(args.workspace)
-    megatron_path = os.path.join(workspace, "Megatron-LM")
     te_path = os.path.join(workspace, "TransformerEngine")
-    # Assuming this script is run from outside or we adjust paths
     omni_path = os.path.join(workspace, "BaigeOmni")
 
     # Adjust omni_path if script is running inside BaigeOmni
     if os.path.basename(workspace) == "BaigeOmni":
         omni_path = workspace
         workspace = os.path.dirname(workspace)
-        megatron_path = os.path.join(workspace, "Megatron-LM")
         te_path = os.path.join(workspace, "TransformerEngine")
 
-    print(f"Workspace: {workspace}")
-    print(f"Megatron-LM Path: {megatron_path}")
-    print(f"TransformerEngine Path: {te_path}")
-    print(f"BaigeOmni Path: {omni_path}")
+    # Megatron-LM lives as a submodule inside the main repo
+    megatron_path = os.path.join(omni_path, "third_party", "Baige-Megatron")
 
-    # 1. Clone Repositories
-    if not os.path.exists(megatron_path):
-        run_command(
-            f"git clone https://github.com/NVIDIA/Megatron-LM.git {megatron_path}")
-    else:
-        print(f"Megatron-LM already exists at {megatron_path}")
+    print(f"Workspace              : {workspace}")
+    print(f"Megatron Path       : {megatron_path}  (submodule)")
+    print(f"TransformerEngine Path : {te_path}")
+    print(f"BaigeOmni Path         : {omni_path}")
 
+    # 1. Initialize Megatron-LM submodule
+    # Version is locked by the submodule commit pointer in BaigeOmni — no patching needed.
+    print("\n[1/5] Initializing Megatron submodule...")
+    run_command("git submodule update --init third_party/Baige-Megatron", cwd=omni_path)
+
+    # 2. Clone TransformerEngine from upstream
+    print("\n[2/5] Setting up TransformerEngine...")
     if not os.path.exists(te_path):
         run_command(
             f"git clone https://github.com/NVIDIA/TransformerEngine.git {te_path}")
     else:
         print(f"TransformerEngine already exists at {te_path}")
 
-    # 2. Checkout Tags
-    print(f"Checking out Megatron-LM tag: {args.megatron_tag}")
-    run_command("git fetch --all --tags", cwd=megatron_path)
-
-    # Check if branch baige_{tag} exists
-    if run_command(f"git rev-parse --verify baige_{args.megatron_tag}", cwd=megatron_path, shell=True, check=False):
-        print(
-            f"Branch baige_{args.megatron_tag} already exists, checking it out.")
-        run_command(
-            f"git checkout baige_{args.megatron_tag}", cwd=megatron_path)
-    else:
-        print(
-            f"Creating branch baige_{args.megatron_tag} from {args.megatron_tag}...")
-        run_command(
-            f"git checkout {args.megatron_tag} -b baige_{args.megatron_tag}", cwd=megatron_path)
-
-    run_command("git restore .", cwd=megatron_path)
-
+    # 3. Checkout TransformerEngine tag
     print(f"Checking out TransformerEngine tag: {args.te_tag}")
     run_command("git fetch --all --tags", cwd=te_path)
 
-    if run_command(f"git rev-parse --verify baige_{args.te_tag}", cwd=te_path, shell=True, check=False):
-        print(f"Branch baige_{args.te_tag} already exists, checking it out.")
-        run_command(f"git checkout baige_{args.te_tag}", cwd=te_path)
+    branch_name = f"baige_{args.te_tag}"
+    if run_command(f"git rev-parse --verify {branch_name}", cwd=te_path, shell=True, check=False):
+        print(f"Branch {branch_name} already exists, checking it out.")
+        run_command(f"git checkout {branch_name}", cwd=te_path)
     else:
-        print(f"Creating branch baige_{args.te_tag} from {args.te_tag}...")
-        run_command(
-            f"git checkout {args.te_tag} -b baige_{args.te_tag}", cwd=te_path)
+        print(f"Creating branch {branch_name} from tag {args.te_tag}...")
+        run_command(f"git checkout {args.te_tag} -b {branch_name}", cwd=te_path)
 
     run_command("git restore .", cwd=te_path)
 
-    # 3. Apply Patches
-    apply_script = os.path.join(
-        omni_path, "tools/apply_patches/apply_two_repo.sh")
+    # 4. Apply patches to TransformerEngine
+    # Patch directory is named after the base tag, e.g. patches/TransformerEngine_v2.9/
+    print("\n[3/5] Applying patches to TransformerEngine...")
+    apply_script = os.path.join(omni_path, "patches/apply_patches.sh")
     if not os.path.exists(apply_script):
         print(f"Error: Patch script not found at {apply_script}")
         sys.exit(1)
 
-    megatron_patch_dir = os.path.join(omni_path, "patches/Megatron-LM")
-    te_patch_dir = os.path.join(omni_path, "patches/TransformerEngine")
+    te_patch_dir = os.path.join(omni_path, f"patches/TransformerEngine_{args.te_tag}")
+    if not os.path.isdir(te_patch_dir):
+        print(f"Error: TE patch directory not found: {te_patch_dir}")
+        sys.exit(1)
 
-    print("Applying patches to Megatron-LM...")
-    run_command(f"bash {apply_script} {megatron_patch_dir} {megatron_path}")
-
-    print("Applying patches to TransformerEngine...")
     run_command(f"bash {apply_script} {te_patch_dir} {te_path}")
 
-    # 4. Build and Install TransformerEngine
-    print("Building and Installing TransformerEngine...")
+    # 5. Build and install TransformerEngine
+    print("\n[4/5] Building and installing TransformerEngine...")
     run_command("git submodule update --init --recursive", cwd=te_path)
 
-    # Set environment variable for build
     env = os.environ.copy()
     env["NVTE_FRAMEWORK"] = "pytorch"
-
-    # Using pip install .
     run_command("pip3 install --no-build-isolation .", cwd=te_path, env=env)
 
-    # 5. Install BaigeOmni dependencies
-    print("Installing BaigeOmni dependencies...")
+    # 6. Install BaigeOmni dependencies
+    print("\n[5/5] Installing BaigeOmni dependencies...")
     run_command("pip install -r requirements.txt", cwd=omni_path)
 
     print("\nSetup completed successfully!")
+    print(f"  Megatron : {megatron_path}")
+    print(f"  TransformerEngine : {te_path}  (tag {args.te_tag}, branch {branch_name})")
 
 
 if __name__ == "__main__":
