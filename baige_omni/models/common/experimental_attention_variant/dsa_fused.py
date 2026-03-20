@@ -611,7 +611,7 @@ class DSAttentionFused(MegatronModule):
                 DSAIndexerLossLoggingHelperFused.save_loss_to_tracker(
                     loss=indexer_loss,
                     layer_number=self.layer_number,
-                    num_layers=self.config.num_layers,
+                    num_layers=self.config.num_layers + getattr(self.config, "mtp_num_layers", 0),
                 )
 
             # Attach loss to output
