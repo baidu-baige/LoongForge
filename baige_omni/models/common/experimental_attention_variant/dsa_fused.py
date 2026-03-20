@@ -615,8 +615,7 @@ class DSAttentionFused(MegatronModule):
                 )
 
             # Attach loss to output
-            # output = DSAIndexerLossAutoScaler.apply(output, indexer_loss)
-            indexer_loss.backward()
+            output = DSAIndexerLossAutoScaler.apply(output, indexer_loss)
 
         output = gather_sequence_and_scatter_heads(output)
 
