@@ -68,6 +68,7 @@ def omni_model_provider(
         component_config.context_parallel_size = 1
         component_config.context_parallel_ulysses_degree = 1
         component_config.pipeline_model_parallel_layout = None
+        component_config.mtp_num_layers = None
 
     # TODO: fp8 support
     model = OmniCombinationModel(

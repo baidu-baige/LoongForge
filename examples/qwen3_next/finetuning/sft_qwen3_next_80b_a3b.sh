@@ -1,15 +1,11 @@
-#! /bin/bash
-# The script needs to be run on at least 2 nodes.
+#!/usr/bin/env bash
+# Copyright 2026 The BaigeOmnni Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 export TORCH_COMPILE=0
 export TORCHDYNAMO_DISABLE=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-# Note: Linear attention does not support sequence packing. Therefore, when --packing-sft-data is enabled, 
-# we force unpacking of hidden states during the linear-attention stage by setting UNPACKING_HIDDEN_STATES_IN_GDN=1.
-# Disabling packing allows linear attention to achieve better computational efficiency and lower memory usage, 
-# but it also means that tokens from different sequences may attend to each other.
-export UNPACKING_HIDDEN_STATES_IN_GDN=1
-export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 
@@ -83,10 +79,10 @@ MOE_ARGS=(
 TRAINING_ARGS=(
     --seed 42
     --training-phase sft # options: pretrain, sft
-    --seq-length 32768
-    --max-position-embeddings 32768
+    --seq-length 4096
+    --max-position-embeddings 4096
     --micro-batch-size 1
-    --global-batch-size 64
+    --global-batch-size 256
     --lr 1.0e-5
     --min-lr 1.0e-6
     --weight-decay 0.1
@@ -121,12 +117,12 @@ TRAINING_ARGS=(
 )
 
 MODEL_PARALLEL_ARGS=(
-    --tensor-model-parallel-size 2
-    --pipeline-model-parallel-size 4
+    --tensor-model-parallel-size 1
+    --pipeline-model-parallel-size 2
     --expert-model-parallel-size 8
     --expert-tensor-parallel-size 1
     --use-distributed-optimizer
-    --sequence-parallel
+    # --sequence-parallel
     --attention-backend flash
     --cross-entropy-loss-fusion
     --cross-entropy-fusion-impl te
@@ -158,4 +154,4 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     ${SFT_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${MODEL_CONFIG_ARGS[@]} \
-    ${LOGGING_ARGS[@]} 2>&1 | tee /workspace/sft_qwen3_next_80b_a3b.log
+    ${LOGGING_ARGS[@]}
