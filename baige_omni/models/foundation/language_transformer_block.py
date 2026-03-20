@@ -313,7 +313,7 @@ class TransformerBlock(MegatronTransformerBlock):
             and self.config.recompute_granularity == 'full'):
             # If DeepStack is present and the uniform strategy is used, 
             # the value of recompute_num_layers must be set to 1; otherwise, DeepStack may be skipped
-            assert self.config.recompute_num_layers == 1, \
+            assert self._recompute_num_layers == 1, \
                 "If has_deepstack is true and recompute_method is set to uniform, recompute_num_layers must be 1."
 
         def custom(start: int, end: int):
@@ -390,7 +390,7 @@ class TransformerBlock(MegatronTransformerBlock):
             layer_idx = 0
             while layer_idx < self.num_layers_per_pipeline_rank:
                 hidden_states, context = checkpoint_handler(
-                    custom(layer_idx, layer_idx + self.config.recompute_num_layers)
+                    custom(layer_idx, layer_idx + self._recompute_num_layers)
                 )
                 if (
                     has_deepstack 
@@ -402,7 +402,7 @@ class TransformerBlock(MegatronTransformerBlock):
                         deepstack_visual_embeds[layer_idx],
                     )
 
-                layer_idx += self.config.recompute_num_layers
+                layer_idx += self._recompute_num_layers
 
         elif self.config.recompute_method == 'block':
             # Checkpoint the input activation of only a set number of individual
@@ -418,7 +418,7 @@ class TransformerBlock(MegatronTransformerBlock):
                     recompute_skip_num_layers += 1
                 if (
                     layer_idx >= recompute_skip_num_layers
-                    and layer_idx < self.config.recompute_num_layers + recompute_skip_num_layers
+                    and layer_idx < self._recompute_num_layers + recompute_skip_num_layers
                 ):
                     hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1))
                 else:

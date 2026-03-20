@@ -411,7 +411,7 @@ class TransformerBlock(MegatronTransformerBlock):
             
             # 如果有DeepStack，使用uniform策略时，recompute_num_layers必须为1，否则可能会跳过DeepStack
             if self.config.recompute_method == 'uniform' and self.config.recompute_granularity == 'full':
-                assert self.config.recompute_num_layers == 1, \
+                assert self._recompute_num_layers == 1, \
                     "If recompute_method is set to uniform, recompute_num_layers must be 1."
 
         def custom(start: int, end: int):
@@ -492,7 +492,7 @@ class TransformerBlock(MegatronTransformerBlock):
             layer_idx = 0
             while layer_idx < self.num_layers_per_pipeline_rank:
                 hidden_states, context = checkpoint_handler(
-                    custom(layer_idx, layer_idx + self.config.recompute_num_layers)
+                    custom(layer_idx, layer_idx + self._recompute_num_layers)
                 )
                 # 提取deepstack特征
                 if self.has_deepstack and layer_idx in deepstack_visual_indexes:
@@ -500,7 +500,7 @@ class TransformerBlock(MegatronTransformerBlock):
                     deepstack_feature = merger(hidden_states)
                     deepstack_feature_lists.append(deepstack_feature)
 
-                layer_idx += self.config.recompute_num_layers
+                layer_idx += self._recompute_num_layers
 
         elif self.config.recompute_method == 'block':
             # Checkpoint the input activation of only a set number of individual
@@ -516,7 +516,7 @@ class TransformerBlock(MegatronTransformerBlock):
                     recompute_skip_num_layers += 1
                 if (
                     layer_idx >= recompute_skip_num_layers
-                    and layer_idx < self.config.recompute_num_layers + recompute_skip_num_layers
+                    and layer_idx < self._recompute_num_layers + recompute_skip_num_layers
                 ):
                     hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1))
                 else:
