@@ -35,7 +35,7 @@ skip_env=false # Whether to skip environment preparation
 
 # Resume parameters (can be preset via env vars, or auto-read from common.yaml by this script)
 check_loss_only=true
-auto_collect_baseline=true
+auto_collect_baseline=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -160,7 +160,7 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         --auto_collect_baseline)
-            auto_collect_baseline=false
+            auto_collect_baseline=true
             shift
             ;;
 
@@ -384,11 +384,5 @@ LOG_DIR="${TRAINING_LOG_PATH:-}"
 python3 /workspace/BaigeOmni/tests/main.py "${args[@]}"
 ret=$?
 
-# After successful run, archive the log directory (with timestamp) and clear the canonical path for next resume
-if [ $ret -eq 0 ] && [ -n "${LOG_DIR}" ] && [ -d "${LOG_DIR}" ]; then
-    ts=$(date '+%Y%m%d_%H%M%S')
-    mv "${LOG_DIR}" "${LOG_DIR}_${ts}"
-    echo "[resume] run completed, archived logs to ${LOG_DIR}_${ts}"
-fi
 
 exit $ret
