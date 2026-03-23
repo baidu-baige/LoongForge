@@ -11,7 +11,6 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'tools'))
 
 from tools.dist_checkpoint.config.parallel_config import ParallelConfig
-from tools.convert_checkpoint.common.common_config import CommonConfig
 from aiak_training_omni.utils.config_map import get_config_from_model_name
 
 
@@ -27,12 +26,8 @@ class Parser:
         """
         assert args is not None, "args is required"
         self.args = args
-        self.data = None
         self.type = None
-        self.config = None
         self.param_dict = None
-        self.mappings = {}
-        self.module_names = {}
 
         self._parse_from_args(args)
 
@@ -46,28 +41,24 @@ class Parser:
         model_config_file = f"{config_path}/{config_name}.yaml"
         model_cfg = load_config(model_config_file)
 
-        # Initialize config dict early
-        self.config = {
-            'model_config_file': model_config_file,
-        }
+        self.config_file = model_config_file 
 
         # Step 3: Check if this is a VLM model by looking at defaults
         is_vlm = self._is_vlm_model(model_cfg)
 
         if is_vlm:
-            # VLM: Parse multiple modules
-            self._parse_vlm_config(model_cfg, config_name)
             self.type = 'vlm'
+            self.convert_file = model_cfg.model.foundation.convert_file
+            self.vision_patch_convert_file = model_cfg.model.image_encoder.convert_file
+            self.adapter_convert_file = model_cfg.model.image_projector.convert_file
 
-            # update the prefix keys
-            self._update_foundation_model_cfg()
-            self._update_image_encoder_cfg()
-            self._update_image_projector_cfg()
             
         else:
-            # LLM: Parse single module (existing logic)
-            self._parse_llm_config(model_cfg, config_name)
             self.type = 'llm'
+            self.convert_file = model_cfg.convert_file
+            self.vision_patch_convert_file = None
+            self.adapter_convert_file = None
+
 
         # Step 4: Build param_dict from args
         self.param_dict = self._build_param_dict(args)
@@ -85,100 +76,6 @@ class Parser:
                 return True
         return False
 
-    def _parse_vlm_config(self, model_cfg, config_name):
-        """Parse VLM configuration with multiple modules."""
-        # Get module names from defaults using parse_at_configs
-        module_names = self._parse_module_names(model_cfg)
-
-        # Process each module
-        for module_type in ['image_encoder', 'image_projector', 'foundation']:
-            if module_type not in module_names:
-                continue
-
-            module_info = module_names[module_type]
-            module_name = module_info['name']
-            prefix = module_info['prefix']
-            convert_file = get_module_convert_file(model_cfg, module_type)
-
-            if convert_file is None:
-                continue
-
-            # Load module config
-            # For convert_file with defaults like "- qwen2.5@module: ???"
-            # we need to override the key like "qwen2.5@module" with module_name
-            override_key = f"{prefix}@module"
-            hydra_overrides = {override_key: module_name}
-            cfg = load_config(
-                convert_file,
-                hydra_overrides=hydra_overrides
-            )
-            OmegaConf.set_struct(cfg, False)
-
-            # Build CommonConfig
-            c_config = CommonConfig()
-            c_config.load_convert_data(cfg)
-            update_overwrite(model_cfg, c_config, module_type)
-
-            # Store in mappings
-            if module_type == 'foundation':
-                self.mappings['foundation'] = c_config
-            else:
-                self.mappings[module_type] = c_config
-
-    def _parse_llm_config(self, model_cfg, config_name):
-        """Parse LLM configuration with single module."""
-        # Get convert_file path from model_cfg
-        convert_file = model_cfg.get('convert_file', None)
-        assert convert_file is not None, f"convert_file not found in model config"
-
-        # Get module_type from convert_file path (e.g., "qwen2.5" from ".../qwen2.5/ckpt_convert/...")
-        module_type = convert_file.split('/')[-3]
-
-        # Load convert_file with model config override
-        # For convert_file with defaults like "- qwen2.5@module: ???"
-        # we need to override the key like "qwen2.5@module" with config_name
-        override_key = f"{module_type}@module"
-        hydra_overrides = {override_key: config_name}
-        cfg = load_config(
-            convert_file,
-            hydra_overrides=hydra_overrides
-        )
-        OmegaConf.set_struct(cfg, False)
-
-        # Build CommonConfig
-        c_config = CommonConfig()
-        c_config.load_convert_data(cfg)
-        update_overwrite(model_cfg, c_config, module_type)
-        self.mappings['language_model'] = c_config
-
-        # Update config for compatibility
-        self.config['convert_file'] = convert_file
-
-    def _parse_module_names(self, model_cfg):
-        """Parse module names from model config defaults."""
-        # Read the YAML file directly to parse @ syntax
-        config_path, model_name = get_config_from_model_name(self.args.model_name)
-        model_config_file = f"{config_path}/{model_name}.yaml"
-
-        try:
-            with open(model_config_file, 'r') as f:
-                lines = f.readlines()
-            result = parse_at_configs(lines)
-            # print(f"DEBUG: parse_at_configs result: {result}")
-            return result
-        except Exception as e:
-            # Fallback: try to get from model_cfg attributes
-            print(f"DEBUG: Failed to parse YAML: {e}")
-            module_names = {}
-            if hasattr(model_cfg, 'model'):
-                if hasattr(model_cfg.model, 'image_encoder'):
-                    module_names['image_encoder'] = getattr(model_cfg.model.image_encoder, '_name', 'default')
-                if hasattr(model_cfg.model, 'image_projector'):
-                    module_names['image_projector'] = getattr(model_cfg.model.image_projector, '_name', 'default')
-                if hasattr(model_cfg.model, 'foundation'):
-                    module_names['foundation'] = getattr(model_cfg.model.foundation, '_name', 'default')
-            print(f"DEBUG: fallback module_names: {module_names}")
-            return module_names
 
     def _build_param_dict(self, args) -> dict:
         """Build param_dict from args object."""
@@ -198,6 +95,7 @@ class Parser:
         # Parallel related parameters (for ParallelConfig)
         param_dict['tp_size'] = getattr(args, 'tensor_model_parallel_size', 1) or 1
         param_dict['pp_size'] = getattr(args, 'pipeline_model_parallel_size', 1) or 1
+        param_dict['encoder_tp_size'] = getattr(args, 'encoder_tensor_model_parallel_size', 1) or 1
         if args.num_experts is not None:
             param_dict['ep_size'] = getattr(args, 'expert_model_parallel_size', None)
             param_dict['etp_size'] = getattr(args, 'expert_tensor_parallel_size', None)
@@ -226,55 +124,19 @@ class Parser:
         return {k: v for k, v in param_dict.items() if v is not None}
 
 
-    def _update_foundation_model_cfg(self):
-        for key, value in self.mappings['foundation'].data['name_map']['mcore'].items():
-            if isinstance(value, str) and 'language_model' in value:
-                self.mappings['foundation'].data['name_map']['mcore'][key] = value.replace('language_model', 'foundation_model')
-
-
-    def _update_image_encoder_cfg(self):
-        for key, value in self.mappings['image_encoder'].data['name_map']['mcore'].items():
-            if isinstance(value, str) and 'vision_model' in value:
-                self.mappings['image_encoder'].data['name_map']['mcore'][key] = value.replace('vision_model', 'encoder_model.image_encoder')
-
-        for key, value in self.mappings['image_encoder'].data['vision_patch'].items():
-            if isinstance(key, str) and 'vision_model' in key:
-                self.mappings['image_encoder'].data['vision_patch'][key.replace('vision_model', 'encoder_model.image_encoder')] = value
-                del self.mappings['image_encoder'].data['vision_patch'][key]
-
-
-    def _update_image_projector_cfg(self):
-        for key, value in self.mappings['image_projector'].data.items():
-            if isinstance(key, str) and 'adapter' in key:
-                self.mappings['image_projector'].data[key.replace('adapter', 'encoder_model.image_projector')] = value
-                del self.mappings['image_projector'].data[key]
-
-    
-    def get_language_model_cfg(self):
-        return self.mappings['language_model']
-
-    def get_foundation_model_cfg(self):
-        return self.mappings['foundation']
-
-    def get_image_encoder_cfg(self):
-        return self.mappings['image_encoder']
-    
-    def get_image_projector_cfg(self):
-        return self.mappings['image_projector']
-
 
     def get_parallel_config(self):
         """Build ParallelConfig from param_dict."""
         parallel_params = {}
 
         parallel_fields = [
-            'tp_size', 'pp_size', 'ep_size', 'etp_size', 'vpp_size',
+            'tp_size', 'encoder_tp_size', 'pp_size', 'ep_size', 'etp_size', 'vpp_size',
             'custom_pipeline_layers', 'decoder_first_pipeline_num_layers',
             'decoder_last_pipeline_num_layers', 'moe_grouped_gemm',
             'vpp_scheduler', 'tp_ranks', 'pp_ranks', 'ep_ranks',
             'etp_ranks', 'safetensors',
             'max_workers', 'fp8_force_no_requant', 'force_pow_2_scales',
-            'amax_epsilon', 'mtp_num_layers'
+            'amax_epsilon', 'mtp_num_layers', 'lora_alpha', 'lora_dim'
         ]
 
         for field in parallel_fields:
@@ -305,55 +167,6 @@ def get_module_convert_file(model_cfg, module_type):
         return None
 
 
-def parse_at_configs(yaml_lines):
-    """
-    Parse configuration lines with @ symbol in YAML to extract module names.
-
-    Args:
-        yaml_lines (list): List of YAML file content lines
-
-    Returns:
-        dict: Dictionary containing module info, e.g.:
-            {
-                'image_encoder': {'prefix': 'image_encoder', 'name': 'qwen2_5_vit'},
-                'image_projector': {'prefix': 'image_projector', 'name': 'qwen_mlp_adapter'},
-                'foundation': {'prefix': 'qwen2.5', 'name': 'qwen2_5_7b'}
-            }
-    """
-    result = {}
-    for line in yaml_lines:
-        line = line.strip()
-        # Match lines like: - ../../models/image_encoder@model.image_encoder: qwen2_5_vit
-        if line.startswith('- ') and '@' in line and ':' in line:
-            # Remove the leading "- "
-            config_str = line[2:].strip()
-            # Split key and value
-            key_part, value = config_str.split(':', 1)
-            key_part = key_part.strip()
-            value = value.strip()
-            # Extract the part before @ as the prefix (e.g., qwen2.5 from "../../models/qwen2.5@model.foundation")
-            if '@' in key_part:
-                # Get the part before @, e.g., "qwen2.5" or "image_encoder"
-                prefix = key_part.split('@')[0].split('/')[-1]
-                # Get the last part after @, e.g., "image_encoder" from "model.image_encoder"
-                config_key = key_part.split('@')[1].split('.')[-1]
-                result[config_key] = {'prefix': prefix, 'name': value}
-    return result
-
-
-def update_overwrite(model_cfg, module_cfg, module_type):
-    if module_type != 'foundation':
-        for key in module_cfg.data.module.keys():
-            try:
-                module_cfg.module[key] = model_cfg['model'][module_type][key]
-            except:
-                continue
-    else:
-        for key in module_cfg.data.module.keys():
-            try:
-                module_cfg.module[key] = model_cfg['model']['foundation'][key]
-            except:
-                continue
 
 
 def load_config(config_path, config_name=None, hydra_overrides=None):
@@ -385,6 +198,7 @@ if __name__ == "__main__":
         '--model-name', 'qwen2_5-vl-7b',
         '--tensor-model-parallel-size', '1',
         '--pipeline-model-parallel-size', '1',
+        '--encoder-tensor-model-parallel-size', '2',
         '--seq-length', '4096',
         '--max-position-embeddings', '4096',
         '--micro-batch-size', '1',
@@ -412,13 +226,7 @@ if __name__ == "__main__":
     print(f"  {parser.get_parallel_config()}")
 
     print("=" * 50)
-    print("mappings keys:", list(parser.mappings.keys()))
-    if 'foundation' in parser.mappings:
-        print("foundation config loaded:", parser.mappings['foundation'] is not None)
-        print("foundation config:", parser.get_foundation_model_cfg().data)
-    if 'image_encoder' in parser.mappings:
-        print("image_encoder config loaded:", parser.mappings['image_encoder'] is not None)
-        print("image_encoder config:", parser.get_image_encoder_cfg().data)
-    if 'image_projector' in parser.mappings:
-        print("image_projector config loaded:", parser.mappings['image_projector'] is not None)
-        print("image_projector config:", parser.get_image_projector_cfg().data)
+    print(parser.config_file)
+    print(parser.convert_file)
+    print(parser.vision_patch_convert_file)
+    print(parser.adapter_convert_file)

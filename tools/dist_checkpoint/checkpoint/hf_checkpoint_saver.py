@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 import torch
 import torch.distributed as dist
-from megatron.core import parallel_state
 from megatron.training import print_rank_0
 
 # Import existing dist_checkpoint modules
@@ -23,6 +22,7 @@ from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpoin
 from tools.dist_checkpoint.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
 from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints, get_etp_map
+from tools.convert_checkpoint.utils.config_utils import get_yaml_config
 
 
 def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_path: Optional[str] = None) -> None:
@@ -158,20 +158,6 @@ def save_hf_checkpoint_online(
 
     # Get parallel config
     parallel_config = parser.get_parallel_config()
-
-    # Get mapping config based on model type
-    if parser.type == 'llm':
-        mapping_cfg = parser.get_language_model_cfg()
-        mapping_cfgs = [mapping_cfg]
-    elif parser.type == 'vlm':
-        # VLM has multiple mapping configs (no language_model key)
-        mapping_cfgs = [
-            parser.get_foundation_model_cfg(),
-            parser.get_image_encoder_cfg(),
-            parser.get_image_projector_cfg()
-        ]
-    else:
-        raise ValueError(f"Unsupported model type: {parser.type}")
 
     print_rank_0(f"Model type: {parser.type}")
 
@@ -404,12 +390,12 @@ def save_hf_checkpoint_online(
             parallel_config.ep_ranks = [ep_rank]
 
         # Create HF converter
-        converter = HfCheckpointConverter(
-            parallel_config=parallel_config,
-            mapping_cfg=mapping_cfgs[0]
-        )
+        c_config = get_yaml_config(parser.config_file, parser.convert_file, for_vlm=(parser.vision_patch_convert_file is not None))
+        c_vision_patch_config = get_yaml_config(
+            parser.config_file, parser.vision_patch_convert_file,
+            adapter_convert_file=parser.adapter_convert_file) if parser.vision_patch_convert_file is not None else None
 
-        converter.set_mapping_cfg(mapping_cfgs[0])
+        hf_converter = HfCheckpointConverter(parallel_config, c_config, vision_patch_config=c_vision_patch_config)
 
         if torch.cuda.is_available():
             peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
@@ -426,7 +412,7 @@ def save_hf_checkpoint_online(
             mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
             torch.cuda.reset_peak_memory_stats()
         try:
-            converter.save_hf_ckpt(mcore_dict, args.save_hf_path)
+            hf_converter.save_hf_ckpt(mcore_dict, args.save_hf_path)
             if torch.cuda.is_available():
                 peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
                 mem_after = torch.cuda.memory_allocated() / (1024 ** 3)

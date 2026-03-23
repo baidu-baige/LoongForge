@@ -65,6 +65,7 @@ from megatron.training import print_rank_0
 from aiak_training_omni.train.parser import parse_train_args
 from aiak_training_omni.train.initialize import initialize_aiak_megatron
 from aiak_training_omni.models.foundation.llm_model_provider import llm_model_provider
+from aiak_training_omni.models.omni_models.omni_model_provider import omni_model_provider
 
 from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 #from dist_checkpoint.checkpoint.hf_checkpoint_loader_big_model import load_hf_checkpoint_online
@@ -326,7 +327,6 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
 def main():
     # ── Step 1: Parse args (identical to training entry) ──────────────────
     args = parse_train_args()
-    ### 转换的parse和训练的分开？？？？
 
     # ── Step 2: Initialize Megatron (identical to training) ───────────────
     initialize_aiak_megatron(args=args)
@@ -344,7 +344,8 @@ def main():
     print_rank_0("=" * 80)
     print_rank_0("Phase 1: Build Model")
     print_rank_0("=" * 80)
-    model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+    #model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+    model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
     # ── Step 4: Load HF checkpoint (identical to training) ────────────────
     print_rank_0("=" * 80)

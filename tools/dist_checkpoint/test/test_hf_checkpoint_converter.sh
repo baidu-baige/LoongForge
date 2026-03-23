@@ -45,7 +45,7 @@ fi
 
 if [ $TEST_MODEL == "qwen2.5_vl_3b" ]; then
     export TP_SIZE=4
-    export ENCODE_TP_SIZE=2
+    export ENCODER_TP_SIZE=2
     export PP_SIZE=4
     export VPP_SIZE=1
     export TP_RANKS=0,1,2,3
@@ -60,7 +60,7 @@ fi
 
 if [ $TEST_MODEL == "qwen3_vl_30b_a3b" ]; then
     export TP_SIZE=4
-    export ENCODE_TP_SIZE=2
+    export ENCODER_TP_SIZE=2
     export PP_SIZE=4
     export VPP_SIZE=1
     export TP_RANKS=0,1,2,3

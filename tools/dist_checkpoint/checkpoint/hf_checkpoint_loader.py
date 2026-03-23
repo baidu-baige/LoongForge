@@ -21,6 +21,7 @@ from tools.dist_checkpoint.core.topo_sharder import TopoSharder
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from tools.dist_checkpoint.utils import time_checkpoint_operation, MemoryTracker
 from tools.convert_checkpoint.utils.utils import get_etp_map
+from tools.convert_checkpoint.utils.config_utils import get_yaml_config
 
 
 def _is_hf_checkpoint(checkpoint_path: str) -> bool:
@@ -99,20 +100,6 @@ def load_hf_checkpoint_online(
     # Get parallel config
     parallel_config = parser.get_parallel_config()
 
-    # Get mapping config based on model type
-    if parser.type == 'llm':
-        mapping_cfg = parser.get_language_model_cfg()
-        mapping_cfgs = [mapping_cfg]
-    elif parser.type == 'vlm':
-        # VLM has multiple mapping configs (no language_model key)
-        mapping_cfgs = [
-            parser.get_foundation_model_cfg(),
-            parser.get_image_encoder_cfg(),
-            parser.get_image_projector_cfg()
-        ]
-    else:
-        raise ValueError(f"Unsupported model type: {parser.type}")
-
     print_rank_0(f"Model type: {parser.type}")
 
     # Step 2: Initialize TopoSharder (parallel_state already initialized by training, only get coordinates here)
@@ -140,49 +127,43 @@ def load_hf_checkpoint_online(
 
     # Step 3: Create HF converter
     print_rank_0("Creating HF checkpoint converter...")
-    converter = HfCheckpointConverter(
-        parallel_config=parallel_config,
-        mapping_cfg=mapping_cfgs[0]
-    )
+    c_config = get_yaml_config(parser.config_file, parser.convert_file, for_vlm=(parser.vision_patch_convert_file is not None))
+    c_vision_patch_config = get_yaml_config(
+        parser.config_file, parser.vision_patch_convert_file,
+        adapter_convert_file=parser.adapter_convert_file) if parser.vision_patch_convert_file is not None else None
+    
+    hf_converter = HfCheckpointConverter(parallel_config, c_config, vision_patch_config=c_vision_patch_config)
 
     # Step 4: Load and convert HF checkpoint based on model type
-    if parser.type == 'llm':
-        # LLM: single mapping config
-        print_rank_0("Processing LLM checkpoint...")
 
-        # Load HF checkpoint
-        print_rank_0(f"Loading HF checkpoint from {args.load}...")
-        mem_before = 0.0
-        if torch.cuda.is_available():
-            mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
-            torch.cuda.reset_peak_memory_stats()
-        if torch.cuda.is_available():
-            peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
-            mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
-            print_rank_0(f"HF checkpoint loaded successfully. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
-        else:
-            print_rank_0("HF checkpoint loaded successfully")
+    print_rank_0("Processing HF checkpoint...")
 
-        # Convert to Mcore format
-        mem_before = 0.0
-        if torch.cuda.is_available():
-            mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
-            torch.cuda.reset_peak_memory_stats()
-        mcore_dict = converter.get_mcore_ckpt(args.load)
-        if torch.cuda.is_available():
-            peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
-            mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
-            print_rank_0(f"Mcore conversion completed. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
-
-        if mcore_dict is None:
-            raise RuntimeError("Failed to convert HF checkpoint to Mcore format")
-
-    elif parser.type == 'vlm':
-        # VLM: multiple mapping configs (foundation, image_encoder, image_projector)
-        # TODO: Implement VLM checkpoint loading
-        raise NotImplementedError("VLM checkpoint loading is not yet implemented")
+    # Load HF checkpoint
+    print_rank_0(f"Loading HF checkpoint from {args.load}...")
+    mem_before = 0.0
+    if torch.cuda.is_available():
+        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+        torch.cuda.reset_peak_memory_stats()
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+        print_rank_0(f"HF checkpoint loaded successfully. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
     else:
-        raise ValueError(f"Unsupported model type: {parser.type}")
+        print_rank_0("HF checkpoint loaded successfully")
+
+    # Convert to Mcore format
+    mem_before = 0.0
+    if torch.cuda.is_available():
+        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
+        torch.cuda.reset_peak_memory_stats()
+    mcore_dict = hf_converter.get_mcore_ckpt(args.load)
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
+        print_rank_0(f"Mcore conversion completed. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
+
+    if mcore_dict is None:
+        raise RuntimeError("Failed to convert HF checkpoint to Mcore format")
 
     # Ensure mcore_dict is not None (for type checker)
     assert mcore_dict is not None, "mcore_dict should not be None after loading"

@@ -712,6 +712,13 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--encoder-tensor-model-parallel-size",
+        type=int,
+        default=1,
+        help="Encoder Tensor Model Parallel Size for Heterogeneous TP Training.",
+    )
+
+    group.add_argument(
         "--legacy-reporting-loss-reduction",
         action="store_true",
         help="Use legacy reporting loss reduction method. Default is False.",

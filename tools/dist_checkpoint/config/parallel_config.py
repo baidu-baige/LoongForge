@@ -9,7 +9,7 @@ class ParallelConfig:
     Parallel config for distributed training
     """
     tp_size: int = 1
-    encode_tp_size: int = 1
+    encoder_tp_size: int = 1
     pp_size: int = 1
     ep_size: Optional[int] = None
     etp_size: Optional[int] = None

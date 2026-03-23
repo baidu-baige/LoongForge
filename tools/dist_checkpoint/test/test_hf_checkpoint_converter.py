@@ -17,7 +17,7 @@ from convert_checkpoint.utils.utils import(
 )
 
 
-def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encode_tp_size=None):
+def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encoder_tp_size=None):
     parallel_config = ParallelConfig()
     parallel_config.vpp_size = vpp
     parallel_config.vpp_scheduler = None
@@ -35,7 +35,7 @@ def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encode_tp_size=None):
     convert_file = os.environ.get('CONVERT_FILE')
     ckpt_path = os.environ.get('LOAD')
     #vlm
-    parallel_config.encode_tp_size = encode_tp_size
+    parallel_config.encoder_tp_size = encoder_tp_size
     vision_patch_convert_file = os.environ.get('VISION_PATCH_CONVERT_FILE', None)
     adapter_convert_file = os.environ.get('ADAPTER_CONVERT_FILE', None)
 
@@ -48,7 +48,7 @@ def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encode_tp_size=None):
     m_dict = hf_convert.get_mcore_ckpt(ckpt_path)
     return m_dict
 
-def test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, mcore_dict, encode_tp_size=None):
+def test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, mcore_dict, encoder_tp_size=None):
     parallel_config = ParallelConfig()
     parallel_config.vpp_size = vpp
     parallel_config.vpp_scheduler = None
@@ -66,7 +66,7 @@ def test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, mcore_dict, encode_tp_size
     convert_file = os.environ.get('CONVERT_FILE')
     ckpt_path = os.environ.get('SAVE')
     #vlm
-    parallel_config.encode_tp_size = encode_tp_size
+    parallel_config.encoder_tp_size = encoder_tp_size
     vision_patch_convert_file = os.environ.get('VISION_PATCH_CONVERT_FILE', None)
     adapter_convert_file = os.environ.get('ADAPTER_CONVERT_FILE', None)
 
@@ -88,7 +88,7 @@ def test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, mcore_dict, encode_tp_size
                 break
         make_hf_sub_checkpoints(ckpt_path)
 
-def test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, encode_tp_size=None):
+def test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, encoder_tp_size=None):
     parallel_config = ParallelConfig()
     parallel_config.vpp_size = vpp
     parallel_config.vpp_scheduler = None
@@ -107,7 +107,7 @@ def test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp
     convert_file = os.environ.get('CONVERT_FILE')
     ckpt_path = os.environ.get('LOAD')
     #vlm
-    parallel_config.encode_tp_size = encode_tp_size
+    parallel_config.encoder_tp_size = encoder_tp_size
     vision_patch_convert_file = os.environ.get('VISION_PATCH_CONVERT_FILE', None)
     adapter_convert_file = os.environ.get('ADAPTER_CONVERT_FILE', None)
 
@@ -120,7 +120,7 @@ def test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp
     m_dict = hf_convert.get_mcore_ckpt(ckpt_path)
     return m_dict
 
-def test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, mcore_dict, encode_tp_size=None):
+def test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, mcore_dict, encoder_tp_size=None):
     parallel_config = ParallelConfig()
     parallel_config.vpp_size = vpp
     parallel_config.vpp_scheduler = None
@@ -139,7 +139,7 @@ def test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp
     convert_file = os.environ.get('CONVERT_FILE')
     ckpt_path = os.environ.get('SAVE')
     #vlm
-    parallel_config.encode_tp_size = encode_tp_size
+    parallel_config.encoder_tp_size = encoder_tp_size
     vision_patch_convert_file = os.environ.get('VISION_PATCH_CONVERT_FILE', None)
     adapter_convert_file = os.environ.get('ADAPTER_CONVERT_FILE', None)
 
@@ -165,7 +165,7 @@ def test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp
 if __name__ == "__main__":
     test_model = os.environ.get('TEST_MODEL')
     tp = int(os.environ.get('TP_SIZE')) if os.environ.get('TP_SIZE') is not None else 1
-    encode_tp_size = int(os.environ.get('ENCODE_TP_SIZE')) if os.environ.get('ENCODE_TP_SIZE') is not None else 1
+    encoder_tp_size = int(os.environ.get('ENCODER_TP_SIZE')) if os.environ.get('ENCODER_TP_SIZE') is not None else 1
     pp = int(os.environ.get('PP_SIZE')) if os.environ.get('PP_SIZE') is not None else 1
     vpp = int(os.environ.get('VPP_SIZE')) if os.environ.get('VPP_SIZE') is not None else None
     pp_ranks = [int(x.strip()) for x in os.environ.get('PP_RANKS').split(',') if x.strip()]
@@ -193,16 +193,16 @@ if __name__ == "__main__":
                     print(f"{p=}, {e=}, {t=}")
         test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, m_dict)
     if test_model == "qwen2.5_vl_3b":
-        m_dict = test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encode_tp_size)
+        m_dict = test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encoder_tp_size)
         for p in m_dict:
             for t in m_dict[p]:
                 print(f"{p=}, {m_dict[p].keys()}")
-        test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, m_dict, encode_tp_size)
+        test_mcore_to_hf(tp, pp, vpp, pp_ranks, tp_ranks, m_dict, encoder_tp_size)
     if test_model == "qwen3_vl_30b_a3b":
-        m_dict = test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, encode_tp_size)
+        m_dict = test_moe_hf_to_mcore(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, encoder_tp_size)
         for p in m_dict:
             print(f"{p=}: {m_dict[p].keys()}")
             for e in m_dict[p]:
                 for t in m_dict[p][e]:
                     print(f"{p=}, {e=}, {t=}")
-        test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, m_dict, encode_tp_size)
+        test_moe_mcore_to_hf(tp, pp, vpp, ep, etp, pp_ranks, tp_ranks, ep_ranks, etp_ranks, m_dict, encoder_tp_size)
