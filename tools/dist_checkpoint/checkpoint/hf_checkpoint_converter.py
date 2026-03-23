@@ -40,7 +40,7 @@ class HfCheckpointConverter:
         self.args.amax_epsilon = parallel_config.amax_epsilon
         self.args.mtp_num_layers = parallel_config.mtp_num_layers
         self.args.encoder_tensor_model_parallel_size = parallel_config.encode_tp_size
-        self.args.load_lora_ckpt_path = parallel_config.load_lora_ckpt_path
+        self.args.load_lora_ckpt_path = None
         self.args.lora_alpha = parallel_config.lora_alpha
         self.args.lora_dim = parallel_config.lora_dim
         self.ep_size = parallel_config.ep_size
