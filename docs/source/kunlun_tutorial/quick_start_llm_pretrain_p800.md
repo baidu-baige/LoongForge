@@ -2,13 +2,13 @@
 
 ## Quick Start: LLM Model Pretrain Training
 
-This document guides you through the quick start process for pre-training Large-Language Models (LLM) using the OmniTraining framework on P800.
+This document guides you through the quick start process for pre-training Large-Language Models (LLM) using the BaigeOmni framework on P800.
 
-For data preparation and weight preparation, refer to [5.1. Quick Start: LLM Model Pretrain Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/B_DSjbh8dhZrHv?t=mention&mt=doc&dt=doc)
+For data preparation and weight preparation, refer to [quick start for llm pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
 
 ## Pretrain Training Script
 
-OmniTraining currently provides Pretrain training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/pretrain/` directory. Below is an example Pretrain training script for `Qwen3-30B-A3B`. Please refer to the comments for the purpose of each script section:
+BaigeOmni currently provides Pretrain training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/pretrain/` directory. Below is an example Pretrain training script for `Qwen3-30B-A3B`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 #! /bin/bash
@@ -39,9 +39,10 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 ###################### Kunlunxin P800 ######################
 # bf16 specific (megatron related variables refer to <Baige Megatron specific>)
-#export USE_FAST_BF16_FC=true                    # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
-export USE_FAST_BF16_FC_FWD_OUT=true
-export USE_FAST_BF16_FC_BWD_DW=true
+export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
+export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # forward
+export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # backward dw
+export XMLIR_ENABLE_FAST_FC_BWD_DX=true  # backward dx
 export FORCE_DISABLE_INPLACE_BF16_CAST=false    # Default is false, needs to be enabled in special cases (async checkpoint)
 
 export BKCL_RDMA_VERBS=1
@@ -52,8 +53,6 @@ export BKCL_FORCE_L3_RDMA=0                     # Setting to 1 may cause OOM if 
 export BKCL_ENABLE_XDR=1
 export BKCL_ALL_TO_ALL_OPT=1                    # Multi-node alltoall switch, see https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/BeQck0ZK7s/QX0GHLg9-A/fa1a35ef87d947 
 export BKCL_RING_HOSTID_USE_RANK=1              # Supported since version 1.2.11, will be default in future
-#export BKCL_FORCE_SYNC=1
-#export BKCL_DEBUG=1
 
 export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: more memory usage but better performance; true: less memory but degraded performance
 export XMLIR_BATCH_PARALLEL=false               # Enable communication fusion operators, USE_CAST_FC_FUSION automatically disabled in bf16
@@ -68,7 +67,7 @@ export XMLIR_CUDNN_ENABLED=1                    # true: use cuDNN, supports conv
 # LINEAR switches
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # Allow linear to bypass xblas fcfusion in certain scenarios, e.g., use addmm, default is 1
 export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE uses int32_with_ll, optional
-export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1         # Enable xpu_plugin for better performance (recommended)
 
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13

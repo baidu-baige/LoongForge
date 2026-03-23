@@ -1,8 +1,8 @@
 # Installation on Kunlunxin P800
 
-This document describes how to build the OmniTraining image that can run on Kunlunxin P800.
+This document describes how to build the BaigeOmni image that can run on Kunlunxin P800.
 
-## Environment Preparation
+## 1. Build & Run with Docker Image (Recommended)
 
 We provide a clean base image with required underlying dependencies installed.
 
@@ -10,47 +10,56 @@ We provide a clean base image with required underlying dependencies installed.
 * Conda environment (internal iregistry): `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`
 
 Environment versions:
-
-* **OS**: Ubuntu 22.04
+* **OS**: Ubuntu 20.04
 * **Software**:
     * Python 3.10
     * PyTorch 2.5.1
+    * CUDA 11.7
+### 1.2 Build the docker image
 
-## Building the Image
+**Before building, initialize the Baige-Megatron submodule** so its contents are included
+in the Docker build context:
 
-Run the following command from the project root directory:
+```bash
+cd BaigeOmni
+git submodule update --init third_party/Baige-Megatron
+cd ..
+```
+
+Then build the image:
 
 ```bash
 BASE_IMAGE=weiyexu/omni_kunlun:uv_base
-# For conda image:
-# BASE_IMAGE=iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33
 INSTALL_LEROBOT=false
 DEFAULT_XPYTORCH_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260206/xpytorch-cp310-torch251-ubuntu2004-x64.run 
 docker build  \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     --build-arg INSTALL_LEROBOT=${INSTALL_LEROBOT} \
     --build-arg XPYTORCH_URL_ARG="${DEFAULT_XPYTORCH_URL_ARG}" \
-    -t OmniTraining-kunlun:latest -f OmniTraining/docker/Dockerfile.xpu .
-    # For conda image:
-    #-t OmniTraining-kunlun:latest -f OmniTraining/docker/Dockerfile.xpu.internal .
+    -t BaigeOmni-kunlun:latest -f BaigeOmni/docker/Dockerfile.xpu .
+    # For internal conda image:
+    #-t BaigeOmni-kunlun:latest -f BaigeOmni/docker/Dockerfile.xpu.internal .
 ```
-
+- `BASE_IMAGE` is the base image used for building. Options include:
+  * `weiyexu/omni_kunlun:uv_base` (default) [available at Docker Hub]
+  * `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33` [internal use only]
+- `XPYTORCH_URL_ARG` is the xpytorch installer url argument.
+- `INSTALL_LEROBOT` is used to determine whether to install lerobot (options: true, false).
 After building, you can verify the image:
 
 ```bash
-docker images | grep OmniTraining-kunlun:latest
+docker images | grep BaigeOmni
 ```
 
-At this point, all dependencies have been installed.
+---
 
-## Running the Image
-
-The following example demonstrates how to start a container and mount project code, data, and other directories:
+### 1.3 Run the docker container
+The example below starts a container and mounts the project code, data, etc.:
 
 ```bash
 #!/bin/bash
 
-image_addr='OmniTraining-kunlun:latest'
+image_addr='BaigeOmni-kunlun:latest'
 DEFAULT_CONTAINER_NAME='omni-kunlun'
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
@@ -72,7 +81,7 @@ case $ACTION in
         --privileged \
         --net=host \
         --name=${CONTAINER_NAME} \
-        -v /xxx:/data \
+        -v /path/to/data:/mnt/cluster/BaigeOmni/ \
         -w /workspace/ \
         ${image_addr} bash
 
@@ -106,4 +115,7 @@ After entering the container:
 - For conda environment image: activate via `conda activate python310_torch25_cuda`
 - For UV image: activate via `source /opt/omni_kunlun/bin/activate`
 
-The virtual environment is activated by default. You can directly navigate to `/workspace/OmniTraining/examples_xpu/` to run the corresponding training scripts.
+The virtual environment is activated by default. You can directly navigate to `/workspace/BaigeOmni/examples_xpu/` to run the corresponding training scripts.
+
+## 2. Manual Environment Setup
+Note: We do NOT need to install the NVIDIA Transformer Engine. For other steps, please refer to [installation guide on NVIDIA GPU](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/get_started/installation.md).

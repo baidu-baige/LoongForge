@@ -4,21 +4,19 @@
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/users/zhaiyanfeng/dataset/qwen3-next/sft_aplaca_zh_new_data.json"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/users/dataset/qwen3-next/sft_aplaca_zh_new_data.json"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/users/zhaiyanfeng/dataset/qwen3-next/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/users/dataset/qwen3-next/sft_aplaca_zh_data_cache"}
 
 DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml"}
 
 # Common paths and configurations
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/users/zhaiyanfeng/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-Instruct/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/users/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-Instruct/"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/users/zhaiyanfeng/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp/"}
-CHECKPOINT_SAVE_PATH=${CHECKPOINT_SAVE_PATH:-"/mnt/cluster/users/zhaiyanfeng/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp-save/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/users/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp/"}
+CHECKPOINT_SAVE_PATH=${CHECKPOINT_SAVE_PATH:-"/mnt/cluster/users/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp-save/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/users/zhaiyanfeng/out/tensorboard/qwen3-next"}
-
-cp -f /mnt/cluster/users/zhaiyanfeng/code1/Qwen3-Next/omni-mcore0.15-0211/attention.py /root/miniconda/envs/python310_torch25_cuda/lib/python3.10/site-packages/transformer_engine/pytorch/attention.py
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/users/out/tensorboard/qwen3-next"}
 
 export XMLIR_MOCK_ASYNC_LINEAR=0 
 

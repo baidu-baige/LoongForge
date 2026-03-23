@@ -2,13 +2,13 @@
 
 ## Quick Start: VLM Model SFT Training
 
-This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the OmniTraining framework on P800.
+This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the BaigeOmni framework on P800.
 
-For data preparation and weight preparation, refer to [7.2. Quick Start: VLM Model SFT Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/srzcYCsgVl4Uvx?t=mention&mt=doc&dt=doc)
+For data preparation and weight preparation, refer to [quick start for vlm sft](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md).
 
 ## SFT Training Script
 
-OmniTraining currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-VL-30B-A3B`. Please refer to the comments for the purpose of each script section:
+BaigeOmni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-VL-30B-A3B`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 #! /bin/bash
@@ -38,12 +38,12 @@ do
 done
  
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/OmniTraining"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/load/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm_202512180001/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/hejinhui01/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
  
 GPUS_PER_NODE=8
 ###################### Kunlunxin P800 ######################
@@ -182,7 +182,7 @@ LOGGING_ARGS=(
  
 PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/omni_training/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${MOE_ARGS[@]} \
     ${DATA_ARGS[@]} \

@@ -124,7 +124,7 @@ BaigeOmni/
 └── docs/                         # Documentation
 ```
 
-## 🌟 Powered by OmniTraining
+## 🌟 Powered by BaigeOmni
 
 **Open-Source Ecosystem:**
 * [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
@@ -132,7 +132,7 @@ BaigeOmni/
 
 **Enterprise Scale & Performance:**
 
-Before becoming an open-source project, OmniTraining had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
+Before becoming an open-source project, BaigeOmni had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
 * Powers proprietary large-scale models across diverse industries, including **Education, Code Generation, and Embodied AI**.
 * Typically achieves a **30%+ average speedup** over standard customer baselines through systemic optimizations.
 * Seamlessly supports ultra-large cluster training scaling up to **5,000 XPUs**.
