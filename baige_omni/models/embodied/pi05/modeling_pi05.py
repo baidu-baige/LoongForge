@@ -82,7 +82,7 @@ def get_safe_dtype(target_dtype, device_type):
 
 
 def create_sinusoidal_pos_embedding(  # see openpi `create_sinusoidal_pos_embedding` (exact copy)
-    time: torch.Tensor, dimension: int, min_period: float, max_period: float, device="cpu"
+    time: torch.Tensor, dimension: int, min_period: float, max_period: float, device: torch.device = torch.device('cpu')
 ) -> Tensor:
     """Computes sine-cosine positional embedding vectors for scalar positions."""
     if dimension % 2 != 0:
@@ -91,6 +91,9 @@ def create_sinusoidal_pos_embedding(  # see openpi `create_sinusoidal_pos_embedd
     if time.ndim != 1:
         raise ValueError("The time tensor is expected to be of shape `(batch_size, )`.")
 
+    # Ensure time tensor is on the correct device
+    time = time.to(device=device)
+    
     dtype = get_safe_dtype(torch.float64, device.type)
     fraction = torch.linspace(0.0, 1.0, dimension // 2, dtype=dtype, device=device)
     period = min_period * (max_period / min_period) ** fraction
@@ -101,7 +104,7 @@ def create_sinusoidal_pos_embedding(  # see openpi `create_sinusoidal_pos_embedd
     return torch.cat([torch.sin(sin_input), torch.cos(sin_input)], dim=1)
 
 
-def sample_beta(alpha, beta, bsize, device):  # see openpi `sample_beta` (exact copy)
+def sample_beta(alpha, beta, bsize, device: torch.device):  # see openpi `sample_beta` (exact copy)
     """Sample from Beta(alpha, beta) for the given batch size and device."""
     alpha_t = torch.as_tensor(alpha, dtype=torch.float32, device=device)
     beta_t = torch.as_tensor(beta, dtype=torch.float32, device=device)
@@ -636,21 +639,22 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         att_2d_masks_4d = att_2d_masks[:, None, :, :]
         return torch.where(att_2d_masks_4d, 0.0, OPENPI_ATTENTION_MASK_VALUE)
 
-    def sample_noise(self, shape, device):
+    def sample_noise(self, shape, device: torch.device):
         """Sample standard normal noise with the provided shape and device."""
         return torch.normal(
             mean=0.0,
             std=1.0,
             size=shape,
             dtype=torch.float32,
-            device=device,
-        )
+            device=(torch.device('cpu') if self.config.random_fallback_cpu else device),
+        ).to(device)
 
-    def sample_time(self, bsize, device):
+    def sample_time(self, bsize, device: torch.device):
         """Sample diffusion timesteps according to the configured beta distribution."""
         time_beta = sample_beta(
-            self.config.time_sampling_beta_alpha, self.config.time_sampling_beta_beta, bsize, device
-        )
+            self.config.time_sampling_beta_alpha, self.config.time_sampling_beta_beta, bsize,
+            torch.device('cpu') if self.config.random_fallback_cpu else device
+        ).to(device)
         time = time_beta * self.config.time_sampling_scale + self.config.time_sampling_offset
         return time.to(dtype=torch.float32, device=device)
 
@@ -711,8 +715,8 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
             self.action_in_proj.out_features,
             min_period=self.config.min_period,
             max_period=self.config.max_period,
-            device=timestep.device,
-        )
+            device=torch.device('cpu') if self.config.random_fallback_cpu else timestep.device
+        ).to(timestep.device)
         time_emb = time_emb.type(dtype=timestep.dtype)
 
         # Fuse timestep + action information using an MLP

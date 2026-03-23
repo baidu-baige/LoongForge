@@ -136,6 +136,9 @@ class PI05Config(PreTrainedConfig):
 
     tokenizer_max_length: int = 200  # see openpi `__post_init__`
 
+    # generate some random number on CPU to align the loss on XPU with that on GPU
+    random_fallback_cpu: bool = False
+
     def __post_init__(self):
         """Run basic validations and fill derived Megatron parameters."""
         super().__post_init__()

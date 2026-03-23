@@ -91,6 +91,7 @@ MODEL_CONFIG_ARGS=(
     --model-name pi05
     --use-distributed-optimizer
     --distributed-backend nccl
+    #--random-fallback-cpu
 )
 
 LOGGING_ARGS=(
