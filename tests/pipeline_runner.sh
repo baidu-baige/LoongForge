@@ -160,7 +160,7 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         --auto_collect_baseline)
-            auto_collect_baseline=true
+            auto_collect_baseline=false
             shift
             ;;
 
