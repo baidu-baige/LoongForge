@@ -106,10 +106,6 @@ Besides the native Megatron flags, the framework adds convenient options (define
 * `--training-phase` – `pretrain`, `sft`, etc.  
 * `--tokenizer-type` – recommend `HFTokenizer` plus `--hf-tokenizer-path`.  
 * `--no-create-attention-mask-in-dataloader` – skip attention mask creation to speed up data loading.  
-* `--fp8-format` – `e4m3` (same as DeepSeek-V3 paper).  
-* `--fp8-recipe` – `blockwise` quantisation.  
-* `--fp8-param-gather` – keep parameters in FP8; omit it to keep BF16.  
-* `--enable-fp8-comm` – dispatch FP8 tensors during MoE communication.  
 * `--custom-pipeline-layers` – per-stage layer assignment, e.g. `19,20,20,21`.  
 * `--custom-pipeline-recompute-layers` – per-stage recompute layers, e.g. `10,11,12,13`.  
 * `--reduce-variable-seq-shape-p2p-comm` – pad p2p buffers to fixed length (useful for SFT).  
@@ -123,45 +119,53 @@ Below is the FP8 pre-training script for DeepSeek-V3.1 (comments added for clari
 #!/bin/bash
 # DeepSeek-V3 FP8 mixed-precision pre-training
 
-export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1   # allow non-weights-only loading
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
+# ------------- data -------------
 DATA_PATH=/path/to/your/dataset
+
+# ------------- tokenizer & checkpoint -------------
 TOKENIZER_PATH=/path/to/your/hf/tokenizer
 CHECKPOINT_PATH=/path/to/your/mcore/checkpoint
 CHECKPOINT_PATH_SAVE=/path/to/your/save_dir
+
+# ------------- logging -------------
 TENSORBOARD_PATH=/path/to/your/tensorboard
 
-# FP8 quantisation EPS (avoid NaN)
+# ------------- FP8 quantisation -------------
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
 export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
 export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 
 GPUS_PER_NODE=8
 
-# NCCL & NVSHMEM tuning for multi-node
+# ------------- NCCL & NVSHMEM -------------
 export NCCL_SOCKET_IFNAME=bond0
 export NCCL_IB_GID_INDEX=3
+# choose HCA list according to your cluster
 export NVSHMEM_HCA_LIST=mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7,mlx5_8,mlx5_9
+export NVSHMEM_BOOTSTRAP=UID
+export NVSHMEM_IB_TRAFFIC_CLASS=130
 export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=bond0
 export NVSHMEM_BOOTSTRAP_UID_SOCK_FAMILY=AF_INET
 export NVSHMEM_IB_GID_INDEX=3
 
-# Transformer-Engine knobs
+# ------------- Transformer Engine -------------
 export NVTE_FWD_LAYERNORM_SM_MARGIN=8
 export NVTE_BWD_LAYERNORM_SM_MARGIN=24
 export NVTE_ALLOW_NONDETERMINISTIC_ALGO=1
 
-# CUDA & PyTorch optimisations
+# ------------- CUDA / PyTorch -------------
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_NCCL_AVOID_RECORD_STREAMS=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Distributed job settings
+# ------------- distributed -------------
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
-MASTER_PORT=${MASTER_PORT:-"5000"}
+MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
 
@@ -173,6 +177,7 @@ DISTRIBUTED_ARGS=(
   --master_port $MASTER_PORT
 )
 
+# ------------- model -------------
 MODEL_ARGS=(
   --model-name deepseek-v3
   --multi-latent-attention
@@ -183,9 +188,10 @@ MODEL_ARGS=(
   --norm-epsilon 1e-6
   --rotary-scaling-factor 40
   --enable-fa-within-mla
-  --use-fp32-dtype-for-param-pattern '^expert_bias$' '.+\.expert_bias$'
+  --use-fp32-dtype-for-param-pattern expert_bias
 )
 
+# ------------- data loader -------------
 DATA_ARGS=(
   --tokenizer-type HFTokenizer
   --hf-tokenizer-path $TOKENIZER_PATH
@@ -194,6 +200,7 @@ DATA_ARGS=(
   --no-create-attention-mask-in-dataloader
 )
 
+# ------------- training hyper-params -------------
 TRAINING_ARGS=(
   --training-phase pretrain
   --seq-length 32768
@@ -227,11 +234,11 @@ TRAINING_ARGS=(
   --fp8-format e4m3
   --fp8-recipe blockwise
   --fp8-param-gather
-  --enable-fp8-comm
   --distributed-timeout-minutes 60
   --enable-experimental
 )
 
+# ------------- MoE -------------
 MOE_ARGS=(
   --moe-router-load-balancing-type seq_aux_loss
   --moe-router-topk 8
@@ -247,6 +254,7 @@ MOE_ARGS=(
   --empty-unused-memory-level 2
 )
 
+# ------------- parallelism & optimiser -------------
 MODEL_PARALLEL_ARGS=(
   --tensor-model-parallel-size 8
   --pipeline-model-parallel-size 8
@@ -265,10 +273,12 @@ MODEL_PARALLEL_ARGS=(
   --overlap-param-gather
 )
 
+# ------------- MTP -------------
 MTP_ARGS=(
   --mtp-loss-scaling-factor 0.1
 )
 
+# ------------- logging -------------
 LOGGING_ARGS=(
   --log-interval 1
   --tensorboard-dir ${TENSORBOARD_PATH}
@@ -278,6 +288,7 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
+# ------------- launch -------------
 PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
   $BAIGE_OMNI_PATH/baige_omni/train.py \

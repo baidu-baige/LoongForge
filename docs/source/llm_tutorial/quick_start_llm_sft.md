@@ -111,7 +111,7 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
       --hf-tokenizer-path $TOKENIZER_PATH \
       --workers 50 \
       --split 100,0,0
-      # --packing-sft-data
+      --packing-sft-data
 ```
 
 Key flags  
@@ -230,7 +230,7 @@ MODEL_ARGS=(
   --norm-epsilon 1e-6
   --rotary-scaling-factor 40
   --enable-fa-within-mla
-  --use-fp32-dtype-for-param-pattern '^expert_bias$' '.+\.expert_bias$'
+  --use-fp32-dtype-for-param-pattern expert_bias
 )
 
 # ------------- data loader -------------
@@ -239,7 +239,6 @@ DATA_ARGS=(
   --hf-tokenizer-path $TOKENIZER_PATH
   --data-path $DATA_PATH
   --split 90,8,2
-  --no-create-attention-mask-in-dataloader
 )
 
 # ------------- SFT specific -------------
