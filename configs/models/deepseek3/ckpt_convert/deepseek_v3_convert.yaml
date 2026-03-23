@@ -18,7 +18,7 @@ args:
     num_experts: ${module.num_experts}
     mtp_num_layers: ${module.mtp_num_layers}
   huggingface:
-    mtp_layer_id: 61                                                                         
+    mtp_layer_id: 61
   mcore:
     untie_embeddings_and_output_weights: true
     add_embedding_padding: true
