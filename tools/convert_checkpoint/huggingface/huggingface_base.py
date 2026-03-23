@@ -219,7 +219,6 @@ class HuggingfaceBase:
             else:
                 h_dict[hf_weight_path] = weight_list[i] if weight_list is not None else None
 
-            h_dict[f"{hf_path}.{WEIGHT}"] = weight_list[i] if weight_list is not None else None
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
             if weight_scale_list is not None:

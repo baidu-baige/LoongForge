@@ -110,14 +110,11 @@ def process_checkpoint_shards(input_dir, output_dir, reverse_mappings, pipeline_
         print(f"Load Megatron Shard:{checkpoint_path}")
         print("🔄 Reversing keys...")
         reversed_shard = reverse_map_single_checkpoint_keys(reverse_mappings, checkpoint_path)
+        save_checkpoint_path = os.path.join(output_dir, checkpoint_name)
+        os.makedirs(os.path.join(output_dir, sub_dir), exist_ok=True)
         print("💾 Saving reversed shard...")
-        torch.save(reversed_shard, checkpoint_path)
-        print(f"Saved Megatron Shard:{checkpoint_path}")
-    
-    shutil.move(input_dir, dirname(output_dir))
-
-
-
+        torch.save(reversed_shard, save_checkpoint_path)
+        print(f"Saved Megatron Shard:{save_checkpoint_path}")
 
 def parse_args(title=None):
     """Parse all arguments."""

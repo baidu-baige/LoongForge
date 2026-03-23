@@ -88,8 +88,6 @@ else:
         etp_size = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', 'image_encoder')
         dtp_size = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', 'foundation')
 
-    assert etp_size == dtp_size, "Hetero TP is not supported in MoE!"
-
     pp_size = parallel_param_parser(args, model_cfg, 'pipeline_model_parallel_size', 'foundation')
     ep_size = parallel_param_parser(args, model_cfg, 'expert_parallel_size', 'foundation')
     vpp_size = parallel_param_parser(args, model_cfg, 'num_virtual_stages_per_pipeline_rank', 'foundation')
@@ -108,6 +106,7 @@ modules = [vision_model, adapter, patch]
 for sub_dir in sub_dirs:
     splits = sub_dir.split('_')
     t = int(splits[2])
+    et_rank = t % etp_size
     checkpoint_name = f"{sub_dir}/model_optim_rng.pt"
     checkpoint_path = os.path.join(args.language_model_path, checkpoint_name)
     print(f"Load Megatron Shard:{checkpoint_path}")
@@ -124,7 +123,8 @@ for sub_dir in sub_dirs:
             else:
                 omni_key_model[key] = value
         ckpt['model'] = omni_key_model
-        if 'foundation_model.embedding.word_embeddings.weight' in ckpt['model']:
+        if (args.pipeline_model_parallel_size == 1 or int(splits[3]) == 0) and \
+                'foundation_model.embedding.word_embeddings.weight' in ckpt['model']:
             ckpt['model']['encoder_model.text_encoder.word_embeddings.weight'] = \
             ckpt['model']['foundation_model.embedding.word_embeddings.weight']
     else:
@@ -139,18 +139,19 @@ for sub_dir in sub_dirs:
                 else:
                     omni_key_model[key] = value
             ckpt[cur_model] = omni_key_model
-        if 'foundation_model.embedding.word_embeddings.weight' in ckpt['model0']:
+        if (args.pipeline_model_parallel_size == 1 or int(splits[3]) == 0) and \
+                'foundation_model.embedding.word_embeddings.weight' in ckpt['model0']:
             ckpt['model0']['encoder_model.text_encoder.word_embeddings.weight'] = \
             ckpt['model0']['foundation_model.embedding.word_embeddings.weight']
 
     if args.pipeline_model_parallel_size == 1 or int(splits[3]) == 0:
         for module in modules:
             if 'model' in ckpt.keys():
-                merge_dict(module[t]['model'], ckpt['model'])
+                merge_dict(module[et_rank]['model'], ckpt['model'])
                 
             else:
                 assert 'model0' in ckpt.keys()  # vpp
-                merge_dict(module[t]['model'], ckpt['model0'])
+                merge_dict(module[et_rank]['model'], ckpt['model0'])
     
     try:
         torch.save(ckpt, checkpoint_path)

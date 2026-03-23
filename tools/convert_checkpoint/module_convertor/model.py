@@ -27,6 +27,7 @@ from convert_checkpoint.huggingface.huggingface_config import HuggingFaceConfig
 from convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
 from convert_checkpoint.mcore.mcore_config import McoreConfig
 from convert_checkpoint.common.common_config import CommonConfig
+from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.arguments import parse_args, set_args
 from convert_checkpoint.utils import utils
 
@@ -35,12 +36,10 @@ from convert_checkpoint.utils.utils import(
     get_layer_ids,
     check_all_done,
     get_ep_map,
-    convert_layout_to_custom_pipeline_layers,
+    convert_layout_to_custom_pipeline_layers
 )
 
-
-from omegaconf import OmegaConf
-from convert_checkpoint.utils.config_utils import parse_at_configs, load_config, parallel_param_parser, update_overwrite
+from convert_checkpoint.utils.config_utils import get_yaml_config, replace_vlm_config
 
 
 BIG_MODEL_LIST = ['llama2-70b', 'qwen-72b', 'codellama-70b', 'codellama-34b']
@@ -50,8 +49,9 @@ class Model():
     """
         Model
     """
-    def __init__(self, c_config):
+    def __init__(self, c_config, c_vision_patch_config=None):
         self.config = c_config
+        self.c_vision_patch_config = c_vision_patch_config
         self.delay_convert_optimizer = False
 
     @staticmethod
@@ -62,7 +62,23 @@ class Model():
             return HuggingFaceCheckpoint.check_done_files(save_path, layer_dict, expert_dict=expert_dict)
         return False
 
-    def convert_from_common(self, platform, target_config, layer_dict, expert_dict=None):
+    @staticmethod
+    def get_pipeline_args(args, c_config):
+        cargs = c_config.get_args("common")
+        num_layers = cargs["num_layers"]
+
+        tp = args.tensor_model_parallel_size
+        pp = args.pipeline_model_parallel_size
+        ep = args.expert_parallel_size
+        etp = args.expert_tensor_parallel_size
+        num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
+        if num_layers_per_stage:
+            vpp = num_layers // pp // num_layers_per_stage
+        else:
+            vpp = args.num_virtual_stages_per_pipeline_rank or 1
+        return (tp, pp, vpp), (ep, etp)
+
+    def convert_from_common(self, platform, target_c_config, layer_dict, expert_dict=None, target_c_vision_config=None):
         """
             Convert common checkpoint to the platform checkpoint.
 
@@ -72,13 +88,27 @@ class Model():
         """
 
         args = parse_args()
+        assert len(layer_dict.keys()) == 1, f"layer_dict keys: {layer_dict.keys()}"
+        p = list(layer_dict.keys())[0]
         if platform == 'mcore':
-            m_ckpt = McoreCheckpoint(self.config, args)
-            return m_ckpt.convert_from_common(self.c_ckpt, target_config, layer_dict, expert_dict=expert_dict)
+            (tp, pp, vpp), (ep, etp) = Model.get_pipeline_args(args, self.config)
+            m_ckpt = McoreCheckpoint(self.config, args, tp, pp, vpp, ep, etp)
+            if p > 0 or self.c_vision_patch_config is None:
+                m_ckpt.convert_from_common(self.c_ckpt, target_c_config, layer_dict, expert_dict=expert_dict)
+            else:
+                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                McoreCheckpoint.convert_from_common_vlm(m_ckpt, m_vision_ckpt, self.c_vision_patch_config, self.c_ckpt,
+                        self.c_vision_ckpt, target_c_config, target_c_vision_config, args.save_ckpt_path, layer_dict, expert_dict)
+
         if platform == 'huggingface':
             hf_ckpt = HuggingFaceCheckpoint(self.config, args)
-            return hf_ckpt.convert_from_common(self.c_ckpt, layer_dict, expert_dict=expert_dict, save_path=args.save_ckpt_path)
-        self.common_ckpt.clear()
+            if p > 0 or self.c_vision_patch_config is None:
+                hf_ckpt.convert_from_common(self.c_ckpt, layer_dict, expert_dict=expert_dict, save_path=args.save_ckpt_path)
+            else:
+                hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, args)
+                HuggingFaceCheckpoint.save_vlm_checkpoint(
+                    hf_ckpt, hf_vision_ckpt, self.c_vision_patch_config, self.c_ckpt,
+                    self.c_vision_ckpt, args.save_ckpt_path, layer_dict, expert_dict=expert_dict)
 
     def convert_config(self, platform):
         """
@@ -88,10 +118,16 @@ class Model():
                 platform (str): name of platform 
         """
         if platform == 'mcore':
-            return self.config.convert(McoreConfig)
+            if self.c_vision_patch_config is None:
+                return self.config.convert(McoreConfig), None
+            else:
+                return self.config.convert(McoreConfig), self.c_vision_patch_config.convert(McoreConfig)
 
         if platform == 'huggingface':
-            return self.config.convert(HuggingFaceConfig)
+            if self.c_vision_patch_config is None:
+                return self.config.convert(HuggingFaceConfig), None
+            else:
+                return self.config.convert(HuggingFaceConfig), self.c_vision_patch_config.convert(HuggingFaceConfig)
 
     def convert_to_common(self, args, layer_dict, expert_dict=None):
         """
@@ -115,23 +151,37 @@ class Model():
         cargs = self.config.get_args("common")
         mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
 
+        assert len(layer_dict.keys()) == 1, f"layer_dict keys: {layer_dict.keys()}"
+        p = list(layer_dict.keys())[0]
         # load checkpoint
         if platform == 'huggingface':
             hf_ckpt = HuggingFaceCheckpoint(self.config, args)
-            assert len(layer_dict.keys()) == 1, f"layer_dict keys: {layer_dict.keys()}"
-            p = list(layer_dict.keys())[0]
             layer_ids = layer_dict[p]
             expert_ids=expert_dict.values() if expert_dict is not None else None
-            hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers)
+            hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids,
+                         mtp_num_layers=mtp_num_layers)
             self.c_ckpt = hf_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
-
+            if p == 0 and self.c_vision_patch_config is not None:
+                hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, args)
+                vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
+                vision_layer_dict = {}
+                vision_layer_dict[0] = list(range(vision_num_layers)) 
+                hf_vision_ckpt.load(ckpt_path, args.safetensors, self.c_vision_patch_config, vision_layer_dict[0])
+                self.c_vision_ckpt = hf_vision_ckpt.convert_to_common(vision_layer_dict)
         # load checkpoint
         if platform == 'mcore':
             self.delay_convert_optimizer = args.model_type_custom in BIG_MODEL_LIST
-            m_ckpt = McoreCheckpoint(self.config, args)
+            (tp, pp, vpp), (ep, etp) = Model.get_pipeline_args(args, self.config)
+            m_ckpt = McoreCheckpoint(self.config, args, tp, pp, vpp, ep, etp)
             m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict, lora_load_path=args.load_lora_ckpt_path)
             self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
-
+            if p == 0 and self.c_vision_patch_config is not None:
+                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
+                vision_layer_dict = {}
+                vision_layer_dict[0] = list(range(vision_num_layers)) 
+                m_vision_ckpt.m_dict = m_ckpt.m_dict
+                self.c_vision_ckpt = m_vision_ckpt.convert_to_common(vision_layer_dict)
 
     def update_args(self, args, group):
         """ update config accoding to args """
@@ -146,32 +196,17 @@ def main():
     c_config = CommonConfig()
     if config_path is not None:
         c_config.load(config_path)
-        tp = args.tensor_model_parallel_size
-        pp = args.pipeline_model_parallel_size
-        ep = args.expert_parallel_size
-        etp = args.expert_tensor_parallel_size
+        c_vision_patch_config = None
     else:
-        with open(args.config_file, 'r') as f:
-            module_names = parse_at_configs(f.readlines())
-        module_type = args.convert_file.split('/')[-3]
-        if module_names == {}: # llm
-            cfg = load_config(args.convert_file, hydra_overrides={module_type+'@module='+args.config_file.split("/")[-1].split(".")[0]})
-        else: # omni vlm
-            cfg = load_config(args.convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
-        OmegaConf.set_struct(cfg, False)
+        c_config = get_yaml_config(args.config_file, args.convert_file, for_vlm=(args.vision_patch_convert_file is not None))
+        c_vision_patch_config = get_yaml_config(args.config_file, args.vision_patch_convert_file,
+                                                adapter_convert_file=args.adapter_convert_file) \
+                if args.vision_patch_convert_file is not None else None
 
-        model_cfg = load_config(args.config_file)
-        if module_type != 'image_encoder':
-            module_type = 'foundation'
-        tp = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', module_type)
-        pp = parallel_param_parser(args, model_cfg, 'pipeline_model_parallel_size', module_type)
-        ep = parallel_param_parser(args, model_cfg, 'expert_parallel_size', module_type)
-        etp = parallel_param_parser(args, model_cfg, 'expert_tensor_parallel_size', module_type)
-        vpp = parallel_param_parser(args, model_cfg, 'num_virtual_stages_per_pipeline_rank', module_type)
-
-        c_config.load_convert_data(cfg)
-
-        update_overwrite(model_cfg, c_config, module_type)
+    tp = args.tensor_model_parallel_size
+    pp = args.pipeline_model_parallel_size
+    ep = args.expert_parallel_size
+    etp = args.expert_tensor_parallel_size
 
     if args.megatron_path is not None:
         sys.path.insert(0, args.megatron_path)
@@ -213,7 +248,7 @@ def main():
             args.expert_parallel_size = 1  # if ep is not set, will set ep=1
 
     def convert_one_p(p, cur_ep_ids=None):
-        model = Model(c_config)
+        model = Model(c_config, c_vision_patch_config)
         layer_dict = {}
         layer_dict[p] = get_layer_ids(c_config, args, p)
         ep_expert_mapping = None
@@ -231,13 +266,9 @@ def main():
             if group == "megatron":
                 model.update_args(_args, "mcore")
 
-        target_config = model.convert_config(args.save_platform)
-        save_optim = not args.no_save_optim and not model.delay_convert_optimizer
-        target_ckpt = model.convert_from_common(args.save_platform, target_config, layer_dict, expert_dict=ep_expert_mapping)
-        save_option = dict()
-        save_option["save_optim"] = save_optim
-        if isinstance(target_ckpt, HuggingFaceCheckpoint):
-            save_option["save_safe"] = args.safetensors
+        target_c_config, target_c_vision_config = model.convert_config(args.save_platform)
+        model.convert_from_common(args.save_platform, target_c_config, layer_dict,
+                                  expert_dict=ep_expert_mapping, target_c_vision_config=target_c_vision_config)
 
     if args.max_workers > 1 and ep is None:
         futures = []
