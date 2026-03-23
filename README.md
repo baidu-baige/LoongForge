@@ -1,9 +1,8 @@
 # README
 <div align="center">
 
-![BaigeOmni Logo](docs/assets/images/omni.jpg)
-
-<h4> A Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h4>
+<h1 align="center">BaigeOmni</h1>
+<h3>A modular, scalable, and highly efficient training framework for language and multimodal models.</h3>
 
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/BaigeOmni/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/BaigeOmni=social)](https://github.com/baidu-baige/BaigeOmni/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/BaigeOmni)](https://github.com/baidu-baige/BaigeOmni/issues)
 
@@ -36,14 +35,14 @@
 
 ## 🚀 Ongoing & Upcoming
 
-* **Enhanced support for VLA and Video Gen (I2V/T2V)** models.
+* **Expanded support for embodied AI models**, including GR00T N1.6, DreamZero, and LingBot VA.
+* **Further performance acceleration for diffusion models** such as WAN.
 * **Expanded foundation model support** (e.g., Kimi 2.5, GLM5).
-* **Decoupled Encoder-Decoder training** to accelerate VLM workflows.
+* **Decoupled encoder-decoder training** to accelerate VLM workflows.
 * **Further enhanced kernel performance** (e.g., DSA, GatedAttention).
-* **Adaptive FP8 precision** schemes.
-* **Advanced MoE load-balancing** strategies.
+* **Adaptive FP8 precision** and **advanced MoE load-balancing** strategies.
 * **Real-world application of MTP scaling** to improve speculative decoding acceptance rates.
-* **Native Huggingface checkpoint load & save support**, eliminating the need for Megatron offline conversion.
+* **Native Hugging Face checkpoint load/save support**, eliminating the need for offline Megatron conversion.
 * ...
 
 ## 🛠️ Getting Started
@@ -154,7 +153,7 @@ If you find BaigeOmni helpful in your research or production, please consider ci
 
 ```bibtex
 @software{BaigeOmni2026,
-      title={BaigeOmni: A Modular, Scalable & High-Efficiency Training Library for Multi Modal Models}, 
+      title={BaigeOmni: A modular, scalable, and highly efficient training framework for language and multimodal models}, 
       author={{The BaigeOmni Authors}},
       year={2026},
       url={https://github.com/baidu-baige/BaigeOmni},
