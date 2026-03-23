@@ -68,28 +68,72 @@ def save_state(path: str, state: Dict[str, Any]) -> None:
 def mark_model(state: Dict[str, Any], model_name: str, passed: bool, meta: Dict[str, Any]) -> None:
     models = state.setdefault("models", {})
     record = models.get(model_name, {})
+    existing_tasks = record.get("tasks") or []
+    existing_training_type = record.get("training_type") or []
     record.update({
         "status": "completed",
         "passed": bool(passed),
         "updated_at": _now(),
     })
     if meta:
+        meta = dict(meta)
+        if "tasks" in meta:
+            merged_tasks = set(existing_tasks)
+            merged_tasks.update(meta.get("tasks") or [])
+            meta["tasks"] = sorted(merged_tasks)
+        if "training_type" in meta:
+            merged_training_type = set(existing_training_type)
+            merged_training_type.update(meta.get("training_type") or [])
+            meta["training_type"] = sorted(merged_training_type)
+        if "tasks_passed" in meta:
+            merged_tasks_passed = dict(record.get("tasks_passed") or {})
+            merged_tasks_passed.update(meta.get("tasks_passed") or {})
+            meta["tasks_passed"] = merged_tasks_passed
         record.update(meta)
     models[model_name] = record
 
 
-def get_completed_models(state: Dict[str, Any], policy: str = "skip_completed") -> Set[str]:
+def get_completed_models(
+    state: Dict[str, Any],
+    policy: str = "skip_completed",
+    required_tasks: Any = None,
+    required_training_type: Any = None,
+) -> Set[str]:
     models = state.get("models", {}) or {}
     completed = set()
+    required_tasks_set = set(required_tasks) if required_tasks else None
+    required_training_type_set = set(required_training_type) if required_training_type else None
+
     for name, info in models.items():
         if not isinstance(info, dict):
             continue
         status = info.get("status")
         passed = info.get("passed")
+        tasks_passed = info.get("tasks_passed") or {}
         if policy == "skip_passed":
-            if status == "completed" and passed is True:
-                completed.add(name)
+            if required_tasks_set is not None and tasks_passed:
+                if not all(tasks_passed.get(task) is True for task in required_tasks_set):
+                    continue
+            else:
+                if not (status == "completed" and passed is True):
+                    continue
         else:
-            if status == "completed":
-                completed.add(name)
+            if status != "completed":
+                continue
+            if required_tasks_set is not None and tasks_passed:
+                if not set(tasks_passed.keys()).issuperset(required_tasks_set):
+                    continue
+
+        if required_tasks_set is not None and "tasks" in info:
+            recorded_tasks = info.get("tasks") or []
+            if not set(recorded_tasks).issuperset(required_tasks_set):
+                continue
+
+        if required_training_type_set is not None and "training_type" in info:
+            recorded_training_type = info.get("training_type") or []
+            if not set(recorded_training_type).issuperset(required_training_type_set):
+                continue
+
+        completed.add(name)
+
     return completed

@@ -80,7 +80,12 @@ def main() -> None:
     resume_enabled = bool(args.resume_state_file)
     if resume_enabled and os.getenv("RANK", "0") == "0":
         resume_state = load_state(args.resume_state_file)
-        completed_models = get_completed_models(resume_state, args.resume_policy)
+        completed_models = get_completed_models(
+            resume_state,
+            args.resume_policy,
+            args.tasks,
+            args.training_type,
+        )
         if completed_models:
             logger.info(f"Resume enabled: skip {len(completed_models)} completed models")
 
@@ -116,6 +121,14 @@ def main() -> None:
         if resume_enabled and os.getenv("RANK", "0") == "0":
             model_results = [item for item in BaseTask._validation_results if item.get("model_name") == model_name]
             model_passed = all(item.get("passed") for item in model_results) if model_results else True
+            task_passed = {}
+            for item in model_results:
+                task_name = item.get("task_name") or ""
+                if not task_name:
+                    continue
+                if task_name not in task_passed:
+                    task_passed[task_name] = True
+                task_passed[task_name] = task_passed[task_name] and bool(item.get("passed"))
             mark_model(
                 resume_state,
                 model_name,
@@ -124,6 +137,7 @@ def main() -> None:
                     "tasks": list(args.tasks),
                     "training_type": list(args.training_type),
                     "category": BaseTask._get_diff_category(model),
+                    "tasks_passed": task_passed,
                 },
             )
             save_state(args.resume_state_file, resume_state)

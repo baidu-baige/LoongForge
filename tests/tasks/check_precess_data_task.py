@@ -205,12 +205,27 @@ class PrecessDataCheckTask(BaseTask):
             case_name = f"preprocess_data:{step_stage}"
             try:
                 self.assert_preprocess_data(model_config=model_config, step_stage=step_stage)
-                self._record_case_result(model_name, case_name, category, True, [])
+                self._record_case_result(
+                    model_name,
+                    case_name,
+                    category,
+                    True,
+                    [],
+                    task_name=getattr(self, "task_description", ""),
+                )
                 return True
             except Exception as exc:
                 error_message = str(exc)
                 logger.error(f"Preprocess data check failed: {model_name} {case_name}, error: {error_message}")
-                self._record_case_result(model_name, case_name, category, False, [step_stage], error_message=error_message)
+                self._record_case_result(
+                    model_name,
+                    case_name,
+                    category,
+                    False,
+                    [step_stage],
+                    error_message=error_message,
+                    task_name=getattr(self, "task_description", ""),
+                )
                 return False
 
         # Wait for all pods to complete

@@ -113,7 +113,16 @@ class BaseTask(object):
         return training_log_path
 
     @classmethod
-    def _record_case_result(cls, model_name: str, training_type: str, category: str, passed: bool, failed_metrics: List[str], error_message: str = ""):
+    def _record_case_result(
+        cls,
+        model_name: str,
+        training_type: str,
+        category: str,
+        passed: bool,
+        failed_metrics: List[str],
+        error_message: str = "",
+        task_name: str = "",
+    ):
         cls._validation_results.append({
             "model_name": model_name,
             "training_type": training_type or "unknown",
@@ -121,6 +130,7 @@ class BaseTask(object):
             "passed": bool(passed),
             "failed_metrics": failed_metrics or [],
             "error_message": error_message or "",
+            "task_name": task_name or "",
         })
 
     @classmethod
@@ -605,7 +615,14 @@ class BaseTask(object):
             
         logger.info("Performance metrics validation passed (Soft Check)!")
 
-        self._record_case_result(model_name, training_type, category, case_passed, case_failed_metrics)
+        self._record_case_result(
+            model_name,
+            training_type,
+            category,
+            case_passed,
+            case_failed_metrics,
+            task_name=getattr(self, "task_description", ""),
+        )
     
     def collect_metrics(self, training_log_file, strict=True):
         self.metric.model_name = self.model_name
