@@ -124,7 +124,9 @@ RUN set -exuo pipefail && \
     fi
 
 # =========================================================
-# TransformerEngine / Megatron / Lerobot
+# TransformerEngine / Lerobot
+# NOTE: Megatron is managed as a git submodule (third_party/Baige-Megatron)
+#       and is already included via COPY ./BaigeOmni. No clone or patch needed.
 # =========================================================
 RUN set -exuo pipefail && \
     install_transformer_engine() { \
@@ -153,23 +155,6 @@ RUN set -exuo pipefail && \
         echo "TransformerEngine install completed" && \
         cd /workspace && rm -rf ${transformerEngine_dir}; \
     }; \
-    install_megatron() { \
-        local megatron_dir=/workspace/Megatron-LM; \
-        local MEGATRON_TAGS="core_v0.15.0" && \
-        echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
-        cd /workspace && \
-        git clone https://github.com/NVIDIA/Megatron-LM.git && \
-        cd ${megatron_dir} && \
-        git fetch --all --tags && \
-        git checkout ${MEGATRON_TAGS} -b baige_${MEGATRON_TAGS} && \
-        git restore . && \
-        if [ -f "/workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh \
-                /workspace/BaigeOmni/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
-                ${megatron_dir}; \
-        fi && \
-        echo "Megatron-LM setup completed"; \
-    }; \
     install_lerobot() { \
         echo "Installing Lerobot..." && \
         cd /workspace && \
@@ -185,12 +170,66 @@ RUN set -exuo pipefail && \
         echo "Lerobot installation completed"; \
     }; \
     install_transformer_engine && \
-    install_megatron && \
     if [ "$INSTALL_LEROBOT" = "true" ]; then \
         install_lerobot; \
     else \
         echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"; \
     fi
+
+
+# =========================================================
+# DeepTraining Ops (sparse_mla_fwd, sparse_mla_bwd, lightning_indexer_bwd)
+# =========================================================
+RUN set -exuo pipefail && \
+    FLASHMLA_COMMIT="47c35a712362f11bc235854ead51819ad76f5a81" && \
+    OPS_DIR="/workspace/BaigeOmni/ops" && \
+    install_sparse_mla_fwd() { \
+        echo "Installing sparse_mla_fwd..." && \
+        cd ${OPS_DIR}/sparse_mla_fwd && \
+        git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA && \
+        cd FlashMLA && \
+        git checkout ${FLASHMLA_COMMIT} && \
+        git submodule update --init --recursive && \
+        cd .. && \
+        pip install --no-build-isolation -v . && \
+        echo "sparse_mla_fwd install completed"; \
+    }; \
+    install_sparse_mla_bwd() { \
+        echo "Installing sparse_mla_bwd..." && \
+        cd ${OPS_DIR}/sparse_mla_bwd && \
+        git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA && \
+        cd FlashMLA && \
+        git checkout ${FLASHMLA_COMMIT} && \
+        git submodule update --init --recursive && \
+        cd .. && \
+        pip install --no-build-isolation -v . && \
+        echo "sparse_mla_bwd install completed"; \
+    }; \
+    install_lightning_indexer_bwd() { \
+        echo "Installing lightning_indexer_bwd..." && \
+        cd ${OPS_DIR}/lightning_indexer_bwd && \
+        mkdir -p vendor && \
+        git clone --recurse-submodules https://github.com/deepseek-ai/DeepGEMM.git vendor/DeepGEMM && \
+        ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
+        LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:${LD_LIBRARY_PATH} bash install.sh && \
+        rm -f /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
+        echo "lightning_indexer_bwd install completed"; \
+    }; \
+    if [ "${COMPILE_ENV}" = "blackwell" ]; then \
+        install_sparse_mla_fwd && \
+        install_sparse_mla_bwd && \
+        install_lightning_indexer_bwd; \
+    else \
+        echo "Skipping DeepTraining ops build (requires blackwell, got COMPILE_ENV=${COMPILE_ENV})"; \
+    fi
+
+
+# =========================================================
+# Megatron Symlink
+# Scripts reference /workspace/Baige-Megatron; the actual location is
+# /workspace/BaigeOmni/third_party/Baige-Megatron (git submodule).
+# =========================================================
+RUN ln -sf /workspace/BaigeOmni/third_party/Baige-Megatron /workspace/Baige-Megatron
 
 # =========================================================
 # Jupyter Configuration
@@ -204,12 +243,10 @@ RUN mkdir -p /root/.jupyter && \
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
     rm -rf /workspace/BaigeOmni/.git && \
+    rm -rf /workspace/BaigeOmni/third_party/Baige-Megatron/.git && \
     rm -rf /workspace/BaigeOmni/build.sh && \
     rm -rf /workspace/BaigeOmni/ci.yml && \
     rm -rf /workspace/BaigeOmni/docker/ci && \
-    rm -rf /workspace/Megatron-LM/.git && \
-    rm -rf /workspace/Megatron-LM/.github && \
-    rm -rf /workspace/Megatron-LM/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

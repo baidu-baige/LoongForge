@@ -65,26 +65,9 @@ RUN set -exuo pipefail && \
     install_requirements
 
 # =========================================================
-# Megatron / Lerobot
+# Lerobot
 # =========================================================
 RUN set -exuo pipefail && \
-    install_megatron() { \
-        local megatron_dir=/workspace/Megatron-LM; \
-        local MEGATRON_TAGS="core_v0.15.0" && \
-        echo "Installing Megatron-LM ${MEGATRON_TAGS}..." && \
-        cd /workspace && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/mcore_v0.15.0/megatron.tar.gz && \
-        tar -zxvf megatron.tar.gz && \
-        cd ${megatron_dir} && \
-        git config --global --add safe.directory ${megatron_dir}; \
-        git restore . && \
-        if [ -f "/workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh \
-                /workspace/BaigeOmni/patches/Megatron-LM_${MEGATRON_TAGS#core_} \
-                ${megatron_dir}; \
-        fi && \
-        echo "Megatron-LM setup completed"; \
-    }; \
     install_lerobot() { \
         echo "Installing lerobot..." && \
         cd /workspace && \
@@ -101,12 +84,19 @@ RUN set -exuo pipefail && \
         echo "Lerobot installation completed"; \
     }; \
     source /opt/omni_kunlun/bin/activate && \
-    install_megatron && \
     if [ "$INSTALL_LEROBOT" = "true" ]; then \
         install_lerobot; \
     else \
         echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"; \
     fi
+
+
+# =========================================================
+# Megatron Symlink
+# Scripts reference /workspace/Baige-Megatron; the actual location is
+# /workspace/BaigeOmni/third_party/Baige-Megatron (git submodule).
+# =========================================================
+RUN ln -sf /workspace/BaigeOmni/third_party/Baige-Megatron /workspace/Baige-Megatron
 
 # =========================================================
 # Jupyter Configuration
@@ -120,12 +110,10 @@ RUN mkdir -p /root/.jupyter && \
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
     rm -rf /workspace/BaigeOmni/.git && \
+    rm -rf /workspace/BaigeOmni/third_party/Baige-Megatron/.git && \
     rm -rf /workspace/BaigeOmni/build.sh && \
     rm -rf /workspace/BaigeOmni/ci.yml && \
     rm -rf /workspace/BaigeOmni/docker/ci && \
-    rm -rf /workspace/Megatron-LM/.git && \
-    rm -rf /workspace/Megatron-LM/.github && \
-    rm -rf /workspace/Megatron-LM/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

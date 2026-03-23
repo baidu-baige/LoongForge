@@ -9,7 +9,17 @@
 * nvidia-container-toolkit
 
 ### 1.2 Build the docker image
-Go to the directory where the project is located and run:
+
+**Before building, initialize the Baige-Megatron submodule** so its contents are included
+in the Docker build context:
+
+```bash
+cd BaigeOmni
+git submodule update --init third_party/Baige-Megatron
+cd ..
+```
+
+Then build the image:
 
 ```bash
 docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
