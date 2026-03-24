@@ -78,6 +78,34 @@ class Model():
             vpp = args.num_virtual_stages_per_pipeline_rank or 1
         return (tp, pp, vpp), (ep, etp)
 
+    def get_visual_args(args):
+        visual_args = argparse.Namespace()
+        visual_args.tensor_model_parallel_size = args.encoder_tensor_model_parallel_size
+        visual_args.num_virtual_stages_per_pipeline_rank = 1
+        visual_args.vpp_scheduler = None
+        visual_args.pipeline_model_parallel_size = 1
+        visual_args.expert_tensor_parallel_size = None
+        visual_args.expert_parallel_size = None
+        visual_args.custom_pipeline_layers = None
+        visual_args.safetensors = args.safetensors
+        visual_args.decoder_first_pipeline_num_layers = None
+        visual_args.decoder_last_pipeline_num_layers = None
+        visual_args.num_layers_per_virtual_pipeline_stage = None
+        visual_args.vit_in_first_virtual_stage_only = args.vit_in_first_virtual_stage_only
+        visual_args.save_ckpt_path = args.save_ckpt_path
+        visual_args.load_ckpt_path = args.load_ckpt_path
+        visual_args.convert_to_fp8 = args.convert_to_fp8
+        visual_args.max_workers = args.max_workers
+        visual_args.moe_grouped_gemm = args.moe_grouped_gemm
+        visual_args.fp8_force_no_requant = args.fp8_force_no_requant
+        visual_args.force_pow_2_scales = args.force_pow_2_scales
+        visual_args.amax_epsilon = args.amax_epsilon
+        visual_args.mtp_num_layers = 0
+        visual_args.load_lora_ckpt_path = args.load_lora_ckpt_path
+        visual_args.lora_alpha = args.lora_alpha
+        visual_args.lora_dim = args.lora_dim
+        return visual_args
+
     def convert_from_common(self, platform, target_c_config, layer_dict, expert_dict=None, target_c_vision_config=None):
         """
             Convert common checkpoint to the platform checkpoint.
@@ -96,7 +124,8 @@ class Model():
             if p > 0 or self.c_vision_patch_config is None:
                 m_ckpt.convert_from_common(self.c_ckpt, target_c_config, layer_dict, expert_dict=expert_dict)
             else:
-                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                visual_args = Model.get_visual_args(args)
+                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
                 McoreCheckpoint.convert_from_common_vlm(m_ckpt, m_vision_ckpt, self.c_vision_patch_config, self.c_ckpt,
                         self.c_vision_ckpt, target_c_config, target_c_vision_config, args.save_ckpt_path, layer_dict, expert_dict)
 
@@ -176,7 +205,8 @@ class Model():
             m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict, lora_load_path=args.load_lora_ckpt_path)
             self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
             if p == 0 and self.c_vision_patch_config is not None:
-                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                visual_args = Model.get_visual_args(args)
+                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
                 vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
                 vision_layer_dict = {}
                 vision_layer_dict[0] = list(range(vision_num_layers)) 
