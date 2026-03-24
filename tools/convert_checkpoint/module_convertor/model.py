@@ -134,7 +134,8 @@ class Model():
             if p > 0 or self.c_vision_patch_config is None:
                 hf_ckpt.convert_from_common(self.c_ckpt, layer_dict, expert_dict=expert_dict, save_path=args.save_ckpt_path)
             else:
-                hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, args)
+                visual_args = Model.get_visual_args(args)
+                hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, visual_args)
                 HuggingFaceCheckpoint.save_vlm_checkpoint(
                     hf_ckpt, hf_vision_ckpt, self.c_vision_patch_config, self.c_ckpt,
                     self.c_vision_ckpt, args.save_ckpt_path, layer_dict, expert_dict=expert_dict)
@@ -191,7 +192,8 @@ class Model():
                          mtp_num_layers=mtp_num_layers)
             self.c_ckpt = hf_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
             if p == 0 and self.c_vision_patch_config is not None:
-                hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, args)
+                visual_args = Model.get_visual_args(args)
+                hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, visual_args)
                 vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
                 vision_layer_dict = {}
                 vision_layer_dict[0] = list(range(vision_num_layers)) 

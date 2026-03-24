@@ -70,12 +70,13 @@ class HfCheckpointConverter:
         self.hf_ckpt = HuggingFaceCheckpoint(config, self.args)
         self.m_ckpt = McoreCheckpoint(config, self.args, tp, pp, vpp, ep, etp)
         if vision_patch_config is not None:
+            visual_args = Model.get_visual_args(self.args)
             vision_num_layers = vision_patch_config.get_args("common")["num_layers"]
             self.vision_layer_dict = {}
             self.vision_layer_dict[0] = list(range(vision_num_layers)) 
-            self.hf_vision_ckpt = HuggingFaceCheckpoint(vision_patch_config, self.args)
+            self.hf_vision_ckpt = HuggingFaceCheckpoint(vision_patch_config, visual_args)
             self.m_vision_ckpt = McoreCheckpoint(
-                c_config=vision_patch_config, args=self.args, tp=self.args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                c_config=vision_patch_config, args=visual_args, tp=self.args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
 
     def get_mcore_ckpt(self, ckpt_path):
         expert_ids=self.expert_dict.values() if self.expert_dict is not None else None
