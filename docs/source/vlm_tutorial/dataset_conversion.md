@@ -40,10 +40,10 @@ Supported input files:
 
 ```bash
 python tools/data_preprocess/vlm/convert_to_webdataset.py \
-  --output_dir /tmp/vlm/wds \
-  --json_file /tmp/vlm/data.jsonl \
-  --image_dir /tmp/vlm/ \
-  --video_dir /tmp/vlm/ \
+  --output_dir /workspace/wds_data/ \
+  --json_file tests/datasets/vlm/mllm_demo.json \
+  --image_dir tests/datasets/vlm/ \
+  --video_dir tests/datasets/vlm/ \
   --media mix \
   --columns_messages messages \
   --maxcount 10000 \
