@@ -8,15 +8,15 @@ ipcs -m | awk '$4 == 666 {print $2}' | while read shmid; do
 ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
- 
+
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/data-path/webdataset_image"}
 # Common paths and configurations
 EXP_NAME=${FULL_JOB_NAME:-"${MODEL_NAME}-$(date +%Y%m%d-%H%M%S)"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/hf-tokenizer-path/Internvl3_5-8B_20251231121543"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/load/Internvl3_5-8B-tp4-pp1"}
-CHECKPOINT_SAVE_PATH=/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/save/Internvl3_5-8B-tp4-pp1-save
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_14b_temp/hf-tokenizer-path/InternVL3_5-14B_20251205113742"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_14b_temp/load/InternVL3_5-14B-tp4-pp1"}
+CHECKPOINT_SAVE_PATH=/mnt/cluster/baigeomni/sft_internvl3.5_14b_temp/save/InternVL3_5-14B-tp4-pp1-save
 LOGS_PATH="${CHECKPOINT_SAVE_PATH}/logs-${EXP_NAME}"
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/out/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node-data3-v11/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/out/tensorboard/internvl3.5/internvl3.5-14b/stage2-16k-gbs32-1node-data3-v11/"}
 mkdir -p ${CHECKPOINT_SAVE_PATH}
 mkdir -p ${LOGS_PATH}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}
@@ -24,7 +24,7 @@ BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 ####### 使用RANK0加载模型RDMA分发 #######
 export DP_RANK0_LOAD=false
- 
+
 ####### Start for NX-P800 #######
 #################################
 export XDNN_USE_FAST_GELU=true
@@ -38,7 +38,7 @@ export NCCL_IB_GID_INDEX=3
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 GPUS_PER_NODE=`echo "$CUDA_VISIBLE_DEVICES" | awk -F, '{print NF}'`
 export SAVE_LOG_FILE_WITH_RANK_ID=false
- 
+
 #################################
 #export FAST_SWIGLU_ENABLE=1
 export XMLIR_ENABLE_FAST_FC=true
@@ -48,7 +48,7 @@ export CUDA_DEVICE_ORDER=OAM_ID
 export XMLIR_PARALLEL_SAVE_MEMORY=false
 #export XMLIR_DISABLE_CUDA_ALLOCATOR=true
 #export USE_FAST_RMS_LAYER_NORM=true
- 
+
 #export XMLIR_DIST_SINGLETON_STREAM=true
 #export DIST_MULTI_STREAM=true
 export CUDA_DEVICE_MAX_CONNECTIONS=1 # 8开启多流
@@ -57,12 +57,12 @@ export XMLIR_DIST_ASYNC_ISEND_IRECV=1 # PP
 #export XMLIR_DIST_DISABLE_ASYNC_ISEND_IRECV=0
 #export TORCH_C10D_USE_RANDOM_SLEEP=1
 export XMLIR_DIST_CHECK_INF_NAN=0
- 
+
 #################################
 #export XMLIR_XDNN_PYTORCH_CHECK_ENABLE_FALLBACK_BOOL=0
 #export XMLIR_ENABLE_FALLBACK_TO_CPU_BOOL=False
 #export XMLIR_DUMP_FALLBACK_OP_LIST_BOOL=true
- 
+
 ##############################
 export BKCL_RDMA_PROXY_DISABLE=1 # 屏蔽旧架构
 export BKCL_USE_AR=1
@@ -80,15 +80,15 @@ export ALLREDUCE_ASYNC=false
 export ALLGATHER_ASYNC=false
 export ALLREDUCE_FUSION=0
 export BKCL_TIMEOUT=360000
-#export BKCL_RDMA_VERBS=1  #与BKCL_QPS_PER_CONNECTION配合使用，当前只用于海光机器才需要
-#export BKCL_QPS_PER_CONNECTION=4  #当前最优配置 BKCL_QPS_PER_CONNECTION=4
- 
+export BKCL_RDMA_VERBS=1  #与BKCL_QPS_PER_CONNECTION配合使用，当前只用于海光机器才需要
+export BKCL_QPS_PER_CONNECTION=4  #当前最优配置 BKCL_QPS_PER_CONNECTION=4
+
 ###############################
 pkill -9 python || true
 export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
 #################################
 ######## End for NX-P800 ########
- 
+
 # Change for multinode config
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -96,9 +96,10 @@ MASTER_PORT=${MASTER_PORT:-"6020"}
 NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
+#export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_8b.yaml
- 
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_14b.yaml
+
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE
     --nnodes $NNODES
@@ -106,12 +107,12 @@ DISTRIBUTED_ARGS=(
     --master_addr $MASTER_ADDR
     --master_port $MASTER_PORT
 )
- 
+
 MODEL_ARGS=(
     --config-file $MODEL_CONFIG_PATH
     --rotary-seq-len-interpolation-factor 1
 )
- 
+
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path $TOKENIZER_PATH
@@ -119,7 +120,7 @@ DATA_ARGS=(
     --split 100,0,0
     --chat-template empty
 )
- 
+
 TRAINING_ARGS=(
     --training-phase sft
     --seq-length 16384
@@ -145,10 +146,9 @@ TRAINING_ARGS=(
     --bf16
     --seed 42
     --no-gradient-accumulation-fusion
+    --save-interval 500
     --load $CHECKPOINT_PATH
     --save $CHECKPOINT_SAVE_PATH
-    --save-interval 2000
-    --exit-interval 500
     --dataloader-type external
     #--variable-seq-lengths  # for packing
     --min-num-frame 8
@@ -170,25 +170,25 @@ TRAINING_ARGS=(
     --use-flash-attn
     --recompute-granularity full
     --recompute-method block
-    --recompute-num-layers 2
-    #--sequence-parallel
-    #--strict-mode
-    --manual-gc
-    --manual-gc-interval 0
-    --dataloader-prefetch-factor 4
+    --recompute-num-layers 15
+    --sequence-parallel
+    --strict-mode
+    --exit-interval 500
+    --no-bias-dropout-fusion
+    --no-bias-gelu-fusion
     --conv-style internvl2_5
     --max-dynamic-patch 12
     --packing-sft-data
-    --packing-buffer-size 474 
+    --packing-buffer-size 200
     --energon-pack-algo sequential_max_images
     --allow-missing-adapter-checkpoint
+    #--sft-dataset multimodal_sharegpt
 )
-
 MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 4
     --pipeline-model-parallel-size 1
-    --use-distributed-optimizer
     --context-parallel-size 1
+    --use-distributed-optimizer
     --distributed-backend nccl
     --distributed-timeout-minutes 60
 )
@@ -203,7 +203,7 @@ LOGGING_ARGS=(
 
 # Run the training
 export PYTHONPATH="$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH"
- 
+
 torchrun ${DISTRIBUTED_ARGS[@]} \
     $BAIGE_OMNI_PATH/baige_omni/train.py \
     --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml \
