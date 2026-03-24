@@ -24,7 +24,6 @@ class ParallelConfig:
     ep_ranks: Optional[list[int]] = None
     etp_ranks: Optional[list[int]] = None
     safetensors: bool = True
-    vit_in_first_virtual_stage_only: bool = False
     max_workers: int = 1
     fp8_force_no_requant: bool = False
     force_pow_2_scales: bool = False

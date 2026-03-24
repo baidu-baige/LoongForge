@@ -78,8 +78,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --save_ckpt_path=$SAVE_VISION_MODEL \
     --safetensors \
     --no_save_optim \
-    --no_load_optim \
-    --vit_in_first_virtual_stage_only
+    --no_load_optim
 
 
 if [[ $LOAD != $LOAD_PATH ]]; then

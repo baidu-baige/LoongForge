@@ -29,7 +29,6 @@ class HfCheckpointConverter:
         self.args.decoder_first_pipeline_num_layers = parallel_config.decoder_first_pipeline_num_layers
         self.args.decoder_last_pipeline_num_layers = parallel_config.decoder_last_pipeline_num_layers
         self.args.num_layers_per_virtual_pipeline_stage = None
-        self.args.vit_in_first_virtual_stage_only = parallel_config.vit_in_first_virtual_stage_only
         self.args.save_ckpt_path = None
         self.args.load_ckpt_path = None
         self.args.convert_to_fp8 = False

@@ -508,8 +508,6 @@ class McoreCheckpoint(AbstractCheckpoint):
 
     def get_transformer_name(self, stage_index):
         """ get transformer name """
-        if self.args.vit_in_first_virtual_stage_only:
-            return self.name_map[TRANSFORMER_TPL] % 0
         if self.num_stages > 1:
             return self.name_map[TRANSFORMER_TPL] % stage_index
         else:

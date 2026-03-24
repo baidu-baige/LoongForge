@@ -133,10 +133,6 @@ def _add_common_args(parser):
                        type=int, default=None,
                        help=('The number of transformer layers on the last pipeline stage of the decoder. '
                        'Default None is even split of transformer layers across all pipeline stages'))
-    group.add_argument('--vit_in_first_virtual_stage_only', action='store_true',
-                       help=('When virtual pipeline is enabled, VIT is only in the first virtual stage,'
-                       'ensuring the integrity of VIT when transitioning from mcore to hf.'
-                       'When VPP is enabled, it must be enabled, default is False'))
 
 def _add_megatron_args(parser):
     """

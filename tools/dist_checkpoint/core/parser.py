@@ -214,7 +214,6 @@ class Parser:
         # =====加#的参数都不在train的args里，只在convert ckpt的args =====================
         param_dict['vpp_scheduler'] = getattr(args, 'vpp_scheduler', None) #
         param_dict['safetensors'] = getattr(args, 'safetensors', True) #
-        param_dict['vit_in_first_virtual_stage_only'] = getattr(args, 'vit_in_first_virtual_stage_only', False) #
         param_dict['max_workers'] = getattr(args, 'max_workers', 1) # 
         param_dict['fp8_force_no_requant'] = getattr(args, 'fp8_force_no_requant', False) # 
         param_dict['force_pow_2_scales'] = getattr(args, 'force_pow_2_scales', False) # 
@@ -273,7 +272,7 @@ class Parser:
             'custom_pipeline_layers', 'decoder_first_pipeline_num_layers',
             'decoder_last_pipeline_num_layers', 'moe_grouped_gemm',
             'vpp_scheduler', 'tp_ranks', 'pp_ranks', 'ep_ranks',
-            'etp_ranks', 'safetensors', 'vit_in_first_virtual_stage_only',
+            'etp_ranks', 'safetensors',
             'max_workers', 'fp8_force_no_requant', 'force_pow_2_scales',
             'amax_epsilon', 'mtp_num_layers'
         ]

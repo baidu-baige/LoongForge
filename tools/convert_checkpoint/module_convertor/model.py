@@ -91,7 +91,6 @@ class Model():
         visual_args.decoder_first_pipeline_num_layers = None
         visual_args.decoder_last_pipeline_num_layers = None
         visual_args.num_layers_per_virtual_pipeline_stage = None
-        visual_args.vit_in_first_virtual_stage_only = args.vit_in_first_virtual_stage_only
         visual_args.save_ckpt_path = args.save_ckpt_path
         visual_args.load_ckpt_path = args.load_ckpt_path
         visual_args.convert_to_fp8 = args.convert_to_fp8

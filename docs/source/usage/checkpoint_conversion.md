@@ -136,7 +136,6 @@ sh examples/qwen3/checkpoint_convert/convert_qwen3_14b_mcore_to_hf.sh
 | `num_virtual_stages_per_pipeline_rank` | Number of virtual pipeline stages per PP rank | Any positive integer | `None` |
 | `decoder-first-pipeline-num-layers` | Number of transformer layers on the first PP stage of decoder | Any positive integer | `None` |
 | `decoder-last-pipeline-num-layers` | Number of transformer layers on the last PP stage of decoder | Any positive integer | `None` |
-| `vit_in_first_virtual_stage_only` | VIT is only in the first virtual stage when virtual pipeline is enabled | `True`/`False` | `False` |
 | `use_distributed_optimizer` | Use distributed optimizer | `True`/`False` | `False` |
 | `tensor_model_parallel_size` | Target tensor model parallel size | Any positive integer | `1` |
 | `pipeline_model_parallel_size` | Target pipeline model parallel size | Any positive integer | `1` |

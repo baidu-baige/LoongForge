@@ -80,7 +80,6 @@ While supporting parameter definition in config files, traditional command line 
 | config_file | Config file for model configuration | Any valid path | `None` |
 | convert_file | Convert file for checkpoint conversion | Any valid path | `None` |
 | num_virtual_stages_per_pipeline_rank | Number of virtual pipeline stages per pipeline parallelism rank | Any positive integer | `None` |
-| vit_in_first_virtual_stage_only | VIT is only in the first virtual stage when virtual pipeline is enabled | `True`/`False` (action) | `False` |
 | tensor_model_parallel_size | Target tensor model parallel size | Any positive integer | `1` |
 | pipeline_model_parallel_size | Target pipeline model parallel size | Any positive integer | `1` |
 | data_parallel_size | Target data parallel size | Any positive integer | `1` |
@@ -288,8 +287,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --save_ckpt_path=$SAVE_VISION_MODEL \
     --safetensors \
     --no_save_optim \
-    --no_load_optim \
-    --vit_in_first_virtual_stage_only # Enable vpp needs to specify vit in first virtual stage
+    --no_load_optim
 
 if [[ $LOAD != $LOAD_PATH ]]; then
     rm -rf $LOAD_PATH
