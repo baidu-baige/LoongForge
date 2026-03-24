@@ -2,15 +2,10 @@
 This section walks through the **Wan Pre-train** pipeline end-to-end.
 
 ---
-## Quick Start Wan2.2 Model Training
-### 1. Data Pre-processing
-
-#### Background
-
-- BaigeOmni expects **offline** pre-processed data.
-
+## Wan2.2 I2V-A14B Training Pipeline
+### 1. Preprocess Training Data
 #### Expected dataset example
-```
+```text
 dataset
 ├── metadata.csv
 └── train
@@ -18,9 +13,9 @@ dataset
     ├── EGO_2.mp4
     ├── EGO_3.mp4
 ```
-**metadata.csv example**
+metadata.csv example
 
-```
+```csv
 video,prompt
 train/EGO_1.mp4,"places the bag of clothes on the floor\nPlan:\n pick up the bag of clothes. Put the bag of clothes on the floor.\nactions :\n1. pick up(bag of clothes)\n2. put on(bag of clothes, floor)"
 ```
@@ -38,30 +33,32 @@ huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ./Wan-AI/Wan2.2-I2V-
 **Step-2** Process the input
 
 ```bash
-MODEL_T5=/ssd1/models/Wan-AI/Wan2.2-I2V-A14B/models_t5_umt5-xxl-enc-bf16.pth
-MODEL_VAE=/ssd1/models/Wan-AI/Wan2.2-I2V-A14B/Wan2.1_VAE.pth
+MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # should match --local-dir in Step-1
+MODEL_T5=${MODEL_BASE}/models_t5_umt5-xxl-enc-bf16.pth
+MODEL_VAE=${MODEL_BASE}/Wan2.1_VAE.pth
+# Script location: examples/wan/wan_preprocess.py in BaigeOmni repo
 accelerate launch wan_preprocess.py \
-  --dataset_base_path fake_dataset \
-  --dataset_metadata_path fake_dataset/metadata.csv \
+  --dataset_base_path <your_dataset> \
+  --dataset_metadata_path <your_dataset>/metadata.csv \
   --height 480 --width 832 --num_frames 49 \
   --model_paths "${MODEL_T5},${MODEL_VAE}" \
-  --tokenizer_local_path "/ssd1/models/Wan-AI/Wan2.2-I2V-A14B/google/umt5-xxl" \
+  --tokenizer_local_path "${MODEL_BASE}/google/umt5-xxl" \
   --output_path ./data/preprocessed \
   --max_timestep_boundary 0.358 --min_timestep_boundary 0
 
 ```
 
 #### Output
-One `.pth` file per video containing three keys:
+Each `.pth` file contains the following three keys:
 - `input_latents` – VAE latent of the whole video
-- `y` – VAE latent of the **first frame**
+- `y` – first-frame VAE latent concatenated with a visibility mask
 - `context` – text encoder embedding
 
 (High-/low-noise tensors are **NOT** separated; BaigeOmni adds noise online later.)
 
 ---
 
-### 2. Checkpoint Conversion (HF → Megatron)
+### 2. Convert Checkpoints (HF → Megatron)
 
 Inside **BaigeOmni** repo:
 
@@ -93,9 +90,15 @@ Repeat for low-noise model.
 
 **Recommended single-node split**: PP=4, CP=2  
 Multi-node – scale by **data parallelism**:  
-```
+```text
 dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 ```
+
+| Symbol | Meaning |
+|---|---|
+| `dp` | Data Parallel degree |
+| `pp` | Pipeline Parallel degree |
+| `cp` | Context Parallel degree |
 
 **Step-1** Tune `examples/wan/pretrain_wan2.2_i2v_a14b.sh`
 - `HIGH_NOISE_CHECKPOINT_PATH` → path to high-noise Megatron checkpoint (from Section 2)
@@ -114,21 +117,15 @@ dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 
 ---
 
-### 4. Checkpoint Export (Megatron → HF)
+### 4. Export Checkpoints (Megatron → HF)
 
 Edit `examples/wan/convert_wan2.2.sh` (section `mcore2hg`):  
 - `--load_path` → Megatron checkpoint after training  
 - `--save_path` → target HF folder  
-- `--checkpoint_path` → dummy HF path (structure only)  
+- `--checkpoint_path` → original HF checkpoint directory (used for reading model structure only)
 - `--pp 4`  
 
 Run  
 ```bash
 bash examples/wan/convert_wan2.2.sh mcore2hg
 ```
-
----
-
-### 5. Argument Reference
-
-Full argument list → see `baige_omni/train/arguments.py`.
