@@ -139,8 +139,8 @@ RUN set -exuo pipefail && \
         git fetch --all --tags && \
         git checkout ${TE_TAGS} -b baige_${TE_TAGS} && \
         git restore . && \
-        if [ -f "/workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh" ]; then \
-            bash /workspace/BaigeOmni/tools/apply_patches/apply_two_repo.sh \
+        if [ -f "/workspace/BaigeOmni/patches/apply_patches.sh" ]; then \
+            bash /workspace/BaigeOmni/patches/apply_patches.sh \
                 /workspace/BaigeOmni/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
