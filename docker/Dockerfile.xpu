@@ -74,13 +74,26 @@ RUN set -exuo pipefail && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lerobot.tar.gz && \
-        tar -zxvf lerobot.tar.gz && \
+        git clone --no-checkout https://github.com/huggingface/lerobot.git && \
         cd lerobot && \
+        git checkout tags/v0.4.3 && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
-        pip install --no-build-isolation ".[pi]" && \
+        pip install func_timeout pytest-xdist prettytable==3.11.0 peft==0.17.0 && \
+        sed -i -e '/"torch[>=<]/d' \
+           -e 's/"torchvision[^"]*",/"torchvision==0.20.1",/' \
+           -e '/python-can/d' \
+           -e '/lerobot\[can-dep\]/d' \
+           -e '/lerobot\[damiao\]/d' \
+           -e '/unitree_g1 = \[/,/\]/ { /matplotlib/d; /pin/d; /meshcat/d; /casadi/d; }' \
+           -e '/lerobot-setup-can/d' \
+           -e '/\[tool.setuptools.package-data\]/d' \
+           -e '/lerobot = \["envs\/\*\.json"\]/d' \
+           -e '/"OT_VALUE"/d' \
+           pyproject.toml && \
+        pip install --no-build-isolation -e ".[pi]" && \
+        sed -i 's|tokenizer_name="google/paligemma-3b-pt-224",|tokenizer_name=config.tokenizer_name,|g' ./src/lerobot/policies/pi05/processor_pi05.py && \
         echo "Lerobot installation completed"; \
     }; \
     source /opt/omni_kunlun/bin/activate && \
