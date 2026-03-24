@@ -1,6 +1,6 @@
 # Kunlunxin P800 README
 
-OmniTraining supports training on Kunlunxin P800, covering mainstream LLM, VLM, VLA, and other model types.
+BaigeOmni supports training on the Kunlunxin P800 XPU, covering a variety of model types such as LLMs, VLMs, VLAs, and more.
 
 ## Quick Start
 
@@ -43,8 +43,8 @@ Refer to [Quick Start: VLM Model SFT Training on Kunlunxin P800](https://github.
 | VLM | Qwen3-VL | qwen3_vl_30b_a3b | ✅ (example) | ✅ (example) |
 | | | qwen3_vl_235b_a22b | ✅ (example) | ✅ (example) |
 | | InternVL-3.5 | internvl3.5_8b | | ✅ (example) |
-| | | internvl3.5_14b | | ✅ (example) |
-| | | internvl3.5_38b | | ✅ (example) |
-| | | internvl3.5_30b_a3b | | ✅ (example) |
-| | | internvl3.5_241b_a28b | | ✅ (example) |
-| VLA | PI 0.5 | | ✅(exampe) | ✅(exampe) |
+| | | internvl3.5_14b | | |
+| | | internvl3.5_38b | | |
+| | | internvl3.5_30b_a3b | | |
+| | | internvl3.5_241b_a28b | | |
+| VLA | PI 0.5 | | | ✅ (example) |

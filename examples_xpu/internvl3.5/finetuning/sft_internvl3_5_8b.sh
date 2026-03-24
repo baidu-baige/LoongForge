@@ -16,7 +16,7 @@ TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/load/Internvl3_5-8B-tp4-pp1"}
 CHECKPOINT_SAVE_PATH=/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/save/Internvl3_5-8B-tp4-pp1-save
 LOGS_PATH="${CHECKPOINT_SAVE_PATH}/logs-${EXP_NAME}"
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/zhaiyanfeng/out/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node-data3-v11/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/out/tensorboard/internvl3.5/internvl3.5-8b/stage2-16k-gbs32-1node-data3-v11/"}
 mkdir -p ${CHECKPOINT_SAVE_PATH}
 mkdir -p ${LOGS_PATH}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}

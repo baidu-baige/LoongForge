@@ -17,13 +17,12 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 export NCCL_SOCKET_IFNAME=eth0
 
-export XMLIR_ENABLE_FAST_FC=true                # 3.3.1.0
-export XMLIR_ENABLE_FAST_FC_FWD_OUT=true
-export XMLIR_ENABLE_FAST_FC_BWD_DW=true
-export XMLIR_ENABLE_FAST_FC_BWD_DX=true
+export XMLIR_ENABLE_FAST_FC=true        # torch.nn.linear.py 中用到(LinearWithActFunction 等)
+#export XMLIR_ENABLE_FAST_FC_FWD_OUT=true #前向输出用到
+#export XMLIR_ENABLE_FAST_FC_BWD_DW=true  #反向 dw 用到
+#export XMLIR_ENABLE_FAST_FC_BWD_DX=true  #反向 dx 用到
 #### P800 environment start ####
 # bf16类型专用(megatron相关变量参考<百舸megatron专用>)
-export USE_FAST_BF16_FC=false                    # 仅bf16下用到
 export FORCE_DISABLE_INPLACE_BF16_CAST=false    # 默认为false，在特殊情况下(异步checkpoint)需要打开
 export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # 多机下使用, 以实际情况为准, 多机要按
 export BKCL_SOCKET_IFNAME=eth0                  # 以实际情况为准, 默认不开, 找不到网卡时再指定
@@ -43,7 +42,7 @@ export XMLIR_CUDNN_ENABLED=1                    # true为使用cuDNN，支持con
 export XDNN_FC_GEMM_DTYPE=int32_with_ll
 # LINEAR 开关
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # 允许某些场景下linear不走xblas fcfusion, 比如走addmm
-export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1         # xpu_plugin 推荐开启，有性能收益
 
 #XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13

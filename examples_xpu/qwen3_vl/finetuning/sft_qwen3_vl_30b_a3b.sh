@@ -30,7 +30,7 @@ BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/load/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm_202512180001/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/hejinhui01/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
  
 GPUS_PER_NODE=8
 ######################kunlun##########################

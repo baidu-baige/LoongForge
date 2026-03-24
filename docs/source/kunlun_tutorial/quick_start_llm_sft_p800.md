@@ -2,40 +2,43 @@
 
 ## Quick Start: LLM Model SFT Training
 
-This document guides you through the quick start process for fine-tuning Large-Language Models (LLM) using the OmniTraining framework on P800.
+This document guides you through the quick start process for fine-tuning Large-Language Models (LLM) using the BaigeOmni framework on P800.
 
-For data preparation and weight preparation, refer to [5.2. Quick Start: LLM Model SFT Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/JE0g5_IKNrHzG5?t=mention&mt=doc&dt=doc)
+For data preparation and weight preparation, refer to [quick start for llm sft](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md).
 
 ## SFT Training Script
 
-OmniTraining currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-8B`. Please refer to the comments for the purpose of each script section:
+BaigeOmni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-8B`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 # ! /bin/bash
 # The script needs to be run on at least 2 nodes.
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/OmniTraining"}
+BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
-# DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/dataset/sft_aplaca_zh_data.json"}
+# DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/sft_aplaca_zh_data.json"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/OmniTraining/qwen3/sft_aplaca_zh_tokenized"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/OmniTraining/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/OmniTraining/configs/data/sft_dataset_config.yaml"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen3-8B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/OmniTraining/qwen3/Qwen3_8B_mcore_tp1pp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3/Qwen3_8B_mcore_tp1pp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/OmniTraining/tensorboard-log/qwen3-8b-sft"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-8b-sft"}
 
 GPUS_PER_NODE=8
 
 ###################### Kunlunxin P800 ######################
 # bf16 specific (megatron related variables refer to <Baige Megatron specific>)
-export USE_FAST_BF16_FC=true                    # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
+export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
+#export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # forward
+#export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # backward dw
+#export XMLIR_ENABLE_FAST_FC_BWD_DX=true  # backward dx
 export FORCE_DISABLE_INPLACE_BF16_CAST=false    # Default is false, needs to be enabled in special cases (async checkpoint)
 
 export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # Used in multi-node setup, adjust according to actual network connectivity
@@ -60,7 +63,7 @@ export XMLIR_CUDNN_ENABLED=1                    # true: use cuDNN, supports conv
 # LINEAR switches
 export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # Allow linear to bypass xblas fcfusion in certain scenarios, e.g., use addmm, default is 1
 export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE uses int32_with_ll, optional
-export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1         # Enable xpu_plugin for better performance (recommended)
 
 XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13
@@ -167,7 +170,7 @@ fi
 
 PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/omni_training/train.py \
+    $BAIGE_OMNI_PATH/baige_omni/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
