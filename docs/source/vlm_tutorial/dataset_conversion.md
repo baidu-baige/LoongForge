@@ -53,17 +53,17 @@ python tools/data_preprocess/vlm/convert_to_webdataset.py \
 
 Parameter Description:
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `--output_dir` | Yes | - | Output directory (generates `pretrain-*.tar` + Energon metadata directory) |
-| `--json_file` | Yes | - | Input `.json/.jsonl` |
-| `--image_dir` | No | - | Image root directory (required when samples contain `image(s)` or `sample_type=vqa/caption`) |
-| `--video_dir` | No | - | Video root directory (required when samples contain `video(s)`) |
-| `--media` | No | `image` | `image/video/mix` |
-| `--columns_messages` | No | `messages` | Key for dialogue/text field in entry |
-| `--maxcount` | No | `10000` | Maximum number of samples per shard (tar) |
-| `--maxsize` | No | `3000000000` | Maximum byte size per shard (tar) |
-| `--sample_type` | Yes | - | Data type (see table above) |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--output_dir` | - | Output directory (generates `pretrain-*.tar` + Energon metadata directory) |
+| `--json_file` | - | Input `.json/.jsonl` |
+| `--image_dir` | - | Image root directory (required when samples contain `image(s)` or `sample_type=vqa/caption`) |
+| `--video_dir` | - | Video root directory (required when samples contain `video(s)`) |
+| `--media` | `image` | `image/video/mix` |
+| `--columns_messages` | `messages` | Key for dialogue/text field in entry |
+| `--maxcount` | `10000` | Maximum number of samples per shard (tar) |
+| `--maxsize` | `3000000000` | Maximum byte size per shard (tar) |
+| `--sample_type` | - | Data type (see table above) |
 
 Output Description:
 
@@ -89,7 +89,3 @@ Text field requirements for different `sample_type` (aligned with script-generat
 In multimodal scenarios, sequence offline packing processing methods are provided
 
 See [Offline Data Packing Guide](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/features/offline_data_packing.md) for details
-
----
-
-There you have it! I've translated the entire VLM dataset conversion documentation into English while preserving all the technical details, tables, code blocks, and formatting. The translation maintains the professional technical tone appropriate for documentation about machine learning data processing frameworks.
