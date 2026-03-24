@@ -201,7 +201,16 @@ class TransformerBlock(MegatronTransformerBlock):
 
         with rng_context, outer_quantization_context:
             # Forward pass.
-            if self.config.recompute_granularity == 'full' and self.training:
+            recompute_for_chunkpipe = False
+            native_recompute = False
+            if self.config.recompute_granularity == 'full':
+                native_recompute = True
+            if self.config.enable_chunkpipe:
+                chunk_num = self.config.chunkpipe_forward_microbatch % self.config.chunk_num_per_seq
+                if chunk_num + self.config.keep_activations_chunks < self.config.chunk_num_per_seq:
+                    recompute_for_chunkpipe = True
+
+            if (native_recompute or recompute_for_chunkpipe) and self.training:
                 hidden_states = self._checkpointed_forward(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
@@ -382,6 +391,14 @@ class TransformerBlock(MegatronTransformerBlock):
                     rotary_pos_emb,
                     **kwargs,
                 )
+
+        if self.config.enable_chunkpipe:
+            start_layer, end_layer = 0, self.num_layers_per_pipeline_rank
+            for layer_idx in range(start_layer, end_layer):
+                hidden_states, context = checkpoint_handler(
+                    custom(layer_idx, layer_idx + 1)
+                )
+            return hidden_states
 
         if self.config.recompute_method == 'uniform':
             # Uniformly divide the total number of Transformer layers and checkpoint

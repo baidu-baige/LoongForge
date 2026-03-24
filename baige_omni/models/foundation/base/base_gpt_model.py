@@ -678,51 +678,106 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     hidden_states.squeeze(1).unsqueeze(0)
                 ).unsqueeze(1)
 
-        if has_config_logger_enabled(self.config) or labels is None:
-            logits, _ = self.output_layer(
-                hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
+        if not getattr(self.config, 'enable_chunkpipe', False):
+            if has_config_logger_enabled(self.config) or labels is None:
+                logits, _ = self.output_layer(
+                    hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
+                )
+            else:
+                logits = None            
+
+            # Restore sequence parallel execution to the output layer if necessary.
+            if sequence_parallel_override:
+                assert (
+                    in_inference_mode
+                    and inference_context.is_dynamic_batching()
+                    and inference_context.materialize_only_last_token_logits
+                )
+                self.output_layer.sequence_parallel = True
+
+            if has_config_logger_enabled(self.config):
+                payload = OrderedDict(
+                    {
+                        'input_ids': input_ids,
+                        'position_ids': position_ids,
+                        'attention_mask': attention_mask,
+                        'decoder_input': decoder_input,
+                        'logits': logits,
+                    }
+                )
+                log_config_to_disk(self.config, payload, prefix='input_and_logits')
+
+            if labels is None:
+                # [s b h] => [b s h]
+                return logits.transpose(0, 1).contiguous()
+
+            loss = self.compute_output_layer_and_language_model_loss(
+                hidden_states,
+                labels=labels,
+                weight=self.shared_embedding_or_output_weight(),
+                sequence_parallel_enabled=self.output_layer.sequence_parallel,
+                column_parallel_linear=self.output_layer,
+                col_linear_kwargs={
+                    'weight': output_weight,
+                    'runtime_gather_output': runtime_gather_output,
+                },
             )
-        else:
-            logits = None            
-
-        # Restore sequence parallel execution to the output layer if necessary.
-        if sequence_parallel_override:
-            assert (
-                in_inference_mode
-                and inference_context.is_dynamic_batching()
-                and inference_context.materialize_only_last_token_logits
+        else: # Chunkpipe: use fused output and loss computation
+            logits, loss = tensor_parallel.checkpoint(
+                self.fused_output_and_cross_entropy,
+                self.config.distribute_saved_activations,
+                hidden_states, output_weight, runtime_gather_output, labels
             )
-            self.output_layer.sequence_parallel = True
 
-        if has_config_logger_enabled(self.config):
-            payload = OrderedDict(
-                {
-                    'input_ids': input_ids,
-                    'position_ids': position_ids,
-                    'attention_mask': attention_mask,
-                    'decoder_input': decoder_input,
-                    'logits': logits,
-                }
-            )
-            log_config_to_disk(self.config, payload, prefix='input_and_logits')
-
-        if labels is None:
-            # [s b h] => [b s h]
-            return logits.transpose(0, 1).contiguous()
-
-        loss = self.compute_output_layer_and_language_model_loss(
-            hidden_states,
-            labels=labels,
-            weight=self.shared_embedding_or_output_weight(),
-            sequence_parallel_enabled=self.output_layer.sequence_parallel,
-            column_parallel_linear=self.output_layer,
-            col_linear_kwargs={
-                'weight': output_weight,
-                'runtime_gather_output': runtime_gather_output,
-            },
-        )
+            if has_config_logger_enabled(self.config):
+                payload = OrderedDict(
+                    {
+                        'input_ids': input_ids,
+                        'position_ids': position_ids,
+                        'attention_mask': attention_mask,
+                        'decoder_input': decoder_input,
+                        'logits': logits,
+                    }
+                )
+                log_config_to_disk(self.config, payload, prefix='input_and_logits')            
 
         return loss
+
+    def fused_output_and_cross_entropy(self, hidden_states, 
+                                        output_weight, runtime_gather_output, labels):
+        """
+        Fused computation of output layer logits and cross-entropy loss.
+
+        This method combines the output layer forward pass and language model loss
+        computation into a single step for efficiency.
+
+        Args:
+            hidden_states (Tensor): The hidden states from the transformer.
+            output_weight (Tensor): The weight matrix for the output layer.
+            runtime_gather_output (bool): Whether to gather output at runtime.
+            labels (Tensor): The ground truth labels for loss computation.
+
+        Returns:
+            tuple: A tuple containing:
+                - logits (Tensor): The output layer logits.
+                - loss (Tensor): The computed cross-entropy loss.
+        """
+        logits, _ = self.output_layer(
+            hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
+        )
+
+        loss = self.compute_output_layer_and_language_model_loss(
+                hidden_states,
+                labels=labels,
+                weight=self.shared_embedding_or_output_weight(),
+                sequence_parallel_enabled=self.output_layer.sequence_parallel,
+                column_parallel_linear=self.output_layer,
+                col_linear_kwargs={
+                    'weight': output_weight,
+                    'runtime_gather_output': runtime_gather_output,
+                },
+            )
+        return logits, loss
 
     def shared_embedding_or_output_weight(self) -> Tensor:
         """Gets the embedding weight or output logit weights when share input embedding and
