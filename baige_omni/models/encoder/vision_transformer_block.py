@@ -353,7 +353,7 @@ class TransformerBlock(MegatronTransformerBlock):
                             sequence_len_offset=sequence_len_offset,
                             **kwargs,
                         )
-                        
+
                     # vision deepstack
                     if self.has_deepstack and l_no in deepstack_visual_indexes:
                             merger = deepstack_merger_list[deepstack_visual_indexes.index(l_no)]

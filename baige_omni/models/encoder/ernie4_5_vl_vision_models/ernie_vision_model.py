@@ -18,19 +18,23 @@
 
 """ErnieVisionModel"""
 
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import logging
-from baige_omni.models.common import BaseMegatronVisionModule
+from typing import Optional
 from megatron.training import get_args
 from transformers import AutoProcessor
+from megatron.core.packed_seq_params import PackedSeqParams
+from baige_omni.models.common import BaseMegatronVisionModule
+from baige_omni.models.encoder.vision_transformer_block import TransformerBlock
+from baige_omni.models.utils import import_module
+from baige_omni.models.common import BaseMegatronVisionModule
 
-from .ernie_vision_block import DFNRopeVisionBlock
 from .ernie_adapter import UniqueNameGuard
-
-logger = logging.getLogger(__name__)
+from .ernie_image_preprocess import ErnieImagePreprocess
 
 
 class PatchEmbed(nn.Module):
@@ -65,9 +69,7 @@ class PatchEmbed(nn.Module):
             torch.Tensor: output tensor
         """
         target_dtype = self.proj.weight.dtype
-
         hidden_states = self.proj(hidden_states.to(target_dtype))
-
         return hidden_states
 
 
@@ -162,9 +164,7 @@ class VariableResolutionResamplerModel(nn.Module):
             H is simply hidden
             """
             x = self.spatial_conv_reshape(x, self.spatial_conv_size)
-
             x = self.spatial_linear(x)
-
             return x
 
         def fwd_placeholder(x, grid_thw, to_tensor=False):
@@ -231,26 +231,21 @@ class VariableResolutionResamplerModel(nn.Module):
             x = self.temporal_linear(x)
             return x
 
-        # def fwd_mlp(x):
-        #     x = self.mlp(x)
-        #     x = self.after_norm(x)
-        #     return x
-
         x = fwd_spatial(x)
         if self.use_temporal_conv:
             x = fwd_placeholder(x, grid_thw)
             x = fwd_temporal(x)
-        # x = fwd_mlp(x)
         return x
 
 
 class ErnieVisionModel(BaseMegatronVisionModule):
-    """Base on DFNRopeVisionTransformerPreTrainedModel"""
+    """ERNIE-4.5-VL Vision Encoder using Megatron TransformerBlock."""
 
-    def __init__(self, config, vp_stage: int = None) -> None:
+    def __init__(self, config, vp_stage: Optional[int] = None) -> None:
         """
         Args:
-            config (dict): model configuration
+            config: ErnieVisionConfig
+            vp_stage: virtual pipeline stage index (for pipeline parallelism)
         """
         super().__init__(config)
         self.spatial_merge_size = config.spatial_merge_size
@@ -261,62 +256,65 @@ class ErnieVisionModel(BaseMegatronVisionModule):
             embed_dim=config.embed_dim,
         )
 
-        head_dim = config.embed_dim // config.num_heads
+        head_dim = config.embed_dim // config.num_attention_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
 
-        self.blocks = nn.ModuleList(
-            [DFNRopeVisionBlock(config) for _ in range(config.num_layers)]
+        # Megatron TransformerBlock: handles recompute, FP8, sequence-parallel, etc.
+        # post_process=False: no final layernorm inside the block (we keep self.ln).
+        # Use a shallow copy with hidden_size=embed_dim (1280) for TransformerBlock,
+        # since ErnieVisionConfig.hidden_size = 5120 is the resampler output size
+        # needed by OmniEncoderModel for the adapter.
+        transformer_config = copy.copy(config)
+        transformer_config.hidden_size = config.embed_dim
+        transformer_layer_spec = import_module(config.model_spec, transformer_config)
+        self.decoder = TransformerBlock(
+            config=transformer_config,
+            spec=transformer_layer_spec,
+            pre_process=True,
+            post_process=False,
+            vp_stage=vp_stage,
         )
 
         self.ln = nn.LayerNorm(config.embed_dim, eps=1e-6)
 
-        self.resampler = VariableResolutionResamplerModel(config,
-            config.resampler_hidden_in, config.resampler_hidden_out)
+        self.resampler = VariableResolutionResamplerModel(
+            config, config.resampler_hidden_in, config.resampler_hidden_out
+        )
 
-        class DummyFunc:
-            """dummy_func"""
-            def __init__(self):
-                self.set_input_tensor = lambda tensor: tensor
-        self.decoder = DummyFunc()
-        args = get_args()
-        self.image_preprocess = AutoProcessor.from_pretrained(args.hf_tokenizer_path,  trust_remote_code=True)
-        self.image_preprocess.eval()
-        self.image_preprocess = self.add_image_preprocess(self.image_preprocess)
+        self.image_preprocess = ErnieImagePreprocess(
+            patch_size=config.patch_size,
+            in_channels=config.in_channels,
+        )
+
         if hasattr(config, 'freeze') and config.freeze:
             for name, param in self.named_parameters():
                 # resampler_model is the only part that needs to be updated in encoder
                 if 'resampler_model' not in name:
                     param.requires_grad = False
 
+    def set_input_tensor(self, input_tensor: torch.Tensor) -> None:
+        """Sets input tensor to the model.
 
-    def add_image_preprocess(self, processor):
-        """add image preprocess"""
-        logger.info("image preprocess is set")
+        See megatron.model.transformer.set_input_tensor()
 
-        image_preprocess = processor.image_processor
-        image_preprocess.image_mean_tensor = torch.tensor(
-            image_preprocess.image_mean, dtype=torch.float32
-        ).reshape([1, 3, 1, 1])
-        image_preprocess.image_std_tensor = torch.tensor(
-            image_preprocess.image_std, dtype=torch.float32
-        ).reshape([1, 3, 1, 1])
-        image_preprocess.rescale_factor = torch.tensor(
-            image_preprocess.rescale_factor, dtype=torch.float32
-        )
-        image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze(
-            [-2, -1]
-        ).repeat_interleave(self.config.patch_size**2 * 1, -1)
-        image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze(
-            [-2, -1]
-        ).repeat_interleave(self.config.patch_size**2 * 1, -1)
+        Args:
+            input_tensor (Tensor): Sets the input tensor for the model.
+        """
+        if not isinstance(input_tensor, list):
+            input_tensor = [input_tensor]
+        assert len(input_tensor) == 1, 'input_tensor should only be length 1'
+        self.decoder.set_input_tensor(input_tensor[0])
 
-        return image_preprocess
+    def preprocess(self, images, grid_thw):
+        """Preprocess"""
+        return self.image_preprocess(images, grid_thw)
 
     def rot_pos_emb(self, grid_thw, num_pad=0):
         """rot_pos_emb
 
         Args:
             grid_thw (torch.Tensor): grid thw of input
+            num_pad (int): number of padding tokens
 
         Returns:
             torch.Tensor: rotary position embedding
@@ -360,67 +358,28 @@ class ErnieVisionModel(BaseMegatronVisionModule):
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_dim=1)
         return rotary_pos_emb
 
-    def set_input_tensor(self, input_tensor: torch.Tensor) -> None:
-        """Sets input tensor to the model.
-
-        See megatron.model.transformer.set_input_tensor()
-
-        Args:
-            input_tensor (Tensor): Sets the input tensor for the model.
-        """
-        # This is usually handled in schedules.py but some inference code still
-        # gives us non-lists or None
-        if not isinstance(input_tensor, list):
-            input_tensor = [input_tensor]
-
-        assert len(input_tensor) == 1, 'input_tensor should only be length 1'
-        self.decoder.set_input_tensor(input_tensor[0])
-
-    def preprocess(self, images, grid_thw):
-        """Preprocess"""
-        assert images.dtype == torch.uint8, images.dtype
-        current_device = images.device
-        self.image_preprocess.image_mean_tensor = (
-            self.image_preprocess.image_mean_tensor.to(current_device)
-        )
-        self.image_preprocess.image_std_tensor = (
-            self.image_preprocess.image_std_tensor.to(current_device)
-        )
-        images = self.image_preprocess.rescale_factor * images.to(torch.float32)
-        images = (
-            images - self.image_preprocess.image_mean_tensor
-        ) / self.image_preprocess.image_std_tensor
-        images = images.to(torch.bfloat16)
-        # process grid thw
-        if grid_thw is not None:
-            grid_thw = grid_thw[grid_thw > 0].reshape([-1, 3])
-            grid_thw = F.pad(
-                torch.repeat_interleave(grid_thw[:, 1:], grid_thw[:, 0], 0),
-                [1, 0, 0, 0],
-                value=1,
-            )
-        return images, grid_thw
-
     def forward(
         self, hidden_states: torch.Tensor, image_grid_thw: torch.Tensor, num_pad=0
     ) -> torch.Tensor:
         """
         Args:
-            hidden_states (torch.Tensor): image input tensor
+            hidden_states (torch.Tensor): image input tensor, shape [S, C*P*P], uint8
             image_grid_thw (torch.Tensor): grid thw of input
             num_pad (int): number of padding tokens
 
         Returns:
             torch.Tensor: output tensor
         """
-        # preprocess images and grid_thw
+        # ---- preprocess: rescale + normalize + grid_thw ----
         hidden_states, image_grid_thw = self.preprocess(hidden_states, image_grid_thw)
-        # vit
+        # ---- patch embedding: [S, C*P*P] -> [S, embed_dim] ----
         hidden_states = self.patch_embed(hidden_states)
 
+        # ---- rotary position embedding ----
         rotary_pos_emb = self.rot_pos_emb(image_grid_thw, num_pad=num_pad)
-        rotary_pos_emb = rotary_pos_emb.to(hidden_states.device)
+        rotary_pos_emb = rotary_pos_emb.to(hidden_states.device).float()
 
+        # ---- cu_seqlens for varlen attention ----
         cu_seqlens = torch.repeat_interleave(
             image_grid_thw[:, 1] * image_grid_thw[:, 2], image_grid_thw[:, 0]
         ).cumsum(dim=0, dtype=torch.int32)
@@ -431,14 +390,26 @@ class ErnieVisionModel(BaseMegatronVisionModule):
         else:
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
-        for idx, blk in enumerate(self.blocks):
-            hidden_states = blk(
-                hidden_states,
-                cu_seqlens=cu_seqlens,
-                rotary_pos_emb=rotary_pos_emb,
-            )
+        # ---- TransformerBlock forward ----
+        # TransformerBlock expects [s, b, h]; ERNIE ViT has no batch dim (b=1).
+        hidden_states = hidden_states[:, None, :].contiguous()  # [S, 1, embed_dim]
+        packed_seq_params = PackedSeqParams(
+            qkv_format="thd",
+            cu_seqlens_q=cu_seqlens,
+            cu_seqlens_kv=cu_seqlens,
+        )
+        # rotary_pos_emb: [S, head_dim//2] -> [S, 1, 1, head_dim//2]
+        # ernie_encoder_spec.apply_rotary_pos_emb_vision does .repeat(..., 2)
+        # internally, so pass the raw half-dim freqs here.
+        hidden_states, _ = self.decoder(
+            hidden_states,
+            attention_mask=None,
+            rotary_pos_emb=rotary_pos_emb.unsqueeze(1).unsqueeze(2),
+            packed_seq_params=packed_seq_params,
+        )
+        hidden_states = hidden_states[:, 0, :].contiguous()  # [S, 1, h] -> [S, h]
 
-        vision_out = self.ln(hidden_states)  # add norm
-        # resample
+        # ---- final LayerNorm + resampler ----
+        vision_out = self.ln(hidden_states)
         ret = self.resampler(vision_out, image_grid_thw)
         return ret, None, [None]

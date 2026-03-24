@@ -17,12 +17,24 @@ from megatron.core.transformer.transformer_block import TransformerBlockSubmodul
 from megatron.core.transformer.transformer_layer import TransformerLayerSubmodules, get_transformer_layer_offset
 from baige_omni.models.common.local_layers.local_norm import LocalNorm
 from baige_omni.models.dispatch import multiacc_modules
-
+from baige_omni.models.encoder.ernie4_5_vl_vision_models.ernie_adapter import RMSNorm as _AdapterRMSNorm
+from baige_omni.models.dispatch import multiacc_modules
 from .ernie_transformer_layer import TransformerLayerErnie
 from .ernie_config import ErnieMoeConfig
 from .ernie_moe_layer import ErnieMultiTypeMoE, MultiTypeMoeSubmodules, ErnieMoeLayer
 from .ernie_experts import ErnieMLP, SequentialMLP, ErnieSharedExpertMLP
 from .ernie_pos_embedding import apply_rotary_3d
+
+
+class RMSNorm(_AdapterRMSNorm):
+    """Wrapper around adapter RMSNorm to accept Megatron build_module calling convention.
+
+    Megatron's build_module passes: RMSNorm(config=config, hidden_size=H, eps=e)
+    Adapter RMSNorm expects:        RMSNorm(hidden_size, rms_norm_eps=e)
+    """
+
+    def __init__(self, config, hidden_size: int, eps: float = 1e-5, **kwargs):
+        super().__init__(hidden_size, rms_norm_eps=eps)
 
 
 def _get_mlp_module_spec(
@@ -80,7 +92,7 @@ def _get_ernie4_5_vl_moedecoderlayer_with_spec(num_experts=0, qk_layernorm: bool
     return ModuleSpec(
         module=TransformerLayerErnie,
         submodules=TransformerLayerSubmodules(
-            input_layernorm=LocalNorm,
+            input_layernorm=RMSNorm,
             self_attention=ModuleSpec(
                 module=SelfAttention,
                 params={"attn_mask_type": AttnMaskType.causal},
@@ -93,7 +105,7 @@ def _get_ernie4_5_vl_moedecoderlayer_with_spec(num_experts=0, qk_layernorm: bool
                 ),
             ),
             self_attn_bda=get_bias_dropout_add,
-            pre_mlp_layernorm=LocalNorm,
+            pre_mlp_layernorm=RMSNorm,
             mlp=mlp_dense_or_sparse,
             mlp_bda=get_bias_dropout_add,
         ),
@@ -138,6 +150,6 @@ def get_ernie4_5_vl_decoder_spec(
     # Block spec.
     block_spec = TransformerBlockSubmodules(
         layer_specs=layer_specs,
-        layer_norm=LocalNorm, # TODO: Whether the Local Norm should be compatible
+        layer_norm=RMSNorm,
     )
     return block_spec
