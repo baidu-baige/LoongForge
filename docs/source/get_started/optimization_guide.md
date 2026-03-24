@@ -1,6 +1,6 @@
 # Parallelism Strategies & Optimization Guide
 
-BaigeOmni is built on Megatron-LM and is fully compatible with all existing Megatron-LM optimization strategies.  
+BaigeOmni is built on [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) and is fully compatible with all existing Megatron-LM optimization strategies.  
 On top of that we have added several enhancements. This document describes the basic parallelism strategies and how to enable their optimizations.  
 They can be combined as needed to efficiently train **billion- to trillion-parameter** models on **hundreds to thousands of GPUs**.
 
@@ -129,7 +129,7 @@ Use `--data-parallel-sharding-strategy` to shard some states along the DP dimens
    Overlaps MoE All-to-All with compute.
 
 5. **DeepEP optimisation**  
-   DeepEP is a high-performance MoE token dispatch/combine library from DeepSeek. It greatly reduces scheduling and sync overhead for **cross-node All-to-All**, and is the recommended setup for DeepSeek-V3 and similar models.
+   [DeepEP](https://github.com/deepseek-ai/DeepEP) is a high-performance MoE token dispatch/combine library from DeepSeek. It greatly reduces scheduling and sync overhead for **cross-node All-to-All**, and is the recommended setup for DeepSeek-V3 and similar models.
 
    ```bash
    --moe-token-dispatcher-type=flex   # {allgather | alltoall | flex}
