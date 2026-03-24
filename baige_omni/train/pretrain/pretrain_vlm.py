@@ -168,22 +168,6 @@ SPIKY_LOSS_FACTOR = 10
 batch_list = []
 forward_step_calling_count = 0
 
-def free_batch_list(batch_list):
-    """
-    Free the memory of the batch list.
-    """
-    for batch in batch_list:
-        if isinstance(batch, dict):
-            for k in list(batch.keys()):
-                v = batch[k]
-                if torch.is_tensor(v):
-                    del v
-                batch.pop(k)
-        del batch
-
-    batch_list.clear()
-    torch.cuda.empty_cache()
-
 def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
 
@@ -206,7 +190,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     forward_group_id = forward_step_calling_count // _ImageEncoderDataParallelSize
     inner_group_id = forward_step_calling_count % _ImageEncoderDataParallelSize
     if inner_group_id == 0:
-        free_batch_list(batch_list)
+        batch_list.clear()
         with stimer(bdata=True):
             for _ in range(_ImageEncoderDataParallelSize):
                 local_batch = copy.deepcopy(get_batch(data_iterator))
