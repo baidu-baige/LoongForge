@@ -27,3 +27,4 @@ moe_ffn_hidden_size: null
 rotary_emb_func: "RotaryEmbedding"
 rotary_base: 1000000
 model_type: "qwen"
+convert_file: "configs/models/qwen3/ckpt_convert/qwen3_convert.yaml"

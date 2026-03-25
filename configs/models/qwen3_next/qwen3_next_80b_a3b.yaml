@@ -30,3 +30,5 @@ linear_num_value_heads: 32
 linear_conv_kernel_dim: 4
 full_attention_interval: 4
 model_type: "qwen3_next"
+
+convert_file: "configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml"

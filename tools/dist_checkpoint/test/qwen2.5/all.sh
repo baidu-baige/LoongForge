@@ -1,3 +1,5 @@
+mkdir -p /workspace/bridge_test_log/qwen2.5/
+
 sh tools/dist_checkpoint/test/qwen2.5/0.5b_bridge_roundtrip.sh 2>&1 | tee -a /workspace/bridge_test_log/qwen2.5/0.5b_log
 
 sh tools/dist_checkpoint/test/qwen2.5/1.5b_bridge_roundtrip.sh 2>&1 | tee -a /workspace/bridge_test_log/qwen2.5/1.5b_log
