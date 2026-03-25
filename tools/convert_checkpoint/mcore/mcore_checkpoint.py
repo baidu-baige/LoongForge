@@ -32,7 +32,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         McoreCheckpoint
     """
 
-    def __init__(self, c_config, args, tp, pp, vpp=None, ep=None, etp=None):
+    def __init__(self, c_config, args, tp, pp, vpp=None, ep=None, etp=None, model_id=None):
         super().__init__(c_config)
         self.args = args
         self.tp = tp
@@ -44,6 +44,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         self.iteration = 0
         self.checkpoint_version = 3.0
         self.rng_state = None
+        self.model_id = model_id
         margs = c_config.get_args("mcore")
         cargs = c_config.get_args("common")
         num_layers = cargs["num_layers"]
@@ -508,7 +509,9 @@ class McoreCheckpoint(AbstractCheckpoint):
 
     def get_transformer_name(self, stage_index):
         """ get transformer name """
-        if self.num_stages > 1:
+        if self.model_id is not None:
+            return self.name_map[TRANSFORMER_TPL] % self.model_id
+        elif self.num_stages > 1:
             return self.name_map[TRANSFORMER_TPL] % stage_index
         else:
             return self.name_map[TRANSFORMER]

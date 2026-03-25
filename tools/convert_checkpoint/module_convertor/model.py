@@ -207,7 +207,8 @@ class Model():
             self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
             if p == 0 and self.c_vision_patch_config is not None:
                 visual_args = Model.get_visual_args(args)
-                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                m_vision_ckpt = McoreCheckpoint(
+                    self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1, model_id=0)
                 vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
                 vision_layer_dict = {}
                 vision_layer_dict[0] = list(range(vision_num_layers)) 
