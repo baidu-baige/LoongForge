@@ -78,6 +78,7 @@ class HfCheckpointConverter:
                 c_config=vision_patch_config, args=visual_args, tp=self.args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
 
     def get_mcore_ckpt(self, ckpt_path):
+        self.m_vision_ckpt.model_id = None
         expert_ids=self.expert_dict.values() if self.expert_dict is not None else None
         mcore_dict = {}
         for p in self.pp_ranks:
@@ -97,6 +98,7 @@ class HfCheckpointConverter:
         return mcore_dict
 
     def save_hf_ckpt(self, mcore_dict, save_path):
+        self.m_vision_ckpt.model_id = 0
         for p in self.pp_ranks:
             cur_layer_dict = {p: self.layer_dict[p]}
             self.m_ckpt.load(None, layer_dict=cur_layer_dict, expert_dict=self.expert_dict, mcore_dict=mcore_dict)
