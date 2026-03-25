@@ -69,16 +69,16 @@ class HfCheckpointConverter:
         self.hf_ckpt = HuggingFaceCheckpoint(config, self.args)
         self.m_ckpt = McoreCheckpoint(config, self.args, tp, pp, vpp, ep, etp)
         if vision_patch_config is not None:
+            visual_model_id = 0 if vpp > 1 else None
             visual_args = Model.get_visual_args(self.args)
             vision_num_layers = vision_patch_config.get_args("common")["num_layers"]
             self.vision_layer_dict = {}
             self.vision_layer_dict[0] = list(range(vision_num_layers)) 
             self.hf_vision_ckpt = HuggingFaceCheckpoint(vision_patch_config, visual_args)
             self.m_vision_ckpt = McoreCheckpoint(
-                c_config=vision_patch_config, args=visual_args, tp=self.args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                c_config=vision_patch_config, args=visual_args, tp=self.args.encoder_tensor_model_parallel_size, pp=1, vpp=1, model_id=visual_model_id)
 
     def get_mcore_ckpt(self, ckpt_path):
-        self.m_vision_ckpt.model_id = None
         expert_ids=self.expert_dict.values() if self.expert_dict is not None else None
         mcore_dict = {}
         for p in self.pp_ranks:
@@ -98,7 +98,6 @@ class HfCheckpointConverter:
         return mcore_dict
 
     def save_hf_ckpt(self, mcore_dict, save_path):
-        self.m_vision_ckpt.model_id = 0
         for p in self.pp_ranks:
             cur_layer_dict = {p: self.layer_dict[p]}
             self.m_ckpt.load(None, layer_dict=cur_layer_dict, expert_dict=self.expert_dict, mcore_dict=mcore_dict)

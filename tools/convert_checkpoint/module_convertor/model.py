@@ -123,8 +123,10 @@ class Model():
             if p > 0 or self.c_vision_patch_config is None:
                 m_ckpt.convert_from_common(self.c_ckpt, target_c_config, layer_dict, expert_dict=expert_dict)
             else:
+                visual_model_id = 0 if vpp > 1 else None
                 visual_args = Model.get_visual_args(args)
-                m_vision_ckpt = McoreCheckpoint(self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1)
+                m_vision_ckpt = McoreCheckpoint(
+                    self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1, model_id=visual_model_id)
                 McoreCheckpoint.convert_from_common_vlm(m_ckpt, m_vision_ckpt, self.c_vision_patch_config, self.c_ckpt,
                         self.c_vision_ckpt, target_c_config, target_c_vision_config, args.save_ckpt_path, layer_dict, expert_dict)
 
@@ -206,9 +208,10 @@ class Model():
             m_ckpt.load(ckpt_path, layer_dict, expert_dict=expert_dict, lora_load_path=args.load_lora_ckpt_path)
             self.c_ckpt = m_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
             if p == 0 and self.c_vision_patch_config is not None:
+                visual_model_id = 0 if vpp > 1 else None
                 visual_args = Model.get_visual_args(args)
                 m_vision_ckpt = McoreCheckpoint(
-                    self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1, model_id=0)
+                    self.c_vision_patch_config, visual_args, args.encoder_tensor_model_parallel_size, pp=1, vpp=1, model_id=visual_model_id)
                 vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
                 vision_layer_dict = {}
                 vision_layer_dict[0] = list(range(vision_num_layers)) 

@@ -621,7 +621,7 @@ class McoreCheckpoint(AbstractCheckpoint):
                 encode_t = t % encoder_tp
                 for model in state_dict[0][t].keys():
                     if model in ("model", "model0"):
-                        state_dict[0][t][model].update(vision_dict[0][encode_t]["model"])
+                        state_dict[0][t][model].update(vision_dict[0][encode_t][model])
                 if save_file:
                     m_ckpt.save_model_file(
                         release_dir, save_margs, 0, t, None, state_dict[0][t], None, layer_ids)
@@ -634,7 +634,7 @@ class McoreCheckpoint(AbstractCheckpoint):
                     encode_t = t % encoder_tp
                     for model in state_dict[0][e][t].keys():
                         if model in ("model", "model0"):
-                            state_dict[0][e][t][model].update(vision_dict[0][encode_t]["model"])
+                            state_dict[0][e][t][model].update(vision_dict[0][encode_t][model])
                     if save_file:
                         m_ckpt.save_model_file(
                             release_dir, save_margs, 0, t, e, state_dict[0][e][t], None, layer_ids)
