@@ -329,7 +329,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         if load_safe:
             from safetensors.torch import load_file
             sub_dirs = [x for x in os.listdir(load_path) if x.endswith("safetensors")]
-            if len(sub_dirs) == 1:
+            if not os.path.exists(os.path.join(load_path, "model.safetensors.index.json")):
                 checkpoint_name = "model.safetensors"
                 self.state_dict = load_file(os.path.join(load_path, checkpoint_name), device="cpu")
                 logging.info(f"Load HuggingFace from: {os.path.join(load_path, checkpoint_name)}")

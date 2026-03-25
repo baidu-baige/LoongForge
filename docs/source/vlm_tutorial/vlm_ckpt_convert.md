@@ -19,6 +19,14 @@
 | | internvl3.5_241b_a28b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>qwen3_moe_convert_intern | | |
 | **LLaVA-OV1.5** | llava_ov_1_5_30b_a3b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_moe_convert | | |
 | | llava_ov_4b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_convert_llava | ✅ | ✅ |
+| **Qwen3.5** | qwen3_5_0_8b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
+| | qwen3_5_2b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
+| | qwen3_5_4b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
+| | qwen3_5_9b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
+| | qwen3_5_27b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
+| | qwen3_5_35b_a3b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_moe_convert | ✅ | ✅ |
+| | qwen3_5_122b_a10b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_moe_convert | ✅ | ✅ |
+| | qwen3_5_397b_a17b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_moe_convert | ✅ | ✅ |
 
 ## 2. Parameter Passing Methods
 

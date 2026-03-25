@@ -12,11 +12,11 @@ BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmnni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/datasets/filter_CC3M/"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3.5-35B-A3B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3.5-397B-A17B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3.5-35b-a3b-tp1pp2ep4/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3.5-397b-a17b-tp1pp4ep8/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3.5-35b-a3b-tp1pp2ep4"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3.5-397b-a17b-tp1pp4ep8"}
 
 GPUS_PER_NODE=8
 
@@ -35,7 +35,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3.5/qwen3_5_35b_a3b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3.5/qwen3_5_397b_a17b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -84,14 +84,14 @@ TRAINING_ARGS=(
 
 MOE_ARGS=(
     --moe-router-load-balancing-type aux_loss
-    --moe-router-topk 8
+    --moe-router-topk 10
     --moe-aux-loss-coeff 1e-3
     --moe-permute-fusion
     --moe-grouped-gemm
     --moe-router-dtype fp32
     --attention-softmax-in-fp32
     --moe-token-dispatcher-type alltoall
-    --moe-shared-expert-intermediate-size 512
+    --moe-shared-expert-intermediate-size 1024
     --moe-shared-expert-overlap
     --cross-entropy-loss-fusion
     --cross-entropy-fusion-impl te
@@ -101,8 +101,8 @@ MOE_ARGS=(
 MODEL_PARALLEL_ARGS=(
     --attention-backend flash
     --tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 2
-    --expert-model-parallel-size 4
+    --pipeline-model-parallel-size 4
+    --expert-model-parallel-size 8
     # --sequence-parallel
     --use-distributed-optimizer
     --overlap-grad-reduce

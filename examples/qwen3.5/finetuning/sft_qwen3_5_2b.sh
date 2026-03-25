@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TORCH_COMPILE=0
 export TORCHDYNAMO_DISABLE=1
 
@@ -12,11 +11,11 @@ BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmnni"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/datasets/filter_CC3M/"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3.5-35B-A3B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3.5-2B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3.5-35b-a3b-tp1pp2ep4/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3.5-2b-tp1pp1/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3.5-35b-a3b-tp1pp2ep4"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3.5-2b-tp1pp1"}
 
 GPUS_PER_NODE=8
 
@@ -35,7 +34,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3.5/qwen3_5_35b_a3b.yaml
+MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3.5/qwen3_5_2b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -43,13 +42,17 @@ DATA_ARGS=(
     --data-path $DATA_PATH
     --dataloader-type external
     --split 100,0,0
-    --add-question-in-pretrain
-    --enable-discard-sample
     --num-workers 32
+    --chat-template qwen2-vl
+    --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml
+    # for packing
+    # --packing-sft-data
+    # --packing-buffer-size 5000
+    # --max-packed-tokens 32768 
 )
 
 TRAINING_ARGS=(
-    --training-phase pretrain # options: pretrain, sft
+    --training-phase sft # options: pretrain, sft
     --seed 42
     --seq-length 4096
     --max-position-embeddings 262144
@@ -80,37 +83,21 @@ TRAINING_ARGS=(
     --no-load-rng
 
     --mtp-num-layers 1
-)
-
-MOE_ARGS=(
-    --moe-router-load-balancing-type aux_loss
-    --moe-router-topk 8
-    --moe-aux-loss-coeff 1e-3
-    --moe-permute-fusion
-    --moe-grouped-gemm
-    --moe-router-dtype fp32
     --attention-softmax-in-fp32
-    --moe-token-dispatcher-type alltoall
-    --moe-shared-expert-intermediate-size 512
-    --moe-shared-expert-overlap
+    --calculate-per-token-loss
     --cross-entropy-loss-fusion
     --cross-entropy-fusion-impl te
-    --calculate-per-token-loss
 )
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend flash
     --tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 2
-    --expert-model-parallel-size 4
+    --pipeline-model-parallel-size 1
     # --sequence-parallel
     --use-distributed-optimizer
     --overlap-grad-reduce
     --overlap-param-gather
     --distributed-backend nccl
-    --recompute-granularity full
-    --recompute-method uniform
-    --recompute-num-layers 1
 )
 
 MODEL_CONFIG_ARGS=(
@@ -136,6 +123,5 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
-    ${MOE_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${LOGGING_ARGS[@]}

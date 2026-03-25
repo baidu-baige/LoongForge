@@ -87,7 +87,7 @@ BaigeOmni supports a massive array of state-of-the-art models. Check out `config
 | | MIMO | mimo-7b |
 | **VLM** | Qwen2.5-VL | qwen2.5-vl-3b, qwen2.5-vl-7b, qwen2.5-vl-32b, qwen2.5-vl-72b |
 | | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
-| | Qwen3.5 | qwen3.5-35B-A3B, qwen3.5-397B-A17B |
+| | Qwen3.5 | qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3.5-9b, qwen3.5-27b, qwen3.5-35B-A3B, qwen3.5-122B-A10B, qwen3.5-397B-A17B |
 | | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
 | | LLaVA-OneVision-1.5 | llava-onevision-1.5-4B |
 | | InternVL2.5 | internvl2.5-8b, internvl2.5-26b, internvl2.5-38b, internvl2.5-78b |

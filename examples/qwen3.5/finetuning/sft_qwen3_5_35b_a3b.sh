@@ -46,8 +46,10 @@ DATA_ARGS=(
     --num-workers 32
     --chat-template qwen2-vl
     --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml
-    --rotary-percent 0.25
-    --calculate-per-token-loss
+    # for packing
+    # --packing-sft-data
+    # --packing-buffer-size 5000
+    # --max-packed-tokens 32768 
 )
 
 TRAINING_ARGS=(
@@ -55,6 +57,7 @@ TRAINING_ARGS=(
     --seed 42
     --seq-length 4096
     --max-position-embeddings 262144
+    --rotary-percent 0.25
     --init-method-std 0.02
     --micro-batch-size 1
     --global-batch-size 64
@@ -96,6 +99,7 @@ MOE_ARGS=(
     --moe-shared-expert-overlap
     --cross-entropy-loss-fusion
     --cross-entropy-fusion-impl te
+    --calculate-per-token-loss
 )
 
 MODEL_PARALLEL_ARGS=(

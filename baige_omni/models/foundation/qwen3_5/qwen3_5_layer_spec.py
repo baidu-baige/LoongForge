@@ -10,8 +10,13 @@ from copy import deepcopy
 
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityOp
+from megatron.core.transformer.mlp import MLP, MLPSubmodules
+from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlockSubmodules
-from megatron.core.extensions.transformer_engine import TEColumnParallelLinear
+from megatron.core.extensions.transformer_engine import (
+    TEColumnParallelLinear,
+    TERowParallelLinear,
+)
 from megatron.core.models.gpt.gpt_layer_specs import (
     get_gpt_layer_with_transformer_engine_spec,
     get_gpt_mtp_block_spec,
@@ -32,6 +37,23 @@ except ImportError:
     HAVE_TE = False
 
 
+def _get_dense_mlp_module_spec():
+    """Get module spec for dense (non-MoE) MLP.
+
+    Uses TEColumnParallelLinear (non-fused) instead of TELayerNormColumnParallelLinear
+    because Qwen3.5 uses zero-centered RMSNorm (Qwen3NextRMSNorm) whose weight format
+    (initialized to zeros, computes (1+w)*norm(x)) differs from TE's fused layernorm
+    (initialized to ones). The layernorm is handled separately by pre_mlp_layernorm.
+    """
+    return ModuleSpec(
+        module=MLP,
+        submodules=MLPSubmodules(
+            linear_fc1=TEColumnParallelLinear,
+            linear_fc2=TERowParallelLinear,
+        ),
+    )
+
+
 def get_qwen3_5_transformer_layer_spec(config, vp_stage=None):
     """Helper function to get module spec for Qwen3_5"""
     if not HAVE_TE:
@@ -41,18 +63,23 @@ def get_qwen3_5_transformer_layer_spec(config, vp_stage=None):
         )
 
     layer_norm_impl = Qwen3NextRMSNorm
+    is_dense = config.num_moe_experts is None
 
-    moe_layer_spec = get_gpt_layer_with_transformer_engine_spec(
+    base_layer_spec = get_gpt_layer_with_transformer_engine_spec(
         num_experts=config.num_moe_experts,
         moe_grouped_gemm=config.moe_grouped_gemm,
         qk_layernorm=config.qk_layernorm,
         multi_latent_attention=config.multi_latent_attention,
         moe_use_legacy_grouped_gemm=config.moe_use_legacy_grouped_gemm,
     )
-    mlp = get_moe_module_spec(
-        num_experts=config.num_moe_experts,
-        moe_grouped_gemm=config.moe_grouped_gemm,
-    )
+
+    if is_dense:
+        mlp = _get_dense_mlp_module_spec()
+    else:
+        mlp = get_moe_module_spec(
+            num_experts=config.num_moe_experts,
+            moe_grouped_gemm=config.moe_grouped_gemm,
+        )
 
     # Build per-layer specs based on layer_types pattern
     layer_types = [
@@ -62,8 +89,8 @@ def get_qwen3_5_transformer_layer_spec(config, vp_stage=None):
 
     layer_specs = []
     for layer_type in layer_types:
-        layer_spec = deepcopy(moe_layer_spec)
-        shard_moe_gate_spec = deepcopy(mlp)
+        layer_spec = deepcopy(base_layer_spec)
+        mlp_spec = deepcopy(mlp)
 
         if layer_type == 'linear_attention':
             layer_spec.submodules.self_attention.module = GatedDeltaNet
@@ -74,15 +101,20 @@ def get_qwen3_5_transformer_layer_spec(config, vp_stage=None):
 
         # Replace all layernorms with Qwen3NextRMSNorm (zero-centered)
         layer_spec.submodules.input_layernorm = layer_norm_impl
-        if hasattr(layer_spec.submodules,
-                   'pre_mlp_layernorm') and layer_spec.submodules.pre_mlp_layernorm is not IdentityOp:
+        # For dense models, pre_mlp_layernorm must be explicitly set because the dense MLP
+        # uses TEColumnParallelLinear (non-fused), so the layernorm is not inside linear_fc1.
+        # For MoE models, the base spec already provides a non-IdentityOp pre_mlp_layernorm.
+        if is_dense:
+            layer_spec.submodules.pre_mlp_layernorm = layer_norm_impl
+        elif hasattr(layer_spec.submodules,
+                     'pre_mlp_layernorm') and layer_spec.submodules.pre_mlp_layernorm is not IdentityOp:
             layer_spec.submodules.pre_mlp_layernorm = layer_norm_impl
         if hasattr(layer_spec.submodules.self_attention.submodules, 'q_layernorm'):
             layer_spec.submodules.self_attention.submodules.q_layernorm = layer_norm_impl
         if hasattr(layer_spec.submodules.self_attention.submodules, 'k_layernorm'):
             layer_spec.submodules.self_attention.submodules.k_layernorm = layer_norm_impl
 
-        layer_spec.submodules.mlp = shard_moe_gate_spec
+        layer_spec.submodules.mlp = mlp_spec
         layer_specs.append(layer_spec)
 
     # Slice layer specs for pipeline parallelism

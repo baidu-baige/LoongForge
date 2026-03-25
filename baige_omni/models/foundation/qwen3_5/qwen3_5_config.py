@@ -51,9 +51,9 @@ class Qwen35Config(BaseModelConfig):
     make_vocab_size_divisible_by: int = 128
     kv_channels: int = 256
 
-    # mixture of experts
-    num_experts: int = 256
-    moe_ffn_hidden_size: int = 512
+    # mixture of experts (None for dense models)
+    num_experts: int = None
+    moe_ffn_hidden_size: int = None
 
     # linear attention
     linear_key_head_dim: int = 128

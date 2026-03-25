@@ -199,10 +199,41 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/qwen3_next",
         "config_name": "qwen3_next_80b_a3b",
     },
-    "qwen3_5-35b-a3b": {
+    
+    # qwen3.5
+    "qwen3.5-0.8b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_0_8b",
+    },
+    "qwen3.5-2b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_2b",
+    },
+    "qwen3.5-4b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_4b",
+    },
+    "qwen3.5-9b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_9b",
+    },
+    "qwen3.5-27b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_27b",
+    },
+    "qwen3.5-35b-a3b": {
         "config_path": "configs/models/qwen3.5",
         "config_name": "qwen3_5_35b_a3b",
     },
+    "qwen3.5-122b-a10b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_122b_a10b",
+    },
+    "qwen3.5-397b-a17b": {
+        "config_path": "configs/models/qwen3.5",
+        "config_name": "qwen3_5_397b_a17b",
+    },
+    
     # qwen2.5-vl
     "qwen2.5-vl-3b": {
         "config_path": "configs/models/qwen2.5vl",
