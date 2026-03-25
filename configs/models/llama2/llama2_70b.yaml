@@ -21,3 +21,5 @@ add_qkv_bias: false
 qk_layernorm: false
 untie_embeddings_and_output_weights: true
 model_type: "llama"
+
+convert_file: "configs/models/llama2/ckpt_convert/llama2_convert.yaml"

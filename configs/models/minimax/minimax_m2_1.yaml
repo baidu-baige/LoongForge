@@ -7,3 +7,5 @@ num_attention_heads: 48
 num_query_groups: 8
 vocab_size_in_config_file: 200064
 num_experts: 256
+
+convert_file: "configs/models/minimax/ckpt_convert/minimax_convert.yaml"

@@ -33,3 +33,5 @@ untie_embeddings_and_output_weights: true
 apply_rope_fusion: true
 multi_latent_attention: true
 model_type: "deepseek"
+
+convert_file: "configs/models/deepseek3/ckpt_convert/deepseek_v3_2_convert.yaml"

@@ -33,4 +33,4 @@ apply_rope_fusion: true
 multi_latent_attention: true
 model_type: "deepseek"
 
-convert_file: "configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml"
+convert_file: "configs/models/deepseek2/ckpt_convert/deepseek_v2_convert.yaml"

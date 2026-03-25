@@ -7,3 +7,5 @@ num_attention_heads: 32
 num_query_groups: 8
 vocab_size_in_config_file: 151680
 mtp_num_layers: 1
+
+convert_file: "configs/models/mimo/ckpt_convert/mimo_convert.yaml"

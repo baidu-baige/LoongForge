@@ -15,8 +15,10 @@ model:
   image_projector:
     hidden_size: 8192
     ffn_hidden_size: 8192
-  foundation: 
+  foundation:
     rotary_emb_func: "RotaryEmbedding"
     rotary_base: 1000000
     vocab_size_in_config_file: 151674
     model_spec: ["aiak_training_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_layer_with_te_spec"]
+    # override as the foundation model of this vlm uses different convert file
+    convert_file: "configs/models/qwen2.5/ckpt_convert/qwen2_5_convert_intern.yaml"

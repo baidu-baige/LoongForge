@@ -11,10 +11,12 @@ model:
   loss_func: ${loss_func:default}
   mix_used_vision_encoder: true
   mix_used_vision_projector: true
-  foundation: 
+  foundation:
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
     model_spec: ["aiak_training_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
+    # override as the foundation model of this vlm doesn't share the same convert file with its language model counterpart
+    convert_file: "configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml"
   image_projector:
     activation_func: ${act:gelu}

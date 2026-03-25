@@ -17,6 +17,15 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3",
     },
+    # internlm2.5
+    "internlm2.5-8b": {
+        "config_path": "configs/models/internlm2.5",
+        "config_name": "internlm2_5_8b",
+    },
+    "internlm2.5-20b": {
+        "config_path": "configs/models/internlm2.5",
+        "config_name": "internlm2_5_20b",
+    },
     # llama
     "llama2-7b": {
         "config_path": "configs/models/llama2",
@@ -185,9 +194,61 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen3_next_80b_a3b",
     },
     # qwen2.5-vl
+    "qwen2_5-vl-3b": {
+        "config_path": "configs/models/qwen2.5vl",
+        "config_name": "qwen2_5_vl_3b",
+    },
     "qwen2_5-vl-7b": {
         "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_7b",
+    },
+    "qwen2_5-vl-32b": {
+        "config_path": "configs/models/qwen2.5vl",
+        "config_name": "qwen2_5_vl_32b",
+    },
+    "qwen2_5-vl-72b": {
+        "config_path": "configs/models/qwen2.5vl",
+        "config_name": "qwen2_5_vl_72b",
+    },
+
+    # internvl2.5
+    "internvl2_5-8b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_8b",
+    },
+    "internvl2_5-26b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_26b",
+    },
+    "internvl2_5-38b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_38b",
+    },
+    "internvl2_5-78b": {
+        "config_path": "configs/models/internvl2.5",
+        "config_name": "internvl2_5_78b",
+    },
+
+    # internvl3.5
+    "internvl3_5-8b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_8b",
+    },
+    "internvl3_5-14b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_14b",
+    },
+    "internvl3_5-30b-a3b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_30b_a3b",
+    },
+    "internvl3_5-38b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_38b",
+    },
+    "internvl3_5-241b-a28b": {
+        "config_path": "configs/models/internvl3.5",
+        "config_name": "internvl3_5_241b_a28b",
     },
 
     #qwen3-vl

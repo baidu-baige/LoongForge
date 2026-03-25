@@ -26,4 +26,6 @@ num_experts: 128
 moe_ffn_hidden_size: 768
 rotary_emb_func: "RotaryEmbedding"
 model_type: "qwen"
+
+convert_file: "configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml"
 # variable_seq_lengths: true
