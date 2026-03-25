@@ -1197,12 +1197,19 @@ def train_step(
                     optim_instance._copy_main_params_to_param_buffer()
 
         # Forward pass.
+        tmp_num_microbatches = get_num_microbatches()
+        tmp_seq_length = args.seq_length
+        if args.enable_chunkpipe:
+            num_chunks = args.seq_length // args.chunksize
+            tmp_num_microbatches *= num_chunks
+            tmp_seq_length = args.chunksize
+
         losses_reduced = forward_backward_func(
             forward_step_func=forward_step_func,
             data_iterator=data_iterator,
             model=model,
-            num_microbatches=get_num_microbatches(),
-            seq_length=args.seq_length,
+            num_microbatches=tmp_num_microbatches,
+            seq_length=tmp_seq_length,
             micro_batch_size=args.micro_batch_size,
             decoder_seq_length=args.decoder_seq_length,
             forward_only=False,
