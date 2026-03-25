@@ -714,7 +714,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     group.add_argument(
         "--encoder-tensor-model-parallel-size",
         type=int,
-        default=1,
+        default=None,
         help="Encoder Tensor Model Parallel Size for Heterogeneous TP Training.",
     )
 

@@ -39,7 +39,7 @@ def parse_args(title=None):
     group.add_argument('--adapter_path', type=str, help="Path to adapter."),
     group.add_argument("--save_ckpt_path", type=str, help="Path to save checkpoint.")
     group.add_argument("--megatron_path", type=str, help="Base directory of Megatron repository")
-    group.add_argument("--encoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for encoder.")
+    group.add_argument("--encoder_tensor_model_parallel_size", type=int, default=None, help="Tensor parallel size for encoder.")
     group.add_argument("--decoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for decoder.")
     group.add_argument("--pipeline_model_parallel_size", type=int, default=1, help="Pipeline parallel size.")
     group.add_argument("--num_virtual_stages_per_pipeline_rank", type=int, default=None, help="Number of virtual pipeline stages per pipeline parallelism rank")

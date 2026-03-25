@@ -66,7 +66,7 @@ class McoreBase:
         McoreBase
     """
 
-    def __init__(self, c_config, args, tp, pp, ep, etp):
+    def __init__(self, c_config, args):
         self.c_config = c_config
         self.args = args
         ############ Get rid of LoRA ##############
@@ -80,10 +80,10 @@ class McoreBase:
         self.mcore_mixer_attn_converter = McoreMixerAttnConverter(c_config)
         self.mcore_attn_gqkv_converter = McoreAttnGateQkvConverter(c_config)
 
-        self.tp = tp
-        self.pp = pp
-        self.ep = ep
-        self.etp = etp
+        self.tp = args.tensor_model_parallel_size
+        self.pp = args.pipeline_model_parallel_size
+        self.ep = args.expert_parallel_size
+        self.etp = args.expert_tensor_parallel_size
 
         self.save_path = self.args.save_ckpt_path
         self.load_path = self.args.load_ckpt_path

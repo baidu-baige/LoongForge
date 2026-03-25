@@ -95,7 +95,7 @@ class Parser:
         # Parallel related parameters (for ParallelConfig)
         param_dict['tp_size'] = getattr(args, 'tensor_model_parallel_size', 1) or 1
         param_dict['pp_size'] = getattr(args, 'pipeline_model_parallel_size', 1) or 1
-        param_dict['encoder_tp_size'] = getattr(args, 'encoder_tensor_model_parallel_size', 1) or 1
+        param_dict['encoder_tp_size'] = getattr(args, 'encoder_tensor_model_parallel_size', None)
         if args.num_experts is not None:
             param_dict['ep_size'] = getattr(args, 'expert_model_parallel_size', None)
             param_dict['etp_size'] = getattr(args, 'expert_tensor_parallel_size', None)

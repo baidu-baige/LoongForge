@@ -25,8 +25,8 @@ class McoreMoe(McoreBase):
         McoreMoe
     """
 
-    def __init__(self, c_config, args, tp, pp, ep, etp):
-        super().__init__(c_config, args, tp, pp, ep, etp)
+    def __init__(self, c_config, args):
+        super().__init__(c_config, args)
 
     def common_e_to_mcore(self, expert_name, name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
                           ep_id=None, expert_id=None, layer_prefix=None, name_prefix=None):

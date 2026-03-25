@@ -153,7 +153,7 @@ def parse_args(title=None):
     parser = argparse.ArgumentParser(description='Reverse checkpoint shard keys using predefined mappings')
     parser.add_argument("--load_omni_ckpt_path", type=str, help="Path to load the omni checkpoint.")
     parser.add_argument("--save_original_ckpt_path", type=str, help="Path to save the original checkpoint.")
-    # parser.add_argument("--encoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for encoder.")
+    # parser.add_argument("--encoder_tensor_model_parallel_size", type=int, default=None, help="Tensor parallel size for encoder.")
     parser.add_argument("--decoder_tensor_model_parallel_size", type=int, default=1, help="Tensor parallel size for decoder.") # Use this as tp
     parser.add_argument("--pipeline_model_parallel_size", type=int, default=1, help="Pipeline parallel size.")
     parser.add_argument("--num_virtual_stages_per_pipeline_rank", type=int, default=None, help="Number of virtual pipeline stages per pipeline parallelism rank")

@@ -32,15 +32,15 @@ class McoreCheckpoint(AbstractCheckpoint):
         McoreCheckpoint
     """
 
-    def __init__(self, c_config, args, tp, pp, vpp=None, ep=None, etp=None, model_id=None):
+    def __init__(self, c_config, args, model_id=None):
         super().__init__(c_config)
         self.args = args
-        self.tp = tp
-        self.pp = pp
-        self.ep = ep
-        self.etp = etp
-        self.m_base = McoreBase(c_config, args, tp, pp, ep, etp)
-        self.m_moe = McoreMoe(c_config, args, tp, pp, ep, etp)
+        self.tp = args.tensor_model_parallel_size
+        self.pp = args.pipeline_model_parallel_size
+        self.ep = args.expert_parallel_size
+        self.etp = args.expert_tensor_parallel_size
+        self.m_base = McoreBase(c_config, args)
+        self.m_moe = McoreMoe(c_config, args)
         self.iteration = 0
         self.checkpoint_version = 3.0
         self.rng_state = None
@@ -50,9 +50,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         num_layers = cargs["num_layers"]
         num_layers_per_stage = self.args.num_layers_per_virtual_pipeline_stage
 
-        if vpp is not None:
-            stage = vpp
-        elif num_layers_per_stage:
+        if num_layers_per_stage:
             stage = num_layers // self.pp // num_layers_per_stage
         else:
             stage = self.args.num_virtual_stages_per_pipeline_rank or 1
