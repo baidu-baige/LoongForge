@@ -69,7 +69,7 @@ TRAINING_ARGS=(
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 2
-    --encoder-tensor-model-parallel-size 2
+    # --encoder-tensor-model-parallel-size 2
     --pipeline-model-parallel-size 4
     --custom-pipeline-layers 6,8,6,8
     #--num-virtual-stages-per-pipeline-rank 2

@@ -1,26 +1,17 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test
-# Based on bridge_debug.sh — removes training loop, adds roundtrip comparison.
-#
-# Usage:
-#   bash bridge_roundtrip.sh
-#
-# What it does:
-#   1. Builds the Megatron model (same as training)
-#   2. Loads the HF checkpoint into the model (load_hf_checkpoint_online)
-#   3. Saves model weights back to HF format  (save_hf_checkpoint_online)
-#   4. Compares original vs roundtripped weights tensor-by-tensor
-#   Report is written to $SAVE_HF_PATH/roundtrip_comparison.json
+# HF Checkpoint Roundtrip Test — Llama3.1-405B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
+export TORCH_NCCL_AVOID_RECORD_STREAMS=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export NCCL_DEBUG=WARNING
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-VL-3B-Instruct/"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-vl-3b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Meta-Llama-3.1-405B"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/llama3.1-405b-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -38,12 +29,10 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name qwen2_5-vl-3b
-    --rotary-base 1000000
-    --rotary-seq-len-interpolation-factor 1
+    --model-name llama3.1-405b
+    --rotary-base 500000
 )
 
-# Tokenizer is needed by initialize_aiak_megatron → set_aiak_extra_global_vars
 TOKENIZER_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path $TOKENIZER_PATH
@@ -52,29 +41,29 @@ TOKENIZER_ARGS=(
 TRAINING_ARGS=(
     --training-phase pretrain
     --seq-length 4096
-    --max-position-embeddings 32768
+    --max-position-embeddings 131072
     --micro-batch-size 1
-    --global-batch-size 8
+    --global-batch-size 4
     --bf16
-    --norm-epsilon 1e-6
+    --norm-epsilon 1e-5
     # --- roundtrip-specific ---
-    --train-iters 0          # no training, only load + save
-    --no-load-optim          # skip optimizer state
-    --no-load-rng            # skip RNG state
-    --load $TOKENIZER_PATH   # original HF checkpoint
+    --train-iters 0
+    --no-load-optim
+    --no-load-rng
+    --load $TOKENIZER_PATH
     --save-hf-path $SAVE_HF_PATH
 )
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
-    --tensor-model-parallel-size 1
-    # --encoder-tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 1
+    --tensor-model-parallel-size 8
+    --pipeline-model-parallel-size 8
+    --use-distributed-optimizer
     --distributed-backend nccl
 )
 
 echo "========================================"
-echo "HF Roundtrip Test"
+echo "HF Roundtrip Test — Llama3.1-405B"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"

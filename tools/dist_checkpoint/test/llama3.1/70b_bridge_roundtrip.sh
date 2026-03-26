@@ -1,5 +1,5 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test — InternLM2.5-8B
+# HF Checkpoint Roundtrip Test — Llama3.1-70B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
@@ -10,8 +10,8 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/internlm2.5-8b"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/internlm2.5-8b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Meta-Llama-3.1-70B"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/llama3.1-70b-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -29,7 +29,8 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name internlm2.5-8b
+    --model-name llama3.1-70b
+    --rotary-base 500000
 )
 
 TOKENIZER_ARGS=(
@@ -40,11 +41,11 @@ TOKENIZER_ARGS=(
 TRAINING_ARGS=(
     --training-phase pretrain
     --seq-length 4096
-    --max-position-embeddings 32768
+    --max-position-embeddings 131072
     --micro-batch-size 1
-    --global-batch-size 8
+    --global-batch-size 4
     --bf16
-    --norm-epsilon 1e-6
+    --norm-epsilon 1e-5
     # --- roundtrip-specific ---
     --train-iters 0
     --no-load-optim
@@ -55,13 +56,14 @@ TRAINING_ARGS=(
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
-    --tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 1
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 2
+    --use-distributed-optimizer
     --distributed-backend nccl
 )
 
 echo "========================================"
-echo "HF Roundtrip Test — InternLM2.5-8B"
+echo "HF Roundtrip Test — Llama3.1-70B"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"

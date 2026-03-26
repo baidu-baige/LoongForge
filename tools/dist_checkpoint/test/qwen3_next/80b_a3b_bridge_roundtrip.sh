@@ -1,26 +1,17 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test
-# Based on bridge_debug.sh — removes training loop, adds roundtrip comparison.
-#
-# Usage:
-#   bash bridge_roundtrip.sh
-#
-# What it does:
-#   1. Builds the Megatron model (same as training)
-#   2. Loads the HF checkpoint into the model (load_hf_checkpoint_online)
-#   3. Saves model weights back to HF format  (save_hf_checkpoint_online)
-#   4. Compares original vs roundtripped weights tensor-by-tensor
-#   Report is written to $SAVE_HF_PATH/roundtrip_comparison.json
+# HF Checkpoint Roundtrip Test — Qwen3-Next-80B-A3B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
+export TORCH_NCCL_AVOID_RECORD_STREAMS=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export NCCL_DEBUG=WARNING
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-VL-3B-Instruct/"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen2.5-vl-3b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-Next-80B-A3B-Instruct"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen3-next-80b-a3b-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -37,13 +28,16 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
-MODEL_ARGS=(
-    --model-name qwen2_5-vl-3b
-    --rotary-base 1000000
-    --rotary-seq-len-interpolation-factor 1
+MODEL_CONFIG_PATH=${AIAK_TRAINING_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
+
+MODEL_CONFIG_ARGS=(
+    --config-file $MODEL_CONFIG_PATH
 )
 
-# Tokenizer is needed by initialize_aiak_megatron → set_aiak_extra_global_vars
+MODEL_ARGS=(
+    --rotary-base 10000000
+)
+
 TOKENIZER_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path $TOKENIZER_PATH
@@ -51,30 +45,44 @@ TOKENIZER_ARGS=(
 
 TRAINING_ARGS=(
     --training-phase pretrain
-    --seq-length 4096
+    --seq-length 32768
     --max-position-embeddings 32768
     --micro-batch-size 1
-    --global-batch-size 8
+    --global-batch-size 4
     --bf16
     --norm-epsilon 1e-6
     # --- roundtrip-specific ---
-    --train-iters 0          # no training, only load + save
-    --no-load-optim          # skip optimizer state
-    --no-load-rng            # skip RNG state
-    --load $TOKENIZER_PATH   # original HF checkpoint
+    --train-iters 0
+    --no-load-optim
+    --no-load-rng
+    --load $TOKENIZER_PATH
     --save-hf-path $SAVE_HF_PATH
+)
+
+MOE_ARGS=(
+    --moe-router-load-balancing-type aux_loss
+    --moe-grouped-gemm
+    --moe-permute-fusion
+    --moe-router-dtype fp32
+    --moe-aux-loss-coeff 1e-3
+    --moe-router-score-function softmax
+    --moe-router-topk 10
+    --moe-shared-expert-intermediate-size 512
+    --moe-token-dispatcher-type alltoall
 )
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 1
-    # --encoder-tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 1
+    --pipeline-model-parallel-size 2
+    --expert-model-parallel-size 8
+    --expert-tensor-parallel-size 1
+    --use-distributed-optimizer
     --distributed-backend nccl
 )
 
 echo "========================================"
-echo "HF Roundtrip Test"
+echo "HF Roundtrip Test — Qwen3-Next-80B-A3B"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"
@@ -85,4 +93,6 @@ PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:$PYTHONPATH \
     ${MODEL_ARGS[@]} \
     ${TOKENIZER_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
-    ${MODEL_PARALLEL_ARGS[@]}
+    ${MOE_ARGS[@]} \
+    ${MODEL_PARALLEL_ARGS[@]} \
+    ${MODEL_CONFIG_ARGS[@]}

@@ -68,9 +68,8 @@ TRAINING_ARGS=(
 MODEL_PARALLEL_ARGS=(
     --attention-backend flash
     --tensor-model-parallel-size 8
-    --encoder-tensor-model-parallel-size 8
+    # --encoder-tensor-model-parallel-size 8
     --pipeline-model-parallel-size 4
-    --custom-pipeline-layers 2,20,20,38
     --distributed-backend nccl
 )
 

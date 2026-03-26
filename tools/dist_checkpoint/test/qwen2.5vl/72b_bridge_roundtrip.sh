@@ -68,9 +68,8 @@ TRAINING_ARGS=(
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
     --tensor-model-parallel-size 8
-    --encoder-tensor-model-parallel-size 8
+    # --encoder-tensor-model-parallel-size 8
     --pipeline-model-parallel-size 4
-    --custom-pipeline-layers 20,20,20,20
     --distributed-backend nccl
 )
 

@@ -14,5 +14,6 @@ model:
     model_spec: ["aiak_training_omni.models.foundation.qwen3.qwen_layer_spec", "get_llava_ov_layer_with_te_spec"]
     rotary_base: 5000000
     group_query_attention: true
-  image_projector: 
+    convert_file: "configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml"
+  image_projector:
     normalization: "LayerNorm"

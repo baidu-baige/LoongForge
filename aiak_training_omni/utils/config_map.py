@@ -276,9 +276,13 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/mimo",
         "config_name": "mimo_7b",
     },
-    "minmax": {
-        "config_path": "configs/models/minmax",
+    "minimax": {
+        "config_path": "configs/models/minimax",
         "config_name": "minimax_m2_1",
+    },
+    "llava-onevision-1.5-4b": {
+        "config_path": "configs/models/llava_onevision",
+        "config_name": "llava_onevision_1_5_4b",
     },
 }
 

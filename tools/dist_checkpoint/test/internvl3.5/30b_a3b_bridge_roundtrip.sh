@@ -67,13 +67,18 @@ TRAINING_ARGS=(
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend flash
-    --tensor-model-parallel-size 2
-    --encoder-tensor-model-parallel-size 2
-    --pipeline-model-parallel-size 2
-    --expert-parallel-size 4
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 1
+    --expert-model-parallel-size 8
     --expert-tensor-parallel-size 1
-    --custom-pipeline-layers 16,16
+    --moe-token-dispatcher-type alltoall
+    --use-distributed-optimizer
+    --context-parallel-size 1
     --distributed-backend nccl
+    --optimizer-cpu-offload
+    --use-precision-aware-optimizer
+    --optimizer-offload-fraction 0.2
+    --overlap-cpu-optimizer-d2h-h2d
 )
 
 echo "========================================"

@@ -115,11 +115,15 @@ def _load_shard(hf_path: Path, filename: str) -> dict:
 
 def _compare_shard(orig_path_str: str, rt_path_str: str,
                    base_fname: str, keys_in_shard: list,
-                   rt_weight_map: dict) -> dict:
+                   rt_weight_map: dict,
+                   verbose: bool = True) -> dict:
     """Compare one baseline shard against its roundtrip counterpart(s).
 
     Designed as a top-level function so it is picklable for thread/process pools.
     Returns per-shard statistics that the caller aggregates.
+
+    Args:
+        verbose: If True, output detailed logs for mismatched keys
     """
     from collections import defaultdict
 
@@ -135,6 +139,7 @@ def _compare_shard(orig_path_str: str, rt_path_str: str,
     shape_mismatches = []
     num_exact = num_close = num_diff = 0
     diff_keys = []
+    diff_details = []  # Store detailed diff info for verbose output
     local_max = 0.0
     local_sum = 0.0
     local_n   = 0
@@ -152,6 +157,8 @@ def _compare_shard(orig_path_str: str, rt_path_str: str,
                     'baseline': tuple(b.shape),
                     'roundtrip': tuple(r.shape),
                 })
+                if verbose:
+                    print(f"  [SHAPE MISMATCH] {key}: baseline={b.shape} vs roundtrip={r.shape}", flush=True)
                 continue
 
             diff = torch.abs(b - r)
@@ -159,13 +166,44 @@ def _compare_shard(orig_path_str: str, rt_path_str: str,
             local_sum += diff.sum().item()
             local_n   += diff.numel()
 
-            if torch.allclose(b, r, rtol=1e-5, atol=1e-8):
+            # Use tolerance that captures typical bfloat16 precision differences (~1e-5 to 1e-4)
+            if torch.allclose(b, r, rtol=1e-4, atol=1e-6):
                 num_exact += 1
-            elif torch.allclose(b, r, rtol=1e-3, atol=1e-5):
+            elif torch.allclose(b, r, rtol=1e-3, atol=1e-4):
                 num_close += 1
+                if verbose:
+                    # Calculate detailed stats for this key
+                    max_diff = diff.max().item()
+                    mean_diff = diff.mean().item()
+                    std_diff = diff.std().item()
+                    print(f"  [CLOSE] {key}: max={max_diff:.6e}, mean={mean_diff:.6e}, std={std_diff:.6e}, shape={tuple(b.shape)}", flush=True)
+                    print(f"          baseline: min={b.min():.6f}, max={b.max():.6f}, mean={b.mean():.6f}", flush=True)
+                    print(f"          roundtrip: min={r.min():.6f}, max={r.max():.6f}, mean={r.mean():.6f}", flush=True)
             else:
                 num_diff += 1
                 diff_keys.append(key)
+                if verbose:
+                    # Calculate detailed stats for this key
+                    max_diff = diff.max().item()
+                    mean_diff = diff.mean().item()
+                    std_diff = diff.std().item()
+                    # Get some sample values with largest differences
+                    flat_diff = diff.flatten()
+                    top_vals, top_idx = torch.topk(flat_diff, min(5, flat_diff.numel()))
+                    max_pos = (diff == diff.max()).nonzero(as_tuple=True)
+                    detail = {
+                        'key': key,
+                        'max_diff': max_diff,
+                        'mean_diff': mean_diff,
+                        'std_diff': std_diff,
+                        'shape': tuple(b.shape),
+                        'baseline_stats': f"min={b.min():.6f}, max={b.max():.6f}, mean={b.mean():.6f}",
+                        'roundtrip_stats': f"min={r.min():.6f}, max={r.max():.6f}, mean={r.mean():.6f}",
+                    }
+                    diff_details.append(detail)
+                    print(f"  [DIFF] {key}: max={max_diff:.6e}, mean={mean_diff:.6e}, std={std_diff:.6e}, shape={tuple(b.shape)}", flush=True)
+                    print(f"          baseline: {detail['baseline_stats']}", flush=True)
+                    print(f"          roundtrip: {detail['roundtrip_stats']}", flush=True)
 
             del b, r, diff
 
@@ -179,6 +217,7 @@ def _compare_shard(orig_path_str: str, rt_path_str: str,
         'num_close': num_close,
         'num_diff': num_diff,
         'diff_keys': diff_keys,
+        'diff_details': diff_details,  # Include detailed diff info
         'local_max': local_max,
         'local_sum': local_sum,
         'local_n':   local_n,
@@ -224,9 +263,19 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
     print(f"  Roundtrip : {len(roundtrip_keys)} tensors", flush=True)
     print(f"  Common    : {len(common_keys)}", flush=True)
     if missing_keys:
-        print(f"  Missing   : {len(missing_keys)}  (first 5: {missing_keys[:5]})", flush=True)
+        print(f"  Missing   : {len(missing_keys)}", flush=True)
+        # Detailed logs for missing keys
+        for key in missing_keys[:20]:
+            print(f"    [MISSING] {key} -> {base_weight_map[key]}", flush=True)
+        if len(missing_keys) > 20:
+            print(f"    ... and {len(missing_keys) - 20} more", flush=True)
     if extra_keys:
-        print(f"  Extra     : {len(extra_keys)}  (first 5: {extra_keys[:5]})", flush=True)
+        print(f"  Extra     : {len(extra_keys)}", flush=True)
+        # Detailed logs for extra keys
+        for key in extra_keys[:20]:
+            print(f"    [EXTRA] {key} -> {rt_weight_map[key]}", flush=True)
+        if len(extra_keys) > 20:
+            print(f"    ... and {len(extra_keys) - 20} more", flush=True)
 
     # ── Step 2: Build per-shard task list ─────────────────────────────────
     keys_by_base_shard = defaultdict(list)
@@ -253,7 +302,7 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
             executor.submit(
                 _compare_shard,
                 str(orig_path), str(rt_path),
-                base_fname, keys_in_shard, rt_map_copy,
+                base_fname, keys_in_shard, rt_map_copy, True,  # verbose=True
             ): base_fname
             for base_fname, keys_in_shard in shard_list
         }

@@ -1,5 +1,5 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test — Qwen3.5-8B
+# HF Checkpoint Roundtrip Test — Llama3-8B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
@@ -10,8 +10,8 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3.5-8B-Instruct"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen3.5-8b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Meta-Llama-3-8B"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/llama3-8b-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -29,9 +29,8 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name qwen3.5-8b
-    --rotary-base 1000000
-    --rotary-seq-len-interpolation-factor 1
+    --model-name llama3-8b
+    --rotary-base 500000
 )
 
 TOKENIZER_ARGS=(
@@ -42,11 +41,11 @@ TOKENIZER_ARGS=(
 TRAINING_ARGS=(
     --training-phase pretrain
     --seq-length 4096
-    --max-position-embeddings 32768
+    --max-position-embeddings 4096
     --micro-batch-size 1
     --global-batch-size 4
     --bf16
-    --norm-epsilon 1e-6
+    --norm-epsilon 1e-5
     # --- roundtrip-specific ---
     --train-iters 0
     --no-load-optim
@@ -57,14 +56,14 @@ TRAINING_ARGS=(
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
-    --tensor-model-parallel-size 1
-    --pipeline-model-parallel-size 1
+    --tensor-model-parallel-size 2
+    --pipeline-model-parallel-size 2
+    --use-distributed-optimizer
     --distributed-backend nccl
-    --sequence-parallel
 )
 
 echo "========================================"
-echo "HF Roundtrip Test — Qwen3.5-8B"
+echo "HF Roundtrip Test — Llama3-8B"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"

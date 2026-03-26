@@ -1,5 +1,5 @@
 #! /bin/bash
-# HF Checkpoint Roundtrip Test — InternLM2.5-20B
+# HF Checkpoint Roundtrip Test — MiniMax-M2-1
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
@@ -10,8 +10,8 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
 export AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/AIAK-Training-Omni"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/internlm2.5-20b"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/internlm2.5-20b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/minimax-m2-1"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/minimax-m2-1-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -29,7 +29,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-    --model-name internlm2.5-20b
+    --model-name minimax
 )
 
 TOKENIZER_ARGS=(
@@ -42,7 +42,7 @@ TRAINING_ARGS=(
     --seq-length 4096
     --max-position-embeddings 32768
     --micro-batch-size 1
-    --global-batch-size 8
+    --global-batch-size 4
     --bf16
     --norm-epsilon 1e-6
     # --- roundtrip-specific ---
@@ -55,13 +55,13 @@ TRAINING_ARGS=(
 
 MODEL_PARALLEL_ARGS=(
     --attention-backend fused
-    --tensor-model-parallel-size 2
+    --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 1
     --distributed-backend nccl
 )
 
 echo "========================================"
-echo "HF Roundtrip Test — InternLM2.5-20B"
+echo "HF Roundtrip Test — MiniMax-M2-1"
 echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"

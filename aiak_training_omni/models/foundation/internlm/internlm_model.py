@@ -149,7 +149,7 @@ class InternLMModel(BaseGPTModel):
                 rope_scaling=config.use_rope_scaling,
                 rope_scaling_factor=config.rope_scaling_factor,
                 use_cpu_initialization=config.use_cpu_initialization,
-                cp_group=pg_collection.cp,
+                cp_group=pg_collection.cp if pg_collection else None
             )
         
         super().__init__(
