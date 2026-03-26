@@ -502,6 +502,12 @@ class BaseGPTModel(BaseMegatronLanguageModule):
 
         rotary_pos_cos_sin = preproc_output[5] if len(preproc_output) == 6 else None
 
+        # Filter out next_batch from extra_block_kwargs before passing to decoder,
+        # as decoder does not accept it. It will be used later in _postprocess for MTP.
+        decoder_extra_kwargs = {
+            k: v for k, v in (extra_block_kwargs or {}).items() if k != 'next_batch'
+        } or None
+
         # Run decoder.
         hidden_states = self.decoder(
             hidden_states=decoder_input,
@@ -513,7 +519,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             rotary_pos_cos_sin=rotary_pos_cos_sin,
             packed_seq_params=packed_seq_params,
             sequence_len_offset=sequence_len_offset,
-            **(extra_block_kwargs or {}),
+            **(decoder_extra_kwargs or {}),
         )
 
         return self._postprocess(
@@ -574,9 +580,39 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             if extra_block_kwargs is not None:
                 extra_block_kwargs.pop('visual_pos_masks', None)
                 extra_block_kwargs.pop('deepstack_visual_embeds', None)
+
+            # Initialize MTP inputs with current batch data as defaults
+            mtp_input_ids = input_ids
+            mtp_position_ids = position_ids
+            mtp_labels = labels
+
+            if getattr(self.config, 'enable_chunkpipe', False):
+                # Extract next_batch from extra_block_kwargs before passing to MTP
+                next_batch = (extra_block_kwargs or {}).pop('next_batch', None)
+
+                # Determine if this is the last chunk in the sequence
+                chunk_idx = self.config.chunkpipe_forward_microbatch % self.config.chunk_num_per_seq
+                is_last_chunk = (chunk_idx + 1 >= self.config.chunk_num_per_seq)
+                if next_batch is not None and not is_last_chunk:
+                    # Append the first mtp_num_layers tokens from the next chunk
+                    # to current inputs, enabling MTP to predict across chunk boundaries
+                    next_input_ids = next_batch['tokens']
+                    mtp_input_ids = torch.cat([input_ids, next_input_ids[:, :self.config.mtp_num_layers]], dim=1)
+                        
+                    next_pos_ids = next_batch['position_ids']
+                    mtp_position_ids = torch.cat([position_ids, next_pos_ids[:, :self.config.mtp_num_layers]], dim=1)
+
+                    next_labels = next_batch['labels']
+                    mtp_labels = torch.cat([labels, next_labels[:, :self.config.mtp_num_layers]], dim=1)
+
+                    # Extend loss_mask to cover the appended tokens from next chunk
+                    if loss_mask is not None:
+                        next_loss_mask = next_batch.get('loss_mask', torch.ones_like(next_labels))
+                        loss_mask = torch.cat([loss_mask, next_loss_mask[:, :self.config.mtp_num_layers]], dim=1)
+
             hidden_states = self.mtp(
-                input_ids=input_ids,
-                position_ids=position_ids,
+                input_ids=mtp_input_ids,
+                position_ids=mtp_position_ids,
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
                 inference_params=inference_params,
@@ -592,68 +628,98 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         if not self.post_process:
             return hidden_states
 
-        if self.config.mtp_num_layers is not None:
-            mtp_labels = labels.clone()
-            hidden_states_list = torch.chunk(hidden_states, 1 + self.config.mtp_num_layers, dim=0)
-            hidden_states = hidden_states_list[0]
-            if loss_mask is None:
-                # if loss_mask is not provided, use all ones as loss_mask
-                loss_mask = torch.ones_like(mtp_labels)
-            for mtp_layer_number in range(self.config.mtp_num_layers):
-                # Calc loss for the current Multi-Token Prediction (MTP) layers.
-                mtp_labels, _ = roll_tensor(
-                    mtp_labels,
-                    shifts=-1,
-                    dims=-1,
-                    cp_group=self.cp_group,
-                    packed_seq_params=packed_seq_params,
-                )
-                loss_mask, num_tokens = roll_tensor(
-                    loss_mask,
-                    shifts=-1,
-                    dims=-1,
-                    cp_group=self.cp_group,
-                    packed_seq_params=packed_seq_params,
+        if self.config.mtp_num_layers is not None and self.config.mtp_num_layers > 0:
+            def _fused_output_and_cross_entropy_mtp(hidden_states, output_weight, 
+                                                runtime_gather_output, labels, packed_seq_params, loss_mask):
+                mtp_labels = labels.clone()
+                hidden_states_list = torch.chunk(hidden_states, 1 + self.config.mtp_num_layers, dim=0)
+                hidden_states = hidden_states_list[0]
+                if loss_mask is None:
+                    # if loss_mask is not provided, use all ones as loss_mask
+                    loss_mask = torch.ones_like(mtp_labels)
+                for mtp_layer_number in range(self.config.mtp_num_layers):
+                    # Calc loss for the current Multi-Token Prediction (MTP) layers.
+                    mtp_labels, _ = roll_tensor(
+                        mtp_labels,
+                        shifts=-1,
+                        dims=-1,
+                        cp_group=self.cp_group,
+                        packed_seq_params=packed_seq_params,
+                    )
+                    loss_mask, num_tokens = roll_tensor(
+                        loss_mask,
+                        shifts=-1,
+                        dims=-1,
+                        cp_group=self.cp_group,
+                        packed_seq_params=packed_seq_params,
+                    )
+
+                    # Compute mtp loss without storing logits to save memory.
+                    mtp_loss = self.compute_output_layer_and_language_model_loss(
+                        hidden_states_list[mtp_layer_number + 1],
+                        labels=mtp_labels[:, :self.config.chunksize] if self.config.enable_chunkpipe else mtp_labels,
+                        weight=self.shared_embedding_or_output_weight(),
+                        sequence_parallel_enabled=self.output_layer.sequence_parallel,
+                        column_parallel_linear=self.output_layer,
+                        col_linear_kwargs={
+                            'weight': output_weight,
+                            'runtime_gather_output': runtime_gather_output,
+                        },
+                    )       
+                    
+                    if self.config.enable_chunkpipe:
+                        # Apply loss mask only within the current chunk range
+                        loss_mask_chunk = loss_mask[:, :self.config.chunksize]
+                        mtp_loss = loss_mask_chunk * mtp_loss
+                        # Total valid tokens across all chunks minus offset for this MTP layer
+                        num_tokens = (self.config.chunksize * self.config.chunk_num_per_seq
+                                      - mtp_layer_number - 1)
+                    else:
+                        mtp_loss = loss_mask * mtp_loss
+
+                    # Log MTP loss during training; for chunkpipe, only log during
+                    # forward recomputation in backward pass (chunkpipe_forward=False)
+                    should_log_mtp_loss = (
+                        not getattr(self.config, 'enable_chunkpipe', False)
+                        or not self.config.chunkpipe_forward
+                    )
+                    if self.training and should_log_mtp_loss:
+                        # TODO(shifangx): remove the use of parallel_state here
+                        # after moving loss logging to loss_func in pretrain_gpt.py
+                        MTPLossLoggingHelper.save_loss_to_tracker(
+                            torch.sum(mtp_loss) / num_tokens,
+                            mtp_layer_number,
+                            self.config.mtp_num_layers,
+                            avg_group=parallel_state.get_data_parallel_group(
+                                with_context_parallel=True
+                            ),
+                        )
+                    mtp_loss_scaling_factor = (
+                        self.config.mtp_loss_scaling_factor
+                        * self.config.mtp_loss_scaling_factor_decay_ratio ** mtp_layer_number
+                    )
+                    mtp_loss_scale = mtp_loss_scaling_factor / self.config.mtp_num_layers
+                    if self.config.calculate_per_token_loss:
+                        hidden_states = MTPLossAutoScaler.apply(
+                            hidden_states, mtp_loss_scale * mtp_loss
+                        )
+                    else:
+                        hidden_states = MTPLossAutoScaler.apply(
+                            hidden_states, mtp_loss_scale * mtp_loss / num_tokens
+                        )
+                        
+                return hidden_states  
+
+            if not getattr(self.config, 'enable_chunkpipe', False):
+                hidden_states = _fused_output_and_cross_entropy_mtp(hidden_states, output_weight, 
+                                        runtime_gather_output, mtp_labels, packed_seq_params, loss_mask)
+            else:
+                hidden_states = tensor_parallel.checkpoint(
+                    _fused_output_and_cross_entropy_mtp,
+                    self.config.distribute_saved_activations,
+                    hidden_states, output_weight, runtime_gather_output, mtp_labels, packed_seq_params, loss_mask
                 )
 
-                # Compute mtp loss without storing logits to save memory.
-                mtp_loss = self.compute_output_layer_and_language_model_loss(
-                    hidden_states_list[mtp_layer_number + 1],
-                    labels=mtp_labels,
-                    weight=self.shared_embedding_or_output_weight(),
-                    sequence_parallel_enabled=self.output_layer.sequence_parallel,
-                    column_parallel_linear=self.output_layer,
-                    col_linear_kwargs={
-                        'weight': output_weight,
-                        'runtime_gather_output': runtime_gather_output,
-                    },
-                )
-
-                mtp_loss = loss_mask * mtp_loss
-                if self.training:
-                    # TODO(shifangx): remove the use of parallel_state here
-                    # after moving loss logging to loss_func in pretrain_gpt.py
-                    MTPLossLoggingHelper.save_loss_to_tracker(
-                        torch.sum(mtp_loss) / num_tokens,
-                        mtp_layer_number,
-                        self.config.mtp_num_layers,
-                        avg_group=parallel_state.get_data_parallel_group(
-                            with_context_parallel=True
-                        ),
-                    )
-                mtp_loss_scaling_factor = (
-                    self.config.mtp_loss_scaling_factor
-                    * self.config.mtp_loss_scaling_factor_decay_ratio ** mtp_layer_number
-                )
-                mtp_loss_scale = mtp_loss_scaling_factor / self.config.mtp_num_layers
-                if self.config.calculate_per_token_loss:
-                    hidden_states = MTPLossAutoScaler.apply(
-                        hidden_states, mtp_loss_scale * mtp_loss
-                    )
-                else:
-                    hidden_states = MTPLossAutoScaler.apply(
-                        hidden_states, mtp_loss_scale * mtp_loss / num_tokens
-                    )
         sequence_parallel_override = False
         if in_inference_mode and inference_context.materialize_only_last_token_logits:
             if inference_context.is_static_batching():
@@ -677,40 +743,40 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 hidden_states = inference_context.last_token_logits(
                     hidden_states.squeeze(1).unsqueeze(0)
                 ).unsqueeze(1)
+       
+        if has_config_logger_enabled(self.config) or labels is None:
+            logits, _ = self.output_layer(
+                hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
+            )
+        else:
+            logits = None            
 
+        # Restore sequence parallel execution to the output layer if necessary.
+        if sequence_parallel_override:
+            assert (
+                in_inference_mode
+                and inference_context.is_dynamic_batching()
+                and inference_context.materialize_only_last_token_logits
+            )
+            self.output_layer.sequence_parallel = True
+
+        if has_config_logger_enabled(self.config):
+            payload = OrderedDict(
+                {
+                    'input_ids': input_ids,
+                    'position_ids': position_ids,
+                    'attention_mask': attention_mask,
+                    'decoder_input': decoder_input,
+                    'logits': logits,
+                }
+            )
+            log_config_to_disk(self.config, payload, prefix='input_and_logits')
+
+        if labels is None:
+            # [s b h] => [b s h]
+            return logits.transpose(0, 1).contiguous()
+        
         if not getattr(self.config, 'enable_chunkpipe', False):
-            if has_config_logger_enabled(self.config) or labels is None:
-                logits, _ = self.output_layer(
-                    hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
-                )
-            else:
-                logits = None            
-
-            # Restore sequence parallel execution to the output layer if necessary.
-            if sequence_parallel_override:
-                assert (
-                    in_inference_mode
-                    and inference_context.is_dynamic_batching()
-                    and inference_context.materialize_only_last_token_logits
-                )
-                self.output_layer.sequence_parallel = True
-
-            if has_config_logger_enabled(self.config):
-                payload = OrderedDict(
-                    {
-                        'input_ids': input_ids,
-                        'position_ids': position_ids,
-                        'attention_mask': attention_mask,
-                        'decoder_input': decoder_input,
-                        'logits': logits,
-                    }
-                )
-                log_config_to_disk(self.config, payload, prefix='input_and_logits')
-
-            if labels is None:
-                # [s b h] => [b s h]
-                return logits.transpose(0, 1).contiguous()
-
             loss = self.compute_output_layer_and_language_model_loss(
                 hidden_states,
                 labels=labels,
@@ -723,61 +789,26 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 },
             )
         else: # Chunkpipe: use fused output and loss computation
-            logits, loss = tensor_parallel.checkpoint(
-                self.fused_output_and_cross_entropy,
-                self.config.distribute_saved_activations,
-                hidden_states, output_weight, runtime_gather_output, labels
-            )
-
-            if has_config_logger_enabled(self.config):
-                payload = OrderedDict(
-                    {
-                        'input_ids': input_ids,
-                        'position_ids': position_ids,
-                        'attention_mask': attention_mask,
-                        'decoder_input': decoder_input,
-                        'logits': logits,
-                    }
+            def _compute_output_layer_and_loss(hidden_states_, labels_):
+                return self.compute_output_layer_and_language_model_loss(
+                    hidden_states_,
+                    labels=labels_,
+                    weight=self.shared_embedding_or_output_weight(),
+                    sequence_parallel_enabled=self.output_layer.sequence_parallel,
+                    column_parallel_linear=self.output_layer,
+                    col_linear_kwargs={
+                        'weight': output_weight,
+                        'runtime_gather_output': runtime_gather_output,
+                    },
                 )
-                log_config_to_disk(self.config, payload, prefix='input_and_logits')            
+
+            loss = tensor_parallel.checkpoint(
+                _compute_output_layer_and_loss,
+                self.config.distribute_saved_activations,
+                hidden_states, labels
+            )           
 
         return loss
-
-    def fused_output_and_cross_entropy(self, hidden_states, 
-                                        output_weight, runtime_gather_output, labels):
-        """
-        Fused computation of output layer logits and cross-entropy loss.
-
-        This method combines the output layer forward pass and language model loss
-        computation into a single step for efficiency.
-
-        Args:
-            hidden_states (Tensor): The hidden states from the transformer.
-            output_weight (Tensor): The weight matrix for the output layer.
-            runtime_gather_output (bool): Whether to gather output at runtime.
-            labels (Tensor): The ground truth labels for loss computation.
-
-        Returns:
-            tuple: A tuple containing:
-                - logits (Tensor): The output layer logits.
-                - loss (Tensor): The computed cross-entropy loss.
-        """
-        logits, _ = self.output_layer(
-            hidden_states, weight=output_weight, runtime_gather_output=runtime_gather_output
-        )
-
-        loss = self.compute_output_layer_and_language_model_loss(
-                hidden_states,
-                labels=labels,
-                weight=self.shared_embedding_or_output_weight(),
-                sequence_parallel_enabled=self.output_layer.sequence_parallel,
-                column_parallel_linear=self.output_layer,
-                col_linear_kwargs={
-                    'weight': output_weight,
-                    'runtime_gather_output': runtime_gather_output,
-                },
-            )
-        return logits, loss
 
     def shared_embedding_or_output_weight(self) -> Tensor:
         """Gets the embedding weight or output logit weights when share input embedding and
