@@ -1,7 +1,7 @@
 import os
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from convert_checkpoint.common.common_config import CommonConfig
 from convert_checkpoint.common.common_checkpoint import (
@@ -172,10 +172,18 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
             old_key = c_config.get("name_map")["mcore"].get(name, None)
             if old_key is None:
                 continue
+            if isinstance(old_key, (dict, DictConfig)):
+                node_is_dict = True
+                old_key = old_key[LAYER_NAME]
+            else:
+                node_is_dict = False
             old_prefix, rest = old_key.split('.', 1)
             if old_prefix == "language_model":
                 new_key = f"foundation_model.{rest}"
-                c_config.get("name_map")["mcore"][name] = new_key
+                if node_is_dict:
+                    c_config.get("name_map")["mcore"][name][LAYER_NAME] = new_key
+                else:
+                    c_config.get("name_map")["mcore"][name] = new_key
 
         word_embeddings = c_config.get("name_map")["mcore"].get(WORD_EMBEDDINGS, None)
         if word_embeddings == "foundation_model.embedding.word_embeddings":

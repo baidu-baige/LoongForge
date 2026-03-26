@@ -80,6 +80,8 @@ def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_voca
         padding_size = padded_vocab_size - orig_vocab_size
     else:
         padding_size = padded_vocab_size - weight.shape[0]
+    if orig_vocab_size > weight.shape[0]:
+        padding_size += (orig_vocab_size - weight.shape[0])
     if padding_size < 0:
         return weight[0:padded_vocab_size, :]
     elif padding_size > 0:
