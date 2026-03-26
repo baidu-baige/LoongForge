@@ -186,11 +186,18 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
 def replace_vlm_config(c_config, adapter, vision_patch):
     name_map = {}
     for k1, k2 in adapter.items():
+        if k1 in name_map:
+            continue
+        extra_data = True
+        if k1.startswith("adapter.linear_fc1") or k1.startswith("adapter.linear_fc2"):
+            extra_data = False
         name_map[k1] = {
             LAYER_NAME: k2,
-            LAYER_EXTRA_DATA: True
+            LAYER_EXTRA_DATA: extra_data
         }
     for k1, k2 in vision_patch.items():
+        if k1 in name_map:
+            continue
         name_map[k1] = {
             LAYER_NAME: k2,
             LAYER_EXTRA_DATA: False
@@ -203,21 +210,21 @@ def replace_vlm_config(c_config, adapter, vision_patch):
     key_suffixes = [f".{WEIGHT}", f".{BIAS}", f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]
 
     for key, value in name_map.items():
-        hf_name = value
+        hf_name = value[LAYER_NAME]
         mcore_name = key
         hf_is_direct = True
         mcore_is_direct = True
         mcore_is_layernorm = False
+        old_prefix, rest = mcore_name.split('.', 1)
+        new_prefix = prefix_mapping.get(old_prefix)
+        if new_prefix:
+            mcore_name = f"{new_prefix}.{rest}"
         for suffix in key_suffixes:
             if value[LAYER_NAME].endswith(suffix):
                 hf_name = value[LAYER_NAME][:-len(suffix)]
                 hf_is_direct = False
             if key.endswith(suffix):
-                mcore_name = key[:-len(suffix)]
-                old_prefix, rest = mcore_name.split('.', 1)
-                new_prefix = prefix_mapping.get(old_prefix)
-                if new_prefix:
-                    mcore_name = f"{new_prefix}.{rest}"
+                mcore_name = mcore_name[:-len(suffix)]
                 mcore_is_direct = False
                 if suffix in [f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]:
                     mcore_is_layernorm = True
@@ -225,6 +232,7 @@ def replace_vlm_config(c_config, adapter, vision_patch):
             c_config.get("name_map")["huggingface"][f"{VISION_MAP}_{hf_name}"] = {LAYER_NAME: hf_name, LAYER_IS_DIRECT_NAME: hf_is_direct}
             c_config.get("name_map")["mcore"][f"{VISION_MAP}_{hf_name}"] = {LAYER_NAME: mcore_name, LAYER_IS_DIRECT_NAME: mcore_is_direct,
                                    LAYER_IS_LAYERNORM: mcore_is_layernorm, LAYER_EXTRA_DATA: value[LAYER_EXTRA_DATA]}
+            hf_dict[hf_name] = True
 
     layer_prefix = c_config.get("name_map")["mcore"].get(LAYER_PREFIX, None)
     if layer_prefix:
