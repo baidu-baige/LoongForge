@@ -252,6 +252,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 position_ids=position_ids,
                 attention_mask=attn_mask,
                 labels=labels,
+                loss_mask=loss_mask,
                 packed_seq_params=packed_seq_params,
                 enable_encoder_hetero_dp=args.enable_encoder_hetero_dp,
                 batch_list=batch_list,
