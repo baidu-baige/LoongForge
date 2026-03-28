@@ -46,6 +46,11 @@ try:
 except ImportError:
     TEGroupedLinear = None
 
+from .dsa_fused_kernels import (
+    fused_apply_mla_rope,
+    fused_apply_mla_rope_for_absorb_kv,
+    fused_rope_permute_cat,
+)
 
 class MLASelfAttentionFused(MLASelfAttention):
     """Omni-side MLA class that preserves the rolled-back DSA absorb path."""
@@ -381,10 +386,14 @@ class MLASelfAttentionFused(MLASelfAttention):
         if self.config.rope_type == "rope":
             rotary_pos_emb = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
         else:
-            assert not self.config.apply_rope_fusion, (
-                "Omni fused DSA path does not support apply_rope_fusion."
-            )
-            rotary_pos_emb, mscale = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
+            if self.config.apply_rope_fusion:
+                rotary_pos_cos, rotary_pos_sin = self.rotary_pos_emb.get_cached_cos_sin(
+                    rotary_seq_len, dtype=hidden_states.dtype, packed_seq=packed_seq
+                )
+                rotary_pos_emb = None
+                assert inference_context is None, "Inference with MLA RoPE fusion is not supported"
+            else:
+                rotary_pos_emb, mscale = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
 
         if packed_seq_params is not None:
             if packed_seq_params.cu_seqlens_q_padded is not None:
@@ -452,51 +461,93 @@ class MLASelfAttentionFused(MLASelfAttention):
             q = q.view(*q.size()[:-1], self.num_attention_heads_per_partition, self.q_head_dim)
 
             k_pos_emb_local = torch.unsqueeze(k_pos_emb, -2)
-            q_no_pe, q_pos_emb = torch.split(
-                q, [self.config.qk_head_dim, self.config.qk_pos_emb_head_dim], dim=-1
-            )
-
-            q_len = q.size()[0]
-            if inference_context is not None:
-                sequence_start = inference_context.sequence_len_offset
-                sequence_end = sequence_start + q_len
-                rotary_pos_emb_local = rotary_pos_emb[sequence_start:sequence_end]
-            elif packed_seq_params is None or self.config.context_parallel_size == 1:
-                rotary_pos_emb_local = rotary_pos_emb[0:q_len]
-            else:
-                rotary_pos_emb_local = rotary_pos_emb
-
-            q_pos_emb = apply_rotary_pos_emb(
-                q_pos_emb,
-                rotary_pos_emb_local,
-                config=self.config,
-                cu_seqlens=cu_seqlens_q,
-                mscale=mscale,
-                cp_group=self.pg_collection.cp,
-            )
-            k_pos_emb_local = apply_rotary_pos_emb(
-                k_pos_emb_local,
-                rotary_pos_emb_local,
-                config=self.config,
-                cu_seqlens=cu_seqlens_kv,
-                mscale=mscale,
-                cp_group=self.pg_collection.cp,
-            )
 
             if self.config.sequence_parallel:
                 kv_compressed = gather_from_sequence_parallel_region(kv_compressed)
 
-            kv_cached = torch.cat([kv_compressed, k_pos_emb_local.squeeze(1)], dim=-1)
+            q_len = q.size()[0]
 
-            q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
-            q_content, _ = self.linear_kv_up_proj_absorb_q(
-                q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
-                [q_len * q_no_pe_4d.size(1)] * self.num_attention_heads_per_partition,
-            )
-            q_content = q_content.permute(1, 2, 0, 3).contiguous()
-            q_content = q_content.squeeze(1) if packed_seq_params is not None else q_content
+            if self.config.apply_rope_fusion:
+                cp_rank = self.pg_collection.cp.rank()
+                cp_size = self.pg_collection.cp.size()
 
-            query = torch.cat([q_content, q_pos_emb], dim=-1)
+                q_no_pe, q_pos_emb_raw = torch.split(
+                    q, [self.config.qk_head_dim, self.config.qk_pos_emb_head_dim], dim=-1
+                )
+
+                # Absorb key up projection weight into query
+                q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
+                q_content, _ = self.linear_kv_up_proj_absorb_q(
+                    q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
+                    [q_len * q_no_pe_4d.size(1)] * self.num_attention_heads_per_partition,
+                )
+
+                query = fused_rope_permute_cat(
+                    q_content,
+                    q_pos_emb_raw,
+                    rotary_pos_cos,
+                    rotary_pos_sin,
+                    cu_seqlens_q,
+                    cp_rank,
+                    cp_size,
+                )
+
+                kv_cached = fused_apply_mla_rope_for_absorb_kv(
+                    kv_compressed.unsqueeze(1),
+                    k_pos_emb_local,
+                    rotary_pos_cos,
+                    rotary_pos_sin,
+                    self.config.qk_pos_emb_head_dim,
+                    self.config.kv_lora_rank,
+                    cu_seqlens_kv,
+                    cp_rank,
+                    cp_size,
+                )
+                kv_cached = kv_cached.squeeze(1)
+            else:
+                if inference_context is not None:
+                    sequence_start = inference_context.sequence_len_offset
+                    sequence_end = sequence_start + q_len
+                    rotary_pos_emb_local = rotary_pos_emb[sequence_start:sequence_end]
+                elif packed_seq_params is None or self.config.context_parallel_size == 1:
+                    rotary_pos_emb_local = rotary_pos_emb[0:q_len]
+                else:
+                    rotary_pos_emb_local = rotary_pos_emb
+
+                q_no_pe, q_pos_emb = torch.split(
+                    q, [self.config.qk_head_dim, self.config.qk_pos_emb_head_dim], dim=-1
+                )
+
+                q_pos_emb = apply_rotary_pos_emb(
+                    q_pos_emb,
+                    rotary_pos_emb_local,
+                    config=self.config,
+                    cu_seqlens=cu_seqlens_q,
+                    mscale=mscale,
+                    cp_group=self.pg_collection.cp,
+                )
+                k_pos_emb_local = apply_rotary_pos_emb(
+                    k_pos_emb_local,
+                    rotary_pos_emb_local,
+                    config=self.config,
+                    cu_seqlens=cu_seqlens_kv,
+                    mscale=mscale,
+                    cp_group=self.pg_collection.cp,
+                )
+
+                kv_cached = torch.cat([kv_compressed, k_pos_emb_local.squeeze(1)], dim=-1)
+
+                # Absorb key up projection weight into query
+                q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
+                q_content, _ = self.linear_kv_up_proj_absorb_q(
+                    q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
+                    [q_len * q_no_pe_4d.size(1)] * self.num_attention_heads_per_partition,
+                )
+                q_content = q_content.permute(1, 2, 0, 3).contiguous()
+                q_content = q_content.squeeze(1) if packed_seq_params is not None else q_content
+
+                query = torch.cat([q_content, q_pos_emb], dim=-1)
+
             key = kv_cached
             value = None
             return query.contiguous(), key.contiguous(), value

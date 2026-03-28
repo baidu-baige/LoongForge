@@ -60,6 +60,7 @@ from .dsa_fused_kernels import (
     triton_attn_dist,
     DSADotProductAttention,
     DSAIndexerKernel,
+    fused_apply_mla_rope,
 )
 
 
@@ -278,36 +279,54 @@ class DSAIndexerFused(MegatronModule):
         rotary_pos_emb: torch.Tensor,
         mscale: float,
         cu_seqlens: torch.Tensor,
+        rotary_pos_cos: torch.Tensor = None,
+        rotary_pos_sin: torch.Tensor = None,
         *,
         is_sp: bool = False
     ):
         """Apply RoPE to the input tensor."""
-        # x_pe   [seqlen, *, qk_pos_emb_head_dim]
-        # x_nope [seqlen, *, index_head_dim - qk_pos_emb_head_dim]
-        x_pe, x_nope = torch.split(
-            x, [self.qk_pos_emb_head_dim, self.index_head_dim - self.qk_pos_emb_head_dim], dim=-1
-        )
-
-        extra_kwargs = dict()
-        if is_sp:
-            cu_seqlens, offsets = shard_packed_cu_seqlens_for_sp_rank(
-                cu_seqlens,
-                sp_rank=self.pg_collection.tp.rank(),
-                sp_world_size=self.pg_collection.tp.size()
+        if self.config.apply_rope_fusion:
+            cp_rank = self.pg_collection.cp.rank()
+            cp_size = self.pg_collection.cp.size()
+            
+            x = fused_apply_mla_rope(
+                x,
+                rotary_pos_cos,
+                rotary_pos_sin,
+                self.index_head_dim - self.qk_pos_emb_head_dim,
+                self.qk_pos_emb_head_dim,
+                None,
+                cp_rank,
+                cp_size,
+                pe_first=True,
             )
-            extra_kwargs["offsets"] = offsets
+        else:
+            # x_pe   [seqlen, *, qk_pos_emb_head_dim]
+            # x_nope [seqlen, *, index_head_dim - qk_pos_emb_head_dim]
+            x_pe, x_nope = torch.split(
+                x, [self.qk_pos_emb_head_dim, self.index_head_dim - self.qk_pos_emb_head_dim], dim=-1
+            )
 
-        x_pe = apply_rotary_pos_emb(
-            x_pe,
-            rotary_pos_emb,
-            config=self.config,
-            cu_seqlens=cu_seqlens,
-            mscale=mscale,
-            cp_group=self.pg_collection.cp,
-            **extra_kwargs,
-        )
-        # [seqlen, *, index_head_dim]
-        x = torch.cat([x_pe, x_nope], dim=-1)
+            extra_kwargs = dict()
+            if is_sp:
+                cu_seqlens, offsets = shard_packed_cu_seqlens_for_sp_rank(
+                    cu_seqlens,
+                    sp_rank=self.pg_collection.tp.rank(),
+                    sp_world_size=self.pg_collection.tp.size()
+                )
+                extra_kwargs["offsets"] = offsets
+
+            x_pe = apply_rotary_pos_emb(
+                x_pe,
+                rotary_pos_emb,
+                config=self.config,
+                cu_seqlens=cu_seqlens,
+                mscale=mscale,
+                cp_group=self.pg_collection.cp,
+                **extra_kwargs,
+            )
+            # [seqlen, *, index_head_dim]
+            x = torch.cat([x_pe, x_nope], dim=-1)
         return x
 
     def get_query_key_weight_tensors(
@@ -352,7 +371,14 @@ class DSAIndexerFused(MegatronModule):
             rotary_pos_emb = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
             mscale = 1.0
         else:
-            rotary_pos_emb, mscale = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
+            if self.config.apply_rope_fusion:
+                rotary_pos_cos, rotary_pos_sin = self.rotary_pos_emb.get_cached_cos_sin(
+                    rotary_seq_len, dtype=x.dtype, packed_seq=packed_seq
+                )
+                mscale = 1.0
+                rotary_pos_emb = None
+            else:
+                rotary_pos_emb, mscale = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
 
         if packed_seq_params is not None:
             if packed_seq_params.cu_seqlens_q_padded is not None:
@@ -377,9 +403,13 @@ class DSAIndexerFused(MegatronModule):
         q = q.view(*q.size()[:-1], self.index_n_heads, self.index_head_dim)  # [..., h, d]
         if packed_seq_params is None:
             offset = self.pg_collection.tp.rank() * q.size(0)
-            q = self._apply_rope(q, rotary_pos_emb[offset:offset + q.size(0)], mscale, cu_seqlens_q)
+            if self.config.apply_rope_fusion:
+                q = self._apply_rope(q, None, mscale, cu_seqlens_q, rotary_pos_cos[offset:offset + q.size(0)], 
+                                        rotary_pos_sin[offset:offset + q.size(0)])
+            else:
+                q = self._apply_rope(q, rotary_pos_emb[offset:offset + q.size(0)], mscale, cu_seqlens_q)
         else:
-            q = self._apply_rope(q, rotary_pos_emb, mscale, cu_seqlens_q, is_sp=True)
+            q = self._apply_rope(q, rotary_pos_emb, mscale, cu_seqlens_q, rotary_pos_cos, rotary_pos_sin, is_sp=True)
 
         # =========================================
         # k linear and apply rope to k
@@ -391,11 +421,11 @@ class DSAIndexerFused(MegatronModule):
             k = gather_from_sequence_parallel_region(k)  # [s, b, d]
         if packed_seq_params is None:
             k = k.unsqueeze(-2)  # [s, b, 1, d]
-            k = self._apply_rope(k, rotary_pos_emb, mscale, cu_seqlens_kv)
+            k = self._apply_rope(k, rotary_pos_emb, mscale, cu_seqlens_kv, rotary_pos_cos, rotary_pos_sin)
             k = k.squeeze(-2)  # [s, b, d]
         else:
             # Cause head and batchsize are both 1, omit the batch squeeze and head unsqueeze
-            k = self._apply_rope(k, rotary_pos_emb, mscale, cu_seqlens_kv)  # [s, b, d]
+            k = self._apply_rope(k, rotary_pos_emb, mscale, cu_seqlens_kv, rotary_pos_cos, rotary_pos_sin)  # [s, b, d]
 
         # =========================================
         # Rotate activation
