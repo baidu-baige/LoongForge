@@ -80,6 +80,7 @@ def rotary_fwd_q_kernel_interleaved(
     stride_x_nheads,
     cp_rank,
     cp_size,
+    sp_offset,
     BLOCK_H: tl.constexpr,
 ):
     """
@@ -96,6 +97,7 @@ def rotary_fwd_q_kernel_interleaved(
         emb_offset: starting offset of the emb_dim RoPE region within the head dimension.
             For nope-first layout [nope, pe]: emb_offset = qk_head_dim.
             For PE-first layout [pe, nope]: emb_offset = 0.
+        sp_offset: global token offset for sequence parallelism (TP rank * local_seqlen).
     """
     pid_m = tl.program_id(axis=0)
     pid_head = tl.program_id(axis=1)
@@ -103,7 +105,7 @@ def rotary_fwd_q_kernel_interleaved(
     if cu_seqlens_q is None:
         token_idx = pid_m // batch_size
     else:
-        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m, seq_num, cp_rank, cp_size)
+        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m + sp_offset, seq_num, cp_rank, cp_size)
 
     Q = Q + pid_m * stride_x_seq + pid_head * BLOCK_H * stride_x_nheads
 
@@ -168,6 +170,7 @@ def rotary_bwd_q_kernel_interleaved(
     stride_x_nheads,
     cp_rank,
     cp_size,
+    sp_offset,
     BLOCK_H: tl.constexpr,
 ):
     """
@@ -179,6 +182,7 @@ def rotary_bwd_q_kernel_interleaved(
 
     Args:
         emb_offset: starting offset of the emb_dim RoPE region within the head dimension.
+        sp_offset: global token offset for sequence parallelism (TP rank * local_seqlen).
     """
     pid_m = tl.program_id(axis=0)
     pid_head = tl.program_id(axis=1)
@@ -186,7 +190,7 @@ def rotary_bwd_q_kernel_interleaved(
     if cu_seqlens_q is None:
         token_idx = pid_m // batch_size
     else:
-        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m, seq_num, cp_rank, cp_size)
+        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m + sp_offset, seq_num, cp_rank, cp_size)
 
     DO = DO + pid_m * stride_x_seq + pid_head * BLOCK_H * stride_x_nheads
 
@@ -240,6 +244,7 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
         cp_rank,
         cp_size,
         emb_offset=None,
+        sp_offset=0,
     ):
         """
         Forward function for ApplyMLARotaryEmbQInterleaved.
@@ -250,6 +255,7 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
             cos/sin: [max_seq_len, 1, 1, emb_dim]
             cu_seqlens_q: [seq_num + 1] accumulated sequence lengths for thd format
             emb_offset: starting offset of RoPE region. None defaults to qk_head_dim (nope-first).
+            sp_offset: global token offset for sequence parallelism (TP rank * local_seqlen).
         """
         if emb_offset is None:
             emb_offset = qk_head_dim
@@ -286,6 +292,7 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
             q.stride(1),
             cp_rank,
             cp_size,
+            sp_offset,
         )
         ctx.save_for_backward(cos, sin)
         ctx.emb_offset = emb_offset
@@ -293,6 +300,7 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
         ctx.cu_seqlens_q = cu_seqlens_q
         ctx.cp_rank = cp_rank
         ctx.cp_size = cp_size
+        ctx.sp_offset = sp_offset
         if cu_seqlens_q is None:
             q = q.view(max_seqlen, batch_size, nheads, headdim)
         return q
@@ -334,10 +342,11 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
             grad.stride(1),
             ctx.cp_rank,
             ctx.cp_size,
+            ctx.sp_offset,
         )
         if ctx.cu_seqlens_q is None:
             grad = grad.view(max_seqlen, batch_size, nheads, headdim)
-        return grad, None, None, None, None, None, None, None, None
+        return grad, None, None, None, None, None, None, None, None, None
 
 
 @triton.autotune(
@@ -369,6 +378,7 @@ def rotary_fwd_q_kernel_non_interleaved(
     stride_x_nheads,
     cp_rank,
     cp_size,
+    sp_offset,
     BLOCK_H: tl.constexpr,
 ):
     """
@@ -379,6 +389,7 @@ def rotary_fwd_q_kernel_non_interleaved(
 
     Args:
         emb_offset: starting offset of the emb_dim RoPE region within the head dimension.
+        sp_offset: global token offset for sequence parallelism (TP rank * local_seqlen).
     """
     pid_m = tl.program_id(axis=0)
     pid_head = tl.program_id(axis=1)
@@ -386,7 +397,7 @@ def rotary_fwd_q_kernel_non_interleaved(
     if cu_seqlens_q is None:
         token_idx = pid_m // batch_size
     else:
-        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m, seq_num, cp_rank, cp_size)
+        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m + sp_offset, seq_num, cp_rank, cp_size)
 
     cos_left = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2))
     sin_left = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2))
@@ -445,6 +456,7 @@ def rotary_bwd_q_kernel_non_interleaved(
     stride_x_nheads,
     cp_rank,
     cp_size,
+    sp_offset,
     BLOCK_H: tl.constexpr,
 ):
     """
@@ -452,6 +464,7 @@ def rotary_bwd_q_kernel_non_interleaved(
 
     Args:
         emb_offset: starting offset of the emb_dim RoPE region within the head dimension.
+        sp_offset: global token offset for sequence parallelism (TP rank * local_seqlen).
     """
     pid_m = tl.program_id(axis=0)
     pid_head = tl.program_id(axis=1)
@@ -459,7 +472,7 @@ def rotary_bwd_q_kernel_non_interleaved(
     if cu_seqlens_q is None:
         token_idx = pid_m // batch_size
     else:
-        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m, seq_num, cp_rank, cp_size)
+        token_idx = _get_thd_token_idx(cu_seqlens_q, pid_m + sp_offset, seq_num, cp_rank, cp_size)
 
     cos_left = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2))
     sin_left = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2))
@@ -506,6 +519,7 @@ class ApplyMLARotaryEmbQNonInterleavedWithOffset(torch.autograd.Function):
         cp_rank,
         cp_size,
         emb_offset=None,
+        sp_offset=0,
     ):
         """Apply non-interleaved YARN RoPE to MLA query tensor in-place with configurable embedding offset."""
         if emb_offset is None:
@@ -541,6 +555,7 @@ class ApplyMLARotaryEmbQNonInterleavedWithOffset(torch.autograd.Function):
             q.stride(1),
             cp_rank,
             cp_size,
+            sp_offset,
         )
         ctx.save_for_backward(cos, sin)
         ctx.emb_offset = emb_offset
@@ -548,6 +563,7 @@ class ApplyMLARotaryEmbQNonInterleavedWithOffset(torch.autograd.Function):
         ctx.cu_seqlens_q = cu_seqlens_q
         ctx.cp_rank = cp_rank
         ctx.cp_size = cp_size
+        ctx.sp_offset = sp_offset
         if cu_seqlens_q is None:
             q = q.view(max_seqlen, batch_size, nheads, headdim)
         return q
@@ -583,10 +599,11 @@ class ApplyMLARotaryEmbQNonInterleavedWithOffset(torch.autograd.Function):
             grad.stride(1),
             ctx.cp_rank,
             ctx.cp_size,
+            ctx.sp_offset,
         )
         if ctx.cu_seqlens_q is None:
             grad = grad.view(max_seqlen, batch_size, nheads, headdim)
-        return grad, None, None, None, None, None, None, None, None
+        return grad, None, None, None, None, None, None, None, None, None
 
 # Fused RoPE + Permute (HSD→SHD) + Cat kernel
 @triton.autotune(
@@ -1162,6 +1179,7 @@ def fused_apply_mla_rope(
     cp_size: int = 1,
     rotary_interleaved: bool = False,
     pe_first: bool = False,
+    sp_offset: int = 0,
 ):
     """
     Fused function for applying YARN RoPE to MLA's query.
@@ -1181,6 +1199,7 @@ def fused_apply_mla_rope(
         rotary_interleaved: whether to apply RoPE interleaved (True) or non-interleaved (False)
         pe_first: if True, layout is [pe, nope] (emb_offset=0);
                   if False, layout is [nope, pe] (emb_offset=qk_head_dim). Default False.
+        sp_offset: global token offset for sequence parallelism (TP rank * local_seqlen).
 
     Returns:
         t: inplace modified input tensor
@@ -1188,12 +1207,12 @@ def fused_apply_mla_rope(
     emb_offset = 0 if pe_first else qk_head_dim
     if rotary_interleaved:
         return ApplyMLARotaryEmbQInterleaved.apply(
-            t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset
+            t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset, sp_offset
         )
     else:
         if pe_first:
             return ApplyMLARotaryEmbQNonInterleavedWithOffset.apply(
-                t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset
+                t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset, sp_offset
             )
         else:
             return ApplyMLARotaryEmbQNonInterleaved.apply(

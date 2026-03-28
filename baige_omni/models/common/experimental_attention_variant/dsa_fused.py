@@ -288,6 +288,7 @@ class DSAIndexerFused(MegatronModule):
         if self.config.apply_rope_fusion:
             cp_rank = self.pg_collection.cp.rank()
             cp_size = self.pg_collection.cp.size()
+            sp_offset = self.pg_collection.tp.rank() * x.shape[0] if is_sp else 0
             
             x = fused_apply_mla_rope(
                 x,
@@ -295,10 +296,11 @@ class DSAIndexerFused(MegatronModule):
                 rotary_pos_sin,
                 self.index_head_dim - self.qk_pos_emb_head_dim,
                 self.qk_pos_emb_head_dim,
-                None,
+                cu_seqlens,
                 cp_rank,
                 cp_size,
                 pe_first=True,
+                sp_offset=sp_offset,
             )
         else:
             # x_pe   [seqlen, *, qk_pos_emb_head_dim]
