@@ -149,6 +149,8 @@ def parse_yaml_config(config_file, convert_file):
         module_type = 'foundation'
 
     c_config.load_convert_data(cfg)
+
+    update_overwrite(model_cfg, c_config, module_type)
     return c_config
 
 def get_yaml_config(config_file, convert_file, adapter_convert_file=None, for_vlm=False):
