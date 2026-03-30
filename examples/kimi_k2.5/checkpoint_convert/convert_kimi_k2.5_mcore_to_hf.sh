@@ -4,28 +4,26 @@ export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-hf-Dec23
-LOAD=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Original/release
-OMNI_LOAD=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15/release
+SAVE=/mnt/cluster/huggingface.co/moonshotai/Kimi-K2.5-hf
+LOAD=/mnt/cluster/BaigeOmni/moonshotai/Kimi-K2.5-entp8dtp8pp8ep32etp1-Original/release
+OMNI_LOAD=/mnt/cluster/BaigeOmni/moonshotai/Kimi-K2.5-entp8dtp8pp8ep32etp1/release
 
 SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-hf
 SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
 SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
 SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_30b_a3b.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/kimi_k2.5/kimi_k2_5.yaml
 
-FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/kimi_k2/ckpt_convert/kimi_k2_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/moon_vit_3d_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/patch_merger_adapter_convert.yaml
 
-
-ETP=2
-DTP=2
-PP=2
-EP=4
+ETP=8
+DTP=8
+PP=8
+EP=32
 Expert_TP=1
-
 
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
@@ -51,7 +49,9 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --save_ckpt_path=$SAVE_LANGUAGE_MODEL \
     --safetensors \
     --no_save_optim \
-    --no_load_optim
+    --no_load_optim \
+    --moe-grouped-gemm \
+    --fp8_force_no_requant
 
 
 # vit: vision model
@@ -93,10 +93,8 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_save_optim \
     --no_load_optim \
 
-
-
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
-    python $CONVERT_CHECKPOINT_PATH/module_convertor/adapter_internvl.py \
+    python $CONVERT_CHECKPOINT_PATH/module_convertor/adapter.py \
     --load_platform=mcore\
     --save_platform=huggingface\
     --config_file $MODEL_CONFIG_FILE \

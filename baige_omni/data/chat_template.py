@@ -36,6 +36,7 @@ from typing import (
 
 from baige_omni.utils.constants import DataRoles
 from .mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
+from .kimi_k25_plugin import KimiK25Plugin
 
 
 if TYPE_CHECKING:
@@ -549,4 +550,52 @@ _register_chat_template(
     default_system="You are a helpful assistant.",
     stop_words=["<|im_end|>"],
     replace_eos=True,
+)
+
+# Kimi K2.5 chat template
+# Format: <|im_user|>user<|im_middle|>{content}<|im_end|><|im_assistant|>assistant\
+#   <|im_middle|><think></think>{response}<|im_end|>
+_register_chat_template(
+    name="kimi-k2.5",
+    format_user=StringFormatter(
+        slots=["<|im_user|>user<|im_middle|>{{content}}<|im_end|><|im_assistant|>assistant<|im_middle|><think></think>"]
+    ),
+    format_system=StringFormatter(
+        slots=["<|im_system|>system<|im_middle|>{{content}}<|im_end|>"]
+    ),
+    format_assistant=StringFormatter(
+        slots=["{{content}}<|im_end|>"]
+    ),
+    format_separator=EmptyFormatter(slots=[""]),
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+    mm_plugin=KimiK25Plugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+    ),
+)
+
+# Kimi K2.5 with thinking (reasoning) enabled
+_register_chat_template(
+    name="kimi-k2.5-think",
+    format_user=StringFormatter(
+        slots=["<|im_user|>user<|im_middle|>{{content}}<|im_end|><|im_assistant|>assistant<|im_middle|><think>"]
+    ),
+    format_system=StringFormatter(
+        slots=["<|im_system|>system<|im_middle|>{{content}}<|im_end|>"]
+    ),
+    format_assistant=StringFormatter(
+        slots=["{{content}}<|im_end|>"]
+    ),
+    format_separator=EmptyFormatter(slots=[""]),
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+    mm_plugin=KimiK25Plugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+    ),
 )

@@ -533,7 +533,7 @@ if [ -z "${EP:-}" ]; then
   EP=1
 fi
 if [ -z "${Expert_TP:-}" ]; then
-  Expert_TP=1=1
+  Expert_TP=1
 fi
 if [ $PP -eq 1 ] && [ $EP -eq 1 ]; then
     LOAD_PATH=$LOAD

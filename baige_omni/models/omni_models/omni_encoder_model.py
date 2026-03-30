@@ -323,6 +323,9 @@ class OmniEncoderModel(torch.nn.Module):
         if self.image_projector is not None:
             image_embeddings = self.image_projector(image_embeddings, window_index)
 
+        if isinstance(image_embeddings, (list, tuple)):
+            image_embeddings = torch.cat([e.reshape(-1, e.shape[-1]) for e in image_embeddings], dim=0)
+
         image_token_id = self.image_encoder.config.image_token_id
         n_image_tokens = (input_ids == image_token_id).sum().item()
         n_image_features = image_embeddings.shape[0]
@@ -520,6 +523,8 @@ class OmniEncoderModel(torch.nn.Module):
             window_index = None
         if projector_model is not None:
             encoder_output = projector_model(encoder_output, window_index)
+        if isinstance(encoder_output, (tuple, list)):
+            encoder_output = encoder_output[0]
         input_embeds = input_embeds + encoder_output.sum() * 0.0
         return input_embeds
 

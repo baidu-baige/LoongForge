@@ -412,6 +412,13 @@ def _validate_custom_model_args(name, args, defaults={}):
         warnings.warn(f"WARNING: Now for {name}, the num_attention_heads is None, using default value"
                       " tensor_model_parallel_size to pass the transformer config check.")
         args.num_attention_heads = args.tensor_model_parallel_size
+
+    if args.moe_router_topk is not None:
+        warnings.warn(f"WARNING: Now for {name}, we do not support moe_router_topk.")
+        args.moe_router_topk = None
+    if args.moe_router_group_topk is not None:
+        warnings.warn(f"WARNING: Now for {name}, we do not support moe_router_group_topk.")
+        args.moe_router_group_topk = None
     
     # Temporary
     assert args.non_persistent_ckpt_type in ['global', 'local', None], \

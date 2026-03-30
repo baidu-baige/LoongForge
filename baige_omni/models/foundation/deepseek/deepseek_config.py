@@ -40,6 +40,7 @@ class DeepseekConfig(BaseModelMLAConfig):
     num_query_groups: int = None
     apply_rope_fusion: bool = True
     multi_latent_attention: bool = True
+    make_vocab_size_divisible_by: int = 128
     # MTP hyperparameters
     mtp_num_layers: int = 0
     mtp_loss_coef: float = 0.1

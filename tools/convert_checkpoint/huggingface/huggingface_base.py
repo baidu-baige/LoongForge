@@ -79,6 +79,7 @@ class HuggingfaceBase:
 
         self.transformer = self.name_map[TRANSFORMER]
         self.layer_prefix = self.name_map[LAYER_PREFIX]
+        self.weight_scale_suffix = self.name_map.get("weight_scale_key", WEIGHT_SCALE)
 
     @staticmethod
     def get_hf_name_and_args(obj):
@@ -131,7 +132,7 @@ class HuggingfaceBase:
                 hf_weight_path = f"{hf_name}.{WEIGHT}"
             hf_bias_path = self.name_map[f"{spec_name}.{BIAS}"] \
                     if f"{spec_name}.{BIAS}" in self.name_map else f"{hf_name}.{BIAS}"
-            hf_weight_scale_path = f"{hf_name}.{WEIGHT_SCALE}"
+            hf_weight_scale_path = f"{hf_name}.{self.weight_scale_suffix}"
             self.update_tensor(h_dict, hf_weight_path, weight, hf_bias_path=hf_bias_path, bias=bias,
                     hf_weight_scale_path=hf_weight_scale_path, weight_scale=weight_scale)
         else:
@@ -170,7 +171,7 @@ class HuggingfaceBase:
                 bias_name = f"{name}.{BIAS}"
                 hf_bias_path = f"{transformer}.{layer_prefix}.{hf_layer_id}.{self.name_map[bias_name]}" \
                         if bias_name in self.name_map else f"{hf_prefix_path}.{BIAS}"
-                hf_weight_scale_path = f"{hf_prefix_path}.{WEIGHT_SCALE}"
+                hf_weight_scale_path = f"{hf_prefix_path}.{self.weight_scale_suffix}"
                 if self.num_padded_heads != 0:
                     if name == ATTENTION_DENSE:
                         weight = weight[:, :self.heads * self.hidden_size_per_head].contiguous()
@@ -209,7 +210,7 @@ class HuggingfaceBase:
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
             if weight_scale_list is not None:
-                h_dict[f"{hf_path}.{WEIGHT_SCALE}"] = weight_scale_list[i]
+                h_dict[f"{hf_path}.{self.weight_scale_suffix}"] = weight_scale_list[i]
 
     def update_h_to_4h(self, h_dict, name, hf_prefix_path, weight, bias, weight_scale, expert_id=None):
         if weight is None:
@@ -235,7 +236,7 @@ class HuggingfaceBase:
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
             if weight_scale_list is not None:
-                h_dict[f"{hf_path}.{WEIGHT_SCALE}"] = weight_scale_list[i]
+                h_dict[f"{hf_path}.{self.weight_scale_suffix}"] = weight_scale_list[i]
     # === update tensor to huggingface state_dict end ===
 
     # ====== from hf to common ========
@@ -281,7 +282,7 @@ class HuggingfaceBase:
                     hf_weight_path = f"{hf_name}.{WEIGHT}"
                 hf_bias_path = self.name_map[f"{name}.{BIAS}"] \
                         if f"{name}.{BIAS}" in self.name_map else f"{hf_name}.{BIAS}"
-                hf_weight_scale_path = f"{hf_name}.{WEIGHT_SCALE}"
+                hf_weight_scale_path = f"{hf_name}.{self.weight_scale_suffix}"
                 weight, bias, weight_scale = self.get_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
             if (name == WORD_EMBEDDINGS_FOR_HEAD or name == MTP_WORD_EMBEDDING) and weight is None and WORD_EMBEDDINGS in self.name_map:
@@ -328,7 +329,7 @@ class HuggingfaceBase:
                 bias_name = f"{name}.{BIAS}"
                 hf_bias_path = f"{transformer}.{layer_prefix}.{hf_layer_id}.{self.name_map[bias_name]}" \
                         if bias_name in self.name_map else f"{hf_prefix_path}.{BIAS}"
-                hf_weight_scale_path = f"{hf_prefix_path}.{WEIGHT_SCALE}"
+                hf_weight_scale_path = f"{hf_prefix_path}.{self.weight_scale_suffix}"
                 weight, bias, weight_scale = self.get_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
                 if ATTENTION_ROTARY_EMB_INV_FREQ == name and weight is None:
@@ -356,8 +357,8 @@ class HuggingfaceBase:
                 weight_list.append(h_dict[f"{hf_path}.{WEIGHT}"])
             if f"{hf_path}.{BIAS}" in h_dict:
                 bias_list.append(h_dict[f"{hf_path}.{BIAS}"])
-            if f"{hf_path}.{WEIGHT_SCALE}" in h_dict:
-                weight_scale_list.append(h_dict[f"{hf_path}.{WEIGHT_SCALE}"])
+            if f"{hf_path}.{self.weight_scale_suffix}" in h_dict:
+                weight_scale_list.append(h_dict[f"{hf_path}.{self.weight_scale_suffix}"])
         weight = func(weight_list) if len(weight_list) > 0 else None
         bias = func(bias_list) if len(bias_list) > 0 else None
         weight_scale = func(weight_scale_list) if len(weight_scale_list) > 0 else None
@@ -375,7 +376,7 @@ class HuggingfaceBase:
             hf_bias_path = f"{hf_path}.{BIAS}"
             if f"{name}.{BIAS}" in self.name_map:
                 hf_bias_path = self.name_map[f"{name}.{BIAS}"]
-            hf_weight_scale_path = f"{hf_path}.{WEIGHT_SCALE}"
+            hf_weight_scale_path = f"{hf_path}.{self.weight_scale_suffix}"
             if hf_weight_path in h_dict:
                 if is_dict_for_expert:
                     assert expert_id is not None, "expert_id must be specified when is_dict_for_expert is True"
