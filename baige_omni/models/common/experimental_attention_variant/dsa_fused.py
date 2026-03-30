@@ -43,6 +43,7 @@ from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.experimental_attention_variant.dsa import (
+    DSAIndexerLossAutoScaler,
     DSAIndexerLossLoggingHelper as DSAIndexerLossLoggingHelperFused,
 )
 
@@ -81,62 +82,6 @@ def rotate_activation(x: torch.Tensor) -> torch.Tensor:
     assert hadamard_transform is not None, "fast_hadamard_transform is not installed."
     hidden_size = x.size(-1)
     return hadamard_transform(x, scale=hidden_size**-0.5)
-
-
-class DSAIndexerLossAutoScaler(torch.autograd.Function):
-    """An AutoScaler that triggers the backward pass and scales the grad for indexer loss.
-
-    This custom autograd function attaches a KL divergence loss to the activation
-    to train the indexer to predict attention scores without affecting the forward pass.
-    """
-
-    main_loss_backward_scale: torch.Tensor = None
-
-    @staticmethod
-    def forward(ctx, output: torch.Tensor, indexer_loss: torch.Tensor):
-        """Preserve the indexer_loss by storing it in the context to avoid garbage collection.
-
-        Args:
-            output: The output tensor (activation).
-            indexer_loss: The indexer KL divergence loss tensor.
-
-        Returns:
-            torch.Tensor: The output tensor unchanged.
-        """
-        ctx.save_for_backward(indexer_loss)
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output: torch.Tensor):
-        """Compute and scale the gradient for indexer loss.
-
-        Args:
-            grad_output: The gradient of the output.
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]: The gradient of the output, scaled indexer loss
-                gradient.
-        """
-        (indexer_loss,) = ctx.saved_tensors
-        if DSAIndexerLossAutoScaler.main_loss_backward_scale is None:
-            DSAIndexerLossAutoScaler.main_loss_backward_scale = torch.tensor(
-                1.0, device=indexer_loss.device
-            )
-        indexer_loss_backward_scale = DSAIndexerLossAutoScaler.main_loss_backward_scale
-        scaled_indexer_loss_grad = torch.ones_like(indexer_loss) * indexer_loss_backward_scale
-        return grad_output, scaled_indexer_loss_grad
-
-    @staticmethod
-    def set_loss_scale(scale: torch.Tensor):
-        """Set the scale of the indexer loss.
-
-        Args:
-            scale: The scale value to set.
-        """
-        if DSAIndexerLossAutoScaler.main_loss_backward_scale is None:
-            DSAIndexerLossAutoScaler.main_loss_backward_scale = scale
-        else:
-            DSAIndexerLossAutoScaler.main_loss_backward_scale.copy_(scale)
 
 
 @dataclass
