@@ -33,12 +33,17 @@ class Parser:
 
     def _parse_from_args(self, args):
         """Parse args to extract configuration."""
-        # Step 1: Get model config path from model-name
-        model_name = args.model_name
-        config_path, config_name = get_config_from_model_name(model_name)
+        # Step 1: Get model config path from model-name or config-file
+        if args.config_file is None and args.model_name is not None:
+            model_name = args.model_name
+            config_path, config_name = get_config_from_model_name(model_name)
+            model_config_file = f"{config_path}/{config_name}.yaml"
+        elif args.config_file is not None:
+            model_config_file = args.config_file
+        else:
+            raise ValueError('Either --model-name or --config-file must be provided.')
 
         # Step 2: Load model config YAML to get convert_file
-        model_config_file = f"{config_path}/{config_name}.yaml"
         model_cfg = load_config(model_config_file)
 
         self.config_file = model_config_file 
