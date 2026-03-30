@@ -333,6 +333,12 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "pi05",
     },
 
+    # groot
+    "groot_n1_6": {
+        "config_path": "configs/models/groot",
+        "config_name": "groot_n1_6",
+    },
+
     # mimo
     "mimo": {
         "config_path": "configs/models/mimo",

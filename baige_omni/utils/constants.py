@@ -109,6 +109,7 @@ class CustomModelFamilies(_BaseFamilies):
 class VisionLanguageActionModelFamilies(_BaseFamilies):
     """Vision language action model families"""
     PI05 = "pi05"
+    GROOT_N1_6 = "groot_n1_6"
 
 
 def get_all_model_families() -> List[str]:

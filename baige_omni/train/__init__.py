@@ -13,6 +13,11 @@ try:
 except ImportError:
     sft_pi05 = None
 
+try:
+    from .embodied import sft_groot
+except ImportError:
+    sft_groot = None
+
 from .sft import sft_llm, sft_vlm, sft_internvl, sft_ernie
 from .diffusion import pretrain_wan
 
