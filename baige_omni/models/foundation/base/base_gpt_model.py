@@ -658,7 +658,8 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     mtp_loss = self.compute_output_layer_and_language_model_loss(
                         hidden_states_list[mtp_layer_number + 1],
                         labels=mtp_labels[:, :self.config.chunksize] if self.config.enable_chunkpipe else mtp_labels,
-                        weight=self.shared_embedding_or_output_weight(),
+                        weight=self.shared_embedding_or_output_weight()
+                        if self.share_embeddings_and_output_weights else self.output_layer.weight,
                         sequence_parallel_enabled=self.output_layer.sequence_parallel,
                         column_parallel_linear=self.output_layer,
                         col_linear_kwargs={
@@ -780,7 +781,8 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             loss = self.compute_output_layer_and_language_model_loss(
                 hidden_states,
                 labels=labels,
-                weight=self.shared_embedding_or_output_weight(),
+                weight=self.shared_embedding_or_output_weight()
+                if self.share_embeddings_and_output_weights else self.output_layer.weight,
                 sequence_parallel_enabled=self.output_layer.sequence_parallel,
                 column_parallel_linear=self.output_layer,
                 col_linear_kwargs={
@@ -793,7 +795,8 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 return self.compute_output_layer_and_language_model_loss(
                     hidden_states_,
                     labels=labels_,
-                    weight=self.shared_embedding_or_output_weight(),
+                    weight=self.shared_embedding_or_output_weight()
+                    if self.share_embeddings_and_output_weights else self.output_layer.weight,
                     sequence_parallel_enabled=self.output_layer.sequence_parallel,
                     column_parallel_linear=self.output_layer,
                     col_linear_kwargs={
