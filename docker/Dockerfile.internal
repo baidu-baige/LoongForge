@@ -193,13 +193,13 @@ RUN set -exuo pipefail && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        wget -q https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lerobot.tar.gz && \
-        tar -zxf lerobot.tar.gz && \
+        wget -q http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lerobot-v0.5.0.tar.gz && \
+        tar -zxf lerobot-v0.5.0.tar.gz && \
         cd lerobot && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
-        pip install "transformers@http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/aiak-training-llm/transformers-fix-lerobot_openpi-20251001-dcddb970.tar.gz" && \
+        pip install "http://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/transformers-5.3.0-py3-none-any.whl" && \
         pip install --no-build-isolation . && \
         pip install "numpy==1.26" && \
         echo "Lerobot installation completed"; \
