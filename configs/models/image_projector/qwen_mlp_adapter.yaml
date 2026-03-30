@@ -4,3 +4,5 @@ _target_: baige_omni.models.encoder.MLPAdapterConfig
 normalization: "RMSNorm"
 add_bias_linear: True
 model_type: "qwen2_5_vl_adapter"
+
+convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml

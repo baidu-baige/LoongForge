@@ -21,3 +21,5 @@ normalization: "RMSNorm"
 apply_rope_fusion: true
 
 model_type: "qwen2_5_vit"
+
+convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml

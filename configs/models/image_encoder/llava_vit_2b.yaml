@@ -24,3 +24,4 @@ add_qkv_bias: true
 position_embedding_type: rope
 
 model_type: rice_vit
+convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml

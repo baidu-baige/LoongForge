@@ -29,7 +29,15 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3_2_warmup",
     },
-
+    # internlm2.5
+    "internlm2.5-8b": {
+        "config_path": "configs/models/internlm2.5",
+        "config_name": "internlm2_5_8b",
+    },
+    "internlm2.5-20b": {
+        "config_path": "configs/models/internlm2.5",
+        "config_name": "internlm2_5_20b",
+    },
     # llama
     "llama2-7b": {
         "config_path": "configs/models/llama2",
@@ -349,6 +357,10 @@ MODEL_CONFIG_REGISTRY = {
     "ernie4.5-vl-28b-a3b": {
         "config_path": "configs/models/ernie4.5vl",
         "config_name": "ernie4_5_vl_28b_a3b",
+    },
+    "llava-onevision-1.5-4b": {
+        "config_path": "configs/models/llava_onevision",
+        "config_name": "llava_onevision_1_5_4b",
     },
 }
 

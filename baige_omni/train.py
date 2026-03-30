@@ -3,6 +3,8 @@
 
 """Training Entry"""
 
+import logging
+logging.basicConfig(level=logging.WARNING)
 from baige_omni.train import parse_train_args
 from baige_omni.train import build_model_trainer
 

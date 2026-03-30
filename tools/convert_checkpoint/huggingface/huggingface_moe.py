@@ -8,7 +8,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import LAYER_IS_DICT_FOR_EXPERT, CommonCheckpoint
 
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 
@@ -26,8 +26,8 @@ class HuggingfaceMoe(HuggingfaceBase):
         HuggingfaceMoe
     """
 
-    def __init__(self, c_config):
-        super().__init__(c_config)
+    def __init__(self, c_config, args):
+        super().__init__(c_config, args)
 
     #========from commmon to hf===========
     def common_e_to_hf(self, expert_name, name, c_ckpt, h_dict, layer_id=None, hf_layer_id=None,

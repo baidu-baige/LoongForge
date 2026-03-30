@@ -21,3 +21,5 @@ add_qkv_bias: false
 qk_layernorm: false
 untie_embeddings_and_output_weights: true
 model_type: "llama"
+
+convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/llama3/ckpt_convert/llama3_convert.yaml

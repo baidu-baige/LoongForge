@@ -56,8 +56,9 @@ class HuggingfaceBase:
         HuggingfaceBase
     """
 
-    def __init__(self, c_config):
+    def __init__(self, c_config, args):
         self.c_config = c_config
+        self.args = args
         self.hf_attn_converter = HfAttnQkvConverter(c_config)
         self.hf_attn_gate_converter = HfAttnGateQkvConverter(c_config)
         self.hf_mixer_attn_converter = HfMixerAttnConverter(c_config)
@@ -231,7 +232,6 @@ class HuggingfaceBase:
             else:
                 h_dict[hf_weight_path] = weight_list[i] if weight_list is not None else None
 
-            h_dict[f"{hf_path}.{WEIGHT}"] = weight_list[i] if weight_list is not None else None
             if bias_list is not None:
                 h_dict[f"{hf_path}.{BIAS}"] = bias_list[i]
             if weight_scale_list is not None:
