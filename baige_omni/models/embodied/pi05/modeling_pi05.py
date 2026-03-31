@@ -82,7 +82,7 @@ def get_safe_dtype(target_dtype, device_type):
 
 
 def create_sinusoidal_pos_embedding(  # see openpi `create_sinusoidal_pos_embedding` (exact copy)
-    time: torch.Tensor, dimension: int, min_period: float, max_period: float, device="cpu"
+    time: torch.Tensor, dimension: int, min_period: float, max_period: float, device: torch.device = torch.device('cpu')
 ) -> Tensor:
     """Computes sine-cosine positional embedding vectors for scalar positions."""
     if dimension % 2 != 0:
@@ -90,6 +90,9 @@ def create_sinusoidal_pos_embedding(  # see openpi `create_sinusoidal_pos_embedd
 
     if time.ndim != 1:
         raise ValueError("The time tensor is expected to be of shape `(batch_size, )`.")
+
+    # Ensure time tensor is on the correct device
+    time = time.to(device=device)
 
     dtype = get_safe_dtype(torch.float64, device.type)
     fraction = torch.linspace(0.0, 1.0, dimension // 2, dtype=dtype, device=device)
@@ -660,8 +663,8 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
             std=1.0,
             size=shape,
             dtype=torch.float32,
-            device=device,
-        )
+            device=(torch.device('cpu') if self.config.random_fallback_cpu else device),
+        ).to(device)
 
     def sample_time(self, bsize, device):
         """sample time"""
@@ -726,8 +729,8 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
             self.action_in_proj.out_features,
             min_period=self.config.min_period,
             max_period=self.config.max_period,
-            device=timestep.device,
-        )
+            device=torch.device('cpu') if self.config.random_fallback_cpu else timestep.device
+        ).to(timestep.device)
         time_emb = time_emb.type(dtype=timestep.dtype)
 
         # Fuse timestep + action information using an MLP
