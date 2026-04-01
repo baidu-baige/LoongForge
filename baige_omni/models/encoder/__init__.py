@@ -32,6 +32,12 @@ from .ernie4_5_vl_vision_models.ernie_vision_model import ErnieVisionModel
 from .ernie4_5_vl_vision_models.ernie_adapter import ErnieAdapter
 from .ernie4_5_vl_vision_models.ernie_config import ErnieVisionConfig, ErnieAdapterConfig
 
+from .moon_vision_models.moon_vision_model import MoonVisionModel
+from .moon_vision_models.moon_vision_config import MoonVisionModelConfig
+from .moon_vision_models.patch_merger_adapter import PatchMergerMLPAdapterConfig
+from .moon_vision_models.patch_merger_adapter import PatchMergerMLP
+
+
 AutoModel.register(Qwen2VisionModelConfig, BaseVisionModel)
 AutoModel.register(Qwen2VisionRMSNormConfig, Qwen2VisionModelWithRMSNorm)
 AutoModel.register(Qwen3VisionModelConfig, Qwen3VisionModel)
@@ -42,3 +48,5 @@ AutoModel.register(InternVisionConfig, InternVisionModel)
 AutoModel.register(InternMLPAdapterConfig, InternAdapter)
 AutoModel.register(ErnieVisionConfig, ErnieVisionModel)
 AutoModel.register(ErnieAdapterConfig, ErnieAdapter)
+AutoModel.register(MoonVisionModelConfig, MoonVisionModel)
+AutoModel.register(PatchMergerMLPAdapterConfig, PatchMergerMLP)

@@ -182,7 +182,7 @@ class BaseVisionModel(BaseMegatronVisionModule):
 
         x = self.patch_embed(images)
         x = x[:, None, :].contiguous()  # [s, h] -> [s, 1, h]
-        x = self.decoder(
+        x, _ = self.decoder(
             x,
             rotary_pos_emb=rotary_pos_emb,
             attention_mask=None,

@@ -72,6 +72,9 @@ def get_batch_on_this_tp_rank(data_iterator):
     )
     if data_iterator is not None and mpu.get_tensor_model_parallel_rank() == 0:
         data = next(data_iterator)
+        # Check if iterator is exhausted (data is None)
+        if data is None:
+            raise StopIteration("Data iterator exhausted. Check if eval_iters exceeds validation dataset size.")
     else:
         data = None
 

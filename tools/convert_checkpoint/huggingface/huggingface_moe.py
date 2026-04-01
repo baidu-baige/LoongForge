@@ -15,7 +15,6 @@ from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 from convert_checkpoint.common.common_checkpoint import (
     WEIGHT,
     BIAS,
-    WEIGHT_SCALE,
     MOE_EXPERT_H_TO_4H,
     LAYER_IS_DICT_FOR_EXPERT,
 )
@@ -65,7 +64,7 @@ class HuggingfaceMoe(HuggingfaceBase):
                 hf_bias_path = f"{transformer}.{layer_prefix}.{hf_layer_id}."\
                         f"{self.name_map[expert_name]}.{expert_id}.{self.name_map[bias_name]}" \
                         if bias_name in self.name_map else f"{hf_path}.{BIAS}"
-            hf_weight_scale_path = f"{hf_path}.{WEIGHT_SCALE}"
+            hf_weight_scale_path = f"{hf_path}.{self.weight_scale_suffix}"
             self.update_tensor(h_dict, hf_weight_path, weight, hf_bias_path=hf_bias_path, bias=bias,
                     hf_weight_scale_path=hf_weight_scale_path, weight_scale=weight_scale,
                     expert_id=expert_id, is_dict_for_expert=is_dict_for_expert)
@@ -119,7 +118,7 @@ class HuggingfaceMoe(HuggingfaceBase):
                 hf_bias_path = f"{transformer}.{layer_prefix}.{hf_layer_id}."\
                         f"{self.name_map[expert_name]}.{expert_id}.{self.name_map[bias_name]}" \
                         if bias_name in self.name_map else f"{hf_path}.{BIAS}"
-            hf_weight_scale_path = f"{hf_path}.{WEIGHT_SCALE}"
+            hf_weight_scale_path = f"{hf_path}.{self.weight_scale_suffix}"
             weight, bias, weight_scale = self.get_from_state_dict(
                     h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path,
                     expert_id=expert_id, is_dict_for_expert=is_dict_for_expert)

@@ -20,6 +20,7 @@ TASK_ENCODER_REGISTRY = {
     "internvltaskencoder": "baige_omni.data.multimodal.internvl.internvl_task_encoder.InternVLTaskEncoder",
     "llavaov15taskencoder": "baige_omni.data.multimodal.llava_ov_task_encoder.LLavaOv15TaskEncoder",
     "ernietaskencoder": "baige_omni.data.multimodal.ernie_task_encoder.ErnieTaskEncoder",
+    "kimitaskencoder": "baige_omni.data.multimodal.kimi_task_encoder.KimiVLMTaskEncoder",
 }
 
 
