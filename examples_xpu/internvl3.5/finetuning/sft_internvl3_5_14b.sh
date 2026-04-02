@@ -20,7 +20,7 @@ TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/out/tensorboard/i
 mkdir -p ${CHECKPOINT_SAVE_PATH}
 mkdir -p ${LOGS_PATH}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
 ####### 使用RANK0加载模型RDMA分发 #######
 export DP_RANK0_LOAD=false
@@ -150,6 +150,7 @@ TRAINING_ARGS=(
     --load $CHECKPOINT_PATH
     --save $CHECKPOINT_SAVE_PATH
     --dataloader-type external
+    --dataloader-save ${CHECKPOINT_SAVE_PATH}/dataloader
     #--variable-seq-lengths  # for packing
     --min-num-frame 8
     --max-num-frame 32
@@ -182,7 +183,7 @@ TRAINING_ARGS=(
     --packing-buffer-size 200
     --energon-pack-algo sequential_max_images
     --allow-missing-adapter-checkpoint
-    #--sft-dataset multimodal_sharegpt
+    --sft-dataset multimodal_sharegpt
 )
 MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 4
