@@ -111,7 +111,9 @@ name_map:
       name: mlp.linear_fc2
       fp8: true
       extra: true
-    final_layernorm: decoder.final_layernorm
+    final_layernorm:
+      name: decoder.final_layernorm
+      extra: true
     word_embeddings_for_head: output_layer
     transformer_tpl: model%d
     mtp_word_embeddings: embedding.word_embeddings

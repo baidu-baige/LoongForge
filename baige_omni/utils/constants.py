@@ -86,6 +86,7 @@ class LanguageModelFamilies(_BaseFamilies):
     MINIMAX = "minimax"
     MIMO = "mimo"
 
+
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""
 

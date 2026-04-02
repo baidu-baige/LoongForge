@@ -384,7 +384,7 @@ def rotary_fwd_q_kernel_non_interleaved(
     """
     Triton kernel for forward pass - Non-interleaved mode with configurable emb_offset.
 
-    Same math as AIAK-Megatron's rotary_fwd_q_kernel, but uses emb_offset instead of
+    Same math as Baige-Megatron's rotary_fwd_q_kernel, but uses emb_offset instead of
     hardcoded qk_head_dim so it works for both nope-first and PE-first layouts.
 
     Args:

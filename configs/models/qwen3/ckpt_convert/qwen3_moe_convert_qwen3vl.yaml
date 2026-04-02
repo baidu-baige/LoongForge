@@ -51,10 +51,10 @@ name_map:
     final_layernorm: model.language_model.norm
     word_embeddings_for_head: lm_head
   mcore:
-    word_embeddings: foundation_model.embedding.word_embeddings
-    word_position_embeddings: foundation_model.embedding.position_embeddings
+    word_embeddings: language_model.embedding.word_embeddings
+    word_position_embeddings: language_model.embedding.position_embeddings
     transformer: model
-    layer_prefix: foundation_model.decoder.layers
+    layer_prefix: language_model.decoder.layers
     input_layernorm:
       name: self_attention.linear_qkv
       is_layernorm: true
@@ -80,7 +80,7 @@ name_map:
     moe.expert_4h_to_h:
       name: linear_fc2
       extra: true
-    final_layernorm: foundation_model.decoder.final_layernorm
-    word_embeddings_for_head: foundation_model.output_layer
+    final_layernorm: language_model.decoder.final_layernorm
+    word_embeddings_for_head: language_model.output_layer
     transformer_tpl: model%d
 torch_dtype: bfloat16

@@ -62,7 +62,9 @@ name_map:
     mlp.dense_4h_to_h:
       name: mlp.linear_fc2
       extra: true
-    final_layernorm: decoder.final_layernorm
+    final_layernorm:
+      name: decoder.final_layernorm
+      extra: true
     word_embeddings_for_head: output_layer
     transformer_tpl: model%d
 torch_dtype: bfloat16

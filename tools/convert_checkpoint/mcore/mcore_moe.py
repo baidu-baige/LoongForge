@@ -9,7 +9,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 
 from convert_checkpoint.mcore.mcore_base import McoreBase
@@ -30,9 +29,8 @@ class McoreMoe(McoreBase):
         McoreMoe
     """
 
-    def __init__(self, c_config):
-        super().__init__(c_config)
-        self.args = parse_args()
+    def __init__(self, c_config, args):
+        super().__init__(c_config, args)
 
     def common_e_to_mcore(self, expert_name, name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
                           ep_id=None, expert_id=None, layer_prefix=None, name_prefix=None):
@@ -88,6 +86,8 @@ class McoreMoe(McoreBase):
             else:
                 et = mt
                 t = etp_to_tp[et]
+            if mt not in m_dict:
+                continue
             m_dict[mt][t_name][f"{mcore_weight_path}"] = weight_list[mt]
             if bias_list is not None:
                 m_dict[mt][t_name][f"{mcore_bias_path}"] = bias_list[mt]

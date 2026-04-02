@@ -1000,6 +1000,28 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--save-hf",
+        type=str,
+        default='false',
+        choices=['true', 'false'],
+        help="Save HF checkpoint at the end of training. Choices: [true, false]. Default: true."
+    )
+
+    group.add_argument(
+        "--save-hf-path",
+        type=str,
+        default=None,
+        help="Path to save the HF model checkpoint. If not specified, will save to <save>/release_hf_weights/"
+    )
+
+    group.add_argument(
+        "--encoder-tensor-model-parallel-size",
+        type=int,
+        default=None,
+        help="Encoder Tensor Model Parallel Size for Heterogeneous TP Training.",
+     )
+
+    group.add_argument(
         "--legacy-reporting-loss-reduction",
         action="store_true",
         help="Use legacy loss reduction method for backward compatibility. Default: False"

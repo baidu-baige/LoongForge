@@ -41,3 +41,5 @@ untie_embeddings_and_output_weights: true
 apply_rope_fusion: false  # no support rope fusion yet
 multi_latent_attention: true
 model_type: "deepseek"
+
+convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_2_convert.yaml

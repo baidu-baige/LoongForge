@@ -45,6 +45,7 @@ def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
         or "self_attention.k_layernorm._extra_state" in key
         or "linear_fc1._extra_state" in key
         or "linear_fc2._extra_state" in key
+        or "final_layernorm._extra_state" in key
     ]
 
     for key in keys_to_remove:

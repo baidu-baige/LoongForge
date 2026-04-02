@@ -31,6 +31,8 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     model_type: str = None
     model_spec: Optional[List[str]] = None
     peft_config: Optional[BasePeftModelConfig] = None
+    convert_file: str = None
+
     def __post_init__(self):
         PretrainedConfig.__init__(self)
         TransformerConfig.__post_init__(self)
@@ -44,6 +46,8 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     model_type: str = None
     model_spec: Optional[List[str]] = None
     peft_config: Optional[BasePeftModelConfig] = None
+    convert_file: str = None
+
     def __post_init__(self):
         PretrainedConfig.__init__(self)
         MLATransformerConfig.__post_init__(self)

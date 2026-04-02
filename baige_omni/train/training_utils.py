@@ -138,6 +138,21 @@ from baige_omni.data.dp_balance.wrapper.dp_balance.training_wrapper import (
 )
 
 
+# Add project root to Python path
+import sys
+import os
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Add tools directory to Python path
+tools_path = os.path.join(project_root, "tools")
+if tools_path not in sys.path:
+    sys.path.insert(0, tools_path)
+
+from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+from dist_checkpoint.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
+
 try:
     from inspector.hooks import register_hooks
 
@@ -530,6 +545,16 @@ def pretrain(
             write_to_tensorboard=not args.skip_train,
             non_loss_data_func=non_loss_data_func,
         )
+    
+    # Save HF checkpoint at the end of training if --save-hf is enabled
+    save_hf_enabled = getattr(args, 'save_hf', 'false').lower() == 'true'
+    if save_hf_enabled and iteration == args.train_iters:
+        # Set default save_hf_path if not specified
+        if getattr(args, 'save_hf_path', None) is None and args.save is not None:
+            args.save_hf_path = os.path.join(args.save, "release_hf_weights/")
+
+        # Save HF checkpoint
+        save_hf_checkpoint_online(model, args)
 
     wandb_writer = get_wandb_writer()
     if wandb_writer:
@@ -991,9 +1016,21 @@ def setup_model_and_optimizer(
             and checkpoint_exists(args.pretrained_checkpoint)
         )
 
+    # Check if it's offline (pre-converted sharded checkpoint) or online (HF checkpoint)
+    # by checking if latest_checkpointed_iteration.txt exists in load path
+    def _is_hf_checkpoint(load_path):
+        if load_path is None:
+            return False
+        import os
+        safe_index_path = os.path.join(load_path, "model.safetensors.index.json")
+        safe_path = os.path.join(load_path, "model.safetensors")
+        bin_index_path = os.path.join(load_path, "pytorch_model.bin.index.json")
+        bin_path = os.path.join(load_path, "pytorch_model.bin")
+        return os.path.exists(safe_index_path) or os.path.exists(safe_path) or \
+                os.path.exists(bin_index_path) or os.path.exists(bin_path)
     if should_load_checkpoint and not args.moe_use_upcycling:
         timers("load-checkpoint", log_level=0).start(barrier=True)
-
+        # Offline checkpoint loading (pre-converted sharded checkpoint)
         args.iteration, args.num_floating_point_operations_so_far = load_checkpoint(
             model,
             optimizer,
@@ -1004,7 +1041,17 @@ def setup_model_and_optimizer(
             and args.ckpt_format == "torch_dist",
             peft_class=peft_class,
         )
-
+        timers("load-checkpoint").stop(barrier=True)
+        timers.log(["load-checkpoint"])
+    elif _is_hf_checkpoint(args.load) and not args.moe_use_upcycling:
+        # Online HF checkpoint loading
+        timers("load-checkpoint", log_level=0).start(barrier=True)
+        args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
+            model,
+            optimizer,
+            opt_param_scheduler,
+            args
+        )     
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
     else:

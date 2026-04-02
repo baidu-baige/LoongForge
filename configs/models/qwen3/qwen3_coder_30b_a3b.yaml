@@ -27,3 +27,5 @@ moe_ffn_hidden_size: 768
 rotary_emb_func: "RotaryEmbedding"
 model_type: "qwen"
 # variable_seq_lengths: true
+
+convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml

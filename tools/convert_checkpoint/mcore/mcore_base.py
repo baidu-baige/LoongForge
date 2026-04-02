@@ -11,7 +11,7 @@ from omegaconf.dictconfig import DictConfig
 logging.basicConfig(level=logging.INFO)
 
 from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import VISION_WORD_EMBEDDINGS, CommonCheckpoint
 from convert_checkpoint.utils.utils import (
     add_embedding_padding, cut_embedding_padding,
     transpose_shape0,
@@ -60,7 +60,8 @@ TENSOR_PARALLEL_DIM = {
     "word_embeddings_for_head.weight": 0,
     "mtp_word_embeddings.weight": 0,
     "mtp_shared_head_head.weight": 0,
-    "mtp_eh_proj.weight": 0
+    "mtp_eh_proj.weight": 0,
+    "vision_word_embeddings.weight": 0
 }
 
 
@@ -69,19 +70,24 @@ class McoreBase:
         McoreBase
     """
 
-    def __init__(self, c_config):
+    def __init__(self, c_config, args):
         self.c_config = c_config
-        self.args = parse_args()
+        self.args = args
+        ############ Get rid of LoRA ##############
+        args.lora_alpha = None
+        args.lora_dim = None
+        args.load_lora_ckpt_path = None
+        ###########################################
         margs = c_config.get_args("mcore")
         self.cargs = self.c_config.get_args("common")
         self.name_map = self.c_config.get("name_map")["mcore"]
         self.mcore_mixer_attn_converter = McoreMixerAttnConverter(c_config)
         self.mcore_attn_gqkv_converter = McoreAttnGateQkvConverter(c_config)
 
-        self.tp = self.args.tensor_model_parallel_size
-        self.pp = self.args.pipeline_model_parallel_size
-        self.ep = self.args.expert_parallel_size
-        self.etp = self.args.expert_tensor_parallel_size if hasattr(self.args, 'expert_tensor_parallel_size') else None
+        self.tp = args.tensor_model_parallel_size
+        self.pp = args.pipeline_model_parallel_size
+        self.ep = args.expert_parallel_size
+        self.etp = args.expert_tensor_parallel_size
 
         self.save_path = self.args.save_ckpt_path
         self.load_path = self.args.load_ckpt_path
@@ -172,12 +178,12 @@ class McoreBase:
         weight, bias, weight_scale = c_ckpt.get(common_key)
         if weight is None:
             return
-        if self.add_embed_padding and name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD]:
+        if self.add_embed_padding and name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD, VISION_WORD_EMBEDDINGS]:
             weight = add_embedding_padding(weight, self.divisible_by, self.vocab_size, self.tp, self.padded_vocab_size)
         weight_list, bias_list = self.get_chunked_weight(
                 name, self.tp, mcore_weight_path, mcore_bias_path, weight, bias, weight_scale,
                 is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
-        etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None else None
+        etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None and ep_id is not None else None
         self.update_mcore_weight(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path, has_extra_path,
                 weight_list, bias_list=bias_list, etp_to_tp=etp_to_tp, has_extra=has_extra)
@@ -195,11 +201,13 @@ class McoreBase:
         else:
             m_tp = self.etp
         for mt in range(m_tp):
-            if self.etp is None:
+            if self.etp is None or etp_to_tp is None:
                 t = mt
             else:
                 et = mt
                 t = etp_to_tp[et]
+            if mt not in m_dict:
+                continue
             m_dict[mt][t_name] = {} if t_name not in m_dict[mt] else m_dict[mt][t_name]
             m_dict[mt][t_name][mcore_weight_path] = weight_list[t]
             if mcore_bias_path is not None and bias_list is not None:
@@ -284,6 +292,8 @@ class McoreBase:
         # ep_mcore_state_dict: 
         #   etp is None: ep_id->t->dict
         #   etp is not None: ep_id->et->dict
+        if m_dict is None:
+            return
         if name not in self.name_map:
             return
         if name == MTP_WORD_EMBEDDING:
@@ -293,7 +303,7 @@ class McoreBase:
             name = WORD_EMBEDDINGS
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         need_cut_padding = self.add_embed_padding and \
-                name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD]
+                name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD, VISION_WORD_EMBEDDINGS]
         if name == MTP_SHARED_HEAD_HEAD:
             assert WORD_EMBEDDINGS_FOR_HEAD in self.name_map, \
                     f"{WORD_EMBEDDINGS_FOR_HEAD} is needed in name_map"
@@ -490,3 +500,4 @@ class McoreBase:
         """
         lora_weight = alpha / dim * (linear_out @ linear_in)
         return base_weight + lora_weight
+

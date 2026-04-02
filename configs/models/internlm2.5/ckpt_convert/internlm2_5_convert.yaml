@@ -68,7 +68,9 @@ name_map:
     mlp.dense_4h_to_h:
       name: mlp.linear_fc2
       extra: true
-    final_layernorm: language_model.decoder.final_layernorm
+    final_layernorm:
+      name: language_model.decoder.final_layernorm
+      extra: true
     word_embeddings_for_head: language_model.output_layer
     transformer_tpl: model%d
 
