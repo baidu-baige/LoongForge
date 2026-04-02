@@ -1945,6 +1945,8 @@ def train(
         and torch.distributed.get_rank() in args.profile_ranks
         and args.use_pytorch_profiler
     ):
+        if getattr(args, 'record_memory_history', False):
+            torch.cuda.memory._record_memory_history(max_entries=100000)
         prof = torch.profiler.profile(
             schedule=torch.profiler.schedule(
                 wait=max(args.profile_step_start - 1, 0),
@@ -1957,6 +1959,7 @@ def train(
             ),
             record_shapes=True,
             with_stack=True,
+            profile_memory=True,
         )
         prof.start()
 

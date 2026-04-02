@@ -8,6 +8,7 @@ BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 export TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/pi05/"}
 
 export CUDA_DEVICE_MAX_CONNECTIONS=8 # mfsdp require CUDA_DEVICE_MAX_CONNECTIONS != 1
 export USE_BF16_BUFFER=false #Dtensor not support
@@ -86,6 +87,8 @@ MODEL_CONFIG_ARGS=(
 
 LOGGING_ARGS=(
     --log-interval 1
+    # --record-memory-history
+    # --memory-snapshot-path ${TENSORBOARD_PATH}/memory_snapshots.pickle
 )
 
 PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:${PYTHONPATH:-} \
