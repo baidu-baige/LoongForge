@@ -345,6 +345,17 @@ class PaliGemmaWithExpertModel(nn.Module):
     See openpi `gemma_pytorch.py: PaliGemmaWithExpertModel` — this class is almost an exact copy.
     """
 
+    # Parameters whose dtype must remain float32 even when the rest of the model is cast to
+    # bfloat16 (e.g. by Megatron's Float16Module).  Keep this list in sync with the body of
+    # to_bfloat16_for_selected_params().
+    _FP32_PARAM_SELECTORS = [
+        "vision_tower",
+        "multi_modal_projector",
+        "input_layernorm",
+        "post_attention_layernorm",
+        "model.norm",
+    ]
+
     def __init__(
         self,
         vlm_config,
@@ -413,16 +424,8 @@ class PaliGemmaWithExpertModel(nn.Module):
 
         # Keep full vision path in float32 so we never toggle (toggle causes optimizer
         # "same dtype" error). Saves memory vs full float32; more memory than only 3 params.
-        params_to_keep_float32 = [
-            "vision_tower",
-            "multi_modal_projector",
-            "input_layernorm",
-            "post_attention_layernorm",
-            "model.norm",
-        ]
-
         for name, param in self.named_parameters():
-            if any(selector in name for selector in params_to_keep_float32):
+            if any(selector in name for selector in self._FP32_PARAM_SELECTORS):
                 param.data = param.data.to(dtype=torch.float32)
 
     def _set_requires_grad(self):
@@ -444,12 +447,28 @@ class PaliGemmaWithExpertModel(nn.Module):
             for name, buf in self.named_buffers()
             if buf is not None and not buf.is_floating_point() and not buf.is_complex()
         }
+        # Save names of fp32 parameters that must remain fp32 (vision path etc.).
+        # We record only params that are CURRENTLY fp32 to avoid forcing fp32 on params
+        # that were intentionally in a different dtype.
+        fp32_param_names = [
+            name
+            for name, param in self.named_parameters()
+            if param is not None
+            and param.dtype == torch.float32
+            and any(sel in name for sel in self._FP32_PARAM_SELECTORS)
+        ]
         super()._apply(fn, recurse)
         # Restore integer buffers to their original dtype.
         buf_dict = dict(self.named_buffers())
         for name, orig_dtype in int_buf_dtypes.items():
             if name in buf_dict and buf_dict[name] is not None:
                 buf_dict[name].data = buf_dict[name].data.to(dtype=orig_dtype)
+        # Restore fp32 parameters that must stay in float32 (e.g. vision_tower weights
+        # cast to bf16 by Megatron's Float16Module).
+        param_dict = dict(self.named_parameters())
+        for name in fp32_param_names:
+            if name in param_dict and param_dict[name] is not None:
+                param_dict[name].data = param_dict[name].data.to(dtype=torch.float32)
         return self
 
     def train(self, mode: bool = True):
@@ -467,6 +486,11 @@ class PaliGemmaWithExpertModel(nn.Module):
             if hasattr(module, 'position_ids') and module.position_ids.is_floating_point():
                 module.position_ids = module.position_ids.long()
         out_dtype = image.dtype
+        # Always run vision tower in float32 regardless of the input tensor's dtype.
+        # Float16Module.forward() converts all fp32 CUDA inputs to bf16 before calling
+        # the model, so `image` may arrive as bf16 even though vision_tower weights are
+        # kept in fp32.  We must NOT use `image.dtype` as out_dtype here — doing so would
+        # cast fp32-computed features back to bf16 and lose precision.
         if image.dtype != torch.float32:
             image = image.to(torch.float32)
         image_outputs = self.paligemma.model.get_image_features(image)
@@ -481,6 +505,19 @@ class PaliGemmaWithExpertModel(nn.Module):
         return features
 
     def embed_language_tokens(self, tokens: torch.Tensor):
+        # PaliGemma uses weight tying (embed_tokens == lm_head).  When the model
+        # is loaded via a Megatron checkpoint (non-torch ckpt_format), the
+        # _fix_pytorch_state_dict_keys remapping is bypassed, so embed_tokens
+        # stays zero-initialised while lm_head gets the correct pretrained values.
+        # Fix it lazily on the first forward pass (after load_checkpoint completes).
+        if not getattr(self, "_embed_tokens_synced", False):
+            lm = self.paligemma.model.language_model
+            lm_head_w = self.paligemma.lm_head.weight
+            embed_w = lm.embed_tokens.weight
+            if embed_w.data_ptr() != lm_head_w.data_ptr():
+                embed_w.data.copy_(lm_head_w.data)
+            self._embed_tokens_synced = True
+
         return self.paligemma.model.language_model.embed_tokens(tokens)
 
     def forward(
@@ -584,6 +621,34 @@ class PaliGemmaWithExpertModel(nn.Module):
 
 class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
     """Core PI05 PyTorch model."""
+
+    # Parameters that must remain float32 even when the rest of the model is cast to
+    # bfloat16 (e.g. by Megatron's Float16Module).  These action/time projection layers
+    # receive fp32 inputs (noisy_actions, sinusoidal time_emb) and should compute in fp32
+    # to match lerobot's reference implementation.
+    _FP32_PARAM_SELECTORS = [
+        "action_in_proj",
+        "action_out_proj",
+        "time_mlp_in",
+        "time_mlp_out",
+    ]
+
+    def _apply(self, fn, recurse=True):
+        # Save names of fp32 params that must remain fp32 after any dtype conversion.
+        fp32_param_names = [
+            name
+            for name, param in self.named_parameters()
+            if param is not None
+            and param.dtype == torch.float32
+            and any(sel in name for sel in self._FP32_PARAM_SELECTORS)
+        ]
+        super()._apply(fn, recurse)
+        # Restore action/time projection params to fp32 (e.g. after Float16Module wraps model).
+        param_dict = dict(self.named_parameters())
+        for name in fp32_param_names:
+            if name in param_dict and param_dict[name] is not None:
+                param_dict[name].data = param_dict[name].data.to(dtype=torch.float32)
+        return self
 
     def __init__(self, config: PI05Config, rtc_processor: RTCProcessor | None = None):
         super().__init__()
@@ -708,6 +773,12 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         num_lang_embs = lang_emb.shape[1]
         att_masks += [0] * num_lang_embs
 
+
+        # Unify dtype before cat to avoid mismatch (img_emb is fp32, lang_emb may be bf16).
+        # We upcast to fp32 here; the caller (forward()) will cast back to the language model's dtype.
+        target_dtype = torch.float32
+        embs = [e.to(target_dtype) if e.dtype != target_dtype else e for e in embs]
+
         embs = torch.cat(embs, dim=1)
         pad_masks = torch.cat(pad_masks, dim=1)
         att_masks = torch.tensor(att_masks, dtype=torch.bool, device=pad_masks.device)
@@ -723,6 +794,8 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         pad_masks = []
         att_masks = []
 
+        # Cast inputs to match model weight dtype to avoid float32/bfloat16 mismatch
+        noisy_actions = noisy_actions.to(dtype=self.action_in_proj.weight.dtype)
         # Embed timestep using sine-cosine positional encoding
         time_emb = create_sinusoidal_pos_embedding(
             timestep,
@@ -810,7 +883,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         )
 
         suffix_out = suffix_out[:, -self.config.chunk_size :]
-        suffix_out = suffix_out.to(dtype=torch.float32)
+        suffix_out = suffix_out.to(dtype=self.action_out_proj.weight.dtype)
 
         def action_out_proj_func(suffix_out):
             return self.action_out_proj(suffix_out)

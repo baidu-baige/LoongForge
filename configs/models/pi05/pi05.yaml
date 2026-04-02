@@ -1,6 +1,7 @@
 model_type: pi05
 # Instantiate the local pi05 config.
 _target_: baige_omni.models.embodied.PI05Config
+max_state_dim: 8
 # Megatron-lite defaults for the pi05 sanity run.
 num_layers: 40
 hidden_size: 5120
