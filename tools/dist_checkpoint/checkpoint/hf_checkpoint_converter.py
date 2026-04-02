@@ -46,6 +46,7 @@ class HfCheckpointConverter:
         self.args.lora_alpha = parallel_config.lora_alpha
         self.args.lora_dim = parallel_config.lora_dim
         self.args.vit_in_first_virtual_stage_only = False
+        self.args.enable_full_hetero_dp = parallel_config.enable_full_hetero_dp
         self.ep_size = parallel_config.ep_size
         self.pp_ranks = parallel_config.pp_ranks
         self.ep_ranks = parallel_config.ep_ranks
@@ -90,7 +91,8 @@ class HfCheckpointConverter:
             self.hf_ckpt.load(ckpt_path, self.args.safetensors, self.config, self.layer_ids, expert_ids=expert_ids,
                          mtp_num_layers=self.args.mtp_num_layers)
             c_ckpt = self.hf_ckpt.convert_to_common(cur_layer_dict, expert_dict=self.expert_dict)
-            if p > 0 or self.vision_patch_config is None:
+            no_encoder: bool = self.vision_patch_config is None or (not self.args.enable_full_hetero_dp and p > 0)
+            if no_encoder:
                 mcore_dict[p] = self.m_ckpt.convert_from_common(
                         c_ckpt, None, cur_layer_dict, expert_dict=self.expert_dict, save_file=False,
                         tp_ranks=self.tp_ranks, etp_ranks=self.etp_ranks)[p]

@@ -144,7 +144,7 @@ class Parser:
             'vpp_scheduler', 'tp_ranks', 'pp_ranks', 'ep_ranks',
             'etp_ranks', 'safetensors',
             'max_workers', 'fp8_force_no_requant', 'force_pow_2_scales',
-            'amax_epsilon', 'mtp_num_layers', 'lora_alpha', 'lora_dim'
+            'amax_epsilon', 'mtp_num_layers', 'lora_alpha', 'lora_dim', 'enable_full_hetero_dp'
         ]
 
         for field in parallel_fields:

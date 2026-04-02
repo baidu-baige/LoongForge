@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 import concurrent.futures
 from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.common.common_checkpoint import VISION_MAP, CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
 from convert_checkpoint.mcore.mcore_base import McoreBase
 from convert_checkpoint.mcore.mcore_moe import McoreMoe
 from convert_checkpoint.utils.utils import (
@@ -185,6 +185,9 @@ class McoreCheckpoint(AbstractCheckpoint):
                 for c_name in name_map.keys():
                     if c_name.startswith(VISION_MAP):
                         self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
+            elif self.args.enable_full_hetero_dp:
+                t_name = self.get_transformer_name(0)
+                self.m_base.common_to_mcore(VISION_WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
@@ -603,6 +606,7 @@ class McoreCheckpoint(AbstractCheckpoint):
     @staticmethod
     def convert_from_common_vlm(m_ckpt, m_vision_ckpt, c_vision_patch_config, c_ckpt, c_vision_ckpt, target_c_config,
                             target_c_vision_config, save_path, layer_dict, expert_dict, save_file=True):
+        p = list(layer_dict.keys())[0]
         vision_num_layers = c_vision_patch_config.get_args("common")["num_layers"]
         vision_layer_dict = {}
         vision_layer_dict[0] = list(range(vision_num_layers))
@@ -613,36 +617,36 @@ class McoreCheckpoint(AbstractCheckpoint):
             done_dir = os.path.join(save_path, "dones")
             need_check_dones, done_keys = McoreCheckpoint.get_need_check_dones(done_dir, layer_dict, expert_dict)
             if need_check_dones:
-                if 0 in done_keys:
-                    logging.info(f"> p: 0 already converted. pass...")
+                if p in done_keys:
+                    logging.info(f"> p: {p} already converted. pass...")
                     return
             release_dir, save_margs = m_ckpt.pre_save(save_path, target_c_config)
-        layer_ids = layer_dict[0]
+        layer_ids = layer_dict[p]
         if expert_dict is None:
-            for t in state_dict[0].keys():
+            for t in state_dict[p].keys():
                 encode_t = t % encoder_tp
-                for model in state_dict[0][t].keys():
+                for model in state_dict[p][t].keys():
                     if model in ("model", "model0"):
-                        state_dict[0][t][model].update(vision_dict[0][encode_t][model])
+                        state_dict[p][t][model].update(vision_dict[0][encode_t][model])
                 if save_file:
                     m_ckpt.save_model_file(
-                        release_dir, save_margs, 0, t, None, state_dict[0][t], None, layer_ids)
+                        release_dir, save_margs, p, t, None, state_dict[p][t], None, layer_ids)
             if save_file:
-                touch_file(done_dir=done_dir, p=0, ep_id=None)
-                logging.info(f"Finish saving p=0 ep_id=None {layer_ids=}.")
+                touch_file(done_dir=done_dir, p=p, ep_id=None)
+                logging.info(f"Finish saving {p=} ep_id=None {layer_ids=}.")
         else:
-            for e, t_v in state_dict[0].items():
+            for e, t_v in state_dict[p].items():
                 for t in t_v.keys():
                     encode_t = t % encoder_tp
-                    for model in state_dict[0][e][t].keys():
+                    for model in state_dict[p][e][t].keys():
                         if model in ("model", "model0"):
-                            state_dict[0][e][t][model].update(vision_dict[0][encode_t][model])
+                            state_dict[p][e][t][model].update(vision_dict[0][encode_t][model])
                     if save_file:
                         m_ckpt.save_model_file(
-                            release_dir, save_margs, 0, t, e, state_dict[0][e][t], None, layer_ids)
+                            release_dir, save_margs, p, t, e, state_dict[p][e][t], None, layer_ids)
                 if save_file:
-                    touch_file(done_dir=done_dir, p=0, ep_id=e)
-                    logging.info(f"Finish saving p=0 ep_id={e} {layer_ids=}.")
+                    touch_file(done_dir=done_dir, p=p, ep_id=e)
+                    logging.info(f"Finish saving {p=} ep_id={e} {layer_ids=}.")
         if not save_file:
             return state_dict
 

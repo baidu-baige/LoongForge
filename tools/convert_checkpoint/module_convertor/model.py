@@ -102,6 +102,7 @@ class Model():
         visual_args.lora_alpha = args.lora_alpha
         visual_args.lora_dim = args.lora_dim
         visual_args.vit_in_first_virtual_stage_only = False
+        visual_args.enable_full_hetero_dp = args.enable_full_hetero_dp
         return visual_args
 
     def convert_from_common(self, platform, target_c_config, layer_dict, expert_dict=None, target_c_vision_config=None):
@@ -119,7 +120,8 @@ class Model():
         if platform == 'mcore':
             (tp, pp, vpp), (ep, etp) = Model.get_pipeline_args(args, self.config)
             m_ckpt = McoreCheckpoint(self.config, args)
-            if p > 0 or self.c_vision_patch_config is None:
+            no_encoder: bool = self.c_vision_patch_config is None or (not args.enable_full_hetero_dp and p > 0)
+            if no_encoder:
                 m_ckpt.convert_from_common(self.c_ckpt, target_c_config, layer_dict, expert_dict=expert_dict)
             else:
                 visual_model_id = 0 if vpp > 1 else None
@@ -191,7 +193,8 @@ class Model():
             hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids,
                          mtp_num_layers=mtp_num_layers)
             self.c_ckpt = hf_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
-            if p == 0 and self.c_vision_patch_config is not None:
+            has_encoder: bool = self.c_vision_patch_config is not None and (args.enable_full_hetero_dp or p == 0)
+            if has_encoder:
                 visual_args = Model.get_visual_args(args)
                 hf_vision_ckpt = HuggingFaceCheckpoint(self.c_vision_patch_config, visual_args)
                 vision_num_layers = self.c_vision_patch_config.get_args("common")["num_layers"]
