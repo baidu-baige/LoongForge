@@ -4,14 +4,13 @@ export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
 CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 
-SAVE=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-hf-Dec22
-LOAD=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Original/release
-OMNI_LOAD=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15/release
+LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/
+SAVE=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-hf
-SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-hf
-SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-hf
-SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-hf
+SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-mcore
+SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
+SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
+SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
 
 MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml
 
@@ -19,15 +18,15 @@ FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen2.5/ckpt_convert/q
 IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
 IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
 
-
-PP=1
 ETP=1
 DTP=1
+PP=1
+
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
-    --load_platform=mcore \
-    --save_platform=huggingface \
+    --load_platform=huggingface \
+    --save_platform=mcore \
     --config_file $MODEL_CONFIG_FILE \
     --convert_file $FOUNDATION_CONVERT_FILE \
     --adapter_convert_file $IMAGE_PROJECTOR_CONVERT_FILE \
@@ -37,6 +36,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --pipeline_model_parallel_size=$PP \
     --load_ckpt_path=$LOAD \
     --save_ckpt_path=$SAVE \
+    --enable-full-hetero-dp \
     --safetensors \
     --no_save_optim \
     --no_load_optim

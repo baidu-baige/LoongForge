@@ -34,4 +34,5 @@ class ParallelConfig:
     mtp_num_layers: int = 0
     lora_alpha: int = None
     lora_dim: int = None
+    enable_full_hetero_dp: bool = False
 

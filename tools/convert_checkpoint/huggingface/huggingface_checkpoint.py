@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 import concurrent.futures
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
 from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import VISION_MAP, CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
 
 from convert_checkpoint.utils.utils import (
     get_done_keys,
@@ -31,7 +31,7 @@ from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 from convert_checkpoint.huggingface.huggingface_moe import HuggingfaceMoe
 
-def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mtp_num_layers=0):
+def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mtp_num_layers=0, args=None):
     name_map = c_config.get("name_map")["huggingface"]
     cargs = c_config.get_args("common")
     hargs = c_config.get_args("huggingface")
@@ -50,6 +50,12 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                 name = name_map[c_name] + ".weight"
                 if name in weight_map:
                     filenames_in_the_layer.add(weight_map[name])
+    if args is not None and args.enable_full_hetero_dp:
+        c_name = VISION_WORD_EMBEDDINGS
+        if c_name in name_map and name_map[c_name] is not None:
+            name = name_map[c_name] + ".weight"
+            if name in weight_map:
+                filenames_in_the_layer.add(weight_map[name])
 
     if 0 in layer_ids:
         for c_name in name_map.keys():
@@ -292,6 +298,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             for c_name in name_map.keys():
                 if c_name.startswith(VISION_MAP):
                     self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
+        elif self.args.enable_full_hetero_dp:
+            self.h_base.hf_to_common(VISION_WORD_EMBEDDINGS, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
             hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
@@ -350,7 +358,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
                 checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
-                                                           mtp_num_layers=mtp_num_layers)
+                                                           mtp_num_layers=mtp_num_layers, args=self.args)
                 self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
         else:
@@ -366,7 +374,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
                 checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
-                                                           mtp_num_layers=mtp_num_layers)
+                                                           mtp_num_layers=mtp_num_layers, args=self.args)
                 self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, max_workers=self.args.max_workers)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 

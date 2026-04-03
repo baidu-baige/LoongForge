@@ -107,7 +107,12 @@ def _add_checkpoint_args(parser):
     group.add_argument('--adapter_convert_file', type=str, default=None, help="Convert file for adapter.")
     group.add_argument('--vision_patch_convert_file', type=str, default=None, help="Convert file for vision_patch.")
     group.add_argument("--encoder_tensor_model_parallel_size", type=int, default=None, help="Tensor parallel size for encoder.")
-
+    group.add_argument(
+        '--enable-full-hetero-dp',
+        default=False,
+        action="store_true",
+        help="Enable full heterogeneous data parallelism. Default: False"
+    )
 def _add_common_args(parser):
     group = parser.add_argument_group(title='common')
 
