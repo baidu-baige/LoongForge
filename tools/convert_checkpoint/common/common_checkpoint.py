@@ -106,6 +106,11 @@ MTP_MOE_EXPERT_4H_TO_H = "mtp_moe.expert_4h_to_h"
 MTP_MOE_SHARED_EXPERT_H_TO_4H = "mtp_moe.shared_expert_h_to_4h"
 MTP_MOE_SHARED_EXPERT_4H_TO_H = "mtp_moe.shared_expert_4h_to_h"
 
+# =========quant_type==========
+QUANT_DTYPE_FP8 = "fp8"
+QUANT_DTYPE_BF16 = "bf16"
+QUANT_HF_BF16_AND_MCORE_FP8 = "hf_bf16_and_mcore_fp8"
+
 # =========vision=========
 VISION_MAP = "vision_map"
 VISION_WORD_EMBEDDINGS = "vision_word_embeddings"
@@ -146,6 +151,7 @@ LAYER_NO_LAYER_ID = "no_layer_id"
 LAYER_DEPEND_ON_KEY = "depend_on_key"
 LAYER_IS_DICT_FOR_EXPERT = "is_dict_for_expert"
 LAYER_NEED_TRANSPOSE = "need_transpose"
+LAYER_DTYPE = "dtype"
 
 class CommonCheckpoint(AbstractCheckpoint):
     """

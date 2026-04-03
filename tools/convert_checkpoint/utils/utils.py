@@ -579,9 +579,9 @@ def get_quantizer_with_weight_scale_inv(weight, weight_scale_inv, dtype, amax_ep
     qx._rowwise_scale_inv[:weight_scale_inv.size(0), :weight_scale_inv.size(1)].copy_(weight_scale_inv)
     return qx
 
-def per_block_dequant_from_fp8(fp8_blocks: torch.Tensor,
-                                scales: torch.Tensor,
-                                dtype: torch.dtype = torch.bfloat16) -> torch.Tensor:
+def convert_fp8_to_bf16(fp8_blocks: torch.Tensor,
+                        scales: torch.Tensor,
+                        dtype: torch.dtype = torch.bfloat16) -> torch.Tensor:
     """
     Dequantizes a tensor from FP8, assuming `fp8_blocks` has the original, unpadded shape.
 
@@ -627,7 +627,7 @@ def per_block_dequant_from_fp8(fp8_blocks: torch.Tensor,
 
     return x_recon
 
-def per_block_cast_to_fp8(
+def convert_bf16_to_fp8(
     x: torch.Tensor,
     method: Literal["te", "pt", "baige"] = 'te',
     fp8_dtype: torch.dtype = torch.float8_e4m3fn,

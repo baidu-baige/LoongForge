@@ -60,7 +60,9 @@ name_map:
     mtp_word_embeddings: embed_tokens
     mtp_enorm: enorm
     mtp_hnorm: hnorm
-    mtp_eh_proj: eh_proj
+    mtp_eh_proj:
+      name: eh_proj
+      dtype: bf16
     mtp_shared_head_norm: shared_head.norm
     mtp_shared_head_head: shared_head.head
   mcore:
@@ -142,7 +144,9 @@ name_map:
     mtp_word_embeddings: embedding.word_embeddings
     mtp_enorm: enorm
     mtp_hnorm: hnorm
-    mtp_eh_proj: eh_proj
+    mtp_eh_proj:
+      name: eh_proj
+      dtype: fp8
     mtp_shared_head_norm:
       name: final_layernorm
       extra: true
