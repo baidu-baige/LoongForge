@@ -22,10 +22,12 @@ from baige_omni.train.initialize import (
     mpu,
     change_parallel_state, 
     get_encoder_dp_size,
+    get_num_micro_batches_per_decoder_dp,
 )
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_init_chunk_handler,
 )
+from megatron.training import print_rank_0
 
 class OmniCombinationModel(BaseMegatronModule):
     """Omni multimodal combination model"""
@@ -134,7 +136,10 @@ class OmniCombinationModel(BaseMegatronModule):
         assert len(input_tensor) == 1, "input_tensor should only be length 1 for llava"
 
         if self.add_encoder and self.add_decoder:
-            self.encoder_model.set_input_tensor(input_tensor[0])
+            if self.pre_process:
+                self.encoder_model.set_input_tensor(input_tensor[0])
+            else:
+                self.foundation_model.set_input_tensor(input_tensor[0])
         elif self.add_encoder:
             self.encoder_model.set_input_tensor(input_tensor[0])
         elif self.pre_process:
@@ -183,41 +188,52 @@ class OmniCombinationModel(BaseMegatronModule):
                     param.offloading_activation = False
             self.disable_param_offloading = False
 
-    def hetero_dp_get_tensor_shape(self, group, src, local_rank, forward_group_id, tensor_name, idx=None):
+    def hetero_dp_get_tensor_shape(
+        self, group, src, local_rank, forward_group_id=None, tensor_name=None,
+        idx=None, local_tensor=None
+    ):
         """Broadcast the shape of a tensor from src rank to all ranks in the group.
-        
-        Src rank reads the actual shape from vit_contexts; non-src ranks allocate
-        a zero tensor of the same ndim. Supports indexed access via idx.
+
+        If local_tensor is provided it is used directly; otherwise the tensor is
+        looked up from vit_contexts[forward_group_id][tensor_name] (with optional
+        indexed access via idx).  Non-src ranks only need local_tensor for its
+        ndim so that they can allocate a zero-filled shape buffer of the right
+        length before the broadcast.
         """
-        local_tensor = self.vit_contexts[forward_group_id][tensor_name]
-        if idx is not None:
-            local_tensor = local_tensor[idx]
+        if local_tensor is None:
+            local_tensor = self.vit_contexts[forward_group_id][tensor_name]
+            if idx is not None:
+                local_tensor = local_tensor[idx]
         if local_rank == src:
             shape = torch.tensor(local_tensor.shape, dtype=torch.long, device='cuda')
         else:
             shape = torch.zeros(local_tensor.dim(), dtype=torch.long, device='cuda')
-        
+
         torch.distributed.broadcast(shape, group=group, src=src)
 
         return shape
 
     def hetero_dp_get_tensor(
-        self, group, src, local_rank, forward_group_id, tensor_name, 
-        shape, needs_grad=True, idx=None
+        self, group, src, local_rank, forward_group_id=None, tensor_name=None,
+        shape=None, needs_grad=True, idx=None, local_tensor=None
     ):
         """Broadcast a tensor from src rank to all ranks in the group.
-        
-        Src rank detaches the tensor from vit_contexts; non-src ranks allocate
-        a zero tensor. Optionally enables grad and supports indexed access.
+
+        If local_tensor is provided it is used directly; otherwise the tensor is
+        looked up from vit_contexts[forward_group_id][tensor_name] (with optional
+        indexed access via idx).  Non-src ranks only need local_tensor for its
+        dtype so that they can allocate a correctly-typed zero buffer before the
+        broadcast.
         """
-        local_tensor = self.vit_contexts[forward_group_id][tensor_name]
-        if idx is not None:
-            local_tensor = local_tensor[idx]
+        if local_tensor is None:
+            local_tensor = self.vit_contexts[forward_group_id][tensor_name]
+            if idx is not None:
+                local_tensor = local_tensor[idx]
         if local_rank == src:
             tensor = local_tensor.detach()
         else:
             tensor = torch.zeros(tuple(shape.tolist()), dtype=local_tensor.dtype, device='cuda')
-        
+
         if needs_grad:
             tensor.requires_grad_(needs_grad)
 
@@ -244,6 +260,7 @@ class OmniCombinationModel(BaseMegatronModule):
         batch_list: Optional[list] = None,
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
+        enable_full_hetero_dp: bool = False,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Forward pass supporting multiple execution paths.
@@ -266,7 +283,7 @@ class OmniCombinationModel(BaseMegatronModule):
         if use_inference_kv_cache:
             vision_embeddings = None
         elif self.add_encoder:
-            if not enable_encoder_hetero_dp:
+            if not enable_encoder_hetero_dp and not enable_full_hetero_dp:
                 combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = self.encoder_model(
                     input_ids=input_ids,
                     position_ids=position_ids,
@@ -428,6 +445,91 @@ class OmniCombinationModel(BaseMegatronModule):
                         )
                     )
                     deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
+
+        if self.add_encoder and mpu.is_pipeline_first_stage() and enable_full_hetero_dp:
+            from baige_omni.train.pretrain.pretrain_vlm import (
+                get_grad_list, get_embedding_list,
+                get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
+                get_deepstack_grad_list,
+            )
+            from baige_omni.train.initialize import get_model_size
+            group = mpu.get_tensor_model_parallel_group()
+            src_rank = torch.distributed.get_global_rank(group, 0)
+            local_rank = torch.distributed.get_rank()
+
+            embedding_list = get_embedding_list()
+            visual_pos_masks_list = get_visual_pos_masks_list()
+            deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
+            model_size = get_model_size()
+            round_num = forward_group_id // model_size
+            inner_num = forward_group_id % model_size
+
+            # src rank broadcasts its actual embedding; other ranks supply only a
+            # dtype/ndim reference so the helpers can allocate the right buffer.
+            ref_tensor = self.vit_contexts[round_num]["local_embedding"]
+            local_tensor = embedding_list[round_num][inner_num] if local_rank == src_rank else ref_tensor
+
+            shape = self.hetero_dp_get_tensor_shape(
+                group, src_rank, local_rank, local_tensor=local_tensor
+            )
+            combined_embeddings = self.hetero_dp_get_tensor(
+                group, src_rank, local_rank, shape=shape, local_tensor=local_tensor
+            )
+
+            def full_hetero_dp_grad_hook_factory(group):
+                def hook(grad):
+                    if torch.distributed.get_rank(group=group) == 0:
+                        grad = grad.clone()
+                        get_grad_list().append(grad)
+                return hook
+
+            combined_embeddings.register_hook(
+                full_hetero_dp_grad_hook_factory(group)
+            )
+
+            if self.config.context_parallel_size > 1:
+                combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+            if self.config.sequence_parallel:
+                combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+
+            if self.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
+                ref_masks = self.vit_contexts[round_num]["local_visual_pos_masks"]
+                local_masks = visual_pos_masks_list[round_num][inner_num] if local_rank == src_rank else ref_masks
+                shape = self.hetero_dp_get_tensor_shape(
+                    group, src_rank, local_rank, local_tensor=local_masks
+                )
+                visual_pos_masks = self.hetero_dp_get_tensor(
+                    group, src_rank, local_rank, shape=shape,
+                    local_tensor=local_masks, needs_grad=False,
+                )
+
+            if self.vit_contexts[round_num]["local_deepstack_visual_embeds"] is not None:
+                ref_embeds = self.vit_contexts[round_num]["local_deepstack_visual_embeds"]
+
+                def full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i):
+                    def hook(grad):
+                        if torch.distributed.get_rank(group=group) == 0:
+                            get_deepstack_grad_list()[round_num][i][inner_num] = grad.clone()
+                    return hook
+
+                deepstack_visual_embeds = []
+                for i in range(len(ref_embeds)):
+                    local_embed = (
+                        deepstack_visual_embeds_list[round_num][i][inner_num] 
+                        if local_rank == src_rank 
+                        else ref_embeds[i]
+                    )
+                    shape = self.hetero_dp_get_tensor_shape(
+                        group, src_rank, local_rank, local_tensor=local_embed
+                    )
+                    embed = self.hetero_dp_get_tensor(
+                        group, src_rank, local_rank, shape=shape, local_tensor=local_embed,
+                    )
+                    embed.register_hook(
+                        full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i)
+                    )
+                    deepstack_visual_embeds.append(embed)
 
         extra_kwargs = {
             "visual_pos_masks": visual_pos_masks,

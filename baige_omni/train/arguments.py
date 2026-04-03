@@ -1231,6 +1231,13 @@ def _add_extra_parallel_args(parser):
              "Allows different DP degrees for encoder vs decoder. Default: False"
     )
 
+    group.add_argument(
+        '--enable-full-hetero-dp',
+        default=False,
+        action="store_true",
+        help="Enable full heterogeneous data parallelism. Default: False"
+    )
+
     # Data parallelism load balancing
     group.add_argument(
         '--use-dp-balance',
