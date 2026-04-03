@@ -30,6 +30,7 @@
 * **Custom Fused Operators**: High-performance fused operators like FusedDSA, which integrates flashmla and indexer forward operators with custom backward operators (essential for training) to accelerate DSA model training.
 * **Versatile Pipeline & Tools**: Out-of-the-box support for Pretrain, MidTrain, SFT, and LoRA. Includes tools for dataset processing (e.g., format conversion, packing..) and bidirectional Megatron ↔ HuggingFace weight conversion.
 * **Heterogeneous Hardware**: Supports training on both NVIDIA GPUs and Kunlun XPUs via a minimally intrusive plugin design.
+* **Native Hugging Face checkpoint load/save support**, eliminating the need for offline Megatron conversion.
 
 *(🔔🔔🔔 Please refer to our [Official Documentation](https://baidu-baige.github.io/BaigeOmni/) for detailed tutorials.)*
 
@@ -42,7 +43,6 @@
 * **Further enhanced kernel performance** (e.g., DSA, GatedAttention).
 * **Adaptive FP8 precision** and **advanced MoE load-balancing** strategies.
 * **Real-world application of MTP scaling** to improve speculative decoding acceptance rates.
-* **Native Hugging Face checkpoint load/save support**, eliminating the need for offline Megatron conversion.
 * ...
 
 ## 🛠️ Getting Started
