@@ -40,7 +40,7 @@ https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch2
 https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_fwd-1.0.0+2026.3.11.15.31.38-cp312-cp312-linux_x86_64.whl
 
 # flash-mla-bwd
-https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_bwd-1.0.0+10a2cc4-cp312-cp312-linux_x86_64.whl
+https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/flash_mla_bwd-1.0.0+2026.4.7.16.52.19-cp312-cp312-linux_x86_64.whl
 
 # lightning-indexer-bwd
 https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29/lightning_indexer_bwd-1.0.0-cp312-cp312-linux_x86_64.whl

@@ -70,6 +70,7 @@ def test_sparse_mla_bwd(
     dtype=torch.bfloat16,
     check_correctness=True,
     q_start_index_s=0,
+    fast_mode=False,
 ):
     # Prepare data
     q = torch.randn((B, S, H, DQKV), dtype=dtype, device="cuda").requires_grad_(True)
@@ -99,6 +100,7 @@ def test_sparse_mla_bwd(
         q_3d, kv_3d, flash_out, do_3d, indices_3d, flash_lse,
         sm_scale=sm_scale,
         q_start_index_s=q_start_index_s,
+        fast_mode=fast_mode,
     )
     torch.cuda.synchronize()
 
@@ -132,6 +134,7 @@ def test_sparse_mla_bwd(
             q_3d, kv_3d, flash_out, do_3d, indices_3d, flash_lse,
             sm_scale=sm_scale,
             q_start_index_s=q_start_index_s,
+            fast_mode=fast_mode,
         )
     torch.cuda.synchronize()
 
@@ -143,6 +146,7 @@ def test_sparse_mla_bwd(
             q_3d, kv_3d, flash_out, do_3d, indices_3d, flash_lse,
             sm_scale=sm_scale,
             q_start_index_s=q_start_index_s,
+            fast_mode=fast_mode,
         )
     end_event.record()
     torch.cuda.synchronize()
@@ -158,7 +162,7 @@ if __name__ == "__main__":
         B=1,
         S=4096,
         SKV=8192,
-        H=128,
+        H=64,
         HKV=1,
         DQKV=576,
         DV=512,
@@ -166,4 +170,5 @@ if __name__ == "__main__":
         dtype=torch.bfloat16,
         check_correctness=True,
         q_start_index_s=2048,
+        fast_mode=True,
     )

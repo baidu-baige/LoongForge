@@ -12,7 +12,7 @@ from . import _C
 if version.parse(cuda_version) >= version.parse('12.1'):
     # DeepGEMM Kernels
     from ._C import (
-        fp8_mqa_logits_bwd
+        fp8_mqa_logits_bwd,
     )
 
 # Initialize CPP modules

@@ -76,7 +76,7 @@ static void __instantiate_kernel() {{
         {}, {}, {}
     >);
 }};
-)", 
+)",
             arch, arch,
             args.num_heads, args.head_dim,
             args.is_compressed_logits,
@@ -132,13 +132,13 @@ static void smxx_fp8_mqa_logits_bwd(
     const int& seq_len_alignment
 )
 {
-    // Now only support Blackwell with num_heads = 64, max_seqlen_k = 0.
+    // Now only support Blackwell with num_heads = 64 or 32, max_seqlen_k = 0.
     DG_HOST_ASSERT(device_runtime->get_arch_major() == 10);
-    DG_HOST_ASSERT(num_heads == 64);
+    DG_HOST_ASSERT(num_heads == 64 || num_heads == 32);
     DG_HOST_ASSERT(max_seqlen_k == 0);
 
     constexpr int block_q  = 1;
-    constexpr int block_qh = 64;
+    const int block_qh = num_heads;  // block_q * num_heads = 1 * num_heads
     constexpr int block_kv = 128;
     constexpr int num_specialized_threads = 128;
     constexpr int num_sparse_load_threads = 128;
@@ -165,16 +165,19 @@ static void smxx_fp8_mqa_logits_bwd(
     const auto& tensor_map_q           = make_tma_2d_desc(q, head_dim, seq_len * num_heads, head_dim, block_qh, head_dim, head_dim);
     const auto& tensor_map_weights     = make_tma_2d_desc(weights, num_heads, seq_len, num_heads, block_q, num_heads, 0);
 
+    // smem_q_bf16 and smem_reshape_d_logit_bf16 inner dim is padded to 64 for 128B UMMA alignment.
+    const int num_heads_padded = num_heads < 64 ? 64 : num_heads;
+
     // Calculate shared memory size per stage.
     const int q_size_per_stage                    = block_q * num_heads * head_dim * static_cast<int>(q.element_size());
-    const int q_bf16_per_stage                    = block_q * num_heads * head_dim * static_cast<int>(sizeof(cutlass::bfloat16_t));
+    const int q_bf16_per_stage                    = block_q * num_heads_padded * head_dim * static_cast<int>(sizeof(cutlass::bfloat16_t));
     const int weight_size_per_stage               = block_q * num_heads * static_cast<int>(weights.element_size());
     const int kv_size_per_stage                   = block_kv * head_dim * static_cast<int>(kv.element_size());
     const int kv_bf16_per_stage                   = block_kv * head_dim * static_cast<int>(sizeof(cutlass::bfloat16_t));
     const int kv_scale_size_per_stage             = block_kv * static_cast<int>(kv_scales.element_size());
     const int topk_indices_size_per_stage         = block_q * block_kv * static_cast<int>(grad_logits.element_size());
-    const int grad_qk_logit_per_stage             = block_q * num_heads * block_kv * static_cast<int>(sizeof(cutlass::bfloat16_t));
-    const int reshape_grad_qk_logit_per_stage     = block_q * num_heads * block_kv * static_cast<int>(sizeof(cutlass::bfloat16_t));
+    const int grad_qk_logit_per_stage             = block_q * num_heads_padded * block_kv * static_cast<int>(sizeof(cutlass::bfloat16_t));
+    const int reshape_grad_qk_logit_per_stage     = block_q * num_heads_padded * block_kv * static_cast<int>(sizeof(cutlass::bfloat16_t));
 
     // Calculate shared memory size.
     int smem_size = 0;

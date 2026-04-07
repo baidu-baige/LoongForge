@@ -75,6 +75,9 @@ ext_modules.append(
         sources=[
               "src/pybind.cpp",
               "src/sm100/sparse_mla_bwd.cu",
+              "src/sm100/head128_2kernels/dq_phase_k576.cu",
+              "src/sm100/head128_2kernels/dkv_phase_k576.cu",
+              "src/sm100/head128_2kernels/fused_phase_k576.cu",
         ],
         extra_compile_args={
             "cxx": cxx_args + get_features_args(),

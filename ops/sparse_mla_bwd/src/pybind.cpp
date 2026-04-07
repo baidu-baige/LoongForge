@@ -10,6 +10,7 @@
 
 #include "params.h"
 #include "sm100/sparse_mla_bwd.h"
+#include "sm100/head128_2kernels/phase.h"
 
 #define CHECK_DEVICE(x) TORCH_CHECK(x.is_cuda(), #x " must be on CUDA")
 #define CHECK_SHAPE(x, ...) TORCH_CHECK(x.sizes() == \
@@ -33,7 +34,8 @@ std::vector<at::Tensor> sparse_prefill_bwd(
     float sm_scale,
     int d_v,
     const std::optional<at::Tensor> &topk_length,
-    int q_start_index_s
+    int q_start_index_s,
+    bool fast_mode
 ) {
     auto dprops = at::cuda::getCurrentDeviceProperties();
     bool is_sm100 = dprops->major == 10;
@@ -96,10 +98,14 @@ std::vector<at::Tensor> sparse_prefill_bwd(
     at::Tensor dQ = torch::empty({s_q, h_q, d_qk}, opts);
     at::Tensor dKV = torch::zeros({s_kv, h_kv, d_qk}, opts.dtype(torch::kFloat32));
     at::Tensor delta = torch::empty({s_q, h_q}, opts.dtype(torch::kFloat32));
+    at::Tensor s = torch::empty({s_q, h_q, topk}, opts);
+    at::Tensor ds = torch::empty({s_q, h_q, topk}, opts);
 
     CHECK_CONTIGUOUS(dQ);
     CHECK_CONTIGUOUS(dKV);
     CHECK_CONTIGUOUS(delta);
+    CHECK_CONTIGUOUS(s);
+    CHECK_CONTIGUOUS(ds);
 
     SparseAttnBwdParams params = {
         s_q, s_kv, h_q, h_kv, d_qk, d_v, topk,
@@ -130,12 +136,27 @@ std::vector<at::Tensor> sparse_prefill_bwd(
         int64_stride_to_int(dKV.stride(0)), int64_stride_to_int(dKV.stride(1)),
         int64_stride_to_int(delta.stride(0)), int64_stride_to_int(delta.stride(1)),
 
+        // Intermediate tensors (for fused mode)
+        (cutlass::bfloat16_t*)s.data_ptr(),
+        (cutlass::bfloat16_t*)ds.data_ptr(),
+        int64_stride_to_int(s.stride(0)), int64_stride_to_int(s.stride(1)),
+        int64_stride_to_int(ds.stride(0)), int64_stride_to_int(ds.stride(1)),
+
         dprops->multiProcessorCount,
         at::cuda::getCurrentCUDAStream().stream()
     };
 
-    sm100::bwd::head128::run_bwd_phase1_kernel<576>(params);
-
+    if (h_q == 128) {
+        if (fast_mode) {
+            sm100::bwd::head128_2kernels::fused::run_bwd_fused_phase_kernel<576>(params);
+        } else {
+            sm100::bwd::head128::run_bwd_phase1_kernel<576>(params);
+        }
+    } else if (h_q == 64) {
+        sm100::bwd::head64::run_bwd_phase1_kernel<576>(params);
+    } else {
+        TORCH_CHECK(false, "Sparse attention backward currently only supports h_q=128 or 64. Got h_q=", h_q);
+    }
     // Convert dKV from float32 to bfloat16
     at::Tensor dKV_bf16 = dKV.to(torch::kBFloat16);
 
@@ -144,5 +165,8 @@ std::vector<at::Tensor> sparse_prefill_bwd(
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.doc() = "FlashMLABWD";
-    m.def("sparse_prefill_bwd", &sparse_prefill_bwd);
+    m.def("sparse_prefill_bwd", &sparse_prefill_bwd, py::arg("q"), py::arg("kv"), py::arg("o"),
+          py::arg("dO"), py::arg("indices"), py::arg("lse"), py::arg("sm_scale"),
+          py::arg("d_v"), py::arg("topk_length") = py::none(),
+          py::arg("q_start_index_s") = 0, py::arg("fast_mode") = false);
 }
