@@ -44,7 +44,8 @@ from convert_checkpoint.common.common_checkpoint import (
     LAYER_NO_LAYER_ID,
     LAYER_DEPEND_ON_KEY,
     LAYER_IS_DICT_FOR_EXPERT,
-    LAYER_NEED_TRANSPOSE
+    LAYER_NEED_TRANSPOSE,
+    LAYER_DTYPE
 )
 
 from convert_checkpoint.huggingface.util.hf_attn_converter import HfAttnQkvConverter, HfAttnGateQkvConverter
@@ -90,6 +91,7 @@ class HuggingfaceBase:
         # need_transpose: whether the weight need to transpose
         # no_layer_id: whether the path has no layer id
         # depend_on_key: whether convert this key depend on one other key has value
+        # dtype: dtype for the weight (e.g., bf16, fp8)
         if isinstance(obj, dict) or isinstance(obj, DictConfig):
             hf_name = obj[LAYER_NAME]
             is_direct_name = obj[LAYER_IS_DIRECT_NAME] if LAYER_IS_DIRECT_NAME in obj else False
@@ -97,6 +99,7 @@ class HuggingfaceBase:
             need_transpose = obj.get(LAYER_NEED_TRANSPOSE, False)
             no_layer_id = obj[LAYER_NO_LAYER_ID] if LAYER_NO_LAYER_ID in obj else False
             depend_on_key = obj[LAYER_DEPEND_ON_KEY] if LAYER_DEPEND_ON_KEY in obj else None
+            dtype = obj.get(LAYER_DTYPE, None)
         else:
             hf_name = obj
             is_direct_name = False
@@ -104,7 +107,8 @@ class HuggingfaceBase:
             need_transpose = False
             no_layer_id = False
             depend_on_key = None
-        return hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key
+            dtype = None
+        return hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key, dtype
 
     #========from commmon to hf===========
     def common_to_hf(self, name, c_ckpt, h_dict, layer_id=None, hf_layer_id=None,
@@ -124,7 +128,7 @@ class HuggingfaceBase:
             assert self.use_rotary_position_embeddings, \
                     f"mcore args.use_rotary_position_embeddings is required to be set to True \
                     since we capture the rotary_emb op"
-        hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key = \
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key, _ = \
                 self.get_hf_name_and_args(self.name_map[spec_name])
         if hf_layer_id is None or no_layer_id:
             if is_direct_name:
@@ -216,7 +220,7 @@ class HuggingfaceBase:
     def update_h_to_4h(self, h_dict, name, hf_prefix_path, weight, bias, weight_scale, expert_id=None):
         if weight is None:
             return
-        hf_name, is_direct_name, is_dict_for_expert, need_transpose, _, _ = self.get_hf_name_and_args(self.name_map[name])
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose, _, _, _ = self.get_hf_name_and_args(self.name_map[name])
         weight = weight.t() if need_transpose else weight
         names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = torch.chunk(weight, len(names), dim=0)
@@ -247,11 +251,11 @@ class HuggingfaceBase:
         is_valid_name = spec_name in self.name_map and self.name_map[spec_name] is not None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
-            hf_name, is_direct_name, _, _, no_layer_id, depend_on_key = \
+            hf_name, is_direct_name, _, _, no_layer_id, depend_on_key, _ = \
                     self.get_hf_name_and_args(self.name_map[spec_name])
             if depend_on_key is not None:
                 assert depend_on_key in self.name_map, f"depend_on_key {depend_on_key} is not in self.name_map"
-                d_hf_name, is_direct_name_2, no_layer_id_2, _, _, _ = self.get_hf_name_and_args(self.name_map[depend_on_key])
+                d_hf_name, is_direct_name_2, no_layer_id_2, _, _, _, _ = self.get_hf_name_and_args(self.name_map[depend_on_key])
                 depend_weight, _, _ = self.get_weight(depend_on_key, h_dict, layer_id, hf_layer_id, layer_prefix,
                                                       expert_name, transformer, d_hf_name, is_direct_name_2, no_layer_id_2, True)
                 if depend_weight is None:
@@ -286,7 +290,7 @@ class HuggingfaceBase:
                 weight, bias, weight_scale = self.get_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
             if (name == WORD_EMBEDDINGS_FOR_HEAD or name == MTP_WORD_EMBEDDING) and weight is None and WORD_EMBEDDINGS in self.name_map:
-                hf_name, _, _, _, _, _ = self.get_hf_name_and_args(self.name_map[WORD_EMBEDDINGS])
+                hf_name, _, _, _, _, _, _ = self.get_hf_name_and_args(self.name_map[WORD_EMBEDDINGS])
                 hf_weight_path = f"{hf_name}.{WEIGHT}"
                 weight, bias, weight_scale = self.get_from_state_dict(h_dict, hf_weight_path)
         else:
@@ -365,7 +369,7 @@ class HuggingfaceBase:
         return weight, bias, weight_scale
 
     def get_h_to_4h_from_state_dict(self, name, h_dict, hf_prefix_path, expert_id=None):
-        hf_name, is_direct_name, is_dict_for_expert, need_transpose, _, _ = self.get_hf_name_and_args(self.name_map[name])
+        hf_name, is_direct_name, is_dict_for_expert, need_transpose, _, _, _ = self.get_hf_name_and_args(self.name_map[name])
         hf_names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = []
         bias_list = []

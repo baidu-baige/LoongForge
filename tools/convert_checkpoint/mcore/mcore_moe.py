@@ -38,7 +38,7 @@ class McoreMoe(McoreBase):
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
-        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
+        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, dtype) = self.get_mcore_name_and_extra(self.name_map[name])
         weight, bias, weight_scale = c_ckpt.get(common_key)
         local_eid = self.expert_local_mapping[expert_id]
         if self.args.moe_grouped_gemm:
@@ -101,7 +101,7 @@ class McoreMoe(McoreBase):
             return
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
-        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp) = self.get_mcore_name_and_extra(self.name_map[name])
+        (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, dtype) = self.get_mcore_name_and_extra(self.name_map[name])
         local_eid = self.expert_local_mapping[expert_id]
         if self.args.moe_grouped_gemm:
             m_name_prefix = self.name_map[MOE_GROUPED_GEMM_EXPERT] if name_prefix is None \

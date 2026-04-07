@@ -60,7 +60,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     if 0 in layer_ids:
         for c_name in name_map.keys():
             if c_name.startswith(VISION_MAP):
-                hf_name, _, _, _, no_layer_id, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                hf_name, _, _, _, no_layer_id, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                 for ext in ["", ".weight", ".bias"]:
                     name = hf_name + ext
                     if name in weight_map:
@@ -79,7 +79,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                 if c_name in name_map:
                     if name_map[c_name] is None:
                         continue
-                    hf_name, _, _, _, no_layer_id, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                    hf_name, _, _, _, no_layer_id, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                     if not no_layer_id:
                         continue
                     name = hf_name + ".weight"
