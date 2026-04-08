@@ -483,7 +483,7 @@ class McoreBase:
                 # ======weight need quantization when dtype is not equal =======
                 weight = convert_fp8_to_bf16(weight, weight_scale, dtype=torch.float32)
                 weight_scale = None
-        elif weight_scale is not None and quant_type == QUANT_HF_BF16_AND_MCORE_FP8:
+        elif weight_scale_list is not None and quant_type == QUANT_HF_BF16_AND_MCORE_FP8:
             # ======weight need cat and need quantization when dtype is not equal =======
             weight = self.convert_fp8s_to_bf16(name, m_tp, chunk_dim, weight_list, weight_scale_list, need_transpose=need_transpose)
             weight_scale = None
