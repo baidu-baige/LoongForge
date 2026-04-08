@@ -24,7 +24,7 @@ from tools.dist_checkpoint.core.tp_gather import TPGather
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from tools.dist_checkpoint.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
-from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints, get_etp_map
+from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints, get_etp_map, check_all_done
 from tools.convert_checkpoint.utils.config_utils import get_yaml_config
 
 
@@ -115,6 +115,7 @@ def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_pat
 def save_hf_checkpoint_online(
     model,
     args,
+    iters=None,
 ) -> None:
     """
     Save model to HF checkpoint online with distributed gathering
@@ -129,6 +130,7 @@ def save_hf_checkpoint_online(
     Args:
         model: Megatron distributed model
         args: Command line arguments with save_hf_path, yaml_file
+        iters: Iteration (optional)
 
     Returns:
         None
@@ -136,24 +138,29 @@ def save_hf_checkpoint_online(
     rank = dist.get_rank()
     world_size = dist.get_world_size()
 
+    tp_size: int = args.tensor_model_parallel_size
+    pp_size: int = args.pipeline_model_parallel_size
+    ep_size = getattr(args, 'expert_model_parallel_size', None)
+    etp_size = getattr(args, 'expert_tensor_parallel_size', None)
+
     # Set GPU device for NCCL backend
     if torch.cuda.is_available():
         local_rank = int(os.environ.get('LOCAL_RANK', 0))
         torch.cuda.set_device(local_rank)
 
+    if iters is None:
+        save_hf_path = args.save_hf_path
+    else:
+        save_hf_path = f"{args.save_hf_path}/iter_{iters}"
     print_rank_0("="*80)
     print_rank_0("Saving HF checkpoint with online gathering")
     print_rank_0("="*80)
-    print_rank_0(f"Save path: {args.save_hf_path}")
+    print_rank_0(f"Save path: {save_hf_path}")
     print_rank_0(f"World size: {world_size}")
-    ep_size = getattr(args, 'expert_model_parallel_size', None)
-    etp_size = getattr(args, 'expert_tensor_parallel_size', None)
     if ep_size is not None and ep_size > 1:
-        print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
-                    f"PP={args.pipeline_model_parallel_size}, EP={ep_size}, ETP={etp_size}")
+        print_rank_0(f"Parallel config: TP={tp_size}, PP={pp_size}, EP={ep_size}, ETP={etp_size}")
     else:
-        print_rank_0(f"Parallel config: TP={args.tensor_model_parallel_size}, "
-                    f"PP={args.pipeline_model_parallel_size}")
+        print_rank_0(f"Parallel config: TP={tp_size}, PP={pp_size}")
 
     # Step 1: Parse args to get config
     print_rank_0("Parsing config from args")
@@ -193,34 +200,14 @@ def save_hf_checkpoint_online(
         mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
         print_rank_0(f"State_dict extracted. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
-    # Prepare state_dict: ensure tensors are on GPU for NCCL gather
-    mem_before = 0.0
-    if torch.cuda.is_available():
-        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
-        torch.cuda.reset_peak_memory_stats()
-        device = torch.cuda.current_device()
-        if num_vpp_stages == 1:
-            model_state_dict = {
-                k: v.to(device) if isinstance(v, torch.Tensor) else v
-                for k, v in model_state_dict.items()
-            }
-        else:
-            model_state_dict = [
-                {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in sd.items()}
-                for sd in model_state_dict
-            ]
-        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
-        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
-        print_rank_0(f"Moved state_dict to GPU. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
+    c_config = get_yaml_config(parser.config_file, parser.convert_file, for_vlm=(parser.vision_patch_convert_file is not None))
+    c_vision_patch_config = get_yaml_config(
+        parser.config_file, parser.vision_patch_convert_file,
+        adapter_convert_file=parser.adapter_convert_file) if parser.vision_patch_convert_file is not None else None
 
     # Step 4: Initialize TPGather
     print_rank_0("Initializing TPGather...")
-    tp_gather = TPGather(topo_sharder)
-
-    # IMPORTANT: Synchronize all ranks before gather
-    # This ensures that all ranks have initialized TPGather simultaneously
-    print_rank_0("Synchronizing all ranks before gather...")
-    dist.barrier()
+    tp_gather = TPGather(topo_sharder, c_config, args, c_vision_patch_config=c_vision_patch_config)
 
     # Step 5: Gather state_dicts within TP group to TP rank 0
     print_rank_0("Gathering state_dicts within TP group...")
@@ -232,30 +219,24 @@ def save_hf_checkpoint_online(
     if num_vpp_stages == 1:
         # Non-VPP: single gather
         gathered_state_dicts = tp_gather.gather_state_dicts(model_state_dict)
+        all_ckpt_empty = all(len(d) == 0 for d in gathered_state_dicts)
     else:
         # VPP: gather each stage separately
         gathered_state_dicts = []
         for vpp_idx, sd in enumerate(model_state_dict):
             print_rank_0(f"Gathering state_dict for VPP stage {vpp_idx}...")
             gathered_state_dicts.append(tp_gather.gather_state_dicts(sd))
+        all_ckpt_empty = all(len(inner_dict) == 0 for outer_list in gathered_state_dicts for inner_dict in outer_list)
 
     if torch.cuda.is_available():
         peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
         mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
         print_rank_0(f"State_dicts gathered within TP group. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
-    # Step 6: TP rank 0 saves checkpoint using HfCheckpointConverter
-    # Dense model: tp_rank == 0 and dp_rank == 0
-    # MoE model: tp_rank == 0 and dp_rank // ep_size == 0
-    # This handles multi-node case where each node has its own dp_rank=0
-    if ep_rank is None:
-        # Dense model
-        should_save = (tp_rank == 0 and dp_rank == 0)
+    if all_ckpt_empty:
+        dist.barrier()
+        return
     else:
-        # MoE model: use ep_size from earlier (default to 1 if not set)
-        should_save = (tp_rank == 0 and dp_rank // (ep_size or 1) == 0)
-
-    if should_save:
         # Prepare mcore_dict from gathered state_dicts
         # Non-VPP: gathered_state_dicts is a list of state_dicts (one per TP rank)
         # VPP: gathered_state_dicts is a list of lists (outer: VPP stage, inner: TP rank)
@@ -287,11 +268,8 @@ def save_hf_checkpoint_online(
                 mcore_dict = {pp_rank: tp_shards}
             else:
                 # MoE model: need to organize by EP rank
-                if etp_rank is not None and args.tensor_model_parallel_size is not None \
-                    and args.expert_model_parallel_size is not None:
-                    tp_size = args.tensor_model_parallel_size
-                    ep_size = args.expert_model_parallel_size
-                    etp_size = args.expert_tensor_parallel_size
+                if etp_rank is not None and tp_size is not None and ep_size is not None \
+                        and etp_size is not None and etp_size > 0:
                     # ETP enabled: use tp_to_ep mapping
                     _, tp_to_ep = get_etp_map(
                         tp_size,
@@ -302,7 +280,7 @@ def save_hf_checkpoint_online(
                     ep_shards = {}
                     ep_ids = []
                     for tp_idx, state_dict in enumerate(gathered_state_dicts):
-                        ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_idx]
+                        ep_id = ((ep_rank * etp_size) // tp_size * tp_size // etp_size) + tp_to_ep[tp_idx]
                         if ep_id not in ep_ids:
                             ep_ids.append(ep_id)
                         if ep_id not in ep_shards:
@@ -348,11 +326,8 @@ def save_hf_checkpoint_online(
                 mcore_dict = {pp_rank: tp_shards}
             else:
                 # MoE model: need to organize by EP rank
-                if etp_rank is not None and args.tensor_model_parallel_size is not None \
-                    and args.expert_model_parallel_size is not None:
-                    tp_size = args.tensor_model_parallel_size
-                    ep_size = args.expert_model_parallel_size
-                    etp_size = args.expert_tensor_parallel_size
+                if etp_rank is not None and tp_size is not None and ep_size is not None \
+                        and etp_size is not None and etp_size > 0:
                     # ETP enabled: use tp_to_ep mapping
                     _, tp_to_ep = get_etp_map(
                         tp_size,
@@ -363,7 +338,7 @@ def save_hf_checkpoint_online(
                     ep_shards = {}
                     ep_ids = []
                     for tp_idx, vpp_state_dicts in enumerate(transposed):
-                        ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_idx]
+                        ep_id = ((ep_rank * etp_size) // tp_size * tp_size // etp_size) + tp_to_ep[tp_idx]
                         if ep_id not in ep_ids:
                             ep_ids.append(ep_id)
                         if ep_id not in ep_shards:
@@ -387,17 +362,13 @@ def save_hf_checkpoint_online(
         # IMPORTANT: Keep original pp_size but only set pp_ranks to [pp_rank]
         parallel_config.tp_ranks = list(range(len(gathered_state_dicts)))
         parallel_config.pp_ranks = [pp_rank]  # Only current pp_rank
+        parallel_config.sub_file_tag = rank
         if ep_rank is not None and etp_rank is not None:
-            parallel_config.ep_ranks = ep_ids 
+            parallel_config.ep_ranks = ep_ids
         elif ep_rank is not None and etp_rank is None:
             parallel_config.ep_ranks = [ep_rank]
 
         # Create HF converter
-        c_config = get_yaml_config(parser.config_file, parser.convert_file, for_vlm=(parser.vision_patch_convert_file is not None))
-        c_vision_patch_config = get_yaml_config(
-            parser.config_file, parser.vision_patch_convert_file,
-            adapter_convert_file=parser.adapter_convert_file) if parser.vision_patch_convert_file is not None else None
-
         hf_converter = HfCheckpointConverter(parallel_config, c_config, vision_patch_config=c_vision_patch_config)
 
         if torch.cuda.is_available():
@@ -406,7 +377,7 @@ def save_hf_checkpoint_online(
             print_rank_0(f"Mcore_dict prepared. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
 
         # Create save directory
-        os.makedirs(args.save_hf_path, exist_ok=True)
+        os.makedirs(save_hf_path, exist_ok=True)
 
         # Convert from Mcore format to HF format and save
         print_rank_0("Converting to HF format and saving...")
@@ -415,7 +386,7 @@ def save_hf_checkpoint_online(
             mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
             torch.cuda.reset_peak_memory_stats()
         try:
-            hf_converter.save_hf_ckpt(mcore_dict, args.save_hf_path)
+            hf_converter.save_hf_ckpt(mcore_dict, save_hf_path)
             if torch.cuda.is_available():
                 peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
                 mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
@@ -426,24 +397,15 @@ def save_hf_checkpoint_online(
             traceback.print_exc()
             raise
 
-    else:
-        # Non-TP rank 0 ranks in the same TP group just exit after gathering
-        pass
-
-    # Step 7: Synchronize all ranks
-    print_rank_0("Synchronizing all ranks...")
     dist.barrier()
-
     # Step 8: Global rank 0 consolidates all PP checkpoints to final location
     if rank == 0:
         print_rank_0("Starting checkpoint consolidation...")
         _consolidate_pp_checkpoints(
-            args.save_hf_path,
-            args.pipeline_model_parallel_size,
+            save_hf_path,
+            pp_size,
             original_hf_path=args.load  # Use the original HF checkpoint path for config files
         )
-
-    dist.barrier()
 
     print_rank_0("="*80)
     print_rank_0("HF checkpoint saved successfully!")

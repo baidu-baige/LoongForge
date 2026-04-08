@@ -4,16 +4,17 @@
 """Base utilities for converting common checkpoints to and from Megatron Core format."""
 
 import io
-from typing import Any
+from typing import Any, Optional
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 import torch
 import logging
 from omegaconf.dictconfig import DictConfig
+from dataclasses import dataclass
 
 logging.basicConfig(level=logging.INFO)
 
 from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import QUANT_DTYPE_BF16, QUANT_DTYPE_FP8, QUANT_HF_BF16_AND_MCORE_FP8, VISION_WORD_EMBEDDINGS, CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import EMBED_NAMES, QUANT_DTYPE_BF16, QUANT_DTYPE_FP8, QUANT_HF_BF16_AND_MCORE_FP8, VISION_WORD_EMBEDDINGS, CommonCheckpoint
 from convert_checkpoint.utils.utils import (
     add_embedding_padding, cut_embedding_padding,
     transpose_shape0,
@@ -38,6 +39,40 @@ from convert_checkpoint.common.common_checkpoint import (
 )
 
 from convert_checkpoint.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
+
+
+@dataclass
+class McorePathInfo:
+    """
+    Data class for holding mcore path information and metadata.
+
+    This class consolidates the path generation results from build_mcore_paths,
+    providing a structured way to access mcore paths and associated metadata.
+    """
+
+    name: str
+    # Path fields
+    mcore_path: str
+    mcore_weight_path: str
+    mcore_bias_path: str
+
+    # Metadata fields
+    has_extra: bool
+    is_layernorm: bool
+    is_fp8: bool
+    fp8_ignore_tp: bool
+    is_direct_name: bool
+    ignore_tp: bool
+    mcore_dtype: Any  # dtype can be None or a string like "fp8", "bf16"
+
+    # LoRA paths (optional, only set when include_lora_paths=True)
+    mcore_lora_in_path: Optional[str] = None
+    mcore_lora_out_path: Optional[str] = None
+
+    # Additional fields moved from common_to_mcore and mcore_to_common
+    common_key: Optional[str] = None  # The common checkpoint key
+    need_emb_padding: bool = False  # Whether to cut embedding padding
+
 
 TENSOR_PARALLEL_DIM = {
     "word_embeddings.weight": 0,
@@ -118,7 +153,8 @@ class McoreBase:
         self.etp_to_tp_mapping, _ = get_etp_map(self.tp, self.ep, self.etp)
 
 
-    def get_mcore_name_and_extra(self, obj):
+    @staticmethod
+    def get_mcore_name_and_extra(obj):
         if isinstance(obj, dict) or isinstance(obj, DictConfig):
             mcore_name = obj[LAYER_NAME]
             has_extra = obj[LAYER_EXTRA_DATA] if LAYER_EXTRA_DATA in obj else False
@@ -139,69 +175,163 @@ class McoreBase:
             dtype = None
         return (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, dtype)
 
-    #========to mcore===========
-    def common_to_mcore(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None,
-                        layer_prefix=None, ep_id=None, expert_name=None, name_prefix=None):
+    def build_mcore_paths(self, name, layer_id=None, m_layer_id=None, layer_prefix=None,
+                         expert_name=None, name_prefix=None, include_lora_paths=False):
+        """
+        Build mcore paths (weight_path, bias_path) and metadata for a given name.
+
+        This function consolidates the path generation logic from common_to_mcore
+        and mcore_to_common into a single reusable function.
+
+        Args:
+            name: The layer name (e.g., "attention.dense", "mlp.dense_h_to_4h")
+            layer_id: Layer ID (for layered models)
+            m_layer_id: Megatron layer ID (may differ from layer_id)
+            layer_prefix: Layer prefix (e.g., "layers")
+            expert_name: Expert name (for MoE models)
+            name_prefix: Optional name prefix
+            include_lora_paths: Whether to include LoRA adapter paths (for mcore_to_common)
+
+        Returns:
+            dict: A dictionary containing:
+                - mcore_path: The base mcore path
+                - mcore_weight_path: Path for the weight tensor
+                - mcore_bias_path: Path for the bias tensor
+                - metadata: Tuple of metadata from get_mcore_name_and_extra
+                - mcore_lora_in_path: LoRA input adapter path (if include_lora_paths)
+                - mcore_lora_out_path: LoRA output adapter path (if include_lora_paths)
+        """
         if name not in self.name_map:
-            return
-        if name == WORD_EMBEDDINGS_FOR_HEAD and (not self.untie_embeddings_and_output_weights and self.pp == 1):
-            return
-        common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
+            return None
+
+        layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         if name == MTP_WORD_EMBEDDING:
             layer_id = None
-        layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
+        common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
+        if name == MTP_SHARED_HEAD_HEAD:
+            name = WORD_EMBEDDINGS_FOR_HEAD
+            layer_id = None
+        if name == WORD_EMBEDDINGS_FOR_HEAD and not self.untie_embeddings_and_output_weights and self.pp == 1:
+            name = WORD_EMBEDDINGS
+        need_emb_padding = self.add_embed_padding and name in EMBED_NAMES
+
+        # Get metadata from name_map
         (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, mcore_dtype) = \
                 self.get_mcore_name_and_extra(self.name_map[name])
-        # ======weight need quantization when dtype is not equal begin =======
-        quant_type = None
-        if mcore_dtype is not None:
-            _, _, _, _, _, _, hf_dtype = HuggingfaceBase.get_hf_name_and_args(self.hf_name_map[name])
-            if hf_dtype is not None and hf_dtype != mcore_dtype:
-                quant_type = QUANT_HF_BF16_AND_MCORE_FP8 \
-                        if hf_dtype == QUANT_DTYPE_BF16 and mcore_dtype == QUANT_DTYPE_FP8 else None                
-        # ======weight need quantization when dtype is not equal end =======
+
+        # Build mcore_path
         if layer_id is None:
             mcore_path = mcore_name
         elif expert_name is not None:
             if expert_name not in self.name_map:
-                return
+                return None
             m_name_prefix = self.name_map[expert_name] if name_prefix is None \
                     else f"{name_prefix}.{self.name_map[expert_name]}"
             mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
         else:
             m_name_prefix = mcore_name if name_prefix is None else f"{name_prefix}.{mcore_name}"
             mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}"
+
+        # Build mcore_weight_path
         if is_direct_name:
             mcore_weight_path = mcore_path
         elif is_layernorm:
             mcore_weight_path = f"{mcore_path}.{LAYERNORM_WEIGHT}"
         else:
             mcore_weight_path = f"{mcore_path}.{WEIGHT}"
+
+        # Build mcore_bias_path
         if is_layernorm:
             mcore_bias_path = f"{mcore_path}.{LAYERNORM_BIAS}"
         else:
             mcore_bias_path = f"{mcore_path}.{BIAS}"
+
+        # Check for custom bias name mapping
         bias_name = f"{name}.{BIAS}"
         if bias_name in self.name_map:
             mcore_bias_name = self.name_map[bias_name]
             m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
-            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}"
-        has_extra_path = f"{mcore_path}.{EXTRA_DATA}"
+            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}" if layer_id is not None else mcore_bias_name
+
+        # Build LoRA paths if requested
+        mcore_lora_in_path = None
+        mcore_lora_out_path = None
+        if include_lora_paths:
+            if is_direct_name:
+                mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}"
+                mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}"
+            elif is_layernorm:
+                mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}.{LAYERNORM_WEIGHT}"
+                mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}.{LAYERNORM_WEIGHT}"
+            else:
+                mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}.{WEIGHT}"
+                mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}.{WEIGHT}"
+
+        return McorePathInfo(
+            name=name,
+            mcore_path=mcore_path,
+            mcore_weight_path=mcore_weight_path,
+            mcore_bias_path=mcore_bias_path,
+            has_extra=has_extra,
+            is_layernorm=is_layernorm,
+            is_fp8=is_fp8,
+            fp8_ignore_tp=fp8_ignore_tp,
+            is_direct_name=is_direct_name,
+            ignore_tp=ignore_tp,
+            mcore_dtype=mcore_dtype,
+            mcore_lora_in_path=mcore_lora_in_path,
+            mcore_lora_out_path=mcore_lora_out_path,
+            common_key = common_key,
+            need_emb_padding = need_emb_padding,
+        )
+
+    #========to mcore===========
+    def common_to_mcore(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None,
+                        layer_prefix=None, ep_id=None, expert_name=None, name_prefix=None):
+        if name == WORD_EMBEDDINGS_FOR_HEAD and (not self.untie_embeddings_and_output_weights and self.pp == 1):
+            return
+
+        # Build mcore paths using the unified function
+        path_info = self.build_mcore_paths(name, layer_id, m_layer_id, layer_prefix, expert_name, name_prefix)
+        if path_info is None:
+            return
+        name = path_info.name
+        mcore_path = path_info.mcore_path
+        mcore_weight_path = path_info.mcore_weight_path
+        mcore_bias_path = path_info.mcore_bias_path
+        has_extra = path_info.has_extra
+        is_fp8 = path_info.is_fp8
+        fp8_ignore_tp = path_info.fp8_ignore_tp
+        ignore_tp = path_info.ignore_tp
+        mcore_dtype = path_info.mcore_dtype
+        common_key = path_info.common_key
+        need_emb_padding = path_info.need_emb_padding
+
+        # ======weight need quantization when dtype is not equal begin =======
+        quant_type = None
+        if mcore_dtype is not None:
+            _, _, _, _, _, _, hf_dtype = HuggingfaceBase.get_hf_name_and_args(self.hf_name_map[name])
+            if hf_dtype is not None and hf_dtype != mcore_dtype:
+                quant_type = QUANT_HF_BF16_AND_MCORE_FP8 \
+                        if hf_dtype == QUANT_DTYPE_BF16 and mcore_dtype == QUANT_DTYPE_FP8 else None
+        # ======weight need quantization when dtype is not equal end =======
+        extra_path = f"{mcore_path}.{EXTRA_DATA}"
 
         weight, bias, weight_scale = c_ckpt.get(common_key)
         if weight is None:
             return
-        if self.add_embed_padding and name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD, VISION_WORD_EMBEDDINGS]:
+        if need_emb_padding:
             weight = add_embedding_padding(weight, self.divisible_by, self.vocab_size, self.tp, self.padded_vocab_size)
+        clear_source = name not in EMBED_NAMES
         weight_list, bias_list = self.get_chunked_weight(
                 name, self.tp, mcore_weight_path, mcore_bias_path, weight, bias, weight_scale,
-                is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type)
+                is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type, clear_source=clear_source)
         etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None and ep_id is not None else None
         self.update_mcore_weight(
-                m_dict, t_name, mcore_weight_path, mcore_bias_path, has_extra_path,
+                m_dict, t_name, mcore_weight_path, mcore_bias_path, extra_path,
                 weight_list, bias_list=bias_list, etp_to_tp=etp_to_tp, has_extra=has_extra)
 
-    def update_mcore_weight(self, m_dict, t_name, mcore_weight_path, mcore_bias_path, has_extra_path,
+    def update_mcore_weight(self, m_dict, t_name, mcore_weight_path, mcore_bias_path, extra_path,
                             weight_list, bias_list=None, etp_to_tp=None, has_extra=False):
         # m_dict:
         #   no etp: tp -> {layer_name -> weight}
@@ -226,9 +356,9 @@ class McoreBase:
             if mcore_bias_path is not None and bias_list is not None:
                 m_dict[mt][t_name][mcore_bias_path] = bias_list[t]
             if has_extra:
-                m_dict[mt][t_name][has_extra_path] = None
+                m_dict[mt][t_name][extra_path] = None
 
-    def get_tp_chunk_list(self, name, m_tp, chunk_dim, source, need_transpose=False):
+    def get_tp_chunk_list(self, name, m_tp, chunk_dim, source, need_transpose=False, clear_source=True):
         if source is None:
             return None
         if chunk_dim is None or m_tp == 1:
@@ -238,6 +368,8 @@ class McoreBase:
                 source = transpose_shape0(source, 2, m_tp)
             source_list = torch.chunk(source, m_tp, dim=chunk_dim)
             source_list = [s.clone() for s in source_list]
+            if clear_source:
+                source.data = torch.empty(0, device=source.device)
 
         return source_list
 
@@ -258,7 +390,7 @@ class McoreBase:
 
     def get_chunked_weight(self, name, m_tp, weight_path, bias_path, weight, bias=None,
                            weight_scale=None, is_fp8=False, fp8_ignore_tp=False, log_flag=True,
-                           ignore_tp=False, quant_type=None):
+                           ignore_tp=False, quant_type=None, clear_source=True):
         if weight is None:
             return None, None
         need_transpose = (m_tp > 1 and self.transpose_mlp_dense and \
@@ -269,11 +401,11 @@ class McoreBase:
             if ignore_tp:
                 weight_list = [weight] * m_tp
             else:
-                weight_list = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose)
+                weight_list = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose, clear_source=clear_source)
         bias_list = None
         if bias is not None:
             bias_chunk_dim = self.tensor_parallel_dim.get(f"{name}.{BIAS}", None)
-            bias_list = self.get_tp_chunk_list(name, m_tp, bias_chunk_dim, bias, need_transpose=need_transpose)
+            bias_list = self.get_tp_chunk_list(name, m_tp, bias_chunk_dim, bias, need_transpose=need_transpose, clear_source=clear_source)
         if weight_scale is None:
             if quant_type == QUANT_HF_BF16_AND_MCORE_FP8:
                 # ======weight need quantization when dtype is not equal =======
@@ -290,9 +422,9 @@ class McoreBase:
                     weight_s = [weight] * m_tp
                     weight_scale_s = [weight_scale] * m_tp
                 else:
-                    weight_s = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose)
+                    weight_s = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose, clear_source=clear_source)
                     weight_scale_s = self.get_tp_chunk_list(
-                            name, m_tp, chunk_dim, weight_scale, need_transpose=need_transpose)
+                            name, m_tp, chunk_dim, weight_scale, need_transpose=need_transpose, clear_source=clear_source)
             else:
                 # First do dequantization then re-quantize back to FP8
                 weight_bf16 = convert_fp8_to_bf16(weight, weight_scale, dtype=torch.float32)
@@ -315,70 +447,38 @@ class McoreBase:
     def mcore_to_common(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None,
                         layer_prefix=None, expert_name=None, name_prefix=None):
         # m_dict: t->dict
-        # ep_mcore_state_dict: 
+        # ep_mcore_state_dict:
         #   etp is None: ep_id->t->dict
         #   etp is not None: ep_id->et->dict
         if m_dict is None:
             return
-        if name not in self.name_map:
+
+        # Handle special case for MTP_SHARED_HEAD_HEAD
+        path_info = self.build_mcore_paths(name, layer_id, m_layer_id, layer_prefix, expert_name, name_prefix, include_lora_paths=True)
+
+        if path_info is None:
             return
-        if name == MTP_WORD_EMBEDDING:
-            layer_id = None
-        common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
-        if name == WORD_EMBEDDINGS_FOR_HEAD and not self.untie_embeddings_and_output_weights and self.pp == 1:
-            name = WORD_EMBEDDINGS
-        layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
-        need_cut_padding = self.add_embed_padding and \
-                name in [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD, VISION_WORD_EMBEDDINGS]
-        if name == MTP_SHARED_HEAD_HEAD:
-            assert WORD_EMBEDDINGS_FOR_HEAD in self.name_map, \
-                    f"{WORD_EMBEDDINGS_FOR_HEAD} is needed in name_map"
-            (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, mcore_dtype) = self.get_mcore_name_and_extra(self.name_map[WORD_EMBEDDINGS_FOR_HEAD])
-            mcore_path = mcore_name
-            need_cut_padding = True
-        else:
-            (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, mcore_dtype) = self.get_mcore_name_and_extra(self.name_map[name])
-            mcore_path = None
+        name = path_info.name
+        mcore_path = path_info.mcore_path
+        mcore_weight_path = path_info.mcore_weight_path
+        mcore_bias_path = path_info.mcore_bias_path
+        is_fp8 = path_info.is_fp8
+        fp8_ignore_tp = path_info.fp8_ignore_tp
+        ignore_tp = path_info.ignore_tp
+        mcore_dtype = path_info.mcore_dtype
+        mcore_lora_in_path = path_info.mcore_lora_in_path
+        mcore_lora_out_path = path_info.mcore_lora_out_path
+        common_key = path_info.common_key
+        need_emb_padding = path_info.need_emb_padding
+
         # ======weight need quantization when dtype is not equal begin =======
         quant_type = None
         if mcore_dtype is not None:
             _, _, _, _, _, _, hf_dtype = HuggingfaceBase.get_hf_name_and_args(self.hf_name_map[name])
             if hf_dtype is not None and hf_dtype != mcore_dtype:
                 quant_type = QUANT_HF_BF16_AND_MCORE_FP8 \
-                        if hf_dtype == QUANT_DTYPE_BF16 and mcore_dtype == QUANT_DTYPE_FP8 else None                
+                        if hf_dtype == QUANT_DTYPE_BF16 and mcore_dtype == QUANT_DTYPE_FP8 else None
         # ======weight need quantization when dtype is not equal end =======
-        if mcore_path is not None:
-            pass
-        elif layer_id is None:
-            mcore_path = mcore_name
-        elif expert_name is not None:
-            if expert_name not in self.name_map:
-                return
-            m_name_prefix = self.name_map[expert_name] if name_prefix is None \
-                    else f"{name_prefix}.{self.name_map[expert_name]}"
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
-        else:
-            m_name_prefix = mcore_name if name_prefix is None else f"{name_prefix}.{mcore_name}"
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}"
-        mcore_lora_in_path = None
-        mcore_lora_out_path = None
-        if is_direct_name:
-            mcore_weight_path = mcore_path
-        elif is_layernorm:
-            mcore_weight_path = f"{mcore_path}.{LAYERNORM_WEIGHT}"
-        else:
-            mcore_weight_path = f"{mcore_path}.{WEIGHT}"
-            mcore_lora_in_path = f"{mcore_path}.{LORA_NAME_IN}.{WEIGHT}"
-            mcore_lora_out_path = f"{mcore_path}.{LORA_NAME_OUT}.{WEIGHT}"
-        if is_layernorm:
-            mcore_bias_path = f"{mcore_path}.{LAYERNORM_BIAS}"
-        else:
-            mcore_bias_path = f"{mcore_path}.{BIAS}"
-        bias_name = f"{name}.{BIAS}"
-        if bias_name in self.name_map:
-            mcore_bias_name = self.name_map[bias_name]
-            m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
-            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}"
 
         weight_list, bias_list, weight_scale_list = self.get_mcore_weight_list(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path)
@@ -401,7 +501,7 @@ class McoreBase:
                 name, self.tp, lora_in_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
             weight = self.lora_merge(weight, lora_out_weight, lora_in_weight, self.lora_alpha, self.lora_dim)
 
-        if need_cut_padding:
+        if need_emb_padding:
             weight = cut_embedding_padding(weight, self.vocab_size)
         c_ckpt.set(common_key, weight, bias=bias, weight_scale=weight_scale)
 

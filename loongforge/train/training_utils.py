@@ -567,6 +567,7 @@ def pretrain(
 
         # Save HF checkpoint
         save_hf_checkpoint_online(model, args)
+        torch.distributed.barrier()
 
     wandb_writer = get_wandb_writer()
     if wandb_writer:
@@ -1116,13 +1117,15 @@ def setup_model_and_optimizer(
 
     elif is_hf_checkpoint(args.load) and not args.moe_use_upcycling:
         # Online HF checkpoint loading
+        assert (not args.use_megatron_fsdp), "Megatron FSDP and HF checkpoint loading cannot be used together. " \
+            "Please set --use-megatron-fsdp to False."
         timers("load-checkpoint", log_level=0).start(barrier=True)
         args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
             model,
             optimizer,
             opt_param_scheduler,
             args
-        )     
+        )
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
     else:

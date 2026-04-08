@@ -70,6 +70,7 @@ from loongforge.train.parser import parse_train_args
 from loongforge.train.initialize import initialize_loongforge_megatron
 from loongforge.models.foundation.llm_model_provider import llm_model_provider
 from loongforge.models.omni_models.omni_model_provider import omni_model_provider
+from loongforge.utils import get_model_config
 
 from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 from dist_checkpoint.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
@@ -396,8 +397,16 @@ def main():
     print_rank_0("=" * 80)
     print_rank_0("Phase 1: Build Model")
     print_rank_0("=" * 80)
-    #model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
-    model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+    model_config = get_model_config()
+    is_vlm = True
+    for name in ["image_encoder", "image_projector"]:
+        if not hasattr(model_config, name):
+            is_vlm = False
+            break
+    if is_vlm:
+        model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+    else:
+        model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
     # ── Step 4: Load HF checkpoint (identical to training) ────────────────
     print_rank_0("=" * 80)

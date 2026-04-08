@@ -268,12 +268,19 @@ def _lprobe(weights, num_parts, bottleneck):
 
     return parts, bsum >= total_weight
 
-def touch_file(done_dir, p, ep_id=None):
+def get_save_file_tag(p, ep_id=None, sub_file_tag=None):
     if ep_id is None:
-        fname = f'{p}.done'
+        tag = f'{p}'
     else:
-        fname = f'{p}_{ep_id}.done'
-    done_file_name = os.path.join(done_dir, fname)
+        tag = f'{p}_{ep_id}'
+    if sub_file_tag is not None:
+        tag = f'{sub_file_tag}_{tag}'
+    return tag
+
+def touch_file(done_dir, p, ep_id=None, sub_file_tag=None):
+    tag = get_save_file_tag(p, ep_id=ep_id, sub_file_tag=sub_file_tag)
+    done_file_name = os.path.join(done_dir, f"{tag}.done")
+    os.makedirs(done_dir, exist_ok=True)
     with open(done_file_name, 'w'):
         os.utime(done_file_name, None)
 
@@ -281,12 +288,14 @@ def check_all_done(done_dir, p, ep):
     fnames = []
     if ep is None:
         for p_id in range(p):
-            fname = f'{p_id}.done'
+            tag = get_save_file_tag(p_id)
+            fname = f'{tag}.done'
             fnames.append(fname)
     else:
         for p_id in range(p):
             for ep_id in range(ep):
-                fname = f'{p_id}_{ep_id}.done'
+                tag = get_save_file_tag(p_id, ep_id=ep_id)
+                fname = f'{tag}.done'
                 fnames.append(fname)
     all_done = True
     for fname in fnames:

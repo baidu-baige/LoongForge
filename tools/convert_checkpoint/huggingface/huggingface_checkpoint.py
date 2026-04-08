@@ -17,7 +17,7 @@ from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_
 
 from convert_checkpoint.utils.utils import (
     get_done_keys,
-    touch_file,
+    touch_file
 )
 
 from convert_checkpoint.common.common_checkpoint import (
@@ -110,7 +110,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                             break
     return list(filenames_in_the_layer)
 
-def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, max_workers=1):
+def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, max_workers=1, hf_checkpoint_device="cpu"):
     """
     Merge sharded checkpoints from transformers into a single checkpoint.
 
@@ -124,9 +124,9 @@ def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, m
     current_chunks = [None] * len(checkpoint_names)
     def load_files(checkpoint_path, i):
         if load_safe:
-            current_chunks[i] = load_file(checkpoint_path, device="cpu")
+            current_chunks[i] = load_file(checkpoint_path, device=hf_checkpoint_device)
         else:
-            current_chunks[i] = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+            current_chunks[i] = torch.load(checkpoint_path, map_location=hf_checkpoint_device, weights_only=False)
         logging.info(f"Loaded huggingface checkpoint: {checkpoint_path}")
     if max_workers is None:
         for i in range(len(checkpoint_names)):
@@ -263,13 +263,19 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
     def save_ckpt_file(self, save_path, p, ep_ids, state_dict):
         done_dir = os.path.join(save_path, "dones")
         if ep_ids is None or len(ep_ids) == 0:
-            self.save(f"{save_path}/sub_checkpoint/{p}", state_dict, None)
-            touch_file(done_dir=done_dir, p=p)
+            file_tag = p
+            if self.args.sub_file_tag is not None:
+                file_tag = self.args.sub_file_tag * 1000 + p
+            self.save(f"{save_path}/sub_checkpoint/{file_tag}", state_dict, None)
+            touch_file(done_dir=done_dir, p=p, sub_file_tag=self.args.sub_file_tag)
             logging.info(f"touch file: {done_dir=}, {p=}")
         else:
-            self.save(f"{save_path}/sub_checkpoint/{p * 1000 + ep_ids[0]}", state_dict, None)
+            file_tag = p * 1000 + ep_ids[0]
+            if self.args.sub_file_tag is not None:
+                file_tag = self.args.sub_file_tag * 1000000 + file_tag
+            self.save(f"{save_path}/sub_checkpoint/{file_tag}", state_dict, None)
             for ep_id in ep_ids:
-                touch_file(done_dir=done_dir, p=p, ep_id=ep_id)
+                touch_file(done_dir=done_dir, p=p, ep_id=ep_id, sub_file_tag=self.args.sub_file_tag)
                 logging.info(f"touch file: {done_dir=}, {p=}, {ep_id=}")
 
 
@@ -350,7 +356,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             sub_dirs = [x for x in os.listdir(load_path) if x.endswith("safetensors")]
             if not os.path.exists(os.path.join(load_path, "model.safetensors.index.json")):
                 checkpoint_name = "model.safetensors"
-                self.state_dict = load_file(os.path.join(load_path, checkpoint_name), device="cpu")
+                self.state_dict = load_file(os.path.join(load_path, checkpoint_name), device=self.args.hf_checkpoint_device)
                 logging.info(f"Load HuggingFace from: {os.path.join(load_path, checkpoint_name)}")
             else:
                 meta_path = f"{load_path}/model.safetensors.index.json"
@@ -359,14 +365,15 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 weight_map = file_content["weight_map"]
                 checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
                                                            mtp_num_layers=mtp_num_layers, args=self.args)
-                self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers)
+                self.state_dict = merge_transformers_sharded_states(
+                    load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
         else:
             sub_dirs = [x for x in os.listdir(load_path) if x.startswith("pytorch_model")]
             if len(sub_dirs) == 1:
                 checkpoint_name = "pytorch_model.bin"
                 self.state_dict = torch.load(os.path.join(load_path, checkpoint_name),
-                                             map_location="cpu", weights_only=False)
+                                             map_location=self.args.hf_checkpoint_device, weights_only=False)
                 logging.info(f"Load HuggingFace from: {os.path.join(load_path, checkpoint_name)}")
             else:
                 meta_path = f"{load_path}/pytorch_model.bin.index.json"
@@ -375,7 +382,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 weight_map = file_content["weight_map"]
                 checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
                                                            mtp_num_layers=mtp_num_layers, args=self.args)
-                self.state_dict = merge_transformers_sharded_states(load_path, checkpoint_names, max_workers=self.args.max_workers)
+                self.state_dict = merge_transformers_sharded_states(
+                    load_path, checkpoint_names, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
 
@@ -398,7 +406,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         def save_hf_shard(tensors, shard_file):
             shard = {}
             for tensor in tensors:
-                shard[tensor] = state_dict[tensor].clone().contiguous()
+                shard[tensor] = state_dict[tensor].contiguous()
                 del state_dict[tensor]
             shard_path = os.path.join(save_path, shard_file)
             save_file(shard, shard_path, metadata={"format": "pt"})

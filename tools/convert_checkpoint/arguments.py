@@ -113,6 +113,8 @@ def _add_checkpoint_args(parser):
         action="store_true",
         help="Enable full heterogeneous data parallelism. Default: False"
     )
+    group.add_argument('--hf_checkpoint_device', type=str, default="cpu", help='Device used to load and save HF checkpoint, default is cpu')
+
 def _add_common_args(parser):
     group = parser.add_argument_group(title='common')
 
@@ -213,6 +215,8 @@ def _add_megatron_args(parser):
                        help='number of layers for saving each time')
     group.add_argument('--save-sub-checkpoint-by-pp', action='store_true',
                        help='save sub checkpoints by pipeline parallel')
+    group.add_argument('--sub_file_tag', type=int, default=None,
+                       help='sub file index when saving huggingface checkpoint')
 
 
 def _add_huggingface_args(parser):

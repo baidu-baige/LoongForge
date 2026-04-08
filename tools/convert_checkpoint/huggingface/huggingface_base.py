@@ -249,6 +249,8 @@ class HuggingfaceBase:
         transformer = self.transformer if transformer is None else transformer
         spec_name = name if spec_name is None or spec_name not in self.name_map else spec_name
         is_valid_name = spec_name in self.name_map and self.name_map[spec_name] is not None
+        if name == MTP_WORD_EMBEDDING:
+            layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
             hf_name, is_direct_name, _, _, no_layer_id, depend_on_key, _ = \

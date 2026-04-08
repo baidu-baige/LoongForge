@@ -90,7 +90,7 @@ class TopoSharder:
         if parallel_config.ep_size is not None:
             self.ep_size = parallel_state.get_expert_model_parallel_world_size()
         else:
-            self.ep_size = 1
+            self.ep_size = None
 
         if parallel_config.etp_size is not None:
             self.etp_size = parallel_state.get_expert_tensor_parallel_world_size()
@@ -123,7 +123,7 @@ class TopoSharder:
         dp_rank = parallel_state.get_data_parallel_rank()
 
         # Get expert parallel ranks if available
-        if self.ep_size > 1:
+        if self.ep_size is not None:
             ep_rank = parallel_state.get_expert_model_parallel_rank()
         else:
             ep_rank = None

@@ -112,7 +112,7 @@ def load_hf_checkpoint_online(
     parallel_config.tp_ranks = [tp_rank]
     parallel_config.pp_ranks = [pp_rank]
     if ep_rank is not None:
-        if etp_rank is not None: # with ETP
+        if etp_rank is not None and etp_size is not None and etp_size > 0: # with ETP
             tp_size = args.tensor_model_parallel_size
             ep_size = args.expert_model_parallel_size
             etp_size = args.expert_tensor_parallel_size
@@ -122,7 +122,7 @@ def load_hf_checkpoint_online(
                     ep_size,
                     etp_size
                 )
-            ep_id = (ep_rank // tp_size * tp_size) + tp_to_ep[tp_rank]
+            ep_id = ((ep_rank * etp_size) // tp_size * tp_size // etp_size) + tp_to_ep[tp_rank]
             parallel_config.ep_ranks = [ep_id]
         else: # without ETP
             parallel_config.ep_ranks = [ep_rank]

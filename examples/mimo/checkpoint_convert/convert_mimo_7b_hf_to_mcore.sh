@@ -22,4 +22,5 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --load_ckpt_path=$LOAD \
     --save_ckpt_path=$SAVE \
     --safetensors \
+    --mtp_num_layers 1 \
     --max_workers=32

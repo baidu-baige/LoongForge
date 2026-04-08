@@ -103,6 +103,8 @@ class Model():
         visual_args.lora_dim = args.lora_dim
         visual_args.vit_in_first_virtual_stage_only = False
         visual_args.enable_full_hetero_dp = args.enable_full_hetero_dp
+        visual_args.hf_checkpoint_device = args.hf_checkpoint_device
+        visual_args.sub_file_tag = args.sub_file_tag
         return visual_args
 
     def convert_from_common(self, platform, target_c_config, layer_dict, expert_dict=None, target_c_vision_config=None):

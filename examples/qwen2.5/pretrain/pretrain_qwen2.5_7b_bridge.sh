@@ -68,7 +68,8 @@ TRAINING_ARGS=(
     --initial-loss-scale 65536
     --bf16
     --load $CHECKPOINT_PATH
-    --save $CHECKPOINT_PATH
+    --save-hf true
+    --save-hf-path $SAVE_HF_PATH
     --save-interval 40
     --eval-interval 1000
     --eval-iters 10

@@ -142,7 +142,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         p = list(layer_dict.keys())[0]
         layer_ids = layer_dict[p]
 
-        etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
+        etp_to_tp_mapping, _ = get_etp_map(self.tp, self.ep, self.etp)
 
         # check dones dir and mkdir release
         if save_file:

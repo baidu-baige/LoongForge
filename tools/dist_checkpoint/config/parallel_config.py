@@ -35,4 +35,6 @@ class ParallelConfig:
     lora_alpha: int = None
     lora_dim: int = None
     enable_full_hetero_dp: bool = False
+    hf_checkpoint_device: str = "cpu"
+    sub_file_tag: int = None
 

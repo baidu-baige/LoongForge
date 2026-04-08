@@ -10,7 +10,7 @@ num_query_groups: 8
 vocab_size_in_config_file: 151680
 
 # MTP
-mtp_num_layers: 3
+mtp_num_layers: 1
 mtp_loss_scaling_factor: 0.1
 mtp_loss_scaling_factor_decay_ratio: 0.8
 

@@ -47,6 +47,8 @@ class HfCheckpointConverter:
         self.args.lora_dim = parallel_config.lora_dim
         self.args.vit_in_first_virtual_stage_only = False
         self.args.enable_full_hetero_dp = parallel_config.enable_full_hetero_dp
+        self.args.hf_checkpoint_device = parallel_config.hf_checkpoint_device
+        self.args.sub_file_tag = parallel_config.sub_file_tag
         self.ep_size = parallel_config.ep_size
         self.pp_ranks = parallel_config.pp_ranks
         self.ep_ranks = parallel_config.ep_ranks
