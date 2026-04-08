@@ -163,6 +163,18 @@ except ImportError:
 stimer = StragglerDetector()
 
 
+def is_hf_checkpoint(load_path):
+    """Check if the checkpoint is in HuggingFace format."""
+    if load_path is None:
+        return False
+    safe_index_path = os.path.join(load_path, "model.safetensors.index.json")
+    safe_path = os.path.join(load_path, "model.safetensors")
+    bin_index_path = os.path.join(load_path, "pytorch_model.bin.index.json")
+    bin_path = os.path.join(load_path, "pytorch_model.bin")
+    return os.path.exists(safe_index_path) or os.path.exists(safe_path) or \
+            os.path.exists(bin_index_path) or os.path.exists(bin_path)
+
+
 @torch.no_grad()
 def update_ema(ema_model, model, rate=0.9999):
     """
@@ -703,29 +715,59 @@ def get_model(
         print_rank_0("Applying PEFT pre-wrap hook...")
 
         # Load pretrained checkpoint if available
-        if args.pretrained_checkpoint is None or not checkpoint_exists(args.pretrained_checkpoint):
+        # Support both HF format and mcore format
+        if args.pretrained_checkpoint is None or (
+            not checkpoint_exists(args.pretrained_checkpoint)
+            and not is_hf_checkpoint(args.pretrained_checkpoint)
+        ):
             raise ValueError(
                 f"Invalid pretrained checkpoint directory found: {args.pretrained_checkpoint}"
             )
 
         # Explicitly set finetune to avoid loading optimizer and RNG states
         args.finetune = True
-        print_rank_0(f"Loading base model weights from: {args.pretrained_checkpoint}")
 
-        # Directly call load_checkpoint_from path in order to avoid
-        # the load directory overriding the pretrained checkpoint path
-        # This is needed to initialize the base model weights first, and then conditionally load adapter states after
-        _load_checkpoint_from_path(
-            load_dir=args.pretrained_checkpoint,
-            args=args,
-            load_arg='load',
-            ddp_model=model,
-            optimizer=None,  # Don't load optimizer - will be created after PEFT
-            opt_param_scheduler=None,  # Don't load scheduler - will be created after PEFT
-            checkpointing_context={},
-            skip_load_to_model_and_opt=False,
-            ignore_ckpt_step=True,  # ckpt_step applies only to adapter checkpoints, not pretrained base model
-        )
+        # Check if it's HF format
+        if is_hf_checkpoint(args.pretrained_checkpoint):
+            # HF checkpoint: use online loading
+            print_rank_0(f"Loading base model weights from HF chekckpoint: {args.pretrained_checkpoint}")
+
+            from tools.dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+
+            # Temporarily set args.load for load_hf_checkpoint_online
+            orig_load = args.load
+            args.load = args.pretrained_checkpoint
+
+            # Load HF checkpoint online
+            iteration, num_fp_ops = load_hf_checkpoint_online(
+                model,
+                None,  # optimizer
+                None,  # opt_param_scheduler
+                args
+            )
+            print_rank_0(f"HF checkpoint loaded successfully, iteration={iteration}")
+
+            # Restore original args.load
+            args.load = orig_load
+        else:
+            # Mcore checkpoint: use standard loading
+            print_rank_0(f"Loading base model weights from: {args.pretrained_checkpoint}")
+
+            # Directly call load_checkpoint_from path in order to avoid
+            # the load directory overriding the pretrained checkpoint path
+            # This is needed to initialize the base model weights first, 
+            # and then conditionally load adapter states after
+            _load_checkpoint_from_path(
+                load_dir=args.pretrained_checkpoint,
+                args=args,
+                load_arg='load',
+                ddp_model=model,
+                optimizer=None,  # Don't load optimizer - will be created after PEFT
+                opt_param_scheduler=None,  # Don't load scheduler - will be created after PEFT
+                checkpointing_context={},
+                skip_load_to_model_and_opt=False,
+                ignore_ckpt_step=True,  # ckpt_step applies only to adapter checkpoints, not pretrained base model
+            )
 
         if "VLM" in type(model_config.peft_config).__name__:
             peft_config = check_vlm_peft_config(model_config)
@@ -996,10 +1038,14 @@ def setup_model_and_optimizer(
         print_rank_0(f"Upcycled checkpoint saved to {args.save}")
 
     if hasattr(model_config, "peft_config") and model_config.peft_config is not None:
-        assert (args.load is not None and checkpoint_exists(args.load)) or (
-            args.pretrained_checkpoint is not None
-            and checkpoint_exists(args.pretrained_checkpoint)
-        ), "Use lora must setup base-model pretrain checkpoint"
+        # For LoRA training, must have base model checkpoint (mcore or HF format)
+        has_base_ckpt = args.pretrained_checkpoint is not None and (
+            checkpoint_exists(args.pretrained_checkpoint) or is_hf_checkpoint(args.pretrained_checkpoint)
+        )
+        assert has_base_ckpt, (
+            "Use LoRA must setup base-model pretrain checkpoint (mcore or HF format). "
+            f"args.pretrained_checkpoint={args.pretrained_checkpoint}"
+        )
 
     # For PEFT, the pretrained checkpoint is loaded in get_model()
     if peft_class is not None:
@@ -1016,18 +1062,6 @@ def setup_model_and_optimizer(
             and checkpoint_exists(args.pretrained_checkpoint)
         )
 
-    # Check if it's offline (pre-converted sharded checkpoint) or online (HF checkpoint)
-    # by checking if latest_checkpointed_iteration.txt exists in load path
-    def _is_hf_checkpoint(load_path):
-        if load_path is None:
-            return False
-        import os
-        safe_index_path = os.path.join(load_path, "model.safetensors.index.json")
-        safe_path = os.path.join(load_path, "model.safetensors")
-        bin_index_path = os.path.join(load_path, "pytorch_model.bin.index.json")
-        bin_path = os.path.join(load_path, "pytorch_model.bin")
-        return os.path.exists(safe_index_path) or os.path.exists(safe_path) or \
-                os.path.exists(bin_index_path) or os.path.exists(bin_path)
     if should_load_checkpoint and not args.moe_use_upcycling:
         timers("load-checkpoint", log_level=0).start(barrier=True)
         # Offline checkpoint loading (pre-converted sharded checkpoint)
@@ -1043,7 +1077,7 @@ def setup_model_and_optimizer(
         )
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
-    elif _is_hf_checkpoint(args.load) and not args.moe_use_upcycling:
+    elif is_hf_checkpoint(args.load) and not args.moe_use_upcycling:
         # Online HF checkpoint loading
         timers("load-checkpoint", log_level=0).start(barrier=True)
         args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(

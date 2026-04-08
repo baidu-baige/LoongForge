@@ -1014,6 +1014,9 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         help="Path to save the HF model checkpoint. If not specified, will save to <save>/release_hf_weights/"
     )
 
+    group.add_argument('--lora-alpha', type=int, help="Lora alpha for LoRA fine tuning.")
+    group.add_argument('--lora-dim', type=int, help="Lora dim for LoRA fine tuning.")
+
     group.add_argument(
         "--encoder-tensor-model-parallel-size",
         type=int,
