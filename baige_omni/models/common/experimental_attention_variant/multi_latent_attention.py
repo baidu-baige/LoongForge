@@ -40,6 +40,7 @@ from megatron.core.transformer.multi_latent_attention import (
 from megatron.core.transformer.spec_utils import build_module
 from megatron.core.transformer.transformer_config import MLATransformerConfig
 from megatron.core.utils import deprecate_inference_params
+from megatron.core.fp8_utils import is_float8tensor
 
 try:
     from megatron.core.extensions.transformer_engine import TEGroupedLinear
@@ -119,8 +120,13 @@ class MLASelfAttentionFused(MLASelfAttention):
 
         self.register_load_state_dict_post_hook(self.initialize_kv_absorb_weights)
         self.register_state_dict_pre_hook(self.update_linear_kv_up_proj)
-        self.absorb_weights_initialized = False
         self.linear_kv_up_proj.weight.requires_grad = False
+
+        # Eagerly materialize absorb weights from linear_kv_up_proj during
+        # module construction so the optimizer sees the real derived values
+        # instead of placeholder initialization. For SP-first, doing this in
+        # the constructor also keeps the TP collective order deterministic.
+        self.initialize_kv_absorb_weights(None, None)
 
     def concat_cached_chunk_key_value_dsa(self, curr_key):
         """Concatenate all cached key chunks for DSA path in chunkpipe.
@@ -213,7 +219,6 @@ class MLASelfAttentionFused(MLASelfAttention):
 
     def initialize_kv_absorb_weights(self, module, incompatible_keys):
         """Initialize absorb weights from linear_kv_up_proj for checkpoint compatibility."""
-        from transformer_engine.pytorch.tensor.quantized_tensor import QuantizedTensor
 
         if incompatible_keys is not None:
             # Absorb weights are derived from linear_kv_up_proj at load time.
@@ -238,7 +243,18 @@ class MLASelfAttentionFused(MLASelfAttention):
 
         with torch.no_grad():
             kv_up_weight = self.linear_kv_up_proj.weight.clone().detach()
-            if isinstance(kv_up_weight, QuantizedTensor):
+            # In FP8 mode each parameter carries a high-precision init value so the
+            # optimizer can build accurate main params without going through the lossy
+            # FP8 representation.  Propagate that value into the absorb weights so the
+            # optimizer sees accurate BF16/FP32 state for these derived parameters too.
+            kv_up_weight_hp = None
+            if is_float8tensor(kv_up_weight):
+                if hasattr(self.linear_kv_up_proj.weight, 'get_high_precision_init_val'):
+                    kv_up_weight_hp = (
+                        self.linear_kv_up_proj.weight.get_high_precision_init_val().view(
+                            self.num_attention_heads_per_partition, -1, self.config.kv_lora_rank
+                        )
+                    )
                 kv_up_weight = kv_up_weight.dequantize()
             kv_up_weight = kv_up_weight.view(
                 self.num_attention_heads_per_partition, -1, self.config.kv_lora_rank
@@ -250,22 +266,36 @@ class MLASelfAttentionFused(MLASelfAttention):
             k_up_proj = k_up_proj.transpose(1, 2).contiguous()
             v_up_proj = v_up_proj.contiguous()
 
+            k_up_proj_hp = v_up_proj_hp = None
+            if kv_up_weight_hp is not None:
+                k_up_proj_hp, v_up_proj_hp = torch.split(
+                    kv_up_weight_hp, [self.config.qk_head_dim, self.config.v_head_dim], dim=-2
+                )
+                k_up_proj_hp = k_up_proj_hp.transpose(1, 2).contiguous()
+                v_up_proj_hp = v_up_proj_hp.contiguous()
+
             for head_idx in range(self.num_attention_heads_per_partition):
                 q_absorb_weight = getattr(self.linear_kv_up_proj_absorb_q, f"weight{head_idx}")
-                if isinstance(q_absorb_weight, QuantizedTensor):
+                if is_float8tensor(q_absorb_weight):
                     q_absorb_weight.quantize_(k_up_proj[head_idx])
+                    if k_up_proj_hp is not None and hasattr(
+                        q_absorb_weight, 'set_high_precision_init_val'
+                    ):
+                        q_absorb_weight.set_high_precision_init_val(k_up_proj_hp[head_idx])
                 else:
                     q_absorb_weight.copy_(k_up_proj[head_idx])
 
                 output_absorb_weight = getattr(
                     self.linear_kv_up_proj_absorb_output, f"weight{head_idx}"
                 )
-                if isinstance(output_absorb_weight, QuantizedTensor):
+                if is_float8tensor(output_absorb_weight):
                     output_absorb_weight.quantize_(v_up_proj[head_idx])
+                    if v_up_proj_hp is not None and hasattr(
+                        output_absorb_weight, 'set_high_precision_init_val'
+                    ):
+                        output_absorb_weight.set_high_precision_init_val(v_up_proj_hp[head_idx])
                 else:
                     output_absorb_weight.copy_(v_up_proj[head_idx])
-
-        self.absorb_weights_initialized = True
 
     def update_linear_kv_up_proj(self, module, prefix, keep_vars):
         """Reconstruct linear_kv_up_proj from absorb weights before saving checkpoint."""
@@ -563,8 +593,6 @@ class MLASelfAttentionFused(MLASelfAttention):
                 "None. This method is used for Omni fused DSA where kv_up weights are absorbed "
                 "into query and output projections."
             )
-            if not self.absorb_weights_initialized:
-                self.initialize_kv_absorb_weights(None, None)
 
             if self.config.q_lora_rank is not None:
                 q, _ = self.linear_q_up_proj(q_compressed)
