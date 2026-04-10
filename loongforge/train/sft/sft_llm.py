@@ -65,6 +65,33 @@ def get_batch(data_iterator):
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
 
+    # Extract chunk_group_size into args (for scheduler) and config (for model-side code).
+    # Only write config on the first chunk of each group (chunk_idx == 0) to avoid
+    # subsequent chunks overwriting with their own chunk_group_size value.
+    args = get_args()
+    if args.enable_chunkpipe and "chunk_group_size" in batch:
+        group_size = batch["chunk_group_size"][0].item()
+        args.chunkpipe_current_chunk_group_size = group_size
+        config = get_model_config()
+        if config is not None and getattr(config, 'sft_chunkpipe_mode', False):
+            # Only write config.chunkpipe_current_group_size on the first chunk of each group
+            # (chunk_idx_in_group == 0). This relies on a strict call-order contract with the
+            # Loong-Megatron scheduler: the scheduler must set
+            # config.chunkpipe_chunk_idx_in_group = 0 **before** invoking forward_step, so
+            # that get_batch (called inside forward_step) observes the correct index here.
+            #
+            # Timing chain:
+            #   scheduler sets chunk_idx = 0
+            #     → forward_step()
+            #       → get_batch() reads chunk_group_size from batch
+            #         → writes config.chunkpipe_current_group_size   ← here
+            #           → model code reads config.chunkpipe_current_group_size
+            #
+            # The ordering is currently correct but depends on this implicit call sequence.
+            # If the scheduler logic is refactored, ensure this contract is preserved.
+            if config.chunkpipe_chunk_idx_in_group == 0:
+                config.chunkpipe_current_group_size = group_size
+
     output = (
         batch["tokens"],
         batch["labels"],
@@ -257,6 +284,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         sort_batch=args.sft_sort_batch,
         packing_buffer_size=args.packing_buffer_size,
         context_parallel_size=args.context_parallel_size,
+        enable_chunkpipe=args.enable_chunkpipe,
+        chunksize=args.chunksize,
     )
 
     print_rank_0(

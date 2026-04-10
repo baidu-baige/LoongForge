@@ -78,12 +78,16 @@ def build_sft_data_collator(
         else PaddingStrategy.MAX_LENGTH
     )
 
+    # When chunkpipe is enabled, all chunks are already padded to chunksize,
+    # so max_length should be chunksize instead of seq_length.
+    max_length = args.chunksize if args.enable_chunkpipe else args.seq_length
+
     data_collator = cls(
         tokenizer=tokenizer.hf_tokenizer(),
         label_pad_token_id=constants.IGNORE_INDEX,
         pad_to_multiple_of=pad_to_multiple_of,
         padding=padding,
-        max_length=args.seq_length,
+        max_length=max_length,
         **kwargs,
     )
     return data_collator
@@ -156,6 +160,181 @@ class SavableCyclicIterator:
         return self.iterable.load_state(state)
 
 
+class ChunkPipeGroupBatchSampler:
+    """Batch sampler that shuffles chunk groups while preserving intra-group order
+    and aligning chunk groups to training step boundaries.
+
+    In chunkpipe SFT, a long sequence is split into multiple consecutive chunks
+    that must be yielded in order. Each chunk carries a `chunk_group_size` field
+    indicating how many consecutive chunks belong to the same source sequence
+    (1 for binpacked short-sequence chunks).
+
+    All chunks of a long sequence must fall within the same training step
+    (same gradient-accumulation window), because KV cache is carried between
+    chunks and would be invalidated by a gradient update.
+
+    This sampler:
+      1. Scans the dataset to identify groups (consecutive chunks with the same group size).
+      2. Shuffles groups for training randomness.
+      3. Shards groups across data-parallel ranks (whole groups, never split).
+      4. Schedules groups into fixed-capacity step windows (capacity = num_microbatches
+         chunks), ensuring no group is split across step boundaries.
+      5. Yields one micro-batch at a time, keeping group members consecutive.
+    """
+
+    def __init__(
+        self,
+        dataset,
+        total_samples,
+        consumed_samples,
+        micro_batch_size,
+        data_parallel_rank,
+        data_parallel_size,
+        num_microbatches,
+        seed=0,
+    ):
+        self.total_samples = total_samples
+        self.consumed_samples = consumed_samples
+        self.micro_batch_size = micro_batch_size
+        self.data_parallel_rank = data_parallel_rank
+        self.data_parallel_size = data_parallel_size
+        self.num_microbatches = num_microbatches
+        self.seed = seed
+
+        # Step capacity in chunks: each step has num_microbatches micro-batches,
+        # each micro-batch holds micro_batch_size chunks.
+        self.step_capacity = num_microbatches * micro_batch_size
+
+        # Build groups by scanning chunk_group_size
+        self.groups = []
+        idx = 0
+        group_sizes = dataset["chunk_group_size"]
+        max_group_size = 0
+        while idx < total_samples:
+            size = group_sizes[idx]
+            self.groups.append(list(range(idx, idx + size)))
+            max_group_size = max(max_group_size, size)
+            idx += size
+
+        assert max_group_size <= self.step_capacity, (
+            f"Max chunk_group_size ({max_group_size}) exceeds step capacity "
+            f"({self.step_capacity} = num_microbatches {num_microbatches} "
+            f"x micro_batch_size {micro_batch_size}). "
+            f"Increase global_batch_size or decrease seq_length/chunksize ratio."
+        )
+
+        # Pre-compute usable samples per epoch for epoch/resume calculation.
+        # Run one dummy schedule (unshuffled) to determine how many samples
+        # a full epoch yields per rank after drop-last truncation.
+        dummy_rank_groups = [self.groups[gi] for gi in
+                             list(range(len(self.groups)))[self.data_parallel_rank::self.data_parallel_size]]
+        dummy_indices = self._schedule_step_aligned(dummy_rank_groups)
+        self.usable_per_rank = (len(dummy_indices) // self.step_capacity) * self.step_capacity
+        self.usable_total = self.usable_per_rank * self.data_parallel_size
+
+        # Determine initial epoch and within-epoch offset for checkpoint resume
+        if self.usable_total > 0:
+            self._epoch = consumed_samples // self.usable_total
+            self._resume_offset = (consumed_samples % self.usable_total) // self.data_parallel_size
+            self._resume_offset = (self._resume_offset // self.step_capacity) * self.step_capacity
+        else:
+            self._epoch = 0
+            self._resume_offset = 0
+
+    def __len__(self):
+        return self.total_samples
+
+    def _schedule_step_aligned(self, rank_groups):
+        """Arrange groups into step-aligned index sequence.
+
+        For each step window of `step_capacity` chunks:
+          1. Greedily place multi-chunk groups (long sequences) that fit.
+          2. Fill remaining slots with single-chunk groups (binpacked short sequences).
+
+        This guarantees that all chunks of a long sequence are within the same
+        training step.
+
+        Args:
+            rank_groups: list of groups (each group is a list of dataset indices)
+                         assigned to this DP rank, already shuffled.
+
+        Returns:
+            Flat list of dataset indices, step-aligned.
+        """
+        from collections import deque
+
+        multi_groups = deque(g for g in rank_groups if len(g) > 1)
+        single_groups = deque(g for g in rank_groups if len(g) == 1)
+
+        all_indices = []
+
+        while multi_groups or single_groups:
+            remaining = self.step_capacity
+            step_indices = []
+
+            # Phase 1: greedily place multi-chunk groups
+            deferred = deque()
+            while multi_groups:
+                group = multi_groups.popleft()
+                if len(group) <= remaining:
+                    step_indices.extend(group)
+                    remaining -= len(group)
+                else:
+                    deferred.append(group)
+            # Put back groups that didn't fit for future steps
+            multi_groups = deferred
+
+            # Phase 2: fill remaining slots with single-chunk groups
+            while single_groups and remaining > 0:
+                step_indices.extend(single_groups.popleft())
+                remaining -= 1
+
+            if not step_indices:
+                break
+
+            all_indices.extend(step_indices)
+
+        return all_indices
+
+    def __iter__(self):
+        total_groups = len(self.groups)
+
+        # Shuffle groups deterministically — different seed per epoch
+        g = torch.Generator()
+        g.manual_seed(self.seed + self._epoch)
+        group_order = torch.randperm(total_groups, generator=g).tolist()
+
+        # Shard groups across DP ranks (round-robin at group level)
+        rank_group_order = group_order[self.data_parallel_rank :: self.data_parallel_size]
+        rank_groups = [self.groups[gi] for gi in rank_group_order]
+
+        # Schedule groups into step-aligned index sequence
+        rank_indices = self._schedule_step_aligned(rank_groups)
+
+        # Drop tail samples that cannot form a complete training step.
+        # This prevents epoch boundary from splitting a chunk group across
+        # two steps (which would break KV cache continuity).
+        usable = (len(rank_indices) // self.step_capacity) * self.step_capacity
+        rank_indices = rank_indices[:usable]
+
+        # On first __iter__ call with checkpoint resume, skip already-consumed samples
+        if self._resume_offset > 0:
+            rank_indices = rank_indices[self._resume_offset:]
+            self._resume_offset = 0  # only skip once
+
+        # Yield in batches of micro_batch_size
+        batch = []
+        for idx in rank_indices:
+            batch.append(idx)
+            if len(batch) == self.micro_batch_size:
+                self.consumed_samples += self.micro_batch_size * self.data_parallel_size
+                yield batch
+                batch = []
+
+        # Epoch complete — next __iter__ call will use a different shuffle
+        self._epoch += 1
+
+
 def _build_cylic_iterator(
     dataset: Union["Dataset", "IterableDataset"],
     consumed_samples: int,
@@ -186,7 +365,22 @@ def _build_cylic_iterator(
         )
     else:
         # build distribued sampler for non-streaming dataset
-        _batch_sampler = MegatronPretrainingRandomSampler(
+        if args.enable_chunkpipe:
+            num_microbatches = args.global_batch_size // (
+                args.micro_batch_size * mpu.get_data_parallel_world_size()
+            )
+            _batch_sampler = ChunkPipeGroupBatchSampler(
+                dataset,
+                total_samples=len(dataset),
+                consumed_samples=consumed_samples,
+                micro_batch_size=args.micro_batch_size,
+                data_parallel_rank=mpu.get_data_parallel_rank(),
+                data_parallel_size=mpu.get_data_parallel_world_size(),
+                num_microbatches=num_microbatches,
+                seed=args.seed,
+            )
+        else:
+            _batch_sampler = MegatronPretrainingRandomSampler(
             dataset,
             total_samples=len(dataset),
             consumed_samples=consumed_samples,  # not support for streaming now!
@@ -317,6 +511,8 @@ def get_batch_on_this_tp_rank(data_iterator):
 
     # broadcast required keys across tp
     required_keys = ["attention_mask"]
+    if args.enable_chunkpipe:
+        required_keys.append("chunk_group_size")
 
     if args.pipeline_model_parallel_size == 1:
         required_keys += ["input_ids", "labels"] + (
@@ -342,17 +538,20 @@ def get_batch_on_this_tp_rank(data_iterator):
     # labels & loss mask
     labels = data_b["labels"].long() if "labels" in data_b else None
     if labels is not None:
-        labels = torch.roll(labels, shifts=-1, dims=1)
-        labels[:, -1] = constants.IGNORE_INDEX
+        if not args.enable_chunkpipe:
+            # Shift labels for next-token prediction; chunkpipe data is already pre-shifted
+            labels = torch.roll(labels, shifts=-1, dims=1)
+            labels[:, -1] = constants.IGNORE_INDEX
         # labels[labels == tokenizer.pad] == constants.IGNORE_INDEX
         # labels[labels == tokenizer.eos] == constants.IGNORE_INDEX
 
     # create loss mask
     loss_mask = data_b["loss_mask"].long() if "loss_mask" in data_b else None
     if loss_mask is not None:
-        # pp last && not eod_mask_loss
-        loss_mask = torch.roll(loss_mask, shifts=-1, dims=1)
-        loss_mask[:, -1] = 0
+        if not args.enable_chunkpipe:
+            # pp last && not eod_mask_loss; chunkpipe data is already pre-shifted
+            loss_mask = torch.roll(loss_mask, shifts=-1, dims=1)
+            loss_mask[:, -1] = 0
 
     elif labels is not None:
         # pp last && eod_mask_loss
@@ -384,6 +583,8 @@ def get_batch_on_this_tp_rank(data_iterator):
         "attention_mask": attention_mask,
         "packed_seq_params": packed_seq_params,
     }
+    if args.enable_chunkpipe and "chunk_group_size" in data_b:
+        batch["chunk_group_size"] = data_b["chunk_group_size"]
 
     return batch
 

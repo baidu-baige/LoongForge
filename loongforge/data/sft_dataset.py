@@ -169,6 +169,12 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
     enable_discard_sample: Optional[bool] = None
     """Sample sequence length bigger than sequence_length will be discarded."""
 
+    enable_chunkpipe: bool = False
+    """Whether to enable chunkpipe feature, which splits sequence into multiple chunks."""
+
+    chunksize: Optional[int] = None
+    """Size of each chunk when chunkpipe is enabled."""
+
     def _setup_default_dataset(self):
         """Setup default dataset or fix the length of dataset list"""
 
@@ -567,13 +573,33 @@ class SFTDataset(HuggingFaceDataset):
                     self.split_dataset[i] = low_level_dataset
                 else:
                     if not self.config.streaming:
-                        # for mappable dataset
-                        temp_split = low_level_dataset.train_test_split(
-                            train_size=split_samplers[i],
-                            seed=self.config.random_seed,
-                        )
-                        self.split_dataset[i] = temp_split["train"]
-                        low_level_dataset = temp_split["test"]
+                        if getattr(self.config, 'enable_chunkpipe', False):
+                            # Chunkpipe requires chunk groups (consecutive chunks
+                            # from the same long sequence) to stay adjacent.
+                            # train_test_split shuffles by default, which would
+                            # break that invariant.  Use ordered slicing instead,
+                            # snapping the split boundary to a chunk group boundary
+                            # so that no group is torn across two splits.
+                            group_sizes = low_level_dataset["chunk_group_size"]
+                            total = len(low_level_dataset)
+                            target = split_samplers[i]
+                            boundary = 0
+                            while boundary < total and boundary < target:
+                                boundary += group_sizes[boundary]
+                            self.split_dataset[i] = low_level_dataset.select(
+                                range(0, boundary)
+                            )
+                            low_level_dataset = low_level_dataset.select(
+                                range(boundary, total)
+                            )
+                        else:
+                            # for mappable dataset
+                            temp_split = low_level_dataset.train_test_split(
+                                train_size=split_samplers[i],
+                                seed=self.config.random_seed,
+                            )
+                            self.split_dataset[i] = temp_split["train"]
+                            low_level_dataset = temp_split["test"]
                     else:
                         # for iterable dataset
                         self.split_dataset[i] = low_level_dataset.take(

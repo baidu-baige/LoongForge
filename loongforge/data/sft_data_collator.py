@@ -10,6 +10,8 @@ import numpy as np
 from transformers import DataCollatorForSeq2Seq
 from transformers.utils import PaddingStrategy
 
+import torch
+
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
     from transformers.utils import PaddingStrategy
@@ -44,6 +46,12 @@ class DataCollatorForSupervisedDataset:
     def __call__(self, features, return_tensors=None):
         if return_tensors is None:
             return_tensors = self.return_tensors
+
+        # Extract chunk_group_size before HF collator (which doesn't recognize it).
+        # It will be added back to the result dict after collation.
+        chunk_group_sizes = None
+        if features and "chunk_group_size" in features[0]:
+            chunk_group_sizes = [f.pop("chunk_group_size") for f in features]
 
         # padding loss mask here
         loss_mask = (
@@ -90,7 +98,13 @@ class DataCollatorForSupervisedDataset:
                             ).astype(np.int64)
 
         # default only padding labels
-        return self.collator(features, return_tensors)
+        result = self.collator(features, return_tensors)
+
+        # Add chunk_group_size back — needed by scheduler for chunkpipe SFT
+        if chunk_group_sizes is not None:  
+            result["chunk_group_size"] = torch.tensor(chunk_group_sizes, dtype=torch.long)
+
+        return result
 
 
 @dataclass
