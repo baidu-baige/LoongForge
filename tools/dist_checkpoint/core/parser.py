@@ -117,6 +117,8 @@ class Parser:
         param_dict['decoder_first_pipeline_num_layers'] = getattr(args, 'decoder_first_pipeline_num_layers', None)
         param_dict['decoder_last_pipeline_num_layers'] = getattr(args, 'decoder_last_pipeline_num_layers', None)
         param_dict['moe_grouped_gemm'] = getattr(args, 'moe_grouped_gemm', False)
+        param_dict['lora_alpha'] = getattr(args, 'lora_alpha', None)
+        param_dict['lora_dim'] = getattr(args, 'lora_dim', None)
         # =====加#的参数都不在train的args里，只在convert ckpt的args =====================
         param_dict['vpp_scheduler'] = getattr(args, 'vpp_scheduler', None) #
         param_dict['safetensors'] = getattr(args, 'safetensors', True) #

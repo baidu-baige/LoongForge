@@ -76,11 +76,9 @@ class McoreBase:
     def __init__(self, c_config, args):
         self.c_config = c_config
         self.args = args
-        ############ Get rid of LoRA ##############
-        args.lora_alpha = None
-        args.lora_dim = None
+        args.lora_alpha = self.args.lora_alpha
+        args.lora_dim = self.args.lora_dim
         args.load_lora_ckpt_path = None
-        ###########################################
         margs = c_config.get_args("mcore")
         self.cargs = self.c_config.get_args("common")
         self.hf_name_map = self.c_config.get("name_map")["huggingface"]

@@ -1,29 +1,31 @@
 #! /bin/bash
 # The script needs to be run on at least 1 nodes.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
+export CUDA_VISIBLE_DEVICES=5
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/pile_test/pile-qwen_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/Qwen3-1.7B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-1.7B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/qwen3-1.7b-tp1-pp1-Dec24"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/Qwen3-1.7B-Instruct"}
+# CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen3_1.7B_mcore_tp1pp1"}
 
-LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/qwen3_1.7B_mcore_tp1pp1_lora"}
+LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen3_1.7B_mcore_tp1pp1_lora"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-1.7b"}
 
 
-GPUS_PER_NODE=8
+GPUS_PER_NODE=1
 
 # To specify the model config file
 MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3/qwen3_1_7b_lora.yaml
 
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
-MASTER_PORT=${MASTER_PORT:-"8000"}
+MASTER_PORT=${MASTER_PORT:-"12435"}
 NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
 
@@ -42,6 +44,7 @@ MODEL_CONFIG_ARGS=(
 MODEL_ARGS=(
     --rotary-base 1000000
     --rotary-seq-len-interpolation-factor 1
+    --attention-backend fused
 )
 
 DATA_ARGS=(
@@ -58,7 +61,7 @@ TRAINING_ARGS=(
     --max-position-embeddings 32768
     --init-method-std 0.006
     --micro-batch-size 1
-    --global-batch-size 32
+    --global-batch-size 2
     --lr 1.0e-5
     --min-lr 1.0e-6
     --clip-grad 1.0
@@ -68,7 +71,7 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-08
     --norm-epsilon 1e-6
-    --train-iters 50000
+    --train-iters 50
     --lr-decay-iters 50000
     --lr-decay-style cosine
     --lr-warmup-fraction 0.002
@@ -77,7 +80,11 @@ TRAINING_ARGS=(
     --load $LORA_CHECKPOINT_PATH
     --save $LORA_CHECKPOINT_PATH
     --pretrained-checkpoint $CHECKPOINT_PATH
-    --save-interval 5000
+    --save-interval 40 
+    --save-hf true
+    --save-hf-path /workspace/aiak-ckpt/qwen3-1.7b-lora-hf
+    --lora-alpha 32
+    --lora-dim 16
     --eval-interval 1000
     --eval-iters 10
     #--ckpt-step 0

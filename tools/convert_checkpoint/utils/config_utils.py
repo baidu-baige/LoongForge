@@ -143,7 +143,9 @@ def parse_yaml_config(config_file, convert_file):
     with open(config_file, 'r') as f:
         module_names = parse_at_configs(f.readlines())
     module_type = convert_file.split('/')[-3]
-    if module_names == {}: # llm
+    # Filter out PEFT config keys (e.g., 'lora') which are not model module types
+    module_keys = [k for k in module_names.keys() if k not in ['lora']]
+    if len(module_keys) == 0: # llm
         cfg = load_config(convert_file, hydra_overrides={module_type+'@module='+config_file.split("/")[-1].split(".")[0]})
     else: # omni vlm
         cfg = load_config(convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})

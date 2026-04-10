@@ -3,7 +3,7 @@
 
 """Lora model config"""
 
-from ..common.base_model_config import BasePeftModelConfig
+from ..base_model_config import BasePeftModelConfig
 from dataclasses import dataclass, field, fields
 from typing import List, Literal, Optional
 import torch
