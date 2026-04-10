@@ -46,7 +46,7 @@ def get_arch_flags():
     print(f'Compiling using NVCC {major}.{minor}')
 
     if major < 12 or (major == 12 and minor <= 8):
-        raise RuntimeError("sm100 compilation for Flash MLA FWD requires NVCC 12.9 or higher. "
+        raise RuntimeError("smxxx compilation for Flash MLA FWD requires NVCC 12.9 or higher. "
                            "Please update your environment.")
 
     arch_flags = ["-gencode", "arch=compute_100f,code=sm_100f"]
@@ -74,7 +74,7 @@ ext_modules.append(
         name="flash_mla_fwd.cuda",
         sources=[
               "src/pybind.cpp",
-              "src/sm100/sparse_mla_fwd.cu",
+              "src/smxxx/sparse_mla_fwd.cu",
         ],
         extra_compile_args={
             "cxx": cxx_args + get_features_args(),
@@ -96,7 +96,7 @@ ext_modules.append(
         },
         include_dirs=[
             Path(this_dir) / "src",
-            Path(this_dir) / "src" / "sm100",
+            Path(this_dir) / "src" / "smxxx",
             Path(this_dir) / "FlashMLA" / "csrc",
             Path(this_dir) / "FlashMLA" / "csrc" / "kerutils" / "include",
             Path(this_dir) / "FlashMLA" / "csrc" / "cutlass" / "include",

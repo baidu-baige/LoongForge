@@ -63,12 +63,12 @@ public:
         const auto& arch = device_runtime->get_arch(true);
 
         return fmt::format(R"(
-#include <lightning_indexer_bwd/impls/sm{}_fp8_mqa_logits_bwd_sparse.cuh>
+#include <lightning_indexer_bwd/impls/smxx_fp8_mqa_logits_bwd_sparse.cuh>
 
 using namespace deep_gemm;
 
 static void __instantiate_kernel() {{
-    auto ptr = reinterpret_cast<void*>(&sm{}_fp8_mqa_logits_bwd<
+    auto ptr = reinterpret_cast<void*>(&smxx_fp8_mqa_logits_bwd<
         {}, {},
         {},
         {}, {},
@@ -77,7 +77,6 @@ static void __instantiate_kernel() {{
     >);
 }};
 )",
-            arch, arch,
             args.num_heads, args.head_dim,
             args.is_compressed_logits,
             args.block_q, args.block_kv,
@@ -132,8 +131,10 @@ static void smxx_fp8_mqa_logits_bwd(
     const int& seq_len_alignment
 )
 {
-    // Now only support Blackwell with num_heads = 64 or 32, max_seqlen_k = 0.
-    DG_HOST_ASSERT(device_runtime->get_arch_major() == 10);
+    // Unsupported architecture
+    DG_HOST_ASSERT(device_runtime->get_arch_major() != 9);
+
+    // Now only num_heads = 64 or 32, max_seqlen_k = 0.
     DG_HOST_ASSERT(num_heads == 64 || num_heads == 32);
     DG_HOST_ASSERT(max_seqlen_k == 0);
 
@@ -143,9 +144,10 @@ static void smxx_fp8_mqa_logits_bwd(
     constexpr int num_specialized_threads = 128;
     constexpr int num_sparse_load_threads = 128;
     constexpr int num_q_stages = 2, num_kv_stages = 2;
-    const int num_math_threads = (device_runtime->get_arch_major() == 10 ? 128 : 512); // TODO: support Hopper if necessary.
+    const int num_math_threads = (device_runtime->get_arch_major() == 10 ? 128 : 512);
     DG_HOST_ASSERT(block_qh % num_heads == 0);
     DG_HOST_ASSERT(seq_len_alignment % block_q == 0);
+    DG_HOST_ASSERT(device_runtime->get_arch_major() == 10);
 
     // Not compressed for logits with no `max_seqlen_k`.
     const bool is_compressed_logits = false;

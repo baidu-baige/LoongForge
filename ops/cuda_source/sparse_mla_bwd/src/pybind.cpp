@@ -9,8 +9,8 @@
 #include <cutlass/fast_math.h>
 
 #include "params.h"
-#include "sm100/sparse_mla_bwd.h"
-#include "sm100/head128_2kernels/phase.h"
+#include "smxxx/sparse_mla_bwd.h"
+#include "smxxx/head128_2kernels/phase.h"
 
 #define CHECK_DEVICE(x) TORCH_CHECK(x.is_cuda(), #x " must be on CUDA")
 #define CHECK_SHAPE(x, ...) TORCH_CHECK(x.sizes() == \

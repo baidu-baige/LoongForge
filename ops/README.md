@@ -35,7 +35,7 @@ python lightning_indexer_bwd/tests/test_autograd.py
 Sparse MLA forward is dependent on FlashMLA. Please manually clone FlashMLA first:
 
 ```bash
-cd sparse_mla_fwd
+cd cuda_source/sparse_mla_fwd
 git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA
 cd FlashMLA
 git checkout 47c35a712362f11bc235854ead51819ad76f5a81
@@ -48,7 +48,7 @@ pip install -v .
 Sparse MLA backward is dependent on FlashMLA. Please manually clone FlashMLA first:
 
 ```bash
-cd sparse_mla_bwd
+cd cuda_source/sparse_mla_bwd
 git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA
 cd FlashMLA
 git checkout 47c35a712362f11bc235854ead51819ad76f5a81
@@ -61,7 +61,7 @@ pip install -v .
 Lightning Indexer backward is dependent on DeepGEMM. Please manually clone DeepGEMM first, then run install.sh which will automatically install deep_gemm:
 
 ```bash
-cd lightning_indexer_bwd
+cd cuda_source/lightning_indexer_bwd
 mkdir -p vendor
 git clone --recurse-submodules https://github.com/deepseek-ai/DeepGEMM.git vendor/DeepGEMM
 sh install.sh  # deep_gemm will be installed automatically
