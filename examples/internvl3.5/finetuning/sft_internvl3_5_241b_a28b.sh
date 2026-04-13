@@ -8,9 +8,9 @@ ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-DATA_PATH=/workspace/dataset/filter_mmdu/webdataset/
-TOKENIZER_PATH=/mnt/cluster/models/InternVL3_5-241B-A28B/
-CHECKPOINT_LOAD_PATH=/mnt/data/checkpoint/InternVL3_5-241B-A28B-tp4pp4ep8etp1-without-gemm
+DATA_PATH=${DATA_PATH:-"/workspace/dataset/filter_mmdu/webdataset/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/InternVL3_5-241B-A28B/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/data/checkpoint/InternVL3_5-241B-A28B-tp4pp4ep8etp1-without-gemm"}
 CHECKPOINT_SAVE_PATH=/mnt/data/checkpoint/InternVL3_5-241B-A28B-tp4pp4ep8etp1-11-28-28-27-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/data/zhaiyanfeng/out/tensorboard/internvl3.5/internvl3.5-241b-a28b/stage2-8k-gbs32-tp4pp4ep8-4nodes/"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}
@@ -73,7 +73,7 @@ TRAINING_ARGS=(
   --bf16
   --seed 42
   --no-gradient-accumulation-fusion
-  --load $CHECKPOINT_LOAD_PATH
+  --load $CHECKPOINT_PATH
   --save $CHECKPOINT_SAVE_PATH
   --save-interval 2000
   --exit-interval 500
@@ -151,7 +151,7 @@ fi
 PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
   $BAIGE_OMNI_PATH/baige_omni/train.py \
-  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/sft_dataset_config.json \
+  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml \
   ${MODEL_ARGS[@]} \
   ${MOE_ARGS[@]} \
   ${DATA_ARGS[@]} \

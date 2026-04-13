@@ -183,7 +183,7 @@ TRAINING_ARGS=(
     --packing-buffer-size 200
     --energon-pack-algo sequential_max_images
     --allow-missing-adapter-checkpoint
-    --sft-dataset multimodal_sharegpt
+    #--sft-dataset multimodal_sharegpt #decide based on your dataset
 )
 MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 4
