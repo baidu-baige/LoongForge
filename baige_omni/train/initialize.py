@@ -51,6 +51,19 @@ _DecoderTensorParallelSize = 1
 _ImageEncoderDataParallelSize = 1
 _VideoEncoderDataParallelSize = 1
 _AudioEncoderDataParallelSize = 1
+_NumMicroBatchesPerDecoderDP = 1
+_NumEncodeRounds = 1
+_ModelSize = 1
+
+def get_model_size():
+    """Return the model parallel size."""
+    return _ModelSize
+
+def get_num_micro_batches_per_decoder_dp():
+    """Return the number of micro-batches per decoder DP group 
+    and the number of encode rounds."""
+    return _NumMicroBatchesPerDecoderDP, _NumEncodeRounds
+
 
 def get_encoder_dp_size(name):
     """
@@ -111,7 +124,11 @@ def save_parallel_state(module_name):
 
     _ParallelStatesDict.setdefault(module_name, {}).update(state_snapshot)
 
-def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False):
+def create_parallel_state(
+        module_name, 
+        tp_size=0, 
+        enable_encoder_hetero_dp=False,
+        enable_full_hetero_dp=False):
     """
     Create the parallel state of the model and save it
     """
@@ -131,6 +148,9 @@ def create_parallel_state(module_name, tp_size=0, enable_encoder_hetero_dp=False
         elif module_name == "audio_encoder":
             global _AudioEncoderDataParallelSize
             _AudioEncoderDataParallelSize = _DecoderTensorParallelSize // tp_size
+
+    if enable_full_hetero_dp:
+        assert tp_size == 1, f"encoder_tp_size must be 1 when enable_full_hetero_dp is True, but got {tp_size}"
 
     initialize_model_parallel(
         tensor_model_parallel_size=tp_size,
@@ -218,6 +238,30 @@ def initialize_baige_megatron(
         save_parallel_state('text_decoder')
         global _DecoderTensorParallelSize
         _DecoderTensorParallelSize = mpu.get_tensor_model_parallel_world_size()
+
+        if args.enable_full_hetero_dp:
+            world_size: int = torch.distributed.get_world_size()
+            global _ModelSize
+            _ModelSize = (
+                args.tensor_model_parallel_size 
+                * args.pipeline_model_parallel_size 
+                * args.context_parallel_size
+            )
+            if world_size % _ModelSize != 0:
+                raise RuntimeError(f"world_size ({world_size}) is not divisible by {_ModelSize}")
+            data_parallel_size: int = world_size // _ModelSize
+            global _NumMicroBatchesPerDecoderDP, _NumEncodeRounds
+            _NumMicroBatchesPerDecoderDP = args.global_batch_size // data_parallel_size
+            _NumEncodeRounds = _NumMicroBatchesPerDecoderDP // _ModelSize
+            assert _NumMicroBatchesPerDecoderDP >= _ModelSize, (
+                f"_NumMicroBatchesPerDecoderDP ({_NumMicroBatchesPerDecoderDP}) "
+                f"must be greater thanor equal to _ModelSize ({_ModelSize})"
+            )
+            assert _NumMicroBatchesPerDecoderDP % _ModelSize == 0, (
+                f"_NumMicroBatchesPerDecoderDP ({_NumMicroBatchesPerDecoderDP}) "
+                f"must be divisible by _ModelSize ({_ModelSize})"
+            )
+
         model_config = get_model_config()
         from megatron.training import print_rank_0
         print_rank_0(f"model_config: {model_config}")
@@ -226,18 +270,21 @@ def initialize_baige_megatron(
                 'image_encoder', 
                 model_config.image_encoder.tensor_model_parallel_size, 
                 args.enable_encoder_hetero_dp,
+                args.enable_full_hetero_dp
             )
         if hasattr(model_config, "video_encoder") and model_config.video_encoder is not None:
             create_parallel_state(
                 'video_encoder', 
                 model_config.video_encoder.tensor_model_parallel_size, 
                 args.enable_encoder_hetero_dp,
+                args.enable_full_hetero_dp
             )
         if hasattr(model_config, "audio_encoder") and model_config.audio_encoder is not None:
             create_parallel_state(
                 'audio_encoder', 
                 model_config.audio_encoder.tensor_model_parallel_size, 
                 args.enable_encoder_hetero_dp,
+                args.enable_full_hetero_dp
             )
 
         change_parallel_state('text_decoder')

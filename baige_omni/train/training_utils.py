@@ -74,7 +74,7 @@ from megatron.core.distributed.fsdp.mcore_fsdp_adapter import (
 )
 from megatron.core.pipeline_parallel import get_forward_backward_func
 from megatron.core.optimizer import get_megatron_optimizer, OptimizerConfig
-from megatron.core.rerun_state_machine import get_rerun_state_machine
+from megatron.core.rerun_state_machine import get_rerun_state_machine, RerunDataIterator, RerunState
 from megatron.core.transformer.moe import upcycling_utils
 from megatron.core.transformer.moe.moe_utils import track_moe_metrics
 from megatron.training.global_vars import get_energy_monitor
@@ -1246,6 +1246,112 @@ def save_checkpoint_and_time(
     energy_monitor.resume()
     timers("interval-time", log_level=0).start(barrier=True)
 
+def gather_variable_shape_embeddings(
+    local_embedding: torch.Tensor,
+    dst_rank: int = 0,
+    group: torch.distributed.ProcessGroup = None,
+) -> list[torch.Tensor] | None:
+    """
+    Gather N-D tensors with different dim-0 sizes from all ranks to dst_rank.
+
+    Args:
+        local_embedding: shape = [batch_i, ...], batch_i may differ across ranks, other dims must match
+        dst_rank:        global rank of the receiver
+        group:           process group, None means default group
+
+    Returns:
+        dst_rank: list[Tensor], the i-th element has shape = [batch_i, ...]
+        other ranks: None
+    """
+    world_size = torch.distributed.get_world_size(group)
+    local_rank = torch.distributed.get_rank(group)
+    device = local_embedding.device
+    dtype = local_embedding.dtype
+    other_dims = local_embedding.shape[1:]
+
+    # Step 1: all_gather batch_size from all ranks
+    local_batch = torch.tensor([local_embedding.shape[0]], dtype=torch.long, device=device)
+    all_batches = [torch.zeros(1, dtype=torch.long, device=device) for _ in range(world_size)]
+    torch.distributed.all_gather(all_batches, local_batch, group=group)
+    batch_sizes = [b[0].item() for b in all_batches]
+    max_batch = max(batch_sizes)
+
+    # Step 2: pad local_embedding to max_batch
+    pad_len = max_batch - local_embedding.shape[0]
+    if pad_len > 0:
+        pad = torch.zeros(pad_len, *other_dims, dtype=dtype, device=device)
+        padded = torch.cat([local_embedding, pad], dim=0)
+    else:
+        padded = local_embedding
+
+    # Step 3: gather to dst_rank
+    gather_list = (
+        [torch.zeros(max_batch, *other_dims, dtype=dtype, device=device)
+         for _ in range(world_size)]
+        if local_rank == dst_rank else None
+    )
+
+    dst_global_rank = torch.distributed.get_global_rank(group, dst_rank)
+    torch.distributed.gather(padded, gather_list=gather_list, dst=dst_global_rank, group=group)
+
+    # Step 4: unpad
+    if local_rank == dst_rank:
+        return [t[:batch_sizes[i]] for i, t in enumerate(gather_list)]
+    return None
+
+def scatter_variable_shape_embeddings(
+    embeddings: list[torch.Tensor] | None,
+    local_embedding_ref: torch.Tensor,
+    src_rank: int = 0,
+    group: torch.distributed.ProcessGroup = None,
+) -> torch.Tensor:
+    """
+    Scatter a list of tensors from src_rank back to each rank.
+    This is the inverse operation of gather_variable_shape_embeddings.
+
+    Args:
+        embeddings:          list[Tensor] on src_rank, the i-th element has shape = [batch_i, ...]
+                             pass None on non-src ranks
+        local_embedding_ref: local tensor used to retrieve shape/dtype/device info
+        src_rank:            global rank of the sender
+        group:               process group, None means default group
+
+    Returns:
+        The local Tensor for this rank, shape = [batch_i, ...]
+    """
+    world_size = torch.distributed.get_world_size(group)
+    local_rank = torch.distributed.get_rank(group)
+    device = local_embedding_ref.device
+    dtype = local_embedding_ref.dtype
+    other_dims = local_embedding_ref.shape[1:]
+
+    # Step 1: all_gather batch_size from all ranks (symmetric with the gather side)
+    local_batch = torch.tensor([local_embedding_ref.shape[0]], dtype=torch.long, device=device)
+    all_batches = [torch.zeros(1, dtype=torch.long, device=device) for _ in range(world_size)]
+    torch.distributed.all_gather(all_batches, local_batch, group=group)
+    batch_sizes = [b[0].item() for b in all_batches]
+    max_batch = max(batch_sizes)
+
+    # Step 2: pad each tensor to max_batch on src_rank
+    if local_rank == src_rank:
+        scatter_list = []
+        for i, emb in enumerate(embeddings):
+            pad_len = max_batch - emb.shape[0]
+            if pad_len > 0:
+                pad = torch.zeros(pad_len, *other_dims, dtype=dtype, device=device)
+                scatter_list.append(torch.cat([emb, pad], dim=0))
+            else:
+                scatter_list.append(emb)
+    else:
+        scatter_list = None
+
+    # Step 3: scatter to each rank
+    recv = torch.zeros(max_batch, *other_dims, dtype=dtype, device=device)
+    src_global_rank = torch.distributed.get_global_rank(group, src_rank)
+    torch.distributed.scatter(recv, scatter_list=scatter_list, src=src_global_rank, group=group)
+
+    # Step 4: unpad to restore the actual batch_size of this rank
+    return recv[:batch_sizes[local_rank]]
 
 @train_step_decorator
 def train_step(
@@ -1260,6 +1366,139 @@ def train_step(
     """Single training step."""
     args = get_args()
     timers = get_timers()
+
+    if args.enable_full_hetero_dp:
+        import itertools, copy
+        from baige_omni.train.initialize import (
+            get_num_micro_batches_per_decoder_dp,
+            change_parallel_state,
+        )
+        from baige_omni.train.pretrain.pretrain_vlm import (
+            get_batch, get_embedding_list,
+            get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
+            get_deepstack_grad_list,
+        )
+
+        num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+        unwrapped_model = unwrap_model(model[0])
+        if isinstance(data_iterator, list):
+            first_iter, backup_iter = itertools.tee(data_iterator[0])
+            data_iterator = [RerunDataIterator(first_iter)] + data_iterator[1:]
+        else:
+            data_iterator, backup_iter = itertools.tee(data_iterator)
+            data_iterator = RerunDataIterator(data_iterator)
+
+        pp_layer = mpu.get_pipeline_model_parallel_rank()
+        tp_size = mpu.get_tensor_model_parallel_world_size()
+
+        model_size = num_microbatch // encoder_rounds
+        iter_count = 0
+        batch_list = []
+        embedding_list = get_embedding_list()
+        visual_pos_masks_list = get_visual_pos_masks_list()
+        deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
+        for round in range(encoder_rounds):
+            batch_list.clear()
+            front = pp_layer * tp_size + round * model_size
+            end = (pp_layer + 1) * tp_size + round * model_size
+            for _ in range(front - iter_count):
+                next(backup_iter)
+            for _ in range(tp_size):
+                local_batch = copy.deepcopy(get_batch(backup_iter))
+                batch_list.append(local_batch)
+            iter_count = end
+
+            input_embeds_list = []
+            for i in range(tp_size):
+                input_embeds = unwrapped_model.encoder_model.text_forward(
+                    batch_list[i]["tokens"],
+                    batch_list[i]["position_ids"]
+                )
+                input_embeds_list.append(input_embeds)
+
+            batch_id = mpu.get_tensor_model_parallel_rank()
+            (
+                local_images,
+                local_image_grid_thw,
+                local_pixel_values_videos,
+                local_video_grid_thw,
+                local_input_ids,
+                local_attn_mask,
+                local_labels,
+                local_cu_lengths,
+                local_max_lengths,
+                local_position_ids,
+                local_loss_mask,
+                local_packed_seq_params,
+            ) = batch_list[batch_id].values()
+
+            (
+                combined_embeddings,
+                decode_input,
+                visual_pos_masks,
+                deepstack_visual_embeds,
+            ) = unwrapped_model.encoder_model(
+                input_ids=local_input_ids,
+                position_ids=local_position_ids,
+                image_inputs=dict(
+                    images=local_images,
+                    image_grid_thw=local_image_grid_thw,
+                ) if local_images is not None else None,
+                video_inputs=dict(
+                    pixel_values_videos=local_pixel_values_videos,
+                    video_grid_thw=local_video_grid_thw,
+                ) if local_pixel_values_videos is not None else None,
+                inference_params=None,
+                inputs_embeds=input_embeds_list[batch_id],
+                enable_encoder_hetero_dp=True,
+            )
+
+            unwrapped_model.vit_contexts.setdefault(round, {
+                "local_embedding": combined_embeddings,
+                "grads": None,
+                "local_visual_pos_masks": visual_pos_masks,
+                "local_deepstack_visual_embeds": deepstack_visual_embeds,
+                "local_deepstack_visual_embeds_grads": None,
+            })
+
+            embedding_list.append(
+                gather_variable_shape_embeddings(
+                    combined_embeddings, 
+                    group=mpu.get_model_parallel_group()
+                )
+            )
+
+            if visual_pos_masks is not None:
+                visual_pos_masks_list.append(
+                    gather_variable_shape_embeddings(
+                        visual_pos_masks, 
+                        group=mpu.get_model_parallel_group()
+                    )
+                )
+            else:
+                visual_pos_masks_list.append(None)
+
+            if deepstack_visual_embeds is not None:
+                deepstack_visual_embeds_list.append([
+                    gather_variable_shape_embeddings(embed, group=mpu.get_model_parallel_group())
+                    for embed in deepstack_visual_embeds
+                ])
+                get_deepstack_grad_list().append(
+                    [[None] * model_size for _ in range(len(deepstack_visual_embeds))]
+                )
+            else:
+                deepstack_visual_embeds_list.append(None)
+                get_deepstack_grad_list().append(None)
+        batch_list.clear()
+
+        _encoder_bucket_groups = set()
+        if args.overlap_grad_reduce and isinstance(model[0], DDP):
+            _ddp_model = model[0]
+            for param in unwrapped_model.encoder_model.parameters():
+                if param in _ddp_model.param_to_bucket_group:
+                    _encoder_bucket_groups.add(_ddp_model.param_to_bucket_group[param])
+            for bg in _encoder_bucket_groups:
+                bg.is_last_microbatch = False
 
     rerun_state_machine = get_rerun_state_machine()
     while rerun_state_machine.should_run_forward_backward(data_iterator):
@@ -1296,6 +1535,81 @@ def train_step(
             forward_only=False,
             adjust_tensor_shapes_fn=adjust_tensor_shapes_fn,
         )
+
+    if args.enable_full_hetero_dp:
+        from baige_omni.train.pretrain.pretrain_vlm import (
+            get_grad_list, get_deepstack_grad_list, clear_full_hetero_info
+        )
+        from baige_omni.train.initialize import get_num_micro_batches_per_decoder_dp
+
+        num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+        grad_list = get_grad_list()
+        n_cols = len(grad_list) // encoder_rounds
+        reshaped_grad_list = [grad_list[i * n_cols:(i + 1) * n_cols] for i in range(encoder_rounds)]
+
+        local_model = unwrap_model(model[0])
+        _rsm = get_rerun_state_machine()
+        _prev_rsm_state = _rsm.state
+        if _rsm.state == RerunState.NOT_RUNNING_YET:
+            _rsm.state = RerunState.INITIAL_RUN
+
+        try:
+            if args.overlap_grad_reduce and _encoder_bucket_groups:
+                for bg in _encoder_bucket_groups:
+                    bg.is_last_microbatch = False
+
+            for round in range(encoder_rounds):
+                if args.overlap_grad_reduce and _encoder_bucket_groups:
+                    for bg in _encoder_bucket_groups:
+                        bg.params_with_grad = set()
+
+                src_rank = 0
+                group = mpu.get_model_parallel_group()
+                local_rank = torch.distributed.get_rank(group=group)
+                ctx = local_model.vit_contexts[round]
+                ctx["grads"] = scatter_variable_shape_embeddings(
+                    reshaped_grad_list[round] if local_rank == src_rank else None,
+                    local_embedding_ref=ctx["local_embedding"],
+                    group=mpu.get_model_parallel_group()
+                )
+
+                deepstack_grads_for_round = get_deepstack_grad_list()[round]
+                if deepstack_grads_for_round is not None:
+                    ctx["local_deepstack_visual_embeds_grads"] = [
+                        scatter_variable_shape_embeddings(
+                            deepstack_grads_for_round[i] if local_rank == src_rank else None,
+                            local_embedding_ref=ctx["local_deepstack_visual_embeds"][i],
+                            group=mpu.get_model_parallel_group()
+                        )
+                        for i in range(len(ctx["local_deepstack_visual_embeds"]))
+                    ]
+
+                backward_tensors = [ctx["local_embedding"]]
+                backward_grads = [ctx["grads"]]
+                if ctx["local_deepstack_visual_embeds_grads"] is not None:
+                    backward_tensors += ctx["local_deepstack_visual_embeds"]
+                    backward_grads += ctx["local_deepstack_visual_embeds_grads"]
+
+                torch.autograd.backward(
+                    tensors=backward_tensors,
+                    grad_tensors=backward_grads,
+                    retain_graph=False,
+                )
+                del local_model.vit_contexts[round]
+
+            if args.overlap_grad_reduce and _encoder_bucket_groups:
+                for bg in _encoder_bucket_groups:
+                    bg.is_last_microbatch = True
+                    bg.start_grad_sync()
+                for bg in _encoder_bucket_groups:
+                    bg.finish_grad_sync()
+        finally:
+            _rsm.state = _prev_rsm_state
+
+        for _round_key in list(local_model.vit_contexts.keys()):
+            del local_model.vit_contexts[_round_key]
+        
+        clear_full_hetero_info()
 
     should_checkpoint, should_exit, exit_code = (
         rerun_state_machine.should_checkpoint_and_exit()
@@ -1927,6 +2241,23 @@ def train(
         if len(model) == 1:
             config.param_sync_func = config.param_sync_func[0]
     config.finalize_model_grads_func = finalize_model_grads
+
+    if args.enable_full_hetero_dp and args.overlap_grad_reduce:
+        _base_finalize = finalize_model_grads
+        def _finalize_model_grads_skip_encoder(model_chunks, num_tokens=None, pg_collection=None):
+            class _DummyHandle:
+                def wait(self):
+                    """No-op to satisfy the async handle interface."""
+                    pass
+
+            for model_chunk in model_chunks:
+                if isinstance(model_chunk, DDP):
+                    for bg in model_chunk.bucket_groups:
+                        if bg.grad_reduce_handle is None:
+                            bg.grad_reduce_handle = _DummyHandle()
+            _base_finalize(model_chunks, num_tokens, pg_collection=pg_collection)
+
+        config.finalize_model_grads_func = _finalize_model_grads_skip_encoder
 
     if args.log_energy:
         energy_monitor.setup()

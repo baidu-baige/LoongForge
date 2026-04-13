@@ -56,7 +56,12 @@ def omni_model_provider(
     # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
-    add_encoder = mpu.is_pipeline_first_stage(ignore_virtual=False, vp_stage=vp_stage)
+    if args.enable_full_hetero_dp:
+        # encoder only resides in the first VPP chunk (model[0]); when VPP is
+        # disabled vp_stage is None, which also satisfies the condition.
+        add_encoder = (vp_stage is None or vp_stage == 0)
+    else:
+        add_encoder = mpu.is_pipeline_first_stage(ignore_virtual=False, vp_stage=vp_stage)
 
     # temporary fix for omni model config
     for name in ["image_encoder", "image_projector"]:

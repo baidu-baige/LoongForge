@@ -10,6 +10,7 @@ import os
 import torch
 from functools import partial
 import copy
+import itertools
 
 from megatron.training import get_timers
 
@@ -19,7 +20,7 @@ from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
 from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
 from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.utils import StragglerDetector
+from megatron.core.utils import StragglerDetector, get_attr_wrapped_model
 from megatron.core import parallel_state
 
 from megatron.core.transformer.enums import AttnMaskType
@@ -50,7 +51,7 @@ from baige_omni.models.omni_models.omni_model_provider import (
 )
 from baige_omni.models.omni_models.utils import get_batch_on_this_cp_rank
 from baige_omni.train.get_loss_func import default_loss_func
-from baige_omni.train.initialize import change_parallel_state, get_encoder_dp_size
+from baige_omni.train.initialize import change_parallel_state, get_encoder_dp_size, get_num_micro_batches_per_decoder_dp
 
 from baige_omni.utils.global_vars import get_model_config
 
@@ -170,6 +171,81 @@ SPIKY_LOSS_FACTOR = 10
 
 batch_list = []
 forward_step_calling_count = 0
+_vpp0_batch_cache = []   # cached batch_list per forward_group_id from vp_stage=0
+_vpp_counters = {}       # counter for higher vpp chunks
+embedding_list = []
+grad_list = []
+visual_pos_masks_list = []
+deepstack_visual_embeds_list = []
+deepstack_grad_list = []
+
+def get_embedding_list():
+    """Return the global embedding list."""
+    return embedding_list
+
+def clear_embedding_list():
+    """Clear the global embedding list."""
+    embedding_list.clear()
+
+def get_grad_list():
+    """Return the global gradient list."""
+    return grad_list
+
+def clear_grad_list():
+    """Clear the global gradient list."""
+    grad_list.clear()
+
+def get_visual_pos_masks_list():
+    """Return the global visual position masks list."""
+    return visual_pos_masks_list
+
+def clear_visual_pos_masks_list():
+    """Clear the global visual position masks list."""
+    visual_pos_masks_list.clear()
+
+def get_deepstack_visual_embeds_list():
+    """Return the global deepstack visual embeddings list."""
+    return deepstack_visual_embeds_list
+
+def clear_deepstack_visual_embeds_list():
+    """Clear the global deepstack visual embeddings list."""
+    deepstack_visual_embeds_list.clear()
+
+def get_deepstack_grad_list():
+    """Return the global deepstack gradient list."""
+    return deepstack_grad_list
+
+def clear_deepstack_grad_list():
+    """Clear the global deepstack gradient list."""
+    deepstack_grad_list.clear()
+
+def get_count_and_gbs():
+    """Return the forward step calling count and global batch size."""
+    return forward_step_calling_count, get_args().global_batch_size
+
+def clear_vpp0_batch_cache():
+    """Clear the global VPP batch cache."""
+    _vpp0_batch_cache.clear()
+
+def clear_vpp_counters():
+    """Clear the global VPP counters."""
+    _vpp_counters.clear()
+
+def set_count(count=0):
+    """Reset the forward step calling count."""
+    global forward_step_calling_count
+    forward_step_calling_count = count
+
+def clear_full_hetero_info(count=0):
+    """Clear full hetero info."""
+    set_count(count)
+    clear_embedding_list()
+    clear_grad_list()
+    clear_visual_pos_masks_list()
+    clear_deepstack_visual_embeds_list()
+    clear_deepstack_grad_list()
+    clear_vpp0_batch_cache()
+    clear_vpp_counters()
 
 def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
@@ -190,14 +266,29 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     global batch_list
 
     _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
-    forward_group_id = forward_step_calling_count // _ImageEncoderDataParallelSize
-    inner_group_id = forward_step_calling_count % _ImageEncoderDataParallelSize
-    if inner_group_id == 0:
-        batch_list.clear()
-        with stimer(bdata=True):
-            for _ in range(_ImageEncoderDataParallelSize):
-                local_batch = copy.deepcopy(get_batch(data_iterator))
-                batch_list.append(local_batch)
+
+    model_add_encoder = get_attr_wrapped_model(model, 'add_encoder')
+    is_higher_vpp_chunk = args.enable_full_hetero_dp and (not model_add_encoder)
+
+    if is_higher_vpp_chunk:
+        vpp_counter = _vpp_counters.get('higher', 0)
+        forward_group_id = vpp_counter // _ImageEncoderDataParallelSize
+        inner_group_id = vpp_counter % _ImageEncoderDataParallelSize
+        if inner_group_id == 0:
+            batch_list.clear()
+            batch_list.extend(_vpp0_batch_cache[forward_group_id])
+        _vpp_counters['higher'] = vpp_counter + 1
+    else:
+        forward_group_id = forward_step_calling_count // _ImageEncoderDataParallelSize
+        inner_group_id = forward_step_calling_count % _ImageEncoderDataParallelSize
+        if inner_group_id == 0:
+            batch_list.clear()
+            with stimer(bdata=True):
+                for _ in range(_ImageEncoderDataParallelSize):
+                    local_batch = copy.deepcopy(get_batch(data_iterator))
+                    batch_list.append(local_batch)
+            if args.enable_full_hetero_dp:
+                _vpp0_batch_cache.append(list(batch_list))
 
     timers("batch-generator").stop()
 
@@ -261,9 +352,14 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 batch_list=batch_list,
                 forward_group_id=forward_group_id,
                 inner_group_id=inner_group_id,
+                enable_full_hetero_dp=args.enable_full_hetero_dp,
             )
 
-        forward_step_calling_count += 1
+        # Only increment the counter for the primary chunk (vp_stage=0).
+        # For full_hetero_dp, is_higher_vpp_chunk tells us; otherwise,
+        # the original check via mpu still holds (returns 0 or None).
+        if not is_higher_vpp_chunk:
+            forward_step_calling_count += 1
 
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
