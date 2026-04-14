@@ -451,10 +451,15 @@ class DSAIndexerFused(MegatronModule):
                 )
                 extra_kwargs["offsets"] = offsets
 
+            # DSA Indexer's q_pe/k_pe are non-interleaved (unlike MLA's interleaved layout),
+            # so we must disable the MLA de-interleave preprocessing in apply_rotary_pos_emb.
+            indexer_rope_config = copy.copy(self.config)
+            indexer_rope_config.multi_latent_attention = False
+
             x_pe = apply_rotary_pos_emb(
                 x_pe,
                 rotary_pos_emb,
-                config=self.config,
+                config=indexer_rope_config,
                 cu_seqlens=cu_seqlens,
                 mscale=mscale,
                 cp_group=self.pg_collection.cp,
@@ -564,9 +569,10 @@ class DSAIndexerFused(MegatronModule):
         k = self.k_norm(k)
         if self.config.sequence_parallel and self.pg_collection.tp.size() > 1:
             k = gather_from_sequence_parallel_region(k)  # [s, b, d]
+
         if packed_seq_params is None:
             k = k.unsqueeze(-2)  # [s, b, 1, d]
-            k = self._apply_rope(k, rotary_pos_emb[:k.size(0)], mscale, cu_seqlens_kv, rotary_pos_cos, rotary_pos_sin)
+            k = self._apply_rope(k, rotary_pos_emb, mscale, cu_seqlens_kv, rotary_pos_cos, rotary_pos_sin)
             k = k.squeeze(-2)  # [s, b, d]
         else:
             # Cause head and batchsize are both 1, omit the batch squeeze and head unsqueeze

@@ -412,19 +412,17 @@ def rotary_fwd_q_kernel_non_interleaved(
 
     x_off = tl.arange(0, BLOCK_H)[:, None] * stride_x_nheads + emb_offset
     mask = x_off < head_num * stride_x_nheads
-    # x1 = t[..., 0::2], x2 = t[..., 1::2]
-    x_1_off = x_off + tl.arange(0, emb_dim // 2)[None, :] * 2
-    x_2_off = x_1_off + 1
+    # non-interleaved: x1 = t[..., :emb_dim//2], x2 = t[..., emb_dim//2:]
+    x_1_off = x_off + tl.arange(0, emb_dim // 2)[None, :]
+    x_2_off = x_off + emb_dim // 2 + tl.arange(0, emb_dim // 2)[None, :]
     x_1 = tl.load(Q + x_1_off, mask=mask)
     x_2 = tl.load(Q + x_2_off, mask=mask)
 
     x_left = x_1 * cos_left - x_2 * sin_left
     x_right = x_2 * cos_right + x_1 * sin_right
 
-    x_left_off = x_off + tl.arange(0, emb_dim // 2)[None, :]
-    x_right_off = x_left_off + emb_dim // 2
-    tl.store(Q + x_left_off, x_left, mask=mask)
-    tl.store(Q + x_right_off, x_right, mask=mask)
+    tl.store(Q + x_1_off, x_left, mask=mask)
+    tl.store(Q + x_2_off, x_right, mask=mask)
 
 
 @triton.autotune(
@@ -487,16 +485,15 @@ def rotary_bwd_q_kernel_non_interleaved(
 
     x_off = tl.arange(0, BLOCK_H)[:, None] * stride_x_nheads + emb_offset
     mask = x_off < head_num * stride_x_nheads
-    x_left_off = x_off + tl.arange(0, emb_dim // 2)[None, :]
-    x_right_off = x_left_off + emb_dim // 2
-    x_left = tl.load(DO + x_left_off, mask=mask)
-    x_right = tl.load(DO + x_right_off, mask=mask)
+    # non-interleaved: read front half and back half
+    x_1_off = x_off + tl.arange(0, emb_dim // 2)[None, :]
+    x_2_off = x_off + emb_dim // 2 + tl.arange(0, emb_dim // 2)[None, :]
+    x_left = tl.load(DO + x_1_off, mask=mask)
+    x_right = tl.load(DO + x_2_off, mask=mask)
 
     x_1 = x_left * cos_left + x_right * sin_right
     x_2 = -x_left * sin_left + x_right * cos_right
 
-    x_1_off = x_off + tl.arange(0, emb_dim // 2)[None, :] * 2
-    x_2_off = x_1_off + 1
     tl.store(DO + x_1_off, x_1, mask=mask)
     tl.store(DO + x_2_off, x_2, mask=mask)
 
@@ -1210,14 +1207,9 @@ def fused_apply_mla_rope(
             t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset, sp_offset
         )
     else:
-        if pe_first:
-            return ApplyMLARotaryEmbQNonInterleavedWithOffset.apply(
-                t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset, sp_offset
-            )
-        else:
-            return ApplyMLARotaryEmbQNonInterleaved.apply(
-                t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, rotary_interleaved
-            )
+        return ApplyMLARotaryEmbQNonInterleavedWithOffset.apply(
+            t, cos, sin, qk_head_dim, emb_dim, cu_seqlens_q, cp_rank, cp_size, emb_offset, sp_offset
+        )
 
 
 @triton.autotune(
