@@ -374,17 +374,19 @@ class OmniCombinationModel(BaseMegatronModule):
                         ctx["grads"] = grad.clone()
 
                     if inner_group_id == _ImageEncoderDataParallelSize - 1:
+                        bwd_tensors = [ctx["local_embedding"]]
+                        bwd_grads = [ctx["grads"]]
+                        if ctx["local_deepstack_visual_embeds"] is not None:
+                            for t, g in zip(
+                                ctx["local_deepstack_visual_embeds"], 
+                                ctx["local_deepstack_visual_embeds_grads"]
+                            ):
+                                if t.requires_grad and t.grad_fn is not None:
+                                    bwd_tensors.append(t)
+                                    bwd_grads.append(g)
                         torch.autograd.backward(
-                            tensors=(
-                                [ctx["local_embedding"]] + ctx["local_deepstack_visual_embeds"] 
-                                if ctx["local_deepstack_visual_embeds"] is not None 
-                                else [ctx["local_embedding"]]
-                            ),
-                            grad_tensors=(
-                                [ctx["grads"]] + ctx["local_deepstack_visual_embeds_grads"] 
-                                if ctx["local_deepstack_visual_embeds_grads"] is not None 
-                                else [ctx["grads"]]
-                            ),
+                            tensors=bwd_tensors,
+                            grad_tensors=bwd_grads,
                             retain_graph=False
                         )
                         del vit_contexts[forward_group_id]

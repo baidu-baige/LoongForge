@@ -1587,8 +1587,10 @@ def train_step(
                 backward_tensors = [ctx["local_embedding"]]
                 backward_grads = [ctx["grads"]]
                 if ctx["local_deepstack_visual_embeds_grads"] is not None:
-                    backward_tensors += ctx["local_deepstack_visual_embeds"]
-                    backward_grads += ctx["local_deepstack_visual_embeds_grads"]
+                    for t, g in zip(ctx["local_deepstack_visual_embeds"], ctx["local_deepstack_visual_embeds_grads"]):
+                        if t.requires_grad and t.grad_fn is not None:
+                            backward_tensors.append(t)
+                            backward_grads.append(g)
 
                 torch.autograd.backward(
                     tensors=backward_tensors,
