@@ -9,7 +9,7 @@
 #include <cutlass/fast_math.h>
 
 #include "params.h"
-#include "sm100/sparse_mla_fwd.h"
+#include "smxxx/sparse_mla_fwd.h"
 
 #define CHECK_DEVICE(x) TORCH_CHECK(x.is_cuda(), #x " must be on CUDA")
 #define CHECK_SHAPE(x, ...) TORCH_CHECK(x.sizes() == \
@@ -62,9 +62,13 @@ std::vector<at::Tensor> sparse_prefill_fwd(
     TORCH_CHECK(d_qk == 576 || d_qk == 512, "Invalid d_qk: ", d_qk, ". Expected 512 or 576.");
     TORCH_CHECK(d_v == 512, "Invalid d_v: ", d_v);
     TORCH_CHECK(q_start_index_s >= 0, "q_start_index_s must be >= 0");
-    TORCH_CHECK(h_q == 128, "Sparse attention forward (head128) requires h_q=128. Got h_q=", h_q);
+    TORCH_CHECK(h_q == 128 || h_q == 64, "Sparse attention forward requires h_q=128 or h_q=64. Got h_q=", h_q);
     TORCH_CHECK(h_kv == 1, "Sparse attention forward currently only supports h_kv=1. Got h_kv=", h_kv);
-    TORCH_CHECK(topk > 0 && topk % 128 == 0, "Sparse attention forward requires topk to be a positive multiple of 128. Got topk=", topk);
+    if (h_q == 128) {
+        TORCH_CHECK(topk > 0 && topk % 128 == 0, "Sparse attention forward (head128) requires topk to be a positive multiple of 128. Got topk=", topk);
+    } else {
+        TORCH_CHECK(topk > 0 && topk % 64 == 0, "Sparse attention forward (head64) requires topk to be a positive multiple of 64. Got topk=", topk);
+    }
 
     CHECK_SHAPE(q, s_q, h_q, d_qk);
     CHECK_SHAPE(kv, s_kv, h_kv, d_qk);
@@ -122,13 +126,19 @@ std::vector<at::Tensor> sparse_prefill_fwd(
         dprops->multiProcessorCount,
         at::cuda::getCurrentCUDAStream().stream()
     };
-
-    if (d_qk == 576) {
-        sm100::fwd::head128::run_fwd_phase1_kernel<576>(params);
+    if (h_q == 128) {
+        if (d_qk == 576) {
+            sm100::fwd::head128::run_fwd_phase1_kernel<576>(params);
+        } else {
+            sm100::fwd::head128::run_fwd_phase1_kernel<512>(params);
+        }
     } else {
-        sm100::fwd::head128::run_fwd_phase1_kernel<512>(params);
+        if (d_qk == 576) {
+            sm100::fwd::head64::run_fwd_phase1_kernel<576>(params);
+        } else {
+            sm100::fwd::head64::run_fwd_phase1_kernel<512>(params);
+        }
     }
-
     return {out, max_logits, lse, p_out};
 }
 

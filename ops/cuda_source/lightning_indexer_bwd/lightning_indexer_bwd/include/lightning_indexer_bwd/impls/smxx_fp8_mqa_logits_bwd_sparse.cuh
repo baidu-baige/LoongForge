@@ -29,7 +29,7 @@ template <
     uint32_t kNumSparseLoadThreads,                         // 128 threads for sparse kv/kv_scales/d_output loading, 1 thread for q/weights TMA loading
     uint32_t kNumMathWarpGroups = kNumMathThreads / 128>    // 1 warp-group for umma loop
 __global__ __launch_bounds__(kNumSpecializedThreads + kNumMathThreads + kNumSparseLoadThreads, 1)
-void sm100_fp8_mqa_logits_bwd(
+void smxx_fp8_mqa_logits_bwd(
     // Parameters
     const uint32_t seq_len,
     const uint32_t seq_len_kv,
