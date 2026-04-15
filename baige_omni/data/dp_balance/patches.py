@@ -1,7 +1,11 @@
 # Copyright 2026 The BaigeOmni Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""patch utils (functional version)"""
+"""Runtime monkey-patches for DP balance adaptation.
+
+Registers and applies patches to PyTorch's _pin_memory_loop and Megatron's
+RerunDataIterator to enable cross-DP data reordering during training.
+"""
 
 import importlib
 import sys
@@ -261,43 +265,25 @@ def dataloader_adaptation():
     """
     Register DataLoader-related patches for DP balance adaptation.
 
-    This function registers multiple runtime replacements related to
-    customized DataLoader implementations and wrapper optimizations.
+    This function registers a lightweight wrapper around PyTorch's
+    _pin_memory_loop to inject cross-DP data reordering, plus
+    a replacement for Megatron's RerunDataIterator.
     """
-    from baige_omni.data.dp_balance.dataloader.dataloader import DataLoader
-    from baige_omni.data.dp_balance.wrapper.dp_balance.dataloader_wrapper import (
+    from baige_omni.data.dp_balance.pin_memory_hook import (
         pin_memory_loop_wrapper,
     )
-    from baige_omni.data.dp_balance.wrapper.dp_balance.rerun_state_wrapper import (
+    from baige_omni.data.dp_balance.rerun_iterator import (
         RerunDataIterator,
     )
-    from baige_omni.data.dp_balance.wrapper.dp_balance.energon_dataloader_wrapper import (
-        SavableDataLoader,
-        BasicDataLoader,
-    )
-
-    register_patch("torch.utils.data.DataLoader", DataLoader, create_dummy=True)
 
     register_patch(
-        "baige_omni.data.dp_balance.dataloader._utils.pin_memory.pin_memory_loop",
+        "torch.utils.data._utils.pin_memory._pin_memory_loop",
         pin_memory_loop_wrapper,
     )
 
     register_patch(
         "megatron.core.rerun_state_machine.RerunDataIterator",
         RerunDataIterator,
-        create_dummy=True,
-    )
-
-    register_patch(
-        "megatron.energon.savable_loader.SavableDataLoader",
-        SavableDataLoader,
-        create_dummy=True,
-    )
-
-    register_patch(
-        "megatron.energon.savable_loader.BasicDataLoader",
-        BasicDataLoader,
         create_dummy=True,
     )
 
@@ -315,9 +301,9 @@ def exec_adaptation():
     """
     from baige_omni.utils import get_args
 
-    if get_args().use_dp_balance:
+    args = get_args()
+    if args.use_vlm_dp_balance:
         dataloader_adaptation()
-
     apply_patches()
 
 

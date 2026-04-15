@@ -132,7 +132,7 @@ from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelpe
 from dataclasses import asdict
 from baige_omni.utils import get_args, constants, global_vars
 from .initialize import initialize_baige_megatron
-from baige_omni.data.dp_balance.wrapper.dp_balance.training_wrapper import (
+from baige_omni.data.dp_balance.train_hooks import (
     train_step_decorator,
     train_log_decorator
 )
@@ -1587,10 +1587,8 @@ def train_step(
                 backward_tensors = [ctx["local_embedding"]]
                 backward_grads = [ctx["grads"]]
                 if ctx["local_deepstack_visual_embeds_grads"] is not None:
-                    for t, g in zip(ctx["local_deepstack_visual_embeds"], ctx["local_deepstack_visual_embeds_grads"]):
-                        if t.requires_grad and t.grad_fn is not None:
-                            backward_tensors.append(t)
-                            backward_grads.append(g)
+                    backward_tensors += ctx["local_deepstack_visual_embeds"]
+                    backward_grads += ctx["local_deepstack_visual_embeds_grads"]
 
                 torch.autograd.backward(
                     tensors=backward_tensors,

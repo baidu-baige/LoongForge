@@ -1244,18 +1244,69 @@ def _add_extra_parallel_args(parser):
 
     # Data parallelism load balancing
     group.add_argument(
-        '--use-dp-balance',
+        '--use-vlm-dp-balance',
         action='store_true',
-        help="Enable dynamic load balancing across data parallel ranks. "
+        help="Enable dynamic load balancing across data parallel ranks for VLM models. "
+             "Adjusts computation distribution based on runtime statistics. Default: False"
+    )
+
+    group.add_argument(
+        '--use-vit-dp-balance',
+        action='store_true',
+        help="Enable dynamic load balancing across data parallel ranks for ViT models. "
              "Adjusts computation distribution based on runtime statistics. Default: False"
     )
     
     group.add_argument(
-        '--dp-balance-warmup-iters',
+        '--vlm-dp-balance-warmup-iters',
         nargs='+',
         type=int,
         default=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-        help="Iteration indices to collect statistics for DP balance coefficient warmup. "
+        help="Iteration indices to collect statistics for VLM DP balance coefficient warmup. "
              "Default: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+    )
+
+    group.add_argument(
+        '--dp-balance-verbose',
+        action='store_true',
+        default=False,
+        help="Print DP balance diagnostic information including imbalance ratio, "
+             "per-DP-rank load distribution, and reorder decisions. Default: False"
+    )
+
+    group.add_argument(
+        '--dp-balance-max-len-ratio-vlm',
+        type=float,
+        default=1.2,
+        help="Maximum sequence length ratio for VLM-level DP load balancing. "
+             "Limits each DP rank's maximum sequence length to (avg_len * ratio). "
+             "Set to None to disable the constraint. Default: 1.2"
+    )
+
+    group.add_argument(
+        '--dp-balance-max-len-ratio-vit',
+        type=float,
+        default=None,
+        help="Maximum sequence length ratio for ViT-level DP load balancing. "
+             "Limits each DP rank's maximum sequence length to (avg_len * ratio). "
+             "Set to None to disable the constraint (default for ViT mode). Default: None"
+    )
+
+    group.add_argument(
+        '--dp-balance-trigger-threshold-vlm',
+        type=float,
+        default=0.2,
+        help="Minimum imbalance ratio threshold for triggering VLM-level DP load balancing. "
+             "Balancing is skipped when imbalance ratio is below this threshold. "
+             "imbalance_ratio = (max_load / avg_load) - 1. Default: 0.2"
+    )
+
+    group.add_argument(
+        '--dp-balance-trigger-threshold-vit',
+        type=float,
+        default=0.2,
+        help="Minimum imbalance ratio threshold for triggering ViT-level DP load balancing. "
+             "Balancing is skipped when imbalance ratio is below this threshold. "
+             "imbalance_ratio = (max_load / avg_load) - 1. Default: 0.2"
     )
     return parser

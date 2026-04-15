@@ -6,13 +6,8 @@
 from typing import Dict, Tuple, List, Any
 
 import torch
-import torch.distributed as dist
-import torch.nn.functional as F
-import numpy as np
-from scipy.optimize import minimize
 
 from baige_omni.utils import get_args, get_tokenizer
-from megatron.core import mpu
 
 # Special token for image context and its token id
 IMG_CONTEXT_TOKEN = "<IMG_CONTEXT>"
@@ -102,6 +97,11 @@ def depack_data_for_intern_vl(
     # ------------------------------------------------
     # 2) Slice packed tensors into per-sample segments
     # ------------------------------------------------
+    img_size = get_args().force_image_size
+    img_context_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
+        IMG_CONTEXT_TOKEN
+    )
+
     for j in range(len(attention_mask) - 1):
         start_idx = int(attention_mask[j].item())
         end_idx = int(attention_mask[j + 1].item())
@@ -114,8 +114,6 @@ def depack_data_for_intern_vl(
         # Default: placeholder image tensors
         # Last segment is padding-only and should not carry images
         cur_image_flags = torch.zeros(1, dtype=torch.int64, device=cur_input_ids.device)
-        # Forced image resolution (used for cost estimation)
-        img_size = get_args().force_image_size
         cur_pixel_values = torch.zeros(
             [1, 3, img_size, img_size],
             dtype=torch.float,
@@ -125,9 +123,6 @@ def depack_data_for_intern_vl(
         # ------------------------------------------------
         # 3) Assign pixel_values based on image tokens
         # ------------------------------------------------
-        img_context_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
-            IMG_CONTEXT_TOKEN
-        )
         if filtered_pixel_values is not None:
             image_token_num = int((cur_input_ids == img_context_token_id).sum().item())
 

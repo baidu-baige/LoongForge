@@ -25,7 +25,8 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
 )
 from transformers.models.auto.modeling_auto import AutoModel
 from baige_omni.train.initialize import change_parallel_state
-
+from baige_omni.data.dp_balance.vit_balance import dp_balance_vit_encoder
+from baige_omni.utils import get_args
 
 def make_encoder_forward_pre_hook(module_name):
     """
@@ -317,9 +318,17 @@ class OmniEncoderModel(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for image encoding."""
-        image_embeddings, window_index, deepstack_image_embeds = self.image_encoder(
-            images, image_grid_thw=image_grid_thw
-        )
+        args = get_args()
+        if args.use_vit_dp_balance:
+            if args.enable_encoder_hetero_dp or args.enable_full_hetero_dp:
+                change_parallel_state("image_encoder")
+            image_embeddings, window_index, deepstack_image_embeds = dp_balance_vit_encoder(
+                self.image_encoder, images, image_grid_thw
+            )
+        else:
+            image_embeddings, window_index, deepstack_image_embeds = self.image_encoder(
+                images, image_grid_thw=image_grid_thw
+            )
         if self.image_projector is not None:
             image_embeddings = self.image_projector(image_embeddings, window_index)
 
