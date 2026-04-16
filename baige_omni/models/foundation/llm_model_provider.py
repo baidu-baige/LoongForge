@@ -60,7 +60,7 @@ def llm_model_provider(
     # TODO: remove or not?
     build_model_context = nullcontext
     build_model_context_args = {}
-    if args.fp8_param_gather:
+    if args.fp8_param_gather and not getattr(config, "selective_fp8", False):
         try:
             from transformer_engine.pytorch import fp8_model_init
 
@@ -82,5 +82,23 @@ def llm_model_provider(
             parallel_output=parallel_output,
             vp_stage=vp_stage,
         )
+
+    # Validate selective FP8 coverage: detect TE modules that lack the
+    # init guard, which would cause "quantized weights without quantized
+    # compute" warnings at runtime.
+    # Check both top-level config and sub-configs (VLM: foundation, image_encoder, etc.)
+    _has_selective_fp8 = getattr(config, "selective_fp8", False)
+    if not _has_selective_fp8:
+        for _attr in ("foundation", "image_encoder", "video_encoder", "audio_encoder"):
+            _sub_cfg = getattr(config, _attr, None)
+            if _sub_cfg and getattr(_sub_cfg, "selective_fp8", False):
+                _has_selective_fp8 = True
+                break
+    if _has_selective_fp8:
+        try:
+            from megatron.core.fp8_utils import validate_selective_fp8_coverage
+            validate_selective_fp8_coverage(model)
+        except ImportError:
+            pass
 
     return model

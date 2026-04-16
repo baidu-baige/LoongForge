@@ -254,8 +254,26 @@ def parse_arguments(
 def parse_args_from_config(args):
     """parse args from config"""
     config = get_hydra_config()
-    model_cfgs = build_model_config(args, config)    
+    model_cfgs = build_model_config(args, config)
     set_model_config(model_cfgs)
+    _register_selective_fp8_decision()
+
+
+def _register_selective_fp8_decision():
+    """Register selective-FP8 init decision callback.
+
+    Always registering keeps behavior stable in long-lived processes and avoids
+    assumptions about ``model_cfgs`` shape (dict vs dataclass/object).
+    The callback itself falls back to static whitelist when no dynamic policy is
+    configured in a given model config.
+    """
+    try:
+        from baige_omni.train.fp8_dynamic_policy import selective_fp8_init_decision
+        from megatron.core.fp8_utils import register_selective_fp8_init_decision
+    except ImportError:
+        return
+
+    register_selective_fp8_init_decision(selective_fp8_init_decision)
 
 
 def parse_train_args(args_defaults={}):
