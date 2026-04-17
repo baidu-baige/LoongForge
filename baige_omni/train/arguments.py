@@ -568,7 +568,7 @@ def _add_extra_video_args(parser):
     )
 
     # -------------------------------------------------------------------------
-    # Latent Space Configuration (for video diffusion models like STDiT)
+    # Latent Space Configuration
     # -------------------------------------------------------------------------
     group.add_argument(
         "--latent-in-channels",
@@ -637,13 +637,6 @@ def _add_extra_video_args(parser):
     )
 
     group.add_argument(
-        "--latent-frame-interval",
-        type=int,
-        default=1,
-        help="Interval between consecutive frames in latent space. Default: 1"
-    )
-
-    group.add_argument(
         "--max-text-length",
         type=int,
         default=None,
@@ -688,21 +681,6 @@ def _add_extra_video_args(parser):
              "Default: None"
     )
 
-    group.add_argument(
-        "--stdit-bucket-config",
-        type=str,
-        default=None,
-        help="Path to bucket configuration file for STDiT models. Defines how "
-             "samples are grouped by resolution. Default: None"
-    )
-
-    group.add_argument(
-        "--num-bucket-build-workers",
-        type=int,
-        default=1,
-        help="Number of worker processes for building sample buckets. Default: 1"
-    )
-
     # -------------------------------------------------------------------------
     # InternVL-specific Arguments
     # -------------------------------------------------------------------------
@@ -741,12 +719,6 @@ def _add_extra_video_args(parser):
     )
 
     group.add_argument(
-        "--use-data-resampling",
-        action="store_true",
-        help="Enable data resampling strategy for imbalanced datasets. Default: False"
-    )
-
-    group.add_argument(
         "--down-sample-ratio",
         type=float,
         default=0.5,
@@ -768,13 +740,6 @@ def _add_extra_video_args(parser):
     )
 
     group.add_argument(
-        "--log_freq",
-        type=int,
-        default=1000,
-        help="Logging frequency (iterations) for packed dataset statistics. Default: 1000"
-    )
-
-    group.add_argument(
         "--strict-mode",
         action="store_true",
         help="Pad images to exactly --num-images-expected when enabled. Default: False"
@@ -784,12 +749,6 @@ def _add_extra_video_args(parser):
         "--replacement",
         action="store_true",
         help="Restart dataset iteration from beginning when exhausted. Default: False"
-    )
-
-    group.add_argument(
-        "--allow-overflow",
-        action="store_true",
-        help="Drop samples that exceed --max-packed-tokens instead of error. Default: False"
     )
 
     group.add_argument(
@@ -866,12 +825,6 @@ def _add_extra_video_args(parser):
     )
 
     group.add_argument(
-        "--communicate-dataset",
-        action="store_true",
-        help="[DEPRECATED] Enable dataset state communication across ranks. Default: False"
-    )
-
-    group.add_argument(
         "--save-dataset-state",
         action="store_true",
         help="[DEPRECATED] Save dataset state for resumable training. Default: False"
@@ -882,12 +835,6 @@ def _add_extra_video_args(parser):
         type=int,
         default=2,
         help="Number of batches to prefetch per worker in dataloader. Default: 2"
-    )
-
-    group.add_argument(
-        "--no-split-annotations",
-        action="store_true",
-        help="[DEPRECATED] Disable splitting of annotation files across workers. Default: False"
     )
 
     return parser
@@ -1197,14 +1144,6 @@ def _add_extra_parallel_args(parser):
         help="[LEGACY] Degree of Ulysses-style context parallelism. "
              "Retained for backward compatibility with older Baige versions. Default: 1"
     )
-    
-    group.add_argument(
-        "--using-config-strategy",
-        action="store_true",
-        help="Use parallel configuration from model config file instead of "
-             "command-line arguments. Default: False"
-    )
-
     # Deprecated pipeline parallelism arguments
     group.add_argument(
         '--custom-pipeline-layers',

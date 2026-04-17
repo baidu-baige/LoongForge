@@ -8,7 +8,7 @@ DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/qwen3/tigerbot-alpaca-zh-0.5m_tok
 
 DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/sft_dataset_config.json"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-32B"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3/Qwen3_32B_mcore_tp4pp2"}

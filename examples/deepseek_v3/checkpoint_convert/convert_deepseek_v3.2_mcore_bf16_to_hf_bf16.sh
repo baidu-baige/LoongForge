@@ -7,7 +7,7 @@ CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
 LOAD=/mnt/cluster/baige-omni-ckpt/deepseek3/DeepSeek-V3.2-bf16-tp8pp8ep32etp1/release  # the converted checkpoint will be in MCore BF16 format
 SAVE=/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3.2-bf16-hf  # the BF16 format checkpoint, converted via fp8_to_bf16 casting script
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek3/deepseek_v3_2.yaml
+MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek3/deepseek_v3_2_sparse.yaml
 CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_2_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \

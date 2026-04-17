@@ -141,7 +141,7 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
   $BAIGE_OMNI_PATH/baige_omni/train.py \
   ${MODEL_CONFIG_ARGS[@]} \
-  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/sft_dataset_config.json \
+  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \
