@@ -57,6 +57,6 @@ name_map:
 torch_dtype: bfloat16
 
 vision_patch:
-  vision_model.patch_embed.position_embeddings.weight: vision_tower.patch_embed.pos_emb.weight
+  vision_model.patch_embed.pos_emb.weight: vision_tower.patch_embed.pos_emb.weight
   vision_model.patch_embed.proj.weight: vision_tower.patch_embed.proj.weight
   vision_model.patch_embed.proj.bias: vision_tower.patch_embed.proj.bias
