@@ -95,58 +95,85 @@ class MLASelfAttentionFused(MLASelfAttention):
             self.v_channels = self.config.v_head_dim
             self.padding_v_head_dim = False
 
-        if TEGroupedLinear is None:
-            raise ImportError(
-                "--use-dsa-fused requires TEGroupedLinear from transformer_engine."
+        self.absorb_backend = getattr(self.config, 'absorb_backend', None)
+        if self.absorb_backend is None:
+            from megatron.training import get_args
+            self.absorb_backend = getattr(get_args(), 'absorb_backend', 'te')
+
+        if self.absorb_backend == "torch":
+            # torch backend: use einsum with sliced weights from linear_kv_up_proj
+            # No extra modules needed; linear_kv_up_proj stays trainable
+            pass
+        else:
+            # TE backend: use TEGroupedLinear absorb modules
+            if TEGroupedLinear is None:
+                raise ImportError(
+                    "--use-dsa-fused requires TEGroupedLinear from transformer_engine."
+                )
+
+            self.linear_kv_up_proj_absorb_q = build_module(
+                TEGroupedLinear,
+                self.num_attention_heads_per_partition,
+                self.config.qk_head_dim,
+                self.config.kv_lora_rank,
+                parallel_mode=None,
+                config=self.config,
+                init_method=self.config.init_method,
+                bias=False,
+                skip_bias_add=False,
+                is_expert=False,
+                tp_comm_buffer_name="kv_up_proj_absorb_q",
+            )
+            self.linear_kv_up_proj_absorb_output = build_module(
+                TEGroupedLinear,
+                self.num_attention_heads_per_partition,
+                self.config.kv_lora_rank,
+                self.config.v_head_dim,
+                parallel_mode=None,
+                config=self.config,
+                init_method=self.config.init_method,
+                bias=False,
+                skip_bias_add=False,
+                is_expert=False,
+                tp_comm_buffer_name="kv_up_proj_absorb_output",
             )
 
-        self.linear_kv_up_proj_absorb_q = build_module(
-            TEGroupedLinear,
-            self.num_attention_heads_per_partition,
-            self.config.qk_head_dim,
-            self.config.kv_lora_rank,
-            parallel_mode=None,
-            config=self.config,
-            init_method=self.config.init_method,
-            bias=False,
-            skip_bias_add=False,
-            is_expert=False,
-            tp_comm_buffer_name="kv_up_proj_absorb_q",
-        )
-        self.linear_kv_up_proj_absorb_output = build_module(
-            TEGroupedLinear,
-            self.num_attention_heads_per_partition,
-            self.config.kv_lora_rank,
-            self.config.v_head_dim,
-            parallel_mode=None,
-            config=self.config,
-            init_method=self.config.init_method,
-            bias=False,
-            skip_bias_add=False,
-            is_expert=False,
-            tp_comm_buffer_name="kv_up_proj_absorb_output",
-        )
+            self.linear_kv_up_proj.weight.requires_grad = False
 
         # Checkpoint load hooks
-        self.register_load_state_dict_pre_hook(self._pre_load_hook)
-        self.register_load_state_dict_post_hook(self._post_load_hook)
+        if self.absorb_backend == "te":
+            # TE: decompose kv_up_proj into per-head absorb weights
+            self.register_load_state_dict_pre_hook(self._pre_load_hook)
+            self.register_load_state_dict_post_hook(self._post_load_hook)
+        else:
+            # Torch: reconstruct kv_up_proj from absorb keys if checkpoint is TE format
+            self.register_load_state_dict_pre_hook(self._pre_load_hook_torch)
+            self.register_load_state_dict_post_hook(self._post_load_hook)
 
-        # Checkpoint save hook (wrap in lambda – bound methods don't support
-        # the arbitrary attribute assignment that PyTorch's hook registration
-        # requires, e.g. hook._from_public_api = True).
-        self.register_state_dict_post_hook(
-            lambda mod, sd, pfx, meta: self._state_dict_post_hook(mod, sd, pfx, meta)
-        )
+        # Checkpoint save hook (TE absorb only — reconstructs kv_up_proj from
+        # per-head absorb weights; torch backend keeps kv_up_proj directly).
+        if self.absorb_backend == "te":
+            self.register_state_dict_post_hook(
+                lambda mod, sd, pfx, meta: self._state_dict_post_hook(mod, sd, pfx, meta)
+            )
 
         # SP-First: convert all 4 linear modules from TP-sharded to duplicated.
         args = get_args()
         self.use_dsa_sp_first = getattr(args, "use_dsa_sp_first", False) if args is not None else False
         if self.use_dsa_sp_first:
             self._convert_to_sp_first()
-            self._sync_kv_up_to_absorb_weights(all_gather_for_sp_first=True)
+            if self.absorb_backend == "te":
+                self._sync_kv_up_to_absorb_weights(all_gather_for_sp_first=True)
 
-        # kv_up_proj is fully decomposed into absorb modules; free it.
-        del self.linear_kv_up_proj
+        if self.absorb_backend == "te":
+            # Eagerly materialize absorb weights from linear_kv_up_proj during
+            # module construction so the optimizer sees the real derived values
+            # instead of placeholder initialization.
+            self._sync_kv_up_to_absorb_weights()
+
+        if self.absorb_backend == "te":
+            # kv_up_proj is fully decomposed into absorb modules; free it.
+            del self.linear_kv_up_proj
 
     @staticmethod
     def _gather_tp_weight(
@@ -275,45 +302,65 @@ class MLASelfAttentionFused(MLASelfAttention):
             tp_comm_buffer_name="proj",
         )
 
-        del self.linear_kv_up_proj_absorb_q
-        self.linear_kv_up_proj_absorb_q = build_module(
-            TEGroupedLinear,
-            self.config.num_attention_heads,
-            self.config.qk_head_dim,
-            self.config.kv_lora_rank,
-            parallel_mode=None,
-            config=self.config,
-            init_method=self.config.init_method,
-            bias=False,
-            skip_bias_add=False,
-            is_expert=False,
-            tp_comm_buffer_name="kv_up_proj_absorb_q",
-        )
+        if self.absorb_backend == "te":
+            # TE absorb modules: re-init with full heads
+            del self.linear_kv_up_proj_absorb_q
+            self.linear_kv_up_proj_absorb_q = build_module(
+                TEGroupedLinear,
+                self.config.num_attention_heads,
+                self.config.qk_head_dim,
+                self.config.kv_lora_rank,
+                parallel_mode=None,
+                config=self.config,
+                init_method=self.config.init_method,
+                bias=False,
+                skip_bias_add=False,
+                is_expert=False,
+                tp_comm_buffer_name="kv_up_proj_absorb_q",
+            )
 
-        del self.linear_kv_up_proj_absorb_output
-        self.linear_kv_up_proj_absorb_output = build_module(
-            TEGroupedLinear,
-            self.config.num_attention_heads,
-            self.config.kv_lora_rank,
-            self.config.v_head_dim,
-            parallel_mode=None,
-            config=self.config,
-            init_method=self.config.init_method,
-            bias=False,
-            skip_bias_add=False,
-            is_expert=False,
-            tp_comm_buffer_name="kv_up_proj_absorb_output",
-        )
+            del self.linear_kv_up_proj_absorb_output
+            self.linear_kv_up_proj_absorb_output = build_module(
+                TEGroupedLinear,
+                self.config.num_attention_heads,
+                self.config.kv_lora_rank,
+                self.config.v_head_dim,
+                parallel_mode=None,
+                config=self.config,
+                init_method=self.config.init_method,
+                bias=False,
+                skip_bias_add=False,
+                is_expert=False,
+                tp_comm_buffer_name="kv_up_proj_absorb_output",
+            )
+        else:
+            # Torch backend: re-init linear_kv_up_proj as duplicated (full heads)
+            del self.linear_kv_up_proj
+            self.linear_kv_up_proj = build_module(
+                _TELinear,
+                self.config.kv_lora_rank,
+                self.config.num_attention_heads * (self.config.qk_head_dim + self.config.v_head_dim),
+                parallel_mode="duplicated",
+                config=self.config,
+                init_method=self.config.init_method,
+                bias=False,
+                skip_bias_add=False,
+                skip_weight_param_allocation=False,
+                tp_comm_buffer_name="kv_up_proj",
+            )
+
+        # Update heads-per-partition to full heads count for SP-First
+        self.num_attention_heads_per_partition = self.config.num_attention_heads
 
         # ---- Set SP flags ----
         # sequence_parallel=True: triggers grad AllReduce in finalize_model_grads.
         # tensor_model_parallel=False: avoids grad norm overcounting across TP ranks.
-        for module in [
-            self.linear_q_up_proj,
-            self.linear_proj,
-            self.linear_kv_up_proj_absorb_q,
-            self.linear_kv_up_proj_absorb_output,
-        ]:
+        sp_modules = [self.linear_q_up_proj, self.linear_proj]
+        if self.absorb_backend == "te":
+            sp_modules.extend([self.linear_kv_up_proj_absorb_q, self.linear_kv_up_proj_absorb_output])
+        else:
+            sp_modules.append(self.linear_kv_up_proj)
+        for module in sp_modules:
             for param in module.parameters():
                 setattr(param, "sequence_parallel", True)
                 setattr(param, "tensor_model_parallel", False)
@@ -575,6 +622,112 @@ class MLASelfAttentionFused(MLASelfAttention):
         # linear_kv_up_proj module is deleted; remove from state_dict.
         del state_dict[kv_up_key]
 
+    def _pre_load_hook_torch(
+        self, module, state_dict, prefix, local_metadata, strict,
+        missing_keys, unexpected_keys, error_msgs,
+    ):
+        """Pre-hook for torch absorb backend: reconstruct kv_up_proj from absorb keys if needed.
+
+        When loading a checkpoint saved with TE absorb backend, the state_dict
+        contains per-head absorb_q/absorb_output keys instead of kv_up_proj.
+        This hook reconstructs kv_up_proj.weight from those keys and removes
+        the absorb keys so that load_state_dict succeeds.
+
+        For SP-First, also all-gathers TP-sharded q_up_proj and linear_proj.
+        """
+        tp_group = parallel_state.get_tensor_model_parallel_group()
+        tp_world_size = parallel_state.get_tensor_model_parallel_world_size()
+
+        # SP-First: all-gather TP-sharded q_up_proj and linear_proj
+        if self.use_dsa_sp_first:
+            cuda_device = torch.cuda.current_device()
+            with torch.no_grad():
+                q_up_key = prefix + "linear_q_up_proj.weight"
+                ckpt_w = state_dict[q_up_key]
+                if ckpt_w.shape[0] != self.linear_q_up_proj.weight.shape[0]:
+                    full, _ = self._gather_tp_weight(
+                        ckpt_w.to(cuda_device),
+                        tp_group, tp_world_size, cat_dim=0,
+                    )
+                    state_dict[q_up_key] = full.cpu()
+
+                proj_key = prefix + "linear_proj.weight"
+                ckpt_w = state_dict[proj_key]
+                if ckpt_w.shape[1] != self.linear_proj.weight.shape[1]:
+                    full, _ = self._gather_tp_weight(
+                        ckpt_w.to(cuda_device),
+                        tp_group, tp_world_size, cat_dim=1,
+                    )
+                    state_dict[proj_key] = full.cpu()
+
+        kv_up_key = prefix + "linear_kv_up_proj.weight"
+        absorb_q_pfx = prefix + "linear_kv_up_proj_absorb_q."
+        absorb_out_pfx = prefix + "linear_kv_up_proj_absorb_output."
+
+        # Check if checkpoint has absorb keys (TE absorb format)
+        absorb_keys = [k for k in state_dict if k.startswith(absorb_q_pfx) or k.startswith(absorb_out_pfx)]
+        if not absorb_keys:
+            # Standard checkpoint with kv_up_proj.weight — may still need all-gather for SP-First
+            if self.use_dsa_sp_first and kv_up_key in state_dict:
+                ckpt_w = state_dict[kv_up_key]
+                if ckpt_w.shape[0] != self.linear_kv_up_proj.weight.shape[0]:
+                    cuda_device = torch.cuda.current_device()
+                    with torch.no_grad():
+                        full, _ = self._gather_tp_weight(
+                            ckpt_w.to(cuda_device),
+                            tp_group, tp_world_size, cat_dim=0,
+                        )
+                        state_dict[kv_up_key] = full.cpu()
+            return
+
+        with torch.no_grad():
+            # Count heads by finding weightN keys
+            num_heads = 0
+            while (absorb_q_pfx + f"weight{num_heads}") in state_dict:
+                num_heads += 1
+
+            if num_heads == 0:
+                return  # No per-head weights found
+
+            q_absorb_list = []
+            output_absorb_list = []
+            for head_idx in range(num_heads):
+                q_w = state_dict[absorb_q_pfx + f"weight{head_idx}"]
+                if is_float8tensor(q_w):
+                    q_w = q_w.dequantize()
+                q_absorb_list.append(q_w.detach())
+
+                out_w = state_dict[absorb_out_pfx + f"weight{head_idx}"]
+                if is_float8tensor(out_w):
+                    out_w = out_w.dequantize()
+                output_absorb_list.append(out_w.detach())
+
+            # Reconstruct kv_up_proj: absorb_q is [kv_lora_rank, qk_head_dim] per head
+            # Need to transpose back: k_up_proj was transposed(1,2) when decomposed
+            q_absorb = torch.stack(q_absorb_list, dim=0)   # [num_heads, kv_lora_rank, qk_head_dim]
+            q_absorb = q_absorb.transpose(1, 2).contiguous()  # [num_heads, qk_head_dim, kv_lora_rank]
+            output_absorb = torch.stack(output_absorb_list, dim=0)  # [num_heads, v_head_dim, kv_lora_rank]
+
+            # Concatenate back: [num_heads, (qk_head_dim + v_head_dim), kv_lora_rank]
+            kv_up_weight = torch.cat([q_absorb, output_absorb], dim=-2)
+            kv_up_weight = kv_up_weight.contiguous().view(-1, self.config.kv_lora_rank)
+
+            # SP-First: all-gather TP-sharded kv_up_proj to full heads
+            if self.use_dsa_sp_first:
+                cuda_device = torch.cuda.current_device()
+                kv_up_weight, _ = self._gather_tp_weight(
+                    kv_up_weight.to(cuda_device),
+                    tp_group, tp_world_size, cat_dim=0,
+                )
+                kv_up_weight = kv_up_weight.cpu()
+
+            # Inject reconstructed kv_up_proj into state_dict
+            state_dict[kv_up_key] = kv_up_weight
+
+        # Remove all absorb keys from state_dict
+        for k in absorb_keys:
+            del state_dict[k]
+
     def _post_load_hook(self, module, incompatible_keys):
         """Post-hook: suppress missing-key warnings for derived/deleted absorb weights."""
         if incompatible_keys is not None:
@@ -681,6 +834,31 @@ class MLASelfAttentionFused(MLASelfAttention):
         for k in keys_to_delete:
             del state_dict[k]
 
+    def _get_kv_up_slices(self):
+        """Return (k_up, v_up) weight slices from linear_kv_up_proj for torch einsum path.
+
+        Results are cached and auto-invalidated when the underlying weight changes
+        (after optimizer step), so they stay valid across micro-batches within a step.
+
+        Returns:
+            k_up: [num_heads_per_partition, qk_head_dim, kv_lora_rank]
+            v_up: [num_heads_per_partition, v_head_dim, kv_lora_rank]
+        """
+        w = self.linear_kv_up_proj.weight
+        cache_key = (w.data_ptr(), w._version)
+        if getattr(self, "_cached_kv_up_key", None) == cache_key:
+            return self._cached_kv_up_slices
+        if is_float8tensor(w):
+            w = w.dequantize()
+        num_heads = self.num_attention_heads_per_partition
+        w = w.view(num_heads, self.config.qk_head_dim + self.config.v_head_dim, self.config.kv_lora_rank)
+        k_up, v_up = torch.split(
+            w, [self.config.qk_head_dim, self.config.v_head_dim], dim=1
+        )
+        self._cached_kv_up_slices = (k_up, v_up)
+        self._cached_kv_up_key = cache_key
+        return k_up, v_up
+
     def forward(
         self,
         hidden_states,
@@ -763,17 +941,25 @@ class MLASelfAttentionFused(MLASelfAttention):
                         **extra_kwargs,
                     )
 
-                num_heads_out = (
-                    self.config.num_attention_heads
-                    if self.use_dsa_sp_first
-                    else self.num_attention_heads_per_partition
-                )
-                m_splits_v = [math.prod(core_attn_out.size()[:-2])] * num_heads_out
-                core_attn_out_permute = core_attn_out.movedim(-2, 0).contiguous()
-                core_attn_out, _ = self.linear_kv_up_proj_absorb_output(
-                    core_attn_out_permute, m_splits_v
-                )
-                core_attn_out = core_attn_out.transpose(0, core_attn_out.ndim - 2)
+                if self.absorb_backend == "torch":
+                    # core_attn_out: [..., num_heads, kv_lora_rank]
+                    # v_up: [num_heads, v_head_dim, kv_lora_rank]
+                    _, v_up = self._get_kv_up_slices()
+                    core_attn_out = torch.einsum(
+                        "...hk,hdk->...hd", core_attn_out, v_up
+                    )
+                else:
+                    num_heads_out = (
+                        self.config.num_attention_heads
+                        if self.use_dsa_sp_first
+                        else self.num_attention_heads_per_partition
+                    )
+                    m_splits_v = [math.prod(core_attn_out.size()[:-2])] * num_heads_out
+                    core_attn_out_permute = core_attn_out.movedim(-2, 0).contiguous()
+                    core_attn_out, _ = self.linear_kv_up_proj_absorb_output(
+                        core_attn_out_permute, m_splits_v
+                    )
+                    core_attn_out = core_attn_out.transpose(0, core_attn_out.ndim - 2)
                 core_attn_out = core_attn_out.flatten(-2, -1).contiguous()
 
             elif self.cache_mla_latents:
@@ -932,10 +1118,9 @@ class MLASelfAttentionFused(MLASelfAttention):
         def qkv_up_proj_and_rope_apply_for_dsa(
             q_compressed, kv_compressed, k_pos_emb, rotary_pos_emb
         ):
-            assert self.linear_kv_up_proj_absorb_q is not None, (
-                "get_query_kv_tensor() can only be called when linear_kv_up_proj_absorb_q is not "
-                "None. This method is used for Omni fused DSA where kv_up weights are absorbed "
-                "into query and output projections."
+            assert self.absorb_backend == "torch" or self.linear_kv_up_proj_absorb_q is not None, (
+                "get_query_kv_tensor() can only be called when absorb_backend is 'torch' or "
+                "linear_kv_up_proj_absorb_q is not None."
             )
 
             if self.config.q_lora_rank is not None:
@@ -974,11 +1159,24 @@ class MLASelfAttentionFused(MLASelfAttention):
                 )
 
                 # Absorb key up projection weight into query
-                q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
-                q_content, _ = self.linear_kv_up_proj_absorb_q(
-                    q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
-                    [q_len * q_no_pe_4d.size(1)] * num_heads_q,
-                )
+                if self.absorb_backend == "torch":
+                    k_up, _ = self._get_kv_up_slices()
+                    q_content = torch.einsum("...hd,hdk->...hk", q_no_pe, k_up)
+                    # Convert SBHD/THD -> HSD to match fused_rope_permute_cat's expected layout
+                    if q_content.ndim == 4:
+                        # SBHD [s, b, h, kv_lora_rank] -> HSD [h, s*b, kv_lora_rank]
+                        q_content = q_content.permute(2, 0, 1, 3).reshape(
+                            num_heads_q, -1, q_content.shape[-1]
+                        ).contiguous()
+                    else:
+                        # THD [t, h, kv_lora_rank] -> HSD [h, t, kv_lora_rank]
+                        q_content = q_content.permute(1, 0, 2).contiguous()
+                else:
+                    q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
+                    q_content, _ = self.linear_kv_up_proj_absorb_q(
+                        q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
+                        [q_len * q_no_pe_4d.size(1)] * num_heads_q,
+                    )
 
                 query = fused_rope_permute_cat(
                     q_content,
@@ -1093,13 +1291,18 @@ class MLASelfAttentionFused(MLASelfAttention):
                 kv_cached = torch.cat([kv_compressed, k_pos_emb_local.squeeze(1)], dim=-1)
 
                 # Absorb key up projection weight into query
-                q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
-                q_content, _ = self.linear_kv_up_proj_absorb_q(
-                    q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
-                    [q_len * q_no_pe_4d.size(1)] * num_heads_q,
-                )
-                q_content = q_content.permute(1, 2, 0, 3).contiguous()
-                q_content = q_content.squeeze(1) if packed_seq_params is not None else q_content
+                if self.absorb_backend == "torch":
+                    k_up, _ = self._get_kv_up_slices()
+                    q_content = torch.einsum("...hd,hdk->...hk", q_no_pe, k_up)
+                    q_content = q_content.squeeze(1) if packed_seq_params is not None else q_content
+                else:
+                    q_no_pe_4d = q_no_pe.unsqueeze(1) if q_no_pe.ndim == 3 else q_no_pe
+                    q_content, _ = self.linear_kv_up_proj_absorb_q(
+                        q_no_pe_4d.permute(2, 0, 1, 3).contiguous(),
+                        [q_len * q_no_pe_4d.size(1)] * num_heads_q,
+                    )
+                    q_content = q_content.permute(1, 2, 0, 3).contiguous()
+                    q_content = q_content.squeeze(1) if packed_seq_params is not None else q_content
 
                 query = torch.cat([q_content, q_pos_emb], dim=-1)
 
