@@ -47,6 +47,8 @@ from megatron.core.transformer.experimental_attention_variant.dsa import (
     DSAIndexerLossLoggingHelper as DSAIndexerLossLoggingHelperFused,
 )
 
+from baige_omni.utils import get_args
+
 try:
     from fast_hadamard_transform import hadamard_transform
 except ImportError:
@@ -721,6 +723,8 @@ class DSAttentionFused(MegatronModule):
 
         self.layer_number = layer_number
         self.pg_collection = pg_collection
+        args = get_args()
+        self.use_dsa_sp_first = getattr(args, "use_dsa_sp_first", False) if args is not None else False
 
         self.indexer = build_module(
             submodules.indexer, config=self.config, pg_collection=pg_collection
@@ -787,9 +791,12 @@ class DSAttentionFused(MegatronModule):
         # ===================================
         # Run sparse attention kernel
         # ===================================
-        # query: [s, b, h / TP, d]
-        # chunk_query: [s / TP, b, h, d]
-        chunk_query = all_to_all_hp2sp_with_padding(query)  # head & seq alltoall
+        if self.use_dsa_sp_first:
+            # query is already chunked [S/TP, B, H, D]
+            chunk_query = query
+        else:
+            # query: [S, B, H/TP, D] -> [S/TP, B, H, D] via All-to-All
+            chunk_query = all_to_all_hp2sp_with_padding(query)
         chunk_sq = chunk_query.size(0)
         offset = self.pg_collection.tp.rank() * chunk_sq
         if self.config.enable_chunkpipe:
@@ -825,12 +832,15 @@ class DSAttentionFused(MegatronModule):
                 main_attn_probs + 1e-10,
                 reduction="sum"
             )
-            indexer_loss = indexer_loss_coeff * loss / sq
-            if getattr(self.config, 'enable_chunkpipe', False):
-                indexer_loss = indexer_loss_coeff * loss / (sq * self.config.chunk_num_per_seq)
-
+            if self.use_dsa_sp_first:
+                loss_norm = sq * self.pg_collection.tp.size()
+            elif getattr(self.config, 'enable_chunkpipe', False):
+                loss_norm = sq * self.config.chunk_num_per_seq
+            else:
+                loss_norm = sq
+            indexer_loss = indexer_loss_coeff * loss / loss_norm
             indexer_loss = reduce_from_tensor_model_parallel_region(indexer_loss)
-            
+
             # Save indexer loss for logging
             if indexer_loss_coeff > 0:
                 DSAIndexerLossLoggingHelperFused.save_loss_to_tracker(
@@ -842,6 +852,7 @@ class DSAttentionFused(MegatronModule):
             # Attach loss to output
             output = DSAIndexerLossAutoScaler.apply(output, indexer_loss)
 
-        output = gather_sequence_and_scatter_heads(output)
+        if not self.use_dsa_sp_first:
+            output = gather_sequence_and_scatter_heads(output)
 
         return output
