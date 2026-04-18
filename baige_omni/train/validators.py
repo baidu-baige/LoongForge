@@ -189,6 +189,21 @@ def _validate_extra_training_args(args):
             "INFO: --use-dsa-fused is enabled; Omni fused DSA modules will be used.",
             args.rank,
         )
+    if getattr(args, "use_dsa_sp_first", False):
+        if not args.use_dsa_fused:
+            raise ValueError(
+                "--use-dsa-sp-first requires --use-dsa-fused to be enabled."
+            )
+        if not args.sequence_parallel:
+            raise ValueError(
+                "--use-dsa-sp-first requires --sequence-parallel to be enabled, "
+                "since the scheme relies on S/TP partitioning."
+            )
+        print_rank_0(
+            "INFO: --use-dsa-sp-first is enabled; All-to-All communication will be "
+            "eliminated in the DSA fused path.",
+            args.rank,
+        )
     if args.num_experts is None and args.moe_token_dispatcher_type in ['allgather', 'alltoall_seq']:
         args.moe_token_dispatcher_type = 'alltoall'
         warnings.warn(

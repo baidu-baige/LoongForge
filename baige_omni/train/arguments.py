@@ -926,6 +926,15 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--use-dsa-sp-first",
+        action="store_true",
+        help="Use SP-First partitioning for DSA fused path. Eliminates All-to-All "
+             "communication by making projection layers hold full-head weights and "
+             "operate on sequence-split data. Requires --use-dsa-fused and "
+             "--sequence-parallel. Default: False"
+    )
+
+    group.add_argument(
         "--no-detail-log",
         action="store_false",
         dest="log_detail",
