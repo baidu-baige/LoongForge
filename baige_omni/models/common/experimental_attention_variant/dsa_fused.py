@@ -742,6 +742,11 @@ class DSAttentionFused(MegatronModule):
             softmax_scale=self.softmax_scale,
         )
 
+        #padding num_attention_heads to 128 
+        _DSA_MIN_HEAD_DIM = 128  # Minimum head count required by DSA sparse attention kernel
+        self.num_attention_heads_padded = max(config.num_attention_heads, _DSA_MIN_HEAD_DIM)
+        self.num_attention_heads = config.num_attention_heads        
+
     def forward(
         self,
         query: torch.Tensor,
@@ -797,6 +802,12 @@ class DSAttentionFused(MegatronModule):
         else:
             # query: [S, B, H/TP, D] -> [S/TP, B, H, D] via All-to-All
             chunk_query = all_to_all_hp2sp_with_padding(query)
+
+        #pad 0 for dim(2)
+        if self.num_attention_heads < self.num_attention_heads_padded:
+            pad_size = self.num_attention_heads_padded - self.num_attention_heads
+            chunk_query = F.pad(chunk_query, [0, 0, 0, pad_size])  # [.., H, D] -> [.., 128, D]
+
         chunk_sq = chunk_query.size(0)
         offset = self.pg_collection.tp.rank() * chunk_sq
         if self.config.enable_chunkpipe:
@@ -814,6 +825,11 @@ class DSAttentionFused(MegatronModule):
             packed_seq_params=packed_seq_params,
             return_p_out=True
         )
+
+        # Unpad output head dim back to original
+        if self.num_attention_heads < self.num_attention_heads_padded:
+           output = output[:, :, :self.num_attention_heads, :]   # [B, S/TP, H, d_v]
+           p_out = p_out[:, :self.num_attention_heads, :]        # [S/TP, H, topk]
 
         # ===================================
         # Attach indexer loss

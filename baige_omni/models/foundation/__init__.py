@@ -16,12 +16,14 @@ from .llama import LLaMAConfig, LLaMAModel
 from .internlm import InternLMModel, InternLMConfig
 
 from .ernie4_5_vl import ErnieMoeModel, ErnieMoeConfig
+from .glm import GlmConfig, GlmModelWithMTP
 # The config name should not be the same as the huggingface config name
 # or we can use exist_ok flag?
 AutoModel.register(Qwen2Config, Qwen2Model, exist_ok=True)  # overwrite existing Qwen2Config
 AutoModel.register(Qwen3Config, Qwen3Model, exist_ok=True)  # overwrite existing Qwen3Config
 AutoModel.register(Qwen3NextConfig, Qwen3NextModel, exist_ok=True)
 AutoModel.register(Qwen35Config, Qwen35Model, exist_ok=True)
+AutoModel.register(GlmConfig, GlmModelWithMTP, exist_ok=True)
 AutoModel.register(InternLMConfig, InternLMModel)
 AutoModel.register(DeepseekConfig, DeepseekModelWithMTP)
 AutoModel.register(MimoConfig, MimoModelWithMTP)

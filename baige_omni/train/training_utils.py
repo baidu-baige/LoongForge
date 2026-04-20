@@ -931,6 +931,35 @@ def get_model(
     return model, peft_class
 
 
+def _p2p_embedding_weights_for_mtp(unwrapped_model, args):
+    """Copy embedding.word_embeddings.weight from the first PP stage to the last PP stage via P2P.
+
+    When PP >= 2 and MTP is enabled, the last PP stage creates its own embedding
+    (for multi-token prediction) but its weights are not loaded from the checkpoint.
+    This function uses point-to-point send/recv to copy embedding weights directly.
+    """
+    pp_world_size = mpu.get_pipeline_model_parallel_world_size()
+    if pp_world_size < 2 or not getattr(args, 'mtp_num_layers', 0):
+        return
+
+    first_rank = mpu.get_pipeline_model_parallel_first_rank()
+    last_rank = mpu.get_pipeline_model_parallel_last_rank()
+
+    # unwrapped_model is a list (one per virtual PP chunk); take the first element
+    model = unwrapped_model[0]
+
+    if mpu.is_pipeline_first_stage():
+        embedding_weight = model.embedding.word_embeddings.weight.data
+        torch.distributed.send(embedding_weight, dst=last_rank, group=mpu.get_pipeline_model_parallel_group())
+        print(f"[MTP] Sent embedding.word_embeddings.weight "
+              f"to last PP stage (rank {last_rank}), shape={embedding_weight.shape}")
+
+    elif mpu.is_pipeline_last_stage():
+        embedding_weight = model.embedding.word_embeddings.weight.data
+        torch.distributed.recv(embedding_weight, src=first_rank, group=mpu.get_pipeline_model_parallel_group())
+        print(f"[MTP] Received embedding.word_embeddings.weight "
+              f"from first PP stage (rank {first_rank}), shape={embedding_weight.shape}")
+
 def setup_model_and_optimizer(
     model_provider_func,
     model_type,
@@ -1077,6 +1106,14 @@ def setup_model_and_optimizer(
         )
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
+
+        #For models such as GLM-5, the model structure is similar to DeepSeek, 
+        #but the weights are different from DeepSeek. 
+        #MTP does not have separate embedding weights, and in pipeline scenarios, 
+        #weights need to be copied from the first PP stage.
+        if args.should_get_embedding_weights_for_mtp:
+            _p2p_embedding_weights_for_mtp(unwrapped_model, args)
+
     elif is_hf_checkpoint(args.load) and not args.moe_use_upcycling:
         # Online HF checkpoint loading
         timers("load-checkpoint", log_level=0).start(barrier=True)

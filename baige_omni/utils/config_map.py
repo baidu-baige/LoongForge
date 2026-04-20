@@ -368,6 +368,10 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/llava_onevision",
         "config_name": "llava_onevision_1_5_4b",
     },
+    "glm5": {
+        "config_path": "configs/models/glm5",
+        "config_name": "glm5",
+    },
 }
 
 

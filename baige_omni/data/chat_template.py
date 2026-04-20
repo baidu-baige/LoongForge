@@ -599,3 +599,14 @@ _register_chat_template(
         temporal_merge_kernel_size=4,
     ),
 )
+
+_register_chat_template(
+    name="glm5",
+    format_user=StringFormatter(slots=["<|user|>{{content}}<|assistant|>"]),
+    format_assistant=StringFormatter(slots=["{{content}}"]),
+    format_system=StringFormatter(slots=["<|system|>{{content}}"]),
+    format_prefix=EmptyFormatter(slots=["[gMASK]<sop>"]),
+    stop_words=["<|user|>", "<|observation|>"],
+    efficient_eos=True,
+)
+

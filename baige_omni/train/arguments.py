@@ -1047,6 +1047,15 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         help="Force all parameters into weight-decay group, overriding default "
              "exclusions for bias and LayerNorm. Default: None (use model defaults)"
     )
+
+    group.add_argument(
+        "--should-get-embedding-weights-for-mtp",
+        action="store_true",
+        help="For models such as GLM-5, MTP does not have separate embedding weights," 
+             "and in pipeline scenarios, weights need to be copied from the first PP stage. "
+             "Default: False"
+    )
+
     return parser
 
 
