@@ -316,6 +316,7 @@ def get_deepseek_decoder_block_and_mtp_spec(
                     num_experts=config.num_moe_experts,
                     moe_grouped_gemm=config.moe_grouped_gemm,
                     qk_layernorm=config.qk_layernorm,
+                    experimental_attention_variant=config.experimental_attention_variant,
                 )
         else:
             transformer_layer_spec_for_mtp = block_spec
