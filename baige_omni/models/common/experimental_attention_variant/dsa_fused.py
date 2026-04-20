@@ -56,6 +56,7 @@ except ImportError:
     
 from .dsa_fused_utils import (
     all_to_all_hp2sp_with_padding,
+    all_to_all_sp2hp_with_padding,
     gather_sequence_and_scatter_heads,
     shard_packed_cu_seqlens_for_sp_rank
 )
@@ -869,6 +870,16 @@ class DSAttentionFused(MegatronModule):
             output = DSAIndexerLossAutoScaler.apply(output, indexer_loss)
 
         if not self.use_dsa_sp_first:
-            output = gather_sequence_and_scatter_heads(output)
+            is_thd = output.dim() == 3
+            if is_thd:
+                # thd format: [t, h, d] -> [t, 1, h, d] to get [s_local, b=1, h, d]
+                # Use all_to_all_sp2hp_with_padding directly (seq-first layout)
+                # instead of gather_sequence_and_scatter_heads (which expects batch-first
+                # and does transpose(0,1), incorrectly swapping seq and batch dims)
+                output = output.unsqueeze(1)  # [t, h, d] -> [t, 1, h, d]
+                output = all_to_all_sp2hp_with_padding(output)  # [S, 1, h/TP, d]
+                output = output.squeeze(1)  # [S, 1, h/TP, d] -> [S, h/TP, d]
+            else:
+                output = gather_sequence_and_scatter_heads(output)
 
         return output

@@ -2213,7 +2213,8 @@ class DSADotProductAttention(MegatronModule):
         if qkv_format == 'sbhd':
             core_attn_out = core_attn_out.contiguous()
         elif qkv_format == 'thd':
-            core_attn_out = core_attn_out.squeeze(1).contiguous()
+            # [1, t, h, d_v] -> [t, h, d_v]
+            core_attn_out = core_attn_out.squeeze(0).contiguous()
         else:
             core_attn_out = core_attn_out.contiguous()
 

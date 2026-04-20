@@ -935,6 +935,16 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--absorb-backend",
+        type=str,
+        default="te",
+        choices=["te", "torch"],
+        help="Backend for MLA absorb projections. "
+             "'te' uses TEGroupedLinear, 'torch' uses torch.einsum with sliced weights. "
+             "Default: te"
+    )
+
+    group.add_argument(
         "--no-detail-log",
         action="store_false",
         dest="log_detail",
