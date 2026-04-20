@@ -354,7 +354,7 @@ class OmniCombinationModel(BaseMegatronModule):
         if not self.pre_process:
             combined_embeddings = None
 
-        if mpu.is_pipeline_first_stage() and enable_encoder_hetero_dp:
+        if self.add_encoder and mpu.is_pipeline_first_stage() and enable_encoder_hetero_dp:
             group = mpu.get_tensor_model_parallel_group()
             src = torch.distributed.get_global_rank(group, inner_group_id)
             local_rank = torch.distributed.get_rank()

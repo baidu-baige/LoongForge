@@ -45,44 +45,35 @@ class Qwen35VisionModel(BaseVisionModel):
         grid_ts, grid_hs, grid_ws = image_grid_thw[:, 0], image_grid_thw[:, 1], image_grid_thw[:, 2]
         device = image_grid_thw.device
 
-        idx_list = [[] for _ in range(4)]
-        weight_list = [[] for _ in range(4)]
+        idx_parts = [[] for _ in range(4)]
+        weight_parts = [[] for _ in range(4)]
 
         for t, h, w in zip(grid_ts, grid_hs, grid_ws):
-            h_idxs = torch.linspace(0, self.num_grid_per_side - 1, h)
-            w_idxs = torch.linspace(0, self.num_grid_per_side - 1, w)
+            h_idxs = torch.linspace(0, self.num_grid_per_side - 1, h.item(), device=device)
+            w_idxs = torch.linspace(0, self.num_grid_per_side - 1, w.item(), device=device)
 
-            h_idxs_floor = h_idxs.int()
-            w_idxs_floor = w_idxs.int()
-            h_idxs_ceil = (h_idxs.int() + 1).clip(max=self.num_grid_per_side - 1)
-            w_idxs_ceil = (w_idxs.int() + 1).clip(max=self.num_grid_per_side - 1)
+            h_floor = h_idxs.to(torch.int64)
+            w_floor = w_idxs.to(torch.int64)
+            h_ceil = (h_floor + 1).clamp(max=self.num_grid_per_side - 1)
+            w_ceil = (w_floor + 1).clamp(max=self.num_grid_per_side - 1)
 
-            dh = h_idxs - h_idxs_floor
-            dw = w_idxs - w_idxs_floor
+            dh = h_idxs - h_floor.float()
+            dw = w_idxs - w_floor.float()
 
-            base_h = h_idxs_floor * self.num_grid_per_side
-            base_h_ceil = h_idxs_ceil * self.num_grid_per_side
+            idx_parts[0].append((h_floor[:, None] * self.num_grid_per_side + w_floor[None, :]).flatten())
+            idx_parts[1].append((h_floor[:, None] * self.num_grid_per_side + w_ceil[None, :]).flatten())
+            idx_parts[2].append((h_ceil[:, None] * self.num_grid_per_side + w_floor[None, :]).flatten())
+            idx_parts[3].append((h_ceil[:, None] * self.num_grid_per_side + w_ceil[None, :]).flatten())
 
-            indices = [
-                (base_h[None].T + w_idxs_floor[None]).flatten(),
-                (base_h[None].T + w_idxs_ceil[None]).flatten(),
-                (base_h_ceil[None].T + w_idxs_floor[None]).flatten(),
-                (base_h_ceil[None].T + w_idxs_ceil[None]).flatten(),
-            ]
+            weight_parts[0].append(((1 - dh)[:, None] * (1 - dw)[None, :]).flatten())
+            weight_parts[1].append(((1 - dh)[:, None] * dw[None, :]).flatten())
+            weight_parts[2].append((dh[:, None] * (1 - dw)[None, :]).flatten())
+            weight_parts[3].append((dh[:, None] * dw[None, :]).flatten())
 
-            weights = [
-                ((1 - dh)[None].T * (1 - dw)[None]).flatten(),
-                ((1 - dh)[None].T * dw[None]).flatten(),
-                (dh[None].T * (1 - dw)[None]).flatten(),
-                (dh[None].T * dw[None]).flatten(),
-            ]
-
-            for i in range(4):
-                idx_list[i].extend(indices[i].tolist())
-                weight_list[i].extend(weights[i].tolist())
-
-        idx_tensor = torch.tensor(idx_list, dtype=torch.long, device=device)
-        weight_tensor = torch.tensor(weight_list, dtype=self.pos_embed.weight.dtype, device=device)
+        idx_tensor = torch.stack([torch.cat(parts) for parts in idx_parts])      # (4, total)
+        weight_tensor = torch.stack(
+            [torch.cat(parts) for parts in weight_parts]
+        ).to(dtype=self.pos_embed.weight.dtype) # (4, total)
         pos_embeds = self.pos_embed(idx_tensor).to(device) * weight_tensor[:, :, None]
         patch_pos_embeds = pos_embeds[0] + pos_embeds[1] + pos_embeds[2] + pos_embeds[3]
 
@@ -105,40 +96,37 @@ class Qwen35VisionModel(BaseVisionModel):
         """Compute rotary positional embedding based on frame size."""
         merge_size = self.spatial_merge_size
 
-        max_hw = int(grid_thw[:, 1:].max().item())
+        # Single GPU->CPU transfer, then all loop logic uses Python ints
+        grid_thw_cpu = grid_thw.cpu().tolist()
+
+        max_hw = max(max(h, w) for _, h, w in grid_thw_cpu)
         freq_table = self.rotary_pos_emb(max_hw)  # (max_hw, dim // 2)
         device = freq_table.device
 
-        total_tokens = int(torch.prod(grid_thw, dim=1).sum().item())
+        total_tokens = sum(t * h * w for t, h, w in grid_thw_cpu)
         pos_ids = torch.empty((total_tokens, 2), dtype=torch.long, device=device)
 
         offset = 0
-        for num_frames, height, width in grid_thw:
-            merged_h, merged_w = height // merge_size, width // merge_size
+        for num_frames, height, width in grid_thw_cpu:
+            merged_h = height // merge_size
+            merged_w = width // merge_size
 
-            block_rows = torch.arange(merged_h, device=device)  # block row indices
-            block_cols = torch.arange(merged_w, device=device)  # block col indices
-            intra_row = torch.arange(merge_size, device=device)  # intra-block row offsets
-            intra_col = torch.arange(merge_size, device=device)  # intra-block col offsets
+            rows = torch.arange(height, device=device).reshape(merged_h, merge_size)
+            cols = torch.arange(width, device=device).reshape(merged_w, merge_size)
 
-            # Compute full-resolution positions
-            row_idx = block_rows[:, None, None, None] * merge_size + intra_row[None, None, :, None]
-            col_idx = block_cols[None, :, None, None] * merge_size + intra_col[None, None, None, :]
-
-            row_idx = row_idx.expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
-            col_idx = col_idx.expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
-
-            coords = torch.stack((row_idx, col_idx), dim=-1)
+            row_idx = rows[:, None, :, None].expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
+            col_idx = cols[None, :, None, :].expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
 
             if num_frames > 1:
-                coords = coords.repeat(num_frames, 1)
+                row_idx = row_idx.unsqueeze(0).expand(num_frames, -1).reshape(-1)
+                col_idx = col_idx.unsqueeze(0).expand(num_frames, -1).reshape(-1)
 
-            num_tokens = coords.shape[0]
-            pos_ids[offset : offset + num_tokens] = coords
+            num_tokens = num_frames * height * width
+            pos_ids[offset:offset + num_tokens, 0] = row_idx
+            pos_ids[offset:offset + num_tokens, 1] = col_idx
             offset += num_tokens
 
-        embeddings = freq_table[pos_ids]  # lookup rotary embeddings
-        embeddings = embeddings.flatten(1)
+        embeddings = freq_table[pos_ids].flatten(1)
         return embeddings
 
     def forward(self, x: torch.Tensor, image_grid_thw: torch.Tensor) -> torch.Tensor:

@@ -575,7 +575,9 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         output_weight = None
         if self.share_embeddings_and_output_weights:
             output_weight = self.shared_embedding_or_output_weight()
-
+        
+        # for all2all overlap 
+        mtp_labels = labels
         if mtp_in_postprocess:
             if extra_block_kwargs is not None:
                 extra_block_kwargs.pop('visual_pos_masks', None)

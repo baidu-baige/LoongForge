@@ -189,7 +189,7 @@ class PreProcessNode(ScheduleNode):
             and model.foundation_model.position_embedding_type == "rope"
             and not model.foundation_model.config.multi_latent_attention
             and model.foundation_model.config.rotary_emb_func not in \
-                ["Qwen2VLRotaryEmbedding", "Qwen3VLRotaryEmbedding"]
+                ["Qwen2VLRotaryEmbedding", "Qwen3VLRotaryEmbedding", "Qwen35RotaryEmbedding"]
         ):
             rotary_seq_len = model.foundation_model.rotary_pos_emb.get_rotary_seq_len(
                 inference_params,
@@ -204,13 +204,9 @@ class PreProcessNode(ScheduleNode):
                 and packed_seq_params.qkv_format == "thd",
             )
         else:
-            rotary_pos_emb = (
-                model.foundation_model.rotary_pos_emb(
-                    position_ids,
-                    packed_seq=packed_seq_params,
-                )
-                .transpose(0, 2)
-                .contiguous()
+            rotary_pos_emb = model.foundation_model.rotary_pos_emb(
+                position_ids,
+                packed_seq=packed_seq_params,
             )
 
         #(model.config.enable_cuda_graph or model.config.flash_decode)
@@ -504,6 +500,12 @@ def build_transformer_layer_callables(layer: TransformerLayer):
 
             local_tokens, probs, _ = layer.mlp.router_and_preprocess(pre_mlp_layernorm_output)
 
+        # Save token_dispatcher attributes to per-microbatch layer_state to protect against
+        # recompute corruption when f_layer == b_layer in combined 1F1B schedule
+        # (occurs at the middle layer when chunk has odd number of layers).
+        # These attributes are used in combine_postprocess for unpermute and view operations.
+        node.layer_state.hidden_shape = layer.mlp.token_dispatcher.hidden_shape
+
         # Detach here for mlp_bda residual connection
         node.layer_state.residual = node.detach(hidden_states)
         if layer.mlp.use_shared_expert and not layer.mlp.shared_expert_overlap:
@@ -614,6 +616,14 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         """
         residual = node.layer_state.residual
         shared_expert_output = getattr(node.layer_state, 'shared_expert_output', None)
+
+        # Restore token_dispatcher attributes from per-microbatch layer_state before
+        # combine_postprocess, to avoid corruption when backward recompute of another
+        # microbatch overwrites token_dispatcher attributes (happens when f_layer == b_layer
+        # in combined 1F1B).
+        saved_hidden_shape = getattr(node.layer_state, 'hidden_shape', None)
+        if saved_hidden_shape is not None:
+            layer.mlp.token_dispatcher.hidden_shape = saved_hidden_shape
         
         # Post-process combine and add shared expert output
         output = layer.mlp.post_combine(output, shared_expert_output)
@@ -699,7 +709,7 @@ def build_mtp_layer_callables(layer):
     """
 
     forward_funcs, backward_dw = build_transformer_layer_callables(layer.transformer_layer)
-    attn_forward, post_attn_forward, dispatch_forward, mlp_forward, combine_forward, post_combine_forward, _ = (
+    attn_forward, post_attn_forward, dispatch_forward, mlp_forward, combine_forward, post_combine_forward, _, _ = (
         forward_funcs
     )
     is_moe = isinstance(layer.transformer_layer.mlp, MoELayer)
@@ -712,10 +722,12 @@ def build_mtp_layer_callables(layer):
             node.chunk_state.mtp_hidden_states = list(torch.chunk(hidden_states, 1 + offset, dim=0))
             hidden_states = node.chunk_state.mtp_hidden_states[offset]
 
+        model = node.chunk_state.model
+        embedding = model.foundation_model.embedding if hasattr(model, 'foundation_model') else model.embedding
         input_ids, position_ids, decoder_input, hidden_states = layer._get_embeddings(
             input_ids=node.chunk_state.input_ids,
             position_ids=node.chunk_state.position_ids,
-            embedding=node.chunk_state.model.embedding,
+            embedding=embedding,
             hidden_states=hidden_states,
         )
         node.chunk_state.input_ids = input_ids
@@ -726,9 +738,6 @@ def build_mtp_layer_callables(layer):
         assert (
             node.chunk_state.context is None
         ), f"multi token prediction + cross attention is not yet supported."
-        assert (
-            node.chunk_state.packed_seq_params is None
-        ), f"multi token prediction + sequence packing is not yet supported."
 
         if layer.config.sequence_parallel:
             rng_context = tensor_parallel.get_cuda_rng_tracker().fork()
@@ -777,6 +786,7 @@ def build_mtp_layer_callables(layer):
         combine_func,
         post_combine_func,
         mtp_post_process_func,
+        None,
     ]
     backward_dw = {
         "attn": [layer.transformer_layer.self_attention, layer.eh_proj],
