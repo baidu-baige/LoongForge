@@ -3,14 +3,14 @@
 set -x
 
 #source activate && conda activate python310_torch25_cuda
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/fuhaohan/qianfan/datasets/128k_tokenized_qianfan_code_data"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen2.5-32B-Instruct"}
-CHECKPOINT_LOAD_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/BaigeOmni/qwen2.5/Qwen2.5_32B_mcore_tp8pp1"}
-CHECKPOINT_SAVE_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/BaigeOmni/qwen2.5/Qwen2.5_32B_mcore_tp8pp1_saved"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen2.5-32b"}
+CHECKPOINT_LOAD_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/LoongForge/qwen2.5/Qwen2.5_32B_mcore_tp8pp1"}
+CHECKPOINT_SAVE_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/LoongForge/qwen2.5/Qwen2.5_32B_mcore_tp8pp1_saved"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen2.5-32b"}
 
 
 mkdir -p ${TENSORBOARD_PATH}
@@ -156,9 +156,9 @@ LOGGING_ARGS=(
 #  )
 #fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${SFT_ARGS[@]} \

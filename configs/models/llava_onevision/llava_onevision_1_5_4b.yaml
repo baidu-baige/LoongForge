@@ -11,9 +11,9 @@ defaults:
 model:
   model_type: llava_ov_1_5
   foundation:
-    model_spec: ["baige_omni.models.foundation.qwen3.qwen_layer_spec", "get_llava_ov_layer_with_te_spec"]
+    model_spec: ["loongforge.models.foundation.qwen3.qwen_layer_spec", "get_llava_ov_layer_with_te_spec"]
     rotary_base: 5000000
     group_query_attention: true
-    convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
+    convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
   image_projector:
     normalization: "LayerNorm"

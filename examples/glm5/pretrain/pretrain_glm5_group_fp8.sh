@@ -2,18 +2,18 @@
 # This script is used for pre-training GLM5 in FP8 mixed precision.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 
 DATA_PATH=${DATA_PATH:-""}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/GLM/GLM-5-FP8"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/GLM/GLM-5-FP8-tp8pp8ep8etp1"}
-CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/BaigeOmni/GLM/save/GLM-5-FP8-tp8pp8ep8etp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/GLM/GLM-5-FP8-tp8pp8ep8etp1"}
+CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/LoongForge/GLM/save/GLM-5-FP8-tp8pp8ep8etp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/glm5"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/glm5"}
 
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
 export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
@@ -52,7 +52,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-  --config-file ${BAIGE_OMNI_PATH}/configs/models/glm5/glm5.yaml
+  --config-file ${LOONGFORGE_PATH}/configs/models/glm5/glm5.yaml
   --multi-latent-attention
   --rotary-base 1000000
   --norm-epsilon 1e-5
@@ -155,9 +155,9 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
+  $LOONGFORGE_PATH/loongforge/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

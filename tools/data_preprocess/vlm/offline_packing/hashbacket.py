@@ -1,4 +1,4 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """Hash bucket processor for efficient data packing."""

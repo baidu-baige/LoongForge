@@ -1,5 +1,5 @@
 # kimi k2.5 vit
-_target_: baige_omni.models.encoder.MoonVisionModelConfig
+_target_: loongforge.models.encoder.MoonVisionModelConfig
 
 num_layers: 27
 hidden_size: 1152

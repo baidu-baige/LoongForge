@@ -1,7 +1,7 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Transform BaigeOmni checkpoint keys back to vanilla naming schemes."""
+"""Transform LoongForge checkpoint keys back to vanilla naming schemes."""
 
 def transform_key_forward(key, forward_mappings):
     """

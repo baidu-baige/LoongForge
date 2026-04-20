@@ -4,15 +4,15 @@ set -eo pipefail
 # Accept config file path as argument
 CONFIG="$1"
 
-# Ensure BAIGE_OMNI_PATH environment variable exists
-# if [ -z "${BAIGE_OMNI_PATH}" ]; then
-#     echo "Error: BAIGE_OMNI_PATH is not set."
+# Ensure LOONGFORGE_PATH environment variable exists
+# if [ -z "${LOONGFORGE_PATH}" ]; then
+#     echo "Error: LOONGFORGE_PATH is not set."
 #     echo "It should process by run.sh"
 #     exit 1
 # fi
 
 # Locate original python tool scripts directory
-TOOLS_DIR="/workspace/BaigeOmni/tools/data_preprocess/vlm/offline_packing"
+TOOLS_DIR="/workspace/LoongForge/tools/data_preprocess/vlm/offline_packing"
 
 if [ ! -d "$TOOLS_DIR" ]; then
     echo "Error: Python scripts directory not found at $TOOLS_DIR"

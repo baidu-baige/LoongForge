@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "BaigeOmni"
+name = "LoongForge"
 version = "0.1.0"
-description = "BaigeOmni framework: an all-scenario training framework"
+description = "LoongForge framework: an all-scenario training framework"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -32,23 +32,23 @@ test = [
 ]
 
 [project.urls]
-Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/BaigeOmni/tree/master"
+Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/LoongForge/tree/master"
 Changelog = "CHANGELOG.md"
 
 [project.scripts]
-BaigeOmni = "baige_omni.train:main"
+LoongForge = "loongforge.train:main"
 
 [tool.hatch.build]
-packages = ["baige_omni"]
+packages = ["loongforge"]
 include = [
-    "baige_omni/conf/*",
-    "baige_omni/data/*",
-    "baige_omni/**/*.yaml",
-    "baige_omni/**/*.json"
+    "loongforge/conf/*",
+    "loongforge/data/*",
+    "loongforge/**/*.yaml",
+    "loongforge/**/*.json"
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["baige_omni"]
+packages = ["loongforge"]
 output-dir = "output/dist"
 
 [tool.hatch.build.targets.sdist]

@@ -13,8 +13,8 @@ TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/InternVL3_5-241B-A28B/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/data/checkpoint/InternVL3_5-241B-A28B-tp4pp4ep8etp1-without-gemm"}
 CHECKPOINT_SAVE_PATH=/mnt/data/checkpoint/InternVL3_5-241B-A28B-tp4pp4ep8etp1-11-28-28-27-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/data/zhaiyanfeng/out/tensorboard/internvl3.5/internvl3.5-241b-a28b/stage2-8k-gbs32-tp4pp4ep8-4nodes/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron/"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron/"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
@@ -25,7 +25,7 @@ GPUS_PER_NODE=8
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_241b_a28b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/internvl3.5/internvl3_5_241b_a28b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -148,10 +148,10 @@ if [ -n "${WANDB_API_KEY}" ]; then
   )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
-  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml \
+  $LOONGFORGE_PATH/loongforge/train.py \
+  --sft-dataset-config ${LOONGFORGE_PATH}/configs/data/sft_dataset_config.yaml \
   ${MODEL_ARGS[@]} \
   ${MOE_ARGS[@]} \
   ${DATA_ARGS[@]} \

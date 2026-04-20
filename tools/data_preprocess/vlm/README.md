@@ -18,7 +18,7 @@
 样本来自 https://huggingface.co/datasets/THUDM/CogVLM-SFT-311K
 
 ```sh
-python /workspace/BaigeOmni/tools/data_preprocess/convert_to_webdataset.py \
+python /workspace/LoongForge/tools/data_preprocess/convert_to_webdataset.py \
     --output_dir /tmp/mllm/wds \
     --json_file /tmp/mllm/mllm_demo.json \
     --image_dir /tmp/mllm/ \

@@ -10,8 +10,8 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export NCCL_DEBUG=WARNING
 
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-0.6B-Instruct"}
 SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen3-0.6b-roundtrip-output"}
@@ -74,9 +74,9 @@ echo "  Source : $TOKENIZER_PATH"
 echo "  Output : $SAVE_HF_PATH"
 echo "========================================"
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/tools/dist_checkpoint/checkpoint/hf_roundtrip_test.py \
+    $LOONGFORGE_PATH/tools/dist_checkpoint/checkpoint/hf_roundtrip_test.py \
     ${MODEL_ARGS[@]} \
     ${TOKENIZER_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

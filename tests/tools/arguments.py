@@ -1,4 +1,4 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """argument parser"""
@@ -93,7 +93,7 @@ def print_args(args, indents=48, std_out=print, need_endl=False):
 
 def parse_args():
     """Parse all arguments."""
-    parser = argparse.ArgumentParser(description='baige tools',
+    parser = argparse.ArgumentParser(description='loongforge tools',
                                      allow_abbrev=False)
     config_dir = "configs"
     optional_config_dir = "optional_configs"

@@ -1,15 +1,15 @@
 #!/bin/bash
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen3-32B"}
 
-input_data=/mnt/cluster/BaigeOmni/dataset/pile_test/train.jsonl
-output_prefix=/mnt/cluster/BaigeOmni/qwen3/pile_test/pile-qwen
+input_data=/mnt/cluster/LoongForge/dataset/pile_test/train.jsonl
+output_prefix=/mnt/cluster/LoongForge/qwen3/pile_test/pile-qwen
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
-    python ${BAIGE_OMNI_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+    python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
         --input ${input_data} \
         --output-prefix ${output_prefix} \
         --tokenizer-type HFTokenizer \

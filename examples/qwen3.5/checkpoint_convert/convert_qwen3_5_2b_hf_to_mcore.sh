@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="${BAIGE_OMNI_PATH}/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/convert_checkpoint"
 
 LOAD=/workspace/Qwen3.5-2B
 SAVE=/workspace/qwen3.5-2B-TP1PP1
@@ -14,11 +14,11 @@ SAVE_VISION_MODEL=${SAVE}/tmp/vision-model-mcore
 SAVE_ADAPTER=${SAVE}/tmp/adapter-mcore
 SAVE_PATCH=${SAVE}/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3.5/qwen3_5_2b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen3.5/qwen3_5_2b.yaml
 
-FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3.5/ckpt_convert/qwen3_5_dense_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_5_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen3.5/ckpt_convert/qwen3_5_dense_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
 
 TP=1
 PP=1
@@ -82,7 +82,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # Step 5: Merge all components (no EP, use merge_megatron.py)
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL/release \

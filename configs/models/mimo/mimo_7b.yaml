@@ -1,5 +1,5 @@
 # mimo_7b model config
-_target_: baige_omni.models.foundation.MimoConfig
+_target_: loongforge.models.foundation.MimoConfig
 
 num_layers: 36
 hidden_size: 4096
@@ -28,4 +28,4 @@ qk_layernorm: false
 untie_embeddings_and_output_weights: true
 model_type: "mimo"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml

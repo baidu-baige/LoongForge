@@ -6,8 +6,8 @@
 set -euo pipefail
 
 # Paths
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
@@ -98,9 +98,9 @@ LOGGING_ARGS=(
     --log-interval 1
 )
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:${PYTHONPATH:-} \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:${PYTHONPATH:-} \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -1,4 +1,4 @@
-_target_: baige_omni.models.foundation.QwenConfig
+_target_: loongforge.models.foundation.QwenConfig
 
 num_layers: 40
 hidden_size: 2560
@@ -27,4 +27,4 @@ rotary_base: 1000000
 rotary_emb_func: "RotaryEmbedding"
 model_type: "qwen"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/qwen/ckpt_convert/qwen1_5_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen/ckpt_convert/qwen1_5_convert.yaml

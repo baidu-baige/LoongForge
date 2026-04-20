@@ -10,9 +10,9 @@ model:
   model_type: kimi_k2_5
   loss_func: ${loss_func:default}
   image_encoder:
-    model_spec: ["baige_omni.models.encoder.moon_vision_models.moon_vision_layer_spec", 
+    model_spec: ["loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec", 
                  "get_moon_vision_model_layer_with_te_spec"]
   image_projector:
-    model_spec: ["baige_omni.models.encoder.moon_vision_models.moon_vision_layer_spec",
+    model_spec: ["loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec",
      "get_adapeter_layer_with_te_spec"]
   vision_token_id: 163603

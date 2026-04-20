@@ -13,9 +13,9 @@ model:
   position_idx_func: ${position_func:position_ids}
   loss_func: ${loss_func:default}
   foundation:
-    model_spec: ["baige_omni.models.foundation.llama.llama_layer_spec", "get_llama_layer_with_te_spec"]
+    model_spec: ["loongforge.models.foundation.llama.llama_layer_spec", "get_llama_layer_with_te_spec"]
   image_encoder:
-    model_spec: ["baige_omni.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
+    model_spec: ["loongforge.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
                  "get_qwen2_vl_vision_model_layer_with_te_spec"]
   image_projector:
     normalization: "RMSNorm"

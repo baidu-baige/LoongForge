@@ -2,12 +2,12 @@
 
 ## Quick Start: VLA Model SFT Training
 
-This document guides you through the quick start process for fine-tuning Vision-Language-Action (VLA) models using the BaigeOmni framework on P800.
+This document guides you through the quick start process for fine-tuning Vision-Language-Action (VLA) models using the LoongForge framework on P800.
 
 
 ## SFT Training Script
 
-BaigeOmni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `PI 0.5`. Please refer to the comments for the purpose of each script section:
+LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `PI 0.5`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 #!/usr/bin/env bash
@@ -18,8 +18,8 @@ BaigeOmni currently provides SFT training example scripts for various models. Af
 set -euo pipefail
 
 # Paths
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 DATA_PATH=${DATA_PATH:-"/workspace/libero/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/paligemma-3b-pt-224/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/"}
@@ -110,9 +110,9 @@ LOGGING_ARGS=(
     --log-interval 1
 )
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:${PYTHONPATH:-} \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:${PYTHONPATH:-} \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

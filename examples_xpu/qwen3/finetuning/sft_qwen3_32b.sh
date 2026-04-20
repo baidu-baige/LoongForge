@@ -1,18 +1,18 @@
 #! /bin/bash
 # The script needs to be run on at least 2 nodes.
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-32B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3/Qwen3_32B_mcore_tp4pp2"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-32b-sft"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3/Qwen3_32B_mcore_tp4pp2"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-32b-sft"}
 GPUS_PER_NODE=8
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 #export DIST_MULTI_STREAM=true # 开启多流
@@ -151,9 +151,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

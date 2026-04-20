@@ -2,7 +2,7 @@
 set -e
 
 # Install bcecmd
-PFS_DIR="/mnt/cfs/BaigeOmniCI"
+PFS_DIR="/mnt/cfs/LoongForgeCI"
 
 # Define bcecmd wrapper function with retry mechanism
 REAL_BCECMD="/usr/local/bin/bcecmd"
@@ -52,7 +52,7 @@ done
 
 checkpoint_dir=${PFS_DIR}/megatron_checkpoint
 huggingface_dir=${PFS_DIR}/huggingface.co
-datasets_dir=${PFS_DIR}/omni_datasets/BaigeOmni/
+datasets_dir=${PFS_DIR}/omni_datasets/LoongForge/
 
 mkdir -p $checkpoint_dir $huggingface_dir $datasets_dir
 

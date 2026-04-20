@@ -1,15 +1,15 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
-SAVE=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-hf-Dec24
+LOAD=/mnt/cluster/LoongForge/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
+SAVE=/mnt/cluster/LoongForge/qwen3/qwen3-1.7b-hf-Dec24
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
 
-CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
 
 TP=1
 PP=1

@@ -297,10 +297,10 @@ function run_all_ipipe_case(){
         fi
         
         pytorchjob_yaml_path=${scripts_root_path}/yaml_template/pytorchjob_standalone.yaml
-        baige_omni_folder="/workspace/BaigeOmni"
+        loongforge_folder="/workspace/LoongForge"
 
         # Pass variables to run_pytorchjob to generate yaml file, usage: envsubst < ${pytorchjob_yaml_path} > ${new_pytorcjob_yaml_path}
-        NAME_PREFIX=${NAME_PREFIX_AGILE:-"agile-baige-transformer-run"}
+        NAME_PREFIX=${NAME_PREFIX_AGILE:-"agile-loongforge-transformer-run"}
         export NAMESPACE="default"
         export PYTORCHJOB_NAME=${NAME_PREFIX}-`date +%s`
         export IMAGE=${IMAGE:-"NA"}
@@ -327,13 +327,13 @@ function run_all_ipipe_case(){
                 set -euo pipefail
                 mkdir -p /workspace/logs
                 
-                echo "Start downloading baige_omni"
-                cd /workspace && rm -rf BaigeOmni
+                echo "Start downloading loongforge"
+                cd /workspace && rm -rf LoongForge
                 wget ${BOS_SYNC_Baige_TRANSFORMER_ADDR}
-                tar -zxvf BaigeOmni.tar.gz
-                echo "Download complete baige_omni"
+                tar -zxvf LoongForge.tar.gz
+                echo "Download complete loongforge"
 
-                cd $baige_omni_folder/tests
+                cd $loongforge_folder/tests
                 extra_param="--node_nums ${node_nums} \
                              --gpu_nums ${gpu_nums} \
                              --models ${model_names} \

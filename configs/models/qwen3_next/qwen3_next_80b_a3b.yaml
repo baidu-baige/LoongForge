@@ -1,5 +1,5 @@
 # qwen3next model configuration
-_target_: baige_omni.models.foundation.Qwen3NextConfig
+_target_: loongforge.models.foundation.Qwen3NextConfig
 
 num_layers: 48
 hidden_size: 2048
@@ -31,4 +31,4 @@ linear_conv_kernel_dim: 4
 full_attention_interval: 4
 model_type: "qwen3_next"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml

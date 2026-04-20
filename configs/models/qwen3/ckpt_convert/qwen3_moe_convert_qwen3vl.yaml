@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file://${oc.env:BAIGE_OMNI_PATH}/configs/models/
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
 
 defaults:
   - qwen3@module: ???

@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file:///workspace/BaigeOmni/configs/models/
+    - file:///workspace/LoongForge/configs/models/
 
 defaults:
   - image_projector@module: ???

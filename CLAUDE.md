@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-BaigeOmni is Baidu's large-scale transformer training framework built on top of NVIDIA Megatron-LM and TransformerEngine. It supports LLMs, VLMs (Vision-Language Models), VLAs (Vision-Language-Action Models), and Diffusion Models across both NVIDIA GPUs and Baidu Kunlun XPUs. Training phases supported: pretrain and SFT (supervised fine-tuning).
+LoongForge is Baidu's large-scale transformer training framework built on top of NVIDIA Megatron-LM and TransformerEngine. It supports LLMs, VLMs (Vision-Language Models), VLAs (Vision-Language-Action Models), and Diffusion Models across both NVIDIA GPUs and Baidu Kunlun XPUs. Training phases supported: pretrain and SFT (supervised fine-tuning).
 
 ## Build & Setup
 
@@ -13,7 +13,7 @@ BaigeOmni is Baidu's large-scale transformer training framework built on top of 
 # Clone and patch Megatron-LM + TransformerEngine dependencies
 python setup_env.py --megatron-tag core_v0.15.0 --te-tag v2.9
 ```
-This clones Megatron-LM and TransformerEngine, checks out specific tags, applies patches from `patches/`, builds TransformerEngine, and installs BaigeOmni dependencies.
+This clones Megatron-LM and TransformerEngine, checks out specific tags, applies patches from `patches/`, builds TransformerEngine, and installs LoongForge dependencies.
 
 ### Install Dependencies
 ```bash
@@ -50,12 +50,12 @@ pytest tests/
 
 ## Training Launch Pattern
 
-Training scripts use `torchrun` for distributed execution. The PYTHONPATH must include both Megatron-LM and BaigeOmni:
+Training scripts use `torchrun` for distributed execution. The PYTHONPATH must include both Megatron-LM and LoongForge:
 
 ```bash
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun --nproc_per_node 8 --nnodes $NNODES ... \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     --model-name <model-name> \
     --training-phase pretrain|sft \
     ...
@@ -65,20 +65,20 @@ Key arguments: `--model-name` (maps to config via `config_map.py`) or `--config-
 
 ## Architecture
 
-### Core Package: `baige_omni/`
+### Core Package: `loongforge/`
 
 - **`train.py`** — Entry point. Calls `parse_train_args()` then `build_model_trainer(args).train()`.
 - **`train/parser.py`** — Argument parsing: merges Megatron CLI args with Hydra YAML configs (OmegaConf). Supports `--model-name` (looked up in `config_map.py`) or `--config-file`.
 - **`train/trainer_builder.py`** — Registry-based trainer dispatch. `register_model_trainer(model_family, training_phase)` decorator registers training functions per model family and phase.
 - **`train/megatron_trainer.py`** — `MegatronTrainer` wraps model_provider, dataset_provider, and forward_step into Megatron's `pretrain()` loop.
 - **`train/training_utils.py`** — Extended Megatron pretrain loop (~87K lines, heavily customized).
-- **`train/arguments.py`** — Baige-specific extra CLI arguments added on top of Megatron's.
-- **`train/validators.py`** — Validation logic for Megatron and Baige args.
+- **`train/arguments.py`** — LoongForge-specific extra CLI arguments added on top of Megatron's.
+- **`train/validators.py`** — Validation logic for Megatron and LoongForge args.
 - **`train/pretrain/`** — Pretrain implementations for LLM and VLM.
 - **`train/sft/`** — SFT implementations for LLM, VLM, InternVL, ERNIE.
 - **`train/custom/`** — Custom model trainers (e.g., WAN diffusion, Pi0.5 VLA).
 
-### Model System: `baige_omni/models/`
+### Model System: `loongforge/models/`
 
 - **`factory.py`** — Model registry. `register_model_config(family, arch)` registers model configs; `register_model_provider(family)` registers model provider functions. Lookups: `get_model_config()`, `get_model_provider()`, `get_model_family()`.
 - **`dispatch.py`** — Hardware-abstraction layer (`MultiAccModules`). Provides unified access to TransformerEngine or local linear/attention/norm implementations.
@@ -91,11 +91,11 @@ Key arguments: `--model-name` (maps to config via `config_map.py`) or `--config-
 
 ### Configuration System: `configs/`
 
-- **`configs/models/<family>/<model>.yaml`** — Hydra/OmegaConf YAML configs defining model architecture params. The `_target_` field maps to a Python config dataclass (e.g., `baige_omni.models.foundation.LLaMAConfig`).
+- **`configs/models/<family>/<model>.yaml`** — Hydra/OmegaConf YAML configs defining model architecture params. The `_target_` field maps to a Python config dataclass (e.g., `loongforge.models.foundation.LLaMAConfig`).
 - **`configs/data/`** — Data configuration templates.
-- **`baige_omni/utils/config_map.py`** — `MODEL_CONFIG_REGISTRY` maps `--model-name` strings to `(config_path, config_name)` pairs.
+- **`loongforge/utils/config_map.py`** — `MODEL_CONFIG_REGISTRY` maps `--model-name` strings to `(config_path, config_name)` pairs.
 
-### Data Pipeline: `baige_omni/data/`
+### Data Pipeline: `loongforge/data/`
 
 - SFT datasets with sharegpt/alpaca format support, multimodal data handling, data packing, DP load balancing.
 - `mm_plugin.py` — Multi-modal data plugin for processing images/video.
@@ -124,11 +124,11 @@ Baidu Kunlun XPU training scripts, mirroring `examples/` structure.
 
 ### Adding a New Model
 
-1. Create a config dataclass in `baige_omni/models/foundation/` (or `encoder/` for vision), decorated with `@register_model_config(family, arch)`.
+1. Create a config dataclass in `loongforge/models/foundation/` (or `encoder/` for vision), decorated with `@register_model_config(family, arch)`.
 2. Create a model provider function decorated with `@register_model_provider(family)`.
 3. Register a trainer function with `@register_model_trainer(family, training_phase)`.
 4. Add YAML config under `configs/models/<family>/`.
-5. Add entry in `baige_omni/utils/config_map.py` `MODEL_CONFIG_REGISTRY`.
+5. Add entry in `loongforge/utils/config_map.py` `MODEL_CONFIG_REGISTRY`.
 6. Add example launch scripts under `examples/<model>/`.
 
 ### Configuration Flow
@@ -137,7 +137,7 @@ CLI args + Hydra YAML config -> `parse_train_args()` -> merged `args` namespace 
 
 ### Model Family Constants
 
-Defined in `baige_omni/utils/constants.py`: `LanguageModelFamilies`, `VisionLanguageModelFamilies`, `CustomModelFamilies`, `VisionLanguageActionModelFamilies`. These enums drive dispatch logic throughout the codebase.
+Defined in `loongforge/utils/constants.py`: `LanguageModelFamilies`, `VisionLanguageModelFamilies`, `CustomModelFamilies`, `VisionLanguageActionModelFamilies`. These enums drive dispatch logic throughout the codebase.
 
 ## Dependencies
 
@@ -145,4 +145,4 @@ Core external dependencies: Megatron-LM (patched, as `Megatron-LM`), Transformer
 
 ## Patches
 
-`patches/Megatron-LM_v0.15.0/` and `patches/TransformerEngine_v2.9/` contain patch files applied to upstream repos during setup. These implement Baige-specific optimizations and fixes.
+`patches/Megatron-LM_v0.15.0/` and `patches/TransformerEngine_v2.9/` contain patch files applied to upstream repos during setup. These implement LoongForge-specific optimizations and fixes.

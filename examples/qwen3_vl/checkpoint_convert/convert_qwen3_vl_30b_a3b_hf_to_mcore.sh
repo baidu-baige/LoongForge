@@ -1,22 +1,22 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="${BAIGE_OMNI_PATH}/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct/
-SAVE=/mnt/cluster/BaigeOmni/qwen3-vl-30b-a3b/qwen3-vl-30b-etp1etp1pp8ep1
+SAVE=/mnt/cluster/LoongForge/qwen3-vl-30b-a3b/qwen3-vl-30b-etp1etp1pp8ep1
 
 SAVE_LANGUAGE_MODEL=${SAVE}/tmp/language-mcore
 SAVE_VISION_MODEL=${SAVE}/tmp/vision-model-mcore
 SAVE_ADAPTER=${SAVE}/tmp/adapter-mcore
 SAVE_PATCH=${SAVE}/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
 
-FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_qwen3vl.yaml
-IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_moe_convert_qwen3vl.yaml
+IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
 
 ETP=1
 DTP=1
@@ -83,7 +83,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 # merge
 if [ $EP -gt 1 ]; then
-    PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron_expert.py\
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \
@@ -97,7 +97,7 @@ if [ $EP -gt 1 ]; then
         --save_ckpt_path $SAVE/release \
         --config_file $MODEL_CONFIG_FILE 
 else
-    PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
         python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py\
         --megatron_path $MEGATRON_PATH \
         --language_model_path $SAVE_LANGUAGE_MODEL/release \

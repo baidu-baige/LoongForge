@@ -1,15 +1,15 @@
 #!/bin/bash
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/leoli/qwen/Qwen2-7B-HF"}
 
-input_data=/mnt/cluster/BaigeOmni/dataset/sft_aplaca_zh_data.json
-output_path=/mnt/cluster/BaigeOmni/qwen2/sft_aplaca_zh_tokenized
+input_data=/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json
+output_path=/mnt/cluster/LoongForge/qwen2/sft_aplaca_zh_tokenized
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
-    python ${BAIGE_OMNI_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+    python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
         --input ${input_data} \
         --output ${output_path} \
         --seq-length 2048 \
@@ -21,5 +21,5 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
         # --packing-sft-data \
         # --train-on-prompt \
         # --eod-mask-loss \
-        # --sft-dataset-config /workspace/BaigeOmni/configs/data/sft_dataset_config.yaml \
+        # --sft-dataset-config /workspace/LoongForge/configs/data/sft_dataset_config.yaml \
         # --sft-dataset custom_dataset \

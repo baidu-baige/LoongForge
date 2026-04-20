@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest a new feature or enhancement for BaigeOmni
+about: Suggest a new feature or enhancement for LoongForge
 title: "[FEATURE] "
 labels: 'enhancement'
 assignees: ''
@@ -10,7 +10,7 @@ assignees: ''
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
 ## Describe the solution you'd like
-A clear and concise description of what you want to happen. How should this new feature work in BaigeOmni?
+A clear and concise description of what you want to happen. How should this new feature work in LoongForge?
 
 ## Describe alternatives you've considered
 A clear and concise description of any alternative solutions or features you've considered.

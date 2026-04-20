@@ -2,39 +2,39 @@
 
 ## Quick Start: LLM Model SFT Training
 
-This document guides you through the quick start process for fine-tuning Large-Language Models (LLM) using the BaigeOmni framework on P800.
+This document guides you through the quick start process for fine-tuning Large-Language Models (LLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for llm sft](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md).
+For data preparation and weight preparation, refer to [quick start for llm sft](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md).
 
 ## SFT Training Script
 
-BaigeOmni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-8B`. Please refer to the comments for the purpose of each script section:
+LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-8B`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 # ! /bin/bash
 # The script needs to be run on at least 2 nodes.
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-# DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/sft_aplaca_zh_data.json"}
+# DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_tokenized"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen3-8B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3/Qwen3_8B_mcore_tp1pp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3/Qwen3_8B_mcore_tp1pp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-8b-sft"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-8b-sft"}
 
 GPUS_PER_NODE=8
 
 ###################### Kunlunxin P800 ######################
-# bf16 specific (megatron related variables refer to <Baige Megatron specific>)
+# bf16 specific (megatron related variables refer to <Loong Megatron specific>)
 export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 #export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # forward
 #export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # backward dw
@@ -168,9 +168,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

@@ -1,15 +1,15 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/BaigeOmni/qwen2.5/qwen2.5-7b-tp2-pp4-Dec21/release/
-SAVE=/mnt/cluster/BaigeOmni/qwen2.5/qwen2.5-7b-hf-Dec24
+LOAD=/mnt/cluster/LoongForge/qwen2.5/qwen2.5-7b-tp2-pp4-Dec21/release/
+SAVE=/mnt/cluster/LoongForge/qwen2.5/qwen2.5-7b-hf-Dec24
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen2.5/qwen2_5_7b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/qwen2_5_7b.yaml
 
-CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert_llm.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert_llm.yaml
 
 TP=2
 PP=4

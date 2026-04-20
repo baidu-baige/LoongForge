@@ -1,4 +1,4 @@
-_target_: baige_omni.models.encoder.Qwen35VisionConfig
+_target_: loongforge.models.encoder.Qwen35VisionConfig
 
 num_layers: 27
 hidden_size: 1152

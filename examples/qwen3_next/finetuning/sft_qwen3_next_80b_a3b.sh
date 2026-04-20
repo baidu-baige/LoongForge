@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 The BaigeOmnni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 export TORCH_COMPILE=0
@@ -7,21 +7,21 @@ export TORCHDYNAMO_DISABLE=1
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/sft_aplaca_zh_data.json"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/BaigeOmni/qwen3_next/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/LoongForge/qwen3_next/sft_aplaca_zh_data_cache"}
 
-DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml"}
+DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3_next/Qwen3_Next_80B_A3B_mcore_tp1pp2ep8"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3_next/Qwen3_Next_80B_A3B_mcore_tp1pp2ep8"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-next-80b-a3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-next-80b-a3b"}
 
 GPUS_PER_NODE=8
 
@@ -39,7 +39,7 @@ DISTRIBUTED_ARGS=(
     --master_port $MASTER_PORT
 )
 
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen3_next/qwen3_next_80b_a3b.yaml
 
 MODEL_CONFIG_ARGS=(
     --config-file $MODEL_CONFIG_PATH
@@ -144,9 +144,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

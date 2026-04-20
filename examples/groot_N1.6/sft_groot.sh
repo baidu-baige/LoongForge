@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Paths - adjust these to your environment
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/BaigeOmni"}
+AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/LoongForge"}
 DATA_PATH=${DATA_PATH:-"/workspace/single_data/single_data/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"$EAGLE_LOCAL_PATH/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt"}
@@ -93,7 +93,7 @@ LOGGING_ARGS=(
 # Run training
 PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:${PYTHONPATH:-} \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/baige_omni/train.py \
+    $AIAK_TRAINING_PATH/loongforge/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

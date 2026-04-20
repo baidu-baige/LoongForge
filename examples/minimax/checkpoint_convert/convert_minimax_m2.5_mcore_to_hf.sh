@@ -1,14 +1,14 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/BaigeOmni/mini_max/MiniMax_mcore_tp8pp4ep8etp1/release
-SAVE=/mnt/cluster/BaigeOmni/mini_max/MiniMax-M2.5-hf/
+LOAD=/mnt/cluster/LoongForge/mini_max/MiniMax_mcore_tp8pp4ep8etp1/release
+SAVE=/mnt/cluster/LoongForge/mini_max/MiniMax-M2.5-hf/
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/minimax/minimax_m2_5.yaml
-CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/minimax/minimax_m2_5.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml
 
 TP=8
 PP=4

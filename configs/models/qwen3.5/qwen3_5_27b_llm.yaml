@@ -1,4 +1,4 @@
-_target_: baige_omni.models.foundation.Qwen35Config
+_target_: loongforge.models.foundation.Qwen35Config
 
 num_layers: 64
 hidden_size: 5120

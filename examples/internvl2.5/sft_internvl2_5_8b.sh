@@ -9,13 +9,13 @@ ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-DATA_PATH=/mnt/cluster/BaigeOmni/dataset/internvl/webdataset
+DATA_PATH=/mnt/cluster/LoongForge/dataset/internvl/webdataset
 TOKENIZER_PATH=/mnt/cluster/huggingface.co/internvl/InternVL2_5-8B/
-CHECKPOINT_LOAD_PATH=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-8b-tp4-pp1-Nov24
-CHECKPOINT_SAVE_PATH=/mnt/cluster/BaigeOmni/internvl2.5/internvl2.5-8b-tp4-pp1-save
+CHECKPOINT_LOAD_PATH=/mnt/cluster/LoongForge/internvl2.5/internvl2.5-8b-tp4-pp1-Nov24
+CHECKPOINT_SAVE_PATH=/mnt/cluster/LoongForge/internvl2.5/internvl2.5-8b-tp4-pp1-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl2.5/internvl2.5-8b/"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -25,7 +25,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl2.5/internvl2_5_8b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/internvl2.5/internvl2_5_8b.yaml
 
 DISTRIBUTED_ARGS=(
   --nproc_per_node $GPUS_PER_NODE
@@ -127,11 +127,11 @@ if [ -n "${WANDB_API_KEY}" ]; then
   )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
+  $LOONGFORGE_PATH/loongforge/train.py \
   ${MODEL_CONFIG_ARGS[@]} \
-  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml \
+  --sft-dataset-config ${LOONGFORGE_PATH}/configs/data/sft_dataset_config.yaml \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \

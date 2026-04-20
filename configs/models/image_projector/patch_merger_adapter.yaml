@@ -1,4 +1,4 @@
-_target_: baige_omni.models.encoder.PatchMergerMLPAdapterConfig
+_target_: loongforge.models.encoder.PatchMergerMLPAdapterConfig
 
 activation_func: ${act:gelu}
 normalization: "LayerNorm"

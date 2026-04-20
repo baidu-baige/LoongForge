@@ -2,17 +2,17 @@
 # This script is used for pre-training Kimi K2.5 multimodal model.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/deepseek3/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/deepseek3/pile_test/pile-deepseek_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/kimi_2_5"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/kimi_2_5/kimi_k2_5-tp8pp8ep32etp1"}
-CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/BaigeOmni/kimi_2_5/save/kimi_k2_5-tp8pp8ep32etp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/kimi_2_5/kimi_k2_5-tp8pp8ep32etp1"}
+CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/LoongForge/kimi_2_5/save/kimi_k2_5-tp8pp8ep32etp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/kimi_k2_5"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/kimi_k2_5"}
 
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
 export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
@@ -48,7 +48,7 @@ DISTRIBUTED_ARGS=(
   --master_port $MASTER_PORT
 )
 
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/kimi_k2.5/kimi_k2_5.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/kimi_k2.5/kimi_k2_5.yaml
 MODEL_CONFIG_ARGS=(
     --config-file $MODEL_CONFIG_PATH
 )
@@ -144,9 +144,9 @@ LOGGING_ARGS=(
   #--check-weight-hash-across-dp-replicas-interval 30
 )
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
+  $LOONGFORGE_PATH/loongforge/train.py \
   ${MODEL_CONFIG_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

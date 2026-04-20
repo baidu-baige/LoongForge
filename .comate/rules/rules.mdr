@@ -1,9 +1,9 @@
 ---
  alwaysApply: true 
 ---
-# BaigeOmni 项目开发规则
+# LoongForge 项目开发规则
 
-本文档基于代码库分析提炼，旨在指导开发者在 BaigeOmni 项目中编写符合项目约定的代码。所有规则均基于可验证的真实代码和文档。
+本文档基于代码库分析提炼，旨在指导开发者在 LoongForge 项目中编写符合项目约定的代码。所有规则均基于可验证的真实代码和文档。
 
 ## 项目概览与技术栈
 
@@ -19,8 +19,8 @@
 ## 模块架构与职责划分
 
 ### 核心模块组织
-- **`baige_omni/train/`**: 训练流水线入口（`train.py`），参数解析，通过注册机制分发训练器
-- **`baige_omni/models/`**: 统一模型抽象
+- **`loongforge/train/`**: 训练流水线入口（`train.py`），参数解析，通过注册机制分发训练器
+- **`loongforge/models/`**: 统一模型抽象
   - `foundation/`: LLM 主干（LLaMA、Qwen、DeepSeek 等）
   - `encoder/`: 视觉编码器（ViT、InternVL、ERNIE-VL 等）
   - `omni_models/`: 多模态组合（视觉 + LLM 流水线）
@@ -50,7 +50,7 @@
 ```
 
 新增模型通常需要：
-1. 在 `baige_omni/models/foundation/` 或 `encoder/` 中定义配置数据类
+1. 在 `loongforge/models/foundation/` 或 `encoder/` 中定义配置数据类
 2. 通过装饰器注册配置、提供者和训练器
 3. 在 `config_map.py` 中添加条目
 4. 添加 YAML 配置到 `configs/models/<family>/`
@@ -76,12 +76,12 @@
 ### 命名约定
 - **类名**: 使用 CamelCase（如 `MegatronTrainer`、`OmniCombinationModel`）
 - **方法/函数名**: 使用 snake_case（如 `register_model_trainer`、`run_command`）
-- **目录名**: 小写 snake_case（如 `baige_omni/`、`tests/`、`patches/`）
+- **目录名**: 小写 snake_case（如 `loongforge/`、`tests/`、`patches/`）
 - **文件名**: Python 文件使用 snake_case，YAML 配置遵循 `configs/models/<family>/<model>.yaml` 模式
 - **提交信息**: 遵循 Conventional Commits 格式（如 `feat: add new model`、`fix: resolve X issue`）
 
 ### 代码组织
-- **导入规范**: 使用从根包的绝对导入（如 `from baige_omni.train.parser import parse_train_args`）
+- **导入规范**: 使用从根包的绝对导入（如 `from loongforge.train.parser import parse_train_args`）
 - **路径要求**: 需要设置 `PYTHONPATH` 包含项目根目录以解析模块
 - **许可头**: 文件使用 SPDX-based Apache-2.0 头部，符合 CONTRIBUTING.md 指南
 
@@ -125,9 +125,9 @@ sh build.sh    # 创建输出压缩包
 ### 训练启动模式
 ```bash
 # 基础训练启动模式
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun --nproc_per_node 8 --nnodes $NNODES \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     --model-name <model-name> \
     --training-phase pretrain|sft
 ```
@@ -157,7 +157,7 @@ pytest tests/
 ## 编码指导原则
 
 ### 新增模型开发流程
-1. **定义配置**: 在 `baige_omni/models/foundation/` 或 `encoder/` 中创建配置数据类
+1. **定义配置**: 在 `loongforge/models/foundation/` 或 `encoder/` 中创建配置数据类
 2. **注册组件**: 使用装饰器注册配置、模型提供者和训练器
 3. **添加配置**: 在 `configs/models/<family>/` 下创建 YAML 配置文件
 4. **更新映射**: 在 `config_map.py` 的 `MODEL_CONFIG_REGISTRY` 中添加条目
@@ -183,7 +183,7 @@ pytest tests/
 - **日志模块使用**: 项目主要使用 `print_rank_0` 处理分布式日志，是否使用 Python 标准 `logging` 模块需进一步确认
 - **构建工具细节**: 项目使用 `build.sh` 生成发布包，但具体构建工具（`pyproject.toml` 或 `setup.py`）未明确提及
 - **自适应 FP8 方案**: 文档提到的"自适应 FP8 精度方案"可能需要验证当前实现状态
-- **命名一致性**: 项目在设置脚本中使用"BaigeOmni"，但 Python 包名为"baige_omni"，可能存在大小写不一致
+- **命名一致性**: 项目在设置脚本中使用"LoongForge"，但 Python 包名为"loongforge"，可能存在大小写不一致
 
 ### 避免的常见错误
 - **硬编码路径**: 避免在代码中硬编码文件路径，使用 `get_config_from_model_name()` 等工具函数
@@ -195,6 +195,6 @@ pytest tests/
 
 ## 规则使用说明
 
-本文档中的规则均基于对真实代码库的分析，旨在帮助开发者在 BaigeOmni 项目中编写符合项目约定的代码。对于不确定的内容已标注`[需人工确认]`，在实际开发中应进行验证。
+本文档中的规则均基于对真实代码库的分析，旨在帮助开发者在 LoongForge 项目中编写符合项目约定的代码。对于不确定的内容已标注`[需人工确认]`，在实际开发中应进行验证。
 
 所有回答均使用中文

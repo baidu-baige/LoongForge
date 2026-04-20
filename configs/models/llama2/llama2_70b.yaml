@@ -1,5 +1,5 @@
 # llama2_7b model config
-_target_: baige_omni.models.foundation.LLaMAConfig
+_target_: loongforge.models.foundation.LLaMAConfig
 
 num_layers: 80
 hidden_size: 8192
@@ -22,4 +22,4 @@ qk_layernorm: false
 untie_embeddings_and_output_weights: true
 model_type: "llama"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/llama2/ckpt_convert/llama2_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/llama2/ckpt_convert/llama2_convert.yaml

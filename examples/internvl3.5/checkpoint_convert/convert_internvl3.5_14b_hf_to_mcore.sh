@@ -1,22 +1,22 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/models/InternVL3_5-14B/
-SAVE=/mnt/cluster/BaigeOmni/internvl3.5/internvl3.5-14b-tp4-pp1-Dec16
+SAVE=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-14b-tp4-pp1-Dec16
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-mcore
-SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
-SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
-SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
+SAVE_LANGUAGE_MODEL=/mnt/cluster/LoongForge/tmp/language-mcore
+SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-mcore
+SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-mcore
+SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_14b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/internvl3.5/internvl3_5_14b.yaml
 
-FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
-IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
+IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/intern_mlp_adapter_convert.yaml
 
 ETP=4
 DTP=4
@@ -77,7 +77,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --no_load_optim
 
 # merge
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/mcore/merge_megatron.py \
     --megatron_path $MEGATRON_PATH \
     --language_model_path $SAVE_LANGUAGE_MODEL/release \

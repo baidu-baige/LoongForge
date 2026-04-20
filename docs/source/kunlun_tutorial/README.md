@@ -1,26 +1,26 @@
 # Kunlunxin P800 README
 
-BaigeOmni supports training on the Kunlunxin P800 XPU, covering a variety of model types such as LLMs, VLMs, VLAs, and more.
+LoongForge supports training on the Kunlunxin P800 XPU, covering a variety of model types such as LLMs, VLMs, VLAs, and more.
 
 ## Quick Start
 
 ### Installation
 
-Refer to [Installation on Kunlunxin P800](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/install_p800.md)
+Refer to [Installation on Kunlunxin P800](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/install_p800.md)
 
 ### Quick Start: VLM Model Training
 
-Refer to [Quick Start: VLM Model SFT Training on Kunlunxin P800](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_vlm_p800.md)
+Refer to [Quick Start: VLM Model SFT Training on Kunlunxin P800](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_vlm_p800.md)
 
 ### Quick Start: LLM Model Training
 
-**Pretrain**: Refer to [Quick Start: LLM Model Pretrain Training on Kunlunxin P800](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
+**Pretrain**: Refer to [Quick Start: LLM Model Pretrain Training on Kunlunxin P800](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
 
-**SFT**: Refer to [Quick Start: LLM Model SFT Training on Kunlunxin P800](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_llm_sft_p800.md)
+**SFT**: Refer to [Quick Start: LLM Model SFT Training on Kunlunxin P800](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_llm_sft_p800.md)
 
 ### Quick Start: VLA Model Training
 
-**SFT**: [Quick Start: VLA Model SFT Training on Kunlunxin P800](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_vla_p800.md)
+**SFT**: [Quick Start: VLA Model SFT Training on Kunlunxin P800](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_vla_p800.md)
 
 ## Supported Models
 

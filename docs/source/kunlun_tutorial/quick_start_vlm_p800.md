@@ -2,13 +2,13 @@
 
 ## Quick Start: VLM Model SFT Training
 
-This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the BaigeOmni framework on P800.
+This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for vlm sft](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md).
+For data preparation and weight preparation, refer to [quick start for vlm sft](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md).
 
 ## SFT Training Script
 
-BaigeOmni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-VL-30B-A3B`. Please refer to the comments for the purpose of each script section:
+LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-VL-30B-A3B`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 #! /bin/bash
@@ -37,17 +37,17 @@ do
     check_for_infer $i
 done
  
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/load/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm_202512180001/"}
+DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/loongforge-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/loongforge-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/loongforge-test/sft_qwen3_vl_30b_a3b_temp/load/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm_202512180001/"}
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
  
 GPUS_PER_NODE=8
 ###################### Kunlunxin P800 ######################
-# bf16 specific (megatron related variables refer to <Baige Megatron specific>)
+# bf16 specific (megatron related variables refer to <Loong Megatron specific>)
 export XMLIR_ENABLE_FAST_FC=true                # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 # export XMLIR_ENABLE_FAST_FC_FWD_OUT=true      # Used for forward output
 # export XMLIR_ENABLE_FAST_FC_BWD_DW=true       # Used for backward DW
@@ -67,7 +67,7 @@ export BKCL_RDMA_VERBS=1                        # Used with BKCL_QPS_PER_CONNECT
 export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: more memory usage but better performance; true: less memory but degraded performance
 export XMLIR_BATCH_PARALLEL=false               # Enable communication fusion operators, USE_CAST_FC_FUSION automatically disabled in bf16
 export SAVE_LOG_FILE_WITH_RANK_ID=false          # If true, training logs will be stored separately by rank_id
-export XMLIR_LOG_PATH="/mnt/rapidfs/baige-omni-test/sft_qwen3_vl_30b_a3b_temp/logs"  # Specify training log storage directory
+export XMLIR_LOG_PATH="/mnt/rapidfs/loongforge-test/sft_qwen3_vl_30b_a3b_temp/logs"  # Specify training log storage directory
 export XMLIR_LOG_PREFIX="qwen3_vl_30b_sft"      # Specify training log file name prefix
 export P800_DEBUG=false                         # If true, training will save checkpoint and exit when grad norm becomes nan
 export P800_DUMP_DIR="ckpt-dump-dir-path"       # Specify dump directory for checkpoint and info when grad norm becomes nan
@@ -180,9 +180,9 @@ LOGGING_ARGS=(
     --log-timers-to-tensorboard
 )
  
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${MOE_ARGS[@]} \
     ${DATA_ARGS[@]} \

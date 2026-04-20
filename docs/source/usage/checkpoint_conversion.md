@@ -1,7 +1,7 @@
 # Model Checkpoint Conversion
 
 ## Overview
-BaigeOmni supports bidirectional conversion between Mcore and Hugging Face (HF) formats for various models. Users can leverage the built-in conversion tools and scripts within the framework to quickly convert model weights and proceed with training or validation.
+LoongForge supports bidirectional conversion between Mcore and Hugging Face (HF) formats for various models. Users can leverage the built-in conversion tools and scripts within the framework to quickly convert model weights and proceed with training or validation.
 
 ## Supported Models for Conversion
 
@@ -161,4 +161,4 @@ sh examples/qwen3/checkpoint_convert/convert_qwen3_14b_mcore_to_hf.sh
 | `sub-num-layers-for-save` | Number of layers to save each time | Any positive integer | `None` |
 | `save-sub-checkpoint-by-pp` | Save sub-checkpoints by pipeline parallelism | `True`/`False` | `False` |
 
-You can add new model weight conversions based on BaigeOmni’s conversion tools.
+You can add new model weight conversions based on LoongForge’s conversion tools.

@@ -2,7 +2,7 @@
 
 ## 1.Heterogeneous TP Parallel
 
-BaigeOmni supports heterogeneous Tensor Parallel (TP) configuration for encoder and decoder, meaning encoder and decoder can use different TP sizes for parallel computation.
+LoongForge supports heterogeneous Tensor Parallel (TP) configuration for encoder and decoder, meaning encoder and decoder can use different TP sizes for parallel computation.
 
 In this design, encoder and decoder are treated as two sub-modules with different computational characteristics and resource requirements. The system allows them to configure independent tensor parallel groups separately, enabling more fine-grained parallel strategy control within the same training or inference task.
 
@@ -14,7 +14,7 @@ This heterogeneous TP mechanism enables the model to flexibly select the most ap
 Set `tensor-model-parallel-size` in the corresponding model's vit.yaml to specify the vit tp size. For example, adding `tensor_model_parallel_size: 2` in qwen3_vit specifies the vit's tp size:
 
 ```yaml
-_target_: baige_omni.models.encoder.Qwen3VisionModelConfig
+_target_: loongforge.models.encoder.Qwen3VisionModelConfig
 
 num_layers: 27
 hidden_size: 1152
@@ -67,7 +67,7 @@ For small-scale encoders like Vit (0.6b), a 5% performance improvement was achie
 
 ## 2.Heterogeneous DP Parallel
 
-Heterogeneous tensor parallelism (TP) alone does not necessarily improve end-to-end performance. Therefore, BaigeOmni supports a heterogeneous data-parallel mechanism. The core idea is that after applying heterogeneous TP to the encoder and decoder, we can leverage multi-GPU parallelism by feeding different inputs to different encoder replicas, allowing them to compute simultaneously and thus reduce overall latency.
+Heterogeneous tensor parallelism (TP) alone does not necessarily improve end-to-end performance. Therefore, LoongForge supports a heterogeneous data-parallel mechanism. The core idea is that after applying heterogeneous TP to the encoder and decoder, we can leverage multi-GPU parallelism by feeding different inputs to different encoder replicas, allowing them to compute simultaneously and thus reduce overall latency.
 
 ### 2.1 Usage Method
 Add `--enable-encoder-hetero-dp` to the shell training script to enable heterogeneous data parallelism:
@@ -86,7 +86,7 @@ MODEL_PARALLEL_ARGS=(
 
 Add `tensor_model_parallel_size: 1` to the corresponding model’s `vit.yaml`. Currently, when heterogeneous DP is enabled, only encoder TP size of 1 is supported.
 ```yaml
-_target_: baige_omni.models.encoder.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280

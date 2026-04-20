@@ -18,8 +18,8 @@
         check_for_infer $i
     done
     #################################### Path Configuration ####################################
-    MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}      # Megatron-LM 代码路径
-    BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}       # BaigeOmni 训练框架代码路径
+    MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}      # Megatron-LM 代码路径
+    LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}       # LoongForge 训练框架代码路径
     DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/datasets/64k_tokenized_byrepo-11000-13000"}  # 训练数据路径
     TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/models/DeepSeek-V3.1-Terminus-bf16"}  # Tokenizer 路径
     TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/tensorboard-log/deepseek-v31-term-sft"}  # TensorBoard 日志路径
@@ -180,9 +180,9 @@
     --log-validation-ppl-to-tensorboard
     )
 
-    PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+    PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

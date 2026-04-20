@@ -14,8 +14,8 @@ echo "================ GPU info ================"
 nvidia-smi -L                 # check that all 8 GPUs are listed
 echo $CUDA_VISIBLE_DEVICES    # should list 8 comma-separated indices
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/ssd3/qwen/qwen3_data/pile-qwen_text_document"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/ssd3/qwen/Qwen3-Coder-480B-A35B-tokenizer"}
@@ -138,9 +138,9 @@ NSYS_ARGS="nsys profile \
     -o /workspace/nsys_${NODE_RANK}_$(date +%Y%m%d-%H%M%S) \
     -- "
     # $NSYS_ARGS \
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

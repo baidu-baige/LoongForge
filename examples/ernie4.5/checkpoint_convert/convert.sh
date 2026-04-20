@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 # Convert ERNIE-4.5-VL checkpoints from HuggingFace to Megatron-Core format.
@@ -18,9 +18,9 @@
 #       PP_LAYER_OFFSETS="0,4,8,12,16,20,24,26"
 
 MEGATRON_PATH=/workspace/ernie/AIAK-Megatron/
-BAIGE_OMNI_PATH=/workspace/ernie/AIAK-Training-Omni/
+LOONGFORGE_PATH=/workspace/ernie/AIAK-Training-Omni/
 
-export PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH
+export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH
 
 # ---------- user-configurable parameters ----------
 LOAD_HG_PATH="/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"

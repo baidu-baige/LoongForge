@@ -7,14 +7,14 @@ bos_path: bos:/ai-data/deepseek-ai/DeepSeek-V2-Lite
 # Model Parameters
 MODEL_RUNNABLE: True # Should be True / False
 
-# BaigeOmni training parameters
+# LoongForge training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
-DATA_PATH: $pfs_path/omni_datasets/BaigeOmni/deepseek_v2_lite/pile_test/pile-deepseek_text_document
+DATA_PATH: $pfs_path/omni_datasets/LoongForge/deepseek_v2_lite/pile_test/pile-deepseek_text_document
 TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $BAIGE_OMNI_PATH/configs/models/deepseek2/deepseek_v2_lite.yaml
-CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/deepseek2/deepseek_v2_lite.yaml
+CONVERT_FILE: $LOONGFORGE_PATH/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
 # Training Parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
@@ -41,7 +41,7 @@ scenarios:
             --num_experts=64
             --expert_tensor_parallel_size=2
             --expert_parallel_size=4
-            --megatron_path=/workspace/Baige-Megatron
+            --megatron_path=/workspace/Loong-Megatron
             --load_ckpt_path=${HF_CKPT_PATH}
             --save_ckpt_path=${CHECKPOINT_PATH}
             --no_save_optim

@@ -1,6 +1,6 @@
-# BaigeOmni Automated Test Guide
+# LoongForge Automated Test Guide
 
-This document explains how to use the automated test scripts and configurations for BaigeOmni CI and functional validation.
+This document explains how to use the automated test scripts and configurations for LoongForge CI and functional validation.
 
 ## Directory Structure
 

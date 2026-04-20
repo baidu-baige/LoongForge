@@ -1,4 +1,4 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -13,7 +13,7 @@ Compared to v1, this version:
   - Eliminates all custom Phase1/2/3 distributed logic and the associated deadlock risks
 
 Flow:
-  initialize_baige_megatron
+  initialize_loongforge_megatron
        ↓
   get_model(llm_model_provider)
        ↓
@@ -66,10 +66,10 @@ from megatron.core.enums import ModelType
 from megatron.training.training import get_model
 from megatron.training import print_rank_0
 
-from baige_omni.train.parser import parse_train_args
-from baige_omni.train.initialize import initialize_baige_megatron
-from baige_omni.models.foundation.llm_model_provider import llm_model_provider
-from baige_omni.models.omni_models.omni_model_provider import omni_model_provider
+from loongforge.train.parser import parse_train_args
+from loongforge.train.initialize import initialize_loongforge_megatron
+from loongforge.models.foundation.llm_model_provider import llm_model_provider
+from loongforge.models.omni_models.omni_model_provider import omni_model_provider
 
 from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 from dist_checkpoint.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
@@ -381,7 +381,7 @@ def main():
     args = parse_train_args()
 
     # ── Step 2: Initialize Megatron (identical to training) ───────────────
-    initialize_baige_megatron(args=args)
+    initialize_loongforge_megatron(args=args)
 
     print_rank_0("=" * 80)
     print_rank_0("HF Checkpoint Roundtrip Test v2")

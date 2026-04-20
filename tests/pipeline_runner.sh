@@ -381,7 +381,7 @@ fi
 
 LOG_DIR="${TRAINING_LOG_PATH:-}"
 
-python3 /workspace/BaigeOmni/tests/main.py "${args[@]}"
+python3 /workspace/LoongForge/tests/main.py "${args[@]}"
 ret=$?
 
 

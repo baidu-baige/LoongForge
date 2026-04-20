@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-#PFS_DIR="/mnt/cluster/baige-omni"
-PFS_DIR="/mnt/cfs/BaigeOmniCI"
+#PFS_DIR="/mnt/cluster/loongforge"
+PFS_DIR="/mnt/cfs/LoongForgeCI"
 BCECMD_DIR="${PFS_DIR}/linux-bcecmd-0.5.1"
 REAL_BCECMD="${BCECMD_DIR}/bcecmd"
 BCECMD_CMD="${REAL_BCECMD} --conf-path ${BCECMD_DIR}"
@@ -13,7 +13,7 @@ CHECK_PORT=29999
 
 checkpoint_dir=${PFS_DIR}/megatron_checkpoint
 huggingface_dir=${PFS_DIR}/huggingface.co
-datasets_dir=${PFS_DIR}/omni_datasets/baige-omni
+datasets_dir=${PFS_DIR}/omni_datasets/loongforge
 
 mkdir -p $checkpoint_dir $huggingface_dir $datasets_dir
 mkdir -p $PFS_DIR

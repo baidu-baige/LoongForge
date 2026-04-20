@@ -1,4 +1,4 @@
-_target_: baige_omni.models.encoder.RiceVisionConfig
+_target_: loongforge.models.encoder.RiceVisionConfig
 
 num_layers: 24
 hidden_size: 1024
@@ -24,4 +24,4 @@ add_qkv_bias: true
 position_embedding_type: rope
 
 model_type: rice_vit
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml

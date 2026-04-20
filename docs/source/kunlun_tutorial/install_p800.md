@@ -1,6 +1,6 @@
 # Installation on Kunlunxin P800
 
-This document describes how to build the BaigeOmni image that can run on Kunlunxin P800.
+This document describes how to build the LoongForge image that can run on Kunlunxin P800.
 
 ## 1. Build & Run with Docker Image (Recommended)
 
@@ -17,12 +17,12 @@ Environment versions:
     * CUDA 11.7
 ### 1.2 Build the docker image
 
-**Before building, initialize the Baige-Megatron submodule** so its contents are included
+**Before building, initialize the Loong-Megatron submodule** so its contents are included
 in the Docker build context:
 
 ```bash
-cd BaigeOmni
-git submodule update --init third_party/Baige-Megatron
+cd LoongForge
+git submodule update --init third_party/Loong-Megatron
 cd ..
 ```
 
@@ -36,9 +36,9 @@ docker build  \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     --build-arg INSTALL_LEROBOT=${INSTALL_LEROBOT} \
     --build-arg XPYTORCH_URL_ARG="${DEFAULT_XPYTORCH_URL_ARG}" \
-    -t BaigeOmni-kunlun:latest -f BaigeOmni/docker/Dockerfile.xpu .
+    -t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu .
     # For internal conda image:
-    #-t BaigeOmni-kunlun:latest -f BaigeOmni/docker/Dockerfile.xpu.internal .
+    #-t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu.internal .
 ```
 - `BASE_IMAGE` is the base image used for building. Options include:
   * `weiyexu/omni_kunlun:uv_base` (default) [available at Docker Hub]
@@ -48,7 +48,7 @@ docker build  \
 After building, you can verify the image:
 
 ```bash
-docker images | grep BaigeOmni
+docker images | grep LoongForge
 ```
 
 ---
@@ -59,7 +59,7 @@ The example below starts a container and mounts the project code, data, etc.:
 ```bash
 #!/bin/bash
 
-image_addr='BaigeOmni-kunlun:latest'
+image_addr='LoongForge-kunlun:latest'
 DEFAULT_CONTAINER_NAME='omni-kunlun'
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
@@ -81,7 +81,7 @@ case $ACTION in
         --privileged \
         --net=host \
         --name=${CONTAINER_NAME} \
-        -v /path/to/data:/mnt/cluster/BaigeOmni/ \
+        -v /path/to/data:/mnt/cluster/LoongForge/ \
         -w /workspace/ \
         ${image_addr} bash
 
@@ -115,7 +115,7 @@ After entering the container:
 - For conda environment image: activate via `conda activate python310_torch25_cuda`
 - For UV image: activate via `source /opt/omni_kunlun/bin/activate`
 
-The virtual environment is activated by default. You can directly navigate to `/workspace/BaigeOmni/examples_xpu/` to run the corresponding training scripts.
+The virtual environment is activated by default. You can directly navigate to `/workspace/LoongForge/examples_xpu/` to run the corresponding training scripts.
 
 ## 2. Manual Environment Setup
-Note: We do NOT need to install the NVIDIA Transformer Engine. For other steps, please refer to [installation guide on NVIDIA GPU](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/get_started/installation.md).
+Note: We do NOT need to install the NVIDIA Transformer Engine. For other steps, please refer to [installation guide on NVIDIA GPU](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md).

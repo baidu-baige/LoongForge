@@ -1,6 +1,6 @@
 # internlm2.5_8b model configuration
 
-_target_: baige_omni.models.foundation.InternLMConfig
+_target_: loongforge.models.foundation.InternLMConfig
 
 num_layers: 48
 hidden_size: 6144
@@ -24,4 +24,4 @@ qk_layernorm: False
 untie_embeddings_and_output_weights: True
 model_type: "internlm"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml

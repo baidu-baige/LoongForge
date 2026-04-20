@@ -1,12 +1,12 @@
 # Quick Start: VLM SFT
 
-This document will guide you through the quick start process for Vision-Language Model (VLM) fine-tuning under the BaigeOmni framework.
+This document will guide you through the quick start process for Vision-Language Model (VLM) fine-tuning under the LoongForge framework.
 
 ## 1. Data Preparation
 
 ### 1.1 Dataset Configuration and Processing
 
-In VLM instruction fine-tuning scenarios, the **multimodal ShareGPT** format (containing `messages` and `images`) is used. BaigeOmni parses this format through BaigeOmni/configs/data/sft_dataset_config.yaml. Below is the **ShareGPT format example**:
+In VLM instruction fine-tuning scenarios, the **multimodal ShareGPT** format (containing `messages` and `images`) is used. LoongForge parses this format through LoongForge/configs/data/sft_dataset_config.yaml. Below is the **ShareGPT format example**:
 
 ```yaml
 multimodal:
@@ -55,7 +55,7 @@ This section is the same as the pre-training section, see section 2 in [7.1. Qui
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting open-source Megatron parameters, BaigeOmni adds more convenient training startup parameters. Detailed configuration can be found in the baige_omni/train/arguments.py file. Main parameter descriptions are as follows:
+Based on supporting open-source Megatron parameters, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/train/arguments.py file. Main parameter descriptions are as follows:
 
 * `--training-phase sft`: Explicitly enable SFT training phase.
 * `--chat-template qwen2-vl`: Specify SFT conversation template as qwen2-vl for concatenating multi-round dialogue samples into model input
@@ -63,15 +63,15 @@ Based on supporting open-source Megatron parameters, BaigeOmni adds more conveni
 
 ### 3.2 SFT Training Script
 
-BaigeOmni currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples/{model}/finetuning/` directory. Below is an example using Qwen3_vl_30b_a3b SFT training script:
+LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples/{model}/finetuning/` directory. Below is an example using Qwen3_vl_30b_a3b SFT training script:
 
 ```bash
 #!/bin/bash
 # The script needs to be run on at least 2 nodes.
 
 # Codebase roots added to PYTHONPATH.
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}
@@ -104,7 +104,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml
 
 # Data & tokenizer setup
 DATA_ARGS=(
@@ -188,9 +188,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

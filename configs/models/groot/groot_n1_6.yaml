@@ -1,5 +1,5 @@
 model_type: "groot_n1_6"
-_target_: baige_omni.models.embodied.groot_n1_6.configuration_groot.Gr00tN1d6OmniConfig
+_target_: loongforge.models.embodied.groot_n1_6.configuration_groot.Gr00tN1d6OmniConfig
 
 # Megatron validation-required defaults
 num_layers: 32

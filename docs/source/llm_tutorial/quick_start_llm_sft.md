@@ -1,6 +1,6 @@
 # Quick Start: LLM SFT
 
-This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job for Large-Language Models (LLM) in the BaigeOmni framework.
+This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job for Large-Language Models (LLM) in the LoongForge framework.
 
 ---
 
@@ -8,7 +8,7 @@ This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job fo
 
 ### 1.1 Dataset format & configuration
 For instruction tuning, two dialogue styles are common: **Alpaca-style** and **ShareGPT-style**.  
-BaigeOmni currently supports **Alpaca-style JSON**, one sample per line:
+LoongForge currently supports **Alpaca-style JSON**, one sample per line:
 
 ```json
 [
@@ -22,7 +22,7 @@ BaigeOmni currently supports **Alpaca-style JSON**, one sample per line:
 
 Field names may differ across datasets, so you must supply a **dataset config file** that tells the loader how to map your columns.  
 A template is shipped at  
-`/workspace/BaigeOmni/configs/data/sft_dataset_config.yaml`.
+`/workspace/LoongForge/configs/data/sft_dataset_config.yaml`.
 
 #### (1) File format  
 We follow the community convention used by [LlamaFactory](https://github.com/hiyouga/LlamaFactory/blob/main/data/README.md).
@@ -79,7 +79,7 @@ custom_dataset_name:
 | `--sft-dataset` | Name of the dataset entry inside the YAML. Must **correspond 1-to-1** with the order in `--data-path` when you use several datasets. |
 
 ### 1.3 Pre-processing modes
-Baige supports **on-the-fly** and **offline** pre-processing.  
+LoongForge supports **on-the-fly** and **offline** pre-processing.  
 Pick **offline** when the dataset is large; it removes tokenisation overhead from the critical path.
 
 #### (1) On-the-fly (default)
@@ -94,15 +94,15 @@ Run the helper script once:
 
 ```bash
 #!/bin/bash
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 TOKENIZER_PATH=/path/to/hf/tokenizer
 input_data=/path/to/custom_dataset_name.json
 output_path=/path/to/save_dir
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
-  python ${BAIGE_OMNI_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+  python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
       --input ${input_data} \
       --output ${output_path} \
       --seq-length 2048 \
@@ -131,13 +131,13 @@ After pre-processing, pass the **directory** to training:
 ---
 
 ## 2. Prepare the checkpoint
-Same as pre-training – see [Quick Start: LLM Pre-training](https://github.com/baidu-baige/BaigeOmni/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
+Same as pre-training – see [Quick Start: LLM Pre-training](https://github.com/baidu-baige/LoongForge/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
 
 ---
 
 ## 3. Launch SFT training
 
-### 3.1 Extra Baige arguments (beyond native Megatron)
+### 3.1 Extra LoongForge arguments (beyond native Megatron)
 | Argument | Purpose |
 |---------|---------|
 | `--training-phase sft` | Switch to fine-tuning stage. |
@@ -161,8 +161,8 @@ Below is the FP8 SFT script for DeepSeek-V3.1 (comments added in English):
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # ------------- data -------------
 DATA_PATH=/path/to/your/data
@@ -342,9 +342,9 @@ LOGGING_ARGS=(
 )
 
 # ------------- launch -------------
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
+  $LOONGFORGE_PATH/loongforge/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

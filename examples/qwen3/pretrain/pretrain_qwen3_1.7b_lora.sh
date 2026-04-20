@@ -3,8 +3,8 @@
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_VISIBLE_DEVICES=5
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 
@@ -15,13 +15,13 @@ CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/Qwen3-1.7B-Instruct"}
 
 LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen3_1.7B_mcore_tp1pp1_lora"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3-1.7b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-1.7b"}
 
 
 GPUS_PER_NODE=1
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3/qwen3_1_7b_lora.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen3/qwen3_1_7b_lora.yaml
 
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
@@ -116,9 +116,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \

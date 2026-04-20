@@ -1,4 +1,4 @@
-_target_: baige_omni.models.encoder.InternVisionConfig
+_target_: loongforge.models.encoder.InternVisionConfig
 
 num_layers: 45
 hidden_size: 3200
@@ -21,4 +21,4 @@ position_embedding_type: 'none'
 initializer_factor: 0.1
 model_type: "intern_vit_6b"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml

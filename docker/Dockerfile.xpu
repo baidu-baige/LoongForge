@@ -10,7 +10,7 @@ ARG XPYTORCH_URL_ARG=""
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./BaigeOmni /workspace/BaigeOmni
+COPY ./LoongForge /workspace/LoongForge
 SHELL ["/bin/bash", "-c"]
 ENV PATH=/opt/omni_kunlun/bin:${PATH}
 
@@ -36,7 +36,7 @@ RUN set -exuo pipefail && \
         XPYTORCH_URL="${XPYTORCH_URL_ARG}"; \
         echo "use specified xpytorch version: ${XPYTORCH_URL}"; \
     else \
-        xpytorch_info="/workspace/BaigeOmni/xpytorch_info.txt"; \
+        xpytorch_info="/workspace/LoongForge/xpytorch_info.txt"; \
         if [ ! -f "${xpytorch_info}" ]; then \
             echo "xpytorch info file not exist: ${xpytorch_info}" && exit 1; \
         fi; \
@@ -52,13 +52,13 @@ RUN set -exuo pipefail && \
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
     install_requirements() { \
-        local requirements_file="/workspace/BaigeOmni/requirements_xpu.txt" && \
+        local requirements_file="/workspace/LoongForge/requirements_xpu.txt" && \
         source /opt/omni_kunlun/bin/activate && \
         # for deepspeed cpu adam
         DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U && \
         echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
         echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
-        cd /workspace/BaigeOmni/ && \
+        cd /workspace/LoongForge/ && \
         python -m pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
             -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
     }; \
@@ -106,10 +106,10 @@ RUN set -exuo pipefail && \
 
 # =========================================================
 # Megatron Symlink
-# Scripts reference /workspace/Baige-Megatron; the actual location is
-# /workspace/BaigeOmni/third_party/Baige-Megatron (git submodule).
+# Scripts reference /workspace/Loong-Megatron; the actual location is
+# /workspace/LoongForge/third_party/Loong-Megatron (git submodule).
 # =========================================================
-RUN ln -sf /workspace/BaigeOmni/third_party/Baige-Megatron /workspace/Baige-Megatron
+RUN ln -sf /workspace/LoongForge/third_party/Loong-Megatron /workspace/Loong-Megatron
 
 # =========================================================
 # Jupyter Configuration
@@ -122,11 +122,11 @@ RUN mkdir -p /root/.jupyter && \
 # Clean Up Unused Files (Consistent with install.sh)
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
-    rm -rf /workspace/BaigeOmni/.git && \
-    rm -rf /workspace/BaigeOmni/third_party/Baige-Megatron/.git && \
-    rm -rf /workspace/BaigeOmni/build.sh && \
-    rm -rf /workspace/BaigeOmni/ci.yml && \
-    rm -rf /workspace/BaigeOmni/docker/ci && \
+    rm -rf /workspace/LoongForge/.git && \
+    rm -rf /workspace/LoongForge/third_party/Loong-Megatron/.git && \
+    rm -rf /workspace/LoongForge/build.sh && \
+    rm -rf /workspace/LoongForge/ci.yml && \
+    rm -rf /workspace/LoongForge/docker/ci && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

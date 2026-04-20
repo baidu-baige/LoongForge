@@ -1,12 +1,12 @@
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 TP="${1:-1}"
 PP="${2:-1}"
 SEQ_LEN="${3:-32768}"
 MBS="${4:-1}"
 GBS="${5:-8}"
 NSTEP="${6:-2500}"
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/dataset/mllm/demo/wds/"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/mllm/demo/wds/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LLaVA-OneVision-1.5/LLaVA-OneVision-1.5-4B-stage0_mcore_tp1_pp1"}
 
@@ -98,7 +98,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path "$TOKENIZER_PATH"
@@ -177,9 +177,9 @@ export OFFLINE_PACKING_VQA='1'
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
 export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
-PYTHONPATH="$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH" \
+PYTHONPATH="$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$BAIGE_OMNI_PATH/baige_omni/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${DATA_ARGS[@]}" \
     ${IMG_ARGS:+${IMG_ARGS[@]}} \
     "${MODEL_CONFIG_ARGS[@]}" \

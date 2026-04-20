@@ -8,19 +8,19 @@ ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_8b_temp/data-path/webdataset_image"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/sft_internvl3.5_8b_temp/data-path/webdataset_image"}
 
 # Common paths and configurations
 EXP_NAME=${FULL_JOB_NAME:-"${MODEL_NAME}-$(date +%Y%m%d-%H%M%S)"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_38b_temp/hf-tokenizer-path/InternVL3_5-38B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/baigeomni/sft_internvl3.5_38b_temp/load/Internvl3_5-38B-tp4-pp2-4-60"}
-CHECKPOINT_SAVE_PATH=/mnt/cluster/baigeomni/sft_internvl3.5_38b_temp/save/Internvl3_5-38B-tp4-pp2-4-60-save
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/LoongForge/sft_internvl3.5_38b_temp/hf-tokenizer-path/InternVL3_5-38B"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/sft_internvl3.5_38b_temp/load/Internvl3_5-38B-tp4-pp2-4-60"}
+CHECKPOINT_SAVE_PATH=/mnt/cluster/LoongForge/sft_internvl3.5_38b_temp/save/Internvl3_5-38B-tp4-pp2-4-60-save
 LOGS_PATH="${CHECKPOINT_SAVE_PATH}/logs-${EXP_NAME}"
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/out/tensorboard/internvl3.5/internvl3.5-38b/stage2-16k-gbs32-1node-data3-v11/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/loongforge/out/tensorboard/internvl3.5/internvl3.5-38b/stage2-16k-gbs32-1node-data3-v11/"}
 mkdir -p ${CHECKPOINT_SAVE_PATH}
 mkdir -p ${LOGS_PATH}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 ####### 使用RANK0加载模型RDMA分发 #######
 export DP_RANK0_LOAD=false
@@ -98,7 +98,7 @@ NODE_RANK=${RANK:-"0"}
 GPUS_PER_NODE=8
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/internvl3.5/internvl3_5_38b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/internvl3.5/internvl3_5_38b.yaml
 
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE
@@ -210,10 +210,10 @@ LOGGING_ARGS=(
 )
 
 # Run the training
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
-  --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml \
+  $LOONGFORGE_PATH/loongforge/train.py \
+  --sft-dataset-config ${LOONGFORGE_PATH}/configs/data/sft_dataset_config.yaml \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

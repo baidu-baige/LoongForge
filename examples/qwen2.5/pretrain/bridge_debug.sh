@@ -4,8 +4,8 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 #export CUDA_VISIBLE_DEVICES=4,5,6,7
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
 
@@ -79,7 +79,7 @@ TRAINING_ARGS=(
     --save-interval 20
     --eval-interval 1000
     --eval-iters 10
-    --yaml-file $BAIGE_OMNI_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_7b.yaml
+    --yaml-file $LOONGFORGE_PATH/tools/dist_checkpoint/demo/qwen2.5/qwen2.5_7b.yaml
     #--ckpt-step 0
     #--no-load-optim
     #--no-load-rng
@@ -112,9 +112,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

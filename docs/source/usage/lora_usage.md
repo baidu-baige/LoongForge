@@ -1,22 +1,22 @@
 # LoRA Feature Usage Guide
 
-The BaigeOmni framework supports LoRA (Low-Rank Adaptation) training to reduce GPU memory consumption and lower the computational resources required for training.
+The LoongForge framework supports LoRA (Low-Rank Adaptation) training to reduce GPU memory consumption and lower the computational resources required for training.
 
 ## Using LoRA in LLM
 1. Modify the configuration file to enable LoRA
 
-Add LoRA-related configurations to the model configuration file you want to train. The LLM LoRA configuration file is located at `${BaigeOmni}/configs/models/lora/lora.yaml`. The configurable parameters include:
+Add LoRA-related configurations to the model configuration file you want to train. The LLM LoRA configuration file is located at `${LoongForge}/configs/models/lora/lora.yaml`. The configurable parameters include:
 
 * **target_modules**: Wildcard patterns for target modules to be replaced with LoRA. The framework matches each module in the model, and modules that match successfully will be replaced with LoRA modules.
 * **dim**: Controls the dimension of low-rank matrices.
 * **alpha**: Controls the scaling factor of LoRA updates to adjust the adaptation strength.
 * **dropout**: Applies dropout during the training of LoRA layers to prevent overfitting.
 
-To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen3-1.7b model, modify `${BaigeOmni}/configs/models/qwen3/qwen3_1_7b_lora.yaml` as follows:
+To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen3-1.7b model, modify `${LoongForge}/configs/models/qwen3/qwen3_1_7b_lora.yaml` as follows:
 
 ```yaml
 # qwen3 model configuration
-_target_: baige_omni.models.foundation.Qwen3Config
+_target_: loongforge.models.foundation.Qwen3Config
 
 defaults:
   - ../../models/lora@peft_config: lora
@@ -98,13 +98,13 @@ TRAINING_ARGS=(
 ## Using LoRA in VLM
 1. Modify the configuration file to enable LoRA
 
-Add LoRA-related configurations to the model configuration file you want to train. The VLM LoRA configuration file is located at `${BaigeOmni}/configs/models/lora/vlm_lora.yaml`. In addition to the LoRA configurable parameters mentioned above, it also includes:
+Add LoRA-related configurations to the model configuration file you want to train. The VLM LoRA configuration file is located at `${LoongForge}/configs/models/lora/vlm_lora.yaml`. In addition to the LoRA configurable parameters mentioned above, it also includes:
 
 * **apply_to_foundation**: Enable LoRA training on the foundation model.
 * **apply_to_image_projector**: Enable LoRA training on the image projector.
 * **apply_to_image_encoder**: Enable LoRA training on the image encoder.
 
-To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${BaigeOmni}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` as follows:
+To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${LoongForge}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` as follows:
 
 ```yaml
 defaults:
@@ -122,7 +122,7 @@ model:
   mix_used_vision_projector: true
   foundation: 
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["baige_omni.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["loongforge.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
   image_projector:
@@ -143,8 +143,8 @@ In the training script, you need to specify additional parameters:
 For example, add the following to the Qwen2.5-vl-3b model training configuration:
 
 ```bash
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1"}
-LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-lora"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1"}
+LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-lora"}
 
 TRAINING_ARGS=(
     --norm-epsilon 1e-6
@@ -184,17 +184,17 @@ Using the offline checkpoint conversion tool provided by the framework, you can 
 ```bash
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
-SAVE=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-hf-Dec24
-LOAD_LORA=/mnt/cluster/BaigeOmni/qwen3/qwen3-1.7b-tp1-pp1-Dec24/iter_0000010/
+LOAD=/mnt/cluster/LoongForge/qwen3/qwen3-1.7b-tp1-pp1-Dec24/release/
+SAVE=/mnt/cluster/LoongForge/qwen3/qwen3-1.7b-hf-Dec24
+LOAD_LORA=/mnt/cluster/LoongForge/qwen3/qwen3-1.7b-tp1-pp1-Dec24/iter_0000010/
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/qwen3_1_7b.yaml
 
-CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
 
 TP=1
 PP=1

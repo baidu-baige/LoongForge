@@ -1,4 +1,4 @@
-_target_: baige_omni.models.foundation.MinimaxConfig
+_target_: loongforge.models.foundation.MinimaxConfig
 
 num_layers: 62
 hidden_size: 3072
@@ -22,4 +22,4 @@ untie_embeddings_and_output_weights: true
 moe_ffn_hidden_size: 1536
 model_type: "minimax"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml

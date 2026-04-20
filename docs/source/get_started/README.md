@@ -1,24 +1,24 @@
 # README
 <div align="center">
 
-![BaigeOmni Logo](../../assets/images/omni.jpg)
+![LoongForge Logo](../../assets/images/omni.jpg)
 
 <h4> A Modular, Scalable & High-Efficiency Training Library for Multi-Modal, Multi-Architecture Models </h4>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/BaigeOmni/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/BaigeOmni=social)](https://github.com/baidu-baige/BaigeOmni/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/BaigeOmni)](https://github.com/baidu-baige/BaigeOmni/issues)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge=social)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
 
 </div>
 
 ## 📖 About
 
-**BaigeOmni** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and Supervised Fine-Tuning (SFT). Through continuous adaptation and performance optimization, BaigeOmni delivers an efficient, easy-to-use, and highly extensible solution for model training.
+**LoongForge** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and Supervised Fine-Tuning (SFT). Through continuous adaptation and performance optimization, LoongForge delivers an efficient, easy-to-use, and highly extensible solution for model training.
 
 * **🚀 Comprehensive Model Coverage**: Natively supports mainstream model architectures including LLMs (Large Language Models), VLMs (Vision-Language), VLAs (Vision-Language-Action), and Diffusion Models. Its flexible composition abstraction makes adding new multi-modal variants effortless.
-* **⚡ Performance-Driven Optimization**: Built upon Megatron-LM with significant enhancements. BaigeOmni introduces advanced optimizations in communication, computation overlap, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
+* **⚡ Performance-Driven Optimization**: Built upon Megatron-LM with significant enhancements. LoongForge introduces advanced optimizations in communication, computation overlap, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
 * **🧪 Heterogeneous Hardware Support**: Provides native, high-performance support for both NVIDIA GPUs and Kunlun XPUs, ensuring seamless migration and stable training at scale across diverse hardware clusters.
 
 ## 🔥 Latest News
-- **[2026/03]** 🎉 Initial release of the BaigeOmni framework!
+- **[2026/03]** 🎉 Initial release of the LoongForge framework!
 
 ## ✨ Key Features
 
@@ -32,7 +32,7 @@
 * **Versatile Pipeline & Tools**: Out-of-the-box support for Pretrain, MidTrain, SFT, and LoRA. Includes tools for dataset processing (e.g., format conversion, packing..) and bidirectional Megatron ↔ HuggingFace weight conversion.
 * **Heterogeneous Hardware**: Supports training on both NVIDIA GPUs and Kunlun XPUs via a minimally intrusive plugin design.
 
-*(🔔🔔🔔 Please refer to our [Official Documentation](https://baidu-baige.github.io/BaigeOmni/) for detailed tutorials.)*
+*(🔔🔔🔔 Please refer to our [Official Documentation](https://baidu-baige.github.io/LoongForge/) for detailed tutorials.)*
 
 ## 🚀 Ongoing & Upcoming
 
@@ -48,26 +48,26 @@
 ## 🛠️ Getting Started
 
 **Quick Start Guides:**
-* [Installation](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/get_started/installation.md)
-* [Supported Models](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/get_started/support_model.md)
-* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md)
-* [Quick Start for LLM SFT](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md)
-* [Quick Start for VLM Pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vlm_tutorial/quick_start_vlm_pretrain.md)
-* [Quick Start for VLM SFT](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md)
-* [Quick Start for VLA Training](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/vla_tutorial/quick_start_vla_training.md)
-* [Quick Start for WAN Training](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/wan_tutorial/quick_start_wan_training.md)
+* [Installation](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md)
+* [Supported Models](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/support_model.md)
+* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md)
+* [Quick Start for LLM SFT](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md)
+* [Quick Start for VLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vlm_tutorial/quick_start_vlm_pretrain.md)
+* [Quick Start for VLM SFT](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md)
+* [Quick Start for VLA Training](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vla_tutorial/quick_start_vla_training.md)
+* [Quick Start for WAN Training](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/wan_tutorial/quick_start_wan_training.md)
 
 **Kunlun XPU Platform:**
-* [README](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/README.md)
-* [Installation](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/install_p800.md)
-* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
-* [Quick Start for LLM SFT](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_llm_sft_p800.md)
-* [Quick Start for VLM](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_vlm_p800.md)
-* [Quick Start for VLA](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/kunlun_tutorial/quick_start_vla_p800.md)
+* [README](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/README.md)
+* [Installation](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/install_p800.md)
+* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
+* [Quick Start for LLM SFT](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_llm_sft_p800.md)
+* [Quick Start for VLM](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_vlm_p800.md)
+* [Quick Start for VLA](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_vla_p800.md)
 
 ## 🏛️ Supported Models
 
-BaigeOmni supports a massive array of state-of-the-art models. Check out `configs/models/` for YAML configurations and `examples/` for launch scripts.
+LoongForge supports a massive array of state-of-the-art models. Check out `configs/models/` for YAML configurations and `examples/` for launch scripts.
 
 
 | **Modality** | **Architectures** | **Models** |
@@ -94,15 +94,15 @@ BaigeOmni supports a massive array of state-of-the-art models. Check out `config
 | | LLaVA-OneVision-1.5 | llava-onevision-1.5-4B |
 | | InternVL2.5 | internvl2.5-8b, internvl2.5-26b, internvl2.5-38b, internvl2.5-78b |
 | | InternVL3.5 | internvl3.5-8b, internvl3.5-14b, internvl3.5-38b, internvl3.5-30b-a3b, internvl3.5-241b-a28b |
-| | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/BaigeOmni/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
+| | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
 | **Diffusion** | WAN2.2 | wan2.2_i2v_a14b |
 | **VLA** | Pi | pi0.5 |
 
 
 ## 🏗️ Architecture Overview
 ```
-BaigeOmni/
-├── baige_omni/                   # Core training framework
+LoongForge/
+├── loongforge/                   # Core training framework
 │   ├── train/                    # Training entry points
 │   ├── models/                   # Unified model abstractions (LLM, Encoder, VLM)
 │   │   ├── common/               # Shared layers and utilities
@@ -126,7 +126,7 @@ BaigeOmni/
 └── docs/                         # Documentation
 ```
 
-## 🌟 Powered by BaigeOmni
+## 🌟 Powered by LoongForge
 
 **Open-Source Ecosystem:**
 * [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
@@ -134,7 +134,7 @@ BaigeOmni/
 
 **Enterprise Scale & Performance:**
 
-Before becoming an open-source project, BaigeOmni had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
+Before becoming an open-source project, LoongForge had already empowered numerous enterprise use cases with its robust training acceleration and scaling capabilities:
 * Powers proprietary large-scale models across diverse industries, including **Education, Code Generation, and Embodied AI**.
 * Typically achieves a **30%+ average speedup** over standard customer baselines through systemic optimizations.
 * Seamlessly supports ultra-large cluster training scaling up to **5,000 XPUs**.
@@ -145,23 +145,23 @@ We heartily welcome community contributions! Whether it's reporting bugs, propos
 
 ## 📄 License
 
-BaigeOmni is released under the [Apache License 2.0](https://github.com/baidu-baige/BaigeOmni/blob/master/LICENSE). 
+LoongForge is released under the [Apache License 2.0](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE). 
 
 Some files in this repository are derived from third-party open-source projects. Please refer to the specific file headers for their respective copyright, license notices, and attribution requirements.
 
 ## 📝 Citation
 
-If you find BaigeOmni helpful in your research or production, please consider citing our repository:
+If you find LoongForge helpful in your research or production, please consider citing our repository:
 
 ```bibtex
-@software{BaigeOmni2026,
-      title={BaigeOmni: A Modular, Scalable & High-Efficiency Training Library for Multi Modal Models}, 
-      author={{The BaigeOmni Authors}},
+@software{LoongForge2026,
+      title={LoongForge: A Modular, Scalable & High-Efficiency Training Library for Multi Modal Models}, 
+      author={{The LoongForge Authors}},
       year={2026},
-      url={https://github.com/baidu-baige/BaigeOmni},
+      url={https://github.com/baidu-baige/LoongForge},
 }
 ```
 
 ## 🙏 Acknowledgments
 
-BaigeOmni is built upon excellent open-source projects including but not limited to Megatron-LM, PyTorch, and Transformers. We thank the open-source community for their invaluable foundational work.
+LoongForge is built upon excellent open-source projects including but not limited to Megatron-LM, PyTorch, and Transformers. We thank the open-source community for their invaluable foundational work.

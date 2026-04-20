@@ -1,5 +1,5 @@
 # glm model config
-_target_: baige_omni.models.foundation.GlmConfig
+_target_: loongforge.models.foundation.GlmConfig
 
 num_layers: 78
 hidden_size: 6144
@@ -42,4 +42,4 @@ apply_rope_fusion: false  # no support rope fusion yet
 multi_latent_attention: true
 model_type: "glm"
 
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/glm5/ckpt_convert/glm5_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/glm5/ckpt_convert/glm5_convert.yaml

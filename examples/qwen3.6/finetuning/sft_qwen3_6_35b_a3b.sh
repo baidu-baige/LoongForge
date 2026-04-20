@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TORCH_COMPILE=0
 export TORCHDYNAMO_DISABLE=1
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/BaigeOmni/datasets/filter_CC3M/"}
+DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/datasets/filter_CC3M/"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3.6-35B-A3B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/BaigeOmni/qwen3.6-35b-a3b-tp1pp2ep4/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3.6-35b-a3b-tp1pp2ep4/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/BaigeOmni/tensorboard-log/qwen3.6-35b-a3b-tp1pp2ep4"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3.6-35b-a3b-tp1pp2ep4"}
 
 GPUS_PER_NODE=8
 
@@ -35,7 +35,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${BAIGE_OMNI_PATH}/configs/models/qwen3.6/qwen3_6_35b_a3b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen3.6/qwen3_6_35b_a3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
@@ -45,7 +45,7 @@ DATA_ARGS=(
     --split 100,0,0
     --num-workers 32
     --chat-template qwen2-vl
-    --sft-dataset-config ${BAIGE_OMNI_PATH}/configs/data/sft_dataset_config.yaml
+    --sft-dataset-config ${LOONGFORGE_PATH}/configs/data/sft_dataset_config.yaml
     # for packing
     # --packing-sft-data
     # --packing-buffer-size 5000
@@ -134,9 +134,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

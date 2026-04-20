@@ -11,11 +11,11 @@ All native Megatron flags are supported:
 * **Training**: `--lr`, `--data-path`, `--fp16`, optimizer settings, dataset paths, precision, etc.  
   Reference: [Megatron training examples](https://github.com/NVIDIA/Megatron-LM/blob/main/docs/user-guide/training-examples.md)
 
-**BaigeOmni specific extras**:
+**LoongForge specific extras**:
 
 | Category | Argument | Purpose | Notes |
 |----------|----------|---------|-------|
-| model_args | `--model-name` | Select model | Family name (e.g. *llama2*) or exact arch (e.g. *llama2-7b*). Family → you must specify all hyper-params; arch → Baige auto-fills them to match open-source checkpoints. |
+| model_args | `--model-name` | Select model | Family name (e.g. *llama2*) or exact arch (e.g. *llama2-7b*). Family → you must specify all hyper-params; arch → LoongForge auto-fills them to match open-source checkpoints. |
 |  | `--config-path` | Model config file | Path to YAML/JSON config |
 |  | `--specify-overwrite-model` | Override policy | Controls whether external config overwrites built-in defaults. Default: *foundation_model* |
 |  | `--enable-fa-within-mla` | MLA | Deprecated; use `--attention-backend=flash` instead. When enabled, pads Q/K/V to allow FlashAttention inside MLA. |
@@ -89,9 +89,9 @@ If you need to modify model-related parameters, you can pass them through the CL
 ```bash
 # examples/deepseek_v3/pretrain/pretrain_deepseek_v3_group_fp8.sh
 ...
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $BAIGE_OMNI_PATH/baige_omni/train.py \
+  $LOONGFORGE_PATH/loongforge/train.py \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \
@@ -103,7 +103,7 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
   model.num_layers=16 \
   model.mtp_num_layers=3
 ```
-BaigeOmni first parses the CLI args and Hydra overrides from user shell script.
+LoongForge first parses the CLI args and Hydra overrides from user shell script.
 The Hydra overrides are then applied to the corresponding model YAML configuration.
 Next, the updated model YAML is used to update args.
 Finally, the model is instantiated as a Python dataclass using both the model YAML and the merged args.

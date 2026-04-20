@@ -1,22 +1,22 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/
-SAVE=/mnt/cluster/BaigeOmni/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15
+SAVE=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-3b-tp1-pp1-Dec15
 
-SAVE_LANGUAGE_MODEL=/mnt/cluster/BaigeOmni/tmp/language-mcore
-SAVE_VISION_MODEL=/mnt/cluster/BaigeOmni/tmp/vision-model-mcore
-SAVE_ADAPTER=/mnt/cluster/BaigeOmni/tmp/adapter-mcore
-SAVE_PATCH=/mnt/cluster/BaigeOmni/tmp/patch-mcore
+SAVE_LANGUAGE_MODEL=/mnt/cluster/LoongForge/tmp/language-mcore
+SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-mcore
+SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-mcore
+SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml
 
-FOUNDATION_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
 
 ETP=1
 DTP=1

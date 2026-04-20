@@ -7,15 +7,15 @@ TOTAL_K8S_NODES: 1
 MODEL_RUNNABLE: True 
 
 HF_CKPT_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
-DATA_PATH: $pfs_path/omni_datasets/BaigeOmni/llavaov_1.5_4b/test_packed_wds_4k/
+DATA_PATH: $pfs_path/omni_datasets/LoongForge/llavaov_1.5_4b/test_packed_wds_4k/
 TOKENIZER_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $BAIGE_OMNI_PATH/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
 
-FOUNDATION_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
-IMAGE_ENCODER_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
+IMAGE_ENCODER_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
 LANGUAGE_MODEL_PATH: $step1_output_path/language-mcore
 VISION_MODEL_PATH: $step1_output_path/vision-model-mcore
 ADAPTER_PATH: $step1_output_path/adapter-mcore
@@ -23,7 +23,7 @@ PATCH_PATH: $step1_output_path/patch-mcore
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 2
 
-# BaigeOmni training parameters
+# LoongForge training parameters
 TENSOR_MODEL_PARALLER_SIZE: 2
 PIPELINE_MODEL_PARALLER_SIZE: 2
 log_interval: 1
@@ -151,7 +151,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       vlm:
-        PREPROCESS_DATA_PATH: ${BAIGE_OMNI_PATH}/tools/data_preprocess/vlm/convert_to_webdataset.py
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/data_preprocess/vlm/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mix.json'
         video_dir: '$scripts_root_path/datasets/vlm/'

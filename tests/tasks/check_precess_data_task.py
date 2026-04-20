@@ -1,4 +1,4 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 """check preprocess data"""
@@ -159,7 +159,7 @@ class PrecessDataCheckTask(BaseTask):
             sys.exit(1)
 
 
-    def start_baige_preprocess_data(self, index, step_stage, scenario_name):
+    def start_loongforge_preprocess_data(self, index, step_stage, scenario_name):
         """
         Start data preprocessing task
         Args:
@@ -167,7 +167,7 @@ class PrecessDataCheckTask(BaseTask):
             step_stage: Preprocessing stage name (e.g. llm_pretrain, llm_sft)
             scenario_name: Scenario name
         """
-        step_name = "baige_preprocess_data"
+        step_name = "loongforge_preprocess_data"
         logger.info(f"{step_stage} {step_name} Start Running ...")
 
         model_config = self.__init_model_scenarios_data__(index, scenario_name, step_stage)
@@ -260,7 +260,7 @@ class PrecessDataCheckTask(BaseTask):
 
                     runnable_flag = self.model["scenarios"][index][scenario_name][step_name].get("RUNNABLE_FLAG")
                     if runnable_flag is None or (isinstance(runnable_flag, str) and runnable_flag.lower() == "true") or runnable_flag is True:
-                        self.start_baige_preprocess_data(index, step_name, scenario_name)
+                        self.start_loongforge_preprocess_data(index, step_name, scenario_name)
                         step_scenario_lock_file = os.path.join(self.model["model_lock_file_path"], scenario_name, step_name, self.master_addr, f"{self.rank_name}_lock.txt")
                         self.wait_async_pod_complete(step_scenario_lock_file, model_name, f"{scenario_name}_{step_name}")
 

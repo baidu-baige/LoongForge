@@ -24,13 +24,13 @@ do
     check_for_infer $i
 done
  
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
  
-DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/load/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm_202512180001/"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/baige/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
+DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/loongforge-training-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/loongforge-training-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/loongforge-training-test/sft_qwen3_vl_30b_a3b_temp/load/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm_202512180001/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/loongforge/checkpoints/qwen3-vl/qwen3-vl-30b-tp4pp1ep8etp1-groupedgemm-save/tensorboard-log/"}
  
 GPUS_PER_NODE=8
 ######################kunlun##########################
@@ -54,7 +54,7 @@ export BKCL_RDMA_VERBS=1
 export XMLIR_PARALLEL_SAVE_MEMORY=false         # 为false显存占用会多, 但会有性能提升; 为true显存会少, 但性能会下降
 export XMLIR_BATCH_PARALLEL=false               # 通信融合算子开启, USE_CAST_FC_FUSION在bf16下会自动失效
 export SAVE_LOG_FILE_WITH_RANK_ID=false          # 为true的话, 训练日志会按rank_id分开存储
-export XMLIR_LOG_PATH="/mnt/rapidfs/baige-training-test/sft_qwen3_vl_30b_a3b_temp/logs"  # 指定训练日志的存储目录
+export XMLIR_LOG_PATH="/mnt/rapidfs/loongforge-training-test/sft_qwen3_vl_30b_a3b_temp/logs"  # 指定训练日志的存储目录
 export XMLIR_LOG_PREFIX="qwen3_vl_30b_sft"      # 指定训练日志文件名的前缀
 export P800_DEBUG=false                         # 为true的话, 训练grad norm出nan会保存ckpt后退出
 export P800_DUMP_DIR="ckpt-dump-dir-path"       # 指定训练grad norm出nan会保存ckpt等信息dump的目录
@@ -168,9 +168,9 @@ LOGGING_ARGS=(
     --log-timers-to-tensorboard
 )
  
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${MOE_ARGS[@]} \
     ${DATA_ARGS[@]} \

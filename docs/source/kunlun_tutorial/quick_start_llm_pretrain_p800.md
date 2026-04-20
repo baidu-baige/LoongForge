@@ -2,13 +2,13 @@
 
 ## Quick Start: LLM Model Pretrain Training
 
-This document guides you through the quick start process for pre-training Large-Language Models (LLM) using the BaigeOmni framework on P800.
+This document guides you through the quick start process for pre-training Large-Language Models (LLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for llm pretrain](https://github.com/baidu-baige/BaigeOmni/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
+For data preparation and weight preparation, refer to [quick start for llm pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
 
 ## Pretrain Training Script
 
-BaigeOmni currently provides Pretrain training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/pretrain/` directory. Below is an example Pretrain training script for `Qwen3-30B-A3B`. Please refer to the comments for the purpose of each script section:
+LoongForge currently provides Pretrain training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/pretrain/` directory. Below is an example Pretrain training script for `Qwen3-30B-A3B`. Please refer to the comments for the purpose of each script section:
 
 ```bash
 #! /bin/bash
@@ -18,16 +18,16 @@ set -x
 source /root/.bashrc
 #source activate && conda activate python310_torch25_cuda
 
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/BaigeOmni/qwen3/pile_test/pile-qwen_text_document"}
+DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/LoongForge/qwen3/pile_test/pile-qwen_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/models/Qwen3-30B-A3B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/BaigeOmni/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/LoongForge/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/BaigeOmni/tensorboard-log/qwen3-30b-a3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/LoongForge/tensorboard-log/qwen3-30b-a3b"}
 
 mkdir -p ${TENSORBOARD_PATH}
 
@@ -38,7 +38,7 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 ###################### Kunlunxin P800 ######################
-# bf16 specific (megatron related variables refer to <Baige Megatron specific>)
+# bf16 specific (megatron related variables refer to <Loong Megatron specific>)
 export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # forward
 export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # backward dw
@@ -168,9 +168,9 @@ if [ -n "${WANDB_API_KEY}" ]; then
     )
 fi
 
-PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $BAIGE_OMNI_PATH/baige_omni/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

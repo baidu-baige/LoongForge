@@ -1,4 +1,4 @@
-_target_: baige_omni.models.common.peft.lora_config.VLMLoraConfig
+_target_: loongforge.models.common.peft.lora_config.VLMLoraConfig
 
 
 defaults:

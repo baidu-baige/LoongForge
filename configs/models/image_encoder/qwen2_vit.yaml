@@ -1,5 +1,5 @@
 
-_target_: baige_omni.models.encoder.Qwen2VisionModelConfig
+_target_: loongforge.models.encoder.Qwen2VisionModelConfig
 
 num_layers: 32
 hidden_size: 1280
@@ -22,4 +22,4 @@ normalization: "LayerNorm"
 apply_rope_fusion: true
 
 model_type: "qwen2_vit"
-convert_file: ${oc.env:BAIGE_OMNI_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml

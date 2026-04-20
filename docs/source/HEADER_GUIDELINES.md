@@ -1,36 +1,36 @@
 # License and File Header Guidelines
 
-This document describes how to add copyright and license headers in BaigeOmni. The BaigeOmni repository is released under the [Apache License 2.0](https://github.com/baidu-baige/BaigeOmni/blob/master/LICENSE).
+This document describes how to add copyright and license headers in LoongForge. The LoongForge repository is released under the [Apache License 2.0](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE).
 
 At the same time, some files in this repository are derived from third-party open-source projects. Those files must remain subject to their original copyright and license requirements. 
 
 In practice, contributors should follow these principles:
-- Original files written for BaigeOmni should use a short SPDX-based Apache-2.0 header.
+- Original files written for LoongForge should use a short SPDX-based Apache-2.0 header.
 - Files derived from third-party projects must retain upstream copyright and license notices verbatim.
 - When modifying third-party derived files, contributors must add a clear modification and origin notice.
 
 ---
 
-## Case 1: Original Files Written for BaigeOmni
+## Case 1: Original Files Written for LoongForge
 
-For new source files authored by the BaigeOmni team or contributors, use the short SPDX-based Apache-2.0 header. This keeps files concise while remaining clear, machine-readable, and consistent with modern tooling.
+For new source files authored by the LoongForge team or contributors, use the short SPDX-based Apache-2.0 header. This keeps files concise while remaining clear, machine-readable, and consistent with modern tooling.
 
 ### Python
 ```python
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 ```
 
 ### Shell
 ```bash
 #!/usr/bin/env bash
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 ```
 
 ### C / C++ / CUDA
 ```cpp
-// Copyright 2026 The BaigeOmni Authors.
+// Copyright 2026 The LoongForge Authors.
 // SPDX-License-Identifier: Apache-2.0
 ```
 
@@ -40,11 +40,11 @@ For new source files authored by the BaigeOmni team or contributors, use the sho
 
 For files adapted from third-party projects (whether Apache 2.0, MIT, BSD, or others), we use a **Universal Minimalist Template**.
 
-**The Golden Rule:** Do not alter the upstream author's original header. Prepend the BaigeOmni copyright, an SPDX identifier, a single line stating the origin and license, and then paste the upstream header *exactly as it is* (whether it is 1 line or 20 lines).
+**The Golden Rule:** Do not alter the upstream author's original header. Prepend the LoongForge copyright, an SPDX identifier, a single line stating the origin and license, and then paste the upstream header *exactly as it is* (whether it is 1 line or 20 lines).
 
 ### The Universal Template
 ```python
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Modified from [UpstreamProject Name] under the [License Name, e.g., MIT / Apache-2.0] License.
@@ -55,7 +55,7 @@ For files adapted from third-party projects (whether Apache 2.0, MIT, BSD, or ot
 If the upstream file only has a single copyright line, just keep that single line.
 
 ```python
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Modified from Megatron-LM under the BSD 3-Clause License.
@@ -68,7 +68,7 @@ If the upstream file only has a single copyright line, just keep that single lin
 If the upstream file has a long license text, paste the entire block without modifications.
 
 ```python
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Modified from ERNIE.
@@ -95,4 +95,4 @@ If the upstream file has a long license text, paste the entire block without mod
 
 When deciding what header to use, follow this simple logic:
 1. **Is it original?** If yes, use the short SPDX header (Case 1).
-2. **Is it modified from a third party?** Use the Universal Template (Case 2): add our 3-line BaigeOmni header + origin statement, then copy-paste the original author's header verbatim below it.
+2. **Is it modified from a third party?** Use the Universal Template (Case 2): add our 3-line LoongForge header + origin statement, then copy-paste the original author's header verbatim below it.

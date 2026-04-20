@@ -6,23 +6,23 @@ TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True # Should be True / False
 
-# BaigeOmni training parameters
+# LoongForge training parameters
 HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
-PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/BaigeOmni/qwen2.5_vl_7b/pretrain/llava_details-minigpt4_3500_formate/wds
-SFT_DATA_PATH: $pfs_path/omni_datasets/BaigeOmni/qwen2.5_vl_7b/sft/test_packing/test_packed_wds_4k/
+PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/LoongForge/qwen2.5_vl_7b/pretrain/llava_details-minigpt4_3500_formate/wds
+SFT_DATA_PATH: $pfs_path/omni_datasets/LoongForge/qwen2.5_vl_7b/sft/test_packing/test_packed_wds_4k/
 TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $BAIGE_OMNI_PATH/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
 
 # ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2
 DECODER_TENSOR_MODEL_PARALLER_SIZE: 4
 NUM_VIRTUAL_STAGES_PER_PIPELINE_RANK: 2
 CUSTOM_PIPELINE_LAYERS: 6,8,6,8
-FOUNDATION_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
-IMAGE_ENCODER_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
-IMAGE_PROJECTOR_CONVERT_FILE: $BAIGE_OMNI_PATH/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
+FOUNDATION_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
+IMAGE_ENCODER_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
+IMAGE_PROJECTOR_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml
 
 # Intermediate product paths
 LANGUAGE_MODEL_PATH: $step1_output_path/language-mcore
@@ -309,7 +309,7 @@ scenarios:
 
   - preprocess_data:
       vlm:
-        PREPROCESS_DATA_PATH: ${BAIGE_OMNI_PATH}/tools/data_preprocess/vlm/convert_to_webdataset.py
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/data_preprocess/vlm/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mllm_demo.json'
         video_dir: '$scripts_root_path/datasets/vlm/'
@@ -324,8 +324,8 @@ scenarios:
           --sample_type vqa'
       offline_packing: 
         # RUNNABLE_FLAG: false
-        PREPROCESS_DATA_PATH: ${BAIGE_OMNI_PATH}/tests/tools/offline_packing.sh
-        packing_config_path: '${BAIGE_OMNI_PATH}/tests/tools/offline_packing.yaml'
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tests/tools/offline_packing.sh
+        packing_config_path: '${LOONGFORGE_PATH}/tests/tools/offline_packing.yaml'
         PREPROCESS_DATA_ARGS: '${packing_config_path}'
 
 tasks:

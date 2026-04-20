@@ -20,7 +20,7 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./BaigeOmni /workspace/BaigeOmni
+COPY ./LoongForge /workspace/LoongForge
 
 # ======================== Basic Environment Setup ========================
 RUN set -exuo pipefail && \
@@ -33,8 +33,8 @@ RUN set -exuo pipefail && \
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
     install_requirements() { \
-        local requirements_file="/workspace/BaigeOmni/requirements.txt"; \
-        cd /workspace/BaigeOmni/ && \
+        local requirements_file="/workspace/LoongForge/requirements.txt"; \
+        cd /workspace/LoongForge/ && \
         pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
             -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
     }; \
@@ -125,8 +125,8 @@ RUN set -exuo pipefail && \
 
 # =========================================================
 # TransformerEngine / Lerobot
-# NOTE: Megatron is managed as a git submodule (third_party/Baige-Megatron)
-#       and is already included via COPY ./BaigeOmni. No clone or patch needed.
+# NOTE: Megatron is managed as a git submodule (third_party/Loong-Megatron)
+#       and is already included via COPY ./LoongForge. No clone or patch needed.
 # =========================================================
 RUN set -exuo pipefail && \
     install_transformer_engine() { \
@@ -137,11 +137,11 @@ RUN set -exuo pipefail && \
         git clone https://github.com/NVIDIA/TransformerEngine.git && \
         cd ${transformerEngine_dir} && \
         git fetch --all --tags && \
-        git checkout ${TE_TAGS} -b baige_${TE_TAGS} && \
+        git checkout ${TE_TAGS} -b loongforge_${TE_TAGS} && \
         git restore . && \
-        if [ -f "/workspace/BaigeOmni/patches/apply_patches.sh" ]; then \
-            bash /workspace/BaigeOmni/patches/apply_patches.sh \
-                /workspace/BaigeOmni/patches/TransformerEngine_${TE_TAGS} \
+        if [ -f "/workspace/LoongForge/patches/apply_patches.sh" ]; then \
+            bash /workspace/LoongForge/patches/apply_patches.sh \
+                /workspace/LoongForge/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
         git submodule update --init --recursive && \
@@ -182,7 +182,7 @@ RUN set -exuo pipefail && \
 # =========================================================
 RUN set -exuo pipefail && \
     FLASHMLA_COMMIT="47c35a712362f11bc235854ead51819ad76f5a81" && \
-    OPS_DIR="/workspace/BaigeOmni/ops" && \
+    OPS_DIR="/workspace/LoongForge/ops" && \
     install_sparse_mla_fwd() { \
         echo "Installing sparse_mla_fwd..." && \
         cd ${OPS_DIR}/sparse_mla_fwd && \
@@ -226,10 +226,10 @@ RUN set -exuo pipefail && \
 
 # =========================================================
 # Megatron Symlink
-# Scripts reference /workspace/Baige-Megatron; the actual location is
-# /workspace/BaigeOmni/third_party/Baige-Megatron (git submodule).
+# Scripts reference /workspace/Loong-Megatron; the actual location is
+# /workspace/LoongForge/third_party/Loong-Megatron (git submodule).
 # =========================================================
-RUN ln -sf /workspace/BaigeOmni/third_party/Baige-Megatron /workspace/Baige-Megatron
+RUN ln -sf /workspace/LoongForge/third_party/Loong-Megatron /workspace/Loong-Megatron
 
 # =========================================================
 # Jupyter Configuration
@@ -242,11 +242,11 @@ RUN mkdir -p /root/.jupyter && \
 # Clean Up Unused Files (Consistent with install.sh)
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
-    rm -rf /workspace/BaigeOmni/.git && \
-    rm -rf /workspace/BaigeOmni/third_party/Baige-Megatron/.git && \
-    rm -rf /workspace/BaigeOmni/build.sh && \
-    rm -rf /workspace/BaigeOmni/ci.yml && \
-    rm -rf /workspace/BaigeOmni/docker/ci && \
+    rm -rf /workspace/LoongForge/.git && \
+    rm -rf /workspace/LoongForge/third_party/Loong-Megatron/.git && \
+    rm -rf /workspace/LoongForge/build.sh && \
+    rm -rf /workspace/LoongForge/ci.yml && \
+    rm -rf /workspace/LoongForge/docker/ci && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file:///workspace/BaigeOmni/configs/models/
+    - file:///workspace/LoongForge/configs/models/
 
 defaults:
   - ernie4_5_vl@module: ???

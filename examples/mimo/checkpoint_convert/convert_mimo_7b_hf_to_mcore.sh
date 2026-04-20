@@ -1,11 +1,11 @@
 #! /bin/bash
 
-export BAIGE_OMNI_PATH=${BAIGE_OMNI_PATH:-"/workspace/BaigeOmni"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Baige-Megatron"}
-CONVERT_CHECKPOINT_PATH="$BAIGE_OMNI_PATH/tools/convert_checkpoint"
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-MODEL_CONFIG_FILE=${BAIGE_OMNI_PATH}/configs/models/mimo/mimo_7b.yaml
-CONVERT_FILE=${BAIGE_OMNI_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/mimo/mimo_7b.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml
 
 LOAD=/models/ckpt/XiaomiMiMo/MiMo-7B-SFT/
 SAVE=/models/ckpt/XiaomiMiMo/MiMo-7B-SFT-tp1pp2

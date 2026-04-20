@@ -1,4 +1,4 @@
-_target_: baige_omni.models.encoder.ErnieVisionConfig
+_target_: loongforge.models.encoder.ErnieVisionConfig
 
 num_layers: 32
 embed_dim: 1280

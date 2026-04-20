@@ -1,7 +1,7 @@
-"""Setup BaigeOmni environment.
+"""Setup LoongForge environment.
 
 Dependency management strategy:
-  - Megatron-LM : managed as a git submodule (third_party/Baige-Megatron),
+  - Megatron-LM : managed as a git submodule (third_party/Loong-Megatron),
                   version is locked by the submodule commit pointer — no patching needed.
   - TransformerEngine : cloned from upstream NVIDIA repo, checked out at the
                         specified tag, then patched from patches/TransformerEngine_<tag>/.
@@ -28,7 +28,7 @@ def run_command(command, cwd=None, shell=True, check=True, env=None):
 def main():
     """main process"""
     parser = argparse.ArgumentParser(
-        description="Setup BaigeOmni development environment.")
+        description="Setup LoongForge development environment.")
     parser.add_argument("--te-tag", required=True,
                         help="Tag for TransformerEngine (e.g., v2.9)")
     parser.add_argument("--workspace", default=os.getcwd(),
@@ -38,26 +38,26 @@ def main():
 
     workspace = os.path.abspath(args.workspace)
     te_path = os.path.join(workspace, "TransformerEngine")
-    omni_path = os.path.join(workspace, "BaigeOmni")
+    omni_path = os.path.join(workspace, "LoongForge")
 
-    # Adjust omni_path if script is running inside BaigeOmni
-    if os.path.basename(workspace) == "BaigeOmni":
+    # Adjust omni_path if script is running inside LoongForge
+    if os.path.basename(workspace) == "LoongForge":
         omni_path = workspace
         workspace = os.path.dirname(workspace)
         te_path = os.path.join(workspace, "TransformerEngine")
 
     # Megatron-LM lives as a submodule inside the main repo
-    megatron_path = os.path.join(omni_path, "third_party", "Baige-Megatron")
+    megatron_path = os.path.join(omni_path, "third_party", "Loong-Megatron")
 
     print(f"Workspace              : {workspace}")
     print(f"Megatron Path       : {megatron_path}  (submodule)")
     print(f"TransformerEngine Path : {te_path}")
-    print(f"BaigeOmni Path         : {omni_path}")
+    print(f"LoongForge Path         : {omni_path}")
 
     # 1. Initialize Megatron-LM submodule
-    # Version is locked by the submodule commit pointer in BaigeOmni — no patching needed.
+    # Version is locked by the submodule commit pointer in LoongForge — no patching needed.
     print("\n[1/5] Initializing Megatron submodule...")
-    run_command("git submodule update --init third_party/Baige-Megatron", cwd=omni_path)
+    run_command("git submodule update --init third_party/Loong-Megatron", cwd=omni_path)
 
     # 2. Clone TransformerEngine from upstream
     print("\n[2/5] Setting up TransformerEngine...")
@@ -71,7 +71,7 @@ def main():
     print(f"Checking out TransformerEngine tag: {args.te_tag}")
     run_command("git fetch --all --tags", cwd=te_path)
 
-    branch_name = f"baige_{args.te_tag}"
+    branch_name = f"loongforge_{args.te_tag}"
     if run_command(f"git rev-parse --verify {branch_name}", cwd=te_path, shell=True, check=False):
         print(f"Branch {branch_name} already exists, checking it out.")
         run_command(f"git checkout {branch_name}", cwd=te_path)
@@ -104,8 +104,8 @@ def main():
     env["NVTE_FRAMEWORK"] = "pytorch"
     run_command("pip3 install --no-build-isolation .", cwd=te_path, env=env)
 
-    # 6. Install BaigeOmni dependencies
-    print("\n[5/5] Installing BaigeOmni dependencies...")
+    # 6. Install LoongForge dependencies
+    print("\n[5/5] Installing LoongForge dependencies...")
     run_command("pip install -r requirements.txt", cwd=omni_path)
 
     print("\nSetup completed successfully!")

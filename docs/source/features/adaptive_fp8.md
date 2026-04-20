@@ -1,6 +1,6 @@
 # Adaptive FP8 Training (Selective FP8)
 
-Adaptive FP8 (also called **Selective FP8**) is a **benchmark-driven dynamic precision selection** mechanism in BaigeOmni. At model initialization time, it consults a pre-generated performance policy file (FP8 Dynamic Policy) to decide — on a per-module basis — whether to use FP8 or BF16. This retains FP8 speedups where they exist while avoiding regressions in unfavorable scenarios (e.g. small MoE experts, high TP parallelism, short sequences).
+Adaptive FP8 (also called **Selective FP8**) is a **benchmark-driven dynamic precision selection** mechanism in LoongForge. At model initialization time, it consults a pre-generated performance policy file (FP8 Dynamic Policy) to decide — on a per-module basis — whether to use FP8 or BF16. This retains FP8 speedups where they exist while avoiding regressions in unfavorable scenarios (e.g. small MoE experts, high TP parallelism, short sequences).
 
 ---
 
@@ -154,7 +154,7 @@ Add adaptive FP8 parameters in the model YAML:
 
 ```yaml
 # Example: configs/models/deepseek3/deepseek_v3_fp8_sel.yaml
-_target_: baige_omni.models.foundation.DeepseekConfig
+_target_: loongforge.models.foundation.DeepseekConfig
 defaults:
   - deepseek_v3
   - _self_
@@ -209,7 +209,7 @@ export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
 export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 
 torchrun --nproc_per_node 8 \
-    baige_omni/train.py \
+    loongforge/train.py \
     --config-file configs/models/deepseek3/deepseek_v3_fp8_sel.yaml \
     --fp8-format e4m3 \
     --fp8-recipe blockwise \

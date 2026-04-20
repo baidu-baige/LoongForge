@@ -1,7 +1,7 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate reverse key mappings for expert-parallel BaigeOmni checkpoints."""
+"""Generate reverse key mappings for expert-parallel LoongForge checkpoints."""
 
 import os
 import sys

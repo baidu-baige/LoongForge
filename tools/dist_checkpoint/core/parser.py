@@ -1,4 +1,4 @@
-# Copyright 2026 The BaigeOmni Authors.
+# Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
@@ -14,7 +14,7 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'tools'))
 
 from tools.dist_checkpoint.config.parallel_config import ParallelConfig
-from baige_omni.utils.config_map import get_config_from_model_name
+from loongforge.utils.config_map import get_config_from_model_name
 
 
 class Parser:
@@ -220,7 +220,7 @@ if __name__ == "__main__":
         '--training-phase', 'pretrain',
     ]
 
-    from baige_omni.train.parser import parse_train_args
+    from loongforge.train.parser import parse_train_args
 
     args = parse_train_args()
     parser = Parser(args)
