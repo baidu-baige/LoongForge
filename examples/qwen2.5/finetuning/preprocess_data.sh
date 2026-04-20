@@ -22,5 +22,5 @@ PYTHONPATH=$MEGATRON_PATH:$BAIGE_OMNI_PATH:$PYTHONPATH \
         # --packing-sft-data \
         # --train-on-prompt \
         # --eod-mask-loss \
-        # --sft-dataset-config /workspace/BaigeOmni/configs/sft_dataset_config.json \
+        # --sft-dataset-config /workspace/BaigeOmni/configs/data/sft_dataset_config.yaml \
         # --sft-dataset custom_dataset \
