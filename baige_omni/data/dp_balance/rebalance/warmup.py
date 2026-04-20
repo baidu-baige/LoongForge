@@ -9,7 +9,7 @@ import torch.distributed as dist
 import numpy as np
 from scipy.optimize import minimize
 
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple, Union
 
 from megatron.training import get_args
 from megatron.core import mpu
@@ -86,8 +86,8 @@ def solve_computation_coef(init=(0, 0, 0)):
     # Only run during DP-balance warm-up phase
     if (
         not is_dp_root
-        or not args_train.use_dp_balance
-        or iteration != args_train.dp_balance_warmup_iters[-1] + 1
+        or not args_train.use_vlm_dp_balance
+        or iteration != args_train.vlm_dp_balance_warmup_iters[-1] + 1
     ):
         return False
 
@@ -150,15 +150,15 @@ def set_warmup_c1(c1):
     args_train = get_args()
     iteration = args_train.curr_iteration
     if (
-        not args_train.use_dp_balance
-        or not iteration in args_train.dp_balance_warmup_iters
-        or iteration == args_train.dp_balance_warmup_iters[0]
+        not args_train.use_vlm_dp_balance
+        or not iteration in args_train.vlm_dp_balance_warmup_iters
+        or iteration == args_train.vlm_dp_balance_warmup_iters[0]
     ):
         return
     WARM_FORWARD_TIME.append(c1)
 
 
-def set_warmup_groups(data: Dict[str, torch.Tensor]):
+def set_warmup_groups(data: Union[List[Dict[str, torch.Tensor]], Dict[str, torch.Tensor]]):
     """
     Collect per-DP sequence statistics during the warm-up phase.
 
@@ -167,20 +167,30 @@ def set_warmup_groups(data: Dict[str, torch.Tensor]):
         - sum(seq_len)
         - number of sequences
 
-    on each DP rank, gathers them across all DP ranks, and stores the
-    resulting per-DP variable group. These statistics are later used
-    to fit the DP computation cost model.
+    across all micro-batches on each DP rank, gathers them across all DP
+    ranks, and stores the resulting per-DP variable group. These statistics
+    are later used to fit the DP computation cost model.
+
+    Args:
+        data: A single micro-batch dict, or a list of micro-batch dicts
+              (one per micro-batch in the iteration).
     """
     global WARMUP_VAR_GROUPS
     args_train = get_args()
     iteration = args_train.curr_iteration
 
     if (
-        not args_train.use_dp_balance
-        or not iteration in args_train.dp_balance_warmup_iters
-        or iteration == args_train.dp_balance_warmup_iters[0]
+        not args_train.use_vlm_dp_balance
+        or not iteration in args_train.vlm_dp_balance_warmup_iters
+        or iteration == args_train.vlm_dp_balance_warmup_iters[0]
     ):
         return
+
+    # Normalize to list for uniform handling
+    if isinstance(data, dict):
+        data_list = [data]
+    else:
+        data_list = data
 
     dp_group = mpu.get_data_parallel_group_gloo(
         with_context_parallel=False,
@@ -188,39 +198,51 @@ def set_warmup_groups(data: Dict[str, torch.Tensor]):
     )
     dp_size = dp_group.size()
 
-    cu_lengths = None
-    if args_train.model_family == "intern_vl":
-        cu_lengths = data["attn_mask"]
-    elif args_train.model_family in constants.VisionLanguageModelFamilies.names():
-        cu_lengths = data["cu_lengths"]
-    cu_lengths = cu_lengths.squeeze(0)
+    # Accumulate statistics across all micro-batches
+    total_seq_num = 0
+    total_seq_lenth_sum = None
+    total_seq_lenth_square_sum = None
 
-    # Number of sequences in the packed batch
-    seq_num = cu_lengths.numel() - 1
+    for micro_batch in data_list:
+        cu_lengths = None
+        if args_train.model_family == "intern_vl":
+            cu_lengths = micro_batch["attn_mask"]
+        elif args_train.model_family in constants.VisionLanguageModelFamilies.names():
+            cu_lengths = micro_batch["cu_lengths"]
+        cu_lengths = cu_lengths.squeeze(0)
+
+        # Number of sequences in this micro-batch
+        seq_num = cu_lengths.numel() - 1
+        total_seq_num += seq_num
+
+        # Per-sequence lengths and their squared values
+        seq_lenth = cu_lengths[1:] - cu_lengths[:-1]
+        seq_lenth_square = seq_lenth**2
+
+        if total_seq_lenth_sum is None:
+            total_seq_lenth_sum = seq_lenth.sum()
+            total_seq_lenth_square_sum = seq_lenth_square.sum()
+        else:
+            total_seq_lenth_sum = total_seq_lenth_sum + seq_lenth.sum()
+            total_seq_lenth_square_sum = total_seq_lenth_square_sum + seq_lenth_square.sum()
+
     seq_num_tensor = torch.tensor(
-        [seq_num],
-        device=cu_lengths.device,
+        [total_seq_num],
+        device=total_seq_lenth_sum.device,
         dtype=torch.long,
     )
 
-    # Per-sequence lengths and their squared values
-    seq_lenth = cu_lengths[1:] - cu_lengths[:-1]
-    seq_lenth_square = seq_lenth**2
-
-    seq_lenth_sum = seq_lenth.sum()
-    seq_lenth_square_sum = seq_lenth_square.sum()
-
     # Prepare all-gather buffers
     seq_num_list = [torch.zeros_like(seq_num_tensor) for _ in range(dp_size)]
-    seq_lenth_sum_list = [torch.zeros_like(seq_lenth_sum) for _ in range(dp_size)]
+    seq_lenth_sum_list = [torch.zeros_like(total_seq_lenth_sum) for _ in range(dp_size)]
     seq_lenth_square_sum_list = [
-        torch.zeros_like(seq_lenth_square_sum) for _ in range(dp_size)
+        torch.zeros_like(total_seq_lenth_square_sum) for _ in range(dp_size)
     ]
 
     # Gather statistics across DP ranks
     dist.all_gather(seq_num_list, seq_num_tensor, group=dp_group)
-    dist.all_gather(seq_lenth_sum_list, seq_lenth_sum, group=dp_group)
-    dist.all_gather(seq_lenth_square_sum_list, seq_lenth_square_sum, group=dp_group)
+    dist.all_gather(seq_lenth_sum_list, total_seq_lenth_sum, group=dp_group)
+    dist.all_gather(seq_lenth_square_sum_list, total_seq_lenth_square_sum, group=dp_group)
 
     dp_rank = mpu.get_data_parallel_rank()
     is_dp_root = dp_rank == 0
@@ -254,4 +276,3 @@ def load_estimate_per_sample(seq_len) -> float:
     Coefficients are calibrated during the warm-up phase.
     """
     return SEQ2_COEF * seq_len**2 + SEQ_COEF * seq_len + SEQ_NUM_COEF
-

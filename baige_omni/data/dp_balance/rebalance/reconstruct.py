@@ -33,7 +33,7 @@ def reconstruct_visual_grid_thw_for_vlm(tensor):
     return tensor.reshape(-1, 3)
 
 
-def reconstruct_visual_for_vlm(tensor, visual_size=1176):
+def reconstruct_visual_for_vlm(tensor, visual_size):
     """Reshape flattened visual embeddings to (num_tokens, visual_size)."""
     return tensor.reshape(-1, visual_size)
 

@@ -202,7 +202,7 @@ def forward_step(data_iterator, model):
 
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     """Train_valid_test_datasets_provider """
-    import baige_omni.data.dp_balance.adaptor
+    import baige_omni.data.dp_balance.patches
     args = get_args()
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None

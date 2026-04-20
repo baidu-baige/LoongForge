@@ -369,7 +369,7 @@ GLOBAL_TRAIN_DATASET_SIZE = None
 
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None):
     """Provides the datasets used by the trainer"""
-    import baige_omni.data.dp_balance.adaptor
+    import baige_omni.data.dp_balance.patches
     global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
 
