@@ -161,7 +161,7 @@ class Qwen2VLRotaryEmbedding(torch.nn.Module):
         if parallel_state.get_context_parallel_world_size() > 1:
             emb = get_pos_emb_on_this_cp_rank(emb, 2, packed_seq)
 
-        return emb
+        return emb.transpose(0, 2).contiguous() # [3, bs, seq_len, dim] -> [seq_len, bs, 3, dim]
 
 
 class Qwen2Model(BaseGPTModel):
@@ -320,13 +320,9 @@ class Qwen2Model(BaseGPTModel):
                 and packed_seq_params.qkv_format == "thd",
             )
         else:
-            rotary_pos_emb = (
-                self.rotary_pos_emb(
-                    position_ids,
-                    packed_seq=packed_seq_params,
-                )
-                .transpose(0, 2)
-                .contiguous()
+            rotary_pos_emb = self.rotary_pos_emb(
+                position_ids,
+                packed_seq=packed_seq_params,
             )
 
         preproc_output = (

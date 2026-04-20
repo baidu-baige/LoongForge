@@ -186,13 +186,12 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens, mscale: float = 1.0):
     rot_dim = freq.shape[-1]
 
     # ideally t_pass is empty so rotary pos embedding is applied to all tensor t
-    freq = freq.permute(2, 1, 0, 3).contiguous()
     t, t_pass = t[..., :rot_dim], t[..., rot_dim:]
 
     # first part is cosine component
     # second part is sine component, need to change signs with _rotate_half method
-    cos_ = (torch.cos(freq) * mscale).to(t.dtype)  # [1, 1, 84, 128]
-    sin_ = (torch.sin(freq) * mscale).to(t.dtype)  # [1, 1, 84, 128]
+    cos_ = (torch.cos(freq) * mscale).to(t.dtype)
+    sin_ = (torch.sin(freq) * mscale).to(t.dtype)
 
     t = (t * cos_) + (_rotate_half(t) * sin_)
 
@@ -208,7 +207,6 @@ def apply_mrope(t, freq, config, cu_seqlens=None, mscale: float = 1.0, cp_group=
             if cp_group is not None
             else parallel_state.get_context_parallel_world_size()
         )
-        cp_rank = parallel_state.get_context_parallel_rank()
         cu_seqlens = cu_seqlens // cp_size
         seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
 
@@ -216,7 +214,7 @@ def apply_mrope(t, freq, config, cu_seqlens=None, mscale: float = 1.0, cp_group=
             [
                 _apply_mrope_bshd(
                     x.unsqueeze(1),
-                    freq[:, :, int(cu_seqlens[i]) : int(cu_seqlens[i]) + x.size(0), :],
+                    freq[int(cu_seqlens[i]) : int(cu_seqlens[i]) + x.size(0)],
                     config,
                     cu_seqlens,
                     mscale,

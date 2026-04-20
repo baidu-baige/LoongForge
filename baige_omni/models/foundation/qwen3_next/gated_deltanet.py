@@ -277,7 +277,6 @@ class GatedDeltaNet(HuggingFaceModule):
 
         return hidden_states
 
-
     def forward(
         self,
         hidden_states: Tensor,
@@ -318,6 +317,7 @@ class GatedDeltaNet(HuggingFaceModule):
             hidden_states = gather_from_sequence_parallel_region(hidden_states)
         
         cu_seqlens = None if packed_seq_params is None else packed_seq_params.cu_seqlens_q
+        cu_seqlens_cpu = None if packed_seq_params is None else packed_seq_params.cu_seqlens_cpu
         hidden_states = hidden_states.transpose(0, 1).contiguous() # [S, B, D] -> [B, S, D]
         if attention_mask is not None:
             if attention_mask.dim() >= 3 and attention_mask.shape[2] > 1: # [B, 1, S, S]
@@ -353,6 +353,7 @@ class GatedDeltaNet(HuggingFaceModule):
             bias=self.conv1d.bias,
             activation=self.activation,
             cu_seqlens=cu_seqlens,
+            cu_seqlens_cpu=cu_seqlens_cpu,
         )[0]
         nvtx_range_pop(suffix="conv1d")
         
@@ -391,6 +392,7 @@ class GatedDeltaNet(HuggingFaceModule):
             output_final_state=False,
             use_qk_l2norm_in_kernel=self.use_qk_l2norm,
             cu_seqlens=cu_seqlens,
+            cu_seqlens_cpu=cu_seqlens_cpu,
         )
         nvtx_range_pop(suffix="gated_delta_rule")
         

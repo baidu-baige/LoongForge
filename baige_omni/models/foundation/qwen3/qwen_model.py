@@ -18,6 +18,10 @@ from megatron.core.process_groups_config import ProcessGroupCollection
 from baige_omni.models.foundation.base import BaseGPTModel
 from baige_omni.models.utils import import_module
 from baige_omni.models.omni_models.utils import get_pos_emb_on_this_cp_rank
+from baige_omni.models.foundation.qwen2.qwen_model import (
+    Qwen2VLRotaryEmbedding,
+    DynamicRotaryEmbedding,
+)
 from .qwen_config import Qwen3Config
 
 
@@ -53,117 +57,6 @@ def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
             incompatible_keys.missing_keys.remove(key)
 
 
-class DynamicRotaryEmbedding(RotaryEmbedding):
-    """Dynamic Rotary Embedding for language model.
-
-    Args:
-        kv_channels (int): Projection weights dimension in multi-head attention. Obtained from transformer config
-        rotary_percent (float): Percent of rotary dimension to use for rotary position embeddings.
-        seq_len_interpolation_factor (float, optional): scale of linearly interpolating RoPE for longer sequences.
-        The value must be a float larger than 1.0. Defaults to None
-        rotary_base (int, optional): Base period for rotary position embeddings. Defaults to 10000.
-    """
-
-    def __init__(
-        self,
-        kv_channels: int,
-        rotary_percent: float,
-        rotary_interleaved: bool = False,
-        seq_len_interpolation_factor: float = None,
-        rotary_base: int = 10000,
-        dtype: torch.dtype = torch.float32,
-        rope_scaling: bool = False,
-        rope_scaling_factor: float = 8.0,
-        use_cpu_initialization: bool = False,
-        max_position_embeddings: int = 4096,
-        cp_group: Optional[torch.distributed.ProcessGroup] = None,
-    ) -> None:
-        super().__init__(
-            kv_channels=kv_channels,
-            rotary_percent=rotary_percent,
-            rotary_interleaved=rotary_interleaved,
-            seq_len_interpolation_factor=seq_len_interpolation_factor,
-            rotary_base=rotary_base,
-            dtype=dtype,
-            rope_scaling=rope_scaling,
-            rope_scaling_factor=rope_scaling_factor,
-            use_cpu_initialization=use_cpu_initialization,
-            cp_group=cp_group,
-        )
-        self.dim = kv_channels
-        self.rotary_base = rotary_base
-        self.scaling_factor = rope_scaling_factor
-        if rotary_percent < 1.0:
-            self.dim = int(self.dim * rotary_percent)
-        self.max_position_embeddings = max_position_embeddings
-        self.max_seq_len_cached = max_position_embeddings
-
-    def forward(
-        self, max_seq_len: int, offset: int = 0, packed_seq: bool = False
-    ) -> Tensor:
-        """Forward pass of RoPE embedding"""
-        if max_seq_len > self.max_position_embeddings:
-            base = self.rotary_base * (
-                (self.scaling_factor * max_seq_len / self.max_position_embeddings)
-                - (self.scaling_factor - 1)
-            ) ** (self.dim / (self.dim - 2))
-            self.inv_freq = 1.0 / (
-                base
-                ** (
-                    torch.arange(
-                        0,
-                        self.dim,
-                        2,
-                        dtype=torch.float32,
-                        device=torch.cuda.current_device(),
-                    )
-                    / self.dim
-                )
-            )
-
-        return super().forward(max_seq_len, offset, packed_seq)
-
-
-class Qwen2VLRotaryEmbedding(torch.nn.Module):
-    """Implements multimodal rotation"""
-
-    def __init__(self, dim, theta=1000000):
-        super().__init__()
-        self.inv_freq = 1.0 / (
-            theta
-            ** (
-                torch.arange(0, dim, 2, dtype=torch.int64)
-                .float()
-                .to(torch.cuda.current_device())
-                / dim
-            )
-        )
-
-    @torch.no_grad()
-    def forward(self, position_ids, packed_seq):
-        """Returns the frequency"""
-        # Core RoPE block. In contrast to other models, Qwen2_VL has different position ids for thw grids
-        # So we expand the inv_freq to shape (3, ...)
-        inv_freq_expanded = (
-            self.inv_freq[None, None, :, None]
-            .float()
-            .expand(3, position_ids.shape[1], -1, 1)
-        )
-        position_ids_expanded = position_ids[
-            :, :, None, :
-        ].float()  # shape (3, bs, 1, positions)
-
-        freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(
-            2, 3
-        )
-        emb = torch.cat((freqs, freqs), dim=-1)
-
-        if parallel_state.get_context_parallel_world_size() > 1:
-            emb = get_pos_emb_on_this_cp_rank(emb, 2, packed_seq)
-
-        return emb
-
-
 class Qwen3VLRotaryEmbedding(Qwen2VLRotaryEmbedding):
     """Implements multimodal rotation"""
     def __init__(self, dim, theta=1000000, mrope_section=[24, 20, 20]):
@@ -196,18 +89,14 @@ class Qwen3VLRotaryEmbedding(Qwen2VLRotaryEmbedding):
             self.inv_freq[None, None, :, None]
             .float()
             .expand(3, position_ids.shape[1], -1, 1)
-        ) # [3, 1, 32, 1]
-        # position_ids: [3, 1, 84]
+        ) 
         position_ids_expanded = position_ids[
             :, :, None, :
-        ].float()  # shape (3, bs, 1, positions) [3, 1, 1, 84]
-
+        ].float()
         freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(
             2, 3
-        ) # [3, 1, 84, 32]
-        
+        )
         freqs = self.apply_interleaved_mrope(freqs, self.mrope_section) # shape (bs, seq_length, dim)
-
         emb = torch.cat((freqs, freqs), dim=-1)
 
         # shape (seq_length, bs, 1, 2 * dim)
@@ -385,13 +274,9 @@ class Qwen3Model(BaseGPTModel):
                 and packed_seq_params.qkv_format == "thd",
             )
         else:
-            rotary_pos_emb = (
-                self.rotary_pos_emb(
-                    position_ids,
-                    packed_seq=packed_seq_params,
-                )
-                .transpose(0, 2)
-                .contiguous()
+            rotary_pos_emb = self.rotary_pos_emb(
+                position_ids,
+                packed_seq=packed_seq_params,
             )
 
         preproc_output = (

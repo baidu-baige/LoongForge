@@ -106,7 +106,7 @@ def get_batch_on_this_tp_rank(data_iterator):
         video_grid_thw = tensor_parallel.broadcast_data(
             ["video_grid_thw"], data, torch.int32
         )["video_grid_thw"]
-
+    cu_lengths_cpu = cu_lengths.clone()
     tokens = tokens.cuda(non_blocking=True)
     labels = labels.cuda(non_blocking=True)
     cu_lengths = cu_lengths.cuda(non_blocking=True)
@@ -122,6 +122,7 @@ def get_batch_on_this_tp_rank(data_iterator):
             qkv_format="thd",
             cu_seqlens_q=cu_lengths[0],
             cu_seqlens_kv=cu_lengths[0],
+            cu_seqlens_cpu=cu_lengths_cpu[0],
             max_seqlen_q=max_lengths[0].item(),
             max_seqlen_kv=max_lengths[0].item(),
         )

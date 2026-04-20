@@ -837,19 +837,54 @@ def _validate_custom_model_args(name, args, defaults={}):
                   'pytorch v1.11 (nvidia pytorch container paired with v1.11). '
                   'Defaulting to no_persist_layer_norm=True')
 
+    # MoE overlap handling: non-foundation components (e.g., VIT) do not participate
+    # in MoE all2all overlap scheduling, so disable overlap flags for them.
+    # VIT recompute is configured independently of foundation's MoE a2a settings.
+    # To customize VIT recompute, use YAML override:
+    #   +model.image_encoder.recompute_granularity=selective
+    #   +model.image_encoder.recompute_modules=[core_attn,layernorm]
+    orig_overlap_moe = getattr(args, 'overlap_moe_expert_parallel_comm', False)
+    if orig_overlap_moe:
+        warnings.warn(f"Warning: Now for {name}, we do not support overlap_moe_expert_parallel_comm and "
+                      "delay_wgrad_compute.")
+        args.overlap_moe_expert_parallel_comm = False
+        args.delay_wgrad_compute = False
+
+    # Filter out a2a_overlap modules from recompute_modules for non-foundation components,
+    # since they don't participate in MoE all2all overlap scheduling.
+    if args.recompute_modules:
+        non_a2a_modules = [m for m in args.recompute_modules if not m.startswith('a2a')]
+        if len(non_a2a_modules) < len(args.recompute_modules):
+            warnings.warn(f"WARNING: Now for {name} model, a2a_overlap modules are not supported, "
+                          "ignoring them.")
+        args.recompute_modules = non_a2a_modules
+
+    # When foundation uses selective recompute for MoE a2a overlap,
+    # VIT inherits 'selective' but doesn't participate in MoE overlap.
+    # Restore VIT to 'full' recompute by default — avoid requiring users to
+    # mix a2a and non-a2a modules in CLI (which would pollute LLM's recompute config).
+    # Users can independently configure VIT recompute via YAML override:
+    #   +model.image_encoder.recompute_granularity=selective
+    #   +model.image_encoder.recompute_modules=[core_attn,layernorm]
+    if orig_overlap_moe and args.recompute_granularity == 'selective':
+        warnings.warn(
+            f"INFO: {name} does not participate in MoE all2all overlap scheduling. "
+            f"Restoring recompute_granularity to 'full' for {name} to enable "
+            f"full activation checkpointing. To customize {name} recompute independently, "
+            f"use YAML override: +model.{name}.recompute_granularity=<granularity> "
+            f"+model.{name}.recompute_modules=[<modules>]"
+        )
+        args.recompute_granularity = 'full'
+        if args.recompute_method is None:
+            args.recompute_method = 'uniform'
+        if args.recompute_num_layers is None:
+            args.recompute_num_layers = 1
+
     if args.recompute_granularity == 'selective':
         assert args.recompute_method is None, \
             'recompute method is not yet supported for ' \
             'selective recomputing granularity'
-        
-    if args.recompute_modules:
-        warnings.warn(f"WARNING: Now for {name} model, a2a modules are not supported"
-                      "for selective recomputing granularity, ignoring them.")
-        args.recompute_modules = [
-            m for m in args.recompute_modules 
-            if not m.startswith('a2a')
-        ]
-    
+
     if args.fine_grained_activation_offloading:
         warnings.warn(f"WARNING: Now for {name} model, fine_grained_activation_offloading is not supported.")
         args.fine_grained_activation_offloading = False
@@ -928,12 +963,6 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.num_experts is not None:
         warnings.warn("Warning: For those non foundation model, num_experts must be None.")
         args.num_experts = None
-
-    if args.overlap_moe_expert_parallel_comm:
-        warnings.warn(f"Warning: Now for {name}, we do not support overlap_moe_expert_parallel_comm and "
-                      "delay_wgrad_compute.")
-        args.overlap_moe_expert_parallel_comm = False
-        args.delay_wgrad_compute = False
 
     # Context parallel
     if args.context_parallel_size > 1:
