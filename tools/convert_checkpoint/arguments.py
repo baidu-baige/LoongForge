@@ -67,8 +67,8 @@ def _add_checkpoint_args(parser):
                        help='Use [safetensors](https://huggingface.co/docs/safetensors).')
     group.add_argument('--convert_to_fp8', action='store_true',
                        help='Convert float16 weights to fp8')
-    group.add_argument('--quant_method', type=str, default='te', choices=['te', 'pt', 'baige'],
-                       help='The quantization method to use. Choices: [te, pt, baige].')
+    group.add_argument('--quant_method', type=str, default='te', choices=['te', 'pt'],
+                       help='The quantization method to use. Choices: [te, pt].')
 
     # Arguments for defining manner of converting FP8 checkpoint
     group.add_argument('--fp8_force_no_requant', action='store_true',
