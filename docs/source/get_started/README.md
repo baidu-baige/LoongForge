@@ -85,6 +85,7 @@ BaigeOmni supports a massive array of state-of-the-art models. Check out `config
 | | Qwen3-Next | qwen3-next-80b-a3b |
 | | MiniMax | minimax-m2.1, minimax-m2.5 |
 | | MIMO | mimo-7b |
+| | GLM | glm5 |
 | **VLM** | Qwen2.5-VL | qwen2.5-vl-3b, qwen2.5-vl-7b, qwen2.5-vl-32b, qwen2.5-vl-72b |
 | | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
 | | Qwen3.5 | qwen3.5-0.8b, qwen3.5-2b, qwen3.5-4b, qwen3.5-9b, qwen3.5-27b, qwen3.5-35B-A3B, qwen3.5-122B-A10B, qwen3.5-397B-A17B |
