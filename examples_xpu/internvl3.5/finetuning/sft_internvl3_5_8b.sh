@@ -150,6 +150,7 @@ TRAINING_ARGS=(
     --save-interval 2000
     --exit-interval 500
     --dataloader-type external
+    --dataloader-save ${CHECKPOINT_SAVE_PATH}/dataloader
     #--variable-seq-lengths  # for packing
     --min-num-frame 8
     --max-num-frame 32
@@ -164,10 +165,6 @@ TRAINING_ARGS=(
     --dynamic-image-size
     --loss-reduction-all-gather
     --num-workers 8
-    --dataloader-prefetch-factor 4
-    --dataloader-save ${CHECKPOINT_SAVE_PATH}/dataloader
-    --manual-gc
-    --manual-gc-interval 0
     --use-flash-attn
     --recompute-granularity full
     --recompute-method block
@@ -183,7 +180,7 @@ TRAINING_ARGS=(
     --packing-buffer-size 474 
     --energon-pack-algo sequential_max_images
     --allow-missing-adapter-checkpoint
-    --sft-dataset multimodal_sharegpt  # if you want to finetune on a specific dataset
+    #--sft-dataset multimodal_sharegpt #decide based on your dataset
 )
 
 MODEL_PARALLEL_ARGS=(
