@@ -629,14 +629,14 @@ def convert_fp8_to_bf16(fp8_blocks: torch.Tensor,
 
 def convert_bf16_to_fp8(
     x: torch.Tensor,
-    method: Literal["te", "pt", "baige"] = 'te',
+    method: Literal["te", "pt"] = 'te',
     fp8_dtype: torch.dtype = torch.float8_e4m3fn,
     **kwargs,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Args:
         x: 2d tensor, the model parameter what will be block-wise quantize to fp8.
-        method: one of the ["te", "pt", "baige"], means using TransformerEngine, naive PyTorch, baige-fp8-quantizer
+        method: one of the ["te", "pt"], means using TransformerEngine or naive PyTorch
             to do the quantization respectively. Defaults to "te".
         fp8_dtype: the dtype of the output fp8 tensor. Defaults to torch.float8_e4m3fn.
         **kwargs: kwargs pass to the `te` method. Take no effect in other quantization methods. Belows are the args:
@@ -660,11 +660,6 @@ def convert_bf16_to_fp8(
         x_scaled = (x_view * (448.0 / x_amax)).to(fp8_dtype)
         return x_scaled.view_as(x_padded)[:m, :n].contiguous().cpu(), \
             (x_amax / 448.0).view(x_view.size(0), x_view.size(2)).cpu()
-
-    elif method == "baige":
-        import baige_fp8_quantizer
-        weight, weight_scale_inv, *_ = baige_fp8_quantizer.per_block_cast_to_fp8_fprop_vector(x)
-        return weight.view(fp8_dtype).cpu(), weight_scale_inv.cpu()
 
     elif method == "te":
         from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer

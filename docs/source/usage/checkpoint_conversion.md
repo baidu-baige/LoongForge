@@ -121,7 +121,7 @@ sh examples/qwen3/checkpoint_convert/convert_qwen3_14b_mcore_to_hf.sh
 | `model_type_custom` | Custom model type | Any string | `None` |
 | `safetensors` | Use safetensors format | `True`/`False` | `False` |
 | `convert_to_fp8` | Convert float16 weights to fp8 | `True`/`False` | `False` |
-| `quant_method` | Quantization method | `te`, `pt`, `baige` | `te` |
+| `quant_method` | Quantization method | `te`, `pt` | `te` |
 | `fp8_force_no_requant` | Skip dequantize + re-quantize in FP8 conversion | `True`/`False` | `False` |
 | `force_pow_2_scales` | Force destination checkpoint's scale to be power-of-two | `True`/`False` | `False` |
 | `amax_epsilon` | Epsilon value for amax calculation in FP8 conversion | Any float | `0.0` |

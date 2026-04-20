@@ -71,7 +71,7 @@ When performing LLM weight conversion, it is recommended to pass parameters usin
 |max_workers|thread for checkpoint converting|
 |moe-grouped-gemm|use grouped gemm in moe|
 |amax_epsilon|Epsilon value for amax calculation in FP8 conversion; used for FP8 quantization scale, aligned with the FP8 EPS environment variable set during training|
-|quant_method|The quantization method to use. Choices: [te, pt, baige], defaults to `te`. When using Nvidia B-series GPUs (Blackwell) for weight conversion, this value needs to be set to `pt`|
+|quant_method|The quantization method to use. Choices: [te, pt], defaults to `te`. When using Nvidia B-series GPUs (Blackwell) for weight conversion, this value needs to be set to `pt`|
 |fp8_force_no_requant|skip dequantize + re-quantize in FP8 conversion|
 
 For descriptions of other parameters, please refer to [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc).
