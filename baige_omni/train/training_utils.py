@@ -1408,15 +1408,17 @@ def train_step(
         import itertools, copy
         from baige_omni.train.initialize import (
             get_num_micro_batches_per_decoder_dp,
+            get_num_real_micro_batches_per_decoder_dp,
             change_parallel_state,
         )
         from baige_omni.train.pretrain.pretrain_vlm import (
             get_batch, get_embedding_list,
             get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
-            get_deepstack_grad_list,
+            get_deepstack_grad_list, _create_mock_batch,
         )
 
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+        num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         unwrapped_model = unwrap_model(model[0])
         if isinstance(data_iterator, list):
             first_iter, backup_iter = itertools.tee(data_iterator[0])
@@ -1438,12 +1440,26 @@ def train_step(
             batch_list.clear()
             front = pp_layer * tp_size + round * model_size
             end = (pp_layer + 1) * tp_size + round * model_size
-            for _ in range(front - iter_count):
-                next(backup_iter)
-            for _ in range(tp_size):
-                local_batch = copy.deepcopy(get_batch(backup_iter))
-                batch_list.append(local_batch)
-            iter_count = end
+            all_mock_in_range = (front >= num_real_microbatch)
+            # Skip batches before this PP rank's range, but only for real data.
+            # When entire range is mock, save the last skipped batch as reference.
+            skip_count = max(0, min(front, num_real_microbatch) - iter_count)
+            last_skipped_batch = None
+            for skip_i in range(skip_count):
+                if skip_i == skip_count - 1 and all_mock_in_range:
+                    last_skipped_batch = copy.deepcopy(get_batch(backup_iter))
+                else:
+                    next(backup_iter)
+            for tp_idx in range(tp_size):
+                global_mb_idx = front + tp_idx
+                if global_mb_idx >= num_real_microbatch:
+                    # This microbatch is beyond real data — use mock batch
+                    mock_ref = batch_list[-1] if batch_list else last_skipped_batch
+                    batch_list.append(_create_mock_batch(mock_ref))
+                else:
+                    local_batch = copy.deepcopy(get_batch(backup_iter))
+                    batch_list.append(local_batch)
+            iter_count = min(end, num_real_microbatch)
 
             input_embeds_list = []
             for i in range(tp_size):
@@ -1577,12 +1593,37 @@ def train_step(
         from baige_omni.train.pretrain.pretrain_vlm import (
             get_grad_list, get_deepstack_grad_list, clear_full_hetero_info
         )
-        from baige_omni.train.initialize import get_num_micro_batches_per_decoder_dp
+        from baige_omni.train.initialize import (
+            get_num_micro_batches_per_decoder_dp,
+            get_num_real_micro_batches_per_decoder_dp,
+            get_model_size,
+        )
 
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+        num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
+        model_size = get_model_size()
         grad_list = get_grad_list()
-        n_cols = len(grad_list) // encoder_rounds
-        reshaped_grad_list = [grad_list[i * n_cols:(i + 1) * n_cols] for i in range(encoder_rounds)]
+
+        # Reshape grad_list into per-round lists and pad with zero grads for
+        # mock positions so that scatter_variable_shape_embeddings receives
+        # exactly model_size entries (one per rank in the model-parallel group).
+        reshaped_grad_list = []
+        real_idx = 0
+        for r in range(encoder_rounds):
+            round_grads = []
+            for pos in range(model_size):
+                global_mb_idx = r * model_size + pos
+                if global_mb_idx < num_real_microbatch and real_idx < len(grad_list):
+                    round_grads.append(grad_list[real_idx])
+                    real_idx += 1
+                else:
+                    # Zero grad placeholder for mock positions
+                    ref = grad_list[0] if grad_list else None
+                    if ref is not None:
+                        round_grads.append(torch.zeros_like(ref))
+                    else:
+                        round_grads.append(None)
+            reshaped_grad_list.append(round_grads)
 
         local_model = unwrap_model(model[0])
         _rsm = get_rerun_state_machine()
@@ -1612,14 +1653,25 @@ def train_step(
 
                 deepstack_grads_for_round = get_deepstack_grad_list()[round]
                 if deepstack_grads_for_round is not None:
-                    ctx["local_deepstack_visual_embeds_grads"] = [
-                        scatter_variable_shape_embeddings(
-                            deepstack_grads_for_round[i] if local_rank == src_rank else None,
-                            local_embedding_ref=ctx["local_deepstack_visual_embeds"][i],
-                            group=mpu.get_model_parallel_group()
+                    ctx["local_deepstack_visual_embeds_grads"] = []
+                    for i in range(len(ctx["local_deepstack_visual_embeds"])):
+                        # Pad None entries (mock positions) with zero tensors for scatter
+                        if local_rank == src_rank:
+                            padded_ds_grads = []
+                            for g in deepstack_grads_for_round[i]:
+                                if g is None:
+                                    padded_ds_grads.append(torch.zeros_like(ctx["local_deepstack_visual_embeds"][i]))
+                                else:
+                                    padded_ds_grads.append(g)
+                        else:
+                            padded_ds_grads = None
+                        ctx["local_deepstack_visual_embeds_grads"].append(
+                            scatter_variable_shape_embeddings(
+                                padded_ds_grads,
+                                local_embedding_ref=ctx["local_deepstack_visual_embeds"][i],
+                                group=mpu.get_model_parallel_group()
+                            )
                         )
-                        for i in range(len(ctx["local_deepstack_visual_embeds"]))
-                    ]
 
                 backward_tensors = [ctx["local_embedding"]]
                 backward_grads = [ctx["grads"]]

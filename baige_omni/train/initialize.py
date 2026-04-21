@@ -52,6 +52,7 @@ _ImageEncoderDataParallelSize = 1
 _VideoEncoderDataParallelSize = 1
 _AudioEncoderDataParallelSize = 1
 _NumMicroBatchesPerDecoderDP = 1
+_NumRealMicroBatchesPerDecoderDP = 1
 _NumEncodeRounds = 1
 _ModelSize = 1
 
@@ -60,9 +61,17 @@ def get_model_size():
     return _ModelSize
 
 def get_num_micro_batches_per_decoder_dp():
-    """Return the number of micro-batches per decoder DP group 
+    """Return the number of micro-batches per decoder DP group
     and the number of encode rounds."""
     return _NumMicroBatchesPerDecoderDP, _NumEncodeRounds
+
+def get_num_real_micro_batches_per_decoder_dp():
+    """Return the number of real (non-mock) micro-batches per decoder DP group."""
+    return _NumRealMicroBatchesPerDecoderDP
+
+def is_mock_microbatch(microbatch_index: int) -> bool:
+    """Return True if the given microbatch index corresponds to a mock (padding) microbatch."""
+    return microbatch_index >= _NumRealMicroBatchesPerDecoderDP
 
 
 def get_encoder_dp_size(name):
@@ -250,17 +259,21 @@ def initialize_baige_megatron(
             if world_size % _ModelSize != 0:
                 raise RuntimeError(f"world_size ({world_size}) is not divisible by {_ModelSize}")
             data_parallel_size: int = world_size // _ModelSize
-            global _NumMicroBatchesPerDecoderDP, _NumEncodeRounds
-            _NumMicroBatchesPerDecoderDP = args.global_batch_size // data_parallel_size
+            global _NumMicroBatchesPerDecoderDP, _NumRealMicroBatchesPerDecoderDP, _NumEncodeRounds
+            _NumRealMicroBatchesPerDecoderDP = args.global_batch_size // data_parallel_size
+            assert _NumRealMicroBatchesPerDecoderDP >= 1, (
+                f"_NumRealMicroBatchesPerDecoderDP ({_NumRealMicroBatchesPerDecoderDP}) "
+                f"must be at least 1"
+            )
+            if _NumRealMicroBatchesPerDecoderDP < _ModelSize:
+                _NumMicroBatchesPerDecoderDP = _ModelSize
+            elif _NumRealMicroBatchesPerDecoderDP % _ModelSize != 0:
+                _NumMicroBatchesPerDecoderDP = (
+                    (_NumRealMicroBatchesPerDecoderDP + _ModelSize - 1) // _ModelSize * _ModelSize
+                )
+            else:
+                _NumMicroBatchesPerDecoderDP = _NumRealMicroBatchesPerDecoderDP
             _NumEncodeRounds = _NumMicroBatchesPerDecoderDP // _ModelSize
-            assert _NumMicroBatchesPerDecoderDP >= _ModelSize, (
-                f"_NumMicroBatchesPerDecoderDP ({_NumMicroBatchesPerDecoderDP}) "
-                f"must be greater thanor equal to _ModelSize ({_ModelSize})"
-            )
-            assert _NumMicroBatchesPerDecoderDP % _ModelSize == 0, (
-                f"_NumMicroBatchesPerDecoderDP ({_NumMicroBatchesPerDecoderDP}) "
-                f"must be divisible by _ModelSize ({_ModelSize})"
-            )
 
         model_config = get_model_config()
         from megatron.training import print_rank_0

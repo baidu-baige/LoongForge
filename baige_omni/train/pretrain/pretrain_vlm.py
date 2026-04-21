@@ -51,7 +51,12 @@ from baige_omni.models.omni_models.omni_model_provider import (
 )
 from baige_omni.models.omni_models.utils import get_batch_on_this_cp_rank
 from baige_omni.train.get_loss_func import default_loss_func
-from baige_omni.train.initialize import change_parallel_state, get_encoder_dp_size, get_num_micro_batches_per_decoder_dp
+from baige_omni.train.initialize import (
+    change_parallel_state,
+    get_encoder_dp_size,
+    get_num_micro_batches_per_decoder_dp,
+    is_mock_microbatch,
+)
 
 from baige_omni.utils.global_vars import get_model_config
 
@@ -165,6 +170,21 @@ def get_batch(data_iterator):
     batch = get_batch_on_this_cp_rank(batch)
 
     return batch
+
+
+def _create_mock_batch(reference_batch):
+    """Create a mock batch based on a reference batch with loss_mask zeroed out.
+
+    The mock batch has the same tensor shapes as the reference but will not
+    contribute to gradients because loss_mask is all zeros.
+    """
+    mock_batch = copy.deepcopy(reference_batch)
+    mock_batch["loss_mask"] = torch.zeros_like(mock_batch["loss_mask"])
+    mock_batch["images"] = None
+    mock_batch["image_grid_thw"] = None
+    mock_batch["pixel_values_videos"] = None
+    mock_batch["video_grid_thw"] = None
+    return mock_batch
 
 
 # define spiky loss as a loss that's 10x the max loss observed
@@ -285,9 +305,16 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
         if inner_group_id == 0:
             batch_list.clear()
             with stimer(bdata=True):
-                for _ in range(_ImageEncoderDataParallelSize):
-                    local_batch = copy.deepcopy(get_batch(data_iterator))
-                    batch_list.append(local_batch)
+                for i in range(_ImageEncoderDataParallelSize):
+                    mb_index = forward_step_calling_count + i
+                    if args.enable_full_hetero_dp and is_mock_microbatch(mb_index):
+                        mock_ref = batch_list[-1] if batch_list else get_batch(data_iterator)
+                        if not batch_list:
+                            batch_list.append(copy.deepcopy(mock_ref))
+                        batch_list.append(_create_mock_batch(mock_ref))
+                    else:
+                        local_batch = copy.deepcopy(get_batch(data_iterator))
+                        batch_list.append(local_batch)
             if args.enable_full_hetero_dp:
                 _vpp0_batch_cache.append(list(batch_list))
 
