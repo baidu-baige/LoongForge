@@ -78,3 +78,9 @@ export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 | Blackwell runtime error with `NVTE_FP8_BLOCK_SCALING_FP32_SCALES=1` | Remove the variable (keep E8M0 scales). |
 
 With the above switches and epsilon guards, Blockwise FP8 training in BaigeOmni is ready for production-scale runs.
+
+---
+
+## 4. Related
+
+For scenarios where full FP8 may regress (small MoE experts, high TP, short sequences), see [Adaptive FP8 Training](adaptive_fp8.md) for a benchmark-driven per-module precision selection mechanism.
