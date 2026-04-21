@@ -1,56 +1,6 @@
 # Checkpoint Conversion for LLM
 
-## 1. Supported Models
-Supports weight conversion between Hugging Face (HF) and Megatron-Core (Mcore) formats for various mainstream Large Language Models (LLMs), facilitating user experimentation and deployment.
-
-|**Model Series**|**Model**|**Convert File**|**HF->Mcore**|**Mcore->HF**|
-|-|-|-|-|-|
-|**DeepSeek-V2**|DeepSeek-V2|deepseek_v2_convert|✅|✅|
-||DeepSeek-V2-Lite|deepseek_v2_lite_convert|✅|✅|
-|**DeepSeek-V3**|DeepSeek-V3|deepseek_v3_convert|✅|✅|
-||DeepSeek-V3.2|deepseek_v3_2_convert|✅|✅|
-|**Llama2**|Llama2_7b|llama2_convert|✅|✅|
-||Llama2_13b|llama2_convert|✅|✅|
-||Llama2_70b|llama2_convert|✅|✅|
-|**Llama3**|Llama3_8b|llama3_convert|✅|✅|
-||Llama3_70b|llama3_convert|✅|✅|
-|**Llama3.1**|Llama3_8b|llama3_1_convert|✅|✅|
-||Llama3_70b|llama3_1_convert|✅|✅|
-||Llama3_405b|llama3_1_convert|||
-|**Qwen**|qwen_1.8b|qwen_convert|✅|✅|
-||qwen_7b|qwen_convert|✅|✅|
-||qwen_14b|qwen_convert|✅|✅|
-||qwen_72b|qwen_convert|✅|✅|
-|**Qwen1.5**|qwen1.5_0.5b|qwen1_5_convert|✅|✅|
-||qwen1.5_1.8b|qwen1_5_convert|✅|✅|
-||qwen1.5_4b|qwen1_5_convert|✅|✅|
-||qwen1.5_7b|qwen1_5_convert|✅|✅|
-||qwen1.5_14b|qwen1_5_convert|✅|✅|
-||qwen1.5_32b|qwen1_5_convert|✅|✅|
-||qwen1.5_72b|qwen1_5_convert|✅|✅|
-|**Qwen2**|qwen2_0.5b|qwen2_convert|✅|✅|
-||qwe2_1.5b|qwen2_convert|✅|✅|
-||qwen2_7b|qwen2_convert|✅|✅|
-||qwen2_72b|qwen2_convert|✅|✅|
-|**Qwen2.5**|qwen2.5_0.5b|qwen2_5_convert_llm|✅|✅|
-||qwe2.5_1.5b|qwen2_5_convert_llm|✅|✅|
-||qwen2.5_3b|qwen2_5_convert_llm|✅|✅|
-||qwen2.5_7b|qwen2_5_convert_llm|✅|✅|
-||qwen2.5_14b|qwen2_5_convert_llm|✅|✅|
-||qwen2.5_32b|qwen2_5_convert_llm|✅|✅|
-||qwen2.5_72b|qwen2.5_convert_llm|✅|✅|
-|**Qwen3**|qwen3_0.6b|qwen3_convert|✅|✅|
-||qwen3_1.7b|qwen3_convert|✅|✅|
-||qwen3_4b|qwen3_convert|✅|✅|
-||qwen3_8b|qwen3_convert|✅|✅|
-||qwen3_14b|qwen3_convert|✅|✅|
-||qwen3_32b|qwen3_convert|✅|✅|
-||qwen3_30b_a3b|qwen3_moe_convert|✅|✅|
-||qwen3_coder_30b_a3b|qwen3_moe_convert|✅|✅|
-||qwen3_235b_a22b|qwen3_moe_convert|||
-||qwen3_480b_a35b|qwen3_moe_convert|||
-
-## 2. Common Parameters
+## 1. Common Parameters
 When performing LLM weight conversion, it is recommended to pass parameters using arguments (args). The following are commonly used parameters:
 
 |**Parameter**|**Description**|
@@ -76,7 +26,7 @@ When performing LLM weight conversion, it is recommended to pass parameters usin
 
 For descriptions of other parameters, please refer to [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc).
 
-## 3. Example Scripts
+## 2. Example Scripts
 The framework provides weight conversion example scripts for each model. Users can find specific scripts under `configs/models/{model}/ckpt_convert/`.
 
 Below is an example script for converting **DeepSeek V3.1** model weights from **Huggingface FP8** format to **MegatronCore FP8** format. When converting FP8 format weights, it is crucial to set the `amax_epsilon` parameter. This parameter must align with the FP8 EPS environment variables set during training (`export FP8_QUANT_FWD_INP_AMAX_EPS`, `export FP8_QUANT_FWD_WEIGHT_AMAX_EPS`, `export FP8_QUANT_BWD_GRAD_AMAX_EPS`).

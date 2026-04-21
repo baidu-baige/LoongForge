@@ -1,35 +1,6 @@
 # Model Checkpoint Conversion for VLM
 
-## 1. Supported Models
-
-| **Model Series** | **Model** | **Convert Files** | **HF->Mcore** | **Mcore->HF** |
-|------------------|-----------|-------------------|---------------|---------------|
-| **Qwen2.5VL** | qwen2_5_vl_3b | qwen2_5_vit_convert<br>qwen_mlp_adapter_convert<br>qwen2_5_convert | ✅ | ✅ |
-| | qwen2_5_vl_7b | qwen2_5_vit_convert<br>qwen_mlp_adapter_convert<br>qwen2_5_convert | ✅ | ✅ |
-| | qwen2_5_vl_32b | qwen2_5_vit_convert<br>qwen_mlp_adapter_convert<br>qwen2_5_convert | ✅ | ✅ |
-| | qwen2_5_vl_72b | qwen2_5_vit_convert<br>qwen_mlp_adapter_convert<br>qwen2_5_convert | ✅ | ✅ |
-| **InternVL2.5** | internvl2.5_8b | intern_vit_0.3b_convert<br>intern_mlp_adapter_convert<br>internlm2_5_convert | ✅ | ✅ |
-| | internvl2.5_26b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>internlm2_5_convert | ✅ | ✅ |
-| | internvl2.5_38b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>qwen2_5_convert | ✅ | ✅ |
-| | internvl2.5_78b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>qwen2_5_convert | ✅ | ✅ |
-| **InternVL3.5** | internvl3.5_8b | intern_vit_0.3b_convert<br>intern_mlp_adapter_convert<br>qwen3_convert_intern | ✅ | ✅ |
-| | internvl3.5_14b | intern_vit_0.3b_convert<br>intern_mlp_adapter_convert<br>qwen3_convert_intern | ✅ | ✅ |
-| | internvl3.5_30b_a3b | intern_vit_0.3b_convert<br>intern_mlp_adapter_convert<br>qwen3_moe_convert_intern | ✅ | ✅ |
-| | internvl3.5_38b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>qwen3_convert_intern | ✅ | ✅ |
-| | internvl3.5_241b_a28b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>qwen3_moe_convert_intern | | |
-| **LLaVA-OV1.5** | llava_ov_1_5_30b_a3b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_moe_convert | | |
-| | llava_ov_4b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_convert_llava | ✅ | ✅ |
-| **Qwen3.5** | qwen3_5_0_8b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
-| | qwen3_5_2b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
-| | qwen3_5_4b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
-| | qwen3_5_9b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
-| | qwen3_5_27b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_dense_convert | ✅ | ✅ |
-| | qwen3_5_35b_a3b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_moe_convert | ✅ | ✅ |
-| | qwen3_5_122b_a10b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_moe_convert | ✅ | ✅ |
-| | qwen3_5_397b_a17b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_5_moe_convert | ✅ | ✅ |
-| **Qwen3.6** | qwen3_6_35b_a3b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_6_moe_convert | ✅ | ✅ |
-
-## 2. Parameter Passing Methods
+## 1. Parameter Passing Methods
 
 Supports two parameter passing methods: defining in config files and passing through command line args during conversion
 
@@ -73,7 +44,7 @@ While supporting parameter definition in config files, traditional command line 
 
 *Currently `num_virtual_stages_per_pipeline_rank` is not supported in YAML and needs to be passed through args
 
-## 3. Common Parameters
+## 2. Common Parameters
 
 | **Parameter Name** | **Explanation** | **Optional Values** | **Default Value** |
 |-------------------|-----------------|-------------------|------------------|
@@ -101,7 +72,7 @@ While supporting parameter definition in config files, traditional command line 
 | moe-grouped-gemm | Use grouped gemm in moe | `True`/`False` (action) | `False` |
 | resume-convert | Resume checkpoint converting when failed | `True`/`False` (action) | `False` |
 
-## 4. Script Examples and Parameter Explanation
+## 3. Script Examples and Parameter Explanation
 
 Below are conversion scripts for Dense and MoE models with parameter explanations
 
