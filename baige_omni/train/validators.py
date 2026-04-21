@@ -45,13 +45,22 @@ def validate_custom_model_args(name, args):
     _validate_custom_model_args(name, args)
 
 
+# YAML key → args attribute name, for cases where TransformerConfig field
+# names diverge from argparse destinations (e.g. fp8_param vs fp8_param_gather).
+_YAML_KEY_ALIASES = {
+    "fp8_param": "fp8_param_gather",
+}
+
+
 def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
     if config is not None:
         for key in config:
-            if hasattr(args, key):
-                setattr(args, key, config[key])
-                print_rank_0(f"  {key} = {config[key]} ", args.rank)
+            attr = _YAML_KEY_ALIASES.get(key, key)
+            if hasattr(args, attr):
+                setattr(args, attr, config[key])
+                suffix = f" (from YAML '{key}')" if attr != key else ""
+                print_rank_0(f"  {attr} = {config[key]}{suffix}", args.rank)
 
         print_rank_0(
             "---------------- End of configuration ----------------", args.rank
@@ -216,7 +225,7 @@ def _validate_extra_multimodal_args(args):
     """Validate multimodal arguments"""
     if args.model_family not in constants.VisionLanguageModelFamilies.names():
         return
-    
+
     args.variable_seq_lengths = True
     if not (args.packing_pretrain_data or args.packing_sft_data):
         args.packing_buffer_size = None

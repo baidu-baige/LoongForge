@@ -33,6 +33,17 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     peft_config: Optional[BasePeftModelConfig] = None
     convert_file: str = None
 
+
+    # --- FP8 dynamic policy (benchmark-driven selective FP8) ---
+    fp8_dynamic_policy_path: Optional[str] = None
+    """Path to a JSON policy file exported by the TE layer benchmark.
+    When set together with ``selective_fp8=True``, the init-time FP8 decision
+    is driven by benchmark-derived per-module-kind token thresholds."""
+
+    fp8_dynamic_num_tokens: int = 0
+    """Effective per-GPU token count for FP8 dynamic policy decisions.
+    When left at 0 (default), auto-computed from ``args.seq_length * args.micro_batch_size``."""
+
     def __post_init__(self):
         PretrainedConfig.__init__(self)
         TransformerConfig.__post_init__(self)
@@ -47,6 +58,11 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     model_spec: Optional[List[str]] = None
     peft_config: Optional[BasePeftModelConfig] = None
     convert_file: str = None
+
+
+    # --- FP8 dynamic policy (same as BaseModelConfig) ---
+    fp8_dynamic_policy_path: Optional[str] = None
+    fp8_dynamic_num_tokens: int = 0
 
     def __post_init__(self):
         PretrainedConfig.__init__(self)
