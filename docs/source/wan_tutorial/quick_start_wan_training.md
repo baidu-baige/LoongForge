@@ -36,7 +36,7 @@ huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ./Wan-AI/Wan2.2-I2V-
 MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # should match --local-dir in Step-1
 MODEL_T5=${MODEL_BASE}/models_t5_umt5-xxl-enc-bf16.pth
 MODEL_VAE=${MODEL_BASE}/Wan2.1_VAE.pth
-# Script location: examples/wan/wan_preprocess.py in BaigeOmni repo
+# Script location: examples/wan/wan_preprocess.py in LoongForge repo
 accelerate launch wan_preprocess.py \
   --dataset_base_path <your_dataset> \
   --dataset_metadata_path <your_dataset>/metadata.csv \
@@ -54,13 +54,13 @@ Each `.pth` file contains the following three keys:
 - `y` – first-frame VAE latent concatenated with a visibility mask
 - `context` – text encoder embedding
 
-(High-/low-noise tensors are **NOT** separated; BaigeOmni adds noise online later.)
+(High-/low-noise tensors are **NOT** separated; LoongForge adds noise online later.)
 
 ---
 
 ### 2. Convert Checkpoints (HF → Megatron)
 
-Inside **BaigeOmni** repo:
+Inside **LoongForge** repo:
 
 **Step-1** Generate **random Megatron checkpoints** with correct PP split (needed as scaffold).  
 - Pick an empty folder, e.g. `<base>/wan2.2/hg2mcore_pp4/high_noise/Megatron_Random`  
