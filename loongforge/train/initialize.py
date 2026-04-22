@@ -249,6 +249,10 @@ def initialize_loongforge_megatron(
         _DecoderTensorParallelSize = mpu.get_tensor_model_parallel_world_size()
 
         if args.enable_full_hetero_dp:
+            assert args.context_parallel_size == 1, (
+                "Full Heterogeneous DP does not support Context Parallelism. "
+                f"context_parallel_size must be 1, but got {args.context_parallel_size}"
+            )
             world_size: int = torch.distributed.get_world_size()
             global _ModelSize
             _ModelSize = (
