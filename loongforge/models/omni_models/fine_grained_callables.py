@@ -426,6 +426,9 @@ def build_transformer_layer_callables(layer: TransformerLayer):
 
     is_moe = isinstance(layer.mlp, MoELayer)
     enable_deepep = layer.config.moe_enable_deepep
+    is_alltoall_dispatcher = (
+        is_moe and layer.config.moe_token_dispatcher_type == "alltoall"
+    )
 
     def submodule_attn_forward(node: ScheduleNode, hidden_states: torch.Tensor):
         """
@@ -505,6 +508,20 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         # (occurs at the middle layer when chunk has odd number of layers).
         # These attributes are used in combine_postprocess for unpermute and view operations.
         node.layer_state.hidden_shape = layer.mlp.token_dispatcher.hidden_shape
+        # hidden_shape_before_permute and reversed_local_input_permutation_mapping are only
+        # used in AlltoAll dispatcher's combine_postprocess (unpermute). AllGather uses them
+        # in combine_preprocess which runs before post_combine, and Flex uses a different
+        # attribute (reversed_mapping_for_combine). So we only save them for alltoall.
+        if is_alltoall_dispatcher:
+            node.layer_state.hidden_shape_before_permute = (
+                layer.mlp.token_dispatcher.hidden_shape_before_permute
+            )
+            # reversed_local_input_permutation_mapping is used as indices in unpermute.
+            # It's an index tensor that doesn't require grad, so we save it directly
+            # without using node.detach() to avoid adding it to the backward graph.
+            node.layer_state.reversed_local_input_permutation_mapping = (
+                layer.mlp.token_dispatcher.reversed_local_input_permutation_mapping
+            )
 
         # Detach here for mlp_bda residual connection
         node.layer_state.residual = node.detach(hidden_states)
@@ -624,6 +641,22 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         saved_hidden_shape = getattr(node.layer_state, 'hidden_shape', None)
         if saved_hidden_shape is not None:
             layer.mlp.token_dispatcher.hidden_shape = saved_hidden_shape
+        # Only restore alltoall-specific attributes when using alltoall dispatcher.
+        if is_alltoall_dispatcher:
+            saved_hidden_shape_before_permute = getattr(
+                node.layer_state, 'hidden_shape_before_permute', None
+            )
+            saved_reversed_local_input_permutation_mapping = getattr(
+                node.layer_state, 'reversed_local_input_permutation_mapping', None
+            )
+            if saved_hidden_shape_before_permute is not None:
+                layer.mlp.token_dispatcher.hidden_shape_before_permute = saved_hidden_shape_before_permute
+            if saved_reversed_local_input_permutation_mapping is not None:
+                layer.mlp.token_dispatcher.reversed_local_input_permutation_mapping = (
+                    saved_reversed_local_input_permutation_mapping
+                )
+            # Release the index tensor reference early to allow GC before _release_state()
+            node.layer_state.reversed_local_input_permutation_mapping = None
         
         # Post-process combine and add shared expert output
         output = layer.mlp.post_combine(output, shared_expert_output)
