@@ -529,11 +529,11 @@ _register_chat_template(
 )
 
 _register_chat_template(
-      name="minimax-m2",
-      format_system=StringFormatter(slots=["{bos_token}", "]~b]system\n{{content}}", "{eos_token}", "\n"]),
-      format_user=StringFormatter(slots=["]~b]user\n{{content}}", "{eos_token}", "\n"]),
-      format_assistant=StringFormatter(slots=["]~b]ai\n{{content}}", "{eos_token}", "\n"]),
-      format_prefix=EmptyFormatter(slots=["{bos_token}", "]~b]ai\n"]),
+    name="minimax-m2",
+    format_user=StringFormatter(slots=["]~b]user\n{{content}}[e~[\n]~b]ai\n"]),
+    format_assistant=StringFormatter(slots=["{{content}}[e~[\n"]),
+    format_system=StringFormatter(slots=["]~!b[]~b]system\n{{content}}[e~[\n"]),
+    stop_words=["[e~["],
 )
 
 _register_chat_template(
