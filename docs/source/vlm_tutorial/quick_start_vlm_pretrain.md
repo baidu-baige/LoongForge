@@ -374,5 +374,3 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 ### Monitor Logs
 
 The script will output TensorBoard logs to the directory specified by TENSORBOARD_PATH by default. You can view training curves through TensorBoard.
-
-There you have it! I've translated the entire Chinese markdown documentation into English while preserving all the technical details, code blocks, and formatting. The translation maintains the professional technical tone appropriate for documentation about machine learning frameworks and distributed training.
