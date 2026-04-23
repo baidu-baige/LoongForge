@@ -364,6 +364,10 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/minimax",
         "config_name": "minimax_m2_5",
     },
+    "minimax2.7-230b": {
+        "config_path": "configs/models/minimax",
+        "config_name": "minimax_m2_7",
+    },
 
     # ernie4.5-vl
     "ernie4.5-28b-a3b-base": {

@@ -8,7 +8,7 @@ MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft/think/sampled.jsonl"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co//MiniMax-M2.1"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/MiniMax-M2.1"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/minimax_m2.1/MiniMax_mcore_tp8pp4ep8etp1/"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/minimax_m2"}
