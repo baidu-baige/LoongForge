@@ -80,7 +80,7 @@ Function Description:
     * `dataset.yaml`: records sample information
     * `split.yaml`: records dataset division
 
-For further understanding of various parameters and detailed functions of dataset conversion, refer to [dataset_conversion.md](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/dataset_conversion.html
+For further understanding of various parameters and detailed functions of dataset conversion, refer to [dataset_conversion.md](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/dataset_conversion.html)
 
 ## 2. Model Weight Preparation
 
@@ -216,7 +216,7 @@ Partial Parameter Description:
 
 * ETP / DTP: Encoder and Decoder tensor parallelism parameters (support heterogeneous parallelism strategies where ETP != DTP)
 
-For further understanding of various parameters and detailed functions of weight conversion, please refer to: [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc)
+For further understanding of various parameters and detailed functions of weight conversion, please refer to: [vlm_ckpt_convert.md](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/vlm_ckpt_convert.html)
 
 ## 3. Start Pre-training
 

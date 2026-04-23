@@ -223,7 +223,7 @@ def replace_vlm_config(c_config, adapter, vision_patch):
 
     hf_dict = {}
 
-    # key 后缀列表
+    # Key suffix list
     key_suffixes = [f".{WEIGHT}", f".{BIAS}", f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]
 
     for key, value in name_map.items():

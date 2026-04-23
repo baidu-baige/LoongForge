@@ -194,7 +194,7 @@ function check_pytorchjob_finish() {
         fi
 
         # Check if pytorchjob failed
-        if [[ "$pytorchjob_status" == "Failed" ]] || [[ "$pod_logs" =~ "出现异常" ]] || [[ "$pod_logs" =~ "Traceback (most recent call last)" ]]; then
+        if [[ "$pytorchjob_status" == "Failed" ]] || [[ "$pod_logs" =~ "Exception" ]] || [[ "$pod_logs" =~ "Traceback (most recent call last)" ]]; then
             FAILURE_echo_date "Model training failed, PytorchJob status is Failed, failure log:"
             WARNING_echo_date "$pod_logs"
             # Do not throw execution errors to outer layer

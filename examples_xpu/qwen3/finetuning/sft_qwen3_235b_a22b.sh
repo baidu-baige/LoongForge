@@ -17,32 +17,32 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 export NCCL_SOCKET_IFNAME=eth0
 
-export XMLIR_ENABLE_FAST_FC=true        # torch.nn.linear.py 中用到(LinearWithActFunction 等)
-#export XMLIR_ENABLE_FAST_FC_FWD_OUT=true #前向输出用到
-#export XMLIR_ENABLE_FAST_FC_BWD_DW=true  #反向 dw 用到
-#export XMLIR_ENABLE_FAST_FC_BWD_DX=true  #反向 dx 用到
+export XMLIR_ENABLE_FAST_FC=true        # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
+#export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # Used for forward output
+#export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # Used for backward dw
+#export XMLIR_ENABLE_FAST_FC_BWD_DX=true  # Used for backward dx
 #### P800 environment start ####
-# bf16类型专用(megatron相关变量参考<百舸megatron专用>)
-export FORCE_DISABLE_INPLACE_BF16_CAST=false    # 默认为false，在特殊情况下(异步checkpoint)需要打开
-export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # 多机下使用, 以实际情况为准, 多机要按
-export BKCL_SOCKET_IFNAME=eth0                  # 以实际情况为准, 默认不开, 找不到网卡时再指定
+# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+export FORCE_DISABLE_INPLACE_BF16_CAST=false    # Default is false; needs to be enabled in special cases (async checkpoint)
+export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # Used in multi-node setup, adjust based on actual NIC connectivity
+export BKCL_SOCKET_IFNAME=eth0                  # Adjust based on actual environment; disabled by default, specify when NIC is not found
 export BKCL_TREE_THRESHOLD=0
-export BKCL_FORCE_L3_RDMA=0                     # 开1空间不够会报OOM错误
+export BKCL_FORCE_L3_RDMA=0                     # Setting to 1 may cause OOM error if space is insufficient
 export BKCL_ENABLE_XDR=1
-export BKCL_ALL_TO_ALL_OPT=1                    # 多机alltoall开关， https://ku.baidu-int.com/knowledg
-export BKCL_RING_HOSTID_USE_RANK=1              # 1.2.11版本开始支持, 后续会做为默认的
+export BKCL_ALL_TO_ALL_OPT=1                    # Multi-node alltoall switch
+export BKCL_RING_HOSTID_USE_RANK=1              # Supported since version 1.2.11, will become the default in the future
 export BKCL_RDMA_VERBS=1
-export XMLIR_PARALLEL_SAVE_MEMORY=false         # 为false显存占用会多, 但会有性能提升; 为true显存会少,
-export XMLIR_BATCH_PARALLEL=false               # 通信融合算子开启, USE_CAST_FC_FUSION在bf16下会自动失
-export SAVE_LOG_FILE_WITH_RANK_ID=false         # 为true的话, 训练日志会按rank_id分开存储
-export P800_DEBUG=false                         # 为true的话, 训练grad norm出nan会保存ckpt后退出
-#export P800_DUMP_DIR="ckpt-dump-dir-path"       # 指定训练grad norm出nan会保存ckpt等信息dump的目录
-export XMLIR_DIST_ASYNC_ISEND_IRECV=false        # 设为true表示send/recv会走异步逻辑，默认为同步
-export XMLIR_CUDNN_ENABLED=1                    # true为使用cuDNN，支持conv3d等，false为不使用cuDNN
+export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: higher memory usage but better performance; true: lower memory usage but reduced performance
+export XMLIR_BATCH_PARALLEL=false               # Communication fusion operator enabled; USE_CAST_FC_FUSION is auto-disabled under bf16
+export SAVE_LOG_FILE_WITH_RANK_ID=false         # If true, training logs will be stored separately by rank_id
+export P800_DEBUG=false                         # If true, will save checkpoint and exit when grad norm is NaN
+#export P800_DUMP_DIR="ckpt-dump-dir-path"       # Specify the directory to dump checkpoint and other info when grad norm is NaN
+export XMLIR_DIST_ASYNC_ISEND_IRECV=false        # Set to true for async send/recv logic; default is synchronous
+export XMLIR_CUDNN_ENABLED=1                    # true to use cuDNN (supports conv3d, etc.); false to disable cuDNN
 export XDNN_FC_GEMM_DTYPE=int32_with_ll
-# LINEAR 开关
-export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # 允许某些场景下linear不走xblas fcfusion, 比如走addmm
-export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1         # xpu_plugin 推荐开启，有性能收益
+# LINEAR switch
+export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # Allow linear to bypass xblas fcfusion in certain scenarios, e.g., use addmm instead
+export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1         # Recommended to enable xpu_plugin for performance gains
 
 #XFLAGS --disable transformer_engine_1_7
 XFLAGS --disable transformer_engine_1_13

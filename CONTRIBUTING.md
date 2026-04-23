@@ -51,14 +51,11 @@ baidu-baige/Loong-Megatron   →  your-name/Loong-Megatron   # only if modifying
 ### Step 1 — Clone your fork and initialize submodules
 
 ```bash
-git clone https://github.com/your-name/LoongForge.git
+git clone --recurse-submodules https://github.com/your-name/LoongForge.git
 cd LoongForge
 
 # Add the official repo as upstream
 git remote add upstream https://github.com/baidu-baige/LoongForge.git
-
-# Initialize the Megatron-LM submodule
-git submodule update --init third_party/Loong-Megatron
 ```
 
 ### Step 2 — Configure Loong-Megatron remotes (only if modifying Megatron)
@@ -85,8 +82,8 @@ git checkout -b feature/your-feature-name
 
 # Loong-Megatron (only if modifying Megatron)
 cd third_party/Loong-Megatron
-git checkout loongforge_mcore_v0.15.0
-git pull origin loongforge_mcore_v0.15.0
+git checkout loong-main/mcore_v0.15.0
+git pull origin loong-main/mcore_v0.15.0
 git checkout -b feature/your-feature-name
 cd ../..
 ```
@@ -112,7 +109,7 @@ For Loong-Megatron changes, push to your Megatron fork instead:
 
 ```bash
 cd third_party/Loong-Megatron
-git pull --rebase origin loongforge_mcore_v0.15.0
+git pull --rebase origin loong-main/mcore_v0.15.0
 git push -u my-fork feature/your-feature-name
 ```
 
@@ -121,7 +118,7 @@ git push -u my-fork feature/your-feature-name
 Open a PR on GitHub from your feature branch to the target upstream branch:
 
 - **LoongForge changes**: `your-name/LoongForge:feature/xxx` → `baidu-baige/LoongForge:main`
-- **Megatron changes**: `your-name/Loong-Megatron:feature/xxx` → `baidu-baige/Loong-Megatron:loongforge_mcore_v0.15.0`
+- **Megatron changes**: `your-name/Loong-Megatron:feature/xxx` → `baidu-baige/Loong-Megatron:loong-main/mcore_v0.15.0`
 - **TE changes**: commit the patch file to LoongForge, then open a PR as in the LoongForge flow above
 
 ---
@@ -130,7 +127,7 @@ Open a PR on GitHub from your feature branch to the target upstream branch:
 
 Before submitting a pull request, please make sure that:
 
-1. You create your branch from `main`.
+1. You create your branch from the correct base branch (`main` for LoongForge, `loong-main/mcore_v0.15.0` for Loong-Megatron).
 2. You update relevant code comments or documentation if APIs are changed.
 3. You add the appropriate copyright and license notice to the top of any new source files when applicable, and preserve upstream notices for third-party derived files.
 4. For original source files, prefer using the SPDX-based Apache-2.0 header described in the project guidelines.
@@ -143,4 +140,4 @@ By contributing to LoongForge, you agree that your original contributions will b
 
 Please note that some files in this repository include or are derived from third-party open-source projects. For such files, contributors must retain the original copyright, license, and attribution notices required by the upstream project, and add modification notices where appropriate. See the corresponding file headers for additional details.
 
-For practical file header templates and examples, please refer to our **[License and File Header Guidelines](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/HEADER_GUIDELINES.md)**.
+For practical file header templates and examples, please refer to our **[License and File Header Guidelines](https://loongforge.readthedocs.io/en/latest/HEADER_GUIDELINES.html)**.

@@ -23,35 +23,35 @@ export XMLIR_MOCK_ASYNC_LINEAR=0
 GPUS_PER_NODE=8
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 ######################kunlun##########################
-# bf16类型专用(megatron相关变量参考<百舸megatron专用>)
+# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
 export XDNN_USE_FAST_GELU=false
-export XMLIR_ENABLE_FAST_FC=true                    # torch.nn.linear.py中用到(LinearWithActFunction等)
+export XMLIR_ENABLE_FAST_FC=true                    # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 # export XMLIR_ENABLE_FAST_FC_FWD_OUT=true
 # export XMLIR_ENABLE_FAST_FC_BWD_DW=true
-export FORCE_DISABLE_INPLACE_BF16_CAST=false    # 默认为false，在特殊情况下(异步checkpoint)需要打开
+export FORCE_DISABLE_INPLACE_BF16_CAST=false    # Default is false; needs to be enabled in special cases (async checkpoint)
 
-export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # 多机下使用, 以实际情况为准, 多机要按机器环境网卡联通性来配
-export BKCL_SOCKET_IFNAME=eth0                  # 以实际情况为准, 默认不开, 找不到网卡时再指定
+export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # Used in multi-node setup, adjust based on actual NIC connectivity
+export BKCL_SOCKET_IFNAME=eth0                  # Adjust based on actual environment; disabled by default, specify when NIC is not found
 export BKCL_TREE_THRESHOLD=0
-export BKCL_FORCE_L3_RDMA=0                     # 开1空间不够会报OOM错误
+export BKCL_FORCE_L3_RDMA=0                     # Setting to 1 may cause OOM error if space is insufficient
 export BKCL_ENABLE_XDR=1
-export BKCL_ALL_TO_ALL_OPT=1                    # 多机alltoall开关， https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/BeQck0ZK7s/QX0GHLg9-A/fa1a35ef87d947
-export BKCL_RING_HOSTID_USE_RANK=1              # 1.2.11版本开始支持, 后续会做为默认的
+export BKCL_ALL_TO_ALL_OPT=1                    # Multi-node alltoall switch
+export BKCL_RING_HOSTID_USE_RANK=1              # Supported since version 1.2.11, will become the default in the future
 export BKCL_RDMA_VERBS=1
 
-export XMLIR_PARALLEL_SAVE_MEMORY=false         # 为false显存占用会多, 但会有性能提升; 为true显存会少, 但性能会下降
-export XMLIR_BATCH_PARALLEL=false               # 通信融合算子开启, USE_CAST_FC_FUSION在bf16下会自动失效
-export SAVE_LOG_FILE_WITH_RANK_ID=false         # 为true的话, 训练日志会按rank_id分开存储
-export XMLIR_LOG_PATH="log-path"                # 指定训练日志的存储目录
-export XMLIR_LOG_PREFIX="log-file-prefix"       # 指定训练日志文件名的前缀
-export P800_DEBUG=false                         # 为true的话, 训练grad norm出nan会保存ckpt后退出
-export P800_DUMP_DIR="ckpt-dump-dir-path"       # 指定训练grad norm出nan会保存ckpt等信息dump的目录
-export XMLIR_DIST_ASYNC_ISEND_IRECV=true        # 设为true表示send/recv会走异步逻辑，默认为同步
-export XMLIR_CUDNN_ENABLED=1                    # true为使用cuDNN，支持conv3d等，false为不使用cuDNN
+export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: higher memory usage but better performance; true: lower memory usage but reduced performance
+export XMLIR_BATCH_PARALLEL=false               # Communication fusion operator enabled; USE_CAST_FC_FUSION is auto-disabled under bf16
+export SAVE_LOG_FILE_WITH_RANK_ID=false         # If true, training logs will be stored separately by rank_id
+export XMLIR_LOG_PATH="log-path"                # Specify the directory for storing training logs
+export XMLIR_LOG_PREFIX="log-file-prefix"       # Specify the prefix for training log filenames
+export P800_DEBUG=false                         # If true, will save checkpoint and exit when grad norm is NaN
+export P800_DUMP_DIR="ckpt-dump-dir-path"       # Specify the directory to dump checkpoint and other info when grad norm is NaN
+export XMLIR_DIST_ASYNC_ISEND_IRECV=true        # Set to true for async send/recv logic; default is synchronous
+export XMLIR_CUDNN_ENABLED=1                    # true to use cuDNN (supports conv3d, etc.); false to disable cuDNN
 
-# LINEAR 开关
-export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # 允许某些场景下linear不走xblas fcfusion, 比如走addmm，默认为1
-export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE 走 int32_with_ll, 可选
+# LINEAR switch
+export XMLIR_ENABLE_LINEAR_FC_FUSION=1          # Allow linear to bypass xblas fcfusion in certain scenarios, e.g., use addmm; default is 1
+export XDNN_FC_GEMM_DTYPE=int32_with_ll         # GEMM_DTYPE uses int32_with_ll, optional
 export XMLIR_MEGATRON_CORE_XPU_PLUGIN=1
 
 XFLAGS --disable transformer_engine_1_7

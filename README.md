@@ -40,6 +40,7 @@
 * **Expanded support for embodied AI models**, including DreamZero, and LingBot VA.
 * **Further performance acceleration for diffusion models** such as WAN.
 * **Further enhanced kernel performance**.
+* **Optimized Full Heterogeneous DP memory overhead** and improved parallelism strategy compatibility.
 * **Advanced MoE load-balancing** strategies.
 * **Support for INT4 quantization-aware training**, such as the approach proposed by Kimi 2.5.
 * **Enhanced long-sequence training** with optimization techniques such as ChunkPipe scheduling and Context Parallelism (CP) to improve throughput and scalability.
@@ -48,32 +49,32 @@
 
 ## 🛠️ Getting Started
 
-### Installation
+### Installation (Docker Quick Start)
 
-See [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.md) for source install, XPU, and development setup options.
+For detailed installation steps (source install, XPU, development setup), see the [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.html). Below is a quick start using Docker:
 
 ```bash
 git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
 
-docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
+docker build --build-arg COMPILE_ENV=hopper --build-arg ENABLE_LEROBOT=false -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
 ```
 
 **Tutorials:**
-* [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.md)
-* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.md)
-* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.md)
-* [Quick Start for VLM Pretrain](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.md)
-* [Quick Start for VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.md)
-* [Quick Start for VLA Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_vla_training.md)
-* [Quick Start for WAN Training](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.md)
+* [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html)
+* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html)
+* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.html)
+* [Quick Start for VLM Pretrain](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html)
+* [Quick Start for VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.html)
+* [Quick Start for VLA Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_vla_training.html)
+* [Quick Start for WAN Training](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
 
 **Kunlun XPU Platform:**
-* [README](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.md)
-* [Installation](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.md)
-* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
-* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_sft_p800.md)
-* [Quick Start for VLM](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vlm_p800.md)
-* [Quick Start for VLA](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vla_p800.md)
+* [README](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/index.html)
+* [Installation](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
+* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_pretrain_p800.html)
+* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_sft_p800.html)
+* [Quick Start for VLM](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vlm_p800.html)
+* [Quick Start for VLA](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vla_p800.html)
 
 ## 🏛️ Supported Models
 
@@ -113,26 +114,39 @@ LoongForge supports a massive array of state-of-the-art models. Check out `confi
 ```
 LoongForge/
 ├── loongforge/                   # Core training framework
-│   ├── train/                    # Training entry points
-│   ├── models/                   # Unified model abstractions (LLM, Encoder, VLM)
-│   │   ├── common/               # Shared layers and utilities
-│   │   ├── encoder/              # Vision encoders (ViT, Qwen-VL, InternVL, Ernie4.5VL, LLaVA-OneVision, etc.)
-│   │   ├── foundation/           # LLM backbones (LLaMA, Qwen, DeepSeek, InternLM, etc.)
-│   │   ├── omni_models/          # Multi-modal model composition
-│   │   ├── diffusion/            # Diffusion model support
-│   │   └── embodied/             # Embodied AI model support
-│   ├── data/                     # Data pipelines and load balancing
+│   ├── train/                    # Training entry points & trainers
+│   │   ├── pretrain/             # Pretrain implementations (LLM, VLM)
+│   │   ├── sft/                  # SFT implementations (LLM, VLM, InternVL, ERNIE)
+│   │   ├── diffusion/            # Diffusion model trainers (WAN)
+│   │   └── embodied/             # Embodied AI model trainers (Pi0.5, GR00T)
+│   ├── models/                   # Unified model abstractions
+│   │   ├── foundation/           # LLM backbones (LLaMA, Qwen, DeepSeek, InternLM, MiniMax, MIMO, GLM)
+│   │   ├── encoder/              # Vision encoders (ViT, Qwen-VL, InternVL, ERNIE4.5-VL, LLaVA-OV)
+│   │   ├── omni_models/          # Multi-modal composition (encoder + projector + decoder)
+│   │   ├── diffusion/            # Diffusion models (WAN)
+│   │   ├── embodied/             # Embodied AI models (Pi0.5, GR00T N1.6)
+│   │   └── common/               # Shared layers and utilities
+│   ├── data/                     # Data pipelines
+│   │   ├── dp_balance/           # Data-parallel load balancing
+│   │   ├── multimodal/           # Multi-modal data processing
+│   │   └── video/                # Video data processing
 │   ├── tokenizer/                # Tokenizer modules
-│   └── utils/                    # Utility functions
+│   └── utils/                    # Utility functions (config map, constants, etc.)
+├── third_party/
+│   └── Loong-Megatron/           # Patched Megatron-LM (git submodule)
 ├── configs/                      # Hydra-based YAML configurations
-│   ├── models/                   # Model configs
+│   ├── models/                   # Model architecture configs
 │   └── data/                     # Data configs
-├── examples/                     # GPU launch scripts
+├── examples/                     # GPU launch scripts (pretrain / sft / checkpoint_convert)
 ├── examples_xpu/                 # Kunlun XPU launch scripts
 ├── tools/                        # Utility tools
-├── ops/                          # Custom fused CUDA/C++ operators
-├── patches/                      # Framework adaptations (Megatron, TransformerEngine)
-├── tests/                        # Test suite
+│   ├── convert_checkpoint/       # HuggingFace ↔ Megatron checkpoint conversion
+│   ├── data_preprocess/          # Data preprocessing utilities
+│   └── dist_checkpoint/          # Distributed checkpoint utilities
+├── ops/                          # Custom fused CUDA/C++ operators (sparse MLA, lightning indexer)
+├── patches/                      # TransformerEngine patch files
+├── docker/                       # Dockerfiles (GPU & XPU)
+├── tests/                        # E2E test suite (YAML-driven)
 └── docs/                         # Documentation
 ```
 

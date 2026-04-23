@@ -88,4 +88,4 @@ Text field requirements for different `sample_type` (aligned with script-generat
 
 In multimodal scenarios, sequence offline packing processing methods are provided
 
-See [Offline Data Packing Guide](https://loongforge.readthedocs.io/en/latest/features/offline_data_packing.md) for details
+See [Offline Data Packing Guide](https://loongforge.readthedocs.io/en/latest/features/offline_data_packing.html) for details

@@ -4,7 +4,7 @@
 
 This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for vlm sft](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.md).
+For data preparation and weight preparation, refer to [quick start for vlm sft](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.html).
 
 ## SFT Training Script
 
@@ -61,7 +61,7 @@ export BKCL_SOCKET_IFNAME=eth0                  # Adjust according to actual env
 export BKCL_TREE_THRESHOLD=0
 export BKCL_FORCE_L3_RDMA=0                     # Setting to 1 may cause OOM if space is insufficient
 export BKCL_ENABLE_XDR=1
-export BKCL_ALL_TO_ALL_OPT=1                    # Multi-node alltoall switch, see https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/BeQck0ZK7s/QX0GHLg9-A/fa1a35ef87d947 
+export BKCL_ALL_TO_ALL_OPT=1                    # Multi-node alltoall switch
 export BKCL_RING_HOSTID_USE_RANK=1              # Supported since version 1.2.11, will be default in future
 export BKCL_RDMA_VERBS=1                        # Used with BKCL_QPS_PER_CONNECTION, currently only needed for Hygon machines
 export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: more memory usage but better performance; true: less memory but degraded performance

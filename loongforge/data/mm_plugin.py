@@ -411,7 +411,7 @@ class Qwen3VLPlugin(MMPlugin):
                     videos_list = videos_data.get("videos", [])
                     durations = videos_data.get("durations", [None] * len(videos_list))
                 else:
-                    # 兼容纯 list 或 tensor
+                    # Compatible with plain list or tensor
                     videos_list = videos_data
                     durations = [getattr(v, "duration", None) for v in videos_list]
                 video_metadata = [

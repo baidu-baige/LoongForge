@@ -21,11 +21,11 @@ When performing LLM weight conversion, it is recommended to pass parameters usin
 |max_workers|thread for checkpoint converting|
 |moe-grouped-gemm|use grouped gemm in moe|
 |amax_epsilon|Epsilon value for amax calculation in FP8 conversion; used for FP8 quantization scale, aligned with the FP8 EPS environment variable set during training. Applicable to both `te` and `pt` methods.|
-|quant_method|The quantization method to use. Choices: [te, pt], defaults to `te`. When using Nvidia B-series GPUs (Blackwell) for weight conversion, this value needs to be set to `pt`|
+|quant_method|The quantization method to use. Choices: [te, pt], defaults to `te`.|
 |force_pow_2_scales|When True (default), uses power-of-2 scaling for FP8 quantization (matching DeepGEMM's get_e4m3_sf_and_sf_inv). When False, uses linear scaling. Applicable to both `te` and `pt` methods.|
 |fp8_force_no_requant|skip dequantize + re-quantize in FP8 conversion|
 
-For descriptions of other parameters, please refer to [checkpoint_convert.md](https://loongforge.readthedocs.io/en/latest/llm_tutorial/checkpoint_convert.md).
+For descriptions of other parameters, please refer to [checkpoint_convert.md](https://loongforge.readthedocs.io/en/latest/llm_tutorial/checkpoint_convert.html).
 
 ## 2. Example Scripts
 The framework provides weight conversion example scripts for each model. Users can find specific scripts under `configs/models/{model}/ckpt_convert/`.

@@ -17,10 +17,6 @@ Add the following parameters to the training launch script:
 --cross-entropy-fusion-impl linear
 ```
 
-Different implementation paths are automatically selected based on GPU architecture:
-* **Blackwell architecture (GPU CC 10.x)**: Uses the deeply-fused implementation (Blackwell path)
-* **Other GPU architectures**: Uses the pure PyTorch implementation (Generic path)
-
 ---
 
 ## 1. Generic Implementation
@@ -51,29 +47,8 @@ The backward pass likewise recomputes chunk by chunk, using the `maximum` and `a
 
 ---
 
-## 2. Blackwell Deeply-Fused Implementation
 
-This is the original implementation from community Megatron. On the Blackwell architecture (compute capability 10.x), it provides a deeply optimized implementation based on CUTLASS/CuTe, fusing chunked matmul, online softmax, and gradient computation into a single GPU kernel. Logits are produced and consumed within TMEM/registers, **never written to global memory**.
-
-### Features
-* Leverages UMMA, TMA, and multi-level pipelines to hide memory access latency
-* FP8 training support
-
-
-
-#### Requirements
-
-| Dependency | Description |
-|------|------|
-| `cutlass` + `cutlass.cute` | Must be installed from CUTLASS source (≥3.6) |
-| `cuda-python` | CUDA Driver Bindings |
-| `triton` | Triton compiler |
-| GPU | Blackwell architecture (compute capability 10.x) |
-
----
-
-
-## 3. Tuning Parameters
+## 2. Tuning Parameters
 
 Control chunk size via environment variables to balance memory usage and performance:
 

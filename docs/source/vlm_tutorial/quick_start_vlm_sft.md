@@ -37,7 +37,7 @@ multimodal:
 
 ### 1.3 Dataset Preprocessing
 
-The process of converting to **Energon loading format** is the same as the pre-training section, see section 1.2 in [7.1. Quick Start:VLM Model Pretrain Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/48y2Lqs8HhEN5U?t=mention&mt=doc&dt=doc). The framework provides two data preprocessing methods: online packing and offline packing, described below:
+The process of converting to **Energon loading format** is the same as the pre-training section, see section 1.2 in [Quick Start: VLM Model Pretrain Training](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html). The framework provides two data preprocessing methods: online packing and offline packing, described below:
 
 * **Online Packing**
 
@@ -45,11 +45,11 @@ Enable under DATA_ARGS in the training script: `--packing-sft-data`, `--packing-
 
 * **Offline Packing**
 
-Provides an "offline sequence packing" pipeline: groups and rearranges **sample-level** data directories (one `json` per sample + several media files) according to `max_token_len`, generating **packed WebDataset** (`pretrain-*.tar` + Energon metadata) to improve training throughput and reduce padding. For further understanding of offline packing details, refer to: [4.2. docs/Features/offline_data_packing.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/pwpYfzgvvvnu_n?t=mention&mt=doc&dt=doc)
+Provides an "offline sequence packing" pipeline: groups and rearranges **sample-level** data directories (one `json` per sample + several media files) according to `max_token_len`, generating **packed WebDataset** (`pretrain-*.tar` + Energon metadata) to improve training throughput and reduce padding. For further understanding of offline packing details, refer to: [offline_data_packing.md](https://loongforge.readthedocs.io/en/latest/features/offline_data_packing.html)
 
 ## 2. Model Weight Preparation
 
-This section is the same as the pre-training section, see section 2 in [7.1. Quick Start:VLM Model Pretrain Training](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/48y2Lqs8HhEN5U?t=mention&mt=doc&dt=doc)
+This section is the same as the pre-training section, see section 2 in [Quick Start: VLM Model Pretrain Training](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html)
 
 ## 3. Start SFT Training
 

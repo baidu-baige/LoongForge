@@ -2,7 +2,7 @@ source /root/.bashrc
 source activate
 conda activate python310_torch25_cuda
 #pip uninstall transformer_engine -y
-#清除残留的共享内存数据
+#Clear residual shared memory data
 ipcs -m | awk '$4 == 666 {print $2}' | while read shmid; do
 ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
@@ -22,7 +22,7 @@ mkdir -p ${LOGS_PATH}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-####### 使用RANK0加载模型RDMA分发 #######
+####### Use RANK0 to load model and distribute via RDMA #######
 export DP_RANK0_LOAD=false
 
 ####### Start for NX-P800 #######
@@ -51,8 +51,8 @@ export XMLIR_PARALLEL_SAVE_MEMORY=false
 
 #export XMLIR_DIST_SINGLETON_STREAM=true
 #export DIST_MULTI_STREAM=true
-export CUDA_DEVICE_MAX_CONNECTIONS=1 # 8开启多流
-#export XMLIR_BATCH_PARALLEL=true # bf16/fp16下用到, 通信融合算子开启, USE_CAST_FC_FUSION在bf16下会自动失效
+export CUDA_DEVICE_MAX_CONNECTIONS=1 # 8 to enable multi-stream
+#export XMLIR_BATCH_PARALLEL=true # Used for bf16/fp16; communication fusion operator enabled, USE_CAST_FC_FUSION is auto-disabled under bf16
 export XMLIR_DIST_ASYNC_ISEND_IRECV=1 # PP
 #export XMLIR_DIST_DISABLE_ASYNC_ISEND_IRECV=0
 #export TORCH_C10D_USE_RANDOM_SLEEP=1
@@ -64,7 +64,7 @@ export XMLIR_DIST_CHECK_INF_NAN=0
 #export XMLIR_DUMP_FALLBACK_OP_LIST_BOOL=true
 
 ##############################
-export BKCL_RDMA_PROXY_DISABLE=1 # 屏蔽旧架构
+export BKCL_RDMA_PROXY_DISABLE=1 # Disable legacy architecture
 export BKCL_USE_AR=1
 export BKCL_RING_OPT=1
 export BKCL_FLAT_RING=1
@@ -75,13 +75,13 @@ export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_FORCE_TREE=1
 export BKCL_TREE_THRESHOLD=1
 export BKCL_RDMA_NICS=eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4
-export BKCL_RING_BUFFER_SIZE=8388608 #当前最优按8M来配
+export BKCL_RING_BUFFER_SIZE=8388608 # Current optimal setting is 8M
 export ALLREDUCE_ASYNC=false
 export ALLGATHER_ASYNC=false
 export ALLREDUCE_FUSION=0
 export BKCL_TIMEOUT=360000
-export BKCL_RDMA_VERBS=1  #与BKCL_QPS_PER_CONNECTION配合使用，当前只用于海光机器才需要
-export BKCL_QPS_PER_CONNECTION=4  #当前最优配置 BKCL_QPS_PER_CONNECTION=4
+export BKCL_RDMA_VERBS=1  # Used together with BKCL_QPS_PER_CONNECTION; currently only needed for Hygon machines
+export BKCL_QPS_PER_CONNECTION=4  # Current optimal setting: BKCL_QPS_PER_CONNECTION=4
 
 ###############################
 pkill -9 python || true

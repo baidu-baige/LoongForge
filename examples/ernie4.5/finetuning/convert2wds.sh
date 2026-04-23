@@ -1,43 +1,43 @@
 #!/bin/bash
 # =============================================================================
-# convert2wds.sh — ERNIE 离线 JSONL -> WebDataset 转换脚本
+# convert2wds.sh -- ERNIE offline JSONL -> WebDataset conversion script
 #
-# 流程:  原始格式 (Step 1) -> sharegpt 格式 (Step 2) -> WebDataset tar
+# Flow:  Original format (Step 1) -> sharegpt format (Step 2) -> WebDataset tar
 #
-# ---- 原始数据格式 (ERNIE 离线管线, text_info + image_info) ----
+# ---- Original data format (ERNIE offline pipeline, text_info + image_info) ----
 #
 #   {
 #     "text_info": [
-#       {"text": "用户问题1",   "tag": "mask"},       // tag=mask    -> user (不参与loss)
-#       {"text": "助手回答1",   "tag": "no_mask"},     // tag=no_mask -> assistant (参与loss)
-#       {"text": "用户问题2",   "tag": "mask"},
-#       {"text": "助手回答2",   "tag": "no_mask"},
+#       {"text": "User question 1",   "tag": "mask"},       // tag=mask    -> user (excluded from loss)
+#       {"text": "Assistant answer 1", "tag": "no_mask"},    // tag=no_mask -> assistant (included in loss)
+#       {"text": "User question 2",   "tag": "mask"},
+#       {"text": "Assistant answer 2", "tag": "no_mask"},
 #       ...
 #     ],
 #     "image_info": [
 #       {
-#         "image_url": "./DoclingMatix/test.jpg",      // 图片相对路径
-#         "matched_text_index": 0                       // 图片插入在 text_info[0] 之前
+#         "image_url": "./DoclingMatix/test.jpg",      // Relative image path
+#         "matched_text_index": 0                       // Image inserted before text_info[0]
 #       }
 #     ]
 #   }
 #
-# ---- 目标数据格式 (sharegpt, 供 convert_to_webdataset.py 消费) ----
+# ---- Target data format (sharegpt, consumed by convert_to_webdataset.py) ----
 #
 #   {
 #     "messages": [
-#       {"role": "user",      "content": "<image>\n用户问题1"},   // <image> 由 image_info 生成
-#       {"role": "assistant", "content": "助手回答1"},
-#       {"role": "user",      "content": "用户问题2"},
-#       {"role": "assistant", "content": "助手回答2"}
+#       {"role": "user",      "content": "<image>\nUser question 1"},   // <image> generated from image_info
+#       {"role": "assistant", "content": "Assistant answer 1"},
+#       {"role": "user",      "content": "User question 2"},
+#       {"role": "assistant", "content": "Assistant answer 2"}
 #     ],
-#     "image": "DoclingMatix/test.jpg"       // 单图用 "image", 多图用 "images": [...]
+#     "image": "DoclingMatix/test.jpg"       // Single image uses "image"; multiple images use "images": [...]
 #   }
 #
-# ---- 最终 WebDataset tar 内部结构 ----
+# ---- Final WebDataset tar internal structure ----
 #
 #   image_0.json                  ->  {"texts": [messages...], "media": "image", "name": ["0_test.jpg"]}
-#   image_0.0_test.jpg            ->  图片二进制
+#   image_0.0_test.jpg            ->  Image binary
 #
 #   .nv-meta/dataset.yaml         ->  subflavors: {sample_type: ernie_mix_qa}
 #

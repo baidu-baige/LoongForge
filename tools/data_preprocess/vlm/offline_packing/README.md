@@ -2,16 +2,16 @@
 
 
 
-## 1 JSONL 格式 转 webdataset 格式
+## 1 Converting JSONL Format to WebDataset Format
 
-支持数据集形式
+Supported dataset types
 
-| 数据场景          | sample_type  | sample 类名        |
-|---------------|--------------|------------------|
-| 单张图片VQA       | vqa          | VQASample        |
-| 多个视频VQA       | multi_vid_qa | CrudeSample      |
-| 图片视频混合、多张图片QA | multi_mix_qa | CrudeSample      |
-| caption数据     | captioning     | CaptioningSample |
+| Data Scenario                              | sample_type  | Sample Class Name |
+|--------------------------------------------|--------------|-------------------|
+| Single image VQA                           | vqa          | VQASample         |
+| Multiple video VQA                         | multi_vid_qa | CrudeSample       |
+| Mixed image/video, multi-image QA          | multi_mix_qa | CrudeSample       |
+| Caption data                               | captioning   | CaptioningSample  |
 
 
 ```sh
@@ -29,29 +29,29 @@ python convert_to_webdataset.py \
     --sample_type multi_mix_qa 
 ```
 
-| 参数                   | 类型  | 默认             | 描述              |
-|----------------------|-----|----------------|-----------------|
-| `--output_dir`       | str | -              | 输出路径            |
-| `--json_file`        | str | -              | json路径          |
-| `--image_dir`        | str | None           | image文件路径       |
-| `--video_dir`        | str | None           | video文件路径       |
-| `--media`            | str | `image`        | image/video/mix |
-| `--columns_messages` | str | `messages`     | json里面的消息key    |
-| `--maxcount`         | int | 10000          | 每个shard最大的数量    |
-| `--maxsize`          | int | 3000000000     | 每个shard最大的大小    |
-| `--max_workers`      | int | CPU cores // 2 | 并行              |
+| Parameter            | Type | Default        | Description                   |
+|----------------------|------|----------------|-------------------------------|
+| `--output_dir`       | str  | -              | Output path                   |
+| `--json_file`        | str  | -              | JSON file path                |
+| `--image_dir`        | str  | None           | Image file path               |
+| `--video_dir`        | str  | None           | Video file path               |
+| `--media`            | str  | `image`        | image/video/mix               |
+| `--columns_messages` | str  | `messages`     | Message key in the JSON file  |
+| `--maxcount`         | int  | 10000          | Maximum number of samples per shard |
+| `--maxsize`          | int  | 3000000000     | Maximum size per shard        |
+| `--max_workers`      | int  | CPU cores // 2 | Parallelism                   |
 
 
 
-## 2 离线packing
+## 2 Offline Packing
 
-基于wds数据集，转换为packing后的 wds数据集，支持场景：
+Based on WebDataset datasets, converts to packed WebDataset datasets. Supported scenarios:
 
-| 数据场景                  | sample_type         | sample 类名   |
-|-----------------------|---------------------|-------------|
-| 离线packed的caption      | packed_captioning   | CrudeSample |
-| 离线packed的单图QA         | packed_vqa          | CrudeSample |
-| 离线packed图片视频混合、多张图片QA | packed_multi_mix_qa | CrudeSample |
+| Data Scenario                              | sample_type         | Sample Class Name |
+|--------------------------------------------|---------------------|-------------------|
+| Offline packed caption                     | packed_captioning   | CrudeSample       |
+| Offline packed single image QA             | packed_vqa          | CrudeSample       |
+| Offline packed mixed image/video, multi-image QA | packed_multi_mix_qa | CrudeSample |
 
 
 
@@ -60,14 +60,14 @@ cd LoongForge/tools/data_preprocess/omni_packing
 
 ```
 
-配置 `omni_packing/config.yaml`
+Configure `omni_packing/config.yaml`
 
 ```yaml
-# 数据路径配置
+# Data path configuration
 data:
-  # webdataset数据样本目录
+  # WebDataset sample directory
   wds_dir: "/mnt/cluster/yxc/test_4/"
-  # 文本字段名
+  # Text field name
   template_text_key: "messages"
   packed_json_dir: "/mnt/cluster/yxc/test_5/"
 model:
@@ -79,33 +79,33 @@ model:
     trust_remote_code: True
     use_fast: False
 
-# 媒体文件预处理配置，可选的的预处理函数在media_preprocess_utils.py中定义
+# Media file preprocessing configuration. Available preprocessing functions are defined in media_preprocess_utils.py
 media_preprocess:
   image: custom_image_preprocess
 
 sample:
-  # 训练数据的最大长度
+  # Maximum token length for training data
   max_token_len: 8192
-  # 决定解析方式
+  # Determines the parsing method
   sample_type: packed_multi_mix_qa
 
-# 并行处理参数
+# Parallel processing parameters
 process:
-  # 每个进程处理的样本块大小
+  # Chunk size of samples processed per worker
   chunk_size: 5000
-  # 归并参数（排序)的batch_size
+  # Batch size for merge (sorting) parameter
   merge_batch_size: 20
-  # 超时设置（根据数据量定，1M数据按 45分钟(2700s)估算）
+  # Timeout setting (set based on data volume; estimate ~45 minutes (2700s) per 1M samples)
   time_out: 2000
 
-# 日志与临时文件
+# Logging and temporary files
 log:
-  # 日志级别（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
   level: "INFO"
-  # 日志文件路径
+  # Log file path
 ```
 
-执行
+Run
 
 ```sh
 sh pack_wds.sh

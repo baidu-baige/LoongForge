@@ -61,6 +61,7 @@ coverage.xml
 # IDE / Editor
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~

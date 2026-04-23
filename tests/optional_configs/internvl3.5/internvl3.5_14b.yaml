@@ -25,7 +25,7 @@ VISION_MODEL_PATH: $CHECKPOINT_PATH/vision-model-mcore
 ADAPTER_PATH: $CHECKPOINT_PATH/adapter-mcore
 PATCH_PATH: $CHECKPOINT_PATH/patch-mcore
 
-# 训练参数
+# Training parameters
 TENSOR_MODEL_PARALLER_SIZE: 4
 PIPELINE_MODEL_PARALLER_SIZE: 1
 global_batch_size: 32

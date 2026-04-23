@@ -150,7 +150,7 @@ class ExampleToFeature(ProcessorBase):
             )
             self.adaptive_max_imgtoken_option = None
             self.adaptive_max_imgtoken_rate = None
-        # video的min_pixels, max_pixels
+        # min_pixels and max_pixels for video
         dataset_video_min_pixels = data_setting.get("video_min_pixels", None)
         dataset_video_max_pixels = data_setting.get("video_max_pixels", None)
         if dataset_video_min_pixels is not None:

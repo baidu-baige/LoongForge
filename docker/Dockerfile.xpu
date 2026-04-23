@@ -4,7 +4,9 @@ FROM ${BASE_IMAGE}
 # =========================================================
 # Build Arguments
 # =========================================================
-ARG INSTALL_LEROBOT="false"
+# LeRobot has dependency conflicts with the base environment; disabled by default.
+# Enable only when training VLA models (e.g., Pi0.5, GR00T).
+ARG ENABLE_LEROBOT="false"
 ARG XPYTORCH_URL_ARG=""
 
 # =========================================================
@@ -27,7 +29,7 @@ RUN set -exuo pipefail && \
         bash "${XPYTORCH_FILE}" --noexec --target xpytorch_unpack && cd xpytorch_unpack && \
         sed -i 's/CONDA_PREFIX/VIRTUAL_ENV/g' setup.sh && \
         python -m ensurepip --upgrade && \
-        python -m pip install --upgrade pip -i http://mirrors.baidubce.com/pypi/simple/ --trusted-host mirrors.baidubce.com && \
+        python -m pip install --upgrade pip && \
         export VIRTUAL_ENV=/opt/omni_kunlun && bash setup.sh && \
         cd .. && rm -rf "${XPYTORCH_FILE}" xpytorch_unpack; \
     }; \
@@ -93,10 +95,10 @@ RUN set -exuo pipefail && \
         echo "Lerobot installation completed"; \
     }; \
     source /opt/omni_kunlun/bin/activate && \
-    if [ "$INSTALL_LEROBOT" = "true" ]; then \
+    if [ "$ENABLE_LEROBOT" = "true" ]; then \
         install_lerobot; \
     else \
-        echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"; \
+        echo "Skipping lerobot installation (ENABLE_LEROBOT=${ENABLE_LEROBOT})"; \
     fi
 
 

@@ -119,7 +119,7 @@ class Parser:
         param_dict['moe_grouped_gemm'] = getattr(args, 'moe_grouped_gemm', False)
         param_dict['lora_alpha'] = getattr(args, 'lora_alpha', None)
         param_dict['lora_dim'] = getattr(args, 'lora_dim', None)
-        # =====加#的参数都不在train的args里，只在convert ckpt的args =====================
+        # ===== Parameters marked with # are not in training args, only in convert ckpt args =====
         param_dict['vpp_scheduler'] = getattr(args, 'vpp_scheduler', None) #
         param_dict['safetensors'] = getattr(args, 'safetensors', True) #
         param_dict['max_workers'] = getattr(args, 'max_workers', 1) # 

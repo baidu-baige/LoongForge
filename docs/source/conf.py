@@ -3,8 +3,8 @@ sys.path.insert(0, os.path.abspath('../..'))
 
 
 project = 'LoongForge'
-copyright = '2026, Baidu'
-author = 'Baidu'
+copyright = '2026, LoongForge'
+author = 'LoongForge'
 
 extensions = [
     "myst_parser",

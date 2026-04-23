@@ -409,7 +409,8 @@ class TransformerBlock(MegatronTransformerBlock):
             assert deepstack_visual_indexes is not None and deepstack_merger_list is not None, \
                 "deepstack_visual_indexes and deepstack_merger_list must be passed when has_deepstack is True"
             
-            # 如果有DeepStack，使用uniform策略时，recompute_num_layers必须为1，否则可能会跳过DeepStack
+            # If DeepStack is enabled and using uniform strategy, recompute_num_layers must be 1, 
+            # otherwise DeepStack may be skipped
             if self.config.recompute_method == 'uniform' and self.config.recompute_granularity == 'full':
                 assert self._recompute_num_layers == 1, \
                     "If recompute_method is set to uniform, recompute_num_layers must be 1."
@@ -494,7 +495,7 @@ class TransformerBlock(MegatronTransformerBlock):
                 hidden_states, context = checkpoint_handler(
                     custom(layer_idx, layer_idx + self._recompute_num_layers)
                 )
-                # 提取deepstack特征
+                # Extract deepstack features
                 if self.has_deepstack and layer_idx in deepstack_visual_indexes:
                     merger = deepstack_merger_list[deepstack_visual_indexes.index(layer_idx)]
                     deepstack_feature = merger(hidden_states)
@@ -523,7 +524,7 @@ class TransformerBlock(MegatronTransformerBlock):
                     hidden_states, context = custom(layer_idx, layer_idx + 1)(
                         hidden_states, attention_mask, context, context_mask, rotary_pos_emb, **kwargs
                     )
-                # 提取deepstack特征
+                # Extract deepstack features
                 if self.has_deepstack and layer_idx in deepstack_visual_indexes:
                     merger = deepstack_merger_list[deepstack_visual_indexes.index(layer_idx)]
                     deepstack_feature = merger(hidden_states)

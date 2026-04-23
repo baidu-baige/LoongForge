@@ -5,7 +5,9 @@ FROM ${BASE_IMAGE}
 # Build Arguments
 # =========================================================
 ARG COMPILE_ENV={{COMPILE_ENV}}
-ARG INSTALL_LEROBOT="false"
+# LeRobot has dependency conflicts with the base environment; disabled by default.
+# Enable only when training VLA models (e.g., Pi0.5, GR00T).
+ARG ENABLE_LEROBOT="false"
 
 # =========================================================
 # Environment Variables
@@ -166,57 +168,10 @@ RUN set -exuo pipefail && \
         echo "Lerobot installation completed"; \
     }; \
     install_transformer_engine && \
-    if [ "$INSTALL_LEROBOT" = "true" ]; then \
+    if [ "$ENABLE_LEROBOT" = "true" ]; then \
         install_lerobot; \
     else \
-        echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"; \
-    fi
-
-
-# =========================================================
-# DeepTraining Ops (sparse_mla_fwd, sparse_mla_bwd, lightning_indexer_bwd)
-# =========================================================
-RUN set -exuo pipefail && \
-    FLASHMLA_COMMIT="47c35a712362f11bc235854ead51819ad76f5a81" && \
-    OPS_DIR="/workspace/LoongForge/ops" && \
-    install_sparse_mla_fwd() { \
-        echo "Installing sparse_mla_fwd..." && \
-        cd ${OPS_DIR}/sparse_mla_fwd && \
-        git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA && \
-        cd FlashMLA && \
-        git checkout ${FLASHMLA_COMMIT} && \
-        git submodule update --init --recursive && \
-        cd .. && \
-        pip install --no-build-isolation -v . && \
-        echo "sparse_mla_fwd install completed"; \
-    }; \
-    install_sparse_mla_bwd() { \
-        echo "Installing sparse_mla_bwd..." && \
-        cd ${OPS_DIR}/sparse_mla_bwd && \
-        git clone https://github.com/deepseek-ai/FlashMLA.git FlashMLA && \
-        cd FlashMLA && \
-        git checkout ${FLASHMLA_COMMIT} && \
-        git submodule update --init --recursive && \
-        cd .. && \
-        pip install --no-build-isolation -v . && \
-        echo "sparse_mla_bwd install completed"; \
-    }; \
-    install_lightning_indexer_bwd() { \
-        echo "Installing lightning_indexer_bwd..." && \
-        cd ${OPS_DIR}/lightning_indexer_bwd && \
-        mkdir -p vendor && \
-        git clone --recurse-submodules https://github.com/deepseek-ai/DeepGEMM.git vendor/DeepGEMM && \
-        ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
-        LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:${LD_LIBRARY_PATH} bash install.sh && \
-        rm -f /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
-        echo "lightning_indexer_bwd install completed"; \
-    }; \
-    if [ "${COMPILE_ENV}" = "blackwell" ]; then \
-        install_sparse_mla_fwd && \
-        install_sparse_mla_bwd && \
-        install_lightning_indexer_bwd; \
-    else \
-        echo "Skipping DeepTraining ops build (requires blackwell, got COMPILE_ENV=${COMPILE_ENV})"; \
+        echo "Skipping lerobot installation (ENABLE_LEROBOT=${ENABLE_LEROBOT})"; \
     fi
 
 

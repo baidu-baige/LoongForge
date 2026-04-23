@@ -15,7 +15,7 @@
 
 `lightning_indexer_bwd` is a single-operator CUDA library targeting **NVIDIA Blackwell (SM100)**,
 implementing the **backward pass of sparse FP8 MQA Attention logits** (`fp8_mqa_logits_bwd`).
-It serves as a low-level kernel module for Baidu's AIACC DeepTraining framework.
+It serves as a low-level kernel module for AIACC DeepTraining framework.
 
 - **Languages**: CUDA C++17 + Python (pybind11 binding)
 - **Compilation**: NVRTC JIT (runtime compilation, not AOT)

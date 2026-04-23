@@ -5,8 +5,9 @@ FROM ${BASE_IMAGE}
 # Build Arguments
 # =========================================================
 ARG COMPILE_ENV={{COMPILE_ENV}}
-# Do not change this here; set INSTALL_LEROBOT in the ipipe pipeline configuration.
-ARG INSTALL_LEROBOT="false"
+# LeRobot has dependency conflicts with the base environment; disabled by default.
+# Do not change this here; set ENABLE_LEROBOT in the ipipe pipeline configuration.
+ARG ENABLE_LEROBOT="false"
 
 # =========================================================
 # Environment Variables
@@ -217,10 +218,10 @@ RUN set -exuo pipefail && \
     }; \
     install_transformer_engine && \
     install_megatron && \
-    if [ "$INSTALL_LEROBOT" = "true" ]; then \
+    if [ "$ENABLE_LEROBOT" = "true" ]; then \
         install_lerobot; \
     else \
-        echo "Skipping lerobot installation (INSTALL_LEROBOT=${INSTALL_LEROBOT})"; \
+        echo "Skipping lerobot installation (ENABLE_LEROBOT=${ENABLE_LEROBOT})"; \
     fi
 
 # =========================================================

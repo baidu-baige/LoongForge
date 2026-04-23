@@ -417,13 +417,13 @@ def main():
     if dist.get_rank() == 0:
         s = io.StringIO()
         ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
-        ps.print_stats(40)  # 打印前40行
+        ps.print_stats(40)  # Print top 40 lines
         print(s.getvalue())
 
         # Print callers/callees
         s2 = io.StringIO()
         ps2 = pstats.Stats(pr, stream=s2).sort_stats('cumulative')
-        ps2.print_callers(30)  # 打印调用关系
+        ps2.print_callers(30)  # Print caller relationships
         print("\n=== Callers ===")
         print(s2.getvalue())
         # Save to file

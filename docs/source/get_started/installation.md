@@ -4,8 +4,7 @@
 
 ### Hardware
 
-- **Required**: NVIDIA GPU (Ampere / Hopper / Blackwell or newer)
-- **FP8 Support**: Requires NVIDIA Hopper or Blackwell GPUs
+- **Required**: NVIDIA GPU (Ampere / Hopper or newer)
 - **NVIDIA Driver**: Version must meet the CUDA Toolkit requirement
 
 ### Software
@@ -15,7 +14,7 @@
 - **CUDA Toolkit**: >= 12.1
 - **OS**: Linux (Ubuntu 22.04 / 24.04 recommended)
 
-Note: For Baidu Kunlun XPU installation, see the
+Note: For Kunlun XPU installation, see the
 [Kunlun Installation Guide](../kunlun_tutorial/install_p800.md).
 
 ## Prerequisites
@@ -69,14 +68,14 @@ git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
 Then build the image:
 
 ```bash
-docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
+docker build --build-arg COMPILE_ENV=hopper --build-arg ENABLE_LEROBOT=false \
   -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
 ```
 
 | Build Arg | Description | Options |
 |---|---|---|
-| `COMPILE_ENV` | Target GPU architecture | `ampere`, `hopper`, `blackwell` |
-| `INSTALL_LEROBOT` | Install LeRobot for VLA training | `true`, `false` |
+| `COMPILE_ENV` | Target GPU architecture | `ampere`, `hopper`|
+| `ENABLE_LEROBOT` | Enable LeRobot dependencies for VLA model training (e.g., Pi0.5, GR00T). Disabled by default due to dependency conflicts with the base environment. | `true`, `false` |
 
 After the build finishes, verify:
 

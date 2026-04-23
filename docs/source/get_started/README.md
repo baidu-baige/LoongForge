@@ -51,29 +51,29 @@
 
 ```bash
 git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
-docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
+docker build --build-arg COMPILE_ENV=hopper --build-arg ENABLE_LEROBOT=false \
   -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
 ```
 
-See [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.md) for source install, XPU, and development setup options.
+See [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.html) for source install, XPU, and development setup options.
 
 **Tutorials:**
-* [Installation](https://loongforge.readthedocs.io/en/latest/get_started/installation.md)
-* [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.md)
-* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.md)
-* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.md)
-* [Quick Start for VLM Pretrain](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.md)
-* [Quick Start for VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.md)
-* [Quick Start for VLA Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_vla_training.md)
-* [Quick Start for WAN Training](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.md)
+* [Installation](https://loongforge.readthedocs.io/en/latest/get_started/installation.html)
+* [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html)
+* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html)
+* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.html)
+* [Quick Start for VLM Pretrain](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html)
+* [Quick Start for VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.html)
+* [Quick Start for VLA Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_vla_training.html)
+* [Quick Start for WAN Training](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
 
 **Kunlun XPU Platform:**
-* [README](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.md)
-* [Installation](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.md)
-* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
-* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_sft_p800.md)
-* [Quick Start for VLM](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vlm_p800.md)
-* [Quick Start for VLA](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vla_p800.md)
+* [README](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.html)
+* [Installation](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
+* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_pretrain_p800.html)
+* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_sft_p800.html)
+* [Quick Start for VLM](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vlm_p800.html)
+* [Quick Start for VLA](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vla_p800.html)
 
 ## 🏛️ Supported Models
 

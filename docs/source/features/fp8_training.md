@@ -12,7 +12,7 @@ This section lists the feature flags / environment variables required to turn th
 
 | Item | Requirement |
 |------|-------------|
-| **Hardware** | Native FP8 support (NVIDIA Hopper / Blackwell: H100, GB200, …) |
+| **Hardware** | Native FP8 support |
 | **Software** | Transformer Engine enabled in the framework |
 | **Care** | FP8 is numerically stricter → keep NaN/Inf/overflow monitors active while you dial in the setup |
 
@@ -75,7 +75,6 @@ export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 | NaN/Inf in loss or grads | Raise the three `*_AMAX_EPS` values gradually (1e-12 → 1e-10). |
 | Divergence vs. BF16 | Disable `--fp8-param-gather` first; if still diverging, lower LR 10-20 %. |
 | Checkpoint reload failure | Ensure the same FP8 flags & epsilon values were used when the checkpoint was saved. |
-| Blackwell runtime error with `NVTE_FP8_BLOCK_SCALING_FP32_SCALES=1` | Remove the variable (keep E8M0 scales). |
 
 With the above switches and epsilon guards, Blockwise FP8 training in LoongForge is ready for production-scale runs.
 
