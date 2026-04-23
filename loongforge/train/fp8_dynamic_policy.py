@@ -74,15 +74,14 @@ class FP8DynamicPolicy:
           "version": 1,
           "speedup_threshold": 1.0,
           "rules": {
-            "layernorm_column": [
-              {"tp": 1, "min_tokens": 1024, "measured_speedup": 1.08}
-            ],
-            "column": [
-              {"tp": 1, "min_tokens": 2048, "measured_speedup": 1.05}
-            ],
-            "row": [
-              {"tp": 1, "min_tokens": 512, "measured_speedup": 1.12}
-            ],
+            "layernorm_column": {
+              "qkv": [{"tp": 1, "min_tokens": 12288, "measured_speedup": 1.03}],
+              "fc1": [{"tp": 1, "min_tokens": 4096,  "measured_speedup": 1.18}]
+            },
+            "row": {
+              "proj": [{"tp": 1, "min_tokens": 99999999}],
+              "fc2":  [{"tp": 1, "min_tokens": 8192, "measured_speedup": 1.15}]
+            },
             "column_grouped": [
               {"etp": 1, "num_gemms": 64, "min_tokens": 424, ...}
             ],
@@ -91,6 +90,11 @@ class FP8DynamicPolicy:
             ]
           }
         }
+
+    Dense module kinds (layernorm_column / column / row / duplicated) use a
+    nested ``{ub_name: [rules]}`` dict so that same-kind modules with
+    different shapes (e.g. qkv vs fc1) can have distinct thresholds. MoE
+    grouped kinds keep the flat list form.
     """
 
     def __init__(self, policy_path: str):
@@ -100,22 +104,31 @@ class FP8DynamicPolicy:
             data = _json.load(f)
         self._rules = data.get("rules", {})
         # Build lookup indices for fast access.
-        self._dense_index = {}  # (module_kind, tp) -> min_tokens
+        self._dense_index = {}  # (module_kind, ub_name, tp) -> min_tokens
         self._moe_index = {}  # (module_kind, etp, num_gemms) -> min_tokens
-        for module_kind, rule_list in self._rules.items():
-            for i, rule in enumerate(rule_list):
-                try:
-                    if module_kind in _MOE_MODULE_KINDS:
+        for module_kind, entry in self._rules.items():
+            if module_kind in _MOE_MODULE_KINDS:
+                for i, rule in enumerate(entry):
+                    try:
                         key = (module_kind, rule["etp"], rule["num_gemms"])
                         self._moe_index[key] = rule["min_tokens"]
-                    else:
-                        key = (module_kind, rule["tp"])
-                        self._dense_index[key] = rule["min_tokens"]
-                except KeyError as e:
-                    raise ValueError(
-                        f"Malformed FP8 policy rule at rules[{module_kind!r}][{i}]: "
-                        f"missing required key {e}. Rule content: {rule}"
-                    ) from None
+                    except KeyError as e:
+                        raise ValueError(
+                            f"Malformed FP8 policy rule at rules[{module_kind!r}][{i}]: "
+                            f"missing required key {e}. Rule content: {rule}"
+                        ) from None
+            else:
+                for ub_name, rule_list in entry.items():
+                    for i, rule in enumerate(rule_list):
+                        try:
+                            key = (module_kind, ub_name, rule["tp"])
+                            self._dense_index[key] = rule["min_tokens"]
+                        except KeyError as e:
+                            raise ValueError(
+                                f"Malformed FP8 policy rule at "
+                                f"rules[{module_kind!r}][{ub_name!r}][{i}]: "
+                                f"missing required key {e}. Rule content: {rule}"
+                            ) from None
 
     def should_use_fp8(
         self,
@@ -124,12 +137,17 @@ class FP8DynamicPolicy:
         tp: int = 1,
         etp: int = 1,
         num_gemms: int = 1,
+        ub_name: Optional[str] = None,
     ) -> bool:
-        """Return True if FP8 is expected to be faster than BF16."""
+        """Return True if FP8 is expected to be faster than BF16.
+
+        For dense module kinds ``ub_name`` is required; a missing entry is
+        treated conservatively (BF16).
+        """
         if module_kind in _MOE_MODULE_KINDS:
             min_tokens = self._moe_index.get((module_kind, etp, num_gemms))
         else:
-            min_tokens = self._dense_index.get((module_kind, tp))
+            min_tokens = self._dense_index.get((module_kind, ub_name, tp))
         if min_tokens is None:
             return False  # No benchmark data → conservative BF16
         return num_tokens >= min_tokens
@@ -258,4 +276,6 @@ def selective_fp8_init_decision(config, *, te_cls, ub_name, init_kwargs) -> bool
             module_kind, num_tokens, tp=tp, etp=etp, num_gemms=num_gemms
         )
     else:
-        return policy.should_use_fp8(module_kind, dense_num_tokens, tp=tp)
+        return policy.should_use_fp8(
+            module_kind, dense_num_tokens, tp=tp, ub_name=ub_name
+        )
