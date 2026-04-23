@@ -47,4 +47,5 @@ Refer to [Quick Start: VLM Model SFT Training on Kunlunxin P800](https://loongfo
 | | | internvl3.5_38b | | |
 | | | internvl3.5_30b_a3b | | |
 | | | internvl3.5_241b_a28b | | |
+| | Qwen-3.5 | qwen3.5_35b_a3b | ✅ (example) | ✅ (example) |
 | VLA | PI 0.5 | | | ✅ (example) |
