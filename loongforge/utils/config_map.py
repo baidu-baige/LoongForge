@@ -243,6 +243,10 @@ MODEL_CONFIG_REGISTRY = {
     },
 
     # qwen3.6
+    "qwen3.6-27b": {
+        "config_path": "configs/models/qwen3.6",
+        "config_name": "qwen3_6_27b",
+    },
     "qwen3.6-35b-a3b": {
         "config_path": "configs/models/qwen3.6",
         "config_name": "qwen3_6_35b_a3b",

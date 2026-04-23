@@ -24,7 +24,8 @@ LoongForge supports bidirectional conversion between Mcore and Hugging Face (HF)
 |                  | internvl3.5_241b_a28b | intern_vit_6b_convert<br>intern_mlp_adapter_convert<br>qwen3_moe_convert_intern | ❌ | ❌ |
 | **LLaVA-OV1.5**  | llava_ov_1_5_30b_a3b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_moe_convert | ❌ | ❌ |
 |                  | llava_ov_4b | llava_vit_convert<br>llava_mlp_adapter_convert<br>qwen3_convert_llava | ✅ | ✅ |
-| **Qwen3.6**      | qwen3_6_35b_a3b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_6_moe_convert | ✅ | ✅ |
+| **Qwen3.6**      | qwen3_6_27b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_6_dense_convert | ✅ | ✅ |
+|                  | qwen3_6_35b_a3b | qwen3_5_vit_convert<br>qwen_3_mlp_adapter_convert<br>qwen3_6_moe_convert | ✅ | ✅ |
 
 ---
 
