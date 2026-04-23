@@ -2,7 +2,7 @@
 <div align="center">
 
 <h1 align="center">LoongForge</h1>
-<h3>A modular, scalable, and highly efficient training framework for language and multimodal models.</h3>
+<h3>A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models.</h3>
 
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://loongforge.readthedocs.io/en/latest/index.html)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge=social)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
 
@@ -10,38 +10,39 @@
 
 ## 📖 About
 
-**LoongForge** (evolved from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)) is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and Supervised Fine-Tuning (SFT). Through continuous adaptation and performance optimization, LoongForge delivers an efficient, easy-to-use, and highly extensible solution for model training.
+**LoongForge** is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and supervised fine-tuning (SFT). Through continuous adaptation and performance optimization, LoongForge delivers an efficient, easy-to-use, and highly extensible solution for model training.
 
 * **🚀 Comprehensive Model Coverage**: Natively supports mainstream model architectures including LLMs (Large Language Models), VLMs (Vision-Language), VLAs (Vision-Language-Action), and Diffusion Models. Its flexible composition abstraction makes adding new multi-modal variants effortless.
 * **⚡ Performance-Driven Optimization**: Built upon Megatron-LM with significant enhancements. LoongForge introduces advanced optimizations in communication, computation overlap, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
 * **🧪 Heterogeneous Hardware Support**: Provides native, high-performance support for both NVIDIA GPUs and Kunlun XPUs, ensuring seamless migration and stable training at scale across diverse hardware clusters.
 
 ## 🔥 Latest News
-- **[2026/03]** 🎉 Initial release of the LoongForge framework!
+- **[2026/04]** 🎉 Initial release of the LoongForge framework!
 
 ## ✨ Key Features
 
 * **Flexible Composition**: A configuration-driven approach to assemble VLMs using interchangeable ViT and LLM components.
-* **Heterogeneous Strategies**: Enables assigning independent configurations—such as Tensor/Data Parallel sizes and recomputation layers—to different model components (e.g., Vision Encoder vs. LLM) for optimal throughput and memory efficiency.
-* **MoE Optimization**: Integrates All2All communication, activation offloading, and computation overlap to optimize memory usage and communication in large-scale MoE models.
-* **DP Load Balancing**: Optimizes data parallel imbalances caused by data packing, improving multi-node scaling efficiency.
-* **FP8 Precision Training**: Validated FP8 training pipelines for both LLMs and VLMs to accelerate computation and reduce memory footprint.
-* **MTP Training**: Supports Multi-Task Pretraining (MTP) with extensible heads, offering options for shared/independent weights and cascade/serial computation.
+* **Heterogeneous Parallelism**: Enables assigning independent configurations—such as Tensor/Data Parallel sizes and recomputation layers—to different model components (e.g., Vision Encoder vs. LLM) for optimal throughput and memory efficiency.
+* **Decoupled Encoder-Decoder Training**: Separates vision encoder and LLM into independent tasks, eliminating encoder-induced pipeline bubbles and preventing ViT computation from blocking LLM throughput.
+* **DP Load Balancing**: Leverages a load-aware data redistribution algorithm to optimize data parallel imbalances caused by data packing, improving multi-node scaling efficiency.
+* **MoE A2A Optimization**: Overlaps All2All communication, activation offloading, and computation to optimize memory usage and communication in large-scale MoE models, achieving lower memory footprint than upstream Megatron-LM.
 * **Custom Fused Operators**: High-performance fused operators like FusedDSA, which integrates flashmla and indexer forward operators with custom backward operators (essential for training) to accelerate DSA model training.
-* **Versatile Pipeline & Tools**: Out-of-the-box support for Pretrain, MidTrain, SFT, and LoRA. Includes tools for dataset processing (e.g., format conversion, packing..) and bidirectional Megatron ↔ HuggingFace weight conversion.
+* **Adaptive FP8 precision**: End-to-end FP8 training support for both LLMs and VLMs, further enhanced with adaptive FP8 that automatically determines whether to enable FP8 per operator based on GEMM shape and computational efficiency to maximize training performance.
+* **Flexible Checkpoint Conversion**: Supports both **offline bidirectional Megatron ↔ HuggingFace weight conversion** and **native online HuggingFace checkpoint load/save**, eliminating format barriers throughout the training workflow.
+* **Versatile Pipeline & Tools**: Out-of-the-box support for Pretrain, MidTrain, SFT, and LoRA, with built-in tools for dataset processing such as format conversion and packing.
 * **Heterogeneous Hardware**: Supports training on both NVIDIA GPUs and Kunlun XPUs via a minimally intrusive plugin design.
-* **Native Hugging Face checkpoint load/save support**, eliminating the need for offline Megatron conversion.
 
-*(🔔🔔🔔 Please refer to our [Official Documentation](https://baidu-baige.github.io/LoongForge/) for detailed tutorials.)*
+*(🔔🔔🔔 Please refer to our [Official Documentation](https://loongforge.readthedocs.io/en/latest/index.html) for detailed tutorials.)*
 
 ## 🚀 Ongoing & Upcoming
 
-* **Expanded support for embodied AI models**, including GR00T N1.6, DreamZero, and LingBot VA.
+* **Expanded foundation model support** (e.g., Kimi 2.6).
+* **Expanded support for embodied AI models**, including DreamZero, and LingBot VA.
 * **Further performance acceleration for diffusion models** such as WAN.
-* **Expanded foundation model support** (e.g., Kimi 2.5, GLM5).
-* **Decoupled encoder-decoder training** to accelerate VLM workflows.
-* **Further enhanced kernel performance** (e.g., DSA, GatedAttention).
-* **Adaptive FP8 precision** and **advanced MoE load-balancing** strategies.
+* **Further enhanced kernel performance**.
+* **Advanced MoE load-balancing** strategies.
+* **Support for INT4 quantization-aware training**, such as the approach proposed by Kimi 2.5.
+* **Enhanced long-sequence training** with optimization techniques such as ChunkPipe scheduling and Context Parallelism (CP) to improve throughput and scalability.
 * **Real-world application of MTP scaling** to improve speculative decoding acceptance rates.
 * ...
 
@@ -49,16 +50,15 @@
 
 ### Installation
 
-```bash
-git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
-docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
-  -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
-```
-
 See [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.md) for source install, XPU, and development setup options.
 
+```bash
+git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
+
+docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
+```
+
 **Tutorials:**
-* [Installation](https://loongforge.readthedocs.io/en/latest/get_started/installation.md)
 * [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.md)
 * [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.md)
 * [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.md)
@@ -140,7 +140,7 @@ LoongForge/
 
 **Open-Source Ecosystem:**
 * [Qianfan-VL: Domain-Enhanced Universal Vision-Language Models](https://github.com/baidubce/Qianfan-VL)
-* [LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5)
+* [LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-1.5) -  Built upon an earlier version of LoongForge.
 
 **Enterprise Scale & Performance:**
 
@@ -165,7 +165,7 @@ If you find LoongForge helpful in your research or production, please consider c
 
 ```bibtex
 @software{LoongForge2026,
-      title={LoongForge: A modular, scalable, and highly efficient training framework for language and multimodal models}, 
+      title={LoongForge: A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models.}, 
       author={{The LoongForge Authors}},
       year={2026},
       url={https://github.com/baidu-baige/LoongForge},
@@ -174,4 +174,5 @@ If you find LoongForge helpful in your research or production, please consider c
 
 ## 🙏 Acknowledgments
 
-LoongForge is built upon excellent open-source projects including but not limited to Megatron-LM, PyTorch, and Transformers. We thank the open-source community for their invaluable foundational work.
+LoongForge is built upon NVIDIA's Megatron-LM. During development, we also referenced and drew inspiration from several excellent open-source projects, including but not limited to Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.
+
