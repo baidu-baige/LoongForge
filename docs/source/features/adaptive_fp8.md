@@ -20,7 +20,7 @@ Adaptive FP8 addresses this by **enabling FP8 only on layers where benchmark dat
 
 | Item | Requirement |
 |------|-------------|
-| **Hardware** | Native FP8 support (NVIDIA Hopper / Blackwell: H100, GB200, …) |
+| **Hardware** | Native FP8 support on the target FP8 hardware platform |
 | **Software** | Transformer Engine enabled in the framework |
 | **Baseline** | Full FP8 training verified to work correctly (see [FP8 Training](fp8_training.md)) |
 
@@ -125,24 +125,31 @@ The generated policy JSON has the following structure:
   "version": 1,
   "speedup_threshold": 1.0,
   "rules": {
-    "layernorm_column": [
-      {"tp": 1, "min_tokens": 16384, "measured_speedup": 1.18}
-    ],
-    "row": [
-      {"tp": 1, "min_tokens": 16384, "measured_speedup": 1.23}
-    ],
+    "layernorm_column": {
+      "qkv": [{"tp": 1, "min_tokens": 16384, "measured_speedup": 1.03}],
+      "fc1": [{"tp": 1, "min_tokens": 4096,  "measured_speedup": 1.18}]
+    },
+    "row": {
+      "proj": [{"tp": 1, "min_tokens": 16384, "measured_speedup": 1.05}],
+      "fc2":  [{"tp": 1, "min_tokens": 8192,  "measured_speedup": 1.23}]
+    },
     "column_grouped": [
       {"etp": 1, "num_gemms": 64, "min_tokens": 424, "measured_speedup": 1.02}
+    ],
+    "row_grouped": [
+      {"etp": 1, "num_gemms": 64, "min_tokens": 424, "measured_speedup": 1.04}
     ]
   }
 }
 ```
 
+Dense module kinds (`layernorm_column` / `column` / `row` / `duplicated`) use a nested `{ub_name: [rules]}` layout so that same-kind modules with different shapes (e.g. `qkv` vs `fc1`, or `proj` vs `fc2`) can carry distinct thresholds. MoE grouped kinds keep the flat list form — per-expert `ub_name` is not a meaningful shape discriminator.
+
 **Decision logic**:
 
-- **Dense layers** (`layernorm_column` / `column` / `row`): Lookup by `(module_kind, tp)` → enable FP8 when `seq_length × micro_batch_size >= min_tokens`.
+- **Dense layers** (`layernorm_column` / `column` / `row` / `duplicated`): Lookup by `(module_kind, ub_name, tp)` → enable FP8 when `seq_length × micro_batch_size >= min_tokens`. `ub_name` is the TE tp-comm buffer name of the module (`qkv` / `proj` / `fc1` / `fc2` / `q_down_proj` / `kv_down_proj`).
 - **MoE layers** (`column_grouped` / `row_grouped`): Lookup by `(module_kind, etp, num_gemms)` → token count is `seq_length × micro_batch_size × moe_router_topk`.
-- **Missing rules**: If the policy has no matching entry for the current TP/EP, **conservatively fall back to BF16**.
+- **Missing rules**: If the policy has no matching entry for the current `(ub_name, tp)` or `(etp, num_gemms)`, **conservatively fall back to BF16**.
 
 ---
 

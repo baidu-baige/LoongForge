@@ -103,7 +103,6 @@ import math
 import os
 import re
 import statistics
-import subprocess
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
@@ -298,6 +297,7 @@ class BenchmarkResult:
     tp_size: int = 1
     etp_size: int = 1
     num_gemms: int = 1
+    ub_name: Optional[str] = None
 
 
 # ============================================================================
@@ -701,12 +701,6 @@ def _parse_omni_config(config_path: str) -> List[ModelSpec]:
                 target_key, yaml_path = _resolve_hydra_default_path(config_dir, key, value)
                 if yaml_path.exists():
                     sub_configs[target_key] = yaml.safe_load(yaml_path.read_text())
-        elif isinstance(entry, str) and entry != "_self_" and "@" in entry:
-            left, config_name = entry.split(":")
-            config_name = config_name.strip()
-            target_key, yaml_path = _resolve_hydra_default_path(config_dir, left, config_name)
-            if yaml_path.exists():
-                sub_configs[target_key] = yaml.safe_load(yaml_path.read_text())
 
     # Merge top-level model overrides into sub-configs (Hydra semantics: _self_ overrides).
     model_overrides = data.get("model", {})
@@ -1125,7 +1119,7 @@ def _reset_module_grad_state(module: torch.nn.Module, config: TransformerConfig)
             parameter.grad_added_to_main_grad = False
 
 
-def _run_warmup(module, config, input_tensor, module_inputs, run_forward_fn) -> None:
+def _run_warmup(module, config, input_tensor, run_forward_fn) -> None:
     """Execute warmup iterations (not timed)."""
     for _ in range(PERF_WARMUP):
         _reset_module_grad_state(module, config)
@@ -1199,7 +1193,7 @@ def _measure_case(case: ModuleCase, config: TransformerConfig, precision: str) -
         return _forward_func(*module_inputs)
 
     # Warmup
-    _run_warmup(module, config, input_tensor, module_inputs, _run_forward)
+    _run_warmup(module, config, input_tensor, _run_forward)
 
     # Timed iterations
     forward_times, backward_times, total_times, output_shape = _run_timed_iterations(
@@ -1236,6 +1230,7 @@ def _measure_case(case: ModuleCase, config: TransformerConfig, precision: str) -
         tp_size=config.tensor_model_parallel_size,
         etp_size=config.expert_tensor_parallel_size,
         num_gemms=case.num_gemms,
+        ub_name=case.tp_comm_buffer_name,
     )
 
 
@@ -1246,39 +1241,54 @@ def _measure_case(case: ModuleCase, config: TransformerConfig, precision: str) -
 def _analyze_fp8_thresholds(
     results: Sequence[BenchmarkResult], speedup_threshold: float = 1.0,
 ) -> dict:
-    """Analyze benchmark results and compute per-module-kind FP8 min_tokens thresholds.
+    """Analyze benchmark results and compute per-module FP8 min_tokens thresholds.
 
-    Groups results by (module_kind, tp_size/etp_size, num_gemms), pairs BF16/FP8
-    measurements, and finds the smallest num_tokens where FP8 speedup exceeds
-    *speedup_threshold*.
+    For dense module kinds (layernorm_column / column / row / duplicated), results
+    are grouped by ``(module_kind, ub_name, tp_size)`` so that same-kind modules
+    with different shapes (e.g. qkv vs fc1) receive distinct thresholds.  The
+    output dict uses a nested ``{module_kind: {ub_name: [rules]}}`` layout.
+
+    For MoE grouped kinds, results are grouped by ``(module_kind, etp_size,
+    num_gemms)`` and the output keeps the legacy flat
+    ``{module_kind: [rules]}`` layout (ub_name is not meaningful per-expert).
 
     Returns:
-        dict mapping module_kind -> list of rule dicts, each containing the
-        parallel config keys and the ``min_tokens`` threshold.
+        dict mapping module_kind to either a ``{ub_name: [rules]}`` dict (dense)
+        or a list of rule dicts (MoE).
     """
-    # Group results by a key that uniquely identifies a (module, parallel config, shape) combo.
-    # We need to pair bf16 and fp8 results for the same case.
+    # Group results by a key that uniquely identifies a (module, parallel config,
+    # shape) combo. We need to pair bf16 and fp8 results for the same case.
     grouped = {}
     for r in results:
         is_moe = r.module_kind in _MOE_MODULE_KINDS
         parallel_key = (r.etp_size, r.num_gemms) if is_moe else (r.tp_size,)
-        group_key = (r.module_kind, parallel_key, r.case_name, r.model_name, r.num_tokens)
+        ub_name = r.ub_name
+        group_key = (
+            r.module_kind, ub_name, parallel_key, r.case_name, r.model_name, r.num_tokens,
+        )
         grouped.setdefault(group_key, {})[r.precision] = r
 
-    # For each (module_kind, parallel_config), collect all (num_tokens, speedup) pairs
-    # and find the min_tokens where speedup > threshold.
-    threshold_candidates = {}  # (module_kind, parallel_key) -> list of (num_tokens, speedup)
-    for (module_kind, parallel_key, _case, _model, num_tokens), precs in grouped.items():
+    # For each (module_kind, ub_name, parallel_config), collect all
+    # (num_tokens, speedup) pairs and find the min_tokens where speedup > threshold.
+    threshold_candidates = {}
+    for (module_kind, ub_name, parallel_key, _case, _model, num_tokens), precs in grouped.items():
         if "bf16" not in precs or "fp8" not in precs:
             continue
         speedup = precs["bf16"].total_ms / precs["fp8"].total_ms
-        threshold_candidates.setdefault((module_kind, parallel_key), []).append(
-            (num_tokens, speedup)
-        )
+        threshold_candidates.setdefault(
+            (module_kind, ub_name, parallel_key), []
+        ).append((num_tokens, speedup))
 
-    rules = {}
-    for (module_kind, parallel_key), candidates in sorted(threshold_candidates.items()):
-        # Sort by num_tokens ascending to find the first crossing point.
+    # Build rules dict.  Dense -> nested by ub_name; MoE -> flat list.
+    rules: dict = {}
+    # Track per-(module_kind, ub_name, parallel_key) the most conservative rule
+    # so repeat cases don't duplicate entries.
+    dense_merged: dict = {}  # (module_kind, ub_name, parallel_key) -> rule
+    moe_merged: dict = {}    # (module_kind, parallel_key) -> rule
+
+    for (module_kind, ub_name, parallel_key), candidates in sorted(
+        threshold_candidates.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])
+    ):
         candidates.sort(key=lambda x: x[0])
         min_tokens = None
         measured_speedup = None
@@ -1287,7 +1297,6 @@ def _analyze_fp8_thresholds(
                 min_tokens = num_tokens
                 measured_speedup = round(speedup, 3)
                 break
-
         if min_tokens is None:
             # FP8 never wins for this config -- skip (conservative: default to BF16).
             continue
@@ -1300,26 +1309,34 @@ def _analyze_fp8_thresholds(
                 "min_tokens": min_tokens,
                 "measured_speedup": measured_speedup,
             }
+            key = (module_kind, parallel_key)
+            if key not in moe_merged or rule["min_tokens"] > moe_merged[key]["min_tokens"]:
+                moe_merged[key] = rule
         else:
             rule = {
                 "tp": parallel_key[0],
                 "min_tokens": min_tokens,
                 "measured_speedup": measured_speedup,
             }
-        rules.setdefault(module_kind, []).append(rule)
+            dkey = (module_kind, ub_name, parallel_key)
+            if dkey not in dense_merged or rule["min_tokens"] > dense_merged[dkey]["min_tokens"]:
+                dense_merged[dkey] = rule
 
-    # De-duplicate: if multiple cases yield the same parallel config, keep the
-    # most conservative (largest) min_tokens.
-    for module_kind, rule_list in rules.items():
-        merged = {}
-        for rule in rule_list:
-            if module_kind in _MOE_MODULE_KINDS:
-                key = (rule["etp"], rule["num_gemms"])
-            else:
-                key = (rule["tp"],)
-            if key not in merged or rule["min_tokens"] > merged[key]["min_tokens"]:
-                merged[key] = rule
-        rules[module_kind] = sorted(merged.values(), key=lambda r: r.get("tp", r.get("etp", 0)))
+    # Emit dense rules as nested dict.
+    for (module_kind, ub_name, _pk), rule in dense_merged.items():
+        rules.setdefault(module_kind, {}).setdefault(ub_name, []).append(rule)
+    for module_kind, by_ub in rules.items():
+        for ub_name, rule_list in by_ub.items():
+            by_ub[ub_name] = sorted(rule_list, key=lambda r: r["tp"])
+
+    # Emit MoE rules as flat list.
+    for (module_kind, _pk), rule in moe_merged.items():
+        rules.setdefault(module_kind, []).append(rule)
+    for module_kind in list(rules):
+        if module_kind in _MOE_MODULE_KINDS:
+            rules[module_kind] = sorted(
+                rules[module_kind], key=lambda r: (r["etp"], r["num_gemms"])
+            )
 
     return rules
 
@@ -1586,6 +1603,5 @@ if __name__ == "__main__":
         print(json.dumps(policy, indent=2))
     else:
         benchmark_results = run_te_parallel_layer_perf_benchmarks()
-        is_rank_zero = not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
-        if is_rank_zero:
+        if _is_rank_zero():
             print(_format_results(benchmark_results))

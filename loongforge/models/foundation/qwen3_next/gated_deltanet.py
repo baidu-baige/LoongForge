@@ -205,9 +205,13 @@ class GatedDeltaNet(HuggingFaceModule):
         self.in_proj_ba_dim = self.num_value_heads * 2
         if self.config.fp8:
             fp8_align_size = get_fp8_align_size(self.config.fp8_recipe)
-            assert self.in_proj_dim % fp8_align_size == 0, (
+            assert self.in_proj_qkvz_dim % fp8_align_size == 0, (
                 "For FP8, the innermost dimension of the GDN layer "
-                "input projection output tensor must be a multiple of 16."
+                f"in_proj_qkvz output tensor ({self.in_proj_qkvz_dim}) must be a multiple of {fp8_align_size}."
+            )
+            assert self.in_proj_ba_dim % fp8_align_size == 0, (
+                "For FP8, the innermost dimension of the GDN layer "
+                f"in_proj_ba output tensor ({self.in_proj_ba_dim}) must be a multiple of {fp8_align_size}."
             )
         self.in_proj_qkvz = TE_Linear(self.hidden_size, self.in_proj_qkvz_dim, bias=False)
         self.in_proj_ba = TE_Linear(self.hidden_size, self.in_proj_ba_dim, bias=False)
