@@ -4,7 +4,7 @@
 
 This document guides you through the quick start process for pre-training Large-Language Models (LLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for llm pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
+For data preparation and weight preparation, refer to [quick start for llm pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html).
 
 ## Pretrain Training Script
 

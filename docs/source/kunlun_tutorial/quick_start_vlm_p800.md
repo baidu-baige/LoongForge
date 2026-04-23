@@ -4,7 +4,7 @@
 
 This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for vlm sft](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md).
+For data preparation and weight preparation, refer to [quick start for vlm sft](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.md).
 
 ## SFT Training Script
 

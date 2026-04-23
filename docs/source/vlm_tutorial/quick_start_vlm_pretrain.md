@@ -80,7 +80,7 @@ Function Description:
     * `dataset.yaml`: records sample information
     * `split.yaml`: records dataset division
 
-For further understanding of various parameters and detailed functions of dataset conversion, refer to [dataset_conversion.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/ZDK80UXEny69eb?t=mention&mt=doc&dt=doc)
+For further understanding of various parameters and detailed functions of dataset conversion, refer to [dataset_conversion.md](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/dataset_conversion.html
 
 ## 2. Model Weight Preparation
 

@@ -4,7 +4,7 @@
 <h1 align="center">LoongForge</h1>
 <h3>A modular, scalable, and highly efficient training framework for language and multimodal models.</h3>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](http://yq02-inf-sci-k8s-a800-aa2ni52-0034.yq02:8080/)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge=social)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://loongforge.readthedocs.io/en/latest/index.html)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge=social)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
 
 </div>
 
@@ -55,25 +55,25 @@ docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
   -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
 ```
 
-See [Installation Guide](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md) for source install, XPU, and development setup options.
+See [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.md) for source install, XPU, and development setup options.
 
 **Tutorials:**
-* [Installation](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md)
-* [Supported Models](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/support_model.md)
-* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md)
-* [Quick Start for LLM SFT](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_sft.md)
-* [Quick Start for VLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vlm_tutorial/quick_start_vlm_pretrain.md)
-* [Quick Start for VLM SFT](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vlm_tutorial/quick_start_vlm_sft.md)
-* [Quick Start for VLA Training](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/vla_tutorial/quick_start_vla_training.md)
-* [Quick Start for WAN Training](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/wan_tutorial/quick_start_wan_training.md)
+* [Installation](https://loongforge.readthedocs.io/en/latest/get_started/installation.md)
+* [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.md)
+* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.md)
+* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.md)
+* [Quick Start for VLM Pretrain](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.md)
+* [Quick Start for VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.md)
+* [Quick Start for VLA Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_vla_training.md)
+* [Quick Start for WAN Training](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.md)
 
 **Kunlun XPU Platform:**
-* [README](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/README.md)
-* [Installation](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/install_p800.md)
-* [Quick Start for LLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
-* [Quick Start for LLM SFT](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_llm_sft_p800.md)
-* [Quick Start for VLM](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_vlm_p800.md)
-* [Quick Start for VLA](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/kunlun_tutorial/quick_start_vla_p800.md)
+* [README](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.md)
+* [Installation](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.md)
+* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_pretrain_p800.md)
+* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_sft_p800.md)
+* [Quick Start for VLM](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vlm_p800.md)
+* [Quick Start for VLA](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vla_p800.md)
 
 ## 🏛️ Supported Models
 
