@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Kimi K2.5 Multimodal Plugin for AIAK-Training-Omni
+Kimi K2.5 Multimodal Plugin for LoongForge
 
 This plugin handles Kimi K2.5 specific image/video processing and token formatting.
 Kimi K2.5 uses a different token format than Qwen2-VL:

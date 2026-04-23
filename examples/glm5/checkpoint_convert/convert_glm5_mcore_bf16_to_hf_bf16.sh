@@ -4,7 +4,7 @@ export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/cluster/aiak-omni-ckpt/GLM/GLM5-bf16-tp8pp8ep8etp1/release  # the converted checkpoint will be in MCore BF16 format
+LOAD=/mnt/cluster/loongforge-omni-ckpt/GLM/GLM5-bf16-tp8pp8ep8etp1/release  # the converted checkpoint will be in MCore BF16 format
 SAVE=/mnt/cluster/huggingface.co/GLM/GLM-5-bf16-hf  # the BF16 format checkpoint, converted via fp8_to_bf16 casting script
 
 MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/glm5/glm5.yaml

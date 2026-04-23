@@ -10,8 +10,8 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Llama-2-7b-hf"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/llama2-7b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/Llama-2-7b-hf"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/loongforge-ckpt/llama2-7b-roundtrip-output"}
 
 GPUS_PER_NODE=8
 

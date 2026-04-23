@@ -8,15 +8,15 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-deepseek_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-Coder-30B-A3B-Instruct"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/Qwen3-Coder-30B-A3B-Instruct"}
 
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/ssd1/sunyuehang/qwen3-coder-30b-a3b-tp2-pp2-ep2-bridge"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen3-coder"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge-ckpt/tensorboard-log/qwen3-coder"}
 
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/qwen3-coder-hf-bridge"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/loongforge-ckpt/qwen3-coder-hf-bridge"}
 
 GPUS_PER_NODE=8
 

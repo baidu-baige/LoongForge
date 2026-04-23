@@ -17,13 +17,11 @@ Environment versions:
     * CUDA 11.7
 ### 1.2 Build the docker image
 
-**Before building, initialize the Loong-Megatron submodule** so its contents are included
-in the Docker build context:
+**Before building, clone the repository with submodules** so the Loong-Megatron
+source is included in the Docker build context:
 
 ```bash
-cd LoongForge
-git submodule update --init third_party/Loong-Megatron
-cd ..
+git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
 ```
 
 Then build the image:
@@ -117,5 +115,20 @@ After entering the container:
 
 The virtual environment is activated by default. You can directly navigate to `/workspace/LoongForge/examples_xpu/` to run the corresponding training scripts.
 
-## 2. Manual Environment Setup
-Note: We do NOT need to install the NVIDIA Transformer Engine. For other steps, please refer to [installation guide on NVIDIA GPU](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md).
+## 2. Install from Source
+
+If you already have a working Kunlun XPU + XPyTorch environment, you can
+install LoongForge directly:
+
+```bash
+git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
+cd LoongForge
+uv venv .venv
+source .venv/bin/activate
+uv pip install -e ".[xpu]"
+```
+
+Note: TransformerEngine is **not** required for XPU. For additional XPU-specific
+dependencies (e.g. XPyTorch, DeepSpeed), refer to
+[`docker/Dockerfile.xpu`](https://github.com/baidu-baige/LoongForge/blob/master/docker/Dockerfile.xpu)
+for exact versions and build steps.

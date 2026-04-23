@@ -48,40 +48,39 @@ baidu-baige/LoongForge        →  your-name/LoongForge
 baidu-baige/Loong-Megatron   →  your-name/Loong-Megatron   # only if modifying Megatron
 ```
 
-### Step 1 — Clone LoongForge and initialize submodules
+### Step 1 — Clone your fork and initialize submodules
 
 ```bash
 git clone https://github.com/your-name/LoongForge.git
 cd LoongForge
 
+# Add the official repo as upstream
+git remote add upstream https://github.com/baidu-baige/LoongForge.git
+
 # Initialize the Megatron-LM submodule
 git submodule update --init third_party/Loong-Megatron
 ```
 
-### Step 2 — Configure remotes
+### Step 2 — Configure Loong-Megatron remotes (only if modifying Megatron)
 
 ```bash
-# LoongForge — add your fork as a push target
-git remote add my-fork https://github.com/your-name/LoongForge.git
-
-# Loong-Megatron — inside the submodule directory
 cd third_party/Loong-Megatron
-# origin already points to baidu-baige/Loong-Megatron (fetch)
+# origin already points to baidu-baige/Loong-Megatron via the submodule config
 git remote add my-fork https://github.com/your-name/Loong-Megatron.git
 
 # Verify
 git remote -v
-# origin    https://github.com/baidu-baige/Loong-Megatron.git   (fetch)
-# my-fork   https://github.com/your-name/Loong-Megatron.git (push)
+# origin    https://github.com/baidu-baige/Loong-Megatron.git (fetch)
+# my-fork   https://github.com/your-name/Loong-Megatron.git   (fetch)
+cd ../..
 ```
 
 ### Step 3 — Create a development branch
 
 ```bash
 # LoongForge
-cd LoongForge
 git checkout main
-git pull origin main
+git pull upstream main
 git checkout -b feature/your-feature-name
 
 # Loong-Megatron (only if modifying Megatron)
@@ -89,6 +88,7 @@ cd third_party/Loong-Megatron
 git checkout loongforge_mcore_v0.15.0
 git pull origin loongforge_mcore_v0.15.0
 git checkout -b feature/your-feature-name
+cd ../..
 ```
 
 ### Step 4 — Develop and commit your changes
@@ -104,15 +104,15 @@ git commit -m "feat: add your commit message"
 
 ```bash
 # (Optional but recommended) Rebase on the latest upstream main before pushing
-git pull --rebase https://github.com/baidu-baige/LoongForge.git main
-git push -u my-fork feature/your-feature-name
+git pull --rebase upstream main
+git push -u origin feature/your-feature-name
 ```
 
 For Loong-Megatron changes, push to your Megatron fork instead:
 
 ```bash
 cd third_party/Loong-Megatron
-git pull --rebase https://github.com/baidu-baige/Loong-Megatron.git loongforge_mcore_v0.15.0
+git pull --rebase origin loongforge_mcore_v0.15.0
 git push -u my-fork feature/your-feature-name
 ```
 
@@ -139,8 +139,8 @@ Before submitting a pull request, please make sure that:
 7. You submit the pull request against the correct development branch as required.
 
 ## License
-By contributing to LoongForge, you agree that your original contributions will be licensed under the [Apache License 2.0](https://github.com/baidu/LoongForge/blob/master/LICENSE).
+By contributing to LoongForge, you agree that your original contributions will be licensed under the [Apache License 2.0](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE).
 
 Please note that some files in this repository include or are derived from third-party open-source projects. For such files, contributors must retain the original copyright, license, and attribution notices required by the upstream project, and add modification notices where appropriate. See the corresponding file headers for additional details.
 
-For practical file header templates and examples, please refer to our **[License and File Header Guidelines](https://github.com/baidu/LoongForge/blob/master/docs/source/HEADER_GUIDELINES.md)**.
+For practical file header templates and examples, please refer to our **[License and File Header Guidelines](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/HEADER_GUIDELINES.md)**.

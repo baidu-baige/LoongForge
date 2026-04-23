@@ -6,14 +6,14 @@ export CUDA_VISIBLE_DEVICES=5
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-deepseek_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen3-1.7B-Instruct"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/Qwen3-1.7B-Instruct"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/Qwen3-1.7B-Instruct"}
-# CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen3_1.7B_mcore_tp1pp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/Qwen3-1.7B-Instruct"}
+# CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/qwen3_1.7B_mcore_tp1pp1"}
 
-LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen3_1.7B_mcore_tp1pp1_lora"}
+LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/qwen3_1.7B_mcore_tp1pp1_lora"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-1.7b"}
 
@@ -82,7 +82,7 @@ TRAINING_ARGS=(
     --pretrained-checkpoint $CHECKPOINT_PATH
     --save-interval 40 
     --save-hf true
-    --save-hf-path /workspace/aiak-ckpt/qwen3-1.7b-lora-hf
+    --save-hf-path /workspace/loongforge-ckpt/qwen3-1.7b-lora-hf
     --lora-alpha 32
     --lora-dim 16
     --eval-interval 1000

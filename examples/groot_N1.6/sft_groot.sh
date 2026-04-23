@@ -6,8 +6,8 @@ export EAGLE_LOCAL_PATH=/workspace/huggingface.co/aravindhs-NV/eagle3-processor-
 set -euo pipefail
 
 # Paths - adjust these to your environment
-MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/AIAK-Megatron"}
-AIAK_TRAINING_PATH=${AIAK_TRAINING_PATH:-"/workspace/LoongForge"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 DATA_PATH=${DATA_PATH:-"/workspace/single_data/single_data/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"$EAGLE_LOCAL_PATH/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt"}
@@ -82,7 +82,7 @@ TRAINING_ARGS=(
 
 MODEL_CONFIG_ARGS=(
     --model-name groot_n1_6
-    --config-file $AIAK_TRAINING_PATH/configs/models/groot/groot_n1_6.yaml
+    --config-file $LOONGFORGE_PATH/configs/models/groot/groot_n1_6.yaml
     --distributed-backend nccl
 )
 
@@ -91,9 +91,9 @@ LOGGING_ARGS=(
 )
 
 # Run training
-PYTHONPATH=$MEGATRON_PATH:$AIAK_TRAINING_PATH:${PYTHONPATH:-} \
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:${PYTHONPATH:-} \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $AIAK_TRAINING_PATH/loongforge/train.py \
+    $LOONGFORGE_PATH/loongforge/train.py \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

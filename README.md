@@ -47,7 +47,17 @@
 
 ## 🛠️ Getting Started
 
-**Quick Start Guides:**
+### Installation
+
+```bash
+git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
+docker build --build-arg COMPILE_ENV=hopper --build-arg INSTALL_LEROBOT=false \
+  -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
+```
+
+See [Installation Guide](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md) for source install, XPU, and development setup options.
+
+**Tutorials:**
 * [Installation](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/installation.md)
 * [Supported Models](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/get_started/support_model.md)
 * [Quick Start for LLM Pretrain](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md)

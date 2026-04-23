@@ -18,8 +18,8 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
-COPY ./BaigeOmni /workspace/BaigeOmni
-COPY ./Baige-Megatron /workspace/Baige-Megatron
+COPY ./LoongForge /workspace/LoongForge
+COPY ./Loong-Megatron /workspace/Loong-Megatron
 COPY ./TransformerEngine /workspace/TransformerEngine
 
 # ======================== Basic Environment Setup ========================
@@ -30,11 +30,11 @@ RUN set -exuo pipefail && \
     }; \
     install_pip_config() { \
         mkdir -p /tmp && chmod -R 777 /tmp && \
-        if [ -f /workspace/BaigeOmni/docker/pip.conf ]; then \
-            cp /workspace/BaigeOmni/docker/pip.conf /etc/pip.conf && \
-            cp /workspace/BaigeOmni/docker/pip.conf /usr/pip.conf && \
-            mkdir -p /root/.pip && cp /workspace/BaigeOmni/docker/pip.conf /root/.pip/pip.conf && \
-            mkdir -p /etc/xdg/pip && cp /workspace/BaigeOmni/docker/pip.conf /etc/xdg/pip/pip.conf; \
+        if [ -f /workspace/LoongForge/docker/pip.conf ]; then \
+            cp /workspace/LoongForge/docker/pip.conf /etc/pip.conf && \
+            cp /workspace/LoongForge/docker/pip.conf /usr/pip.conf && \
+            mkdir -p /root/.pip && cp /workspace/LoongForge/docker/pip.conf /root/.pip/pip.conf && \
+            mkdir -p /etc/xdg/pip && cp /workspace/LoongForge/docker/pip.conf /etc/xdg/pip/pip.conf; \
         fi; \
     }; \
     remove_pip_constraints() { \
@@ -46,9 +46,9 @@ RUN set -exuo pipefail && \
         fi; \
     }; \
     setup_system_env() { \
-        if [ -f /workspace/BaigeOmni/docker/sources.list ]; then \
+        if [ -f /workspace/LoongForge/docker/sources.list ]; then \
             rm -rf /etc/apt/sources.list && \
-            cp /workspace/BaigeOmni/docker/sources.list /etc/apt/sources.list; \
+            cp /workspace/LoongForge/docker/sources.list /etc/apt/sources.list; \
         fi && \
         rm -f /etc/apt/sources.list.d/ubuntu.sources && \
         apt-get update && \
@@ -64,12 +64,23 @@ RUN set -exuo pipefail && \
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
     install_requirements() { \
-        local requirements_file="/workspace/BaigeOmni/requirements_internal.txt"; \
-        cd /workspace/BaigeOmni/ && \
-        pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
-            -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
+        cd /workspace/LoongForge/ && \
+        pip install uv && \
+        uv pip install --no-config --system --break-system-packages --no-cache -e ".[gpu]" --group internal \
+            -i http://mirrors.baidubce.com/pypi/simple --allow-insecure-host mirrors.baidubce.com; \
+    }; \
+    install_internal_wheels() { \
+        local BOS_BASE="https://aihc-ai-datasets-bj.bj.bcebos.com/hac-aiacc/omni_training/ngc2506_torch28_cuda129_tev29" && \
+        pip install --no-cache-dir \
+            "${BOS_BASE}/flash_attn-2.8.1-cp312-cp312-linux_x86_64.whl" \
+            "${BOS_BASE}/flash_attn_3-3.0.0b1-cp39-abi3-linux_x86_64.whl" \
+            "${BOS_BASE}/fast_hadamard_transform-1.0.4.post1-cp312-cp312-linux_x86_64.whl" \
+            "${BOS_BASE}/flash_mla_fwd-1.0.0+2026.3.11.15.31.38-cp312-cp312-linux_x86_64.whl" \
+            "${BOS_BASE}/flash_mla_bwd-1.0.0+2026.4.7.16.52.19-cp312-cp312-linux_x86_64.whl" \
+            "${BOS_BASE}/lightning_indexer_bwd-1.0.0-cp312-cp312-linux_x86_64.whl"; \
     }; \
     install_requirements && \
+    install_internal_wheels && \
     echo "y" | pip uninstall nvidia-modelopt || true
 
 # =========================================================
@@ -181,11 +192,11 @@ RUN set -exuo pipefail && \
         cd /workspace && rm -rf ${transformerEngine_dir}; \
     }; \
     install_megatron() { \
-        local megatron_dir=/workspace/Baige-Megatron; \
+        local megatron_dir=/workspace/Loong-Megatron; \
         local MEGATRON_TAGS="core_v0.15.0" && \
-        echo "Installing Baige-Megatron ${MEGATRON_TAGS}..." && \
+        echo "Installing Loong-Megatron ${MEGATRON_TAGS}..." && \
         cd ${megatron_dir} && \
-        echo "Baige-Megatron setup completed"; \
+        echo "Loong-Megatron setup completed"; \
     }; \
     install_lerobot() { \
         echo "Installing lerobot..." && \
@@ -223,13 +234,13 @@ RUN mkdir -p /root/.jupyter && \
 # Clean Up Unused Files (Consistent with install.sh)
 # =========================================================
 RUN rm -rf /tmp/* ~/.bash_history && \
-    rm -rf /workspace/BaigeOmni/.git && \
-    rm -rf /workspace/BaigeOmni/build.sh && \
-    rm -rf /workspace/BaigeOmni/ci.yml && \
-    rm -rf /workspace/BaigeOmni/docker/ci && \
-    rm -rf /workspace/Baige-Megatron/.git && \
-    rm -rf /workspace/Baige-Megatron/.github && \
-    rm -rf /workspace/Baige-Megatron/output && \
+    rm -rf /workspace/LoongForge/.git && \
+    rm -rf /workspace/LoongForge/build.sh && \
+    rm -rf /workspace/LoongForge/ci.yml && \
+    rm -rf /workspace/LoongForge/docker/ci && \
+    rm -rf /workspace/Loong-Megatron/.git && \
+    rm -rf /workspace/Loong-Megatron/.github && \
+    rm -rf /workspace/Loong-Megatron/output && \
     rm -rf /workspace/*.tar.gz && \
     rm -f /workspace/README.md /workspace/license.txt && \
     rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot

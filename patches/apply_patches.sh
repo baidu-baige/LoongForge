@@ -7,6 +7,7 @@ set -euo pipefail # Exit on error, undefined variable, pipe fail
 # Configuration
 PATCH_DIR="${1:-patches}"
 TARGET_REPO="${2:-./target-repo}"
+NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 
 # Color definitions
 RED='\033[0;31m'
@@ -43,6 +44,11 @@ if [ ! -d "$TARGET_REPO/.git" ]; then
     exit 1
 fi
 
+# Convert PATCH_DIR to absolute path before cd into TARGET_REPO
+if [[ "$PATCH_DIR" != /* ]]; then
+    PATCH_DIR="$(cd "$PATCH_DIR" && pwd)"
+fi
+
 cd "$TARGET_REPO"
 echo -e "${GREEN}Using repository: $(pwd)${NC}"
 
@@ -55,44 +61,13 @@ echo -e "Current commit: ${YELLOW}$CURRENT_COMMIT${NC}"
 # Check if working directory is clean
 if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     echo -e "${YELLOW}Warning: Working directory has uncommitted changes${NC}"
-    read -p "Continue applying patches? (y/n): " confirm < /dev/tty
-    if [ "$confirm" != "y" ]; then
-        echo "Operation cancelled"
-        exit 0
-    fi
-fi
-
-# Read and display patch metadata
-echo ""
-if [ -f "../$PATCH_DIR/metadata.json" ]; then
-    echo -e "${BLUE}Patch Metadata:${NC}"
-    if command -v jq >/dev/null 2>&1; then
-        BASELINE_BRANCH=$(jq -r '.baseline_repo_branch // "unknown"' "../$PATCH_DIR/metadata.json")
-        BASELINE_COMMIT=$(jq -r '.baseline_repo_commit // "unknown"' "../$PATCH_DIR/metadata.json")
-        MODIFIED_BRANCH=$(jq -r '.modified_repo_branch // "unknown"' "../$PATCH_DIR/metadata.json")
-        MODIFIED_COMMIT=$(jq -r '.modified_repo_commit // "unknown"' "../$PATCH_DIR/metadata.json")
-        PATCH_DATE=$(jq -r '.export_date // "unknown"' "../$PATCH_DIR/metadata.json")
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+        echo "NON_INTERACTIVE=true, continuing..."
     else
-        BASELINE_BRANCH=$(grep -oP '"baseline_repo_branch": "\K[^"]+' "../$PATCH_DIR/metadata.json" 2>/dev/null || echo "unknown")
-        BASELINE_COMMIT=$(grep -oP '"baseline_repo_commit": "\K[^"]+' "../$PATCH_DIR/metadata.json" 2>/dev/null || echo "unknown")
-        MODIFIED_BRANCH=$(grep -oP '"modified_repo_branch": "\K[^"]+' "../$PATCH_DIR/metadata.json" 2>/dev/null || echo "unknown")
-        MODIFIED_COMMIT=$(grep -oP '"modified_repo_commit": "\K[^"]+' "../$PATCH_DIR/metadata.json" 2>/dev/null || echo "unknown")
-        PATCH_DATE=$(grep -oP '"export_date": "\K[^"]+' "../$PATCH_DIR/metadata.json" 2>/dev/null || echo "unknown")
-    fi
-    echo "  Baseline Branch: $BASELINE_BRANCH"
-    echo "  Baseline Commit: ${BASELINE_COMMIT:0:8}"
-    echo "  Modified Branch: $MODIFIED_BRANCH"
-    echo "  Modified Commit: ${MODIFIED_COMMIT:0:8}"
-    echo "  Export Date: $PATCH_DATE"
-    
-    # Check version compatibility
-    if [ "$BASELINE_COMMIT" != "unknown" ]; then
-        # Get full commit hash and compare
-        CURRENT_FULL=$(git rev-parse HEAD)
-        BASELINE_FULL=$(git rev-parse "$BASELINE_COMMIT" 2>/dev/null || echo "unknown")
-        
-        if [ "$BASELINE_FULL" != "unknown" ] && [ "$CURRENT_FULL" != "$BASELINE_FULL" ]; then
-            echo -e "${YELLOW}  Note: Current commit differs from patch baseline, conflicts may occur${NC}"
+        read -p "Continue applying patches? (y/n): " confirm < /dev/tty
+        if [ "$confirm" != "y" ]; then
+            echo "Operation cancelled"
+            exit 0
         fi
     fi
 fi
@@ -106,11 +81,6 @@ SKIP_COUNT=0
 FAILED_PATCHES=()
 
 # Collect patch files into array (recursively search subdirectories)
-# Convert PATCH_DIR to absolute path if it's relative
-if [[ "$PATCH_DIR" != /* ]]; then
-    # Relative path: convert to absolute (relative to where script is called from)
-    PATCH_DIR="$(cd "$PATCH_DIR" && pwd)"
-fi
 
 # Use mapfile for bash 4.0+, fallback to while-read for older versions
 BASH_MAJOR_VERSION="${BASH_VERSINFO[0]}"

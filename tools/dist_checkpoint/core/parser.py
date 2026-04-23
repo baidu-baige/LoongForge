@@ -214,8 +214,8 @@ if __name__ == "__main__":
         '--micro-batch-size', '1',
         '--global-batch-size', '8',
         '--train-iters', '0',
-        '--load', '/workspace/aiak-ckpt/Qwen2-VL-7B-Instruct',
-        '--save-hf-path', '/workspace/aiak-ckpt/output',
+        '--load', '/workspace/loongforge-ckpt/Qwen2-VL-7B-Instruct',
+        '--save-hf-path', '/workspace/loongforge-ckpt/output',
         '--save-hf', 'true',
         '--training-phase', 'pretrain',
     ]

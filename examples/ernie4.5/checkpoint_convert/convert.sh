@@ -17,8 +17,8 @@
 #   - Example for PP=8 with split [4,4,4,4,4,4,2,2]:
 #       PP_LAYER_OFFSETS="0,4,8,12,16,20,24,26"
 
-MEGATRON_PATH=/workspace/ernie/AIAK-Megatron/
-LOONGFORGE_PATH=/workspace/ernie/AIAK-Training-Omni/
+MEGATRON_PATH=/workspace/ernie/Loong-Megatron/
+LOONGFORGE_PATH=/workspace/ernie/LoongForge/
 
 export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH
 
