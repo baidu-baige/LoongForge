@@ -35,13 +35,14 @@ source_suffix = {
 
 myst_enable_extensions = [
     "amsmath",
-    "dollarmath",  
+    "dollarmath",
     "deflist",
     "html_image",
     "linkify",
     "replacements",
     "substitution",
     "tasklist",
+    "colon_fence",
 ]
 
 html_theme = 'sphinx_book_theme'

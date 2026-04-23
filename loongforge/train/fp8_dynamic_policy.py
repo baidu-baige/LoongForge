@@ -141,7 +141,7 @@ _FP8_DYNAMIC_POLICY_CACHE: Dict[str, FP8DynamicPolicy] = {}
 
 
 def _resolve_policy_path(policy_path: str) -> str:
-    """Resolve relative paths against the AIAK-Training-Omni project root."""
+    """Resolve relative paths against the LoongForge project root."""
     if os.path.isabs(policy_path):
         return policy_path
     # Project root = parent of the loongforge package directory

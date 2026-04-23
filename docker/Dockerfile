@@ -32,13 +32,9 @@ RUN set -exuo pipefail && \
 
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
-    install_requirements() { \
-        local requirements_file="/workspace/LoongForge/requirements.txt"; \
-        cd /workspace/LoongForge/ && \
-        pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
-            -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
-    }; \
-    install_requirements && \
+    cd /workspace/LoongForge/ && \
+    pip install uv && \
+    uv pip install --system --break-system-packages --no-cache -e ".[gpu]" && \
     echo "y" | pip uninstall nvidia-modelopt || true
 
 # =========================================================
@@ -140,7 +136,7 @@ RUN set -exuo pipefail && \
         git checkout ${TE_TAGS} -b loongforge_${TE_TAGS} && \
         git restore . && \
         if [ -f "/workspace/LoongForge/patches/apply_patches.sh" ]; then \
-            bash /workspace/LoongForge/patches/apply_patches.sh \
+            NON_INTERACTIVE=true bash /workspace/LoongForge/patches/apply_patches.sh \
                 /workspace/LoongForge/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \

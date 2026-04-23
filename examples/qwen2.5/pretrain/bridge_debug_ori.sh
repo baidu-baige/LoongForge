@@ -7,14 +7,14 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-deepseek_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/Qwen2.5-7B-Instruct"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/Qwen2.5-7B-Instruct"}
 
-#CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-7b-tp2-pp4-custom"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/qwen2.5-7b-tp2-pp2-vpp"}
+#CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/qwen2.5-7b-tp2-pp4-custom"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/qwen2.5-7b-tp2-pp2-vpp"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/qwen2.5-7b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge-ckpt/tensorboard-log/qwen2.5-7b"}
 
 
 

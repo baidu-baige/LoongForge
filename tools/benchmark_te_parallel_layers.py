@@ -23,7 +23,7 @@ Usage
     TE_LAYER_PERF_CASESET=vision pytest ... -s
     TE_LAYER_PERF_CASESET=llm   pytest ... -s
 
-3. Load model config from an AIAK-Training-Omni Hydra YAML::
+3. Load model config from an LoongForge Hydra YAML::
 
     # VL model (auto-resolves Hydra defaults for image_encoder / foundation)
     TE_LAYER_PERF_OMNI_CONFIG_PATH=path/to/configs/models/qwen3_vl/qwen3_vl_235b_a22b.yaml \
@@ -674,7 +674,7 @@ def _model_spec_from_cfg(cfg: dict, *, variant: str, name: str) -> ModelSpec:
 
 
 def _parse_omni_config(config_path: str) -> List[ModelSpec]:
-    """Parse an AIAK-Training-Omni model YAML (Hydra-style) into ModelSpec instances.
+    """Parse an LoongForge model YAML (Hydra-style) into ModelSpec instances.
 
     Supports three config types:
     - Top-level VL configs (e.g. qwen3_vl/qwen3_vl_235b_a22b.yaml) that reference

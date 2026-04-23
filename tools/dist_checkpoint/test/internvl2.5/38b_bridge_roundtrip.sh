@@ -19,8 +19,8 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/InternVL2_5-38B/"}
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/internvl2.5-38b-roundtrip-output"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/InternVL2_5-38B/"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/loongforge-ckpt/internvl2.5-38b-roundtrip-output"}
 
 GPUS_PER_NODE=8
 
@@ -43,7 +43,7 @@ MODEL_ARGS=(
     --rotary-seq-len-interpolation-factor 1
 )
 
-# Tokenizer is needed by initialize_loongforge_megatron → set_aiak_extra_global_vars
+# Tokenizer is needed by initialize_loongforge_megatron → set_loongforge_extra_global_vars
 TOKENIZER_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path $TOKENIZER_PATH

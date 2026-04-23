@@ -51,18 +51,14 @@ RUN set -exuo pipefail && \
 
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
-    install_requirements() { \
-        local requirements_file="/workspace/LoongForge/requirements_xpu.txt" && \
-        source /opt/omni_kunlun/bin/activate && \
-        # for deepspeed cpu adam
-        DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U && \
-        echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
-        echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
-        cd /workspace/LoongForge/ && \
-        python -m pip install -q --no-cache-dir --root-user-action=ignore -r ${requirements_file} \
-            -i http://mirrors.baidubce.com/pypi/simple --trusted-host mirrors.baidubce.com; \
-    }; \
-    install_requirements
+    source /opt/omni_kunlun/bin/activate && \
+    # for deepspeed cpu adam
+    DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U && \
+    echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
+    echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
+    cd /workspace/LoongForge/ && \
+    pip install uv && \
+    uv pip install --no-config --no-cache -e ".[xpu]"
 
 # =========================================================
 # Lerobot

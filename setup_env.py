@@ -1,10 +1,8 @@
-"""Setup LoongForge environment.
+"""Setup LoongForge environment — TransformerEngine only.
 
-Dependency management strategy:
-  - Megatron-LM : managed as a git submodule (third_party/Loong-Megatron),
-                  version is locked by the submodule commit pointer — no patching needed.
-  - TransformerEngine : cloned from upstream NVIDIA repo, checked out at the
-                        specified tag, then patched from patches/TransformerEngine_<tag>/.
+This script handles cloning, patching, and building TransformerEngine.
+For Megatron-LM, use: git clone --recurse-submodules
+For LoongForge itself, use: uv pip install -e ".[gpu]"
 """
 import os
 import subprocess
@@ -28,7 +26,7 @@ def run_command(command, cwd=None, shell=True, check=True, env=None):
 def main():
     """main process"""
     parser = argparse.ArgumentParser(
-        description="Setup LoongForge development environment.")
+        description="Setup TransformerEngine for LoongForge.")
     parser.add_argument("--te-tag", required=True,
                         help="Tag for TransformerEngine (e.g., v2.9)")
     parser.add_argument("--workspace", default=os.getcwd(),
@@ -46,28 +44,19 @@ def main():
         workspace = os.path.dirname(workspace)
         te_path = os.path.join(workspace, "TransformerEngine")
 
-    # Megatron-LM lives as a submodule inside the main repo
-    megatron_path = os.path.join(omni_path, "third_party", "Loong-Megatron")
-
     print(f"Workspace              : {workspace}")
-    print(f"Megatron Path       : {megatron_path}  (submodule)")
     print(f"TransformerEngine Path : {te_path}")
-    print(f"LoongForge Path         : {omni_path}")
+    print(f"LoongForge Path        : {omni_path}")
 
-    # 1. Initialize Megatron-LM submodule
-    # Version is locked by the submodule commit pointer in LoongForge — no patching needed.
-    print("\n[1/5] Initializing Megatron submodule...")
-    run_command("git submodule update --init third_party/Loong-Megatron", cwd=omni_path)
-
-    # 2. Clone TransformerEngine from upstream
-    print("\n[2/5] Setting up TransformerEngine...")
+    # 1. Clone TransformerEngine from upstream
+    print("\n[1/3] Setting up TransformerEngine...")
     if not os.path.exists(te_path):
         run_command(
             f"git clone https://github.com/NVIDIA/TransformerEngine.git {te_path}")
     else:
         print(f"TransformerEngine already exists at {te_path}")
 
-    # 3. Checkout TransformerEngine tag
+    # Checkout TransformerEngine tag
     print(f"Checking out TransformerEngine tag: {args.te_tag}")
     run_command("git fetch --all --tags", cwd=te_path)
 
@@ -81,9 +70,8 @@ def main():
 
     run_command("git restore .", cwd=te_path)
 
-    # 4. Apply patches to TransformerEngine
-    # Patch directory is named after the base tag, e.g. patches/TransformerEngine_v2.9/
-    print("\n[3/5] Applying patches to TransformerEngine...")
+    # 2. Apply patches to TransformerEngine
+    print("\n[2/3] Applying patches to TransformerEngine...")
     apply_script = os.path.join(omni_path, "patches/apply_patches.sh")
     if not os.path.exists(apply_script):
         print(f"Error: Patch script not found at {apply_script}")
@@ -94,22 +82,19 @@ def main():
         print(f"Error: TE patch directory not found: {te_patch_dir}")
         sys.exit(1)
 
-    run_command(f"bash {apply_script} {te_patch_dir} {te_path}")
+    env = os.environ.copy()
+    env["NON_INTERACTIVE"] = "true"
+    run_command(f"bash {apply_script} {te_patch_dir} {te_path}", env=env)
 
-    # 5. Build and install TransformerEngine
-    print("\n[4/5] Building and installing TransformerEngine...")
+    # 3. Build and install TransformerEngine
+    print("\n[3/3] Building and installing TransformerEngine...")
     run_command("git submodule update --init --recursive", cwd=te_path)
 
     env = os.environ.copy()
     env["NVTE_FRAMEWORK"] = "pytorch"
     run_command("pip3 install --no-build-isolation .", cwd=te_path, env=env)
 
-    # 6. Install LoongForge dependencies
-    print("\n[5/5] Installing LoongForge dependencies...")
-    run_command("pip install -r requirements.txt", cwd=omni_path)
-
-    print("\nSetup completed successfully!")
-    print(f"  Megatron : {megatron_path}")
+    print("\nTransformerEngine setup completed successfully!")
     print(f"  TransformerEngine : {te_path}  (tag {args.te_tag}, branch {branch_name})")
 
 

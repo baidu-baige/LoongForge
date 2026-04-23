@@ -8,16 +8,16 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-deepseek_text_document"}
 
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/DeepSeek-V2-Lite"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/DeepSeek-V2-Lite"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/DeepSeek_V2_Lite_group_tp1-pp1-ep8-bridge/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/DeepSeek_V2_Lite_group_tp1-pp1-ep8-bridge/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard-log/deepseek-v2"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge-ckpt/tensorboard-log/deepseek-v2"}
 
-SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/aiak-ckpt/deepseek-v2-lite-hf-bridge"}
+SAVE_HF_PATH=${SAVE_HF_PATH:-"/workspace/loongforge-ckpt/deepseek-v2-lite-hf-bridge"}
 
 
 GPUS_PER_NODE=8

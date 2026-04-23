@@ -19,10 +19,10 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/workspace/aiak-ckpt/pile_test/pile-deepseek_text_document"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/aiak-ckpt/DeepSeek-V2-Lite"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/aiak-ckpt/DeepSeek-V2-Lite"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/aiak-ckpt/tensorboard/deepseek-v2-lite"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-deepseek_text_document"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/DeepSeek-V2-Lite"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/DeepSeek-V2-Lite"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge-ckpt/tensorboard/deepseek-v2-lite"}
 
 GPUS_PER_NODE=8
 
