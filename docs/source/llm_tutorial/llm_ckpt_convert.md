@@ -20,8 +20,9 @@ When performing LLM weight conversion, it is recommended to pass parameters usin
 |safetensors|Use safetensors|
 |max_workers|thread for checkpoint converting|
 |moe-grouped-gemm|use grouped gemm in moe|
-|amax_epsilon|Epsilon value for amax calculation in FP8 conversion; used for FP8 quantization scale, aligned with the FP8 EPS environment variable set during training|
+|amax_epsilon|Epsilon value for amax calculation in FP8 conversion; used for FP8 quantization scale, aligned with the FP8 EPS environment variable set during training. Applicable to both `te` and `pt` methods.|
 |quant_method|The quantization method to use. Choices: [te, pt], defaults to `te`. When using Nvidia B-series GPUs (Blackwell) for weight conversion, this value needs to be set to `pt`|
+|force_pow_2_scales|When True (default), uses power-of-2 scaling for FP8 quantization (matching DeepGEMM's get_e4m3_sf_and_sf_inv). When False, uses linear scaling. Applicable to both `te` and `pt` methods.|
 |fp8_force_no_requant|skip dequantize + re-quantize in FP8 conversion|
 
 For descriptions of other parameters, please refer to [checkpoint_convert.md](https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/VPxwT-t6VJ/fj-SCq_ssunsiH?t=mention&mt=doc&dt=doc).
@@ -69,6 +70,8 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 Below is an example script for converting **DeepSeek V3.1** model weights from **MegatronCore FP8** format to **Huggingface FP8** format:
 
+> **Note**: When converting from BF16/FP32 source to FP8 target, `--fp8_force_no_requant` is necessary to avoid dequantize + re-quantize. On Nvidia B-series GPUs, `--quant_method pt` must also be added.
+
 ```bash
 #! /bin/bash
 
@@ -99,5 +102,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --safetensors \
     --max_workers=32 \
     --moe-grouped-gemm \
-    --fp8_force_no_requant
+    --fp8_force_no_requant \
+    --amax_epsilon=1e-12 \
+    # --quant_method pt
 ```

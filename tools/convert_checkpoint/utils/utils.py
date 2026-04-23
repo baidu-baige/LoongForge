@@ -639,9 +639,10 @@ def convert_bf16_to_fp8(
         method: one of the ["te", "pt"], means using TransformerEngine or naive PyTorch
             to do the quantization respectively. Defaults to "te".
         fp8_dtype: the dtype of the output fp8 tensor. Defaults to torch.float8_e4m3fn.
-        **kwargs: kwargs pass to the `te` method. Take no effect in other quantization methods. Belows are the args:
-            `amax_epsilon`: defaults to 0.
-            `force_pow_2_scales` defaults to True.
+        **kwargs: kwargs for quantization. Supported args:
+            `amax_epsilon`: defaults to 0. Minimum value for amax (clamp floor).
+            `force_pow_2_scales`: defaults to True. When True, uses power-of-2 scaling
+                (matching DeepGEMM's get_e4m3_sf_and_sf_inv).
     Returns:
         x_scaled: 2d tensor, the quantized tensor.
         weight_scale_inv: 2d tensor, the scale_inv of the quantized tensor.
@@ -650,16 +651,31 @@ def convert_bf16_to_fp8(
     # Always do the quantization on device
     x = x.cuda()
     
+    amax_epsilon = kwargs.get("amax_epsilon", 0.0)
+    force_pow_2 = kwargs.get("force_pow_2_scales", True)
+
     if method == "pt":
         assert x.dim() == 2
         m, n = x.shape
         x_padded = torch.zeros((ceil_div(m, 128) * 128, ceil_div(n, 128) * 128), dtype=x.dtype, device=x.device)
         x_padded[:m, :n] = x
         x_view = x_padded.view(-1, 128, x_padded.size(1) // 128, 128)
-        x_amax = x_view.abs().float().amax(dim=(1, 3), keepdim=True).clamp(1e-4)
-        x_scaled = (x_view * (448.0 / x_amax)).to(fp8_dtype)
+        x_amax = x_view.abs().float().amax(dim=(1, 3), keepdim=True).clamp(min=amax_epsilon)
+        if force_pow_2:
+            # Power-of-2 scaling
+            scaled = x_amax / 448.0
+            exp = torch.ceil(torch.log2(scaled))
+            scale = torch.pow(2.0, exp)
+            scale_inv = torch.pow(2.0, -exp)
+            x_scaled = (x_view * scale_inv).to(fp8_dtype)
+        else:
+            # Linear scaling
+            scale = x_amax / 448.0
+            scale_inv = 448.0 / x_amax
+            x_scaled = (x_view * scale_inv).to(fp8_dtype)
+        # scale returned is the scale factor (for dequantization: x = x_scaled * scale)
         return x_scaled.view_as(x_padded)[:m, :n].contiguous().cpu(), \
-            (x_amax / 448.0).view(x_view.size(0), x_view.size(2)).cpu()
+            scale.view(x_view.size(0), x_view.size(2)).cpu()
 
     elif method == "te":
         from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer
@@ -668,8 +684,8 @@ def convert_bf16_to_fp8(
             fp8_dtype=TE_DType[fp8_dtype],
             rowwise=True,
             columnwise=False,
-            amax_epsilon=kwargs.get("amax_epsilon", 0.0),
-            force_pow_2_scales=kwargs.get("force_pow_2_scales", True),
+            amax_epsilon=amax_epsilon,
+            force_pow_2_scales=force_pow_2,
             block_scaling_dim=2,
         )
         xq = quantizer(x)

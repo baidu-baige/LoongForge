@@ -27,7 +27,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --safetensors \
     --max_workers=32 \
     --moe-grouped-gemm \
-    --amax_epsilon=1e-4 \
+    --amax_epsilon=1e-12 \
     --pretrain_as_fp8 \
     --convert_to_fp8 \
     --force_pow_2_scales
