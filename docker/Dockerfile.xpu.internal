@@ -71,7 +71,7 @@ RUN set -exuo pipefail && \
         XPYTORCH_URL="${XPYTORCH_URL_ARG}"; \
         echo "use specified xpytorch version: ${XPYTORCH_URL}"; \
     else \
-        xpytorch_info="/workspace/LoongForge/xpytorch_info.txt"; \
+        xpytorch_info="/workspace/LoongForge/docker/xpytorch_info.txt"; \
         if [ ! -f "${xpytorch_info}" ]; then \
             echo "xpytorch info file not exist: ${xpytorch_info}" && exit 1; \
         fi; \
