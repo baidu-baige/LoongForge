@@ -4,7 +4,7 @@ set -x
 
 #source activate && conda activate python310_torch25_cuda
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/qianfan/datasets/128k_tokenized_qianfan_code_data"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen2.5-32B-Instruct"}

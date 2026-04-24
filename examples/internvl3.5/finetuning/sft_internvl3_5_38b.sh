@@ -14,7 +14,7 @@ CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/models/internvl/ckpt-megatron/I
 CHECKPOINT_SAVE_PATH=/mnt/cluster/models/internvl/ckpt-megatron/Internvl3_5-38B-tp4-pp2-5-59-save
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl3.5/internvl3.5-38b/stage2-16k-gbs32-1node/"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 # Change for multinode config
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}

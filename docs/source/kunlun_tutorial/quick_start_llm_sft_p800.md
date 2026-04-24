@@ -15,7 +15,7 @@ LoongForge currently provides SFT training example scripts for various models. A
 # The script needs to be run on at least 2 nodes.
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json"}
 

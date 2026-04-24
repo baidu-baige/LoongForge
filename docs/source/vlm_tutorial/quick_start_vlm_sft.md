@@ -71,7 +71,7 @@ LoongForge currently provides SFT training example scripts for various models. A
 
 # Codebase roots added to PYTHONPATH.
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # Dataset root or manifest path used by the external dataloader.
 DATA_PATH=${DATA_PATH:-"/path/to/your/dataset"}

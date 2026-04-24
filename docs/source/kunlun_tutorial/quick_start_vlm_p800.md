@@ -38,7 +38,7 @@ do
 done
  
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/loongforge-test/sft_qwen3_vl_30b_a3b_temp/data-path/LLaVA-Pretrain_202511180001/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/loongforge-test/sft_qwen3_vl_30b_a3b_temp/hf-tokenizer-path/Qwen3-VL-30B-A3B-Instruct_202512180001/"}

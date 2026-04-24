@@ -20,7 +20,7 @@ Before training you usually need to transform massive raw corpora into a format 
 
 ```bash
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 TOKENIZER_PATH=/path/to/your/tokenizer
 input_data=/path/to/your/json
@@ -122,7 +122,7 @@ Below is the FP8 pre-training script for DeepSeek-V3.1 (comments added for clari
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # ------------- data -------------
 DATA_PATH=/path/to/your/dataset

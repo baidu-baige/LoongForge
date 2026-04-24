@@ -15,7 +15,7 @@ nvidia-smi -L                 # check that all 8 GPUs are listed
 echo $CUDA_VISIBLE_DEVICES    # should list 8 comma-separated indices
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/ssd3/qwen/qwen3_data/pile-qwen_text_document"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/ssd3/qwen/Qwen3-235B-A22B-tokenizer"}

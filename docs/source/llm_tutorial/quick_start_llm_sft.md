@@ -95,7 +95,7 @@ Run the helper script once:
 ```bash
 #!/bin/bash
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 TOKENIZER_PATH=/path/to/hf/tokenizer
 input_data=/path/to/custom_dataset_name.json
@@ -162,7 +162,7 @@ Below is the FP8 SFT script for DeepSeek-V3.1 (comments added in English):
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 # ------------- data -------------
 DATA_PATH=/path/to/your/data

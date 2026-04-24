@@ -3,7 +3,7 @@
 #source activate && conda activate python310_torch25_cuda
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-480B-A35B"}

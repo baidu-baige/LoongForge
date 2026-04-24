@@ -2,7 +2,7 @@
 # The script needs to be run on at least 2 nodes.
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/users/dataset/qwen3-next/sft_aplaca_zh_new_data.json"}
 
