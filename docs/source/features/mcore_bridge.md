@@ -4,7 +4,7 @@ This module provides online loading and saving of HuggingFace (HF) format checkp
 
 > **Credits**: This module is inspired by [NVIDIA Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge).
 
-### What is Bridge?
+## What is Bridge?
 
 In the standard workflow, training requires a separate offline conversion step (`HF → Megatron`) before training can begin. Bridge eliminates this step — it detects HF safetensors in your checkpoint directory and converts them to Megatron format **on the fly** during startup. This saves you:
 

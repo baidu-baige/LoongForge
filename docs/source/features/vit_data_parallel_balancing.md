@@ -69,7 +69,7 @@ It can be used **independently of or together with** VLM-level DP load-balancing
 The ViT DP balance is invoked inside \`OmniEncoderModel.encode_images()\` via \`dp_balance_vit_encoder()\` (defined in \`vit_balance.py\`). The function wraps the ViT module call:
 
 \`\`\`python
-# Inside OmniEncoderModel.encode_images():
+### Inside OmniEncoderModel.encode_images():
 if args.use_vit_dp_balance:
     pixel_embeds, window_index, deepstack = dp_balance_vit_encoder(
         vit_module, pixel_values, image_grid_thw
@@ -80,7 +80,6 @@ else:
 
 Unlike VLM-level balancing (which uses monkey-patching), ViT balancing is a direct function call — **no warm-up phase or cost model fitting is needed** because the ViT cost model is a simple quadratic that requires no calibration.
 
----
 
 ### 4.2 Cost Estimation
 Each image's ViT compute cost is estimated as:
@@ -90,8 +89,6 @@ cost(image<sub>i</sub>) = num\_tokens<sub>i</sub>²
 where num\_tokens<sub>i</sub> = T<sub>i</sub> × H<sub>i</sub> × W<sub>i</sub> from \`image_grid_thw\`.
 
 This quadratic model reflects the self-attention complexity inside the ViT encoder. No warm-up profiling is needed — the quadratic assumption is a direct consequence of the ViT's architecture.
-
----
 
 ### 4.3 Load-Balanced Assignment
 The solver (\`solve_sample_dp_reorder_plan\`) uses the same **greedy LPT (Longest Processing Time first)** algorithm as VLM-level balancing, but in **ViT mode** (no packing constraint):

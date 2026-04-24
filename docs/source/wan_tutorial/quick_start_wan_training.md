@@ -15,7 +15,7 @@ dataset
 ```
 metadata.csv example
 
-```csv
+```text
 video,prompt
 train/EGO_1.mp4,"places the bag of clothes on the floor\nPlan:\n pick up the bag of clothes. Put the bag of clothes on the floor.\nactions :\n1. pick up(bag of clothes)\n2. put on(bag of clothes, floor)"
 ```

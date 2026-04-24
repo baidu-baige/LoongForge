@@ -167,7 +167,7 @@ Before becoming an open-source project, LoongForge had already empowered numerou
 
 ## 🤝 Contributing
 
-We heartily welcome community contributions! Whether it's reporting bugs, proposing features, or submitting code, please read our [Contributing Guidelines](docs/source/CONTRIBUTING.md) before submitting a Pull Request.
+We heartily welcome community contributions! Whether it's reporting bugs, proposing features, or submitting code, please read our [Contributing Guidelines](https://github.com/baidu-baige/LoongForge/blob/master/CONTRIBUTING.md) before submitting a Pull Request.
 
 ## 📄 License
 

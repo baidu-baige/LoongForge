@@ -9,4 +9,6 @@ Advanced Features
    ../features/moe_all2all_overlap.md
    ../features/optimizer_support.md
    ../features/fused_linear_cross_entropy.md
+   ../features/mcore_bridge.md
    ../usage/lora_usage.md
+   

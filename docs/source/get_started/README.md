@@ -2,7 +2,7 @@
 <div align="center">
 
 <h1 align="center">LoongForge</h1>
-<h3>A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models.</h3>
+<h4>A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models.</h4>
 
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://loongforge.readthedocs.io/en/latest/index.html)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge=social)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
 
@@ -10,10 +10,12 @@
 
 ## 📖 About
 
-**LoongForge** is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and supervised fine-tuning (SFT). Through continuous adaptation and performance optimization, LoongForge delivers an efficient, easy-to-use, and highly extensible solution for model training.
+> 🐉 **The Baige "Loong" Family:** LoongForge (alongside [LoongFlow](https://github.com/baidu-baige/LoongFlow)) is part of the Loong open-source series from Baidu's Baige AI infrastructure platform, named after the traditional Chinese loong boat.
+
+**LoongForge** is a training framework for large-scale transformer models across diverse modalities and architectures. It supports key stages of the training pipeline, including pre-training, continued pre-training, and supervised fine-tuning (SFT). Built upon Megatron-LM with significant enhancements, LoongForge delivers an efficient, easy-to-use, and highly extensible solution for model training.
 
 * **🚀 Comprehensive Model Coverage**: Natively supports mainstream model architectures including LLMs (Large Language Models), VLMs (Vision-Language), VLAs (Vision-Language-Action), and Diffusion Models. Its flexible composition abstraction makes adding new multi-modal variants effortless.
-* **⚡ Performance-Driven Optimization**: Built upon Megatron-LM with significant enhancements. LoongForge introduces advanced optimizations in communication, computation overlap, and memory management, further optimizing training performance to significantly reduce training costs and accelerate model development.
+* **⚡ Performance-Driven Optimization**: Provides advanced optimizations in parallelism and memory management, significantly reducing training costs and accelerating model development.
 * **🧪 Heterogeneous Hardware Support**: Provides native, high-performance support for both NVIDIA GPUs and Kunlun XPUs, ensuring seamless migration and stable training at scale across diverse hardware clusters.
 
 ## 🔥 Latest News
@@ -165,7 +167,7 @@ Before becoming an open-source project, LoongForge had already empowered numerou
 
 ## 🤝 Contributing
 
-We heartily welcome community contributions! Whether it's reporting bugs, proposing features, or submitting code, please read our [Contributing Guidelines](docs/source/CONTRIBUTING.md) before submitting a Pull Request.
+We heartily welcome community contributions! Whether it's reporting bugs, proposing features, or submitting code, please read our [Contributing Guidelines](https://github.com/baidu-baige/LoongForge/blob/master/CONTRIBUTING.md) before submitting a Pull Request.
 
 ## 📄 License
 

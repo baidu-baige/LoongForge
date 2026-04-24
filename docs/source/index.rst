@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 LoongForge Documentation
-=======================
+==========================
 
 .. toctree::
    :maxdepth: 2
