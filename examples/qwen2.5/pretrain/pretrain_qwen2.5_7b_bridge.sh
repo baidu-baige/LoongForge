@@ -8,7 +8,7 @@ export NCCL_DEBUG=WARNING
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-deepseek_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge-ckpt/pile_test/pile-qwen_text_document"}
 
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge-ckpt/Qwen2.5-7B-Instruct/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge-ckpt/Qwen2.5-7B-Instruct/"}

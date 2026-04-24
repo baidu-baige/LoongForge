@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ Preprocess dataset parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 PREPROCESS_DATA_PATH="${PREPROCESS_DATA_PATH}"
 
 PREPROCESS_DATA_ARGS=(

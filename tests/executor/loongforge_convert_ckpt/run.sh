@@ -5,7 +5,7 @@ set -eo pipefail
 ############################################ Model Training Parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$LOONGFORGE_PATH/tools/convert_checkpoint"}
 
 export LOONGFORGE_PATH

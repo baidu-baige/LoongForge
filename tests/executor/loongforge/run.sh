@@ -12,7 +12,7 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 ############################################ Model Training Parameters ############################################
 
 MEGATRON_PATH=${megatron_path:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 DATA_PATH=${DATA_PATH}
 TOKENIZER_PATH=${TOKENIZER_PATH}
 CHECKPOINT_PATH=${CHECKPOINT_PATH}

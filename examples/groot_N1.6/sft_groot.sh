@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Paths - adjust these to your environment
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 DATA_PATH=${DATA_PATH:-"/workspace/single_data/single_data/"}
 TOKENIZER_PATH=${TOKENIZER_PATH:-"$EAGLE_LOCAL_PATH/"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt"}

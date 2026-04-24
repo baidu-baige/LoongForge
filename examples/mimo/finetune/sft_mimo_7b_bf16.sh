@@ -1,7 +1,7 @@
 #!/bin/bash
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 echo "Using MEGATRON_PATH: ${MEGATRON_PATH}"
 echo "Using LOONGFORGE_PATH: ${LOONGFORGE_PATH}"
 

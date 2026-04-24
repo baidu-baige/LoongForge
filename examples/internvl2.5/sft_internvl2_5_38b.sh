@@ -15,7 +15,7 @@ CHECKPOINT_LOAD_PATH=/mnt/cluster/LoongForge/internvl2.5/internvl2.5-38b-tp4-pp2
 CHECKPOINT_SAVE_PATH=/mnt/cluster/LoongForge/internvl2.5/internvl2.5-38b-tp4-pp2-save/
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/out/tensorboard/internvl2.5/internvl2.5-38b/"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
