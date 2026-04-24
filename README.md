@@ -28,7 +28,7 @@
 * **Decoupled Encoder-Decoder Training**: Separates vision encoder and LLM into independent tasks, eliminating encoder-induced pipeline bubbles and preventing ViT computation from blocking LLM throughput.
 * **DP Load Balancing**: Leverages a load-aware data redistribution algorithm to optimize data parallel imbalances caused by data packing, improving multi-node scaling efficiency.
 * **MoE A2A Optimization**: Overlaps All2All communication, activation offloading, and computation to optimize memory usage and communication in large-scale MoE models, achieving lower memory footprint than upstream Megatron-LM.
-* **Custom Fused Operators**: High-performance fused operators like FusedDSA, which integrates flashmla and indexer forward operators with custom backward operators (essential for training) to accelerate DSA model training.
+* **Custom Fused Operators**: High-performance fused operators like FusedDSA, which integrates flashmla and indexer forward operators with custom backward operators (essential for training) to accelerate DSA model training. Currently the TileLang-based operators are open-sourced; CUDA kernel implementations are available for free on Baidu Baige Platform.
 * **Adaptive FP8 precision**: End-to-end FP8 training support for both LLMs and VLMs, further enhanced with adaptive FP8 that automatically determines whether to enable FP8 per operator based on GEMM shape and computational efficiency to maximize training performance.
 * **Flexible Checkpoint Conversion**: Supports both **offline bidirectional Megatron ↔ HuggingFace weight conversion** and **native online HuggingFace checkpoint load/save**, eliminating format barriers throughout the training workflow.
 * **Versatile Pipeline & Tools**: Out-of-the-box support for Pretrain, MidTrain, SFT, and LoRA, with built-in tools for dataset processing such as format conversion and packing.
@@ -145,7 +145,7 @@ LoongForge/
 │   ├── convert_checkpoint/       # HuggingFace ↔ Megatron checkpoint conversion
 │   ├── data_preprocess/          # Data preprocessing utilities
 │   └── dist_checkpoint/          # Distributed checkpoint utilities
-├── ops/                          # Custom fused CUDA/C++ operators (sparse MLA, lightning indexer)
+├── ops/                          # Custom fused operators (TileLang open-sourced; CUDA available on Baidu Baige Platform)
 ├── patches/                      # TransformerEngine patch files
 ├── docker/                       # Dockerfiles (GPU & XPU)
 ├── tests/                        # E2E test suite (YAML-driven)
