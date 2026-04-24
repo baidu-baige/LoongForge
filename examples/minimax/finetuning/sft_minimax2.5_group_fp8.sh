@@ -2,8 +2,6 @@
 
 # This script is used for SFT training Minimax2.5 in FP8 mixed precision.
 
-
-
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 

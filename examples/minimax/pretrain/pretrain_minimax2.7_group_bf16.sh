@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script is used for pre-training Minimax2.1 in BF16 mixed precision.
+# This script is used for pre-training Minimax2.7 in BF16 mixed precision.
 
 
 
@@ -8,8 +8,8 @@ MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-""}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/MiniMax-M2.1"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/minimax_m2.1/MiniMax_mcore_tp8pp4ep8etp1/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co//MiniMax-M2.7"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/mini_max/MiniMax_m2_7_mcore_tp8pp4ep8etp1/"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/minimax_m2"}
 
@@ -45,13 +45,13 @@ DISTRIBUTED_ARGS=(
 
 
 MODEL_ARGS=(
-  --model-name minimax2.1-230b
+  --model-name minimax2.7-230b
   --rotary-percent 0.5
   --norm-epsilon 1e-6
   --rotary-base 5000000
   --use-fp32-dtype-for-param-pattern expert_bias
   --attention-backend fused
-  
+
 )
 
 DATA_ARGS=(
@@ -138,4 +138,4 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   ${TRAINING_ARGS[@]} \
   ${MOE_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \
-  ${LOGGING_ARGS[@]} 
+  ${LOGGING_ARGS[@]}
