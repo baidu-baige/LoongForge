@@ -1,0 +1,11 @@
+_target_: loongforge.models.common.peft.lora_config.VLMLoraConfig
+
+
+defaults:
+  - lora
+  - _self_
+apply_to_foundation: false
+apply_to_image_projector: false
+apply_to_image_encoder: false
+apply_to_video_projector: false
+apply_to_video_encoder:  false

@@ -1,0 +1,48 @@
+# Data path configuration
+data:
+  # Webdataset sample directory - corresponds to vlm task output directory
+  wds_dir: "/mnt/cfs/LoongForgeCI/omni_datasets/LoongForge/offline_packing_data/"
+  # Text field name
+  template_text_key: "messages"
+  # Directory for intermediate json results
+  packed_json_dir: "/workspace/omni_datasets/LoongForge/packed_json/"
+  # Packed wds dataset
+  packed_wds_dir: "/workspace/omni_datasets/LoongForge/packed_8k_wds"
+
+model:
+  model_type: "qwenvl"
+  processor_kwargs:
+    # Pretrained Model/Tokenizer path
+    pretrained_model_name_or_path: "/mnt/cfs/LoongForgeCI/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/"
+    min_pixels: 3136   # 4*28*28
+    max_pixels: 4014080 # 5120*28*28(4014080,8192)
+    trust_remote_code: True
+    use_fast: False
+
+# Media file preprocessing configuration, optional preprocessing functions defined in media_preprocess_utils.py
+media_preprocess:
+  image: custom_image_preprocess
+
+sample:
+  # Max token length for training data
+  max_token_len: 8192
+  # Determine parsing method
+  sample_type: packed_vqa
+
+packed_wds:
+  maxsize: 2000000000
+  maxcount: 1000000000
+
+# Parallel processing parameters
+process:
+  # Sample chunk size processed by each process
+  chunk_size: 5000
+  # Merge sort batch_size
+  merge_batch_size: 20
+  # Timeout setting
+  time_out: 2000
+
+# Log and temporary files
+log:
+  # Log level（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+  level: "INFO"

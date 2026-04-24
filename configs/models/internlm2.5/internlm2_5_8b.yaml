@@ -1,0 +1,28 @@
+# internlm2.5_8b model configuration
+
+_target_: loongforge.models.foundation.InternLMConfig
+
+num_layers: 32
+hidden_size: 4096
+ffn_hidden_size: 14336
+num_attention_heads: 32
+max_sequence_length: 32768
+vocab_size: 92553
+group_query_attention: True
+num_query_groups: 8
+max_position_embeddings: 32768
+
+position_embedding_type: "rope"
+add_position_embedding: False
+rotary_interleaved: False
+normalization: "RMSNorm"
+swiglu: True
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: False
+add_qkv_bias: False
+qk_layernorm: False
+untie_embeddings_and_output_weights: True
+model_type: "internlm"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/internlm2.5/ckpt_convert/internlm2_5_convert.yaml

@@ -1,0 +1,11 @@
+_target_: loongforge.models.common.peft.lora_config.LoraConfig
+
+target_modules:
+  - linear_qkv
+  - linear_proj
+  - linear_fc1
+  - linear_fc2
+
+dim: 16
+alpha: 32
+dropout: 0.1

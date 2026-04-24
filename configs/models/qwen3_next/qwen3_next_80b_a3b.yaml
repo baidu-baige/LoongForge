@@ -1,0 +1,34 @@
+# qwen3next model configuration
+_target_: loongforge.models.foundation.Qwen3NextConfig
+
+num_layers: 48
+hidden_size: 2048
+ffn_hidden_size: 5120
+num_attention_heads: 16
+group_query_attention: True
+num_query_groups: 2
+position_embedding_type: "rope"
+add_position_embedding: False
+rotary_interleaved: False
+normalization: "RMSNorm"
+swiglu: True
+attention_dropout: 0.0
+hidden_dropout: 0.0
+add_bias_linear: False
+add_qkv_bias: False
+qk_layernorm: True
+untie_embeddings_and_output_weights: True
+vocab_size_in_config_file: 151936
+make_vocab_size_divisible_by: 128
+kv_channels: 256
+num_experts: 512
+moe_ffn_hidden_size: 512
+linear_key_head_dim: 128
+linear_value_head_dim: 128
+linear_num_key_heads: 16
+linear_num_value_heads: 32
+linear_conv_kernel_dim: 4
+full_attention_interval: 4
+model_type: "qwen3_next"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3_next/ckpt_convert/qwen3_next_moe_convert.yaml

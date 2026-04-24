@@ -1,0 +1,24 @@
+_target_: loongforge.models.encoder.InternVisionConfig
+
+num_layers: 45
+hidden_size: 3200
+kv_channels: 128
+ffn_hidden_size: 12800
+patch_size: 14
+num_attention_heads: 32
+num_query_groups: 32
+original_num_attention_heads: 25
+original_num_query_groups: 25
+image_size: 448
+layernorm_epsilon: 1.0e-06
+normalization: RMSNorm
+add_bias_linear: True
+add_qkv_bias: False
+qk_layernorm: True
+apply_rope_fusion: False
+bias_activation_fusion: False
+position_embedding_type: 'none'
+initializer_factor: 0.1
+model_type: "intern_vit_6b"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_6b_convert.yaml

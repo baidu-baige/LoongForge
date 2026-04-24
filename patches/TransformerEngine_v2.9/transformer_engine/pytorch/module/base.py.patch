@@ -1,0 +1,41 @@
+diff --git a/transformer_engine/pytorch/module/base.py b/transformer_engine/pytorch/module/base.py
+index d16455b5..639fc84c 100644
+--- a/transformer_engine/pytorch/module/base.py
++++ b/transformer_engine/pytorch/module/base.py
+@@ -180,11 +180,12 @@ def initialize_ub(
+                         option and always initializes Userbuffers with direct MPI calls in C++,
+                         which also requires `MPI_HOME=/path/to/mpi/root` to be set at compile time.
+     """
+-    if not tex.device_supports_multicast():
+-        assert bool(int(os.getenv("UB_SKIPMC", "0"))), (
+-            "CUDA device, driver and/or toolkit version does not support comm+GEMM overlap with "
+-            + "CUDA Multicast. Launch app with UB_SKIPMC=1 to try CUDA IPC instead."
+-        )
++    # TODO: temporarily disable checking for multicast support
++    #if not tex.device_supports_multicast():
++    #    assert bool(int(os.getenv("UB_SKIPMC", "0"))), (
++    #        "CUDA device, driver and/or toolkit version does not support comm+GEMM overlap with "
++    #        + "CUDA Multicast. Launch app with UB_SKIPMC=1 to try CUDA IPC instead."
++    #    )
+ 
+     if not quantization_modes:
+         warnings.warn(
+@@ -1316,12 +1317,18 @@ class TransformerEngineBaseModule(torch.nn.Module, ABC):
+                         return self._high_precision_init_val
+                     return None
+ 
++                def _set(self, tensor):
++                    if hasattr(self, "_high_precision_init_val"):
++                        self._high_precision_init_val.copy_(tensor.detach().cpu())
++                    return None
++
+                 def clear(self):
+                     if hasattr(self, "_high_precision_init_val"):
+                         del self._high_precision_init_val
+ 
+                 param._high_precision_init_val = high_precision_init_val
+                 param.get_high_precision_init_val = MethodType(get, param)
++                param.set_high_precision_init_val = MethodType(_set, param)
+                 param.clear_high_precision_init_val = MethodType(clear, param)
+ 
+             setattr(self, name, param)

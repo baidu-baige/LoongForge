@@ -1,0 +1,24 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder:  intern_vit_0.3b
+  - ../../models/image_projector@model.image_projector: intern_mlp_adapter
+  - ../../models/qwen3@model.foundation: qwen3_8b
+  - _self_
+
+model:
+  model_type: intern_vl
+  loss_func: ${loss_func:loss_func_internvl}
+
+  foundation:
+    rotary_emb_func: "RotaryEmbedding"
+    model_spec: ["loongforge.models.foundation.qwen3.qwen_layer_spec", "get_qwen3_layer_with_te_spec"]
+    rotary_base: 1000000
+    # override as the foundation model of this vlm uses different convert file
+    convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_intern.yaml
+  image_projector:
+    hidden_size: 4096  # same as llm hidden_size
+    ffn_hidden_size: 4096  # same as llm hidden_size
+    normalization: "LayerNorm"

@@ -51,4 +51,44 @@ coverage.xml
 
 # Sphinx documentation
 /docs/_build/
+/docs/build/
 
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+wandb/
+swanlog/
+
+# Model weights / checkpoints
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Data files
+*.npy
+*.npz
+*.h5
+*.hdf5
+
+# Profiling
+*.prof
+nsys_*/
+nsight_*/

@@ -1,0 +1,45 @@
+
+# Data path configuration
+data:
+  # Webdataset data sample directory
+  wds_dir: "/mnt/cluster/yxc/filter_4w_CC3M/images"
+  # Text field name
+  template_text_key: "messages"
+  # template_text_key: "texts"
+  # Directory for storing intermediate results as JSON
+  packed_json_dir: "/mnt/cluster/yxc/test_packing/test_vqa_16k_json/"
+  # Packed wds dataset
+  packed_wds_dir: "/mnt/cluster/yxc/test_packing/test_vqa_16k_packed_wds/"
+
+model:
+  model_type: "qwenvl"
+  processor_kwargs:
+    pretrained_model_name_or_path: "/mnt/cluster/models/Qwen3-VL-30B-A3B-Instruct"
+    min_pixels: 3136   # 4*28*28
+    max_pixels: 4014080 # 5120*28*28(4014080,8192)
+    trust_remote_code: True
+    use_fast: False
+
+# Media file preprocessing configuration, optional preprocessing functions are defined in media_preprocess_utils.py
+media_preprocess:
+  image: custom_image_preprocess
+
+sample:
+  # Max length of training data tokens
+  max_token_len: 16384
+  # Determine parsing method
+  sample_type: packed_vqa
+
+# Parallel processing parameters
+process:
+  # Chunk size for samples processed by each process
+  chunk_size: 5000
+  # Batch size for merge parameters (sorting)
+  merge_batch_size: 20
+  # Timeout setting (estimated based on data volume, 1M data ~ 45 minutes / 2700s)
+  time_out: 2000
+
+# Logging and temporary files
+log:
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"

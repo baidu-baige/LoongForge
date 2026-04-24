@@ -1,0 +1,37 @@
+# kimi k2.5 vit
+_target_: loongforge.models.encoder.MoonVisionModelConfig
+
+num_layers: 27
+hidden_size: 1152
+kv_channels: 72                 # hidden_size / num_attention_heads
+ffn_hidden_size: 4304
+patch_size: 14
+temporal_patch_size: 1
+num_attention_heads: 16
+num_query_groups: 16
+
+activation_func: ${act:gelu_tanh}
+normalization: "LayerNorm"
+add_bias_linear: true
+add_qkv_bias: true
+swiglu: False
+group_query_attention: False
+gated_linear_unit: False
+position_embedding_type: "none"
+bias_activation_fusion: False
+attention_dropout: 0.0
+hidden_dropout: 0.0
+bias_dropout_fusion: False
+apply_rope_fusion: False
+layernorm_epsilon: 1.0e-5
+
+init_pos_emb_height: 64
+init_pos_emb_width: 64
+init_pos_emb_time: 4
+pos_emb_type: "divided_fixed"
+video_attn_type: "spatial_temporal"
+merge_kernel_size: [2, 2]
+merge_type: "sd2_tpool"
+image_token_id: 163603
+
+model_type: "moon_vit_3d"

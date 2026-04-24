@@ -1,0 +1,62 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_encoder@module: ???
+  - _self_
+
+args:
+  common:
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+
+  mcore:
+    use_rotary_position_embeddings: true
+    use_distributed_optimizer: false
+    transpose_mlp_dense: false
+    transpose_query_key_value: true
+
+name_map:
+  huggingface:
+    transformer: vision_tower.encoder
+    layer_prefix: blocks
+    input_layernorm: norm0
+    attention.query_key_value: wqkv
+    attention.dense: wo
+    post_attention_layernorm: norm1
+    mlp.dense_h_to_4h: mlp.fc0
+    mlp.dense_4h_to_h: mlp.fc1
+    final_layernorm: vision_tower.encoder.final_layernorm
+  mcore:
+    transformer: model
+    layer_prefix: vision_model.decoder.layers
+    input_layernorm:
+      name: self_attention.linear_qkv
+      is_layernorm: true
+    attention.query_key_value:
+      name: self_attention.linear_qkv
+      extra: true
+    attention.dense:
+      name: self_attention.linear_proj
+      extra: true
+    post_attention_layernorm:
+      name: mlp.linear_fc1
+      is_layernorm: true
+    mlp.dense_h_to_4h:
+      name: mlp.linear_fc1
+      extra: true
+    mlp.dense_4h_to_h:
+      name: mlp.linear_fc2
+      extra: true
+    final_layernorm: vision_model.decoder.final_layernorm
+    transformer_tpl: model%d
+
+torch_dtype: bfloat16
+
+vision_patch:
+  vision_model.patch_embed.pos_emb.weight: vision_tower.patch_embed.pos_emb.weight
+  vision_model.patch_embed.proj.weight: vision_tower.patch_embed.proj.weight
+  vision_model.patch_embed.proj.bias: vision_tower.patch_embed.proj.bias

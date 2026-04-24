@@ -1,0 +1,5 @@
+hatchling>=1.18.0
+build>=1.0.3
+pytest
+mock
+-e .

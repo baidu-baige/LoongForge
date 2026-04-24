@@ -1,0 +1,76 @@
+model_type: "groot_n1_6"
+_target_: loongforge.models.embodied.groot_n1_6.configuration_groot.Gr00tN1d6OmniConfig
+
+# Megatron validation-required defaults
+num_layers: 32
+hidden_size: 1024
+ffn_hidden_size: 4096
+num_attention_heads: 32
+kv_channels: 32
+seq_length: 1024
+max_position_embeddings: 1024
+tensor_model_parallel_size: 1
+pipeline_model_parallel_size: 1
+context_parallel_size: 1
+expert_model_parallel_size: 1
+
+# Optimizer defaults (matching LeRobot training config)
+optimizer_lr: 1.0e-4
+optimizer_weight_decay: 1.0e-5
+warmup_ratio: 0.05  # LeRobot-style warmup: init_lr = peak_lr / (warmup_steps + 1)
+
+# Diffusion model
+use_alternate_vl_dit: true
+attend_text_every_n_blocks: 2
+diffusion_model_cfg:
+  positional_embeddings: null
+  num_layers: 32
+  num_attention_heads: 32
+  attention_head_dim: 48
+  norm_type: ada_norm
+  dropout: 0.2
+  final_dropout: true
+  output_dim: 1024
+  interleave_self_attention: true
+
+# Action/state sizes
+max_state_dim: 128
+max_action_dim: 128
+action_horizon: 50
+input_embedding_dim: 1536
+
+# Position/embedding settings
+add_pos_embed: true
+attn_dropout: 0.2
+use_vlln: true
+max_seq_len: 1024
+
+# Flow matching parameters
+num_inference_timesteps: 4
+noise_beta_alpha: 1.5
+noise_beta_beta: 1.0
+noise_s: 0.999
+num_timestep_buckets: 1000
+
+# Augment/image processing
+image_crop_size: [224, 224]
+image_target_size: [224, 224]
+shortest_image_edge: 256
+crop_fraction: 0.95
+random_rotation_angle: null
+color_jitter_params:
+  brightness: 0.3
+  contrast: 0.4
+  saturation: 0.5
+  hue: 0.08
+use_albumentations_transforms: true
+formalize_language: true
+apply_sincos_state_encoding: false
+use_relative_action: true
+
+# Trainable switches
+tune_llm: false
+tune_visual: false
+tune_projector: true
+tune_diffusion_model: true
+tune_vlln: true

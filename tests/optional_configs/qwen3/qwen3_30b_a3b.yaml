@@ -1,0 +1,169 @@
+model_name: qwen3_30b_a3b
+description: $model_name
+huggingface_path: https:/huggingface.co/Qwen/Qwen3-30B-A3B
+bos_path: bos:/ai-data/Qwen/Qwen3-30B-A3B
+TOTAL_K8S_NODES: 2
+
+MODEL_RUNNABLE: True
+
+# LoongForge training parameters
+HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-30B-A3B
+PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/LoongForge/qwen3/pile_test/pile-qwen_text_document
+SFT_DATA_PATH: $scripts_root_path/datasets/llm/sft_aplaca_zh_data.json
+TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-30B-A3B
+CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/qwen3/$model_name
+TENSORBOARD_PATH: $pfs_path/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/qwen3/qwen3_30b_a3b.yaml
+CONVERT_FILE: $LOONGFORGE_PATH/configs/models/qwen3/ckpt_convert/qwen3_moe_convert.yaml
+
+# Training Parameters
+TENSOR_MODEL_PARALLER_SIZE: 2
+PIPELINE_MODEL_PARALLER_SIZE: 2
+EXPERT_PARALLEL_SIZE: 4
+NUM_EXPERTS: 128
+log_interval: 1
+initial_loss_scale: 65536
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          RUNNABLE_FLAG: False
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --num_experts=${NUM_EXPERTS}
+            --expert_parallel_size=${EXPERT_PARALLEL_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim
+            --moe-grouped-gemm'
+        Step2:
+          # RUNNABLE_FLAG: False
+          MODEL_ARGS: '
+            --model-name qwen3-30b-a3b
+            --rotary-base 1000000
+            --rotary-seq-len-interpolation-factor 1'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --eod-mask-loss
+            --data-path $PRETRAIN_DATA_PATH
+            --split 99,1,0'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --seq-length 4096
+            --max-position-embeddings 40960
+            --init-method-std 0.006
+            --micro-batch-size 1
+            --global-batch-size 128
+            --lr 1.0e-5
+            --min-lr 1.0e-6
+            --clip-grad 1.0
+            --weight-decay 0.1
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-08
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 50000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale 65536
+            --bf16
+            --load $CHECKPOINT_PATH
+            --save-interval 5000
+            --eval-interval 1000
+            --eval-iters 0
+            --log-memory-stats'
+          MOE_ARGS: '
+            --moe-router-load-balancing-type aux_loss
+            --moe-router-topk 8
+            --moe-router-dtype fp32
+            --moe-aux-loss-coeff 1e-3
+            --moe-grouped-gemm
+            --empty-unused-memory-level 2'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --expert-model-parallel-size ${EXPERT_PARALLEL_SIZE}
+            --moe-token-dispatcher-type alltoall
+            --use-distributed-optimizer
+            --distributed-backend nccl
+            --sequence-parallel'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+      sft:
+        Step2:
+          # RUNNABLE_FLAG: False
+          MODEL_ARGS: '
+            --model-name qwen3-30b-a3b
+            --rotary-base 1000000
+            --rotary-seq-len-interpolation-factor 1'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $SFT_DATA_PATH
+            --split 100,0,0'
+          TRAINING_ARGS: '
+            --training-phase sft
+            --seq-length 4096
+            --max-position-embeddings 40960
+            --init-method-std 0.006
+            --micro-batch-size 1
+            --global-batch-size 32
+            --lr 1.0e-5
+            --min-lr 1.0e-6
+            --clip-grad 1.0
+            --weight-decay 0.1
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-08
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 5000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale ${initial_loss_scale}
+            --bf16
+            --load $CHECKPOINT_PATH
+            --save-interval 500
+            --eval-interval 100
+            --eval-iters 0'
+          MOE_ARGS: '
+            --moe-router-load-balancing-type aux_loss
+            --moe-router-topk 8
+            --moe-router-dtype fp32
+            --moe-aux-loss-coeff 1e-3
+            --moe-grouped-gemm
+            --empty-unused-memory-level 2'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --expert-model-parallel-size ${EXPERT_PARALLEL_SIZE}
+            --moe-token-dispatcher-type alltoall
+            --use-distributed-optimizer
+            --distributed-backend nccl
+            --sequence-parallel'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+          SFT_ARGS: '
+            --chat-template qwen
+            --sft-num-preprocess-workers 16
+            --no-check-for-nan-in-loss-and-grad
+            --packing-sft-data'
+
+tasks:
+  check_correctness_task: True

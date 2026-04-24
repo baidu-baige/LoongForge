@@ -1,0 +1,154 @@
+model_name: qwen3_8b
+description: $model_name
+huggingface_path: https://huggingface.co/Qwen/Qwen3-8B
+bos_path: bos:/ai-data/Qwen/Qwen3-8B
+TOTAL_K8S_NODES: 1
+
+MODEL_RUNNABLE: True
+
+# LoongForge training parameters
+HF_CKPT_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-8B
+PRETRAIN_DATA_PATH: $pfs_path/omni_datasets/LoongForge/qwen3/pile_test/pile-qwen_text_document
+SFT_DATA_PATH: $scripts_root_path/datasets/llm/sft_aplaca_zh_data.json
+TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen3-8B
+CHECKPOINT_PATH: $save_mcore_ckpt_path_pre/qwen3/$model_name
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/qwen3/qwen3_8b.yaml
+CONVERT_FILE: $LOONGFORGE_PATH/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml
+
+# Training Parameters
+TENSOR_MODEL_PARALLER_SIZE: 1
+PIPELINE_MODEL_PARALLER_SIZE: 1
+log_interval: 1
+initial_loss_scale: 65536
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          RUNNABLE_FLAG: False
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --safetensors
+            --no_save_optim
+            --no_load_optim'
+        Step2:
+          # RUNNABLE_FLAG: False
+          MODEL_ARGS: '
+            --model-name qwen3-8b
+            --rotary-base 1000000
+            --rotary-seq-len-interpolation-factor 1'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --eod-mask-loss
+            --data-path $PRETRAIN_DATA_PATH
+            --split 99,1,0'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --seq-length 4096
+            --max-position-embeddings 32768
+            --init-method-std 0.006
+            --micro-batch-size 1
+            --global-batch-size 32
+            --lr 1.0e-5
+            --min-lr 1.0e-6
+            --clip-grad 1.0
+            --weight-decay 0.1
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-08
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 50000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale ${initial_loss_scale}
+            --bf16
+            --load $CHECKPOINT_PATH
+            --save-interval 5000
+            --eval-interval 1000
+            --eval-iters 10
+            --log-memory-stats'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --use-distributed-optimizer
+            --overlap-grad-reduce
+            --overlap-param-gather
+            --recompute-granularity full
+            --recompute-method block
+            --recompute-num-layers 36
+            --distributed-backend nccl'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+      sft:
+        Step2:
+          # RUNNABLE_FLAG: False
+          MODEL_ARGS: '
+            --model-name qwen3-8b
+            --rotary-base 1000000
+            --rotary-seq-len-interpolation-factor 1'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $SFT_DATA_PATH
+            --split 100,0,0'
+          TRAINING_ARGS: '
+            --training-phase sft
+            --seq-length 4096
+            --max-position-embeddings 32768
+            --init-method-std 0.006
+            --micro-batch-size 1
+            --global-batch-size 32
+            --lr 1.0e-5
+            --min-lr 1.0e-6
+            --clip-grad 1.0
+            --weight-decay 0.1
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-08
+            --norm-epsilon 1e-6
+            --train-iters ${train_iters}
+            --lr-decay-iters 5000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale ${initial_loss_scale}
+            --bf16
+            --load $CHECKPOINT_PATH
+            --save-interval 500
+            --eval-interval 100
+            --eval-iters 0
+            --log-memory-stats'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --use-distributed-optimizer
+            --overlap-grad-reduce
+            --overlap-param-gather
+            --recompute-granularity full
+            --recompute-method block
+            --recompute-num-layers 36
+            --distributed-backend nccl'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+          SFT_ARGS: '
+            --chat-template qwen
+            --sft-num-preprocess-workers 16
+            --no-check-for-nan-in-loss-and-grad'
+
+tasks:
+  check_correctness_task: True

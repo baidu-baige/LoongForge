@@ -1,85 +1,147 @@
-# 构建系统配置
-# PEP 517 规定的构建系统配置，指定构建工具和后端
 [build-system]
-# 构建时需要的依赖
 requires = ["hatchling"]
-# 构建后端，使用 hatchling 替代传统的 setuptools
 build-backend = "hatchling.build"
 
-# 项目元数据配置
-# PEP 621 规定的项目核心元数据
 [project]
-# 项目名称，将用于发布和安装
-name = "AIAK-Training-Omni"
-# 项目版本，1.0.0 以上版本被视为正式发布版本
-# 修改版本号时请遵循：https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/tjIp17bwPd/CHf1I_vIs4/9lX58wB6nSUjI_
+name = "LoongForge"
 version = "0.1.0"
-# 项目简介，不支持非英文字符
-description = "Hello world"
-# README 文件路径，用于生成长描述
+description = "LoongForge framework: an all-scenario training framework"
 readme = "README.md"
-# Python 版本要求
 requires-python = ">=3.10"
-# 许可证信息
-license = { text = "MIT" }
-# 作者信息列表
+license = { text = "Apache-2.0" }
 authors = [
-    { name = "zhanghenghua", email = "zhanghenghua@baidu.com" }
+    { name = "The LoongForge Authors" }
 ]
-# 关键词，用于包索引和搜索
-keywords = ["baidu", "demo"]
-# 项目分类，用于 PyPI 分类（如果项目不打算开源可以忽略）
-# 完整分类列表：https://pypi.org/pypi?%3Aaction=list_classifiers
+keywords = ["baidu", "training", "megatron", "llm", "vlm", "distributed"]
 classifiers = [
-    "Private :: Do Not Upload",
-    "Programming Language :: Python",
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10"
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-# 项目依赖列表
-dependencies = [
-    "build>=1.0.3"
-]
+dependencies = []
 
-# 可选依赖配置，可通过 pip install package[test] 安装
 [project.optional-dependencies]
-# 测试相关依赖
-test = [
-    "pytest",
-    "mock"
+gpu = [
+    # Core
+    "packaging>=23.2,<25",
+    "wrapt==1.16.0",
+    "hydra-core==1.3.2",
+    "omegaconf==2.3.0",
+    "protobuf==3.20.2",
+    # LLM / HF ecosystem
+    "transformers==5.2.0",
+    "datasets==2.19.2",
+    "accelerate==1.12.0",
+    "tokenizers==0.22.2",
+    "sentencepiece>=0.2.0",
+    "safetensors==0.4.5",
+    "huggingface_hub==1.5.0",
+    "tiktoken==0.5.2",
+    # Training / Modeling utils
+    "einops==0.8.1",
+    "timm==1.0.3",
+    "webdataset==0.2.111",
+    "regex",
+    "natsort==8.4.0",
+    "pandarallel",
+    # NLP / dataset utils
+    "jsonlines==4.0.0",
+    "ftfy==6.1.3",
+    "nltk==3.9.1",
+    "py-cpuinfo==9.0.0",
+    # Monitoring / logging
+    "wandb==0.21.4",
+    "swanlab",
+    # Vision / misc
+    "opencv-python-headless==4.11.0.86",
+    # Megatron / Qwen
+    "qwen-vl-utils==0.0.11",
+    "megatron-energon==5.0.0",
+    # GPU-specific
+    "deepspeed==0.17.6",
+    "flashinfer-python==0.6.2",
+    "flashinfer-cubin==0.6.2",
+    "tilelang==0.1.7post1",
+]
+xpu = [
+    # Core
+    "hydra-core==1.3.2",
+    # LLM / HF ecosystem (XPU-specific versions)
+    "transformers==4.57.1",
+    "datasets==2.20.0",
+    "accelerate==0.25.0",
+    "sentencepiece==0.1.99",
+    # Training / Modeling utils
+    "einops==0.7.0",
+    # NLP / dataset utils
+    "py-cpuinfo==9.0.0",
+    # Monitoring / logging
+    "wandb==0.21.4",
+    "swanlab",
+    # Vision / misc
+    "opencv-python==4.11.0.86",
+    # XPU-specific
+    "scipy",
+    "pybind11",
+    "numpy",
+    "Cython",
+    "megatron-energon==5.0.0",
+    "botocore==1.41.6",
 ]
 
-# 项目相关 URL 配置
 [project.urls]
-# 项目主页，通常是项目的 icode 地址
-Homepage = "http://icode.baidu.com/repos/baidu/hac-aiacc/AIAK-Training-Omni/tree/master"
-# 更新日志文件链接
+Homepage = "https://github.com/baidu-baige/LoongForge"
+Repository = "https://github.com/baidu-baige/LoongForge"
+Documentation = "https://baidu-baige.github.io/LoongForge/"
 Changelog = "CHANGELOG.md"
 
-# 命令行入口点配置
 [project.scripts]
-# 格式：命令名 = 模块路径:函数名
-AIAK-Training-Omni = "aiak_training_omni.cmdline:main"
+LoongForge = "loongforge.train:main"
 
-# Hatch 构建工具配置
-[tool.hatch.build]
-# 要包含的 Python 包
-packages = ["aiak_training_omni"]
-# 要包含的数据文件
-# 支持通配符模式
-include = [
-    "aiak_training_omni/conf/*",
-    "aiak_training_omni/data/*"
+[dependency-groups]
+test = [
+    "pytest",
+    "mock",
+]
+dev = [
+    "pre-commit>=3.2",
+]
+notebook = [
+    "jupyterlab",
+    "jupyterlab-language-pack-zh-CN",
+    "jupytext",
+]
+internal = [
+    # Build toolchain
+    "setuptools>=65.5",
+    "wheel>=0.42",
+    "hatchling>=1.18.0",
+    "build>=1.0.3",
+    # Test / Dev / Notebook
+    {include-group = "test"},
+    {include-group = "dev"},
+    {include-group = "notebook"},
 ]
 
-# wheel 包构建配置
+[tool.uv]
+no-build-isolation-package = [
+    "transformer-engine",
+]
+
+[tool.hatch.build]
+packages = ["loongforge"]
+include = [
+    "loongforge/conf/*",
+    "loongforge/data/*",
+    "loongforge/**/*.yaml",
+    "loongforge/**/*.json",
+]
+
 [tool.hatch.build.targets.wheel]
-# 指定要打包的 Python 包
-packages = ["aiak_training_omni"]
-# wheel 包输出目录
+packages = ["loongforge"]
 output-dir = "output/dist"
 
-# 源码包构建配置
 [tool.hatch.build.targets.sdist]
-# 源码包输出目录
 output-dir = "output/dist"

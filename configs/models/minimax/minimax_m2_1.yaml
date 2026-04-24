@@ -1,0 +1,25 @@
+_target_: loongforge.models.foundation.MinimaxConfig
+
+num_layers: 62
+hidden_size: 3072
+ffn_hidden_size: 1536
+num_attention_heads: 48
+num_query_groups: 8
+vocab_size_in_config_file: 200064
+num_experts: 256
+group_query_attention: True
+kv_channels: 128
+qk_layernorm: True
+add_bias_linear: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+position_embedding_type: "rope"
+add_position_embedding: false
+untie_embeddings_and_output_weights: true
+moe_ffn_hidden_size: 1536
+model_type: "minimax"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml

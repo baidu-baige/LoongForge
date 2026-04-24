@@ -1,0 +1,200 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - qwen3.5@module: ???
+  - _self_
+
+args:
+  common:
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+    num_key_value_heads: ${module.num_query_groups}
+    head_dim: ${module.kv_channels}
+    mixer_num_key_heads: ${module.linear_num_key_heads}
+    mixer_num_value_heads: ${module.linear_num_value_heads}
+    mixer_key_head_dim: ${module.linear_key_head_dim}
+    mixer_value_head_dim: ${module.linear_value_head_dim}
+    vocab_size: ${module.vocab_size_in_config_file}
+    num_experts: ${module.num_experts}
+  huggingface:
+    mtp_layer_id: 0
+  mcore:
+    use_rotary_position_embeddings: true
+    add_embedding_padding: true
+    transpose_mlp_dense: true
+    transpose_query_key_value: true
+    untie_embeddings_and_output_weights: ${module.untie_embeddings_and_output_weights}
+    make_vocab_size_divisible_by: ${module.make_vocab_size_divisible_by}
+name_map:
+  huggingface:
+    word_embeddings: model.language_model.embed_tokens
+    transformer: model.language_model
+    mtp_transformer: mtp
+    layer_prefix: layers
+    mixer_input_layernorm:
+      name: input_layernorm
+      depend_on_key: mixer_att.log
+    input_layernorm:
+      name: input_layernorm
+      depend_on_key: attention.query_gate_key_value
+    mixer_att.log:
+      name: linear_attn.A_log
+      is_direct_name: true
+    mixer_att.dt_bias:
+      name: linear_attn.dt_bias
+      is_direct_name: true
+    mixer_att.conv1d: linear_attn.conv1d
+    mixer_att.norm: linear_attn.norm
+    mixer_att.out_proj: linear_attn.out_proj
+    # qkv+z -> interleaved qkvz, b+a -> interleaved ba (for GatedDeltaNet from qwen3_next)
+    mixer_att.in_proj_qkvz:
+    - linear_attn.in_proj_qkv
+    - linear_attn.in_proj_z
+    mixer_att.in_proj_ba:
+    - linear_attn.in_proj_b
+    - linear_attn.in_proj_a
+    attention.query_gate_key_value:
+    - self_attn.q_proj
+    - self_attn.k_proj
+    - self_attn.v_proj
+    attention.q_a_layernorm: self_attn.q_norm
+    attention.kv_a_layernorm: self_attn.k_norm
+    attention.dense: self_attn.o_proj
+    post_attention_layernorm: post_attention_layernorm
+    moe.gate: mlp.gate
+    moe.expert: mlp.experts
+    moe.shared_expert: mlp.shared_expert
+    moe.shared_expert_gate: mlp.shared_expert_gate
+    moe.shared_expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    moe.shared_expert_4h_to_h: down_proj
+    mtp_moe.expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    mtp_moe.expert_4h_to_h: down_proj
+    mtp_moe.shared_expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    mtp_moe.shared_expert_4h_to_h: down_proj
+    moe.expert_h_to_4h:
+      name: gate_up_proj
+      is_direct_name: true
+      is_dict_for_expert: true
+    moe.expert_4h_to_h:
+      name: down_proj
+      is_direct_name: true
+      is_dict_for_expert: true
+    final_layernorm: model.language_model.norm
+    word_embeddings_for_head: lm_head
+    mtp_word_embeddings: null
+    mtp_eh_proj:
+      name: mtp.fc
+      no_layer_id: true
+    mtp_shared_head_norm:
+      name: mtp.norm
+      no_layer_id: true
+    mtp_enorm:
+      name: mtp.pre_fc_norm_embedding
+      no_layer_id: true
+    mtp_hnorm:
+      name: mtp.pre_fc_norm_hidden
+      no_layer_id: true
+
+  mcore:
+    word_embeddings: language_model.embedding.word_embeddings
+    word_position_embeddings: language_model.embedding.position_embeddings
+    transformer: model
+    layer_prefix: language_model.decoder.layers
+    mtp_layer_prefix: language_model.mtp.layers
+    mixer_input_layernorm:
+      name: input_layernorm
+    input_layernorm:
+      name: input_layernorm
+    mixer_att.log:
+      name: self_attention.A_log
+      ignore_tp: true
+      is_direct_name: true
+    mixer_att.dt_bias:
+      name: self_attention.dt_bias
+      ignore_tp: true
+      is_direct_name: true
+    mixer_att.conv1d:
+      name: self_attention.conv1d
+      ignore_tp: true
+    mixer_att.norm:
+      name: self_attention.out_norm
+    mixer_att.out_proj:
+      name: self_attention.out_proj
+      ignore_tp: true
+      extra: true
+    # qkvz/ba layout matching GatedDeltaNet from qwen3_next
+    mixer_att.in_proj_qkvz:
+      name: self_attention.in_proj_qkvz
+      ignore_tp: true
+      extra: true
+    mixer_att.in_proj_ba:
+      name: self_attention.in_proj_ba
+      ignore_tp: true
+      extra: true
+    attention.query_gate_key_value:
+      name: self_attention.linear_qkv
+      extra: true
+    attention.q_a_layernorm:
+      name: self_attention.q_layernorm
+    attention.kv_a_layernorm:
+      name: self_attention.k_layernorm
+    attention.dense:
+      name: self_attention.linear_proj
+      extra: true
+    post_attention_layernorm:
+      name: pre_mlp_layernorm
+    moe.gate: mlp.router
+    moe.expert: mlp.experts.local_experts
+    moe.groupedgemm.expert: mlp.experts
+    moe.shared_expert: mlp.shared_experts
+    moe.shared_expert_gate:
+      name: mlp.shared_experts.gate_weight
+      is_direct_name: true
+    moe.expert_h_to_4h:
+      name: linear_fc1
+      extra: true
+    moe.expert_4h_to_h:
+      name: linear_fc2
+      extra: true
+    moe.shared_expert_h_to_4h:
+      name: linear_fc1
+      extra: true
+    moe.shared_expert_4h_to_h:
+      name: linear_fc2
+      extra: true
+    mtp_moe.expert_h_to_4h:
+      name: linear_fc1
+      extra: true
+    mtp_moe.expert_4h_to_h:
+      name: linear_fc2
+      extra: true
+    mtp_moe.shared_expert_h_to_4h:
+      name: linear_fc1
+      extra: true
+    mtp_moe.shared_expert_4h_to_h:
+      name: linear_fc2
+      extra: true
+    final_layernorm:
+      name: language_model.decoder.final_layernorm
+    word_embeddings_for_head: language_model.output_layer
+    transformer_tpl: model%d
+    mtp_word_embeddings: language_model.embedding.word_embeddings
+    mtp_eh_proj:
+      name: eh_proj
+      extra: true
+    mtp_shared_head_norm: final_layernorm
+    mtp_enorm: enorm
+    mtp_hnorm: hnorm
+    mtp_name_prefix_for_layer: transformer_layer
+    
+torch_dtype: bfloat16

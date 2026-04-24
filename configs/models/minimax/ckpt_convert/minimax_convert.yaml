@@ -1,0 +1,87 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - minimax@module: ???
+  - _self_
+
+args:
+  common:
+    head_dim: 128
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+    num_key_value_heads: ${module.num_query_groups}
+    vocab_size: ${module.vocab_size_in_config_file}
+    num_experts: ${module.num_experts}
+  mcore:
+    untie_embeddings_and_output_weights: true
+    add_embedding_padding: true
+    transpose_mlp_dense: true
+    transpose_query_key_value: true
+name_map:
+  huggingface:
+    word_embeddings: model.embed_tokens
+    transformer: model
+    layer_prefix: layers
+    input_layernorm: input_layernorm
+    attention.query_key_value:
+    - self_attn.q_proj
+    - self_attn.k_proj
+    - self_attn.v_proj
+    attention.q_a_layernorm: self_attn.q_norm
+    attention.kv_a_layernorm: self_attn.k_norm
+    attention.dense: self_attn.o_proj
+    post_attention_layernorm: post_attention_layernorm
+    moe.gate: block_sparse_moe.gate
+    moe.gate.bias: block_sparse_moe.e_score_correction_bias
+    moe.expert: block_sparse_moe.experts
+    moe.expert_h_to_4h:
+    - w1
+    - w3
+    moe.expert_4h_to_h: w2
+    final_layernorm: model.norm
+    word_embeddings_for_head: lm_head
+  mcore:
+    word_embeddings: embedding.word_embeddings
+    word_position_embeddings: model.embedding.position_embeddings
+    transformer: model
+    layer_prefix: decoder.layers
+    input_layernorm:
+      name: self_attention.linear_qkv
+      is_layernorm: true
+    attention.query_key_value:
+      name: self_attention.linear_qkv
+      fp8: true
+      extra: true
+    attention.q_a_layernorm:
+      name: self_attention.q_layernorm
+      is_layernorm: false
+    attention.kv_a_layernorm:
+      name: self_attention.k_layernorm
+      is_layernorm: false
+    attention.dense:
+      name: self_attention.linear_proj
+      fp8: true
+      extra: true
+    post_attention_layernorm: pre_mlp_layernorm
+    moe.gate: mlp.router
+    moe.gate.bias: mlp.router.expert_bias
+    moe.expert: mlp.experts.local_experts
+    moe.groupedgemm.expert: mlp.experts
+    moe.expert_h_to_4h:
+      name: linear_fc1
+      fp8: true
+      extra: true
+    moe.expert_4h_to_h:
+      name: linear_fc2
+      fp8: true
+      extra: true
+    final_layernorm:
+      name: decoder.final_layernorm
+      extra: true
+    word_embeddings_for_head: output_layer
+    transformer_tpl: model%d
+torch_dtype: bfloat16

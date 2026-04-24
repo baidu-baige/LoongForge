@@ -1,0 +1,132 @@
+ARG BASE_IMAGE="weiyexu/omni_kunlun:uv_base"
+FROM ${BASE_IMAGE}
+
+# =========================================================
+# Build Arguments
+# =========================================================
+# LeRobot has dependency conflicts with the base environment; disabled by default.
+# Enable only when training VLA models (e.g., Pi0.5, GR00T).
+ARG ENABLE_LEROBOT="false"
+ARG XPYTORCH_URL_ARG=""
+
+# =========================================================
+# Base System Configuration + APT Source Replacement
+# =========================================================
+COPY ./LoongForge /workspace/LoongForge
+SHELL ["/bin/bash", "-c"]
+ENV PATH=/opt/omni_kunlun/bin:${PATH}
+
+RUN wget https://ai-data.bj.bcebos.com/open-source/xcudart.tar.gz && tar -xzvf xcudart.tar.gz -C /opt/omni_kunlun/ && rm -rf xcudart*
+ENV LD_LIBRARY_PATH=/usr/local/cuda-11.7/:/opt/omni_kunlun/xcudart/lib/:${LD_LIBRARY_PATH}
+
+# ======================== Install XPU Requirements ========================
+RUN set -exuo pipefail && \
+    download_xpytorch() { \
+        local XPYTORCH_URL=$1; \
+        local XPYTORCH_FILE=$(basename "${XPYTORCH_URL}"); \
+        echo "download xpytorch package: ${XPYTORCH_URL}" && \
+        wget "${XPYTORCH_URL}" && \
+        bash "${XPYTORCH_FILE}" --noexec --target xpytorch_unpack && cd xpytorch_unpack && \
+        sed -i 's/CONDA_PREFIX/VIRTUAL_ENV/g' setup.sh && \
+        python -m ensurepip --upgrade && \
+        python -m pip install --upgrade pip && \
+        export VIRTUAL_ENV=/opt/omni_kunlun && bash setup.sh && \
+        cd .. && rm -rf "${XPYTORCH_FILE}" xpytorch_unpack; \
+    }; \
+    source /opt/omni_kunlun/bin/activate && \
+    if [ -n "${XPYTORCH_URL_ARG}" ]; then \
+        XPYTORCH_URL="${XPYTORCH_URL_ARG}"; \
+        echo "use specified xpytorch version: ${XPYTORCH_URL}"; \
+    else \
+        xpytorch_info="/workspace/LoongForge/docker/xpytorch_info.txt"; \
+        if [ ! -f "${xpytorch_info}" ]; then \
+            echo "xpytorch info file not exist: ${xpytorch_info}" && exit 1; \
+        fi; \
+        DEFAULT_XPYTORCH_URL=$(cat "${xpytorch_info}" | tr -d '[:space:]'); \
+        if [ -z "${DEFAULT_XPYTORCH_URL}" ]; then \
+            echo "Error: xpytorch_info.txt file content is empty" && exit 1; \
+        fi; \
+        XPYTORCH_URL="${DEFAULT_XPYTORCH_URL}"; \
+        echo "use default xpytorch version: ${XPYTORCH_URL}"; \
+    fi && \
+    download_xpytorch "${XPYTORCH_URL}"
+
+# ======================== Install Base Requirements ========================
+RUN set -exuo pipefail && \
+    source /opt/omni_kunlun/bin/activate && \
+    # for deepspeed cpu adam
+    DS_BUILD_CPU_ADAM=1  BUILD_UTILS=1  pip install deepspeed==0.18.5 -U && \
+    echo "alias ll='ls -alF'" > /etc/profile.d/alias.sh; \
+    echo "source /etc/profile.d/alias.sh" >> ~/.bashrc && \
+    cd /workspace/LoongForge/ && \
+    pip install uv && \
+    uv pip install --no-config --no-cache -e ".[xpu]"
+
+# =========================================================
+# Lerobot
+# =========================================================
+RUN set -exuo pipefail && \
+    install_lerobot() { \
+        echo "Installing lerobot..." && \
+        cd /workspace && \
+        if [ -d "lerobot" ]; then \
+            rm -rf lerobot; \
+        fi && \
+        git clone --no-checkout https://github.com/huggingface/lerobot.git && \
+        cd lerobot && \
+        git checkout tags/v0.4.3 && \
+        if [ -f "requirements-ubuntu.txt" ]; then \
+            sed -i '/evdev/d' requirements-ubuntu.txt; \
+        fi && \
+        pip install func_timeout pytest-xdist prettytable==3.11.0 peft==0.17.0 && \
+        sed -i -e '/"torch[>=<]/d' \
+           -e 's/"torchvision[^"]*",/"torchvision==0.20.1",/' \
+           -e '/python-can/d' \
+           -e '/lerobot\[can-dep\]/d' \
+           -e '/lerobot\[damiao\]/d' \
+           -e '/unitree_g1 = \[/,/\]/ { /matplotlib/d; /pin/d; /meshcat/d; /casadi/d; }' \
+           -e '/lerobot-setup-can/d' \
+           -e '/\[tool.setuptools.package-data\]/d' \
+           -e '/lerobot = \["envs\/\*\.json"\]/d' \
+           -e '/"OT_VALUE"/d' \
+           pyproject.toml && \
+        pip install --no-build-isolation -e ".[pi]" && \
+        sed -i 's|tokenizer_name="google/paligemma-3b-pt-224",|tokenizer_name=config.tokenizer_name,|g' ./src/lerobot/policies/pi05/processor_pi05.py && \
+        echo "Lerobot installation completed"; \
+    }; \
+    source /opt/omni_kunlun/bin/activate && \
+    if [ "$ENABLE_LEROBOT" = "true" ]; then \
+        install_lerobot; \
+    else \
+        echo "Skipping lerobot installation (ENABLE_LEROBOT=${ENABLE_LEROBOT})"; \
+    fi
+
+
+# =========================================================
+# Megatron Symlink
+# Scripts reference /workspace/Loong-Megatron; the actual location is
+# /workspace/LoongForge/third_party/Loong-Megatron (git submodule).
+# =========================================================
+RUN ln -sf /workspace/LoongForge/third_party/Loong-Megatron /workspace/Loong-Megatron
+
+# =========================================================
+# Jupyter Configuration
+# =========================================================
+RUN mkdir -p /root/.jupyter && \
+    touch /root/.jupyter/enterpoint.sh && \
+    chmod +x /root/.jupyter/enterpoint.sh
+
+# =========================================================
+# Clean Up Unused Files (Consistent with install.sh)
+# =========================================================
+RUN rm -rf /tmp/* ~/.bash_history && \
+    rm -rf /workspace/LoongForge/.git && \
+    rm -rf /workspace/LoongForge/third_party/Loong-Megatron/.git && \
+    rm -rf /workspace/LoongForge/build.sh && \
+    rm -rf /workspace/LoongForge/ci.yml && \
+    rm -rf /workspace/LoongForge/docker/ci && \
+    rm -rf /workspace/*.tar.gz && \
+    rm -f /workspace/README.md /workspace/license.txt && \
+    rm -rf /workspace/docker-examples /workspace/tutorials /workspace/lerobot
+
+WORKDIR /workspace

@@ -1,0 +1,36 @@
+# deepseek_v2 model config
+_target_: loongforge.models.foundation.DeepseekConfig
+
+num_layers: 60
+hidden_size: 5120
+ffn_hidden_size: 12288
+num_attention_heads: 128
+num_experts: 160
+moe_ffn_hidden_size: 1536
+moe_shared_expert_intermediate_size: 3072
+q_lora_rank: 1536
+kv_lora_rank: 512
+qk_head_dim: 128
+qk_pos_emb_head_dim: 64
+v_head_dim: 128
+moe_layer_freq: ${moe_freq:"[0]*1+[1]*59"}
+qk_layernorm: true
+vocab_size_in_config_file: 102400
+
+# common default
+position_embedding_type: "rope"
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+add_qkv_bias: false
+untie_embeddings_and_output_weights: true
+num_query_groups: 128
+apply_rope_fusion: true
+multi_latent_attention: true
+model_type: "deepseek"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek2/ckpt_convert/deepseek_v2_convert.yaml

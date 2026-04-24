@@ -1,0 +1,31 @@
+# mimo_7b model config
+_target_: loongforge.models.foundation.MimoConfig
+
+num_layers: 36
+hidden_size: 4096
+ffn_hidden_size: 11008
+num_attention_heads: 32
+group_query_attention: true
+num_query_groups: 8
+vocab_size_in_config_file: 151680
+
+# MTP
+mtp_num_layers: 3
+mtp_loss_scaling_factor: 0.1
+mtp_loss_scaling_factor_decay_ratio: 0.8
+
+# common default
+position_embedding_type: "rope"
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+add_qkv_bias: true
+qk_layernorm: false
+untie_embeddings_and_output_weights: true
+model_type: "mimo"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/mimo/ckpt_convert/mimo_convert.yaml

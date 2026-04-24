@@ -1,0 +1,45 @@
+# glm model config
+_target_: loongforge.models.foundation.GlmConfig
+
+num_layers: 78
+hidden_size: 6144
+ffn_hidden_size: 12288
+num_attention_heads: 64
+num_query_groups: 64
+num_experts: 256
+mtp_num_layers: 1
+moe_ffn_hidden_size: 2048
+moe_shared_expert_intermediate_size: 2048
+q_lora_rank: 2048
+kv_lora_rank: 512
+qk_head_dim: 192
+qk_pos_emb_head_dim: 64
+v_head_dim: 256
+moe_layer_freq: ${moe_freq:"[0]*3+[1]*75"}
+qk_layernorm: true
+vocab_size_in_config_file: 154880
+
+# Deepseek Sparse Attention
+experimental_attention_variant: "dsa"
+dsa_indexer_n_heads: 32
+dsa_indexer_head_dim: 128
+dsa_indexer_topk: 2048
+dsa_indexer_loss_coeff: 1.0
+dsa_indexer_use_sparse_loss: true
+
+# common default
+position_embedding_type: "rope"
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+add_qkv_bias: false
+untie_embeddings_and_output_weights: true
+apply_rope_fusion: false  # no support rope fusion yet
+multi_latent_attention: true
+model_type: "glm"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/glm5/ckpt_convert/glm5_convert.yaml

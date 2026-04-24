@@ -1,0 +1,115 @@
+model_name: deepseek_v2_lite
+description: $model_name
+TOTAL_K8S_NODES: 1
+huggingface_path:
+bos_path: bos:/ai-data/deepseek-ai/DeepSeek-V2-Lite
+
+# Model Parameters
+MODEL_RUNNABLE: True # Should be True / False
+
+# LoongForge training parameters
+HF_CKPT_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
+DATA_PATH: $pfs_path/omni_datasets/LoongForge/deepseek_v2_lite/pile_test/pile-deepseek_text_document
+TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
+CHECKPOINT_PATH: $step1_output_path
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/deepseek2/deepseek_v2_lite.yaml
+CONVERT_FILE: $LOONGFORGE_PATH/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
+
+# Training Parameters
+TENSOR_MODEL_PARALLER_SIZE: 2
+PIPELINE_MODEL_PARALLER_SIZE: 1
+EXPERT_MODEL_PARALLEL_SIZE: 4
+EXPERT_TENSOR_PARALLEL_SIZE: 2
+log_interval: 1
+global_batch_size: 32
+precision: bf16
+
+scenarios:
+  - function:
+      pretrain:
+        Step1:
+          RUNNABLE_FLAG: False
+          CONVERT_ARGS: '
+            --checkpoint-format=model-{i:05d}-of-{num_checkpoints:06d}.safetensors
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --num_experts=64
+            --expert_tensor_parallel_size=2
+            --expert_parallel_size=4
+            --megatron_path=/workspace/Loong-Megatron
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --no_save_optim
+            --no_load_optim
+            --no-te
+            --moe-grouped-gemm
+            --safetensors'
+        Step2:
+          MODEL_ARGS: '
+            --model-name deepseek-v2-lite
+            --norm-epsilon 1e-6
+            --rotary-scaling-factor 40
+            --mscale 0.707
+            --mscale-all-dim 0.707'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path $DATA_PATH
+            --split 99990,8,2'
+          TRAINING_ARGS: '
+            --training-phase pretrain
+            --seq-length 2048
+            --max-position-embeddings 2048
+            --init-method-std 0.01
+            --no-masked-softmax-fusion
+            --micro-batch-size 1
+            --global-batch-size ${global_batch_size}
+            --lr 1e-4
+            --train-iters ${train_iters}
+            --load ${CHECKPOINT_PATH}
+            --lr-decay-iters 320000
+            --lr-decay-style cosine
+            --min-lr 1.0e-5
+            --weight-decay 0.1
+            --lr-warmup-iters 500
+            --clip-grad 1.0
+            --bf16
+            --save-interval 10000
+            --eval-interval 1000
+            --eval-iters 0
+            --no-load-optim
+            --no-load-rng
+            --enable-experimental
+            --deterministic-mode
+            --log-memory-stats'
+            # --save ${step1_output_path}
+          MOE_ARGS: '
+            --moe-router-load-balancing-type aux_loss
+            --moe-router-topk 6
+            --moe-aux-loss-coeff 1e-3
+            --moe-grouped-gemm'
+          MODEL_PARALLEL_ARGS: '
+            --attention-backend unfused
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --expert-model-parallel-size ${EXPERT_MODEL_PARALLEL_SIZE}
+            --expert-tensor-parallel-size ${EXPERT_TENSOR_PARALLEL_SIZE}
+            --use-distributed-optimizer
+            --overlap-param-gather
+            --overlap-grad-reduce
+            --sequence-parallel
+            --moe-token-dispatcher-type alltoall
+            --recompute-granularity full
+            --recompute-method block
+            --recompute-num-layers 27'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+tasks:
+  check_correctness_task: True

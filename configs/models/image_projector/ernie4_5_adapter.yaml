@@ -1,0 +1,7 @@
+_target_: loongforge.models.encoder.ErnieAdapterConfig
+
+in_dim: 1280
+out_dim: 2560
+rms_norm_eps: 1e-5
+
+model_type: ernie4_5_adapter

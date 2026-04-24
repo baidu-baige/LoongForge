@@ -1,0 +1,21 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: intern_vit_0.3b
+  - ../../models/image_projector@model.image_projector: intern_mlp_adapter
+  - ../../models/internlm2.5@model.foundation: internlm2_5_8b
+  - _self_
+
+model:
+  model_type: intern_vl
+  loss_func: ${loss_func:loss_func_internvl}
+  
+  image_projector:
+    hidden_size: 4096
+    ffn_hidden_size: 4096
+  foundation: 
+    rotary_emb_func: "DynamicRotaryEmbedding"
+    rotary_base: 1000000
+    model_spec: ["loongforge.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]

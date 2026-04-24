@@ -1,0 +1,21 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: qwen2_5_vit
+  - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
+  - ../../models/llama3@model.foundation: llama3_8b
+  - _self_
+
+model:
+  model_type: qwen_vit_llama
+  position_idx_func: ${position_func:position_ids}
+  loss_func: ${loss_func:default}
+  foundation:
+    model_spec: ["loongforge.models.foundation.llama.llama_layer_spec", "get_llama_layer_with_te_spec"]
+  image_encoder:
+    model_spec: ["loongforge.models.encoder.qwen2_vl_vision_models.qwen2_vl_layer_spec",
+                 "get_qwen2_vl_vision_model_layer_with_te_spec"]
+  image_projector:
+    normalization: "RMSNorm"

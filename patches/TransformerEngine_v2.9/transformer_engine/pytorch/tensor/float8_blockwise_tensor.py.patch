@@ -1,0 +1,23 @@
+diff --git a/transformer_engine/pytorch/tensor/float8_blockwise_tensor.py b/transformer_engine/pytorch/tensor/float8_blockwise_tensor.py
+index 48762499..19e3e41a 100644
+--- a/transformer_engine/pytorch/tensor/float8_blockwise_tensor.py
++++ b/transformer_engine/pytorch/tensor/float8_blockwise_tensor.py
+@@ -360,6 +360,8 @@ class Float8BlockwiseQTensor(Float8BlockwiseQTensorStorage, QuantizedTensor):
+         """
+         if isinstance(tensor, QuantizedTensor):
+             return self.quantize_(tensor.dequantize())
++        if hasattr(self, 'set_high_precision_init_val'):
++            self.set_high_precision_init_val(tensor)
+         return super().quantize_(tensor, noop_flag=noop_flag)
+ 
+     def dequantize(self, *, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
+@@ -490,7 +492,8 @@ class Float8BlockwiseQTensor(Float8BlockwiseQTensorStorage, QuantizedTensor):
+         dtype: torch.dtype,
+         quantizer: Quantizer,
+         is_2D_scaled: bool,
+-        data_format: tex.Float8BlockScaleTensorFormat,
++        data_format: tex.Float8BlockScaleTensorFormat = Float8BlockScaleTensorFormat.GEMM_READY,
++        *_,  # optional: swallow any future extras for forward-compat
+     ) -> Float8BlockwiseQTensor:
+         """Build Float8BlockwiseQTensor, for use in __reduce__
+ 

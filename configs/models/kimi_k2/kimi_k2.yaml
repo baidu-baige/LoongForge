@@ -1,0 +1,54 @@
+# kimi k2 model config
+# Adapted from https://moonshotai.github.io/Kimi-K2/ and Megatron-Bridge KimiK2Provider
+_target_: loongforge.models.foundation.DeepseekConfig
+
+num_layers: 61
+hidden_size: 7168
+ffn_hidden_size: 18432
+num_attention_heads: 64
+num_query_groups: 64
+num_experts: 384
+mtp_num_layers: 0
+moe_ffn_hidden_size: 2048
+moe_shared_expert_intermediate_size: 2048
+kv_channels: 64
+q_lora_rank: 1536
+kv_lora_rank: 512
+qk_head_dim: 128
+qk_pos_emb_head_dim: 64
+v_head_dim: 128
+moe_layer_freq: ${moe_freq:"[0]*1+[1]*60"}
+qk_layernorm: true
+vocab_size_in_config_file: 163840
+rotary_base: 50000
+make_vocab_size_divisible_by: 1280
+
+# Rope scaling (YaRN)
+rotary_scaling_factor: 64
+beta_fast: 32.0
+beta_slow: 1.0
+mscale: 1.0
+mscale_all_dim: 1.0
+original_max_position_embeddings: 4096
+
+# common default
+position_embedding_type: "rope"
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+add_qkv_bias: false
+untie_embeddings_and_output_weights: true
+apply_rope_fusion: false
+bias_activation_fusion: true
+bias_dropout_fusion: true
+masked_softmax_fusion: true
+gradient_accumulation_fusion: true
+cross_entropy_loss_fusion: true
+cross_entropy_fusion_impl: "te"
+moe_permute_fusion: true
+multi_latent_attention: true
+model_type: "kimi"

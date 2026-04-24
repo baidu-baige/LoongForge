@@ -1,0 +1,8 @@
+_target_: loongforge.models.encoder.PatchMergerMLPAdapterConfig
+
+activation_func: ${act:gelu}
+normalization: "LayerNorm"
+bias_activation_fusion: False
+gated_linear_unit: False
+layernorm_epsilon: 1e-05
+model_type: "patch_merger_adapter"

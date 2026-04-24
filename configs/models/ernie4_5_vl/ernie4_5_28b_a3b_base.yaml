@@ -1,0 +1,42 @@
+_target_: loongforge.models.foundation.ErnieMoeConfig
+
+num_layers: 28
+hidden_size: 2560
+ffn_hidden_size: 12288
+num_attention_heads: 20
+group_query_attention: true
+num_query_groups: 4
+vocab_size_in_config_file: 103424
+make_vocab_size_divisible_by: 128
+qk_layernorm: true
+kv_channels: 128
+add_qkv_bias: false
+num_experts: 64
+
+num_moe_experts: 64
+moe_num_shared_experts: 2
+gated_linear_unit: false
+bias_activation_fusion: false
+mrope_section: [22,22,20]
+max_position_embeddings: 131072
+moe_intermediate_size: [1536, 512]
+moe_router_topk: 6
+moe_layer_end_index: [29,28]
+dense_layer_index: [0,]
+moe_layer_start_index: [1,1]
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "Torch_RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+untie_embeddings_and_output_weights: false
+apply_rope_fusion: true
+position_embedding_type: "rope"
+moe_token_dispatcher_type: "alltoall"
+im_patch_id: 100295
+moe_router_pre_softmax: true
+
+model_type: ernie4_5_28b_a3b_base
+

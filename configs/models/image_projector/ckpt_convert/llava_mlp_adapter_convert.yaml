@@ -1,0 +1,19 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_projector@module: ???
+  - _self_
+
+# Adapter configuration
+adapter.layernorm.weight: visual.merger.ln_q.weight
+adapter.layernorm.bias: visual.merger.ln_q.bias
+adapter.linear_fc1.weight: visual.merger.mlp.0.weight
+adapter.linear_fc1.bias: visual.merger.mlp.0.bias
+adapter.linear_fc2.weight: visual.merger.mlp.2.weight
+adapter.linear_fc2.bias: visual.merger.mlp.2.bias
+
+name_map:
+  mcore:
+    layer_prefix: adapter. # don't remove the dot

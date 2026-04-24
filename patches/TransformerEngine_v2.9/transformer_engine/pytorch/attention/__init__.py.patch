@@ -1,0 +1,17 @@
+diff --git a/transformer_engine/pytorch/attention/__init__.py b/transformer_engine/pytorch/attention/__init__.py
+index 67afd835..6c06e09a 100644
+--- a/transformer_engine/pytorch/attention/__init__.py
++++ b/transformer_engine/pytorch/attention/__init__.py
+@@ -8,10 +8,12 @@ from .dot_product_attention import DotProductAttention
+ from .multi_head_attention import MultiheadAttention
+ from .inference import InferenceParams
+ from .rope import RotaryPositionEmbedding
++from .rope import apply_rotary_pos_emb
+ 
+ __all__ = [
+     "DotProductAttention",
+     "MultiheadAttention",
+     "InferenceParams",
+     "RotaryPositionEmbedding",
++    "apply_rotary_pos_emb",
+ ]

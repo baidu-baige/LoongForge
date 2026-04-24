@@ -1,0 +1,184 @@
+{
+  "sft": [
+    {
+      "iteration": 1,
+      "elapsed_time_ms": 38788.8,
+      "throughput": 1689.6,
+      "lm_loss": 1.543247,
+      "grad_norm": 4.160952,
+      "mem_allocated_avg_MB": 23651.36,
+      "mem_max_allocated_avg_MB": 41840.31
+    },
+    {
+      "iteration": 2,
+      "elapsed_time_ms": 29282.6,
+      "throughput": 2238.0,
+      "lm_loss": 1.556087,
+      "grad_norm": 4.063859,
+      "mem_allocated_avg_MB": 23696.1,
+      "mem_max_allocated_avg_MB": 49691.12
+    },
+    {
+      "iteration": 3,
+      "elapsed_time_ms": 28902.2,
+      "throughput": 2267.5,
+      "lm_loss": 1.47843,
+      "grad_norm": 2.396632,
+      "mem_allocated_avg_MB": 23704.82,
+      "mem_max_allocated_avg_MB": 49699.9
+    },
+    {
+      "iteration": 4,
+      "elapsed_time_ms": 29601.0,
+      "throughput": 2214.0,
+      "lm_loss": 1.424359,
+      "grad_norm": 3.516519,
+      "mem_allocated_avg_MB": 23705.05,
+      "mem_max_allocated_avg_MB": 49704.97
+    },
+    {
+      "iteration": 5,
+      "elapsed_time_ms": 29725.8,
+      "throughput": 2204.7,
+      "lm_loss": 1.416873,
+      "grad_norm": 3.461094,
+      "mem_allocated_avg_MB": 23706.25,
+      "mem_max_allocated_avg_MB": 49704.97
+    },
+    {
+      "iteration": 6,
+      "elapsed_time_ms": 30220.7,
+      "throughput": 2168.6,
+      "lm_loss": 1.360179,
+      "grad_norm": 2.686287,
+      "mem_allocated_avg_MB": 23711.48,
+      "mem_max_allocated_avg_MB": 49709.8
+    },
+    {
+      "iteration": 7,
+      "elapsed_time_ms": 28471.0,
+      "throughput": 2301.8,
+      "lm_loss": 1.313379,
+      "grad_norm": 1.813896,
+      "mem_allocated_avg_MB": 23704.68,
+      "mem_max_allocated_avg_MB": 49709.8
+    },
+    {
+      "iteration": 8,
+      "elapsed_time_ms": 29442.2,
+      "throughput": 2225.9,
+      "lm_loss": 1.25369,
+      "grad_norm": 1.743099,
+      "mem_allocated_avg_MB": 23699.57,
+      "mem_max_allocated_avg_MB": 49709.8
+    },
+    {
+      "iteration": 9,
+      "elapsed_time_ms": 29710.0,
+      "throughput": 2205.9,
+      "lm_loss": 1.231608,
+      "grad_norm": 1.647135,
+      "mem_allocated_avg_MB": 23706.67,
+      "mem_max_allocated_avg_MB": 49709.8
+    },
+    {
+      "iteration": 10,
+      "elapsed_time_ms": 29338.9,
+      "throughput": 2233.8,
+      "lm_loss": 1.175968,
+      "grad_norm": 1.670601,
+      "mem_allocated_avg_MB": 23704.57,
+      "mem_max_allocated_avg_MB": 49709.8
+    },
+    {
+      "iteration": 11,
+      "elapsed_time_ms": 29767.2,
+      "throughput": 2201.6,
+      "lm_loss": 1.156441,
+      "grad_norm": 1.463163,
+      "mem_allocated_avg_MB": 23709.86,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 12,
+      "elapsed_time_ms": 29230.7,
+      "throughput": 2242.0,
+      "lm_loss": 1.107976,
+      "grad_norm": 1.348818,
+      "mem_allocated_avg_MB": 23708.98,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 13,
+      "elapsed_time_ms": 28818.1,
+      "throughput": 2274.1,
+      "lm_loss": 1.05014,
+      "grad_norm": 1.18516,
+      "mem_allocated_avg_MB": 23702.83,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 14,
+      "elapsed_time_ms": 29580.0,
+      "throughput": 2215.6,
+      "lm_loss": 1.033315,
+      "grad_norm": 1.1813,
+      "mem_allocated_avg_MB": 23707.58,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 15,
+      "elapsed_time_ms": 29318.9,
+      "throughput": 2235.3,
+      "lm_loss": 1.008018,
+      "grad_norm": 1.178046,
+      "mem_allocated_avg_MB": 23707.32,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 16,
+      "elapsed_time_ms": 29190.1,
+      "throughput": 2245.1,
+      "lm_loss": 1.039559,
+      "grad_norm": 1.31961,
+      "mem_allocated_avg_MB": 23701.28,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 17,
+      "elapsed_time_ms": 29454.4,
+      "throughput": 2225.0,
+      "lm_loss": 0.9808091,
+      "grad_norm": 1.157589,
+      "mem_allocated_avg_MB": 23705.94,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 18,
+      "elapsed_time_ms": 29143.6,
+      "throughput": 2248.7,
+      "lm_loss": 0.9783846,
+      "grad_norm": 1.133361,
+      "mem_allocated_avg_MB": 23707.49,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 19,
+      "elapsed_time_ms": 29115.1,
+      "throughput": 2250.9,
+      "lm_loss": 0.9324149,
+      "grad_norm": 1.296892,
+      "mem_allocated_avg_MB": 23704.44,
+      "mem_max_allocated_avg_MB": 49710.01
+    },
+    {
+      "iteration": 20,
+      "elapsed_time_ms": 29647.1,
+      "throughput": 2210.5,
+      "lm_loss": 0.9746478,
+      "grad_norm": 1.038855,
+      "mem_allocated_avg_MB": 23708.96,
+      "mem_max_allocated_avg_MB": 49710.01
+    }
+  ]
+}

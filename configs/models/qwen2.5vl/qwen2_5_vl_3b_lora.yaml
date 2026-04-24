@@ -1,0 +1,26 @@
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: qwen2_5_vit
+  - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
+  - ../../models/qwen2.5@model.foundation: qwen2_5_3b
+  - ../../models/lora@model.peft_config: vlm_lora
+  - _self_
+
+model:
+  model_type: qwen2_5_vl
+  position_idx_func: ${position_func:mrope_ids}
+  loss_func: ${loss_func:default}
+  mix_used_vision_encoder: true
+  mix_used_vision_projector: true
+  foundation: 
+    rotary_emb_func: "Qwen2VLRotaryEmbedding"
+    model_spec: ["loongforge.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    rotary_base: 1000000
+    group_query_attention: true
+  image_projector:
+    activation_func: ${act:gelu}
+    freeze: true
+  image_encoder:
+    freeze: true
+  peft_config:
+    apply_to_foundation: true

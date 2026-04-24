@@ -1,0 +1,21 @@
+pfs_path: /mnt/cfs/LoongForgeCI/
+load_hf_ckpt_path_pre: $pfs_path/huggingface.co/
+save_mcore_ckpt_path_pre: $pfs_path/megatron_checkpoint/
+megatron_path: /workspace/Loong-Megatron
+LOONGFORGE_PATH: /workspace/LoongForge/
+
+
+scripts_root_path: $LOONGFORGE_PATH/tests
+# In the pipeline, the logs path will be replaced by appending a suffix of name + pipeline ID
+training_log_path: $pfs_path/logs
+
+convert_checkpoint_path: $LOONGFORGE_PATH/tools/convert_checkpoint
+
+# Determine the status of each stage of the training task
+model_lock_file_path: $save_mcore_ckpt_path_pre/lock_file/$model_name
+
+# Step1: Training output/ckpt path
+step1_output_path: $save_mcore_ckpt_path_pre/$model_name
+
+# Number of iterations
+train_iters: 20

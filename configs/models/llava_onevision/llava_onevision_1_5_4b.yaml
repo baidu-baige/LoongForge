@@ -1,0 +1,19 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: llava_vit
+  - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
+  - ../../models/qwen3@model.foundation: qwen3_4b
+  - _self_
+
+model:
+  model_type: llava_ov_1_5
+  foundation:
+    model_spec: ["loongforge.models.foundation.qwen3.qwen_layer_spec", "get_llava_ov_layer_with_te_spec"]
+    rotary_base: 5000000
+    group_query_attention: true
+    convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
+  image_projector:
+    normalization: "LayerNorm"

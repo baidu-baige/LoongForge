@@ -1,0 +1,30 @@
+_target_: loongforge.models.encoder.ErnieVisionConfig
+
+num_layers: 32
+embed_dim: 1280
+in_channels: 3
+mlp_ratio: 4
+num_attention_heads: 16
+patch_size: 14
+spatial_merge_size: 2
+rms_norm_eps: 1e-6
+temporal_merge_size: 2
+use_temporal_conv: True
+hidden_size: 5120
+ffn_hidden_size: 5120
+kv_channels: 80
+
+resampler_hidden_in: 1280
+resampler_hidden_out: 2560
+
+# Lock ViT-specific TransformerConfig fields so they are not overwritten by
+# the foundation-model global args (which use swiglu / gated_linear_unit).
+swiglu: False
+gated_linear_unit: False
+bias_activation_fusion: False
+add_qkv_bias: True
+normalization: "LayerNorm"
+group_query_attention: False
+layernorm_epsilon: 1e-6
+
+model_type: ernie4_5_vit

@@ -1,0 +1,29 @@
+
+_target_: loongforge.models.encoder.Qwen3VisionModelConfig
+
+num_layers: 27
+hidden_size: 1152
+kv_channels: 72
+ffn_hidden_size: 4304
+patch_size: 16
+num_attention_heads: 16
+num_query_groups: 16
+image_size: [1344, 1344]
+activation_func: ${act:gelu_tanh}
+normalization: "LayerNorm"
+add_bias_linear: true
+add_qkv_bias: true
+swiglu: False
+group_query_attention: False
+gated_linear_unit: False
+position_embedding_type: "none"
+bias_activation_fusion: False
+deepstack_visual_indexes: [8, 16, 24]
+num_position_embeddings: 2304
+attention_dropout: 0.0
+hidden_dropout: 0.0
+bias_dropout_fusion: False
+apply_rope_fusion: True
+
+model_type: "qwen3_vit"
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_vit_convert.yaml

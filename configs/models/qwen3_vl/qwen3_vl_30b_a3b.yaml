@@ -1,0 +1,29 @@
+# hydra:
+#   searchpath:
+#     - file://configs/
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: qwen3_vit
+  - ../../models/image_projector@model.image_projector: qwen_mlp_adapter
+  - ../../models/qwen3@model.foundation: qwen3_30b_a3b
+  - _self_
+
+model:
+  model_type: qwen3_vl
+  position_idx_func: ${position_func:rope_ids_qwen3vl}
+  loss_func: ${loss_func:default}
+  foundation: 
+    rotary_emb_func: "Qwen3VLRotaryEmbedding"
+    mrope_section: [24, 20, 20]
+    rotary_base: 1000000
+    model_spec: ["loongforge.models.foundation.qwen3.qwen_layer_spec", "get_qwen3_vl_layer_with_te_spec"]
+  image_encoder:
+    model_spec: ["loongforge.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec", 
+                 "get_qwen3_vl_vision_model_layer_with_te_spec"]
+  image_projector:
+    activation_func: ${act:gelu}
+    normalization: "LayerNorm"
+    bias_activation_fusion: False
+    gated_linear_unit: False
+    model_spec: ["loongforge.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec",
+     "get_adapeter_layer_with_te_spec"]

@@ -1,0 +1,30 @@
+_target_: loongforge.models.foundation.QwenConfig
+
+num_layers: 32
+hidden_size: 4096
+ffn_hidden_size: 11008
+num_attention_heads: 32
+vocab_size_in_config_file: 151936
+make_vocab_size_divisible_by: 128
+
+group_query_attention: false
+num_query_groups: null
+position_embedding_type: "rope"
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+add_qkv_bias: true
+qk_layernorm: false
+untie_embeddings_and_output_weights: true
+kv_channels: null
+num_experts: null
+moe_ffn_hidden_size: null
+rotary_base: 1000000
+rotary_emb_func: "RotaryEmbedding"
+model_type: "qwen"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen/ckpt_convert/qwen_convert.yaml

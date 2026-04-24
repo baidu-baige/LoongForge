@@ -1,0 +1,70 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_encoder@module: ???
+  - _self_
+
+args:
+  common:
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+    num_key_value_heads: ${module.num_query_groups}
+  huggingface:
+    depth: ${module.num_layers}
+    embed_dim: ${module.hidden_size}
+    num_heads: ${module.num_attention_heads}
+    patch_size: ${module.patch_size}
+    spatial_merge_size: 2
+    spatial_patch_size: 14
+    mlp_ratio: 4
+  mcore:
+    use_rotary_position_embeddings: true
+    use_distributed_optimizer: false
+    transpose_mlp_dense: false
+    transpose_query_key_value: true
+
+name_map:
+  huggingface:
+    transformer: visual
+    layer_prefix: blocks
+    input_layernorm: norm1
+    attention.query_key_value: attn.qkv
+    attention.dense: attn.proj
+    post_attention_layernorm: norm2
+    mlp.dense_h_to_4h: mlp.fc1
+    mlp.dense_4h_to_h: mlp.fc2
+  mcore:
+    transformer: model
+    layer_prefix: vision_model.decoder.layers
+    input_layernorm:
+      name: self_attention.linear_qkv
+      is_layernorm: true
+    attention.query_key_value:
+      name: self_attention.linear_qkv
+      extra: true
+    attention.dense:
+      name: self_attention.linear_proj
+      extra: true
+    post_attention_layernorm:
+      name: mlp.linear_fc1
+      is_layernorm: true
+    mlp.dense_h_to_4h:
+      name: mlp.linear_fc1
+      extra: true
+    mlp.dense_4h_to_h:
+      name: mlp.linear_fc2
+      extra: true
+    transformer_tpl: model%d
+
+torch_dtype: float32
+
+vision_patch:
+  vision_model.patch_embed.proj.weight: visual.patch_embed.proj.weight
+  vision_model.class_embedding: visual.class_embedding
+  vision_model.class_pos_emb: visual.class_pos_emb
+  vision_model.pre_layernorm.weight: visual.pre_layernorm.weight
+  vision_model.pre_layernorm.bias: visual.pre_layernorm.bias

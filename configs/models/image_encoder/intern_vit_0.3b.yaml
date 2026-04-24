@@ -1,0 +1,21 @@
+_target_: loongforge.models.encoder.InternVisionConfig
+
+num_layers: 24
+hidden_size: 1024
+kv_channels: 64
+ffn_hidden_size: 4096
+patch_size: 14
+num_attention_heads: 16
+num_query_groups: 16
+image_size: 448
+layernorm_epsilon: 1.0e-06
+normalization: LayerNorm
+add_bias_linear: True
+add_qkv_bias: True
+qk_layernorm: False
+apply_rope_fusion: False
+bias_activation_fusion: False
+position_embedding_type: 'none'
+model_type: "intern_vit_300m"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/internvl_vit_0.3b_convert.yaml

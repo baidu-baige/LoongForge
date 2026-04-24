@@ -1,0 +1,109 @@
+model_name: llama2_7b
+description: $model_name
+huggingface_path: https://huggingface.co/meta-llama/Llama-2-7b-hf
+bos_path: bos:/ai-data/Llama-2-7b-hf-test
+TOTAL_K8S_NODES: 1
+
+# Model Parameters
+MODEL_RUNNABLE: True # Should be True / False
+
+# LoongForge training parameters
+HF_CKPT_PATH: $pfs_path/huggingface.co/meta-llama/Llama-2-7b-hf
+DATA_PATH: $scripts_root_path/datasets
+TOKENIZER_PATH: $pfs_path/huggingface.co/meta-llama/Llama-2-7b-hf
+CHECKPOINT_PATH: $step1_output_path
+TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/llama2/llama2_7b.yaml
+CONVERT_FILE: $LOONGFORGE_PATH/configs/models/llama2/ckpt_convert/llama2_convert.yaml
+
+# Training Parameters
+TENSOR_MODEL_PARALLER_SIZE: 1
+PIPELINE_MODEL_PARALLER_SIZE: 1
+log_interval: 1
+initial_loss_scale: 1024
+global_batch_size: 64
+precision: fp16
+
+scenarios:
+  - function:
+      sft:
+        Step1:
+          RUNNABLE_FLAG: False
+          CONVERT_ARGS: '
+            --load_platform=huggingface
+            --save_platform=mcore
+            --config_file=${MODEL_CONFIG_PATH}
+            --convert_file=${CONVERT_FILE}
+            --tensor_model_parallel_size=${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline_model_parallel_size=${PIPELINE_MODEL_PARALLER_SIZE}
+            --load_ckpt_path=${HF_CKPT_PATH}
+            --save_ckpt_path=${CHECKPOINT_PATH}
+            --no_save_optim
+            --no_load_optim'
+        Step2:
+          MODEL_ARGS: '
+            --model-name llama2-7b'
+          DATA_ARGS: '
+            --tokenizer-type HFTokenizer
+            --hf-tokenizer-path $TOKENIZER_PATH
+            --data-path ${DATA_PATH}/llm/sft_aplaca_zh_data.json
+            --split 100,0,0'
+          SFT_ARGS: '
+            --chat-template llama2
+            --sft-num-preprocess-workers 16
+            --no-check-for-nan-in-loss-and-grad'
+          TRAINING_ARGS: '
+            --training-phase sft
+            --seq-length 4096
+            --max-position-embeddings 4096
+            --init-method-std 0.01
+            --micro-batch-size 1
+            --global-batch-size ${global_batch_size}
+            --lr 0.0002
+            --min-lr 1.0e-5
+            --clip-grad 1.0
+            --weight-decay 0.01
+            --optimizer adam
+            --adam-beta1 0.9
+            --adam-beta2 0.95
+            --adam-eps 1e-05
+            --norm-epsilon 1e-6
+            --load $CHECKPOINT_PATH
+            --train-iters ${train_iters}
+            --lr-decay-iters 5000
+            --lr-decay-style cosine
+            --lr-warmup-fraction 0.002
+            --initial-loss-scale ${initial_loss_scale}
+            --${precision}
+            --save-interval 500
+            --eval-interval 100
+            --eval-iters 0
+            --log-memory-stats
+            --deterministic-mode'
+          MODEL_PARALLEL_ARGS: '
+            --tensor-model-parallel-size ${TENSOR_MODEL_PARALLER_SIZE}
+            --pipeline-model-parallel-size ${PIPELINE_MODEL_PARALLER_SIZE}
+            --use-distributed-optimizer
+            --overlap-grad-reduce
+            --overlap-param-gather
+            --distributed-backend nccl'
+          LOGGING_ARGS: '
+            --log-interval ${log_interval}
+            --tensorboard-dir $TENSORBOARD_PATH
+            --log-timers-to-tensorboard'
+  - preprocess_data:
+      llm_sft:
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py
+        output_prefix: ${pfs_path}/pile_test_sft/$model_name
+        train_json_file_name: '${DATA_PATH}/llm/sft_aplaca_zh_data.json'
+        PREPROCESS_DATA_ARGS: '
+          --input ${train_json_file_name}
+          --output-path ${output_prefix}
+          --seq-length 2048
+          --chat-template llama2
+          --tokenizer-type HFTokenizer
+          --hf-tokenizer-path ${TOKENIZER_PATH}
+          --workers 50'
+tasks:
+  check_correctness_task: True 
+  check_precess_data_task: True 

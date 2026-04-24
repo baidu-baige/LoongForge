@@ -1,0 +1,1 @@
+https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260409/torch25/xpytorch-cp310-torch251-ubuntu2004-x64.run

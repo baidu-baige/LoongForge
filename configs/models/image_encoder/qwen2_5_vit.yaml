@@ -1,0 +1,25 @@
+_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+
+num_layers: 32
+hidden_size: 1280
+kv_channels: 80
+ffn_hidden_size: 3420
+patch_size: 14
+num_attention_heads: 16
+num_query_groups: 16
+image_size: [1344, 1344]
+activation_func: ${act:silu}
+add_bias_linear: true
+add_qkv_bias: true
+swiglu: true
+gated_linear_unit: true
+position_embedding_type: "none"
+bias_activation_fusion: False
+hidden_dropout: 0
+attention_dropout: 0
+normalization: "RMSNorm"
+apply_rope_fusion: true
+
+model_type: "qwen2_5_vit"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
