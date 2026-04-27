@@ -410,8 +410,18 @@ class PaliGemmaWithExpertModel(nn.Module):
         self.gemma_expert = PiGemmaForCausalLM(config=action_expert_config_hf)
         self.gemma_expert.model.embed_tokens = None
 
-        self.to_bfloat16_for_selected_params(precision)
+        # Skip dtype cast on meta device — tensors have no data to cast.
+        # Megatron's to_empty_if_meta_device will materialize them on GPU later.
+        if not self._is_on_meta_device():
+            self.to_bfloat16_for_selected_params(precision)
         self._set_requires_grad()
+
+    def _is_on_meta_device(self) -> bool:
+        """Return True if any parameter lives on the meta device."""
+        try:
+            return next(self.parameters()).device.type == "meta"
+        except StopIteration:
+            return False
 
     def to_bfloat16_for_selected_params(self, precision: Literal["bfloat16", "float32"] = "bfloat16"):
         if precision == "bfloat16":
@@ -1039,7 +1049,10 @@ class PI05Policy(PreTrainedPolicy):
         if config.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
 
-        self.model.to(config.device)
+        # Skip .to(device) on meta device — Megatron's to_empty_if_meta_device
+        # will materialize parameters directly on GPU after load_checkpoint.
+        if next(self.model.parameters()).device.type != "meta":
+            self.model.to(config.device)
 
         self.reset()
 
