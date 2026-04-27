@@ -49,38 +49,21 @@
 * **Real-world application of MTP scaling** to improve speculative decoding acceptance rates.
 * ...
 
-## 🛠️ Getting Started
+## 📚 Getting Started
+For complete installation steps, tutorials, and advanced usage, see the [LoongForge Documentation](https://loongforge.readthedocs.io/en/latest/index.html).
 
-### Installation (Docker Quick Start)
+### Installation
+- **NVIDIA GPU**: [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.html)
+- **Kunlun XPU**: [Installation Guide](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
 
-For detailed installation steps (source install, XPU, development setup), see the [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.html). Below is a quick start using Docker:
+### Tutorials
+- **NVIDIA GPU**: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/index.html), [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/index.html), [VLA](https://loongforge.readthedocs.io/en/latest/vla_tutorial/index.html), and [WAN](https://loongforge.readthedocs.io/en/latest/wan_tutorial/index.html)
+- **Kunlun XPU**: [Kunlun XPU Tutorials](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/index.html)
 
-```bash
-git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
-
-docker build --build-arg COMPILE_ENV=hopper --build-arg ENABLE_LEROBOT=false -t loongforge:latest -f ./LoongForge/docker/Dockerfile .
-```
-
-**Tutorials:**
-* [Supported Models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html)
-* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html)
-* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.html)
-* [Quick Start for VLM Pretrain](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html)
-* [Quick Start for VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.html)
-* [Quick Start for VLA Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_vla_training.html)
-* [Quick Start for WAN Training](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
-
-**Kunlun XPU Platform:**
-* [README](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/index.html)
-* [Installation](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
-* [Quick Start for LLM Pretrain](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_pretrain_p800.html)
-* [Quick Start for LLM SFT](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_llm_sft_p800.html)
-* [Quick Start for VLM](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vlm_p800.html)
-* [Quick Start for VLA](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/quick_start_vla_p800.html)
 
 ## 🏛️ Supported Models
 
-LoongForge supports a massive array of state-of-the-art models. Check out `configs/models/` for YAML configurations and `examples/` for launch scripts.
+LoongForge supports a massive array of [state-of-the-art models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html). Check out `configs/models/` for YAML configurations and `examples/` for launch scripts.
 
 
 | **Modality** | **Architectures** | **Models** |
