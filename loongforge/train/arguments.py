@@ -264,6 +264,33 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        '--enable-int4-qat',
+        action='store_true',
+        help="Enable INT4 Quantization-Aware Training (QAT) for expert linear layers. "
+             "Only applies to TEGroupedLinear modules matching the filter. "
+             "Default: False"
+    )
+
+    group.add_argument(
+        '--int4-qat-group-size',
+        type=int,
+        default=32,
+        help="Group size for INT4 QAT quantization. Smaller groups give better "
+             "accuracy at the cost of more quantization parameters. "
+             "Default: 32"
+    )
+
+    group.add_argument(
+        '--int4-qat-filter-regex',
+        type=str,
+        default=None,
+        help="Regular expression pattern to match module paths for INT4 QAT wrapping. "
+             "Only modules whose full path matches the regex are wrapped. "
+             "Example: '.*mlp\\.experts\\.linear_fc1$' quantizes only fc1 experts. "
+             "Default: None (uses built-in default regex for MoE expert FC layers)"
+    )
+
+    group.add_argument(
         "--allow-missing-adapter-checkpoint",
         action="store_true",
         help="Allow model loading to proceed even when adapter checkpoint is missing. "
