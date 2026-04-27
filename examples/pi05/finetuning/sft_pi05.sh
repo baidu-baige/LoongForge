@@ -41,8 +41,8 @@ DATA_ARGS=(
 # Core training args — pi05 trainer only needs minimal Megatron flags
 TRAINING_ARGS=(
     --training-phase sft
-    --micro-batch-size 16
-    --global-batch-size 128
+    --micro-batch-size 12
+    --global-batch-size 96
     --train-iters 30000
     --seq-length 762
     --max-position-embeddings 762
@@ -64,11 +64,10 @@ TRAINING_ARGS=(
     --adam-eps 1e-8
     --adam-beta2 0.95
     --weight-decay 0.01
-    --no-strict-fsdp-dtensor-load
     --finetune
     --bf16
     --use-precision-aware-optimizer
-    --exp-avg-dtype bf16
+    --exp-avg-dtype fp32
     --exp-avg-sq-dtype bf16
     --num-distributed-optimizer-instances 1
     --save $CHECKPOINT_PATH

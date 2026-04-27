@@ -110,15 +110,15 @@ DATA_ARGS=(
 # ── Core Training Hyperparameters ───────────────────────────────────────────
 TRAINING_ARGS=(
     --training-phase sft
-    --micro-batch-size 16
-    --global-batch-size 128
+    --micro-batch-size 12
+    --global-batch-size 96
     --train-iters 30000
     --seq-length 762
     --max-position-embeddings 762
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 1
     --no-masked-softmax-fusion
-    --ckpt-format fsdp_dtensor
+    --ckpt-format torch
     --load $CHECKPOINT_PATH
     --no-load-optim
     --no-load-rng
@@ -133,11 +133,10 @@ TRAINING_ARGS=(
     --adam-eps 1e-8
     --adam-beta2 0.95
     --weight-decay 0.01
-    --no-strict-fsdp-dtensor-load
     --finetune
     --bf16
     --use-precision-aware-optimizer
-    --exp-avg-dtype bf16
+    --exp-avg-dtype fp32
     --exp-avg-sq-dtype bf16
     --num-distributed-optimizer-instances 1
     --save $CHECKPOINT_PATH
