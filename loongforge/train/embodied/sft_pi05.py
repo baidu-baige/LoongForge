@@ -350,6 +350,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     sampler = None
     shuffle = not getattr(args, "sft_data_streaming", False)
     dataloader_kwargs = {}
+    run_seed = int(getattr(args, "seed", 0) or 0)
+    data_loader_generator = torch.Generator().manual_seed(run_seed)
 
     if sampler is not None:
         dataloader_kwargs["sampler"] = sampler
@@ -362,6 +364,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         pin_memory=config.device == "cuda",
         drop_last=False,
         prefetch_factor=2 if args.num_workers > 0 else None,
+        generator=data_loader_generator,
         **dataloader_kwargs,
     )
 

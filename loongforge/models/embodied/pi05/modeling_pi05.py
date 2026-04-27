@@ -409,6 +409,7 @@ class PaliGemmaWithExpertModel(nn.Module):
         self.paligemma = PaliGemmaForConditionalGenerationWithPiGemma(config=vlm_config_hf)
         self.gemma_expert = PiGemmaForCausalLM(config=action_expert_config_hf)
         self.gemma_expert.model.embed_tokens = None
+        self._tie_paligemma_language_weights()
 
         # Skip dtype cast on meta device — tensors have no data to cast.
         # Megatron's to_empty_if_meta_device will materialize them on GPU later.
@@ -422,6 +423,14 @@ class PaliGemmaWithExpertModel(nn.Module):
             return next(self.parameters()).device.type == "meta"
         except StopIteration:
             return False
+
+    def _tie_paligemma_language_weights(self) -> None:
+        """Tie PaliGemma token embeddings to lm_head so checkpoint loads update both."""
+        language_model = self.paligemma.model.language_model
+        if getattr(language_model, "embed_tokens", None) is None:
+            return
+        language_model.embed_tokens.weight = self.paligemma.lm_head.weight
+
 
     def to_bfloat16_for_selected_params(self, precision: Literal["bfloat16", "float32"] = "bfloat16"):
         if precision == "bfloat16":
@@ -479,6 +488,24 @@ class PaliGemmaWithExpertModel(nn.Module):
         for name in fp32_param_names:
             if name in param_dict and param_dict[name] is not None:
                 param_dict[name].data = param_dict[name].data.to(dtype=torch.float32)
+        # Fix inv_freq: GemmaRotaryEmbedding.inv_freq is persistent=False and not saved in
+        # checkpoints. Float16Module.bfloat16() converts all buffers including inv_freq, but
+        # if inv_freq somehow ends up all-zero (e.g. meta-device init without materialization),
+        # RoPE becomes an identity transform and positional information is lost.
+        for module in self.modules():
+            if type(module).__name__ == 'GemmaRotaryEmbedding' and hasattr(module, 'inv_freq'):
+                inv_freq = module.inv_freq
+                if inv_freq.device.type == 'meta':
+                    continue  # not yet materialized; fix will run after to_empty_if_meta_device
+                if not inv_freq.any().item():
+                    new_inv_freq, _ = type(module).compute_default_rope_parameters(
+                        module.config, device=module.inv_freq.device
+                    )
+                    # Cast to match the current model dtype (bfloat16 after Float16Module wraps).
+                    new_inv_freq = new_inv_freq.to(dtype=module.inv_freq.dtype)
+                    module.register_buffer('inv_freq', new_inv_freq, persistent=False)
+                    module.register_buffer('original_inv_freq', new_inv_freq.clone(), persistent=False)
+        self._tie_paligemma_language_weights()
         return self
 
     def train(self, mode: bool = True):
@@ -490,11 +517,18 @@ class PaliGemmaWithExpertModel(nn.Module):
             self.paligemma.eval()
 
     def embed_image(self, image: torch.Tensor):
-        # Vision tower and multi_modal_projector are kept in float32 (params_to_keep_float32).
-        # FSDP may cast integer buffers (e.g. position_ids) to float; restore correct dtype.
+        # Fix position_ids: persistent=False means to_empty_if_meta_device() leaves values
+        # uninitialized (not [0,1,...,N-1]). Fix dtype and values before first use.
         for module in self.paligemma.modules():
-            if hasattr(module, 'position_ids') and module.position_ids.is_floating_point():
-                module.position_ids = module.position_ids.long()
+            if hasattr(module, 'position_ids'):
+                pid = module.position_ids
+                if pid.device.type == 'meta':
+                    continue
+                n = pid.numel()
+                expected = torch.arange(n, device=pid.device, dtype=torch.int64)
+                if pid.dtype != torch.int64 or not torch.equal(pid.view(-1), expected):
+                    module.register_buffer('position_ids', expected.view(1, -1), persistent=False)
+
         out_dtype = image.dtype
         # Always run vision tower in float32 regardless of the input tensor's dtype.
         # Float16Module.forward() converts all fp32 CUDA inputs to bf16 before calling
@@ -515,19 +549,6 @@ class PaliGemmaWithExpertModel(nn.Module):
         return features
 
     def embed_language_tokens(self, tokens: torch.Tensor):
-        # PaliGemma uses weight tying (embed_tokens == lm_head).  When the model
-        # is loaded via a Megatron checkpoint (non-torch ckpt_format), the
-        # _fix_pytorch_state_dict_keys remapping is bypassed, so embed_tokens
-        # stays zero-initialised while lm_head gets the correct pretrained values.
-        # Fix it lazily on the first forward pass (after load_checkpoint completes).
-        if not getattr(self, "_embed_tokens_synced", False):
-            lm = self.paligemma.model.language_model
-            lm_head_w = self.paligemma.lm_head.weight
-            embed_w = lm.embed_tokens.weight
-            if embed_w.data_ptr() != lm_head_w.data_ptr():
-                embed_w.data.copy_(lm_head_w.data)
-            self._embed_tokens_synced = True
-
         return self.paligemma.model.language_model.embed_tokens(tokens)
 
     def forward(
