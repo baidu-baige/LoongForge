@@ -2,7 +2,7 @@
  * Original INT4 fake-quantization CUDA kernel.
  *
  * This kernel was originally derived from the `slime` library
- * (https://github.com/yangzhch6/slime/tree/master/smoothquant) and adapted
+ * (https://github.com/THUDM/slime/blob/main/slime/backends/megatron_utils/kernels/int4_qat/fake_int4_quant_cuda.cu) and adapted
  * for this project.  The core quantize-only logic (warp-reduce per-group
  * scale/zero, symmetric/asymmetric modes) is preserved; dispatch helpers
  * and pybind11 bindings have been added to integrate with the
