@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# This script is used for SFT training Minimax2.5 in BF16 mixed precision.
+# This script is used for SFT training Minimax2.7 in BF16 mixed precision.
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
 DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft/think/sampled.jsonl"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co//MiniMax-M2.5"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/minimax_m2.5/MiniMax_mcore_tp8pp4ep8etp1/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/MiniMax-M2.7"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/mini_max/MiniMax_m2_7_mcore_tp8pp4ep8etp1/"}
 
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/minimax_m2"}
 
@@ -50,13 +50,13 @@ SFT_ARGS=(
 )
 
 MODEL_ARGS=(
-  --model-name minimax2.5-230b
+  --model-name minimax2.7-230b
   --rotary-percent 0.5
   --norm-epsilon 1e-6
   --rotary-base 5000000
   --use-fp32-dtype-for-param-pattern expert_bias
   --attention-backend fused
-  
+
 )
 
 DATA_ARGS=(
@@ -144,4 +144,4 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   ${MOE_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \
   ${LOGGING_ARGS[@]} \
-  ${SFT_ARGS[@]} 
+  ${SFT_ARGS[@]}
