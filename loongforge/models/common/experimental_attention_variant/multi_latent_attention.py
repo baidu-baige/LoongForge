@@ -152,9 +152,16 @@ class MLASelfAttentionFused(MLASelfAttention):
 
         # Checkpoint save hook (TE absorb only — reconstructs kv_up_proj from
         # per-head absorb weights; torch backend keeps kv_up_proj directly).
+        # For torch+SP-First, a separate hook shards the down_proj/up_proj/proj weights.
         if self.absorb_backend == "te":
             self.register_state_dict_post_hook(
                 lambda mod, sd, pfx, meta: self._state_dict_post_hook(mod, sd, pfx, meta)
+            )
+        else:
+            # Torch backend: register a lighter save hook for SP-First that only
+            # shards down_proj, q_up_proj, kv_up_proj and proj weights back to TP.
+            self.register_state_dict_post_hook(
+                lambda mod, sd, pfx, meta: self._state_dict_post_hook_torch(mod, sd, pfx, meta)
             )
 
         # SP-First: convert all 4 linear modules from TP-sharded to duplicated.
@@ -165,10 +172,13 @@ class MLASelfAttentionFused(MLASelfAttention):
             if self.absorb_backend == "te":
                 self._sync_kv_up_to_absorb_weights(all_gather_for_sp_first=True)
 
-        if self.absorb_backend == "te":
+        if self.absorb_backend == "te" and not self.use_dsa_sp_first:
             # Eagerly materialize absorb weights from linear_kv_up_proj during
             # module construction so the optimizer sees the real derived values
             # instead of placeholder initialization.
+            # Skip when use_dsa_sp_first: already synced above with all_gather,
+            # and linear_kv_up_proj has been re-initialized with random weights
+            # by _convert_to_sp_first() so a second sync would use wrong values.
             self._sync_kv_up_to_absorb_weights()
 
         if self.absorb_backend == "te":
@@ -256,24 +266,67 @@ class MLASelfAttentionFused(MLASelfAttention):
         return shard
 
     def _convert_to_sp_first(self):
-        """Convert all 4 linear modules from TP-sharded to duplicated for SP-First.
+        """Convert linear modules from TP-sharded to duplicated for SP-First.
 
         Deletes each TP-sharded module and re-initialises it as a duplicated
         (non-TP) variant.  Weight synchronisation is deferred to the
         ``_post_load_absorb_weights`` hook which runs after checkpoint loading.
 
-        The four modules handled are:
+        The modules handled are:
+        - ``linear_q_down_proj`` — ColumnParallel → duplicated TELinear  (if q_lora_rank is set)
+        - ``linear_kv_down_proj`` — ColumnParallel → duplicated TELinear
         - ``linear_q_up_proj``  — ColumnParallel → duplicated TELinear
         - ``linear_proj``       — RowParallel    → duplicated TELinear
         - ``linear_kv_up_proj_absorb_q``     — TEGroupedLinear (partial heads) → full heads
         - ``linear_kv_up_proj_absorb_output`` — TEGroupedLinear (partial heads) → full heads
+
+        Converting the down_proj modules is critical: when they remain
+        TP-sharded, their output size is ``output/TP``, triggering
+        ``scatter_to_sequence_parallel_region`` in the forward pass.  This
+        produces incorrectly shaped tensors for subsequent absorb operations
+        (DeepGEMM GEMM), causing CUDA illegal memory access.  After conversion
+        to duplicated the size-check condition is False so scatter is skipped
+        entirely.
         """
         if _TELinear is None:
             raise ImportError(
                 "--use-dsa-sp-first requires TELinear from transformer_engine."
             )
 
-        # ---- Re-init all 4 modules as duplicated (non-TP) ----
+        # ---- Re-init all modules as duplicated (non-TP) ----
+        # Convert down_proj modules first: their TP-sharded output would otherwise
+        # trigger scatter_to_sequence_parallel_region in the forward pass, producing
+        # incorrectly shaped tensors that cause CUDA illegal memory access in
+        # subsequent absorb operations.
+        if self.config.q_lora_rank is not None:
+            del self.linear_q_down_proj
+            self.linear_q_down_proj = build_module(
+                _TELinear,
+                self.config.hidden_size,
+                self.config.q_lora_rank,
+                parallel_mode="duplicated",
+                config=self.config,
+                init_method=self.config.init_method,
+                bias=False,
+                skip_bias_add=False,
+                skip_weight_param_allocation=False,
+                tp_comm_buffer_name="q_down_proj",
+            )
+
+        del self.linear_kv_down_proj
+        self.linear_kv_down_proj = build_module(
+            _TELinear,
+            self.config.hidden_size,
+            self.config.kv_lora_rank + self.config.qk_pos_emb_head_dim,
+            parallel_mode="duplicated",
+            config=self.config,
+            init_method=self.config.init_method,
+            bias=False,
+            skip_bias_add=False,
+            skip_weight_param_allocation=False,
+            tp_comm_buffer_name="kv_down_proj",
+        )
+
         del self.linear_q_up_proj
         self.linear_q_up_proj = build_module(
             _TELinear,
@@ -558,17 +611,41 @@ class MLASelfAttentionFused(MLASelfAttention):
     ):
         """Pre-hook: decompose kv_up_proj and inject per-head absorb weights into state_dict.
 
-        For SP-First, also all-gathers q_up_proj, proj, and kv_up_proj TP shards,
+        For SP-First, also all-gathers q_down_proj, kv_down_proj, q_up_proj, proj,
+        and kv_up_proj TP shards to match duplicated module shapes,
         then removes kv_up_key since the module is deleted.
         """
         tp_group = parallel_state.get_tensor_model_parallel_group()
         tp_world_size = parallel_state.get_tensor_model_parallel_world_size()
 
-        # All-gather TP-sharded `q_up_proj` and `linear_proj` to match duplicated module shapes.
+        # All-gather TP-sharded weights to match duplicated module shapes.
         if self.use_dsa_sp_first:
             # Ensure we use CUDA device for all_gather (NCCL only supports CUDA)
             cuda_device = torch.cuda.current_device()
             with torch.no_grad():
+                # q_down_proj: ColumnParallel → duplicated, shard along dim-0 (output dim)
+                if self.config.q_lora_rank is not None:
+                    q_down_key = prefix + "linear_q_down_proj.weight"
+                    if q_down_key in state_dict:
+                        ckpt_w = state_dict[q_down_key]
+                        if ckpt_w.shape[0] != self.linear_q_down_proj.weight.shape[0]:
+                            full, _ = self._gather_tp_weight(
+                                ckpt_w.to(cuda_device),
+                                tp_group, tp_world_size, cat_dim=0,
+                            )
+                            state_dict[q_down_key] = full.cpu()
+
+                # kv_down_proj: ColumnParallel → duplicated, shard along dim-0 (output dim)
+                kv_down_key = prefix + "linear_kv_down_proj.weight"
+                if kv_down_key in state_dict:
+                    ckpt_w = state_dict[kv_down_key]
+                    if ckpt_w.shape[0] != self.linear_kv_down_proj.weight.shape[0]:
+                        full, _ = self._gather_tp_weight(
+                            ckpt_w.to(cuda_device),
+                            tp_group, tp_world_size, cat_dim=0,
+                        )
+                        state_dict[kv_down_key] = full.cpu()
+
                 q_up_key = prefix + "linear_q_up_proj.weight"
                 ckpt_w = state_dict[q_up_key]
                 if ckpt_w.shape[0] != self.linear_q_up_proj.weight.shape[0]:
@@ -633,15 +710,39 @@ class MLASelfAttentionFused(MLASelfAttention):
         This hook reconstructs kv_up_proj.weight from those keys and removes
         the absorb keys so that load_state_dict succeeds.
 
-        For SP-First, also all-gathers TP-sharded q_up_proj and linear_proj.
+        For SP-First, also all-gathers TP-sharded q_down_proj, kv_down_proj,
+        q_up_proj and linear_proj to match duplicated module shapes.
         """
         tp_group = parallel_state.get_tensor_model_parallel_group()
         tp_world_size = parallel_state.get_tensor_model_parallel_world_size()
 
-        # SP-First: all-gather TP-sharded q_up_proj and linear_proj
+        # SP-First: all-gather TP-sharded weights to match duplicated module shapes
         if self.use_dsa_sp_first:
             cuda_device = torch.cuda.current_device()
             with torch.no_grad():
+                # q_down_proj: ColumnParallel → duplicated, shard along dim-0 (output dim)
+                if self.config.q_lora_rank is not None:
+                    q_down_key = prefix + "linear_q_down_proj.weight"
+                    if q_down_key in state_dict:
+                        ckpt_w = state_dict[q_down_key]
+                        if ckpt_w.shape[0] != self.linear_q_down_proj.weight.shape[0]:
+                            full, _ = self._gather_tp_weight(
+                                ckpt_w.to(cuda_device),
+                                tp_group, tp_world_size, cat_dim=0,
+                            )
+                            state_dict[q_down_key] = full.cpu()
+
+                # kv_down_proj: ColumnParallel → duplicated, shard along dim-0 (output dim)
+                kv_down_key = prefix + "linear_kv_down_proj.weight"
+                if kv_down_key in state_dict:
+                    ckpt_w = state_dict[kv_down_key]
+                    if ckpt_w.shape[0] != self.linear_kv_down_proj.weight.shape[0]:
+                        full, _ = self._gather_tp_weight(
+                            ckpt_w.to(cuda_device),
+                            tp_group, tp_world_size, cat_dim=0,
+                        )
+                        state_dict[kv_down_key] = full.cpu()
+
                 q_up_key = prefix + "linear_q_up_proj.weight"
                 ckpt_w = state_dict[q_up_key]
                 if ckpt_w.shape[0] != self.linear_q_up_proj.weight.shape[0]:
@@ -784,14 +885,67 @@ class MLASelfAttentionFused(MLASelfAttention):
 
         return kv_up_weight
 
+    def _state_dict_post_hook_torch(self, module, state_dict, prefix, local_metadata):
+        """Post-hook for torch absorb backend: shard duplicated SP-First weights back to TP.
+
+        For SP-First, the down_proj, q_up_proj, kv_up_proj and linear_proj weights
+        are stored as full (non-TP) tensors in the module.  This hook slices them
+        back to per-rank TP shards so that saved checkpoints remain TP-compatible
+        and can be resumed with or without SP-First.
+
+        This hook is a no-op when use_dsa_sp_first is False.
+        """
+        if not self.use_dsa_sp_first:
+            return
+        with torch.no_grad():
+            tp_rank = parallel_state.get_tensor_model_parallel_rank()
+            world_size = parallel_state.get_tensor_model_parallel_world_size()
+
+            # --- q_down_proj: ColumnParallel, shard along dim-0 (output dim) ---
+            if self.config.q_lora_rank is not None:
+                q_down_key = prefix + "linear_q_down_proj.weight"
+                if q_down_key in state_dict:
+                    state_dict[q_down_key] = self._shard_tp_weight(
+                        state_dict[q_down_key], tp_rank, world_size, shard_dim=0,
+                    )
+
+            # --- kv_down_proj: ColumnParallel, shard along dim-0 (output dim) ---
+            kv_down_key = prefix + "linear_kv_down_proj.weight"
+            if kv_down_key in state_dict:
+                state_dict[kv_down_key] = self._shard_tp_weight(
+                    state_dict[kv_down_key], tp_rank, world_size, shard_dim=0,
+                )
+
+            # --- q_up_proj: ColumnParallel, shard along dim-0 (output dim) ---
+            q_up_key = prefix + "linear_q_up_proj.weight"
+            if q_up_key in state_dict:
+                state_dict[q_up_key] = self._shard_tp_weight(
+                    state_dict[q_up_key], tp_rank, world_size, shard_dim=0,
+                )
+
+            # --- kv_up_proj: ColumnParallel, shard along dim-0 (output dim) ---
+            kv_up_key = prefix + "linear_kv_up_proj.weight"
+            if kv_up_key in state_dict:
+                state_dict[kv_up_key] = self._shard_tp_weight(
+                    state_dict[kv_up_key], tp_rank, world_size, shard_dim=0,
+                )
+
+            # --- linear_proj: RowParallel, shard along dim-1 (input dim) ---
+            proj_key = prefix + "linear_proj.weight"
+            if proj_key in state_dict:
+                state_dict[proj_key] = self._shard_tp_weight(
+                    state_dict[proj_key], tp_rank, world_size, shard_dim=1,
+                )
+
     def _state_dict_post_hook(self, module, state_dict, prefix, local_metadata):
         """Post-hook: reconstruct kv_up_proj from absorb weights and inject into state_dict.
 
         Also removes the redundant per-head absorb weight keys, since they can be
         fully reconstructed from linear_kv_up_proj.weight during loading (_pre_load_hook).
 
-        For SP-First, also slices the duplicated (non-TP) q_up_proj and linear_proj
-        weights back to per-rank TP shards so that checkpoints remain TP-compatible.
+        For SP-First, also slices the duplicated (non-TP) down_proj, q_up_proj and
+        linear_proj weights back to per-rank TP shards so that checkpoints remain
+        TP-compatible.
 
         Finally, all FP8 blockwise tensors whose internal data sits in an
         oversized shared storage are compacted (cloned to right-sized
@@ -801,6 +955,21 @@ class MLASelfAttentionFused(MLASelfAttention):
             if self.use_dsa_sp_first:
                 tp_rank = parallel_state.get_tensor_model_parallel_rank()
                 world_size = parallel_state.get_tensor_model_parallel_world_size()
+
+                # --- q_down_proj: ColumnParallel, shard along dim-0 (output dim) ---
+                if self.config.q_lora_rank is not None:
+                    q_down_key = prefix + "linear_q_down_proj.weight"
+                    if q_down_key in state_dict:
+                        state_dict[q_down_key] = self._shard_tp_weight(
+                            state_dict[q_down_key], tp_rank, world_size, shard_dim=0,
+                        )
+
+                # --- kv_down_proj: ColumnParallel, shard along dim-0 (output dim) ---
+                kv_down_key = prefix + "linear_kv_down_proj.weight"
+                if kv_down_key in state_dict:
+                    state_dict[kv_down_key] = self._shard_tp_weight(
+                        state_dict[kv_down_key], tp_rank, world_size, shard_dim=0,
+                    )
 
                 # --- kv_up_proj: reconstruct full weight, then extract TP shard ---
                 kv_up_weight = self._shard_tp_weight(
