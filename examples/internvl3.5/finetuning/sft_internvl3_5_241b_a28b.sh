@@ -55,7 +55,7 @@ TRAINING_ARGS=(
   --max-packed-tokens 8192
   --init-method-std 0.01
   --micro-batch-size 1
-  --global-batch-size 32
+  --global-batch-size 32  #When the video memory is insufficient, it can be reduced to 8
   --lr 1e-5
   --min-lr 0.0
   --clip-grad 1.0
@@ -106,6 +106,8 @@ TRAINING_ARGS=(
   --packing-buffer-size 200
   --energon-pack-algo sequential_max_images
   --allow-missing-adapter-checkpoint
+  --no-save-optim
+  --no-load-optim
 )
 
 MOE_ARGS=(
