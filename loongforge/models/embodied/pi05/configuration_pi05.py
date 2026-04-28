@@ -20,6 +20,7 @@
 
 from dataclasses import dataclass, field
 import os
+from typing import Callable, Optional
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
 from lerobot.optim.optimizers import AdamWConfig
@@ -142,6 +143,8 @@ class PI05Config(PreTrainedConfig):
     # generate some random number on CPU to align the loss on XPU with that on GPU
     random_fallback_cpu: bool = False
 
+    param_sync_func: Optional[Callable] = None
+    grad_sync_func: Optional[Callable] = None
 
     def __post_init__(self):
         """Run basic validations and fill derived Megatron parameters."""
