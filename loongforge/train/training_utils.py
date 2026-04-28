@@ -1576,9 +1576,14 @@ def train_step(
         tmp_num_microbatches = get_num_microbatches()
         tmp_seq_length = args.seq_length
         if args.enable_chunkpipe:
-            num_chunks = args.seq_length // args.chunksize
-            tmp_num_microbatches *= num_chunks
             tmp_seq_length = args.chunksize
+            if args.training_phase != "sft":
+                # Pretrain: DataLoader produces full sequences, ChunkDataIterator
+                # splits them, so num_microbatches must be inflated.
+                num_chunks = args.seq_length // args.chunksize
+                tmp_num_microbatches *= num_chunks
+            # SFT: DataLoader already produces chunk-level micro-batches,
+            # num_microbatches is already correct.
 
         losses_reduced = forward_backward_func(
             forward_step_func=forward_step_func,

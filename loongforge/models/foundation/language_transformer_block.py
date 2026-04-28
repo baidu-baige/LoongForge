@@ -206,8 +206,15 @@ class TransformerBlock(MegatronTransformerBlock):
             if self.config.recompute_granularity == 'full':
                 native_recompute = True
             if self.config.enable_chunkpipe:
-                chunk_num = self.config.chunkpipe_forward_microbatch % self.config.chunk_num_per_seq
-                if chunk_num + self.config.keep_activations_chunks < self.config.chunk_num_per_seq:
+                if self.config.sft_chunkpipe_mode:
+                    # SFT: scheduler sets chunk index directly
+                    effective_group = self.config.chunkpipe_current_group_size
+                    chunk_num = self.config.chunkpipe_chunk_idx_in_group
+                else:
+                    # Pretrain: compute from global counter (all groups same size)
+                    effective_group = self.config.chunk_num_per_seq
+                    chunk_num = self.config.chunkpipe_forward_microbatch % self.config.chunk_num_per_seq
+                if chunk_num + self.config.keep_activations_chunks < effective_group:
                     recompute_for_chunkpipe = True
 
             if (native_recompute or recompute_for_chunkpipe) and self.training:
