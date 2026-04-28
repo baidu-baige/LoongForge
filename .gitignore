@@ -92,3 +92,7 @@ swanlog/
 *.prof
 nsys_*/
 nsight_*/
+
+# ops build
+ops/cuda_source/int4_qat/build/
+ops/cuda_source/int4_qat/*.egg-info
