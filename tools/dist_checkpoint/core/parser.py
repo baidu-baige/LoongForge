@@ -113,8 +113,20 @@ class Parser:
         else:
             param_dict['ep_size'] = None
             param_dict['etp_size'] = None
-        param_dict['vpp_size'] = getattr(args, 'num_virtual_stages_per_pipeline_rank', None)
-        param_dict['custom_pipeline_layers'] = getattr(args, 'custom_pipeline_layers', None)
+        param_dict['vpp_size'] = getattr(args, 'virtual_pipeline_model_parallel_size', None)
+        vpp_size = param_dict['vpp_size']
+        custom_pipeline_layers = getattr(args, 'custom_pipeline_layers', None)
+        # Split custom_pipeline_layers by vpp_size
+        if custom_pipeline_layers is not None and vpp_size is not None and vpp_size > 1:
+            layers_list = [int(x) for x in custom_pipeline_layers.split(',')]
+            new_layers_list = []
+            for i in range (vpp_size):
+                for layers in layers_list:
+                    if layers % vpp_size != 0:
+                        raise ValueError(f"custom_pipeline_layers value {layers} is not divisible by vpp_size {vpp_size}")
+                    new_layers_list.append(layers // vpp_size)
+            custom_pipeline_layers = ','.join(map(str, new_layers_list))
+        param_dict['custom_pipeline_layers'] = custom_pipeline_layers
         param_dict['decoder_first_pipeline_num_layers'] = getattr(args, 'decoder_first_pipeline_num_layers', None)
         param_dict['decoder_last_pipeline_num_layers'] = getattr(args, 'decoder_last_pipeline_num_layers', None)
         param_dict['moe_grouped_gemm'] = getattr(args, 'moe_grouped_gemm', False)
