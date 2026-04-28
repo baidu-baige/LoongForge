@@ -841,8 +841,8 @@ class MLASelfAttentionFused(MLASelfAttention):
         (after optimizer step), so they stay valid across micro-batches within a step.
 
         Returns:
-            k_up: [num_heads_per_partition, qk_head_dim, kv_lora_rank]
-            v_up: [num_heads_per_partition, v_head_dim, kv_lora_rank]
+            k_up: [num_heads, qk_head_dim, kv_lora_rank]
+            v_up: [num_heads, v_head_dim, kv_lora_rank]
         """
         w = self.linear_kv_up_proj.weight
         cache_key = (w.data_ptr(), w._version)
@@ -850,7 +850,13 @@ class MLASelfAttentionFused(MLASelfAttention):
             return self._cached_kv_up_slices
         if is_float8tensor(w):
             w = w.dequantize()
-        num_heads = self.num_attention_heads_per_partition
+        # SP-First: linear_kv_up_proj is duplicated (full heads); use global head count.
+        # Non-SP-First: weight is TP-sharded; use per-partition head count.
+        num_heads = (
+            self.config.num_attention_heads
+            if self.use_dsa_sp_first
+            else self.num_attention_heads_per_partition
+        )
         w = w.view(num_heads, self.config.qk_head_dim + self.config.v_head_dim, self.config.kv_lora_rank)
         k_up, v_up = torch.split(
             w, [self.config.qk_head_dim, self.config.v_head_dim], dim=1
