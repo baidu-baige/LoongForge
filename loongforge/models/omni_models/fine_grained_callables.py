@@ -29,6 +29,7 @@ from megatron.core.transformer.multi_token_prediction import (
 )
 from megatron.core.transformer.transformer_layer import TransformerLayer, make_viewless_tensor
 from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
+from loongforge.train.initialize import mpu
 
 def maybe_set_offload_tag(tensor_name: str, tensor: torch.Tensor, config):
     """
@@ -108,7 +109,10 @@ class PreProcessNode(ScheduleNode):
     before the main transformer layers.
     """
 
-    def __init__(self, gpt_model, chunk_state, event, stream):
+    def __init__(self, gpt_model, chunk_state, event, stream,
+                 enable_encoder_hetero_dp=False, batch_list=None,
+                 forward_group_id=None, inner_group_id=None,
+                 enable_full_hetero_dp=False):
         """Initializes a preprocessing node.
 
         Args:
@@ -116,10 +120,22 @@ class PreProcessNode(ScheduleNode):
             chunk_state (TransformerChunkState): State shared within a chunk
             event: CUDA event for synchronization.
             stream: CUDA stream for execution.
+            enable_encoder_hetero_dp: Whether encoder heterogeneous DP is enabled.
+            batch_list: List of batches for hetero DP encoder forward.
+            forward_group_id: The forward group ID for hetero DP.
+            inner_group_id: The inner group ID within one hetero DP group.
+            enable_full_hetero_dp: Whether full heterogeneous DP is enabled.
         """
         super().__init__(weak_method(self.forward_impl), stream, event, name="pre_process")
         self.gpt_model = gpt_model
         self.chunk_state = chunk_state
+        self.enable_encoder_hetero_dp = enable_encoder_hetero_dp
+        self.batch_list = batch_list
+        self.forward_group_id = forward_group_id
+        self.inner_group_id = inner_group_id
+        self.enable_full_hetero_dp = enable_full_hetero_dp
+        # Cache the model chunk state reference for backward
+        self.model_chunk_state = chunk_state
 
     def forward_impl(self):
         """forward pass for pre-processing.
@@ -156,7 +172,259 @@ class PreProcessNode(ScheduleNode):
             )
             if use_inference_kv_cache:
                 vision_embeddings = None
-            if model.add_encoder:
+
+            if model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_encoder_hetero_dp:
+                from loongforge.train.initialize import (
+                    get_encoder_dp_size,
+                )
+                _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
+                inner_group_id = self.inner_group_id
+                forward_group_id = self.forward_group_id
+                batch_list = self.batch_list
+
+                if inner_group_id == 0:
+                    batch_id = mpu.get_tensor_model_parallel_rank()
+
+                    input_embeds_list = []
+                    for i in range(_ImageEncoderDataParallelSize):
+                        input_embeds = model.encoder_model.text_forward(
+                            batch_list[i]["tokens"],
+                            batch_list[i]["position_ids"]
+                        )
+                        input_embeds_list.append(input_embeds)
+
+                    (
+                        local_images,
+                        local_image_grid_thw,
+                        local_pixel_values_videos,
+                        local_video_grid_thw,
+                        local_input_ids,
+                        local_attn_mask,
+                        local_labels,
+                        local_cu_lengths,
+                        local_max_lengths,
+                        local_position_ids,
+                        local_loss_mask,
+                        local_packed_seq_params,
+                    ) = batch_list[batch_id].values()
+
+                    combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = model.encoder_model(
+                        input_ids=local_input_ids,
+                        position_ids=local_position_ids,
+                        image_inputs=dict(
+                            images=local_images,
+                            image_grid_thw=local_image_grid_thw,
+                        ) if local_images is not None else None,
+                        video_inputs=dict(
+                            pixel_values_videos=local_pixel_values_videos,
+                            video_grid_thw=local_video_grid_thw,
+                        ) if local_pixel_values_videos is not None else None,
+                        inference_params=inference_params,
+                        inputs_embeds=input_embeds_list[batch_id],
+                        enable_encoder_hetero_dp=True,
+                    )
+
+                    model.vit_contexts.setdefault(forward_group_id, {
+                        "local_embedding": combined_embeddings,
+                        "grads": None,
+                        "local_visual_pos_masks": visual_pos_masks,
+                        "local_deepstack_visual_embeds": deepstack_visual_embeds,
+                        "local_deepstack_visual_embeds_grads": (
+                            [None for _ in deepstack_visual_embeds]
+                            if deepstack_visual_embeds is not None
+                            else None
+                        ),
+                    })
+
+                if not model.pre_process:
+                    combined_embeddings = None
+
+                if model.add_encoder and mpu.is_pipeline_first_stage():
+                    group = mpu.get_tensor_model_parallel_group()
+                    src = torch.distributed.get_global_rank(group, inner_group_id)
+                    local_rank = torch.distributed.get_rank()
+
+                    # combined_embeddings communication
+                    shape = model.hetero_dp_get_tensor_shape(
+                        group, src, local_rank, forward_group_id, "local_embedding"
+                    )
+                    combined_embeddings = model.hetero_dp_get_tensor(
+                        group, src, local_rank, forward_group_id,
+                        "local_embedding", shape
+                    )
+
+                    def vit_grad_hook_factory(forward_group_id, inner_group_id, vit_contexts):
+                        def hook(grad):
+                            ctx = vit_contexts[forward_group_id]
+                            tp_id = mpu.get_tensor_model_parallel_rank()
+                            if tp_id == inner_group_id:
+                                ctx["grads"] = grad.clone()
+
+                            if inner_group_id == _ImageEncoderDataParallelSize - 1:
+                                bwd_tensors = [ctx["local_embedding"]]
+                                bwd_grads = [ctx["grads"]]
+                                if ctx["local_deepstack_visual_embeds"] is not None:
+                                    for t, g in zip(
+                                        ctx["local_deepstack_visual_embeds"],
+                                        ctx["local_deepstack_visual_embeds_grads"]
+                                    ):
+                                        if t.requires_grad and t.grad_fn is not None and g is not None:
+                                            bwd_tensors.append(t)
+                                            bwd_grads.append(g)
+                                torch.autograd.backward(
+                                    tensors=bwd_tensors,
+                                    grad_tensors=bwd_grads,
+                                    retain_graph=False
+                                )
+                                del vit_contexts[forward_group_id]
+
+                        return hook
+
+                    combined_embeddings.register_hook(
+                        vit_grad_hook_factory(forward_group_id, inner_group_id, model.vit_contexts)
+                    )
+
+                    if model.config.context_parallel_size > 1:
+                        combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+                    if model.config.sequence_parallel:
+                        combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+
+                    # visual positional encoding communication
+                    if model.vit_contexts[forward_group_id]["local_visual_pos_masks"] is not None:
+                        shape = model.hetero_dp_get_tensor_shape(
+                            group, src, local_rank,
+                            forward_group_id, "local_visual_pos_masks"
+                        )
+                        visual_pos_masks = model.hetero_dp_get_tensor(
+                            group, src, local_rank, forward_group_id,
+                            "local_visual_pos_masks", shape, needs_grad=False
+                        )
+
+                    if model.vit_contexts[forward_group_id]["local_deepstack_visual_embeds"] is not None:
+                        len_deepstack_visual_embeds = len(
+                            model.vit_contexts[forward_group_id]["local_deepstack_visual_embeds"]
+                        )
+                        shape = model.hetero_dp_get_tensor_shape(
+                            group, src, local_rank, forward_group_id,
+                            "local_deepstack_visual_embeds", idx=0
+                        )
+                        deepstack_visual_embeds = []
+                        for i in range(len_deepstack_visual_embeds):
+                            tmp_deepstack_visual_embeds = model.hetero_dp_get_tensor(
+                                group, src, local_rank, forward_group_id,
+                                "local_deepstack_visual_embeds", shape, idx=i
+                            )
+
+                            def deepstack_visual_embeds_grad_hook_factory(
+                                forward_group_id, inner_group_id, vit_contexts, idx
+                            ):
+                                def hook(grad):
+                                    ctx = vit_contexts[forward_group_id]
+                                    tp_id = mpu.get_tensor_model_parallel_rank()
+                                    if tp_id == inner_group_id:
+                                        ctx["local_deepstack_visual_embeds_grads"][idx] = grad.clone()
+                                return hook
+
+                            tmp_deepstack_visual_embeds.register_hook(
+                                deepstack_visual_embeds_grad_hook_factory(
+                                    forward_group_id, inner_group_id, model.vit_contexts, i
+                                )
+                            )
+                            deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
+
+            elif model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_full_hetero_dp:
+                from loongforge.train.initialize import get_model_size
+                if mpu.is_pipeline_first_stage():
+                    from loongforge.train.pretrain.pretrain_vlm import (
+                        get_grad_list, get_embedding_list,
+                        get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
+                        get_deepstack_grad_list,
+                    )
+
+                    group = mpu.get_tensor_model_parallel_group()
+                    src_rank = torch.distributed.get_global_rank(group, 0)
+                    local_rank = torch.distributed.get_rank()
+
+                    embedding_list = get_embedding_list()
+                    visual_pos_masks_list = get_visual_pos_masks_list()
+                    deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
+                    model_size = get_model_size()
+                    forward_group_id = self.forward_group_id
+                    round_num = forward_group_id // model_size
+                    inner_num = forward_group_id % model_size
+
+                    ref_tensor = model.vit_contexts[round_num]["local_embedding"]
+                    local_tensor = embedding_list[round_num][inner_num] if local_rank == src_rank else ref_tensor
+
+                    shape = model.hetero_dp_get_tensor_shape(
+                        group, src_rank, local_rank, local_tensor=local_tensor
+                    )
+                    combined_embeddings = model.hetero_dp_get_tensor(
+                        group, src_rank, local_rank, shape=shape, local_tensor=local_tensor
+                    )
+
+                    def full_hetero_dp_grad_hook_factory(group):
+                        def hook(grad):
+                            if torch.distributed.get_rank(group=group) == 0:
+                                grad = grad.clone()
+                                get_grad_list().append(grad)
+                        return hook
+
+                    combined_embeddings.register_hook(
+                        full_hetero_dp_grad_hook_factory(group)
+                    )
+
+                    if model.config.context_parallel_size > 1:
+                        combined_embeddings = get_inputs_on_this_cp_rank(combined_embeddings, packed_seq_params)
+
+                    if model.config.sequence_parallel:
+                        combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+
+                    # Handle visual_pos_masks
+                    if model.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
+                        ref_masks = model.vit_contexts[round_num]["local_visual_pos_masks"]
+                        local_masks = (
+                            visual_pos_masks_list[round_num][inner_num]
+                            if local_rank == src_rank else ref_masks
+                        )
+                        shape = model.hetero_dp_get_tensor_shape(
+                            group, src_rank, local_rank, local_tensor=local_masks
+                        )
+                        visual_pos_masks = model.hetero_dp_get_tensor(
+                            group, src_rank, local_rank, shape=shape,
+                            local_tensor=local_masks, needs_grad=False,
+                        )
+
+                    # Handle deepstack_visual_embeds
+                    if model.vit_contexts[round_num]["local_deepstack_visual_embeds"] is not None:
+                        ref_embeds = model.vit_contexts[round_num]["local_deepstack_visual_embeds"]
+
+                        def full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i):
+                            def hook(grad):
+                                if torch.distributed.get_rank(group=group) == 0:
+                                    get_deepstack_grad_list()[round_num][i][inner_num] = grad.clone()
+                            return hook
+
+                        deepstack_visual_embeds = []
+                        for i in range(len(ref_embeds)):
+                            local_embed = (
+                                deepstack_visual_embeds_list[round_num][i][inner_num]
+                                if local_rank == src_rank
+                                else ref_embeds[i]
+                            )
+                            shape = model.hetero_dp_get_tensor_shape(
+                                group, src_rank, local_rank, local_tensor=local_embed
+                            )
+                            embed = model.hetero_dp_get_tensor(
+                                group, src_rank, local_rank, shape=shape, local_tensor=local_embed,
+                            )
+                            embed.register_hook(
+                                full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i)
+                            )
+                            deepstack_visual_embeds.append(embed)
+
+            elif model.add_encoder and not self.enable_encoder_hetero_dp and not self.enable_full_hetero_dp:
                 combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = model.encoder_model(
                     input_ids=input_ids,
                     image_inputs=image_inputs,
@@ -169,6 +437,9 @@ class PreProcessNode(ScheduleNode):
 
                 if model.config.sequence_parallel:
                     combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+
+            if not model.pre_process:
+                combined_embeddings = None
 
             decoder_input = combined_embeddings
 
@@ -698,6 +969,8 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         def submodule_deepstack_forward(node: ScheduleNode, output: torch.Tensor):
         
             deepstack_visual_embeds = node.chunk_state.deepstack_visual_embeds
+            if deepstack_visual_embeds is None:
+                return output
             visual_pos_masks = node.chunk_state.visual_pos_masks
 
             output = _deepstack_process(

@@ -327,6 +327,11 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
         extra_block_kwargs=None,
         runtime_gather_output: Optional[bool] = None,
         loss_mask: Optional[Tensor] = None,
+        enable_encoder_hetero_dp: bool = False,
+        batch_list=None,
+        forward_group_id: Optional[int] = None,
+        inner_group_id: Optional[int] = None,
+        enable_full_hetero_dp: bool = False,
     ):
         """Initialize the schedule plan of all Transformer layers' sub-modules.
 
@@ -383,7 +388,14 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
         self._model_chunk_state.attention_bias = None
 
         # build preprocess
-        self.pre_process = PreProcessNode(model, self._model_chunk_state, self._event, comp_stream)
+        self.pre_process = PreProcessNode(
+            model, self._model_chunk_state, self._event, comp_stream,
+            enable_encoder_hetero_dp=enable_encoder_hetero_dp,
+            batch_list=batch_list,
+            forward_group_id=forward_group_id,
+            inner_group_id=inner_group_id,
+            enable_full_hetero_dp=enable_full_hetero_dp,
+        )
 
         # check if encoder model has deepstack
         self._deepstack_indexes = None
