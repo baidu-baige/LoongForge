@@ -96,7 +96,7 @@ LoongForge supports a massive array of state-of-the-art models. Check out `confi
 | | Qwen2.5 | qwen2.5-0.5b, qwen2.5-1.5b, qwen2.5-3b, qwen2.5-7b, qwen2.5-14b, qwen2.5-32b, qwen2.5-72b |
 | | Qwen3 | qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b, qwen3-14b, qwen3-32b, qwen3-30b-a3b, qwen3-235b-a22b, qwen3-480b-a35b, qwen3-coder-30b-a3b |
 | | Qwen3-Next | qwen3-next-80b-a3b |
-| | MiniMax | minimax-m2.1, minimax-m2.5 |
+| | MiniMax | minimax-m2.1, minimax-m2.5, minimax-m2.7 |
 | | MIMO | mimo-7b |
 | | GLM | glm5 |
 | **VLM** | Qwen2.5-VL | qwen2.5-vl-3b, qwen2.5-vl-7b, qwen2.5-vl-32b, qwen2.5-vl-72b |

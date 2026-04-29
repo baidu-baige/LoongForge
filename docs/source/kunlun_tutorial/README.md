@@ -27,6 +27,8 @@ Refer to [Quick Start: VLM Model SFT Training on Kunlunxin P800](https://loongfo
 | **Model Type** | **Model Category** | **Model** | **Pretrain** | **SFT** |
 |:---|:---|:---|:---:|:---:|
 | LLM | DeepSeek-V3.1 | deepseek_v3_group_bf16 | | ✅ (example) |
+| | MiniMax | minimax_m2.5_230b | | ✅ (example) |
+| | | minimax_m2.7_230b | | ✅ (example) |
 | | Qwen2.5 | qwen2.5_0.5b | | |
 | | | qwen2.5_1.5b | | |
 | | | qwen2.5_3b | | |
@@ -43,9 +45,9 @@ Refer to [Quick Start: VLM Model SFT Training on Kunlunxin P800](https://loongfo
 | VLM | Qwen3-VL | qwen3_vl_30b_a3b | ✅ (example) | ✅ (example) |
 | | | qwen3_vl_235b_a22b | ✅ (example) | ✅ (example) |
 | | InternVL-3.5 | internvl3.5_8b | | ✅ (example) |
-| | | internvl3.5_14b | | |
-| | | internvl3.5_38b | | |
-| | | internvl3.5_30b_a3b | | |
-| | | internvl3.5_241b_a28b | | |
+| | | internvl3.5_14b | | ✅ (example) |
+| | | internvl3.5_38b | | ✅ (example) |
+| | | internvl3.5_30b_a3b | | ✅ (example) |
+| | | internvl3.5_241b_a28b | | ✅ (example) |
 | | Qwen-3.5 | qwen3.5_35b_a3b | ✅ (example) | ✅ (example) |
 | VLA | PI 0.5 | | | ✅ (example) |
