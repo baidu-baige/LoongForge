@@ -289,7 +289,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
 
     model_add_encoder = get_attr_wrapped_model(model, 'add_encoder')
-    is_higher_vpp_chunk = args.enable_full_hetero_dp and (not model_add_encoder)
+    is_higher_vpp_chunk = args.enable_full_hetero_dp and (not model_add_encoder) and mpu.is_pipeline_first_stage()
 
     if is_higher_vpp_chunk:
         vpp_counter = _vpp_counters.get('higher', 0)
@@ -307,7 +307,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
             with stimer(bdata=True):
                 for i in range(_ImageEncoderDataParallelSize):
                     mb_index = forward_step_calling_count + i
-                    if args.enable_full_hetero_dp and is_mock_microbatch(mb_index):
+                    if args.enable_full_hetero_dp and is_mock_microbatch(mb_index) and mpu.is_pipeline_first_stage():
                         mock_ref = batch_list[-1] if batch_list else get_batch(data_iterator)
                         if not batch_list:
                             batch_list.append(copy.deepcopy(mock_ref))
@@ -315,7 +315,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                     else:
                         local_batch = copy.deepcopy(get_batch(data_iterator))
                         batch_list.append(local_batch)
-            if args.enable_full_hetero_dp:
+            if args.enable_full_hetero_dp and mpu.is_pipeline_first_stage():
                 _vpp0_batch_cache.append(list(batch_list))
 
     timers("batch-generator").stop()
@@ -338,6 +338,9 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
 
         loss_func = getattr(model_config, "loss_func", default_loss_func)
 
+        if not is_higher_vpp_chunk:
+            forward_step_calling_count += 1
+
         if return_schedule_plan:
             assert args.overlap_moe_expert_parallel_comm, \
                 "overlap_moe_expert_parallel_comm must be enabled to return the schedule plan"
@@ -357,6 +360,11 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 labels=labels,
                 packed_seq_params=packed_seq_params,
                 loss_mask=loss_mask,
+                enable_encoder_hetero_dp=args.enable_encoder_hetero_dp,
+                batch_list=batch_list,
+                forward_group_id=forward_group_id,
+                inner_group_id=inner_group_id,
+                enable_full_hetero_dp=args.enable_full_hetero_dp,
             )
             return schedule_plan, partial(loss_func, loss_mask)
         else:
@@ -382,12 +390,6 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 inner_group_id=inner_group_id,
                 enable_full_hetero_dp=args.enable_full_hetero_dp,
             )
-
-        # Only increment the counter for the primary chunk (vp_stage=0).
-        # For full_hetero_dp, is_higher_vpp_chunk tells us; otherwise,
-        # the original check via mpu still holds (returns 0 or None).
-        if not is_higher_vpp_chunk:
-            forward_step_calling_count += 1
 
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 

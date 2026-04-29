@@ -378,10 +378,10 @@ class OmniCombinationModel(BaseMegatronModule):
                         bwd_grads = [ctx["grads"]]
                         if ctx["local_deepstack_visual_embeds"] is not None:
                             for t, g in zip(
-                                ctx["local_deepstack_visual_embeds"], 
+                                ctx["local_deepstack_visual_embeds"],
                                 ctx["local_deepstack_visual_embeds_grads"]
                             ):
-                                if t.requires_grad and t.grad_fn is not None:
+                                if t.requires_grad and t.grad_fn is not None and g is not None:
                                     bwd_tensors.append(t)
                                     bwd_grads.append(g)
                         torch.autograd.backward(
@@ -564,6 +564,11 @@ class OmniCombinationModel(BaseMegatronModule):
         attention_mask: Optional[torch.Tensor] = None,
         packed_seq_params=None,
         labels: Optional[torch.LongTensor] = None,
+        enable_encoder_hetero_dp: bool = False,
+        batch_list: Optional[list] = None,
+        forward_group_id: Optional[int] = None,
+        inner_group_id: Optional[int] = None,
+        enable_full_hetero_dp: bool = False,
         **kwargs: Any,
     ):
 
@@ -583,5 +588,10 @@ class OmniCombinationModel(BaseMegatronModule):
             attention_mask=attention_mask,
             labels=labels,
             packed_seq_params=packed_seq_params,
+            enable_encoder_hetero_dp=enable_encoder_hetero_dp,
+            batch_list=batch_list,
+            forward_group_id=forward_group_id,
+            inner_group_id=inner_group_id,
+            enable_full_hetero_dp=enable_full_hetero_dp,
             **kwargs,
         )
