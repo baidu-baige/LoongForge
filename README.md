@@ -4,7 +4,7 @@
 <h1 align="center">LoongForge</h1>
 <h4>A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models.</h4>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://loongforge.readthedocs.io/en/latest/index.html)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge=social)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://loongforge.readthedocs.io/en/latest/index.html)[![License](https://img.shields.io/github/license/open-mmlab/mmdeploy.svg)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)[![Stars](https://img.shields.io/github/stars/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/tree/master)[![Issues](https://img.shields.io/github/issues-raw/baidu-baige/LoongForge)](https://github.com/baidu-baige/LoongForge/issues)
 
 </div>
 
