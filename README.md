@@ -175,3 +175,10 @@ If you find LoongForge helpful in your research or production, please consider c
 
 LoongForge is built upon NVIDIA's Megatron-LM. During development, we also referenced and drew inspiration from several excellent open-source projects, including but not limited to Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.
 
+
+## 💬 Contact
+
+We welcome questions, feedback, feature requests, and contributions from the community. Please feel free to open an issue on GitHub, or scan the WeChat QR code below to join our developer community for discussion and collaboration.
+
+<img width="377" height="566" alt="2deed0efb66ab6a98a50b3c716355191" src="https://github.com/user-attachments/assets/fb84c217-9288-4108-9709-100e46ed1d7a" />
+
