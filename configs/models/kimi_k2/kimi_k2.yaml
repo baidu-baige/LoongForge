@@ -52,3 +52,5 @@ cross_entropy_fusion_impl: "te"
 moe_permute_fusion: true
 multi_latent_attention: true
 model_type: "kimi"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/kimi_k2/ckpt_convert/kimi_k2_convert.yaml

@@ -114,28 +114,28 @@ class Parser:
             param_dict['ep_size'] = None
             param_dict['etp_size'] = None
         param_dict['vpp_size'] = getattr(args, 'virtual_pipeline_model_parallel_size', None)
-        vpp_size = param_dict['vpp_size']
-        custom_pipeline_layers = getattr(args, 'custom_pipeline_layers', None)
-        # Split custom_pipeline_layers by vpp_size
-        if custom_pipeline_layers is not None and vpp_size is not None and vpp_size > 1:
-            layers_list = [int(x) for x in custom_pipeline_layers.split(',')]
-            new_layers_list = []
-            for i in range (vpp_size):
-                for layers in layers_list:
-                    if layers % vpp_size != 0:
-                        raise ValueError(f"custom_pipeline_layers value {layers} is not divisible by vpp_size {vpp_size}")
-                    new_layers_list.append(layers // vpp_size)
-            custom_pipeline_layers = ','.join(map(str, new_layers_list))
-        param_dict['custom_pipeline_layers'] = custom_pipeline_layers
-        param_dict['decoder_first_pipeline_num_layers'] = getattr(args, 'decoder_first_pipeline_num_layers', None)
-        param_dict['decoder_last_pipeline_num_layers'] = getattr(args, 'decoder_last_pipeline_num_layers', None)
+        convert_pp_layout= getattr(args, 'convert_pp_layout', None)
+        if convert_pp_layout is not None and convert_pp_layout.layout is not None:
+            from megatron.core.transformer.enums import LayerType
+            decoder_counts = []
+            vpp_size = param_dict['vpp_size'] if param_dict['vpp_size'] is not None else 1
+            for vpp_id in range(vpp_size):
+                for pp_layout in convert_pp_layout.layout:
+                    if vpp_id >= len(pp_layout):
+                        break
+                    vpp_layerout = pp_layout[vpp_id]
+                    decoder_count = sum(1 for layer_type in vpp_layerout if layer_type == LayerType.decoder)
+                    decoder_counts.append(str(decoder_count))
+            param_dict['custom_pipeline_layers'] = ','.join(decoder_counts)
+        else:
+            param_dict['custom_pipeline_layers'] = None
         param_dict['moe_grouped_gemm'] = getattr(args, 'moe_grouped_gemm', False)
         param_dict['lora_alpha'] = getattr(args, 'lora_alpha', None)
         param_dict['lora_dim'] = getattr(args, 'lora_dim', None)
         # ===== Parameters marked with # are not in training args, only in convert ckpt args =====
         param_dict['vpp_scheduler'] = getattr(args, 'vpp_scheduler', None) #
         param_dict['safetensors'] = getattr(args, 'safetensors', True) #
-        param_dict['max_workers'] = getattr(args, 'max_workers', 1) # 
+        param_dict['max_workers'] = getattr(args, 'max_workers', 1) #
         param_dict['fp8_force_no_requant'] = getattr(args, 'fp8_force_no_requant', False) # 
         param_dict['force_pow_2_scales'] = getattr(args, 'force_pow_2_scales', False) # 
         param_dict['amax_epsilon'] = getattr(args, 'amax_epsilon', 0.0) # 
@@ -154,10 +154,8 @@ class Parser:
 
         parallel_fields = [
             'tp_size', 'encoder_tp_size', 'pp_size', 'ep_size', 'etp_size', 'vpp_size',
-            'custom_pipeline_layers', 'decoder_first_pipeline_num_layers',
-            'decoder_last_pipeline_num_layers', 'moe_grouped_gemm',
-            'vpp_scheduler', 'tp_ranks', 'pp_ranks', 'ep_ranks',
-            'etp_ranks', 'safetensors',
+            'moe_grouped_gemm', 'vpp_scheduler', 'tp_ranks', 'pp_ranks', 'ep_ranks',
+            'etp_ranks', 'safetensors', 'custom_pipeline_layers',
             'max_workers', 'fp8_force_no_requant', 'force_pow_2_scales',
             'amax_epsilon', 'mtp_num_layers', 'lora_alpha', 'lora_dim', 'enable_full_hetero_dp'
         ]

@@ -6,3 +6,5 @@ bias_activation_fusion: False
 gated_linear_unit: False
 layernorm_epsilon: 1e-05
 model_type: "patch_merger_adapter"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/patch_merger_adapter_convert.yaml
