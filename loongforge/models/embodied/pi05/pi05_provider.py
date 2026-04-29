@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import torch
 
-from megatron.training import get_args
 from loongforge.models.factory import register_model_provider
 from loongforge.utils.constants import VisionLanguageActionModelFamilies
 from loongforge.utils.global_vars import get_model_config
@@ -37,9 +36,5 @@ def pi05_model_provider(
     if getattr(model_config, "device", None) is None:
         model_config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    args = get_args()
-    if args.ckpt_format == "torch":
-        model = PI05Policy.from_pretrained(args.load, config=model_config)
-    else:
-        model = PI05Policy(model_config)
+    model = PI05Policy(model_config)
     return model

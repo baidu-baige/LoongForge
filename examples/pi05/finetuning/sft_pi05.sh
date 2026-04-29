@@ -66,6 +66,7 @@ TRAINING_ARGS=(
     --weight-decay 0.01
     --finetune
     --bf16
+    --init-model-with-meta-device
     --use-precision-aware-optimizer
     --exp-avg-dtype fp32
     --exp-avg-sq-dtype bf16
