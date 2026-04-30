@@ -432,6 +432,39 @@ def pretrain(
             add_hooks(tmp_model, args, prefix)
             index += 1
 
+    # INT4 QAT setup
+    if getattr(args, 'enable_int4_qat', False):
+        try:
+            from int4_qat.weight_transform import apply_int4_qat
+            group_size = getattr(args, 'int4_qat_group_size', 32)
+            filter_regex = getattr(args, 'int4_qat_filter_regex', None)
+            models = model if isinstance(model, (list, tuple)) else [model]
+            total_wrapped = 0
+            for m in models:
+                kwargs = dict(group_size=group_size, sym=True)
+                if filter_regex is not None:
+                    kwargs['filter_regex'] = filter_regex
+                _, count = apply_int4_qat(m, **kwargs)
+                total_wrapped += count
+            if total_wrapped == 0:
+                print_rank_0(
+                    "[INT4 QAT] WARNING: --enable-int4-qat is set but NO modules were wrapped. "
+                    "Check that the model contains MoE expert layers and that "
+                    f"--int4-qat-filter-regex='{filter_regex or 'default'}' matches "
+                    "the expected module names. QAT is effectively disabled for this run."
+                )
+            else:
+                print_rank_0(
+                    f"[INT4 QAT] Wrapped {total_wrapped} expert linears "
+                    f"(group_size={group_size})"
+                )
+        except ImportError:
+            print_rank_0("[INT4 QAT] Warning: int4_qat package not installed, skipping QAT")
+        except Exception as e:
+            raise RuntimeError(
+                f"[INT4 QAT] Failed to enable INT4 QAT (--enable-int4-qat was set): {e}"
+            ) from e
+
     timers("model-and-optimizer-setup").stop()
     print_datetime("after model, optimizer, and learning rate scheduler are built")
     config = get_model_config(model[0])

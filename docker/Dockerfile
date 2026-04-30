@@ -178,6 +178,15 @@ RUN set -exuo pipefail && \
 
 
 # =========================================================
+# INT4 QAT CUDA Kernels (fake quantization for QAT)
+# =========================================================
+RUN set -exuo pipefail && \
+    echo "Installing INT4 QAT CUDA kernels..." && \
+    cd /workspace/LoongForge/ops/cuda_source/int4_qat && \
+    pip install --no-build-isolation . && \
+    echo "INT4 QAT install completed"
+
+# =========================================================
 # Megatron Symlink
 # Scripts reference /workspace/Loong-Megatron; the actual location is
 # /workspace/LoongForge/third_party/Loong-Megatron (git submodule).
