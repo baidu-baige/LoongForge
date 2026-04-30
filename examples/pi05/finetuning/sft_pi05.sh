@@ -41,8 +41,8 @@ DATA_ARGS=(
 # Core training args — pi05 trainer only needs minimal Megatron flags
 TRAINING_ARGS=(
     --training-phase sft
-    --micro-batch-size 12
-    --global-batch-size 96
+    --micro-batch-size 16
+    --global-batch-size 128
     --train-iters 30000
     --seq-length 762
     --max-position-embeddings 762
@@ -68,7 +68,7 @@ TRAINING_ARGS=(
     --bf16
     --init-model-with-meta-device
     --use-precision-aware-optimizer
-    --exp-avg-dtype fp32
+    --exp-avg-dtype bf16
     --exp-avg-sq-dtype bf16
     --num-distributed-optimizer-instances 1
     --save $CHECKPOINT_PATH

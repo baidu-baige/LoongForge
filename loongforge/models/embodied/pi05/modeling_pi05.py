@@ -51,7 +51,6 @@ else:
     layernorm_forward = None
     PaliGemmaForConditionalGenerationWithPiGemma = None
 from lerobot.configs.policies import PreTrainedConfig
-from lerobot.policies.pi05.configuration_pi05 import DEFAULT_IMAGE_SIZE, PI05Config
 from lerobot.policies.pretrained import PreTrainedPolicy, T
 from lerobot.policies.rtc.modeling_rtc import RTCProcessor
 from lerobot.utils.constants import (
@@ -60,6 +59,8 @@ from lerobot.utils.constants import (
     OBS_LANGUAGE_TOKENS,
     OPENPI_ATTENTION_MASK_VALUE,
 )
+
+from .configuration_pi05 import DEFAULT_IMAGE_SIZE, PI05Config
 
 
 class ActionSelectKwargs(TypedDict, total=False):
@@ -410,6 +411,10 @@ class PaliGemmaWithExpertModel(nn.Module):
         self.gemma_expert = PiGemmaForCausalLM(config=action_expert_config_hf)
         self.gemma_expert.model.embed_tokens = None
         self._tie_paligemma_language_weights()
+        # Keep compile-sensitive config values as plain Python fields. Accessing
+        # nested transformers config objects inside fullgraph compile is fragile.
+        self._text_hidden_size = vlm_config_hf.text_config.hidden_size
+        self._num_hidden_layers = vlm_config_hf.text_config.num_hidden_layers
 
         # Skip dtype cast on meta device — tensors have no data to cast.
         # Megatron's to_empty_if_meta_device will materialize them on GPU later.
@@ -543,7 +548,7 @@ class PaliGemmaWithExpertModel(nn.Module):
             img_tensor = image_outputs
         else:
             img_tensor = image_outputs.pooler_output
-        features = img_tensor * self.paligemma.config.text_config.hidden_size**0.5
+        features = img_tensor * self._text_hidden_size**0.5
         if features.dtype != out_dtype:
             features = features.to(out_dtype)
         return features
@@ -588,7 +593,7 @@ class PaliGemmaWithExpertModel(nn.Module):
             prefix_past_key_values = None
         else:
             models = [self.paligemma.model.language_model, self.gemma_expert.model]
-            num_layers = self.paligemma.config.text_config.num_hidden_layers
+            num_layers = self._num_hidden_layers
 
             # Check if gradient checkpointing is enabled for any of the models
             use_gradient_checkpointing = (
@@ -713,12 +718,17 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         # Initialize gradient checkpointing flag
         self.gradient_checkpointing_enabled = False
 
-        # Compile model if requested
-        if config.compile_model:
-            torch.set_float32_matmul_precision("high")
-            self.sample_actions = torch.compile(self.sample_actions, mode=config.compile_mode)
-            # Also compile the main forward pass used during training
-            self.forward = torch.compile(self.forward, mode=config.compile_mode)
+        torch.set_float32_matmul_precision("high")
+
+        # Compile model if requested by the PI05 model config.
+        if getattr(config, "compile_model", False):
+            compile_mode = getattr(config, "compile_mode", "max-autotune")
+            self.paligemma_with_expert.forward = torch.compile(
+                self.paligemma_with_expert.forward,
+                mode=compile_mode,
+                fullgraph=True,
+            )
+            logging.info("PI05 torch.compile enabled (mode=%s, fullgraph=True)", compile_mode)
 
     def gradient_checkpointing_enable(self):
         """Enable gradient checkpointing for memory optimization."""
