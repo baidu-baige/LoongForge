@@ -12,6 +12,7 @@ from convert_checkpoint.common.common_config import CommonConfig
 from convert_checkpoint.common.common_checkpoint import (
     BIAS,
     EXTRA_DATA,
+    FINAL_LAYERNORM,
     FIRST_LAYER_NAMES,
     LAST_LAYER_NAMES,
     LAYER_EXTRA_DATA,
@@ -223,7 +224,7 @@ def replace_vlm_config(c_config, adapter, vision_patch):
 
     hf_dict = {}
 
-    # key 后缀列表
+    # Key suffix list
     key_suffixes = [f".{WEIGHT}", f".{BIAS}", f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]
 
     for key, value in name_map.items():
@@ -251,11 +252,14 @@ def replace_vlm_config(c_config, adapter, vision_patch):
                                    LAYER_IS_LAYERNORM: mcore_is_layernorm, LAYER_EXTRA_DATA: value[LAYER_EXTRA_DATA]}
             hf_dict[hf_name] = True
 
-    layer_prefix = c_config.get("name_map")["mcore"].get(LAYER_PREFIX, None)
-    if layer_prefix:
-        old_prefix, rest = layer_prefix.split('.', 1)
+    replace_prefix_keys = [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES
+    for key in replace_prefix_keys:
+        mcore_key = c_config.get("name_map")["mcore"].get(key, None)
+        if mcore_key is None:
+            continue
+        old_prefix, rest = mcore_key.split('.', 1)
         new_prefix = prefix_mapping.get(old_prefix)
         if new_prefix:
             new_key = f"{new_prefix}.{rest}"
-            c_config.get("name_map")["mcore"]["layer_prefix"] = new_key
+            c_config.get("name_map")["mcore"][key] = new_key
     return c_config

@@ -35,3 +35,5 @@ merge_type: "sd2_tpool"
 image_token_id: 163603
 
 model_type: "moon_vit_3d"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/moon_vit_3d_convert.yaml

@@ -470,39 +470,39 @@ def get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp):
     return virtual_p, layer_offset
 
 def get_layer_ids(c_config, args, p):
-    cargs = c_config.get_args("common")  # 获取模型通用配置参数
+    cargs = c_config.get_args("common")  # Get model common config parameters
 
-    # 获取模型层数相关参数
-    num_layers = cargs["num_layers"]  # 模型总层数
-    mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)  # MTP附加层数，默认为0
+    # Get model layer count related parameters
+    num_layers = cargs["num_layers"]  # Total number of model layers
+    mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)  # MTP additional layers, default 0
     num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
-    # 计算虚拟pipeline阶段数
+    # Calculate number of virtual pipeline stages
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage
     else:
         stage = args.num_virtual_stages_per_pipeline_rank or 1
     
-    dualpipev = args.vpp_scheduler == 'dualpipev'  # 判断是否使用dualpipev调度器
-    pp = args.pipeline_model_parallel_size  # pipeline并行度
-    custom_pipeline_layers = args.custom_pipeline_layers  # 自定义pipeline层分配
-    num_layers_in_first_pipeline_stage = args.decoder_first_pipeline_num_layers  # 第一个pipeline阶段层数
-    num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers  # 最后一个pipeline阶段层数
-    
-    # 获取虚拟pipeline中各阶段的层数分布
+    dualpipev = args.vpp_scheduler == 'dualpipev'  # Check whether to use dualpipev scheduler
+    pp = args.pipeline_model_parallel_size  # Pipeline parallel size
+    custom_pipeline_layers = args.custom_pipeline_layers  # Custom pipeline layer assignment
+    num_layers_in_first_pipeline_stage = args.decoder_first_pipeline_num_layers  # Number of layers in the first pipeline stage
+    num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers  # Number of layers in the last pipeline stage
+
+    # Get the layer count distribution across virtual pipeline stages
     num_layers_in_vp = get_num_layers_in_vp_map(
             stage, num_layers, pp, mtp_num_layers=mtp_num_layers,
             custom_pipeline_layers=custom_pipeline_layers,
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)
 
-    layer_ids = []  # 存储当前pipeline rank的layer id列表
-    # 遍历所有虚拟pipeline阶段
+    layer_ids = []  # Store layer id list for the current pipeline rank
+    # Iterate over all virtual pipeline stages
     for stage_index in range(stage):
-        # 获取当前阶段的虚拟分区和层偏移量
+        # Get the virtual partition and layer offset for the current stage
         virtual_p, layer_offset, = get_virtual_partition(dualpipev, stage_index, p, pp, num_layers_in_vp)
-        # 遍历当前虚拟分区中的所有层
+        # Iterate over all layers in the current virtual partition
         for layer_index in range(num_layers_in_vp[virtual_p]):
-            layer_id = layer_index + layer_offset  # 计算全局layer id
+            layer_id = layer_index + layer_offset  # Compute global layer id
             layer_ids.append(layer_id)
     return layer_ids
 

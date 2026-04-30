@@ -564,6 +564,8 @@ def pretrain(
         # Set default save_hf_path if not specified
         if getattr(args, 'save_hf_path', None) is None and args.save is not None:
             args.save_hf_path = os.path.join(args.save, "release_hf_weights/")
+        if hasattr(config, 'pipeline_model_parallel_layout'):
+            args.convert_pp_layout = config.pipeline_model_parallel_layout
 
         # Save HF checkpoint
         save_hf_checkpoint_online(model, args)
@@ -738,6 +740,8 @@ def get_model(
             # Temporarily set args.load for load_hf_checkpoint_online
             orig_load = args.load
             args.load = args.pretrained_checkpoint
+            if hasattr(model_config, 'pipeline_model_parallel_layout'):
+                args.convert_pp_layout = model_config.pipeline_model_parallel_layout
 
             # Load HF checkpoint online
             iteration, num_fp_ops = load_hf_checkpoint_online(
@@ -1118,8 +1122,10 @@ def setup_model_and_optimizer(
     elif is_hf_checkpoint(args.load) and not args.moe_use_upcycling:
         # Online HF checkpoint loading
         assert (not args.use_megatron_fsdp), "Megatron FSDP and HF checkpoint loading cannot be used together. " \
-                "Please set --use-megatron-fsdp to False."
+            "Please set --use-megatron-fsdp to False."
         timers("load-checkpoint", log_level=0).start(barrier=True)
+        if hasattr(model_config, 'pipeline_model_parallel_layout'):
+            args.convert_pp_layout = model_config.pipeline_model_parallel_layout
         args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
             model,
             optimizer,
@@ -1576,9 +1582,14 @@ def train_step(
         tmp_num_microbatches = get_num_microbatches()
         tmp_seq_length = args.seq_length
         if args.enable_chunkpipe:
-            num_chunks = args.seq_length // args.chunksize
-            tmp_num_microbatches *= num_chunks
             tmp_seq_length = args.chunksize
+            if args.training_phase != "sft":
+                # Pretrain: DataLoader produces full sequences, ChunkDataIterator
+                # splits them, so num_microbatches must be inflated.
+                num_chunks = args.seq_length // args.chunksize
+                tmp_num_microbatches *= num_chunks
+            # SFT: DataLoader already produces chunk-level micro-batches,
+            # num_microbatches is already correct.
 
         losses_reduced = forward_backward_func(
             forward_step_func=forward_step_func,

@@ -287,7 +287,7 @@ class McoreBase:
 
     #========to mcore===========
     def common_to_mcore(self, name, c_ckpt, m_dict, t_name, layer_id=None, m_layer_id=None,
-                        layer_prefix=None, ep_id=None, expert_name=None, name_prefix=None):
+                        layer_prefix=None, ep_id=None, expert_name=None, name_prefix=None, clear_source=True):
         if name == WORD_EMBEDDINGS_FOR_HEAD and (not self.untie_embeddings_and_output_weights and self.pp == 1):
             return
 
@@ -322,7 +322,8 @@ class McoreBase:
             return
         if need_emb_padding:
             weight = add_embedding_padding(weight, self.divisible_by, self.vocab_size, self.tp, self.padded_vocab_size)
-        clear_source = name not in EMBED_NAMES
+        if name in EMBED_NAMES:
+            clear_source = False
         weight_list, bias_list = self.get_chunked_weight(
                 name, self.tp, mcore_weight_path, mcore_bias_path, weight, bias, weight_scale,
                 is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type, clear_source=clear_source)
