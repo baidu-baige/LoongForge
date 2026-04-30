@@ -6,7 +6,7 @@ This document describes how to build the LoongForge image that can run on Kunlun
 
 We provide a clean base image with required underlying dependencies installed.
 
-* UV environment (community Docker Hub): `weiyexu/omni_kunlun:uv_base`
+* UV environment (community Docker Hub): `loongforge/loongforge_kunlun:py310_torch25`
 * Conda environment (internal iregistry): `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`
 
 Environment versions:
@@ -27,9 +27,10 @@ git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
 Then build the image:
 
 ```bash
-BASE_IMAGE=weiyexu/omni_kunlun:uv_base
+BASE_IMAGE=loongforge/loongforge_kunlun:py310_torch25
 ENABLE_LEROBOT=false
-DEFAULT_XPYTORCH_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260206/xpytorch-cp310-torch251-ubuntu2004-x64.run 
+DEFAULT_XPYTORCH_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260409/torch25/xpytorch-cp310-torch251-ubuntu2004-x64.run
+
 docker build  \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     --build-arg ENABLE_LEROBOT=${ENABLE_LEROBOT} \
@@ -39,7 +40,7 @@ docker build  \
     #-t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu.internal .
 ```
 - `BASE_IMAGE` is the base image used for building. Options include:
-  * `weiyexu/omni_kunlun:uv_base` (default) [available at Docker Hub]
+  * `loongforge/loongforge_kunlun:py310_torch25` (default) [available at Docker Hub]
   * `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33` [internal use only]
 - `XPYTORCH_URL_ARG` is the xpytorch installer url argument.
 - `ENABLE_LEROBOT`: enable LeRobot dependencies for VLA model training (e.g., Pi0.5, GR00T). Disabled by default due to dependency conflicts with the base environment. Options: `true`, `false` (default).
@@ -58,7 +59,7 @@ The example below starts a container and mounts the project code, data, etc.:
 #!/bin/bash
 
 image_addr='LoongForge-kunlun:latest'
-DEFAULT_CONTAINER_NAME='omni-kunlun'
+DEFAULT_CONTAINER_NAME='loongforge-kunlun'
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
     echo "Usage: $0 {start|exec|stop|rm} [container_name(default: ${DEFAULT_CONTAINER_NAME})]"
@@ -111,7 +112,7 @@ esac
 
 After entering the container:
 - For conda environment image: activate via `conda activate python310_torch25_cuda`
-- For UV image: activate via `source /opt/omni_kunlun/bin/activate`
+- For UV image: activate via `source /opt/loongforge_kunlun/bin/activate`
 
 The virtual environment is activated by default. You can directly navigate to `/workspace/LoongForge/examples_xpu/` to run the corresponding training scripts.
 
