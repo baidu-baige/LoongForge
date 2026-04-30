@@ -254,7 +254,7 @@ class TPGather:
             cur_etp_size = self.etp_size if self.etp_size is not None else self.tp_size
             if rank_id is None:
                 pass
-            elif cur_etp_size == 1:
+            elif cur_rank_id == rank_id and cur_etp_size == 1:
                 result[self.tp_rank][key] = tensor
                 continue
             elif cur_rank_id == rank_id:
