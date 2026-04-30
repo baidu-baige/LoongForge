@@ -18,8 +18,6 @@ class ParallelConfig:
     vpp_size: Optional[int] = None
     encoder_tp_size: Optional[int] = None
     custom_pipeline_layers: Optional[str] = None
-    decoder_first_pipeline_num_layers: Optional[int] = None
-    decoder_last_pipeline_num_layers: Optional[int] = None
     moe_grouped_gemm: bool = False
     vpp_scheduler: Optional[str] = None
     tp_ranks: Optional[list[int]] = None

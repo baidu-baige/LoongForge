@@ -159,7 +159,7 @@ class McoreCheckpoint(AbstractCheckpoint):
                 for ep_id in expert_dict.keys():
                     mcore_dict[p][ep_id] = {}
 
-        def convert_one_ep_from_common(ep_id=None):
+        def convert_one_ep_from_common(ep_id=None, clear_source=True):
             if save_file and need_check_dones:
                 if ep_id is None and p in done_keys:
                     logging.info(f"> p: {p} already converted. pass...")
@@ -181,13 +181,13 @@ class McoreCheckpoint(AbstractCheckpoint):
             if p == 0:
                 t_name = self.get_transformer_name(0)
                 for c_name in FIRST_LAYER_NAMES:
-                    self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                    self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
                 for c_name in name_map.keys():
                     if c_name.startswith(VISION_MAP):
-                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
             elif self.args.enable_full_hetero_dp:
                 t_name = self.get_transformer_name(0)
-                self.m_base.common_to_mcore(VISION_WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                self.m_base.common_to_mcore(VISION_WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
@@ -204,11 +204,11 @@ class McoreCheckpoint(AbstractCheckpoint):
                         name_prefix = None
                     for c_name in BASE_NAMES:
                         self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                                    layer_prefix=layer_prefix, ep_id=ep_id, name_prefix=name_prefix)
+                                                    layer_prefix=layer_prefix, ep_id=ep_id, name_prefix=name_prefix, clear_source=clear_source)
                     # ====moe shared_expert
                     for c_name in MOE_EXPERT_PROJS:
                         self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix,
-                                                    ep_id=ep_id, expert_name=MOE_SHARED_EXPERT, name_prefix=name_prefix)
+                                                    ep_id=ep_id, expert_name=MOE_SHARED_EXPERT, name_prefix=name_prefix, clear_source=clear_source)
 
                     # EXPERT
                     if expert_dict is not None:
@@ -222,12 +222,13 @@ class McoreCheckpoint(AbstractCheckpoint):
                         for c_name in MTP_NAMES:
                             if c_name == MTP_SHARED_HEAD_HEAD:
                                 continue
-                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix, ep_id=ep_id)
+                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                                    layer_prefix=layer_prefix, ep_id=ep_id, clear_source=clear_source)
 
                     # final pp
                     if layer_id == num_layers - 1:
                         for c_name in LAST_LAYER_NAMES:
-                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id)
+                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
 
             for mt in m_dict.keys():
                 if ep_id is None:
@@ -257,13 +258,15 @@ class McoreCheckpoint(AbstractCheckpoint):
                 logging.info(f"Finish saving {p=} {ep_id=} {layer_ids=}.")
 
         if expert_dict is None:
-            convert_one_ep_from_common(ep_id=None)
+            clear_source = True
+            convert_one_ep_from_common(ep_id=None, clear_source=clear_source)
         else:
+            clear_source = False if len(expert_dict) > 1 else True
             if self.args.max_workers > 1:
                 futures = []
                 with concurrent.futures.ThreadPoolExecutor(max_workers=self.args.max_workers) as executor:
                     for ep_id in expert_dict.keys():
-                        futures.append(executor.submit(convert_one_ep_from_common, ep_id=ep_id))
+                        futures.append(executor.submit(convert_one_ep_from_common, ep_id=ep_id, clear_source=clear_source))
                 concurrent.futures.wait(futures)
                 for future in futures:
                     try:
@@ -273,7 +276,7 @@ class McoreCheckpoint(AbstractCheckpoint):
                         raise e
             else:
                 for ep_id in expert_dict.keys():
-                    convert_one_ep_from_common(ep_id=ep_id)
+                    convert_one_ep_from_common(ep_id=ep_id, clear_source=clear_source)
         logging.info(f"Finish saving mcore checkpoint. {p=} {layer_ids=}.")
         if not save_file:
             return mcore_dict
