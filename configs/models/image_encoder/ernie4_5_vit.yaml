@@ -28,3 +28,5 @@ group_query_attention: False
 layernorm_epsilon: 1e-6
 
 model_type: ernie4_5_vit
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/ernie4_5_vl_convert.yaml

@@ -45,7 +45,7 @@ TRAINING_ARGS=(
     --seq-length 4096
     --max-position-embeddings 40960
     --micro-batch-size 1
-    --global-batch-size 8
+    --global-batch-size 4
     --bf16
     --norm-epsilon 1e-6
     # --- roundtrip-specific ---
@@ -71,7 +71,6 @@ MODEL_PARALLEL_ARGS=(
     --tensor-model-parallel-size 2
     --pipeline-model-parallel-size 2
     --expert-model-parallel-size 4
-    --expert-tensor-parallel-size 1
     --moe-token-dispatcher-type alltoall
     --use-distributed-optimizer
     --distributed-backend nccl

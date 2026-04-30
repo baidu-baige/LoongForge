@@ -29,8 +29,8 @@ class HfCheckpointConverter:
         self.args.expert_parallel_size = parallel_config.ep_size
         self.args.custom_pipeline_layers = parallel_config.custom_pipeline_layers
         self.args.safetensors = parallel_config.safetensors
-        self.args.decoder_first_pipeline_num_layers = parallel_config.decoder_first_pipeline_num_layers
-        self.args.decoder_last_pipeline_num_layers = parallel_config.decoder_last_pipeline_num_layers
+        self.args.decoder_first_pipeline_num_layers = None
+        self.args.decoder_last_pipeline_num_layers = None
         self.args.num_layers_per_virtual_pipeline_stage = None
         self.args.save_ckpt_path = None
         self.args.load_ckpt_path = None

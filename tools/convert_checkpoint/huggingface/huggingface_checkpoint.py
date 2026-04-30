@@ -390,8 +390,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
     def print_memory_usage(self, desc):
         import psutil
         process = psutil.Process(os.getpid())
-        mem = process.memory_info().rss / 1024**2  # 转为 MB
-        logging.info(f"{desc}内存占用: {mem:.2f} MB")
+        mem = process.memory_info().rss / 1024**2  # Convert to MB
+        logging.info(f"{desc} memory usage: {mem:.2f} MB")
 
     def save(self, save_path, state_dict, h_config=None, save_optim=False):
         """ save ckpt """

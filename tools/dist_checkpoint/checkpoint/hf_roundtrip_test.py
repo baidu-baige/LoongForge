@@ -398,6 +398,8 @@ def main():
     print_rank_0("Phase 1: Build Model")
     print_rank_0("=" * 80)
     model_config = get_model_config()
+    if hasattr(model_config, 'pipeline_model_parallel_layout'):
+        args.convert_pp_layout = model_config.pipeline_model_parallel_layout
     is_vlm = True
     for name in ["image_encoder", "image_projector"]:
         if not hasattr(model_config, name):

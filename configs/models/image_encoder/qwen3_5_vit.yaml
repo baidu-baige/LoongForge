@@ -24,3 +24,5 @@ bias_dropout_fusion: False
 apply_rope_fusion: False
 
 model_type: "qwen3_5_vit"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen3_5_vit_convert.yaml
