@@ -2,6 +2,9 @@ model_type: pi05
 # Instantiate the local pi05 config.
 _target_: loongforge.models.embodied.PI05Config
 max_state_dim: 8
+# Model-level torch.compile switch. Override with compile_model=true to enable.
+compile_model: true
+compile_mode: max-autotune
 # Megatron-lite defaults for the pi05 sanity run.
 num_layers: 40
 hidden_size: 5120
