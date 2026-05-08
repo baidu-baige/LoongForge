@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from functools import partial
 from copy import deepcopy
-from dataclasses import fields
+from dataclasses import fields, replace
 import os
 from pathlib import Path
 from collections import Counter
 from pprint import pformat
 import json
 import hashlib
+from threading import Thread
+from queue import Queue
 from typing import Optional
 import random
 from typing import Any, Optional
@@ -22,6 +24,7 @@ from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 from megatron.training import get_timers
 from megatron.training.utils import average_losses_across_data_parallel_group
+from megatron.core import parallel_state as mpu
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler, Sampler, default_collate
 
 from loongforge.models import get_model_family, get_model_provider
@@ -250,12 +253,17 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int | None = N
     if getattr(config, "device", None) is None:
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    base_seed = int(getattr(args, "seed", 0) or 0)
-    random.seed(base_seed)
-    np.random.seed(base_seed)
-    torch.manual_seed(base_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(base_seed)
+    # Mirror lerobot: only seed when cfg.seed is explicitly set
+    cfg_seed = getattr(args, "seed", None)
+    if cfg_seed is not None:
+        run_seed = int(cfg_seed)
+        random.seed(run_seed)
+        np.random.seed(run_seed)
+        torch.manual_seed(run_seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(run_seed)
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cuda.matmul.allow_tf32 = True
 
     tokenizer_path = getattr(args, "hf_tokenizer_path", None)
     if tokenizer_path and Path(tokenizer_path).exists():
@@ -276,15 +284,12 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int | None = N
 
 def get_batch(data_iterator):
     """Generate a batch and move it to the active device."""
+    from torch.utils._pytree import tree_map
+
     batch = next(data_iterator)
-    target_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def _move_to_device(value):
-        return value.to(device=target_device, non_blocking=True) if torch.is_tensor(value) else value
-
-    for key, val in batch.items():
-        batch[key] = _move_to_device(val)
-    return batch
+    return tree_map(lambda x: x.to(device, non_blocking=True) if torch.is_tensor(x) else x, batch)
 
 
 def loss_func(local_loss_dict: dict, output_tensor: torch.Tensor):
@@ -299,8 +304,45 @@ def loss_func(local_loss_dict: dict, output_tensor: torch.Tensor):
             local_loss_dict["loss_per_dim"], device=loss.device
         ).mean()
 
+    # Pass total_inputs to training_utils for throughput calculation
+    if local_loss_dict and "total_inputs" in local_loss_dict:
+        loss_reduced["total_inputs"] = local_loss_dict["total_inputs"]
+
     return loss, loss_reduced
 
+def _count_tokens_in_batch(batch: dict[str, Any]) -> int:
+    """Count total tokens (VLM + DiT) for throughput calculation.
+
+    For GROOT VLA models the compute has two stages:
+      1. VLM backbone  — processes ``input_ids`` (text + image tokens)
+      2. DiT action head — processes ``sa_embs = cat(state, action)`` tokens
+
+    Returns:
+        total_tokens: Sum of VLM tokens and DiT tokens (padding included).
+    """
+    if "input_ids" in batch:
+        batch_size = batch["input_ids"].shape[0]
+    elif "action" in batch:
+        batch_size = batch["action"].shape[0]
+    elif "state" in batch:
+        batch_size = batch["state"].shape[0]
+    else:
+        batch_size = 1
+
+    if "input_ids" in batch:
+        vlm_seq_len = batch["input_ids"].shape[1]
+        vlm_tokens = batch_size * vlm_seq_len
+    else:
+        vlm_tokens = 0
+
+    # Get action_horizon from model config (default: 50)
+    config = get_model_config()
+    action_horizon = int(getattr(config, "action_horizon", 50) or 50)
+    dit_tokens = batch_size * (1 + action_horizon)
+
+    total_tokens = vlm_tokens + dit_tokens
+
+    return total_tokens
 
 def forward_step(data_iterator, model):
     """Forward training step."""
@@ -311,6 +353,7 @@ def forward_step(data_iterator, model):
         batch = get_batch(data_iterator=data_iterator)
     timers("batch-generator").stop()
 
+    total_tokens = _count_tokens_in_batch(batch)
     with stimer:
         # GrooT model expects inputs dict with keys:
         # - state, action, embodiment_id, action_mask for action input
@@ -319,6 +362,9 @@ def forward_step(data_iterator, model):
         # The model returns a dict with 'loss' key
         output_loss = output["loss"]
 
+    # Scale by data parallel size so total_inputs reflects global batch tokens
+    dp_world_size = mpu.get_data_parallel_world_size(with_context_parallel=False)
+    output["total_inputs"] = torch.tensor(total_tokens * dp_world_size, dtype=torch.float, device=output_loss.device)
     return output_loss, partial(loss_func, output)
 
 
@@ -419,10 +465,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     if missing_required:
         print_rank_0(message=f"[sft_groot] Missing required dataset features: {missing_required}")
 
-    # Force a supported lightweight video backend to avoid torchcodec/ffmpeg dependency issues.
     if hasattr(base_dataset, "video_backend"):
-        base_dataset.video_backend = "pyav"
-        print_rank_0(message=f"[sft_groot] video_backend set to {base_dataset.video_backend} to bypass torchcodec")
+        print_rank_0(message=f"[sft_groot] video_backend = {base_dataset.video_backend}")
 
     dataset_stats = get_lerobot_dataset_stats(base_dataset)
 
@@ -450,9 +494,14 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     lr_policy_cfg.input_features = config.input_features
     lr_policy_cfg.device = "cpu"
 
+    preprocessor_cfg = replace(lr_policy_cfg,
+        max_state_dim=29,
+        max_action_dim=29,
+        action_horizon=16,
+    )
 
     preprocessor, _postprocessor = make_gr00t_n1d6_pre_post_processors(
-        policy_cfg=lr_policy_cfg,
+        policy_cfg=preprocessor_cfg,
         dataset_stats=dataset_stats,
         dataset=base_dataset,
     )
@@ -475,49 +524,58 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     num_workers = getattr(args, "num_workers", 0) or 0
     streaming = bool(getattr(tp_cfg.dataset, "streaming", False))
 
-    def set_seed(seed=42):
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        
+    dp_world_size = mpu.get_data_parallel_world_size()
+    if dp_world_size > 1:
+        dp_rank = mpu.get_data_parallel_rank()
+        batch_size = args.micro_batch_size
+        total = len(base_dataset)
 
-    run_seed = args.seed if args.seed is not None else 42
-    set_seed(run_seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.use_deterministic_algorithms(True)
+        if sampler is not None:
+            all_indices = list(sampler)
+        else:
+            all_indices = list(range(total))
 
-    data_loader_generator = torch.Generator().manual_seed(run_seed)
-
-    def worker_init_fn(worker_id):
-        """Set per-worker seed derived from the run seed."""
-        worker_seed = run_seed + worker_id
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
-        torch.manual_seed(worker_seed)
+        samples_per_rank = (total + dp_world_size - 1) // dp_world_size  
+        rank_start = dp_rank * samples_per_rank
+        rank_end = min(rank_start + samples_per_rank, total)
+        rank_indices = all_indices[rank_start:rank_end]
+        base_dataset = torch.utils.data.Subset(base_dataset, rank_indices)
+        sampler = None
+        shuffle = False
 
     dataloader = torch.utils.data.DataLoader(
         base_dataset,
         num_workers=args.num_workers,
         batch_size=args.micro_batch_size,
-        shuffle=shuffle,  
-        sampler=sampler,  
+        shuffle=shuffle and not streaming,
+        sampler=sampler,
         pin_memory=config.device == "cuda",
         drop_last=False,
-        prefetch_factor=0 if args.num_workers > 0 else None,
-        worker_init_fn=worker_init_fn if args.num_workers > 0 else None,
-        generator=data_loader_generator, 
+        prefetch_factor=2 if args.num_workers > 0 else None,
     )
+
+    def _prefetch_preprocess_iter(dl_iter, prefetch_count=2):
+        """Async prefetch wrapper: preprocess next batch(es) in a background
+        thread so that CPU preprocessing overlaps with GPU forward/backward."""
+        q = Queue(maxsize=prefetch_count)
     
+        def _worker():
+            try:
+                for batch in dl_iter:
+                    q.put(preprocessor(batch))
+            except Exception as e:
+                q.put(e)
+    
+        t = Thread(target=_worker, daemon=True)
+        t.start()
+    
+        while True:
+            item = q.get()
+            if isinstance(item, Exception):
+                raise item
+            yield item
+    train_iter = _prefetch_preprocess_iter(_cyclic_iter(dataloader), prefetch_count=2)
 
-    def _preprocess_iter(dl_iter):
-        for batch in dl_iter:
-            processed = preprocessor(batch)
-            yield processed
-
-    train_iter = _preprocess_iter(_cyclic_iter(dataloader))
-    # Debug hook to inspect the preprocessed training batches before they enter the training loop.
     return train_iter, None, None
 
 
