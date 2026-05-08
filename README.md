@@ -1,7 +1,14 @@
 # README
 <div align="center">
 
-<h1 align="center">LoongForge</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
+    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="520">
+  </picture>
+</p>
+
 <h4>A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models.</h4>
 
 <p align="center">
