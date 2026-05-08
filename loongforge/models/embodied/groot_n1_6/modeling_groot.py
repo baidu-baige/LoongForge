@@ -29,6 +29,8 @@ from .modules.embodiment_mlp import (
     CategorySpecificMLP,
     MultiEmbodimentActionEncoder,
 )
+import warnings
+warnings.filterwarnings("ignore", message="torch.get_autocast_gpu_dtype", category=DeprecationWarning)
 
 
 class Gr00tN1d6ActionHead(nn.Module):
@@ -42,22 +44,13 @@ class Gr00tN1d6ActionHead(nn.Module):
         self.hidden_size = config.hidden_size
         self.input_embedding_dim = config.input_embedding_dim
 
-        # Initialize components directly from config
-        if config.use_alternate_vl_dit:
-            self.model = AlternateVLDiT(
-                **config.diffusion_model_cfg,
-                cross_attention_dim=config.backbone_embedding_dim,
-                attend_text_every_n_blocks=config.attend_text_every_n_blocks,
-            )
-            print("Using AlternateVLDiT for diffusion model")
-        else:
-            self.model = DiT(
-                **config.diffusion_model_cfg, cross_attention_dim=config.backbone_embedding_dim
-            )
-            print("Using DiT for diffusion model")
         self.action_dim = config.max_action_dim
         self.action_horizon = config.action_horizon
         self.num_inference_timesteps = config.num_inference_timesteps
+        
+        self.vlln = (
+            nn.LayerNorm(config.backbone_embedding_dim) if config.use_vlln else nn.Identity()
+        )
 
         self.state_encoder = CategorySpecificMLP(
             num_categories=config.max_num_embodiments,
@@ -70,20 +63,31 @@ class Gr00tN1d6ActionHead(nn.Module):
             hidden_size=self.input_embedding_dim,
             num_embodiments=config.max_num_embodiments,
         )
+
+        if config.add_pos_embed:
+            self.position_embedding = nn.Embedding(config.max_seq_len, self.input_embedding_dim)
+            nn.init.normal_(self.position_embedding.weight, mean=0.0, std=0.02)
+
+        # Initialize diffusion model
+        if config.use_alternate_vl_dit:
+            self.model = AlternateVLDiT(
+                **config.diffusion_model_cfg,
+                cross_attention_dim=config.backbone_embedding_dim,
+                attend_text_every_n_blocks=config.attend_text_every_n_blocks,
+            )
+            print("Using AlternateVLDiT for diffusion model")
+        else:
+            self.model = DiT(
+                **config.diffusion_model_cfg, cross_attention_dim=config.backbone_embedding_dim
+            )
+            print("Using DiT for diffusion model")
+
         self.action_decoder = CategorySpecificMLP(
             num_categories=config.max_num_embodiments,
             input_dim=self.hidden_size,
             hidden_dim=self.hidden_size,
             output_dim=self.action_dim,
         )
-
-        self.vlln = (
-            nn.LayerNorm(config.backbone_embedding_dim) if config.use_vlln else nn.Identity()
-        )
-
-        if config.add_pos_embed:
-            self.position_embedding = nn.Embedding(config.max_seq_len, self.input_embedding_dim)
-            nn.init.normal_(self.position_embedding.weight, mean=0.0, std=0.02)
 
         # State dropout parameters
         self.state_dropout_prob = config.state_dropout_prob
@@ -915,8 +919,15 @@ class Gr00tN1d6(nn.Module):
         inputs = self._pad_inputs_to_checkpoint_dims(inputs)
         # Prepare inputs for backbone and action head
         backbone_inputs, action_inputs = self.prepare_input(inputs)
-        backbone_outputs = self.backbone(backbone_inputs)
-        action_outputs = self.action_head(backbone_outputs, action_inputs)
+
+        # Use bf16 autocast for forward computation to satisfy FlashAttention
+        # requirements while keeping trainable params in fp32 for optimizer precision.
+        # This matches lerobot's "bf16 compute, fp32 params" paradigm.
+        device_type = torch.device(getattr(self.config, "device", "cuda")).type
+        use_bf16 = getattr(self.config, "use_bf16", True)
+        with torch.autocast(device_type=device_type, dtype=torch.bfloat16, enabled=use_bf16):
+            backbone_outputs = self.backbone(backbone_inputs)
+            action_outputs = self.action_head(backbone_outputs, action_inputs)
 
         return action_outputs
 
@@ -926,10 +937,13 @@ class Gr00tN1d6(nn.Module):
         """
         # Prepare inputs for backbone and action head
         backbone_inputs, action_inputs = self.prepare_input(inputs)
+        device_type = torch.device(getattr(self.config, "device", "cuda")).type
+        use_bf16 = getattr(self.config, "use_bf16", True)
+        with torch.autocast(device_type=device_type, dtype=torch.bfloat16, enabled=use_bf16):
 
-        # Forward through backbone
-        backbone_outputs = self.backbone(backbone_inputs)
-        action_outputs = self.action_head.get_action(backbone_outputs, action_inputs)
+            # Forward through backbone
+            backbone_outputs = self.backbone(backbone_inputs)
+            action_outputs = self.action_head.get_action(backbone_outputs, action_inputs)
 
         return action_outputs
 

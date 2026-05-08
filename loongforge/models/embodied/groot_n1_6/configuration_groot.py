@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Configuration for Gr00tN1d6 model within OmniTraining.
+"""Configuration for Gr00tN1d6 model within LoongForge.
 
 Copyright 2024 NVIDIA. All rights reserved.
 
@@ -438,6 +438,8 @@ class Gr00tN1d6OmniConfig(PretrainedConfig):
             getattr(self, "fine_grained_activation_offloading", False)
         )
         self.no_sync_func = getattr(self, "no_sync_func", None)
+        self.grad_sync_func = getattr(self, "grad_sync_func", None)
+        self.param_sync_func = getattr(self, "param_sync_func", None)
         self.overlap_moe_expert_parallel_comm = bool(
             getattr(self, "overlap_moe_expert_parallel_comm", False)
         )

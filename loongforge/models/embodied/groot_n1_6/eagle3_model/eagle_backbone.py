@@ -120,6 +120,23 @@ class EagleBackbone(torch.nn.Module):
                 for parameter in layer.parameters():
                     parameter.requires_grad = True
 
+            # Reorder _modules in trainable layers to match forward access order.
+            # HuggingFace registers: self_attn, mlp, input_layernorm, post_attention_layernorm
+            # Forward accesses:      input_layernorm, self_attn, post_attention_layernorm, mlp
+            # Megatron --overlap-param-gather requires registration order == forward order.
+            from collections import OrderedDict
+            for layer in layers[-tune_top_llm_layers:]:
+                fwd_order = ["input_layernorm", "self_attn", "post_attention_layernorm", "mlp"]
+                existing_keys = list(layer._modules.keys())
+                if all(k in existing_keys for k in fwd_order):
+                    new_modules = OrderedDict()
+                    for key in fwd_order:
+                        new_modules[key] = layer._modules[key]
+                    for key in existing_keys:
+                        if key not in new_modules:
+                            new_modules[key] = layer._modules[key]
+                    layer._modules = new_modules
+
         print(f"Tune backbone llm: {self.tune_llm}")
         print(f"Tune backbone visual: {self.tune_visual}")
 
