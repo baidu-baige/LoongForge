@@ -271,6 +271,21 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int | None = N
     if not hasattr(config, "reward_delta_indices"):
         config.reward_delta_indices = None
 
+    # Ensure trainable params stay in fp32 after Float16Module wraps the model.
+    # In lerobot, the top LLM layers and entire action_head are kept in fp32 (with
+    # bf16 autocast for compute). Float16Module calls .bfloat16() on the whole model,
+    # so we must tell training_utils to restore these params to fp32 afterwards.
+    if getattr(args, "use_fp32_dtype_for_param_pattern", None) is None:
+        select_layer = int(getattr(config, "select_layer", 16))
+        tune_top = int(getattr(config, "tune_top_llm_layers", 4))
+        llm_layer_patterns = []
+        for i in range(select_layer - tune_top, select_layer):
+            llm_layer_patterns.append(f"language_model.model.layers.{i}.")
+            llm_layer_patterns.append(f"language_model.layers.{i}.")
+        args.use_fp32_dtype_for_param_pattern = [
+            "action_head",
+        ] + llm_layer_patterns
+
     return provider(pre_process, post_process, vp_stage, config=config)
 
 
