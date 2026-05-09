@@ -1207,6 +1207,16 @@ def _add_extra_parallel_args(parser):
         help="Enable full heterogeneous data parallelism. Default: False"
     )
 
+    group.add_argument(
+        '--full-hetero-dp-cpu-offload',
+        default=False,
+        action="store_true",
+        help="Offload full hetero DP intermediate embeddings and gradients to "
+             "pinned CPU memory to reduce GPU memory usage. Uses async CUDA "
+             "streams for transfers. Requires --enable-full-hetero-dp. "
+             "Default: False"
+    )
+
     # Data parallelism load balancing
     group.add_argument(
         '--use-vlm-dp-balance',

@@ -452,7 +452,7 @@ class OmniCombinationModel(BaseMegatronModule):
             from loongforge.train.pretrain.pretrain_vlm import (
                 get_grad_list, get_embedding_list,
                 get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
-                get_deepstack_grad_list,
+                get_deepstack_grad_list, get_cpu_offload_manager,
             )
             from loongforge.train.initialize import get_model_size
             group = mpu.get_tensor_model_parallel_group()
@@ -466,6 +466,16 @@ class OmniCombinationModel(BaseMegatronModule):
             round_num = forward_group_id // model_size
             inner_num = forward_group_id % model_size
 
+            _offload_mgr = get_cpu_offload_manager()
+
+            # Reload embedding from CPU if offloaded
+            if _offload_mgr.enabled and local_rank == src_rank:
+                from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                reload_list_item(
+                    _offload_mgr, embedding_list[round_num], inner_num,
+                    f"emb_r{round_num}"
+                )
+
             # src rank broadcasts its actual embedding; other ranks supply only a
             # dtype/ndim reference so the helpers can allocate the right buffer.
             ref_tensor = self.vit_contexts[round_num]["local_embedding"]
@@ -478,15 +488,20 @@ class OmniCombinationModel(BaseMegatronModule):
                 group, src_rank, local_rank, shape=shape, local_tensor=local_tensor
             )
 
-            def full_hetero_dp_grad_hook_factory(group):
+            def full_hetero_dp_grad_hook_factory(group, offload_mgr):
                 def hook(grad):
                     if torch.distributed.get_rank(group=group) == 0:
                         grad = grad.clone()
-                        get_grad_list().append(grad)
+                        grad_list = get_grad_list()
+                        grad_idx = len(grad_list)
+                        grad_list.append(grad)
+                        if offload_mgr.enabled:
+                            offload_mgr.offload(f"grad_{grad_idx}", grad)
+                            grad_list[grad_idx] = None
                 return hook
 
             combined_embeddings.register_hook(
-                full_hetero_dp_grad_hook_factory(group)
+                full_hetero_dp_grad_hook_factory(group, _offload_mgr)
             )
 
             if self.config.context_parallel_size > 1:
@@ -496,6 +511,14 @@ class OmniCombinationModel(BaseMegatronModule):
                 combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
 
             if self.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
+                # Reload visual_pos_masks from CPU if offloaded
+                if _offload_mgr.enabled and local_rank == src_rank:
+                    from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                    reload_list_item(
+                        _offload_mgr, visual_pos_masks_list[round_num], inner_num,
+                        f"vpm_r{round_num}"
+                    )
+
                 ref_masks = self.vit_contexts[round_num]["local_visual_pos_masks"]
                 local_masks = visual_pos_masks_list[round_num][inner_num] if local_rank == src_rank else ref_masks
                 shape = self.hetero_dp_get_tensor_shape(
@@ -517,6 +540,14 @@ class OmniCombinationModel(BaseMegatronModule):
 
                 deepstack_visual_embeds = []
                 for i in range(len(ref_embeds)):
+                    # Reload deepstack embed from CPU if offloaded
+                    if _offload_mgr.enabled and local_rank == src_rank:
+                        from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                        reload_list_item(
+                            _offload_mgr, deepstack_visual_embeds_list[round_num][i],
+                            inner_num, f"ds_r{round_num}_l{i}"
+                        )
+
                     local_embed = (
                         deepstack_visual_embeds_list[round_num][i][inner_num] 
                         if local_rank == src_rank 

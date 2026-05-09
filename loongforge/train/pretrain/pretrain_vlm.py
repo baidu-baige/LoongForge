@@ -200,6 +200,21 @@ visual_pos_masks_list = []
 deepstack_visual_embeds_list = []
 deepstack_grad_list = []
 
+_cpu_offload_manager = None
+
+
+def get_cpu_offload_manager():
+    """Return the global CpuOffloadManager singleton (lazy-initialized)."""
+    global _cpu_offload_manager
+    if _cpu_offload_manager is None:
+        from loongforge.train.full_hetero_cpu_offload import CpuOffloadManager
+
+        args = get_args()
+        _cpu_offload_manager = CpuOffloadManager(
+            enabled=args.full_hetero_dp_cpu_offload
+        )
+    return _cpu_offload_manager
+
 def get_embedding_list():
     """Return the global embedding list."""
     return embedding_list
@@ -267,6 +282,9 @@ def clear_full_hetero_info(count=0):
     clear_deepstack_grad_list()
     clear_vpp0_batch_cache()
     clear_vpp_counters()
+    manager = get_cpu_offload_manager()
+    if manager.enabled:
+        manager.clear()
 
 def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.

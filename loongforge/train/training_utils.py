@@ -1553,6 +1553,34 @@ def train_step(
                 get_deepstack_grad_list().append(None)
         batch_list.clear()
 
+        # Offload gathered embeddings to CPU (only rank 0 holds them)
+        if args.full_hetero_dp_cpu_offload:
+            from loongforge.train.pretrain.pretrain_vlm import get_cpu_offload_manager
+            from loongforge.train.full_hetero_cpu_offload import offload_list_items
+            _offload_mgr = get_cpu_offload_manager()
+            _local_rank_for_offload = torch.distributed.get_rank(mpu.get_model_parallel_group())
+            if _local_rank_for_offload == 0:
+                for _round_idx in range(encoder_rounds):
+                    if embedding_list[_round_idx] is not None:
+                        offload_list_items(
+                            _offload_mgr, embedding_list[_round_idx],
+                            f"emb_r{_round_idx}"
+                        )
+                    if visual_pos_masks_list[_round_idx] is not None:
+                        offload_list_items(
+                            _offload_mgr, visual_pos_masks_list[_round_idx],
+                            f"vpm_r{_round_idx}"
+                        )
+                    if deepstack_visual_embeds_list[_round_idx] is not None:
+                        for _layer_idx, _layer_embeds in enumerate(
+                            deepstack_visual_embeds_list[_round_idx]
+                        ):
+                            offload_list_items(
+                                _offload_mgr, _layer_embeds,
+                                f"ds_r{_round_idx}_l{_layer_idx}"
+                            )
+            _offload_mgr.wait_all_offloads()
+
         _encoder_bucket_groups = set()
         if args.overlap_grad_reduce and isinstance(model[0], DDP):
             _ddp_model = model[0]
@@ -1612,6 +1640,18 @@ def train_step(
         num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         model_size = get_model_size()
         grad_list = get_grad_list()
+
+        # Reload offloaded grads from CPU before reshaping
+        if args.full_hetero_dp_cpu_offload:
+            from loongforge.train.pretrain.pretrain_vlm import get_cpu_offload_manager
+            _reload_mgr = get_cpu_offload_manager()
+            _reload_mgr.wait_all_offloads()
+            for _gi in range(len(grad_list)):
+                if grad_list[_gi] is None:
+                    _reloaded = _reload_mgr.reload(f"grad_{_gi}")
+                    if _reloaded is not None:
+                        _reload_mgr.reload_sync(f"grad_{_gi}")
+                        grad_list[_gi] = _reloaded
 
         # Reshape grad_list into per-round lists and pad with zero grads for
         # mock positions so that scatter_variable_shape_embeddings receives
