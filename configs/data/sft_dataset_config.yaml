@@ -4,6 +4,7 @@ default:
     prompt: instruction
     query: input
     response: output
+    history: history
 
 alpaca:
   format: alpaca
@@ -11,6 +12,7 @@ alpaca:
     prompt: instruction
     query: input
     response: output
+    history: history
 
 sharegpt:
   format: sharegpt
