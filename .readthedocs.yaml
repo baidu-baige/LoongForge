@@ -9,7 +9,7 @@ build:
     python: "3.12"
 
 sphinx:
-  configuration: docs/source/conf.py
+  configuration: docs/source/zh/conf.py
   fail_on_warning: true
 
 formats: []
