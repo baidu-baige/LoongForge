@@ -40,6 +40,31 @@ from loongforge.models.embodied.groot_n1_6.configuration_groot import (
 stimer = StragglerDetector()
 
 
+class BatchInterleavedDistributedSampler(Sampler):
+    """DP sampler: round-robin batches across ranks with tail padding."""
+
+    def __init__(self, dataset, batch_size, num_replicas, rank, source_sampler=None):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.source_sampler = source_sampler
+
+    def __iter__(self):
+        indices = list(self.source_sampler) if self.source_sampler else list(range(len(self.dataset)))
+        batches = [indices[i:i + self.batch_size] for i in range(0, len(indices), self.batch_size)]
+        batches += batches[:(-len(batches) % self.num_replicas)]
+        return iter([idx for i, b in enumerate(batches) if i % self.num_replicas == self.rank for idx in b])
+
+    def __len__(self):
+        total = len(self.source_sampler) if self.source_sampler else len(self.dataset)
+        n = (total + self.batch_size - 1) // self.batch_size
+        per_rank = (n + (-n % self.num_replicas)) // self.num_replicas
+        last = total % self.batch_size or self.batch_size
+        if (n - 1) % self.num_replicas == self.rank:
+            return (per_rank - 1) * self.batch_size + last
+        return per_rank * self.batch_size
+
 
 def _ensure_megatron_defaults(train_args):
     """Backfill Megatron-required args for the VLA sanity path."""
@@ -541,21 +566,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
     dp_world_size = mpu.get_data_parallel_world_size()
     if dp_world_size > 1:
-        dp_rank = mpu.get_data_parallel_rank()
-        batch_size = args.micro_batch_size
-        total = len(base_dataset)
-
-        if sampler is not None:
-            all_indices = list(sampler)
-        else:
-            all_indices = list(range(total))
-
-        samples_per_rank = (total + dp_world_size - 1) // dp_world_size  
-        rank_start = dp_rank * samples_per_rank
-        rank_end = min(rank_start + samples_per_rank, total)
-        rank_indices = all_indices[rank_start:rank_end]
-        base_dataset = torch.utils.data.Subset(base_dataset, rank_indices)
-        sampler = None
+        sampler = BatchInterleavedDistributedSampler(
+            dataset=base_dataset,
+            batch_size=args.micro_batch_size,
+            num_replicas=dp_world_size,
+            rank=mpu.get_data_parallel_rank(),
+            source_sampler=sampler,
+        )
         shuffle = False
 
     dataloader = torch.utils.data.DataLoader(
