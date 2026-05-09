@@ -4,9 +4,57 @@
 
 This document guides you through the quick start process for pre-training Large-Language Models (LLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for llm pretrain](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html).
+## 0. Resource Preparation
 
-## Pretrain Training Script
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+### 0.1 Download Model Weights
+
+```bash
+hf download Qwen/Qwen3-30B-A3B --local-dir ./Qwen3-30B-A3B
+```
+
+> **Note:** This model requires approximately **60 GB** of disk space (MoE architecture). Download may take a while depending on your network.
+
+### 0.2 Download Tokenizer
+
+The tokenizer is included in the model weights downloaded above (`./Qwen3-30B-A3B/`).
+
+### 0.3 Download Dataset
+
+For a quick demo, we use the WikiText-103-raw dataset (~180 MB). For real pretraining, prepare your own large-scale corpus.
+
+```bash
+hf download wikitext --repo-type dataset --include "wikitext-103-raw-v1*" --local-dir ./data/wikitext
+```
+
+The raw wikitext data must be converted to newline-delimited JSON before preprocessing. Run:
+
+```python
+from datasets import load_dataset
+import json
+
+ds = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+with open("./data/wikitext_train.jsonl", "w") as f:
+    for item in ds:
+        text = item["text"].strip()
+        if text:
+            f.write(json.dumps({"text": text}) + "\n")
+```
+
+## 1. Data Preparation & Checkpoint Conversion
+
+After downloading resources in Section 0, you need to preprocess the data and convert the checkpoint before training. These steps are the same as the GPU version:
+
+* **Data preprocessing**: Convert `wikitext_train.jsonl` (from Section 0.3) to Megatron binary format — see [Quick Start: LLM Pre-training](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) Section 1.1.
+* **Checkpoint conversion**: Convert HF weights (from Section 0.1) to Megatron-Core format — see [Quick Start: LLM Pre-training](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) Section 2.
+
+## 2. Pretrain Training Script
 
 LoongForge currently provides Pretrain training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/pretrain/` directory. Below is an example Pretrain training script for `Qwen3-30B-A3B`. Please refer to the comments for the purpose of each script section:
 

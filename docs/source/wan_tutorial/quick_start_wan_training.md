@@ -3,6 +3,44 @@ This section walks through the **Wan Pre-train** pipeline end-to-end.
 
 ---
 ## Wan2.2 I2V-A14B Training Pipeline
+
+### 0. Resource Preparation
+
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+#### 0.1 Download Model Weights
+
+```bash
+hf download Wan-AI/Wan2.2-I2V-A14B --local-dir ./Wan-AI/Wan2.2-I2V-A14B
+```
+
+> **Note:** This model requires approximately **126 GB** of disk space (high-noise model ~57 GB + low-noise model ~57 GB + T5 encoder ~11.4 GB + VAE ~0.5 GB). Download may take a while depending on your network.
+
+#### 0.2 Download Tokenizer
+
+The UMT5 tokenizer is included in the model weights downloaded above (`./Wan-AI/Wan2.2-I2V-A14B/google/umt5-xxl/`).
+
+#### 0.3 Prepare Dataset
+
+There is no standard public video dataset for quick-start. Prepare your own video data in the `metadata.csv` format described in Section 1. Below is a minimal example for testing:
+
+```bash
+mkdir -p ./data/dataset/train
+# Place your .mp4 files in ./data/dataset/train/
+
+cat > ./data/dataset/metadata.csv << 'EOF'
+video,prompt
+train/sample.mp4,"A sample video description"
+EOF
+```
+
+---
+
 ### 1. Preprocess Training Data
 #### Expected dataset example
 ```text
@@ -22,18 +60,16 @@ train/EGO_1.mp4,"places the bag of clothes on the floor\nPlan:\n pick up the bag
 
 #### Steps
 
-**Step-1** Install dependencies and download model weights
+**Step-1** Install dependencies (model weights were already downloaded in Section 0.1)
 
 ```bash
 pip install diffsynth==1.1.8
-pip install "huggingface_hub[cli]"
-huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ./Wan-AI/Wan2.2-I2V-A14B
 ```
 
 **Step-2** Process the input
 
 ```bash
-MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # should match --local-dir in Step-1
+MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # should match --local-dir in Section 0.1
 MODEL_T5=${MODEL_BASE}/models_t5_umt5-xxl-enc-bf16.pth
 MODEL_VAE=${MODEL_BASE}/Wan2.1_VAE.pth
 # Script location: examples/wan/wan_preprocess.py in LoongForge repo

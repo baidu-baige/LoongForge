@@ -2,6 +2,44 @@
 
 This document will guide you through the quick start process for **Pi0.5** SFT training under the LoongForge framework.
 
+## 0. Resource Preparation
+
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+### 0.1 Download Model Weights
+
+```bash
+hf download lerobot/pi05_base --local-dir ./pi05_base
+```
+
+> **Note:** This model requires approximately **14.5 GB** of disk space.
+
+### 0.2 Download Tokenizer
+
+The tokenizer is a separate download. **Gated access** — you must log in to HuggingFace and accept the license agreement at https://huggingface.co/google/paligemma-3b-pt-224 before downloading.
+
+```bash
+hf login  # authenticate with your HF token
+hf download google/paligemma-3b-pt-224 --local-dir ./paligemma-3b-pt-224
+```
+
+### 0.3 Download Dataset
+
+We use the Libero-10 dataset in LeRobot v3.0 format for robot manipulation training.
+
+```bash
+hf download lerobot/libero_10 --repo-type dataset --local-dir ./data/libero_10
+```
+
+After download, point `--data-path` to `./data/libero_10` in your training script.
+
+---
+
 ## 1. Data Preparation
 
 ### 1.1 Dataset Format
@@ -20,7 +58,7 @@ LeRobot dataset v3.0 stores episodes as Parquet files with standardized fields f
 
 ## 2. Model Weight Preparation
 
-### 2.2 Convert HF Weights to torch Format
+### 2.1 Convert HF Weights to torch Format
 
 Convert HuggingFace weights to PyTorch format for LoongForge training:
 
@@ -63,7 +101,7 @@ Based on supporting open-source Megatron parameters, LoongForge adds more conven
 
 ### 3.2 SFT Training Script
 
-The full Pi0.5 SFT training script is located at [examples/pi05/finetuning/sft_pi05.sh](../../../examples/pi05/finetuning/sft_pi05.sh). Below is an annotated version:
+The full Pi0.5 SFT training script is located at [examples/pi05/finetuning/sft_pi05.sh](https://github.com/baidu-baige/LoongForge/tree/master/examples/pi05/finetuning/sft_pi05.sh). Below is an annotated version:
 
 ```bash
 #!/usr/bin/env bash

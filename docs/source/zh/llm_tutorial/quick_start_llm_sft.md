@@ -1,39 +1,39 @@
-# Quick Start: LLM SFT
+# 快速入门：LLM SFT
 
-This guide walks you through launching a **Supervised Fine-Tuning (SFT)** job for Large-Language Models (LLM) in the LoongForge framework.
+本指南将带你完成在 LoongForge 框架中启动大语言模型（LLM）**SFT（监督微调）**任务的全过程。
 
 ---
 
-## 0. Resource Preparation
+## 0. 资源准备
 
-Before starting, download the required model weights, tokenizer, and datasets.
-All downloads use HuggingFace. Install the CLI first:
+在开始之前，请下载所需的模型权重、分词器和数据集。
+所有资源通过 HuggingFace 下载。请先安装 CLI 工具：
 
 ```bash
 pip install "huggingface_hub[cli]"
 ```
 
-### 0.1 Download Model Weights
+### 0.1 下载模型权重
 
 ```bash
 hf download deepseek-ai/DeepSeek-V3.1 --local-dir ./deepseek-v3.1
 ```
 
-> **Note:** This model requires approximately **1.37 TB** of disk space (163 safetensor shards, FP8 weights).
+> **注意：** 该模型约需 **1.37 TB** 磁盘空间（163 个 safetensor 分片，FP8 权重）。
 
-### 0.2 Download Tokenizer
+### 0.2 下载分词器
 
-The tokenizer is included in the model weights downloaded above (`./deepseek-v3.1/`).
+分词器已包含在上方下载的模型权重中（`./deepseek-v3.1/`）。
 
-### 0.3 Download Dataset
+### 0.3 下载数据集
 
-We use the Alpaca-Cleaned dataset (~30 MB, 51,742 samples) for SFT. It already matches LoongForge's built-in `default` Alpaca format.
+我们使用 Alpaca-Cleaned 数据集（约 30 MB，51,742 条样本）进行 SFT。该数据集已与 LoongForge 内置的 `default` Alpaca 格式匹配。
 
 ```bash
 hf download yahma/alpaca-cleaned --repo-type dataset --local-dir ./data/alpaca-cleaned
 ```
 
-Export the dataset to a JSON file that LoongForge can read:
+将数据集导出为 LoongForge 可读取的 JSON 文件：
 
 ```python
 from datasets import load_dataset
@@ -45,15 +45,15 @@ with open("./data/alpaca_cleaned.json", "w") as f:
     json.dump(records, f, ensure_ascii=False, indent=2)
 ```
 
-After export, use `--data-path ./data/alpaca_cleaned.json --sft-dataset default` in your training script.
+导出后，在训练脚本中使用 `--data-path ./data/alpaca_cleaned.json --sft-dataset default`。
 
 ---
 
-## 1. Prepare the data
+## 1. 准备数据
 
-### 1.1 Dataset format & configuration
-For instruction tuning, two dialogue styles are common: **Alpaca-style** and **ShareGPT-style**.  
-LoongForge currently supports **Alpaca-style JSON**, one sample per line:
+### 1.1 数据集格式与配置
+在指令微调场景中，常见的对话格式有两种：**Alpaca 格式**和 **ShareGPT 格式**。
+LoongForge 目前支持 **Alpaca 格式 JSON**，每行一个样本：
 
 ```json
 [
@@ -65,15 +65,15 @@ LoongForge currently supports **Alpaca-style JSON**, one sample per line:
 ]
 ```
 
-Field names may differ across datasets, so you must supply a **dataset config file** that tells the loader how to map your columns.  
-A template is shipped at  
-`/workspace/LoongForge/configs/data/sft_dataset_config.yaml`.
+不同数据集的字段名可能不同，因此需要提供一个**数据集配置文件**来告诉加载器如何映射字段。
+模板文件位于
+`/workspace/LoongForge/configs/data/sft_dataset_config.yaml`。
 
-#### (1) File format  
-We follow the community convention used by [LlamaFactory](https://github.com/hiyouga/LlamaFactory/blob/main/data/README.md).
+#### (1) 文件格式
+我们遵循 [LlamaFactory](https://github.com/hiyouga/LlamaFactory/blob/main/data/README.md) 使用的社区惯例。
 
-#### (2) Default section  
-If your file already uses the canonical Alpaca names, simply rely on the built-in `default` block:
+#### (2) 默认配置
+如果你的文件已使用标准 Alpaca 字段名，直接使用内置的 `default` 配置块即可：
 
 ```yaml
 default:
@@ -84,8 +84,8 @@ default:
     response: output
 ```
 
-#### (3) Adding a custom dataset  
-Suppose your file is called `custom_dataset_name.json` and contains extra fields:
+#### (3) 添加自定义数据集
+假设你的文件名为 `custom_dataset_name.json`，且包含额外字段：
 
 ```json
 [
@@ -102,7 +102,7 @@ Suppose your file is called `custom_dataset_name.json` and contains extra fields
 ]
 ```
 
-Append a new section to the YAML:
+在 YAML 文件中追加新的配置块：
 
 ```yaml
 custom_dataset_name:
@@ -115,27 +115,27 @@ custom_dataset_name:
     history: history
 ```
 
-### 1.2 Dataset arguments
-| Argument | Meaning |
+### 1.2 数据集参数
+| 参数 | 含义 |
 |---------|---------|
-| `--data-path` | Path to the JSON file(s). **Multiple datasets** are supported; give sampling weights with colon separator: `path1:weight1,path2:weight2`. |
-| `--split` | Train/valid/test ratio, e.g. `--split 90,8,2`. |
-| `--sft-dataset-config` | Path to the YAML file described above. **Default:** `configs/data/sft_dataset_config.yaml`. |
-| `--sft-dataset` | Name of the dataset entry inside the YAML. Must **correspond 1-to-1** with the order in `--data-path` when you use several datasets. |
+| `--data-path` | JSON 文件路径。支持**多个数据集**，使用冒号分隔采样权重：`path1:weight1,path2:weight2`。 |
+| `--split` | 训练/验证/测试比例，例如 `--split 90,8,2`。 |
+| `--sft-dataset-config` | 上述 YAML 配置文件路径。**默认值：** `configs/data/sft_dataset_config.yaml`。 |
+| `--sft-dataset` | YAML 中数据集条目的名称。使用多个数据集时，必须与 `--data-path` 中的顺序**一一对应**。 |
 
-### 1.3 Pre-processing modes
-LoongForge supports **on-the-fly** and **offline** pre-processing.  
-Pick **offline** when the dataset is large; it removes tokenisation overhead from the critical path.
+### 1.3 预处理模式
+LoongForge 支持**在线**和**离线**两种预处理模式。
+当数据集较大时，建议选择**离线**模式，可将分词开销从关键路径中移除。
 
-#### (1) On-the-fly (default)
+#### (1) 在线模式（默认）
 ```bash
 --data-path /path/to/custom_dataset_name.json \
 --sft-dataset custom_dataset_name \
---sft-data-streaming   # optional: stream large files
+--sft-data-streaming   # 可选：流式读取大文件
 ```
 
-#### (2) Offline
-Run the helper script once:
+#### (2) 离线模式
+运行一次辅助脚本：
 
 ```bash
 #!/bin/bash
@@ -159,13 +159,13 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
       --packing-sft-data
 ```
 
-Key flags  
-* `--seq-length` – max token length; longer samples are truncated.  
-* `--chat-template` – must match the template you will use during training.  
-* `--split` – pre-split the data; you still need `--split` in training for sanity checks.  
-* `--packing-sft-data` – pack multiple samples into one sequence (no padding).
+关键参数说明
+* `--seq-length` -- 最大 token 长度；超长样本将被截断。
+* `--chat-template` -- 必须与训练时使用的模板一致。
+* `--split` -- 预先划分数据；训练时仍需指定 `--split` 用于校验。
+* `--packing-sft-data` -- 将多个样本打包到一个序列中（无填充）。
 
-After pre-processing, pass the **directory** to training:
+预处理完成后，将**目录**传递给训练：
 
 ```bash
 --data-path /path/to/save_dir \
@@ -175,64 +175,64 @@ After pre-processing, pass the **directory** to training:
 
 ---
 
-## 2. Prepare the checkpoint
-Same as pre-training – see [Quick Start: LLM Pre-training](https://github.com/baidu-baige/LoongForge/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md).
+## 2. 准备权重
+与预训练相同 -- 请参阅 [快速入门：LLM 预训练](https://github.com/baidu-baige/LoongForge/tree/master/docs/source/llm_tutorial/quick_start_llm_pretrain.md)。
 
 ---
 
-## 3. Launch SFT training
+## 3. 启动 SFT 训练
 
-### 3.1 Extra LoongForge arguments (beyond native Megatron)
-| Argument | Purpose |
+### 3.1 LoongForge 额外参数（除原生 Megatron 参数外）
+| 参数 | 用途 |
 |---------|---------|
-| `--training-phase sft` | Switch to fine-tuning stage. |
-| `--chat-template` | Which conversation template to apply (`no-template`, `llama3`, `qwen`, …). |
-| `--sft-dataset` / `--sft-train-dataset` / `--sft-valid-dataset` | Dataset name(s) in the YAML file. |
-| `--packing-sft-data` | Enable sample packing to increase throughput. |
-| `--sft-data-streaming` | Stream large JSON files instead of loading everything into RAM. |
-| `--sft-num-preprocess-workers` | CPU workers for on-the-fly tokenisation. |
-| `--reduce-variable-seq-shape-p2p-comm` | Pad p2p buffers to fixed length (recommended for SFT). |
-| `--optimizer-cpu-offload` / `--optimizer-offload-fraction` | Offload optimiser states to CPU to save GPU memory. |
+| `--training-phase sft` | 切换到微调阶段。 |
+| `--chat-template` | 对话模板选择（`no-template`、`llama3`、`qwen` 等）。 |
+| `--sft-dataset` / `--sft-train-dataset` / `--sft-valid-dataset` | YAML 文件中的数据集名称。 |
+| `--packing-sft-data` | 启用样本打包以提高吞吐量。 |
+| `--sft-data-streaming` | 流式读取大型 JSON 文件，而非全部加载到内存。 |
+| `--sft-num-preprocess-workers` | 在线分词的 CPU 工作线程数。 |
+| `--reduce-variable-seq-shape-p2p-comm` | 将 p2p 缓冲区填充为固定长度（SFT 推荐启用）。 |
+| `--optimizer-cpu-offload` / `--optimizer-offload-fraction` | 将优化器状态卸载到 CPU 以节省 GPU 显存。 |
 
-All FP8, pipeline-parallel, recompute, MoE, MTP flags keep the same meaning as in pre-training.
+所有 FP8、流水线并行、重计算、MoE、MTP 相关参数与预训练保持一致。
 
-### 3.2 Example SFT script
-Ready-to-run scripts are located under `examples/{model}/finetuning/`.  
-Below is the FP8 SFT script for DeepSeek-V3.1 (comments added in English):
+### 3.2 SFT 脚本示例
+开箱即用的脚本位于 `examples/{model}/finetuning/` 目录下。
+以下是 DeepSeek-V3.1 的 FP8 SFT 脚本：
 
 ```bash
 #!/bin/bash
-# DeepSeek-V3 FP8 supervised fine-tuning
+# DeepSeek-V3 FP8 监督微调
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-# ------------- data -------------
+# ------------- 数据 -------------
 DATA_PATH=/path/to/your/data
 DATA_CACHE_PATH=/path/to/your/data/cache
-DATASET_CONFIG_PATH=/path/to/your/dataset_config   # optional
+DATASET_CONFIG_PATH=/path/to/your/dataset_config   # 可选
 
-# ------------- tokenizer & checkpoint -------------
+# ------------- 分词器与权重 -------------
 TOKENIZER_PATH=/path/to/hf/tokenizer
 CHECKPOINT_PATH=/path/to/mcore/checkpoint
 CHECKPOINT_PATH_SAVE=/path/to/save_dir
 
-# ------------- logging -------------
+# ------------- 日志 -------------
 TENSORBOARD_PATH=/path/to/tensorboard
 
-# ------------- FP8 quantisation -------------
+# ------------- FP8 量化 -------------
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
 export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
 export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 
 GPUS_PER_NODE=8
 
-# ------------- NCCL & NVSHMEM -------------
+# ------------- NCCL 与 NVSHMEM -------------
 export NCCL_SOCKET_IFNAME=bond0
 export NCCL_IB_GID_INDEX=3
-# choose HCA list according to your cluster
+# 根据集群选择 HCA 列表
 export NVSHMEM_HCA_LIST=mlx5_4,mlx5_7,mlx5_8,mlx5_9,mlx5_10,mlx5_11,mlx5_12,mlx5_13
 export NVSHMEM_BOOTSTRAP=UID
 export NVSHMEM_IB_TRAFFIC_CLASS=130
@@ -250,7 +250,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 export TORCH_NCCL_AVOID_RECORD_STREAMS=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# ------------- distributed -------------
+# ------------- 分布式 -------------
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"6000"}
 NNODES=${WORLD_SIZE:-"1"}
@@ -264,7 +264,7 @@ DISTRIBUTED_ARGS=(
   --master_port $MASTER_PORT
 )
 
-# ------------- model -------------
+# ------------- 模型 -------------
 MODEL_ARGS=(
   --model-name deepseek-v3
   --multi-latent-attention
@@ -278,7 +278,7 @@ MODEL_ARGS=(
   --use-fp32-dtype-for-param-pattern expert_bias
 )
 
-# ------------- data loader -------------
+# ------------- 数据加载 -------------
 DATA_ARGS=(
   --tokenizer-type HFTokenizer
   --hf-tokenizer-path $TOKENIZER_PATH
@@ -286,7 +286,7 @@ DATA_ARGS=(
   --split 90,8,2
 )
 
-# ------------- SFT specific -------------
+# ------------- SFT 专属参数 -------------
 SFT_ARGS=(
   --chat-template no-template
   --sft-num-preprocess-workers 16
@@ -295,7 +295,7 @@ SFT_ARGS=(
   --sft-dataset sharegpt
 )
 
-# ------------- training hyper-params -------------
+# ------------- 训练超参数 -------------
 TRAINING_ARGS=(
   --training-phase sft
   --seq-length 65536
@@ -352,7 +352,7 @@ MOE_ARGS=(
   --empty-unused-memory-level 2
 )
 
-# ------------- parallelism & optimiser -------------
+# ------------- 并行与优化器 -------------
 MODEL_PARALLEL_ARGS=(
   --tensor-model-parallel-size 8
   --pipeline-model-parallel-size 8
@@ -376,7 +376,7 @@ MTP_ARGS=(
   --mtp-loss-scaling-factor 0.1
 )
 
-# ------------- logging -------------
+# ------------- 日志 -------------
 LOGGING_ARGS=(
   --log-interval 1
   --tensorboard-dir ${TENSORBOARD_PATH}
@@ -386,7 +386,7 @@ LOGGING_ARGS=(
   --check-weight-hash-across-dp-replicas-interval 30
 )
 
-# ------------- launch -------------
+# ------------- 启动 -------------
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
   $LOONGFORGE_PATH/loongforge/train.py \
@@ -402,6 +402,6 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 
 ---
 
-## 4. Monitoring
-TensorBoard logs are written to the directory specified by `TENSORBOARD_PATH`.  
-Open TensorBoard to inspect loss, perplexity, memory, throughput, etc.
+## 4. 监控
+TensorBoard 日志将写入 `TENSORBOARD_PATH` 指定的目录。
+打开 TensorBoard 即可查看损失、困惑度、内存、吞吐量等指标。

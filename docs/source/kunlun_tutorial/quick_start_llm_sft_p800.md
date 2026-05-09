@@ -4,9 +4,55 @@
 
 This document guides you through the quick start process for fine-tuning Large-Language Models (LLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for llm sft](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.html).
+## 0. Resource Preparation
 
-## SFT Training Script
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+### 0.1 Download Model Weights
+
+```bash
+hf download Qwen/Qwen3-8B --local-dir ./Qwen3-8B
+```
+
+> **Note:** This model requires approximately **16 GB** of disk space. Download may take a while depending on your network.
+
+### 0.2 Download Tokenizer
+
+The tokenizer is included in the model weights downloaded above (`./Qwen3-8B/`).
+
+### 0.3 Download Dataset
+
+We use the Alpaca-Cleaned dataset (~30 MB, 51,742 samples) for SFT. It already matches LoongForge's built-in `default` Alpaca format.
+
+```bash
+hf download yahma/alpaca-cleaned --repo-type dataset --local-dir ./data/alpaca-cleaned
+```
+
+Export the dataset to a JSON file that LoongForge can read:
+
+```python
+from datasets import load_dataset
+import json
+
+ds = load_dataset("yahma/alpaca-cleaned", split="train")
+records = [{"instruction": item["instruction"], "input": item["input"], "output": item["output"]} for item in ds]
+with open("./data/alpaca_cleaned.json", "w") as f:
+    json.dump(records, f, ensure_ascii=False, indent=2)
+```
+
+## 1. Data Preparation & Checkpoint Conversion
+
+After downloading resources in Section 0, you need to preprocess the data and convert the checkpoint before training. These steps are the same as the GPU version:
+
+* **Data preparation**: Format the Alpaca dataset and configure the SFT data loader — see [Quick Start: LLM SFT](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_sft.html) Sections 1.1–1.3.
+* **Checkpoint conversion**: Convert HF weights (from Section 0.1) to Megatron-Core format — see [Quick Start: LLM Pre-training](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) Section 2.
+
+## 2. SFT Training Script
 
 LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-8B`. Please refer to the comments for the purpose of each script section:
 

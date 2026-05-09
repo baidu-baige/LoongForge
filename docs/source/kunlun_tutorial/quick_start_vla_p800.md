@@ -4,8 +4,47 @@
 
 This document guides you through the quick start process for fine-tuning Vision-Language-Action (VLA) models using the LoongForge framework on P800.
 
+## 0. Resource Preparation
 
-## SFT Training Script
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+### 0.1 Download Model Weights
+
+```bash
+hf download lerobot/pi05_base --local-dir ./pi05_base
+```
+
+> **Note:** This model requires approximately **14.5 GB** of disk space.
+
+### 0.2 Download Tokenizer
+
+The tokenizer is a separate download. **Gated access** — you must log in to HuggingFace and accept the license agreement at https://huggingface.co/google/paligemma-3b-pt-224 before downloading.
+
+```bash
+hf login  # authenticate with your HF token
+hf download google/paligemma-3b-pt-224 --local-dir ./paligemma-3b-pt-224
+```
+
+### 0.3 Download Dataset
+
+We use the Libero-10 dataset in LeRobot v3.0 format for robot manipulation training.
+
+```bash
+hf download lerobot/libero_10 --repo-type dataset --local-dir ./data/libero_10
+```
+
+## 1. Checkpoint Conversion
+
+After downloading resources in Section 0, you need to convert the HF checkpoint to torch format before training. This step is the same as the GPU version:
+
+* **Checkpoint conversion**: Convert HuggingFace weights (from Section 0.1) to PyTorch format — see [Quick Start: Pi0.5 Training](https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_pi05_training.html) Section 2.1.
+
+## 2. SFT Training Script
 
 LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `PI 0.5`. Please refer to the comments for the purpose of each script section:
 

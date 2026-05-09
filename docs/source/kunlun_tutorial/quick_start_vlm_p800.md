@@ -4,9 +4,43 @@
 
 This document guides you through the quick start process for fine-tuning Vision-Language Models (VLM) using the LoongForge framework on P800.
 
-For data preparation and weight preparation, refer to [quick start for vlm sft](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.html).
+## 0. Resource Preparation
 
-## SFT Training Script
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+### 0.1 Download Model Weights
+
+```bash
+hf download Qwen/Qwen3-VL-30B-A3B-Instruct --local-dir ./Qwen3-VL-30B-A3B-Instruct
+```
+
+> **Note:** This model requires approximately **62 GB** of disk space (13 safetensor shards). There is no non-Instruct base variant on HuggingFace; the Instruct variant is used for both pretrain and SFT.
+
+### 0.2 Download Tokenizer
+
+The tokenizer is included in the model weights downloaded above (`./Qwen3-VL-30B-A3B-Instruct/`).
+
+### 0.3 Download Dataset
+
+We use the LLaVA-Instruct-Mix-VSFT-Small dataset (~109 MB, 2,592 samples, multimodal image-text pairs in ShareGPT format) for VLM SFT.
+
+```bash
+hf download axolotl-ai-co/llava-instruct-mix-vsft-small --repo-type dataset --local-dir ./data/llava-instruct-mix-vsft-small
+```
+
+## 1. Data Preparation & Checkpoint Conversion
+
+After downloading resources in Section 0, you need to convert the dataset to WebDataset format and convert the checkpoint before training. These steps are the same as the GPU version:
+
+* **Dataset conversion**: Convert the downloaded dataset to Energon/WebDataset format — see [Quick Start: VLM SFT](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_sft.html) Section 1.3.
+* **Checkpoint conversion**: Convert HF VLM weights (language model, vision encoder, adapter) to Megatron-Core format — see [Quick Start: VLM Pre-training](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html) Section 2.
+
+## 2. SFT Training Script
 
 LoongForge currently provides SFT training example scripts for various models. After entering the container, you can find relevant scripts in the `examples_xpu/{model}/finetuning/` directory. Below is an example SFT training script for `Qwen3-VL-30B-A3B`. Please refer to the comments for the purpose of each script section:
 

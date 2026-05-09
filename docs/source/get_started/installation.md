@@ -143,4 +143,4 @@ for exact versions and build steps.
 
 ## Next Steps
 
-Head over to the [Quick Start](./README.md) guide to launch your first training run.
+Head over to the [LLM Pre-training](../llm_tutorial/quick_start_llm_pretrain.md) guide to launch your first training run.

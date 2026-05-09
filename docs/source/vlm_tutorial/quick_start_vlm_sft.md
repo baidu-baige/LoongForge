@@ -2,6 +2,39 @@
 
 This document will guide you through the quick start process for Vision-Language Model (VLM) fine-tuning under the LoongForge framework.
 
+## 0. Resource Preparation
+
+Before starting, download the required model weights, tokenizer, and datasets.
+All downloads use HuggingFace. Install the CLI first:
+
+```bash
+pip install "huggingface_hub[cli]"
+```
+
+### 0.1 Download Model Weights
+
+```bash
+hf download Qwen/Qwen3-VL-30B-A3B-Instruct --local-dir ./Qwen3-VL-30B-A3B-Instruct
+```
+
+> **Note:** This model requires approximately **62 GB** of disk space (13 safetensor shards).
+
+### 0.2 Download Tokenizer
+
+The tokenizer is included in the model weights downloaded above (`./Qwen3-VL-30B-A3B-Instruct/`).
+
+### 0.3 Download Dataset
+
+We use the LLaVA-Instruct-Mix-VSFT-Small dataset (~109 MB, 2,592 samples, multimodal image-text pairs in ShareGPT format) for VLM SFT.
+
+```bash
+hf download axolotl-ai-co/llava-instruct-mix-vsft-small --repo-type dataset --local-dir ./data/llava-instruct-mix-vsft-small
+```
+
+After download, convert the dataset to WebDataset format following Section 1.3 of this document.
+
+---
+
 ## 1. Data Preparation
 
 ### 1.1 Dataset Configuration and Processing

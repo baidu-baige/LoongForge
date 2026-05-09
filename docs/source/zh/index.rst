@@ -1,5 +1,7 @@
-LoongForge
-==========================
+.. LoongForge 中文文档主文件
+
+LoongForge 中文文档
+=====================
 
 .. image:: https://img.shields.io/badge/docs-latest-brightgreen.svg
    :target: https://loongforge.readthedocs.io/en/latest/
@@ -8,13 +10,13 @@ LoongForge
 .. image:: https://img.shields.io/github/stars/baidu-baige/LoongForge.svg?style=social
    :target: https://github.com/baidu-baige/LoongForge
 
-A modular, scalable, and highly efficient training framework for language, multimodal, and embodied models. Built upon Megatron-LM with significant enhancements.
+面向语言、多模态与具身模型的模块化、可扩展、高效训练框架。基于 Megatron-LM 并进行了大量增强。
 
 ---
 
 .. toctree::
    :maxdepth: 1
-   :caption: Get Started
+   :caption: 快速开始
 
    get_started/installation
    get_started/support_model
@@ -22,7 +24,7 @@ A modular, scalable, and highly efficient training framework for language, multi
 
 .. toctree::
    :maxdepth: 1
-   :caption: LLM Training
+   :caption: LLM 训练
 
    llm_tutorial/quick_start_llm_pretrain
    llm_tutorial/quick_start_llm_sft
@@ -37,7 +39,7 @@ A modular, scalable, and highly efficient training framework for language, multi
 
 .. toctree::
    :maxdepth: 1
-   :caption: VLM Training
+   :caption: VLM 训练
 
    vlm_tutorial/quick_start_vlm_pretrain
    vlm_tutorial/quick_start_vlm_sft
@@ -52,19 +54,19 @@ A modular, scalable, and highly efficient training framework for language, multi
 
 .. toctree::
    :maxdepth: 1
-   :caption: VLA Training
+   :caption: VLA 训练
 
    vla_tutorial/quick_start_pi05_training
 
 .. toctree::
    :maxdepth: 1
-   :caption: Diffusion Training
+   :caption: Diffusion 训练
 
    wan_tutorial/quick_start_wan_training
 
 .. toctree::
    :maxdepth: 1
-   :caption: KunLun Training
+   :caption: 昆仑训练
 
    kunlun_tutorial/README
    kunlun_tutorial/install_p800
@@ -75,14 +77,13 @@ A modular, scalable, and highly efficient training framework for language, multi
 
 .. toctree::
    :maxdepth: 1
-   :caption: Developer Guide
+   :caption: 开发指南
 
    advance/support_new_model
 
 .. toctree::
    :maxdepth: 1
-   :caption: More
+   :caption: 更多
 
-   CONTRIBUTING
    HEADER_GUIDELINES
    faqs

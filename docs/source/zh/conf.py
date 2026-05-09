@@ -1,5 +1,5 @@
 import os, sys
-sys.path.insert(0, os.path.abspath('../..')) 
+sys.path.insert(0, os.path.abspath('../../..'))
 
 
 project = 'LoongForge'
@@ -15,9 +15,9 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = ['zh']
+exclude_patterns = []
 
-language = 'en'
+language = 'zh'
 
 autosummary_generate = True
 autodoc_default_options = {
@@ -51,10 +51,9 @@ html_theme_options = {
     "repository_url": "https://github.com/baidu-baige/LoongForge",
     "use_repository_button": True,
 }
-html_static_path = ['_static']
+html_static_path = ['../_static']
 html_css_files = [
     "custom.css",
 ]
 html_show_sphinx = False
 html_show_copyright = True
-
