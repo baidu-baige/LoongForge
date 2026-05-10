@@ -118,7 +118,7 @@ LoongForge supports a broad range of [state-of-the-art models](https://loongforg
 | | Qwen3.5 | qwen3.5-0.8b → qwen3.5-397b-a17b |
 | | Qwen3.6 | qwen3.6-27b, qwen3.6-35b-a3b |
 | | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
-| | LLaVA-OneVision-1.5 | llava-onevision-1.5-4B |
+| | LLaVA-OneVision-1.5 | llava-onevision-1.5-4b |
 | | InternVL2.5 | internvl2.5-8b → internvl2.5-78b |
 | | InternVL3.5 | internvl3.5-8b → internvl3.5-241b-a28b |
 | | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
