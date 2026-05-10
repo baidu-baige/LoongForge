@@ -1,5 +1,7 @@
 <div align="center">
 
+**English** | [中文](./README_zh.md)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
