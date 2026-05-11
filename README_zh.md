@@ -207,4 +207,4 @@ LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时也从 HuggingFace Tr
 
 欢迎通过 GitHub Issue 提交问题、反馈或功能建议，也可以扫描下方微信二维码加入开发者社区。
 
-<img width="377" alt="LoongForge WeChat Community" src="https://github.com/user-attachments/assets/1bc94e98-d9d7-41dc-b4b8-fefc6288bdc0" />
+<img width="377" alt="LoongForge WeChat Community" src="https://github.com/user-attachments/assets/c2385797-7fcd-4062-b8ee-2cb016a55818" />
