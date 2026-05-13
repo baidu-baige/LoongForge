@@ -87,6 +87,19 @@ def _add_checkpoint_args(parser):
                        help='Run pretrain as fp8, only used for hf to mcore when '
                        'saved checkpoint is bf16 and pretrain as fp8')
 
+    group.add_argument('--hf-dequantize-int4', '--hf_dequantize_int4', dest='hf_dequantize_int4',
+                       action='store_true',
+                       help=('When loading a HuggingFace checkpoint, materialize compressed-tensors '
+                             'pack-quantized INT4 weights into floating-point .weight tensors before '
+                             'the common/mcore conversion.'))
+    group.add_argument('--hf-dequantize-dtype', '--hf_dequantize_dtype', dest='hf_dequantize_dtype',
+                       type=str, default='bfloat16',
+                       choices=['bf16', 'bfloat16', 'fp16', 'float16', 'fp32', 'float32'],
+                       help='Floating dtype used for on-the-fly HF INT4 dequantization.')
+    group.add_argument('--hf-quant-config-file', '--hf_quant_config_file', dest='hf_quant_config_file',
+                       type=str, default=None,
+                       help='Optional HF config.json path for compressed-tensors quantization_config.')
+
     group.add_argument('--fp8_quant_transfer_type', type=str, default="float32", choices=["float32", "bfloat16"],
                        help='The transfer dtype when convert from hf fp8 to mcore fp8')
     group.add_argument('--distributed_convert', action='store_true',

@@ -41,6 +41,9 @@ class HfCheckpointConverter:
         self.args.fp8_force_no_requant = parallel_config.fp8_force_no_requant
         self.args.force_pow_2_scales = parallel_config.force_pow_2_scales
         self.args.amax_epsilon = parallel_config.amax_epsilon
+        self.args.hf_dequantize_int4 = parallel_config.hf_dequantize_int4
+        self.args.hf_dequantize_dtype = parallel_config.hf_dequantize_dtype
+        self.args.hf_quant_config_file = parallel_config.hf_quant_config_file
         self.args.mtp_num_layers = parallel_config.mtp_num_layers
         self.args.encoder_tensor_model_parallel_size = parallel_config.encoder_tp_size
         self.args.load_lora_ckpt_path = None

@@ -30,8 +30,47 @@ from convert_checkpoint.common.common_checkpoint import (
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 from convert_checkpoint.huggingface.huggingface_moe import HuggingfaceMoe
+from convert_checkpoint.huggingface.compressed_tensors_dequant import (
+    DTYPE_MAP as HF_DEQUANT_DTYPE_MAP,
+    dequantize_state_dict,
+    get_packed_weight_keys,
+)
 
-def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mtp_num_layers=0, args=None):
+
+def _hf_dequantize_int4_enabled(args):
+    return bool(args is not None and getattr(args, "hf_dequantize_int4", False))
+
+
+def _packed_to_weight_key(key):
+    packed_suffix = ".weight_packed"
+    if key.endswith(packed_suffix):
+        return f"{key[:-len(packed_suffix)]}.weight"
+    return None
+
+
+def _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=None):
+    if not _hf_dequantize_int4_enabled(args) or dequant_weight_keys is None:
+        return
+    if weight_key in weight_map:
+        return
+    packed_key = weight_key[: -len(".weight")] + ".weight_packed" if weight_key.endswith(".weight") else f"{weight_key}.weight_packed"
+    if packed_key in weight_map:
+        dequant_weight_keys.add(weight_key)
+
+
+def _add_hf_weight_file(weight_map, filenames, weight_key, args=None, dequant_weight_keys=None):
+    if weight_key in weight_map:
+        filenames.add(weight_map[weight_key])
+    if not _hf_dequantize_int4_enabled(args):
+        return
+    _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=args)
+    for packed_key in get_packed_weight_keys(weight_key):
+        if packed_key in weight_map:
+            filenames.add(weight_map[packed_key])
+
+
+def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mtp_num_layers=0, args=None,
+                            return_dequant_weight_keys=False):
     name_map = c_config.get("name_map")["huggingface"]
     cargs = c_config.get_args("common")
     hargs = c_config.get_args("huggingface")
@@ -41,6 +80,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     mtp_layer_id = hargs.get("mtp_layer_id", None)
 
     filenames_in_the_layer = set()
+    dequant_weight_keys = set()
 
     if 0 in layer_ids or num_layers - 1 in layer_ids:
         for c_name in FIRST_LAYER_NAMES:
@@ -48,14 +88,16 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                 if name_map[c_name] is None:
                     continue
                 name = name_map[c_name] + ".weight"
-                if name in weight_map:
-                    filenames_in_the_layer.add(weight_map[name])
+                _add_hf_weight_file(
+                    weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
+                )
     if args is not None and args.enable_full_hetero_dp:
         c_name = VISION_WORD_EMBEDDINGS
         if c_name in name_map and name_map[c_name] is not None:
             name = name_map[c_name] + ".weight"
-            if name in weight_map:
-                filenames_in_the_layer.add(weight_map[name])
+            _add_hf_weight_file(
+                weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
+            )
 
     if 0 in layer_ids:
         for c_name in name_map.keys():
@@ -63,8 +105,14 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                 hf_name, _, _, _, no_layer_id, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                 for ext in ["", ".weight", ".bias"]:
                     name = hf_name + ext
-                    if name in weight_map:
-                        filenames_in_the_layer.add(weight_map[name])
+                    if ext == ".bias":
+                        if name in weight_map:
+                            filenames_in_the_layer.add(weight_map[name])
+                    else:
+                        _add_hf_weight_file(
+                            weight_map, filenames_in_the_layer, name, args=args,
+                            dequant_weight_keys=dequant_weight_keys
+                        )
 
     if (num_layers - 1) in layer_ids:
         for c_name in LAST_LAYER_NAMES:
@@ -72,8 +120,9 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                 if name_map[c_name] is None:
                     continue
                 name = name_map[c_name] + ".weight"
-                if name in weight_map:
-                    filenames_in_the_layer.add(weight_map[name])
+                _add_hf_weight_file(
+                    weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
+                )
         if mtp_num_layers > 0:
             for c_name in MTP_NAMES:
                 if c_name in name_map:
@@ -83,8 +132,10 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                     if not no_layer_id:
                         continue
                     name = hf_name + ".weight"
-                    if name in weight_map:
-                        filenames_in_the_layer.add(weight_map[name])
+                    _add_hf_weight_file(
+                        weight_map, filenames_in_the_layer, name, args=args,
+                        dequant_weight_keys=dequant_weight_keys
+                    )
 
     ori_transformer = name_map[TRANSFORMER]
     layer_prefix = name_map[LAYER_PREFIX]
@@ -99,16 +150,31 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                 cur_layer_id = mtp_layer_id
         for key, value in weight_map.items():
             name_prefix = f"{transformer}.{layer_prefix}.{cur_layer_id}."
-            if key.startswith(name_prefix) and value not in filenames_in_the_layer:
-                if expert_ids is None or not key.startswith(f"{name_prefix}.{moe_expert}."):
-                    filenames_in_the_layer.add(value)
-                else:
+            if not key.startswith(name_prefix):
+                continue
+            if expert_ids is None:
+                include_key = True
+            else:
+                expert_root = f"{name_prefix}{moe_expert}."
+                include_key = not key.startswith(expert_root)
+                if not include_key:
                     for expert_id in expert_ids:
-                        expert_prefix = f"{name_prefix}.{moe_expert}.{expert_id}."
+                        expert_prefix = f"{expert_root}{expert_id}."
                         if key.startswith(expert_prefix):
-                            filenames_in_the_layer.add(value)
+                            include_key = True
                             break
-    return list(filenames_in_the_layer)
+            if not include_key:
+                continue
+
+            filenames_in_the_layer.add(value)
+            dequant_weight_key = _packed_to_weight_key(key) if _hf_dequantize_int4_enabled(args) else None
+            if dequant_weight_key is not None and dequant_weight_key not in weight_map:
+                dequant_weight_keys.add(dequant_weight_key)
+
+    checkpoint_names = list(filenames_in_the_layer)
+    if return_dequant_weight_keys:
+        return checkpoint_names, dequant_weight_keys
+    return checkpoint_names
 
 def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, max_workers=1, hf_checkpoint_device="cpu"):
     """
@@ -349,8 +415,32 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         return c_ckpt
 
+    def dequantize_compressed_tensors_if_needed(self, load_path, target_weight_keys=None):
+        if not _hf_dequantize_int4_enabled(self.args):
+            return
+
+        dtype_name = getattr(self.args, "hf_dequantize_dtype", "bfloat16")
+        try:
+            output_dtype = HF_DEQUANT_DTYPE_MAP[dtype_name.lower()]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported --hf-dequantize-dtype: {dtype_name}") from exc
+
+        converted = dequantize_state_dict(
+            self.state_dict,
+            load_path,
+            output_dtype=output_dtype,
+            config_file=getattr(self.args, "hf_quant_config_file", None),
+            target_weight_keys=target_weight_keys,
+        )
+        logging.info(
+            "On-the-fly dequantized %d compressed-tensors packed INT4 weight(s) to %s.",
+            converted,
+            dtype_name,
+        )
+
     def load(self, load_path, load_safe=False, c_config=None, layer_ids=[], expert_ids=None, mtp_num_layers=0):
         """ load ckpt """
+        dequant_weight_keys = None
         if load_safe:
             from safetensors.torch import load_file
             sub_dirs = [x for x in os.listdir(load_path) if x.endswith("safetensors")]
@@ -363,8 +453,14 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
-                                                           mtp_num_layers=mtp_num_layers, args=self.args)
+                checkpoint_names, dequant_weight_keys = get_hf_checkpoint_names(
+                    c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers,
+                    args=self.args, return_dequant_weight_keys=True)
+                logging.info(
+                    "Selected %d HuggingFace shard(s), %d packed INT4 target weight(s).",
+                    len(checkpoint_names),
+                    0 if dequant_weight_keys is None else len(dequant_weight_keys),
+                )
                 self.state_dict = merge_transformers_sharded_states(
                     load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
@@ -380,12 +476,19 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 with open(meta_path, 'r') as f:
                     file_content = json.load(f)
                 weight_map = file_content["weight_map"]
-                checkpoint_names = get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=expert_ids,
-                                                           mtp_num_layers=mtp_num_layers, args=self.args)
+                checkpoint_names, dequant_weight_keys = get_hf_checkpoint_names(
+                    c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers,
+                    args=self.args, return_dequant_weight_keys=True)
+                logging.info(
+                    "Selected %d HuggingFace shard(s), %d packed INT4 target weight(s).",
+                    len(checkpoint_names),
+                    0 if dequant_weight_keys is None else len(dequant_weight_keys),
+                )
                 self.state_dict = merge_transformers_sharded_states(
                     load_path, checkpoint_names, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
+        self.dequantize_compressed_tensors_if_needed(load_path, target_weight_keys=dequant_weight_keys)
 
     def print_memory_usage(self, desc):
         import psutil

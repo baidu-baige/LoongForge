@@ -29,10 +29,12 @@ class ParallelConfig:
     fp8_force_no_requant: bool = False
     force_pow_2_scales: bool = False
     amax_epsilon: float = 0.0
+    hf_dequantize_int4: bool = False
+    hf_dequantize_dtype: str = "bfloat16"
+    hf_quant_config_file: Optional[str] = None
     mtp_num_layers: int = 0
     lora_alpha: int = None
     lora_dim: int = None
     enable_full_hetero_dp: bool = False
     hf_checkpoint_device: str = "cpu"
     sub_file_tag: int = None
-
