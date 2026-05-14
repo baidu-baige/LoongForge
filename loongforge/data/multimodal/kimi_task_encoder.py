@@ -3,6 +3,7 @@
 
 """Kimi Task Encoder."""
 
+import logging
 import torch
 from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
 from typing import Dict, List, Optional, Tuple, Union
@@ -26,6 +27,8 @@ else:
 
 
 from loongforge.utils import constants, get_chat_template
+from megatron.energon.task_encoder.base import stateless
+from loongforge.data.multimodal import MultiMixQASample, MultiVidQASample
 from .base.task_encoder import (
     BaseTaskEncoder,
     BaseTaskSample,
@@ -95,6 +98,51 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
             self.merge_kernel_size = [merge_kernel_size, merge_kernel_size]
         else:
             self.merge_kernel_size = list(merge_kernel_size)
+
+    def _sample_sequence_limit(self) -> int:
+        sequence_limit = self.args.seq_length
+        packed_limit = getattr(self.args, "max_packed_tokens", None)
+        if self.is_packing_enabled and packed_limit is not None:
+            sequence_limit = min(sequence_limit, packed_limit)
+        return sequence_limit
+
+    def _should_discard_overlong(self, sample, input_ids) -> bool:
+        if not self.args.enable_discard_sample:
+            return False
+
+        sequence_limit = self._sample_sequence_limit()
+        input_length = len(input_ids)
+        if input_length <= sequence_limit:
+            return False
+
+        logging.warning(
+            "discard overlong sample %s: input length %s > sequence limit %s",
+            sample.__key__,
+            input_length,
+            sequence_limit,
+        )
+        return True
+
+    @stateless(restore_seeds=True)
+    def encode_sample(
+        self,
+        sample: Union[CaptioningSample, VQASample, MultiVidQASample, MultiMixQASample],
+    ):
+        """Return tokenised multimodal sample."""
+        if isinstance(sample, CaptioningSample):
+            encoded_sample = self.encode_captioning(sample)
+        elif isinstance(sample, VQASample):
+            encoded_sample = self.encode_vqa(sample)
+        elif isinstance(sample, MultiVidQASample):
+            encoded_sample = self.encode_multi_vid_qa(sample)
+        elif isinstance(sample, MultiMixQASample):
+            encoded_sample = self.encode_multi_mix_qa(sample)
+        else:
+            yield from super().encode_sample(sample)
+            return
+
+        if encoded_sample is not None:
+            yield encoded_sample
 
     def _get_vision_token_ids(self):
         """Get special token IDs for vision processing."""
@@ -352,11 +400,9 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         )
         num_tiles = [len(image_grid_thw)] if image_grid_thw is not None else [0]
 
-        if self.args.enable_discard_sample:
-            assert (
-                len(input_ids) <= self.args.seq_length
-            ), f"{sample.__key__} input length {len(input_ids)}"
-        elif image_grid_thw is not None:
+        if self._should_discard_overlong(sample, input_ids):
+            return None
+        if not self.args.enable_discard_sample and image_grid_thw is not None:
             assert (
                 image_grid_thw.prod() / 4 <= self.args.seq_length
             ), f"{sample.__key__} thw {image_grid_thw}"
@@ -414,11 +460,9 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
 
         num_tiles = [len(image_grid_thw)] if image_grid_thw is not None else [0]
 
-        if self.args.enable_discard_sample:
-            assert (
-                len(input_ids) <= self.args.seq_length
-            ), f"{sample.__key__} input length {len(input_ids)}"
-        elif image_grid_thw is not None:
+        if self._should_discard_overlong(sample, input_ids):
+            return None
+        if not self.args.enable_discard_sample and image_grid_thw is not None:
             assert (
                 image_grid_thw.prod() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
@@ -564,15 +608,21 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
                 f"Unknown training phase {self.args.training_phase}"
             )
 
-        if self.args.enable_discard_sample:
-            assert (
-                len(input_ids) <= self.args.seq_length
-            ), f"{sample.__key__} input length {len(input_ids)}"
-        elif sample.video is not None and video_grid_thw is not None:
+        if self._should_discard_overlong(sample, input_ids):
+            return None
+        if (
+            not self.args.enable_discard_sample
+            and sample.video is not None
+            and video_grid_thw is not None
+        ):
             assert (
                 video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {video_grid_thw}"
-        elif sample.image is not None and image_grid_thw is not None:
+        elif (
+            not self.args.enable_discard_sample
+            and sample.image is not None
+            and image_grid_thw is not None
+        ):
             assert (
                 image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
@@ -626,11 +676,9 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
                 f"Unknown training phase {self.args.training_phase}"
             )
 
-        if self.args.enable_discard_sample:
-            assert (
-                len(input_ids) <= self.args.seq_length
-            ), f"{sample.__key__} input length {len(input_ids)}"
-        elif video_grid_thw is not None:
+        if self._should_discard_overlong(sample, input_ids):
+            return None
+        if not self.args.enable_discard_sample and video_grid_thw is not None:
             assert (
                 video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {video_grid_thw}"

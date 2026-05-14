@@ -149,7 +149,9 @@ class KimiK25Plugin(MMPlugin):
             pixel_values: tensor with shape (num_patches, patch_dim)
             grid_thws: tensor with shape (num_images, 3) for [T, H, W]
         """
-        import torch
+        mm_inputs = {}
+        if len(images) == 0 and len(videos) == 0:
+            return mm_inputs
 
         # Use Kimi's media processor
         media_processor = getattr(processor, 'media_processor', None)
@@ -158,8 +160,6 @@ class KimiK25Plugin(MMPlugin):
 
         if media_processor is None:
             raise ValueError("Processor must have media_processor or image_processor")
-
-        mm_inputs = {}
 
         if len(images) != 0:
             # Regularize images first
@@ -255,12 +255,14 @@ class KimiK25Plugin(MMPlugin):
 
         num_image_tokens, num_video_tokens = 0, 0
         messages = deepcopy(messages)
+        has_images = len(images) > 0
+        has_videos = len(videos) > 0
 
         for message in messages:
             content = message["content"]
 
             # Replace image placeholders
-            while Placeholder.IMAGE in content:
+            while has_images and Placeholder.IMAGE in content:
                 if num_image_tokens >= len(image_grid_thw):
                     raise ValueError(
                         f"`len(images)` ({len(images)}) is less than the number of "
@@ -279,7 +281,7 @@ class KimiK25Plugin(MMPlugin):
                 num_image_tokens += 1
 
             # Replace video placeholders
-            while Placeholder.VIDEO in content:
+            while has_videos and Placeholder.VIDEO in content:
                 if num_video_tokens >= len(video_grid_thw):
                     raise ValueError(
                         f"`len(videos)` ({len(videos)}) is less than the number of "
@@ -301,13 +303,13 @@ class KimiK25Plugin(MMPlugin):
             message["content"] = content
 
         # Validate counts
-        if len(images) != num_image_tokens:
+        if has_images and len(images) != num_image_tokens:
             raise ValueError(
                 f"The number of images ({len(images)}) does not match "
                 f"the number of {Placeholder.IMAGE} tokens ({num_image_tokens})"
             )
 
-        if len(videos) != num_video_tokens:
+        if has_videos and len(videos) != num_video_tokens:
             raise ValueError(
                 f"The number of videos ({len(videos)}) does not match "
                 f"the number of {Placeholder.VIDEO} tokens ({num_video_tokens})"
