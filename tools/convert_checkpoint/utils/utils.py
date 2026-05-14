@@ -23,6 +23,19 @@ logging.basicConfig(level=logging.INFO)
 LOADED_STATE_DICT = None
 
 
+def _flatten_expert_ids(expert_ids):
+    if expert_ids is None:
+        return None
+
+    flattened = set()
+    for expert_id in expert_ids:
+        if isinstance(expert_id, (list, tuple, set, range)):
+            flattened.update(int(x) for x in expert_id)
+        else:
+            flattened.add(int(expert_id))
+    return sorted(flattened)
+
+
 def ceil_div(x: int, y: int) -> int:
     return (x + y - 1) // y
 

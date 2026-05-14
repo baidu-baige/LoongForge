@@ -10,10 +10,11 @@ from tools.convert_checkpoint.huggingface.huggingface_checkpoint import HuggingF
 from tools.convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
 from tools.convert_checkpoint.common.common_config import CommonConfig
 from tools.convert_checkpoint.utils.utils import(
+    _flatten_expert_ids,
+    get_ep_map,
     get_layer_ids
 )
 
-from tools.convert_checkpoint.utils.utils import get_ep_map
 from tools.convert_checkpoint.module_convertor.model import Model
 
 class HfCheckpointConverter:
@@ -86,7 +87,8 @@ class HfCheckpointConverter:
                 c_config=vision_patch_config, args=visual_args, model_id=visual_model_id)
 
     def get_mcore_ckpt(self, ckpt_path):
-        expert_ids=self.expert_dict.values() if self.expert_dict is not None else None
+        expert_ids = self.expert_dict.values() if self.expert_dict is not None else None
+        expert_ids = _flatten_expert_ids(expert_ids)
         mcore_dict = {}
         for p in self.pp_ranks:
             cur_layer_dict = {p: self.layer_dict[p]}

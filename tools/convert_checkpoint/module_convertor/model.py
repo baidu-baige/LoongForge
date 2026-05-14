@@ -29,6 +29,7 @@ from convert_checkpoint.arguments import parse_args, set_args
 from convert_checkpoint.utils import utils
 
 from convert_checkpoint.utils.utils import(
+    _flatten_expert_ids,
     get_pipeline_by_rank_id,
     get_layer_ids,
     check_all_done,
@@ -191,7 +192,8 @@ class Model():
         if platform == 'huggingface':
             hf_ckpt = HuggingFaceCheckpoint(self.config, args)
             layer_ids = layer_dict[p]
-            expert_ids=expert_dict.values() if expert_dict is not None else None
+            expert_ids = expert_dict.values() if expert_dict is not None else None
+            expert_ids = _flatten_expert_ids(expert_ids)
             hf_ckpt.load(ckpt_path, args.safetensors, self.config, layer_ids, expert_ids=expert_ids,
                          mtp_num_layers=mtp_num_layers)
             self.c_ckpt = hf_ckpt.convert_to_common(layer_dict, expert_dict=expert_dict)
