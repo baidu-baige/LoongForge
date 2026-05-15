@@ -2,10 +2,10 @@
 import os
 import torch
 import argparse
-from safetensors.torch import load_file
+import tempfile
 from einops import rearrange
 from huggingface_hub import split_torch_state_dict_into_shards
-from safetensors.torch import load_file, save_file
+from safetensors.torch import save_file
 from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from pathlib import Path
 import json
@@ -23,20 +23,6 @@ parser.add_argument(
 parser.add_argument(
     "--save_path", type=str, required=True, help="Path to save hg checkpoints to"
 )
-parser.add_argument(
-    "--checkpoint_path",
-    type=str,
-    required=True,
-    help="Path to the Hugging original checkpoints",
-)
-parser.add_argument(
-    "--num_checkpoints",
-    type=int,
-    required=True,
-    help="Number of Hugging Face checkpoints",
-)
-parser.add_argument("--tp", type=int, required=True, help="Tensor parallel size")
-parser.add_argument("--pp", type=int, required=True, help="Pipeline parallel size")
 parser.add_argument("--num_layers", type=int, required=True, help="Number of layers")
 
 args = parser.parse_args()
@@ -44,51 +30,44 @@ args = parser.parse_args()
 print(f"model_name: {args.model_name}")
 print(f"load_path: {args.load_path}")
 print(f"save_path: {args.save_path}")
-print(f"checkpoint_path: {args.checkpoint_path}")
-print(f"num_checkpoints: {args.num_checkpoints}")
-print(f"tp: {args.tp}")
-print(f"pp: {args.pp}")
 print(f"num_layers: {args.num_layers}")
 assert args.load_path != args.save_path
-assert args.checkpoint_path != args.save_path
-tp = args.tp
-pp = args.pp
 num_layers = args.num_layers
-num_checkpoints = args.num_checkpoints
-checkpoint_path = args.checkpoint_path
 load_path = args.load_path
 save_path = args.save_path
 model_name = args.model_name
 
-def find_parent_of_mp_rank(base_dir: str):
-    """find parent path of mp_rank"""
-    base_path = Path(base_dir)
-    for subdir in base_path.rglob('*'):
-        if subdir.is_dir() and 'mp_rank' in subdir.name:
-            return subdir.parent
-    return None
 
-def load(load_path):
-    load_path = str(find_parent_of_mp_rank(load_path))
-    state_dict = []
-    for p in range(pp):
-        state_dict.append([])
-        for t in range(tp):
-            state_dict[p].append({})
-            sub_dir_name = f"mp_rank_{t:02d}" if pp == 1 else f"mp_rank_{t:02d}_{p:03d}"
-            checkpoint_path = os.path.join(
-                load_path, sub_dir_name, "model_optim_rng.pt"
-            )
-            state_dict[p][t] = torch.load(
-                checkpoint_path, map_location="cpu", weights_only=False
-            )
-    return state_dict
+def load_dcp(load_path):
+    """Load DCP (fsdp_dtensor) checkpoint and return the model state dict."""
+    from torch.distributed.checkpoint.format_utils import dcp_to_torch_save
+
+    iter_file = os.path.join(load_path, "latest_checkpointed_iteration.txt")
+    with open(iter_file) as f:
+        iteration = f.read().strip()
+    dcp_dir = os.path.join(load_path, f"iter_{int(iteration):07d}")
+    print(f"Loading DCP checkpoint from: {dcp_dir}")
+
+    with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        dcp_to_torch_save(dcp_dir, tmp_path)
+        raw = torch.load(tmp_path, map_location="cpu", weights_only=False)
+    finally:
+        os.unlink(tmp_path)
+
+    # Strip "module." prefix added by _save_dcp in hg2mcore
+    model_dict = {}
+    for k, v in raw["model"].items():
+        new_key = k.removeprefix("module.")
+        model_dict[new_key] = v
+
+    return model_dict
 
 
 def save_huggingface_checkpoint(state_dict, save_path):
     """save ckpt"""
     os.makedirs(save_path, exist_ok=True)
-    checkpoint_path = os.path.join(save_path, "model.safetensors")
 
     state_dict_split = split_torch_state_dict_into_shards(state_dict)
     for shard_file, tensors in state_dict_split.filename_to_tensors.items():
@@ -111,28 +90,6 @@ def save_huggingface_checkpoint(state_dict, save_path):
             f.write(content)
 
 
-def load_huggingface_chekckpoints(path, num_checkpoints):
-    """
-    Merge sharded checkpoints from transformers into a single checkpoint.
-
-    Args:
-        path (str): the path to the sharded checkpoints
-        num_checkpoints (int): the number of checkpoints to merge
-    """
-    state_dict = {}
-    for i in range(1, num_checkpoints + 1):
-        checkpoint_path = os.path.join(
-            path,
-            f"diffusion_pytorch_model-{i:05d}-of-{num_checkpoints:05d}.safetensors",
-        )
-        current_chunk = load_file(checkpoint_path)
-        state_dict.update(current_chunk)
-    return state_dict
-
-
-state_dict = load_huggingface_chekckpoints(args.checkpoint_path, args.num_checkpoints)
-# """Convert megatron format to HuggingFace state_dict"""
-
 # Model first part
 base_first_part_list = [
     "patch_embedding.weight",
@@ -152,44 +109,7 @@ extra_first_part_dict = {
     "wan2_2_i2v": []
 }
 first_part_list = base_first_part_list + extra_first_part_dict.get(model_name, [])
-# All weight correspondence for second part
-second_part_dict = {
-    "decoder.layers.0.ffn.0.weight": "blocks.0.ffn.0.weight",
-    "decoder.layers.0.ffn.0.bias": "blocks.0.ffn.0.bias",
-    "decoder.layers.0.ffn.2.weight": "blocks.0.ffn.2.weight",
-    "decoder.layers.0.ffn.2.bias": "blocks.0.ffn.2.bias",
-    "decoder.layers.0.norm3.weight": "blocks.0.norm3.weight",
-    "decoder.layers.0.norm3.bias": "blocks.0.norm3.bias",
-    "decoder.layers.0.modulation": "blocks.0.modulation",  # Need to transpose
-    "decoder.layers.0.self_attn.linear_proj.weight": "blocks.0.self_attn.o.weight",
-    "decoder.layers.0.self_attn.linear_proj.bias": "blocks.0.self_attn.o.bias",
-    "decoder.layers.0.self_attn.linear_qkv.weight": [
-        "blocks.0.self_attn.q.weight",
-        "blocks.0.self_attn.k.weight",
-        "blocks.0.self_attn.v.weight",
-    ],
-    "decoder.layers.0.self_attn.linear_qkv.bias": [
-        "blocks.0.self_attn.q.bias",
-        "blocks.0.self_attn.k.bias",
-        "blocks.0.self_attn.v.bias",
-    ],
-    "decoder.layers.0.self_attn.q_layernorm.weight": "blocks.0.self_attn.norm_q.weight",
-    "decoder.layers.0.self_attn.k_layernorm.weight": "blocks.0.self_attn.norm_k.weight",
-    "decoder.layers.0.cross_attn.linear_proj.weight": "blocks.0.cross_attn.o.weight",
-    "decoder.layers.0.cross_attn.linear_proj.bias": "blocks.0.cross_attn.o.bias",
-    "decoder.layers.0.cross_attn.linear_q.weight": "blocks.0.cross_attn.q.weight",
-    "decoder.layers.0.cross_attn.linear_q.bias": "blocks.0.cross_attn.q.bias",
-    "decoder.layers.0.cross_attn.linear_kv.weight": [
-        "blocks.0.cross_attn.k.weight",
-        "blocks.0.cross_attn.v.weight",
-    ],
-    "decoder.layers.0.cross_attn.linear_kv.bias": [
-        "blocks.0.cross_attn.k.bias",
-        "blocks.0.cross_attn.v.bias",
-    ],
-    "decoder.layers.0.cross_attn.q_layernorm.weight": "blocks.0.cross_attn.norm_q.weight",
-    "decoder.layers.0.cross_attn.k_layernorm.weight": "blocks.0.cross_attn.norm_k.weight",
-}
+
 # Parts that do not need transpose inside
 inside_blk_replace_dict = {
     "blocks.0.ffn.0.weight": "decoder.layers.0.ffn.0.weight",
@@ -198,11 +118,12 @@ inside_blk_replace_dict = {
     "blocks.0.ffn.2.bias": "decoder.layers.0.ffn.2.bias",
     "blocks.0.norm3.weight": "decoder.layers.0.norm3.weight",
     "blocks.0.norm3.bias": "decoder.layers.0.norm3.bias",
-    "blocks.0.self_attn.norm_q.weight": "decoder.layers.0.self_attn.q_layernorm.weight",
-    "blocks.0.self_attn.norm_k.weight": "decoder.layers.0.self_attn.k_layernorm.weight",
+    "blocks.0.self_attn.norm_q.weight": "decoder.layers.0.self_attention.q_layernorm.weight",
+    "blocks.0.self_attn.norm_k.weight": "decoder.layers.0.self_attention.k_layernorm.weight",
     "blocks.0.cross_attn.norm_q.weight": "decoder.layers.0.cross_attn.q_layernorm.weight",
     "blocks.0.cross_attn.norm_k.weight": "decoder.layers.0.cross_attn.k_layernorm.weight",
 }
+
 # Model last part
 third_part_dict = {
     "head.modulation",
@@ -210,20 +131,16 @@ third_part_dict = {
     "head.head.bias",
 }
 
+mcore_dict = load_dcp(args.load_path)
+
 new_state_dict = {}
 
-cp_pp = load(args.load_path)
-
 for i in range(num_layers):
-    layers_in_each_stage = num_layers // pp
-    pp_idx = i // layers_in_each_stage
-    shift = i % layers_in_each_stage
-    print(f"layer_idx: {i}, pp_idx: {pp_idx}, shift: {shift}")
+    print(f"layer_idx: {i}")
 
     ## self_attention qkv split
-    mcore_dict = cp_pp[pp_idx][0]["model"]
     src_qkv_weight = mcore_dict[
-        "decoder.layers." + str(shift) + ".self_attn.linear_qkv.weight"
+        "decoder.layers." + str(i) + ".self_attention.linear_qkv.weight"
     ]
     trans_qkv = rearrange(
         src_qkv_weight, "(N R D) H -> (R N D) H", R=3, N=40, D=128, H=5120
@@ -234,7 +151,7 @@ for i in range(num_layers):
     new_state_dict["blocks." + str(i) + ".self_attn.v.weight"] = v_weight
 
     src_qkv_bias = mcore_dict[
-        "decoder.layers." + str(shift) + ".self_attn.linear_qkv.bias"
+        "decoder.layers." + str(i) + ".self_attention.linear_qkv.bias"
     ]
     trans_qkv = rearrange(src_qkv_bias, "(N R D H) -> (R N D H)", R=3, N=40, D=128, H=1)
     q_bias, k_bias, v_bias = torch.split(trans_qkv, 5120, dim=0)
@@ -244,10 +161,10 @@ for i in range(num_layers):
 
     # Convert to o
     linear_proj_weight = mcore_dict[
-        "decoder.layers." + str(shift) + ".self_attn.linear_proj.weight"
+        "decoder.layers." + str(i) + ".self_attention.linear_proj.weight"
     ]
     linear_proj_bias = mcore_dict[
-        "decoder.layers." + str(shift) + ".self_attn.linear_proj.bias"
+        "decoder.layers." + str(i) + ".self_attention.linear_proj.bias"
     ]
     linear_proj_weight = rearrange(
         linear_proj_weight, "(N R D) H -> (R N D) H", R=1, N=40, D=128, H=5120
@@ -260,13 +177,13 @@ for i in range(num_layers):
 
     ## cross_attention q transpose
     cross_q_weight = mcore_dict[
-        "decoder.layers." + str(shift) + ".cross_attn.linear_q.weight"
+        "decoder.layers." + str(i) + ".cross_attn.linear_q.weight"
     ]
     cross_q_weight = rearrange(
         cross_q_weight, "(N R D) H -> (R N D) H", R=1, N=40, D=128, H=5120
     )
     cross_q_bias = mcore_dict[
-        "decoder.layers." + str(shift) + ".cross_attn.linear_q.bias"
+        "decoder.layers." + str(i) + ".cross_attn.linear_q.bias"
     ]
     cross_q_bias = rearrange(
         cross_q_bias, "(N R D H) -> (R N D H)", R=1, N=40, D=128, H=1
@@ -276,12 +193,12 @@ for i in range(num_layers):
 
     # cross_attention kv split
     kv_weight = mcore_dict[
-        "decoder.layers." + str(shift) + ".cross_attn.linear_kv.weight"
+        "decoder.layers." + str(i) + ".cross_attn.linear_kv.weight"
     ]
     kv_weight = rearrange(kv_weight, "(N R D) H -> (R N D) H", R=2, N=40, D=128, H=5120)
     k_weight, v_weight = torch.split(kv_weight, 5120, dim=0)
 
-    kv_bias = mcore_dict["decoder.layers." + str(shift) + ".cross_attn.linear_kv.bias"]
+    kv_bias = mcore_dict["decoder.layers." + str(i) + ".cross_attn.linear_kv.bias"]
     kv_bias = rearrange(kv_bias, "(N R D H) -> (R N D H)", R=2, N=40, D=128, H=1)
     k_bias, v_bias = torch.split(kv_bias, 5120, dim=0)
     new_state_dict["blocks." + str(i) + ".cross_attn.k.weight"] = k_weight
@@ -291,7 +208,7 @@ for i in range(num_layers):
 
     # cross_attention o
     cross_o_weight = mcore_dict[
-        "decoder.layers." + str(shift) + ".cross_attn.linear_proj.weight"
+        "decoder.layers." + str(i) + ".cross_attn.linear_proj.weight"
     ]
     cross_o_weight = rearrange(
         cross_o_weight, "(N R D) H ->(R N D) H", R=1, N=40, D=128, H=5120
@@ -299,7 +216,7 @@ for i in range(num_layers):
     new_state_dict["blocks." + str(i) + ".cross_attn.o.weight"] = cross_o_weight
 
     cross_o_bias = mcore_dict[
-        "decoder.layers." + str(shift) + ".cross_attn.linear_proj.bias"
+        "decoder.layers." + str(i) + ".cross_attn.linear_proj.bias"
     ]
     cross_o_bias = rearrange(
         cross_o_bias, "(N R D H) ->(R N D H)", R=1, N=40, D=128, H=1
@@ -307,23 +224,22 @@ for i in range(num_layers):
     new_state_dict["blocks." + str(i) + ".cross_attn.o.bias"] = cross_o_bias
 
     # 1, 6, 5120 -> 6, 1, 5120 # modulation transpose
-    modulation = mcore_dict["decoder.layers." + str(shift) + ".modulation"]
+    modulation = mcore_dict["decoder.layers." + str(i) + ".modulation"]
     modulation = rearrange(modulation, "D M L -> M D L")
     new_state_dict["blocks." + str(i) + ".modulation"] = modulation
 
     ## General replacement
     for key, value in inside_blk_replace_dict.items():
         key = key.replace("blocks.0", "blocks." + str(i))
-        value = value.replace("decoder.layers.0", "decoder.layers." + str(shift))
+        value = value.replace("decoder.layers.0", "decoder.layers." + str(i))
         new_state_dict[key] = mcore_dict[value]
 
 
-# new_state_dict = {}
 for key in first_part_list:
-    new_state_dict[key] = cp_pp[0][0]["model"][key]
+    new_state_dict[key] = mcore_dict[key]
 
 for key in third_part_dict:
-    new_state_dict[key] = cp_pp[pp - 1][0]["model"][key]
+    new_state_dict[key] = mcore_dict[key]
 
 save_huggingface_checkpoint(new_state_dict, args.save_path)
 print(f"convert success! checkpoint path: {save_path}")

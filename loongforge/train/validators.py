@@ -409,14 +409,6 @@ def _validate_custom_model_args(name, args, defaults={}):
         warnings.warn(f"WARNING: Now for {name}, we do not support num_virtual_stages_per_pipeline_rank.")
         args.num_virtual_stages_per_pipeline_rank = None
 
-    if args.context_parallel_ulysses_degree is not None:
-        warnings.warn(f"WARNING: Now for {name}, we do not support context_parallel_ulysses_degree.")
-        args.context_parallel_ulysses_degree = 1
-
-    if args.context_parallel_size > 1:
-        warnings.warn(f"WARNING: Now for {name}, we only support context parallel size 1.")
-        args.context_parallel_size = 1
-
     if args.tp_comm_overlap:
         warnings.warn(f"WARNING: Now for {name}, we do not support tp_comm_overlap.")
         args.tp_comm_overlap = False
