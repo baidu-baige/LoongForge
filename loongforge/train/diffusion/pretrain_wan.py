@@ -11,6 +11,7 @@ from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 
+
 from megatron.training import get_timers
 from megatron.training.utils import average_losses_across_data_parallel_group
 
@@ -62,12 +63,12 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
         MCoreModel: The returned model
     """
     args = get_args()
-    cp = args.context_parallel_ulysses_degree
-    text_length = math.ceil(args.max_text_length / cp) * cp
-    if args.model_name == "wan2-2-i2v":
-        args.seq_length = args.max_video_length + text_length + (6 + 1) * cp
+    assert args.tensor_model_parallel_size == 1, (
+        "WAN model only supports TP=1. "
+        "WanCrossAttention.norm_k uses global num_attention_heads for reshape, "
+        "which produces incorrect results when TP>1."
+    )
     args.max_position_embeddings = args.seq_length
-    print_rank_0(f"> calculated seq_length:  {args.seq_length}")
 
     if args.model_name == "wan2-2-i2v":
         model_provider = wan2_2_i2v_model_provider
@@ -188,10 +189,12 @@ def gaussian_diffusion():
 def loss_func(training_target, timestep, scale, noise_pred):
     """Compute the loss."""
     loss = torch.nn.functional.mse_loss(noise_pred.float(), training_target.float())
-    # loss = loss * scheduler.training_weight(timestep)
     loss = loss * scale
-    averaged_loss = average_losses_across_data_parallel_group([loss])
-    return loss, {"lm loss": averaged_loss[0]}
+    dp_cp_group = parallel_state.get_data_parallel_group(with_context_parallel=True)
+    averaged_losses = torch.cat([loss.clone().detach().view(1)])
+    torch.distributed.all_reduce(averaged_losses, group=dp_cp_group)
+    averaged_losses = averaged_losses / dp_cp_group.size()
+    return loss, {"lm loss": averaged_losses[0]}
 
 
 def forward_step(diffusion, data_iterator, model):

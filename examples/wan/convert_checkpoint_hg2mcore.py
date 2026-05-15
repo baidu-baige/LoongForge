@@ -5,15 +5,11 @@ import argparse
 from safetensors.torch import load_file
 from einops import rearrange
 from pathlib import Path
-import re
 
 
 parser = argparse.ArgumentParser(description="Process some checkpoints.")
 parser.add_argument(
     "--model_name", type=str, required=True, help="Supported model name: [wan2_2_i2v]"
-)
-parser.add_argument(
-    "--load_path", type=str, required=True, help="Path to load checkpoints from"
 )
 parser.add_argument(
     "--save_path", type=str, required=True, help="Path to save checkpoints to"
@@ -30,58 +26,57 @@ parser.add_argument(
     required=True,
     help="Number of Hugging Face checkpoints",
 )
-parser.add_argument("--tp", type=int, required=True, help="Tensor parallel size")
-parser.add_argument("--pp", type=int, required=True, help="Pipeline parallel size")
 parser.add_argument("--num_layers", type=int, required=True, help="Number of layers")
 
 args = parser.parse_args()
 
 print(f"model_name: {args.model_name}")
-print(f"load_path: {args.load_path}")
 print(f"save_path: {args.save_path}")
 print(f"checkpoint_path: {args.checkpoint_path}")
 print(f"num_checkpoints: {args.num_checkpoints}")
-print(f"tp: {args.tp}")
-print(f"pp: {args.pp}")
 print(f"num_layers: {args.num_layers}")
 
-assert args.load_path != args.save_path
 assert args.checkpoint_path != args.save_path
 
-tp = args.tp
-pp = args.pp
 num_layers = args.num_layers
 num_checkpoints = args.num_checkpoints
 checkpoint_path = args.checkpoint_path
-load_path = args.load_path
 save_path = args.save_path
 model_name = args.model_name
 
 
-def load(load_path):
-    state_dict = []
-    for p in range(pp):
-        state_dict.append([])
-        for t in range(tp):
-            state_dict[p].append({})
-            sub_dir_name = f"mp_rank_{t:02d}" if pp == 1 else f"mp_rank_{t:02d}_{p:03d}"
-            checkpoint_path = os.path.join(
-                load_path, sub_dir_name, "model_optim_rng.pt"
-            )
-            state_dict[p][t] = torch.load(
-                checkpoint_path, map_location="cpu", weights_only=False
-            )
-    return state_dict
+def _save_dcp(model_state_dict, save_path, iteration=0):
+    """Save model weights in DCP (fsdp_dtensor) format.
 
+    Uses torch_save_to_dcp to convert a plain state dict to DCP without
+    requiring a running distributed process group.
 
-def save(state_dict, save_path):
-    for p in range(pp):
-        for t in range(tp):
-            sub_dir_name = f"mp_rank_{t:02d}" if pp == 1 else f"mp_rank_{t:02d}_{p:03d}"
-            sub_dir = save_path / sub_dir_name
-            sub_dir.mkdir(parents=True, exist_ok=True)
-            checkpoint_path = sub_dir / "model_optim_rng.pt"
-            torch.save(state_dict[p][t], checkpoint_path)
+    Saves to <save_path>/iter_XXXXXXX/ and writes
+    latest_checkpointed_iteration.txt = "<iteration>".
+    """
+    import tempfile
+    from torch.distributed.checkpoint.format_utils import torch_save_to_dcp
+
+    dcp_iter_path = save_path / f"iter_{iteration:07d}"
+    dcp_iter_path.mkdir(parents=True, exist_ok=True)
+
+    # torch_save_to_dcp expects a regular torch.save file as input.
+    with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Add 'module.' prefix to match the FSDP wrapper key format produced by
+        # generate_state_dict() at runtime: model.module.<param_name>.
+        model_sd_with_prefix = {"module." + k: v for k, v in model_state_dict.items()}
+        torch.save({"model": model_sd_with_prefix}, tmp_path)
+        torch_save_to_dcp(tmp_path, str(dcp_iter_path))
+    finally:
+        os.unlink(tmp_path)
+
+    with open(save_path / "latest_checkpointed_iteration.txt", "w") as f:
+        f.write(str(iteration))
+
+    print(f"DCP checkpoint saved to: {dcp_iter_path}")
 
 
 def load_huggingface_chekckpoints(path, num_checkpoints):
@@ -134,20 +129,20 @@ second_part_dict = {
     "decoder.layers.0.norm3.weight": "blocks.0.norm3.weight",
     "decoder.layers.0.norm3.bias": "blocks.0.norm3.bias",
     "decoder.layers.0.modulation": "blocks.0.modulation",  # Need to transpose
-    "decoder.layers.0.self_attn.linear_proj.weight": "blocks.0.self_attn.o.weight",
-    "decoder.layers.0.self_attn.linear_proj.bias": "blocks.0.self_attn.o.bias",
-    "decoder.layers.0.self_attn.linear_qkv.weight": [
+    "decoder.layers.0.self_attention.linear_proj.weight": "blocks.0.self_attn.o.weight",
+    "decoder.layers.0.self_attention.linear_proj.bias": "blocks.0.self_attn.o.bias",
+    "decoder.layers.0.self_attention.linear_qkv.weight": [
         "blocks.0.self_attn.q.weight",
         "blocks.0.self_attn.k.weight",
         "blocks.0.self_attn.v.weight",
     ],
-    "decoder.layers.0.self_attn.linear_qkv.bias": [
+    "decoder.layers.0.self_attention.linear_qkv.bias": [
         "blocks.0.self_attn.q.bias",
         "blocks.0.self_attn.k.bias",
         "blocks.0.self_attn.v.bias",
     ],
-    "decoder.layers.0.self_attn.q_layernorm.weight": "blocks.0.self_attn.norm_q.weight",
-    "decoder.layers.0.self_attn.k_layernorm.weight": "blocks.0.self_attn.norm_k.weight",
+    "decoder.layers.0.self_attention.q_layernorm.weight": "blocks.0.self_attn.norm_q.weight",
+    "decoder.layers.0.self_attention.k_layernorm.weight": "blocks.0.self_attn.norm_k.weight",
     "decoder.layers.0.cross_attn.linear_proj.weight": "blocks.0.cross_attn.o.weight",
     "decoder.layers.0.cross_attn.linear_proj.bias": "blocks.0.cross_attn.o.bias",
     "decoder.layers.0.cross_attn.linear_q.weight": "blocks.0.cross_attn.q.weight",
@@ -171,8 +166,8 @@ inside_blk_replace_dict = {
     "blocks.0.ffn.2.bias": "decoder.layers.0.ffn.2.bias",
     "blocks.0.norm3.weight": "decoder.layers.0.norm3.weight",
     "blocks.0.norm3.bias": "decoder.layers.0.norm3.bias",
-    "blocks.0.self_attn.norm_q.weight": "decoder.layers.0.self_attn.q_layernorm.weight",
-    "blocks.0.self_attn.norm_k.weight": "decoder.layers.0.self_attn.k_layernorm.weight",
+    "blocks.0.self_attn.norm_q.weight": "decoder.layers.0.self_attention.q_layernorm.weight",
+    "blocks.0.self_attn.norm_k.weight": "decoder.layers.0.self_attention.k_layernorm.weight",
     "blocks.0.cross_attn.norm_q.weight": "decoder.layers.0.cross_attn.q_layernorm.weight",
     "blocks.0.cross_attn.norm_k.weight": "decoder.layers.0.cross_attn.k_layernorm.weight",
 }
@@ -206,22 +201,17 @@ for i in range(num_layers):
         concat_qkv_bias, "(R N D H) -> (N R D H)", R=3, N=40, D=128, H=1
     )
 
-    new_state_dict["decoder.layers." + str(i) + ".self_attn.linear_qkv.weight"] = (
-        concat_qkv_weight
-    )
-    new_state_dict["decoder.layers." + str(i) + ".self_attn.linear_qkv.bias"] = (
-        concat_qkv_bias
-    )
+    new_state_dict[f"decoder.layers.{i}.self_attention.linear_qkv.weight"] = concat_qkv_weight
+    new_state_dict[f"decoder.layers.{i}.self_attention.linear_qkv.bias"] = concat_qkv_bias
+
     # Convert o
     o_weight = state_dict["blocks." + str(i) + ".self_attn.o.weight"]
     o_weight = rearrange(o_weight, "(R N D) H -> (N R D) H", R=1, N=40, D=128, H=5120)
     o_bias = state_dict["blocks." + str(i) + ".self_attn.o.bias"]
     o_bias = rearrange(o_bias, "(R N D H) -> (N R D H)", R=1, N=40, D=128, H=1)
 
-    new_state_dict["decoder.layers." + str(i) + ".self_attn.linear_proj.bias"] = o_bias
-    new_state_dict["decoder.layers." + str(i) + ".self_attn.linear_proj.weight"] = (
-        o_weight
-    )
+    new_state_dict[f"decoder.layers.{i}.self_attention.linear_proj.weight"] = o_weight
+    new_state_dict[f"decoder.layers.{i}.self_attention.linear_proj.bias"] = o_bias
 
     # cross_attention q transpose
     cross_q_w = state_dict["blocks." + str(i) + ".cross_attn.q.weight"]
@@ -288,53 +278,7 @@ for key in third_part_dict:
     new_state_dict[key] = state_dict[key]
 
 mcore_dict = new_state_dict
-cp_pp = load(args.load_path)
-
-# Set into tp_pp dict
-used = set()
-for p in range(pp):
-    for t in range(tp):
-        print(f" ----------------- [pp{p}, tp{t}] ----------------")
-        for k, v in cp_pp[p][t]["model"].items():
-            # print("k: ", k)
-            # if "t_embedder" in k:
-            #     print("t_embedder skip: {k}",k)
-            #     continue
-            if k.endswith("extra_state"):
-                continue
-            if v.shape == mcore_dict[k].shape:
-                if "decoder.layers." in k:
-                    match = re.search(r"decoder\.layers\.(\d+)", k)
-                    if match:
-                        # number = int(match.group(1))
-                        old_number = int(match.group(1))
-                        new_number = int(old_number + num_layers / pp * p)
-                        real_k = k.replace(
-                            f"decoder.layers.{old_number}.",
-                            f"decoder.layers.{new_number}.",
-                        )
-                        cp_pp[p][t]["model"][k] = mcore_dict[real_k].clone()
-                        used.add(real_k)
-                    else:
-                        raise ValueError
-                else:
-                    cp_pp[p][t]["model"][k] = mcore_dict[k].clone()
-                    used.add(k)
-
-                print("【-】", k, v.shape)
-
-            else:
-                assert False, f"{k} {v.shape} {mcore_dict[k].shape}"
-
-for k in mcore_dict.keys():
-    assert k in used, k
 
 save_path = Path(args.save_path)
-release_path = save_path / "release"
-save(cp_pp, release_path)
-
-with open(f"{save_path}/latest_checkpointed_iteration.txt", "w") as f:
-    f.write("release")
-
-
+_save_dcp(mcore_dict, save_path, iteration=1)
 print(f"convert success! checkpoint path: {save_path}")

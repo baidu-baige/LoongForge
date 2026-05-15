@@ -22,15 +22,25 @@ class WanConfig(BaseModelStditConfig):
     hidden_size: int
     # kv_channels: int
     ffn_hidden_size: int
-    caption_channels: int
     num_attention_heads: int
     model_type: str
+    # WAN-specific fields
+    text_dim: int = 4096
+    has_image_input: bool = False
+    in_dim: int = 36
+    freq_dim: int = 256
+    out_dim: int = 16
     norm_epsilon: float = 1e-06
+    has_image_pos_emb: bool = False
+    require_clip_embedding: bool = True
     group_query_attention: bool = False
     num_query_groups: int = 1
     position_embedding_type: str = "learned_absolute"
     rotary_interleaved: bool = False
     normalization: str = "RMSNorm"
+
+    vae_temporal_compress: int = 4
+    vae_spatial_compress: int = 8
 
     swiglu: bool = False
     attention_dropout: float = 0
