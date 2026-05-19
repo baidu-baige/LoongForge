@@ -1,0 +1,60 @@
+name: PR Title Check
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request?.title || "";
+            const TYPES = ["feat","fix","refactor","perf","docs","test","chore","ci"];
+            const MODULES = new Set([
+              "llm","vlm","vla","diffusion",
+              "train","data","ops","ckpt","peft",
+              "docker","xpu","ci","docs","tests","scripts","release",
+            ]);
+            const re = /^(?<breaking>\[BREAKING\])?\[(?<mods>[a-zA-Z0-9,\s\-]+)\]\s+(?<type>[a-zA-Z]+):\s+.+$/;
+            const m = title.match(re);
+            const fail = (msg) => core.setFailed(msg);
+            if (!m) {
+              fail([
+                `PR title "${title}" does not match required format.`,
+                ``,
+                `Expected: [<modules>] <type>: <description>`,
+                `      or: [BREAKING][<modules>] <type>: <description>`,
+                ``,
+                `Valid types:   ${TYPES.join(", ")}`,
+                `Valid modules: ${[...MODULES].join(", ")}`,
+                ``,
+                `Example: [llm, ckpt] feat: support Qwen3-Next checkpoint conversion`,
+              ].join("\n"));
+              return;
+            }
+            const typ = m.groups.type.toLowerCase();
+            if (!TYPES.includes(typ)) {
+              fail(`Invalid type "${typ}". Valid types: ${TYPES.join(", ")}`);
+              return;
+            }
+            const mods = m.groups.mods.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+            const bad = mods.filter(x => !MODULES.has(x));
+            if (bad.length) {
+              fail([
+                `Invalid modules: ${bad.join(", ")}`,
+                `Valid modules: ${[...MODULES].join(", ")}`,
+              ].join("\n"));
+              return;
+            }
+            core.info(`OK: type=${typ}, modules=[${mods.join(", ")}]`);
