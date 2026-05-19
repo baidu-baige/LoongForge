@@ -4,11 +4,9 @@
 """wan model provider"""
 
 from megatron.core.transformer.spec_utils import import_module
-
 from loongforge.utils import get_args, build_transformer_config, print_rank_0
 
-from loongforge.models.common import BaseModelStditConfig
-
+from .wan_config import WanConfig
 from .wan_model import WanModel
 from .wan_layer_spec import get_wan_layer_with_te_spec
 import torch
@@ -33,8 +31,11 @@ def wan2_2_i2v_model_provider(
 
     print_rank_0("building WAN2_2_I2V model ...")
 
-    config = build_transformer_config(args, config_class=BaseModelStditConfig)
+    config = build_transformer_config(args, config_class=WanConfig)
     config.pipeline_dtype = torch.float32
+    # WAN uses RMSNorm for q/k layernorm (consistent with HuggingFace), regardless of
+    # the global --normalization arg which defaults to LayerNorm from TransformerConfig.
+    config.normalization = "RMSNorm"
 
     if args.spec is not None:
         transformer_layer_spec = import_module(args.spec)
@@ -42,21 +43,6 @@ def wan2_2_i2v_model_provider(
         assert args.transformer_impl == "transformer_engine"
         transformer_layer_spec = get_wan_layer_with_te_spec()
 
-    # Wan-AI/Wan2.2-I2V-A14B
-    extra_config = {
-        "has_image_input": False,
-        "patch_size": [1, 2, 2],
-        "in_dim": 36,
-        "dim": 5120,
-        "ffn_dim": 13824,
-        "freq_dim": 256,
-        "text_dim": 4096,
-        "out_dim": 16,
-        "num_heads": 40,
-        "num_layers": 40,
-        "eps": 1e-6,
-        "require_clip_embedding": False,
-    }
     model = WanModel(
         config=config,
         transformer_layer_spec=transformer_layer_spec,
@@ -69,7 +55,6 @@ def wan2_2_i2v_model_provider(
         share_embeddings_and_output_weights=False,
         position_embedding_type=args.position_embedding_type,
         rotary_percent=args.rotary_percent,
-        **extra_config,
     )
 
     return model

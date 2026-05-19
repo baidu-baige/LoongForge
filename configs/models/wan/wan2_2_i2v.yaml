@@ -2,11 +2,20 @@ _target_: loongforge.models.diffusion.WanConfig
 num_layers: 40
 hidden_size: 5120
 ffn_hidden_size: 13824
-caption_channels: 4096
+text_dim: 4096
 num_attention_heads: 40
 latent_in_channels: 4
 latent_out_channels: 8
 latent_patch_size: [1, 2, 2]
 latent_space_scale: 0.5
 latent_time_scale: 1.0
+vae_temporal_compress: 4
+vae_spatial_compress: 8
+has_image_input: False
+freq_dim: 256
+in_dim: 36
+out_dim: 16
+norm_epsilon: 1e-6
+require_clip_embedding: False
+has_image_pos_emb: False
 model_type: "wan2_2_i2v"
