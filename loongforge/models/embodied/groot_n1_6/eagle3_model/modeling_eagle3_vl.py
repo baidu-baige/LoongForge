@@ -24,6 +24,7 @@ from transformers.models.llama.modeling_llama import LlamaForCausalLM
 from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM
 from transformers.models.qwen3.modeling_qwen3 import Qwen3ForCausalLM
 from transformers.models.siglip.modeling_siglip import SiglipVisionModel
+from transformers.masking_utils import ALL_MASK_ATTENTION_FUNCTIONS
 from transformers.utils import logging
 
 from .configuration_eagle3_vl import (
@@ -33,6 +34,284 @@ from .configuration_eagle3_vl import (
 from .modeling_siglip2 import Siglip2VisionModel
 
 logger = logging.get_logger(__name__)
+
+
+# =============================================================================
+# CUDA-graph-safe Flash Attention patches
+# =============================================================================
+
+
+def _flash_attention_mask_no_sync(
+    batch_size, cache_position, kv_length, kv_offset=0, mask_function=None, attention_mask=None, **kwargs
+):
+    """Patched flash_attention_mask that skips .all() GPU→CPU sync for CUDA graph compatibility.
+
+    The original transformers flash_attention_mask calls attention_mask.all() to decide
+    whether to return None (for is_causal optimization). This .all() triggers a GPU→CPU
+    sync which is forbidden during CUDA graph capture. We simply skip that optimization
+    and always return the sliced mask (FA2 handles the mask correctly either way).
+    """
+    if attention_mask is not None:
+        attention_mask = attention_mask[:, kv_offset:kv_offset + kv_length]
+    return attention_mask
+
+
+# Prevents GPU→CPU sync in create_causal_mask → flash_attention_mask
+# Deferred: applied only when GRooT model is instantiated (see Eagle3VlForConditionalGeneration.__init__)
+_FA2_PATCHES_INSTALLED = False
+
+
+# Buffer cache for graph-safe FA2 operations.
+# Pre-allocated during warmup, reused during graph capture to avoid cudaMalloc and CPU→GPU sync.
+_FA2_GRAPH_BUFFERS: dict = {}
+
+
+def _get_fa2_buffers(batch_size, seq_len, num_q_heads, num_kv_heads, head_dim, dtype, device):
+    """Get or create pre-allocated buffers for graph-safe FA2.
+
+    Includes a single zero-token buffer for each of q/k/v that is concatenated
+    after packing to prevent FA2 OOB reads when all tokens are valid.
+    """
+    key = (batch_size, seq_len, num_q_heads, num_kv_heads, head_dim, dtype, device)
+    if key not in _FA2_GRAPH_BUFFERS:
+        total = batch_size * seq_len
+        # Pre-compute the constant "total" value as a 1-element tensor for concat
+        total_tensor = torch.tensor([total], dtype=torch.int32, device=device)
+        _FA2_GRAPH_BUFFERS[key] = {
+            "seq_ids": torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, seq_len).reshape(-1),
+            "pos_in_seq": torch.arange(seq_len, device=device).unsqueeze(0).expand(batch_size, -1).reshape(-1),
+            "sort_key": torch.zeros(total, dtype=torch.int64, device=device),
+            "total_tensor": total_tensor,
+            "zero_tensor": torch.zeros(1, dtype=torch.int32, device=device),
+            # Pre-allocated zero tokens for OOB prevention (avoids cudaMalloc during graph capture)
+            "zero_q": torch.zeros(1, num_q_heads, head_dim, device=device, dtype=dtype),
+            "zero_kv": torch.zeros(1, num_kv_heads, head_dim, device=device, dtype=dtype),
+        }
+    return _FA2_GRAPH_BUFFERS[key]
+
+
+def _graph_safe_unpad_and_attend(
+    query_states,
+    key_states,
+    value_states,
+    attention_mask,
+    flash_attn_varlen_func,
+    softmax_scale,
+    causal,
+    flash_kwargs,
+):
+    """Graph-safe FA2 attention with argsort-based packing.
+
+    Replaces the original nonzero-based unpad path. All operations produce fixed-size
+    outputs and use pre-allocated buffers, making them fully CUDA-graph-capturable.
+    """
+    batch_size, kv_seq_len, num_kv_heads, head_dim = key_states.shape
+    total = batch_size * kv_seq_len
+    device = attention_mask.device
+    num_q_heads = query_states.shape[2]
+
+    # Get pre-allocated buffers (created during warmup, reused during capture)
+    bufs = _get_fa2_buffers(batch_size, kv_seq_len, num_q_heads, num_kv_heads, head_dim,
+                            query_states.dtype, device)
+    seq_ids = bufs["seq_ids"]
+    pos_in_seq = bufs["pos_in_seq"]
+    sort_key = bufs["sort_key"]
+    total_tensor = bufs["total_tensor"]
+    zero_tensor = bufs["zero_tensor"]
+    zero_q = bufs["zero_q"]
+    zero_kv = bufs["zero_kv"]
+
+    flat_mask = attention_mask.reshape(-1).int()  # (B*S,)
+
+    # Compute sort key: valid tokens first (per-sequence, in position order), padding at end
+    sort_key.copy_(seq_ids * kv_seq_len + pos_in_seq + (1 - flat_mask).long() * total)
+    sorted_indices = torch.argsort(sort_key, stable=True)  # (B*S,) fixed
+    reverse_indices = torch.argsort(sorted_indices)  # (B*S,) fixed
+
+    # Build cu_seqlens WITHOUT in-place scalar assignment (which causes CPU→GPU sync).
+    # cu_seqlens = [0, cumsum(seqlens), safe_total]
+    # Each call creates a NEW tensor to avoid version-counter conflicts in autograd.
+    seqlens = attention_mask.sum(dim=-1, dtype=torch.int32)  # (B,)
+    cumulative = torch.cumsum(seqlens, dim=0, dtype=torch.int32)  # (B,)
+    # When all tokens are valid (no padding), cumulative[-1] == total, which creates a
+    # zero-length virtual sequence that crashes FA2 (cu_seqlens[i]==cu_seqlens[i+1]).
+    # Use max(total_tensor, cumulative[-1:] + 1) to guarantee the dummy sequence has length >= 1.
+    safe_total = torch.max(total_tensor, cumulative[-1:] + 1)
+    cu_seqlens = torch.cat([zero_tensor, cumulative, safe_total])  # (B+2,)
+    # max_seqlen must cover the virtual padding sequence (safe_total[0] - cumulative[-1])
+    # Use `total` as a safe upper bound — it's always >= actual max seqlen.
+    max_seqlen = total  # safe upper bound for FA2 tiling
+
+    # Pack q, k, v using sorted_indices, then unconditionally append a zero dummy token.
+    # This prevents FA2 OOB reads when safe_total == total+1 (all tokens valid).
+    # torch.cat produces a NEW tensor each call, so autograd version tracking is correct.
+    # The zero_q/zero_kv buffers are pre-allocated (no cudaMalloc during graph capture).
+    packed_q = torch.cat([query_states.reshape(total, num_q_heads, head_dim)[sorted_indices], zero_q], dim=0)
+    packed_k = torch.cat([key_states.reshape(total, num_kv_heads, head_dim)[sorted_indices], zero_kv], dim=0)
+    packed_v = torch.cat([value_states.reshape(total, num_kv_heads, head_dim)[sorted_indices], zero_kv], dim=0)
+
+    # Flash attention on packed sequences (B real + 1 dummy for padding)
+    attn_output_packed = flash_attn_varlen_func(
+        packed_q,
+        packed_k,
+        packed_v,
+        cu_seqlens_q=cu_seqlens,
+        cu_seqlens_k=cu_seqlens,
+        max_seqlen_q=max_seqlen,
+        max_seqlen_k=max_seqlen,
+        softmax_scale=softmax_scale,
+        causal=causal,
+        **flash_kwargs,
+    )
+
+    # Unpack: take only the first `total` tokens, then reverse sort to restore original positions
+    attn_output_flat = attn_output_packed[:total][reverse_indices]  # (B*S, H, D)
+
+    # Zero out padding positions
+    attn_output_flat = attn_output_flat * flat_mask.unsqueeze(-1).unsqueeze(-1).to(attn_output_flat.dtype)
+
+    # Reshape back to (B, S, H, D)
+    return attn_output_flat.reshape(batch_size, kv_seq_len, num_q_heads, head_dim)
+
+
+def _is_graph_mode_active() -> bool:
+    """Check if we should use graph-safe FA2 path.
+
+    Returns True when:
+    - Full-iteration or per-microbatch CUDA graph is configured (covers warmup + capture + replay phases)
+    - OR we're currently in a CUDA graph capture stream
+    """
+    try:
+        from loongforge.models.common.cuda_graph_config import (
+            is_full_iteration_graph, is_per_microbatch_graph,
+        )
+        if is_full_iteration_graph() or is_per_microbatch_graph():
+            return True
+    except (ImportError, RuntimeError):
+        pass
+    return torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
+
+
+def _install_graph_safe_fa2_patch():
+    """Monkey-patch transformers' _flash_attention_forward.
+
+    In graph mode: uses argsort-based packing (fixed output shapes, graph-capturable).
+    In eager mode: uses original nonzero-based path (better performance).
+    """
+    import transformers.modeling_flash_attention_utils as fa_utils
+
+    _original_flash_attention_forward = fa_utils._flash_attention_forward
+
+    def _patched_flash_attention_forward(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        query_length,
+        is_causal,
+        dropout=0.0,
+        softmax_scale=None,
+        sliding_window=None,
+        use_top_left_mask=False,
+        softcap=None,
+        deterministic=None,
+        cu_seq_lens_q=None,
+        cu_seq_lens_k=None,
+        max_length_q=None,
+        max_length_k=None,
+        target_dtype=None,
+        attn_implementation=None,
+        **kwargs,
+    ):
+        # Use graph-safe argsort path only when:
+        # 1. attention_mask is not None (the problematic branch)
+        # 2. We're in training mode with query_length == kv_seq_len
+        # 3. No pre-computed varlen kwargs
+        # 4. Graph mode is active (full_iteration_graph configured or stream capturing)
+        if (
+            attention_mask is not None
+            and query_length == key_states.shape[1]
+            and cu_seq_lens_q is None
+            and _is_graph_mode_active()
+        ):
+            # Resolve flash_attn varlen function
+            if attn_implementation == "flash_attention_3":
+                from flash_attn_interface import flash_attn_varlen_func as _varlen_func
+            else:
+                from flash_attn import flash_attn_varlen_func as _varlen_func
+
+            # Build flash_kwargs
+            fa_kwargs = {}
+            if dropout > 0.0:
+                fa_kwargs["dropout_p"] = dropout
+            if sliding_window is not None:
+                fa_kwargs["window_size"] = (sliding_window, sliding_window)
+            if deterministic is None:
+                det_flag = os.environ.get("FLASH_ATTENTION_DETERMINISTIC", "0") == "1"
+            else:
+                det_flag = deterministic
+            if attn_implementation != "flash_attention_3":
+                fa_kwargs["deterministic"] = det_flag
+            if softcap is not None:
+                fa_kwargs["softcap"] = softcap
+
+            # PEFT dtype handling
+            if target_dtype is not None:
+                query_states = query_states.to(target_dtype)
+                key_states = key_states.to(target_dtype)
+                value_states = value_states.to(target_dtype)
+
+            causal = is_causal or (query_length > 1 and not use_top_left_mask)
+
+            return _graph_safe_unpad_and_attend(
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+                _varlen_func,
+                softmax_scale,
+                causal,
+                fa_kwargs,
+            )
+
+        # Eager mode or non-matching cases: use original implementation (nonzero-based)
+        return _original_flash_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            query_length,
+            is_causal,
+            dropout=dropout,
+            softmax_scale=softmax_scale,
+            sliding_window=sliding_window,
+            use_top_left_mask=use_top_left_mask,
+            softcap=softcap,
+            deterministic=deterministic,
+            cu_seq_lens_q=cu_seq_lens_q,
+            cu_seq_lens_k=cu_seq_lens_k,
+            max_length_q=max_length_q,
+            max_length_k=max_length_k,
+            target_dtype=target_dtype,
+            attn_implementation=attn_implementation,
+            **kwargs,
+        )
+
+    # Apply the patch to ALL references
+    fa_utils._flash_attention_forward = _patched_flash_attention_forward
+    # Also patch the local reference in flash_attention.py (imported at module load time)
+    import transformers.integrations.flash_attention as flash_attn_integration
+    flash_attn_integration._flash_attention_forward = _patched_flash_attention_forward
+
+
+# Install the patch lazily (called from model __init__, not at import time)
+def _maybe_install_fa2_patches():
+    global _FA2_PATCHES_INSTALLED
+    if _FA2_PATCHES_INSTALLED:
+        return
+    ALL_MASK_ATTENTION_FUNCTIONS._global_mapping["flash_attention_2"] = _flash_attention_mask_no_sync
+    _install_graph_safe_fa2_patch()
+    _FA2_PATCHES_INSTALLED = True
 
 
 # =============================================================================
@@ -83,6 +362,8 @@ class Eagle3VlForConditionalGeneration(Eagle3VlPreTrainedModel, GenerationMixin)
 
     def __init__(self, config: Eagle3VLConfig, vision_model=None, language_model=None):
         super().__init__(config)
+        # Install FA2 patches on first model instantiation (not at import time)
+        _maybe_install_fa2_patches()
 
         self.select_layer = config.select_layer
         self.template = getattr(config, "template", None)
@@ -147,6 +428,8 @@ class Eagle3VlForConditionalGeneration(Eagle3VlPreTrainedModel, GenerationMixin)
         )
         self.image_token_index = config.image_token_index
         self.neftune_alpha = None
+        # Cached spatial shapes for CUDA graph capture (fixed in training)
+        self._cached_pixel_shuffle_shapes = None
 
         self.use_backbone_lora = getattr(config, "use_backbone_lora", 0) != 0
         self.use_llm_lora = getattr(config, "use_llm_lora", 0) != 0
@@ -226,17 +509,19 @@ class Eagle3VlForConditionalGeneration(Eagle3VlPreTrainedModel, GenerationMixin)
 
         input_ids = input_ids.reshape(B * N)
         selected = input_ids == self.image_token_index
-        try:
-            input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds
-        except Exception as e:
-            print(
-                f"warning: {e}, input_embeds[selected].shape={input_embeds[selected].shape}, "
-                f"vit_embeds.shape={vit_embeds.shape}"
-            )
-            n_token = selected.sum()
-            input_embeds[selected] = (
-                input_embeds[selected] * 0.0 + vit_embeds[:n_token]
-            )
+        # Defensive: if token count mismatch (data preprocessing anomaly), truncate vit_embeds.
+        # Only check in eager mode — int(sum()) triggers CPU sync forbidden during capture.
+        # During capture/replay, shapes are fixed by warmup so mismatch cannot occur.
+        if not torch.cuda.is_current_stream_capturing():
+            num_img_tokens = int(selected.sum())
+            if num_img_tokens != vit_embeds.shape[0]:
+                vit_embeds = vit_embeds[:num_img_tokens]
+        # Use masked_scatter_ uniformly (graph-capturable AND numerically identical
+        # to boolean indexing). This eliminates any code-path difference between
+        # graph capture/replay and eager.
+        input_embeds.masked_scatter_(
+            selected.unsqueeze(-1).expand_as(input_embeds), vit_embeds
+        )
 
         input_embeds = input_embeds.reshape(B, N, C)
 
@@ -279,7 +564,20 @@ class Eagle3VlForConditionalGeneration(Eagle3VlPreTrainedModel, GenerationMixin)
     def pixel_shuffle_back(self, vit_embeds, spatial_shapes):
         """Apply pixel shuffle to vision embeddings."""
         B, N, C = vit_embeds.shape
-        shapes = spatial_shapes.tolist()
+        # spatial_shapes.tolist() triggers GPU→CPU sync — not capturable in CUDA graph.
+        # Cache the result from the first eager call and reuse during graph capture,
+        # since shapes are fixed across iterations in training.
+        if torch.cuda.is_current_stream_capturing():
+            shapes = self._cached_pixel_shuffle_shapes
+            if shapes is None:
+                raise RuntimeError(
+                    "pixel_shuffle_back: CUDA graph capture started before warmup. "
+                    "_cached_pixel_shuffle_shapes is None. "
+                    "Ensure at least one eager forward pass runs before graph capture."
+                )
+        else:
+            shapes = spatial_shapes.tolist()
+            self._cached_pixel_shuffle_shapes = shapes
 
         # Split at once
         lengths = [h * w for (h, w) in shapes]
@@ -367,8 +665,26 @@ class Eagle3VlForConditionalGeneration(Eagle3VlPreTrainedModel, GenerationMixin)
         B, N, C = vit_embeds.shape
         vit_embeds = vit_embeds.reshape(B * N, C)
 
-        if image_flags is not None and any(image_flags == 0):
-            vit_embeds = self.mask_valid_tokens(vit_embeds, spatial_shapes, image_flags)
+        # any(image_flags == 0) triggers GPU→CPU sync via Python's any() iterating
+        # over a tensor — not capturable in CUDA graph. In fixed-batch training all
+        # images are valid (flags all 1), so skip masking during graph capture.
+        if image_flags is not None:
+            if torch.cuda.is_current_stream_capturing():
+                # During capture, rely on warmup-phase validation: if warmup detected
+                # invalid images, capture must not proceed (would bake in wrong path).
+                if getattr(self, '_capture_has_invalid_images', False):
+                    raise RuntimeError(
+                        "CUDA graph capture: image_flags contained zeros during warmup. "
+                        "Ensure all batches have valid images when using full-iteration "
+                        "CUDA graph, or disable CUDA graph for this dataset."
+                    )
+            elif any(image_flags == 0):
+                # Only record the flag during graph warmup phase, not during
+                # unrelated eager calls (eval, inference) which should not block
+                # subsequent graph capture.
+                if getattr(self, '_in_graph_warmup', False):
+                    self._capture_has_invalid_images = True
+                vit_embeds = self.mask_valid_tokens(vit_embeds, spatial_shapes, image_flags)
 
         return vit_embeds
 

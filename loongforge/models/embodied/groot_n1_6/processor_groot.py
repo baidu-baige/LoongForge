@@ -260,8 +260,14 @@ def build_processor(
     return processor
 
 
-def make_gr00t_n1d6_pre_post_processors(policy_cfg=None, dataset_stats=None, dataset=None):
-    """Build preprocessors aligned with `lerobot` GR00T-N1.6 baseline."""
+def make_gr00t_n1d6_pre_post_processors(policy_cfg=None, dataset_stats=None, dataset=None, max_length=None):
+    """Build preprocessors aligned with `lerobot` GR00T-N1.6 baseline.
+
+    Args:
+        max_length: If set, pad token sequences to this fixed length. Required
+            for full-iteration CUDA graph where all batches must have identical
+            tensor shapes. When None, uses dynamic padding.
+    """
 
     if policy_cfg is None:
         raise ValueError("policy_cfg (Gr00tN1d6Config) is required to build processors")
@@ -339,6 +345,7 @@ def make_gr00t_n1d6_pre_post_processors(policy_cfg=None, dataset_stats=None, dat
         random_rotation_angle=getattr(policy_cfg, "random_rotation_angle", None),
         color_jitter_params=getattr(policy_cfg, "color_jitter_params", None),
         use_processor_image_size=False,
+        max_length=max_length,
     )
     baseline_processor.train()
 
@@ -866,14 +873,26 @@ class Gr00tN1d6DataCollator:
         tokenizer_assets_repo: str = "lerobot/eagle3-processor-groot-n1d6",
         model_type: Literal["eagle"] = "eagle",
         transformers_loading_kwargs: dict | None = None,
+        max_length: int | None = None,
     ):
-        """Initialize data collator."""
+        """Initialize data collator.
+
+        Args:
+            max_length: If set, pad all sequences to this fixed length using
+                ``padding="max_length"`` and ``truncation=True``. This ensures
+                all batches have identical tensor shapes, which is required for
+                full-iteration CUDA graph (``--cuda-graph-scope=full_iteration``).
+                When ``None`` (default), uses dynamic padding (pad to longest
+                sequence in the batch).
+        """
         if transformers_loading_kwargs is None:
             transformers_loading_kwargs = {}
         self.processor = build_processor(model_name, tokenizer_assets_repo, transformers_loading_kwargs)
         self.processor.tokenizer.padding_side = "left"
         self.model_type = model_type
         self.model_name = model_name
+        self.max_length = max_length
+        self._truncation_warned = False
 
     def __call__(self, features: list[dict[str, Any]]) -> BatchFeature:
         """Process features into batch."""
@@ -891,7 +910,28 @@ class Gr00tN1d6DataCollator:
 
                 if self.model_type == "eagle":
                     image_inputs, _ = self.processor.process_vision_info([v["conversation"] for v in values])
-                vlm_inputs = self.processor(text=text_list, images=image_inputs, return_tensors="pt", padding=True)
+                vlm_inputs = self.processor(
+                    text=text_list, images=image_inputs, return_tensors="pt",
+                    padding="max_length" if self.max_length else True,
+                    max_length=self.max_length,
+                    truncation=self.max_length is not None,
+                )
+                # Detect truncation: if any sample has attention_mask all-1 with
+                # max_length set, it was truncated (no pad tokens added).
+                if (self.max_length is not None and not self._truncation_warned
+                        and "attention_mask" in vlm_inputs):
+                    attn_mask = vlm_inputs["attention_mask"]
+                    num_truncated = int((attn_mask.sum(dim=-1) == attn_mask.shape[-1]).sum())
+                    if num_truncated > 0:
+                        self._truncation_warned = True
+                        warnings.warn(
+                            f"{num_truncated}/{attn_mask.shape[0]} samples in this batch "
+                            f"have no padding tokens (sequence length == max_length="
+                            f"{self.max_length}), which likely means they were truncated. "
+                            "Consider increasing --cuda-graph-pad-length if this is unexpected.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                 for k, v in vlm_inputs.items():
                     batch[k] = v
             elif key in ("pixel_values", "image_grid_thw", "attention_mask", "input_ids"):
@@ -946,6 +986,7 @@ class Gr00tN1d6Processor:
         embodiment_id_mapping: dict[str, int] | None = None,
         transformers_loading_kwargs: dict | None = None,
         use_processor_image_size: bool = False,
+        max_length: int | None = None,
     ):
         """Initialize Gr00tN1d6 processor."""
         if transformers_loading_kwargs is None:
@@ -988,6 +1029,7 @@ class Gr00tN1d6Processor:
         self.shortest_image_edge = shortest_image_edge
         self.crop_fraction = crop_fraction
         self.use_processor_image_size = use_processor_image_size
+        self.max_length = max_length
 
         if use_albumentations and not ALBUMENTATIONS_AVAILABLE:
             warnings.warn(
@@ -1023,6 +1065,7 @@ class Gr00tN1d6Processor:
             tokenizer_assets_repo=tokenizer_assets_repo,
             model_type=model_type,
             transformers_loading_kwargs=transformers_loading_kwargs,
+            max_length=max_length,
         )
         self.training = True
         self._cached_raw_state = None

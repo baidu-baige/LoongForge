@@ -332,11 +332,22 @@ def get_batch(data_iterator):
     return tree_map(lambda x: x.to(device, non_blocking=True) if torch.is_tensor(x) else x, batch)
 
 
+# Module-level flag: when True, loss_func skips NCCL all_reduce (used during
+# CUDA graph capture/replay where NCCL ops are unreliable).
+_SKIP_LOSS_ALLREDUCE = False
+
+
 def loss_func(local_loss_dict: dict, output_tensor: torch.Tensor):
     """Reduce loss across data-parallel ranks and surface useful metrics."""
     loss = output_tensor.float()
-    averaged_loss = average_losses_across_data_parallel_group([loss])
-    loss_reduced = {"loss": averaged_loss[0]}
+
+    if _SKIP_LOSS_ALLREDUCE:
+        # During graph capture/replay, store raw per-GPU loss without NCCL.
+        # The graph wrapper will all_reduce after replay.
+        loss_reduced = {"loss": loss.clone().detach()}
+    else:
+        averaged_loss = average_losses_across_data_parallel_group([loss])
+        loss_reduced = {"loss": averaged_loss[0]}
 
     if local_loss_dict and "loss_per_dim" in local_loss_dict:
         # Megatron's reduction expects scalar or 2-element tensors. Collapse per-dim losses to a scalar mean.
@@ -402,9 +413,10 @@ def forward_step(data_iterator, model):
         # The model returns a dict with 'loss' key
         output_loss = output["loss"]
 
-    # Scale by data parallel size so total_inputs reflects global batch tokens
+    # Scale by data parallel size so total_inputs reflects global batch tokens.
+    # Use CPU tensor to avoid CUDA allocation during CUDA graph capture.
     dp_world_size = mpu.get_data_parallel_world_size(with_context_parallel=False)
-    output["total_inputs"] = torch.tensor(total_tokens * dp_world_size, dtype=torch.float, device=output_loss.device)
+    output["total_inputs"] = torch.tensor(total_tokens * dp_world_size, dtype=torch.float)
     return output_loss, partial(loss_func, output)
 
 
@@ -544,6 +556,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         policy_cfg=preprocessor_cfg,
         dataset_stats=dataset_stats,
         dataset=base_dataset,
+        max_length=getattr(args, "cuda_graph_pad_length", None),
     )
 
     # Optional debug hook: force the first sample index to match a reference run (e.g., lerobot).
@@ -575,6 +588,17 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         )
         shuffle = False
 
+    # Seed for reproducible dataloader ordering.
+    run_seed = args.seed if args.seed is not None else 42
+    data_loader_generator = torch.Generator().manual_seed(run_seed)
+
+    def worker_init_fn(worker_id):
+        """Set per-worker seed derived from the run seed."""
+        worker_seed = run_seed + worker_id
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+        torch.manual_seed(worker_seed)
+
     dataloader = torch.utils.data.DataLoader(
         base_dataset,
         num_workers=args.num_workers,
@@ -584,6 +608,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         pin_memory=config.device == "cuda",
         drop_last=False,
         prefetch_factor=2 if args.num_workers > 0 else None,
+        worker_init_fn=worker_init_fn if args.num_workers > 0 else None,
+        generator=data_loader_generator,
     )
 
     def _prefetch_preprocess_iter(dl_iter, prefetch_count=2):
@@ -618,6 +644,32 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 def default_sft_trainer(train_args):
     """Megatron-FSDP trainer for groot SFT."""
     _ensure_megatron_defaults(train_args)
+
+    # Validate that --cuda-graph-pad-length is set when using full_iteration scope.
+    # Without padding, _graph_safe_unpad_and_attend may access packed tensors OOB during capture.
+    if (getattr(train_args, 'cuda_graph_impl', 'none') == 'local' and
+            getattr(train_args, 'cuda_graph_scope', 'full') == 'full_iteration'):
+        if getattr(train_args, 'cuda_graph_pad_length', None) is None:
+            raise ValueError(
+                "--cuda-graph-pad-length must be set when using "
+                "--cuda-graph-scope=full_iteration. Without padding tokens, "
+                "_graph_safe_unpad_and_attend may access packed tensors out of "
+                "bounds during CUDA graph capture."
+            )
+
+    # Register full-iteration CUDA graph wrapper for this model family.
+    from loongforge.train.training_utils import (
+        register_full_iteration_graph_wrapper,
+        register_per_microbatch_graph_wrapper,
+    )
+    from loongforge.models.embodied.groot_n1_6.modules.groot_full_iteration_graph import (
+        GrootFullIterationGraph,
+    )
+    from loongforge.models.embodied.groot_n1_6.modules.groot_per_microbatch_graph import (
+        GrootPerMicrobatchGraph,
+    )
+    register_full_iteration_graph_wrapper("groot_n1_6", GrootFullIterationGraph)
+    register_per_microbatch_graph_wrapper("groot_n1_6", GrootPerMicrobatchGraph)
 
     trainer = MegatronTrainer(
         train_args=train_args,

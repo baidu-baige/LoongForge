@@ -55,7 +55,6 @@ from megatron.core.distributed import (
     DistributedDataParallelConfig,
     TorchFullyShardedDataParallelConfig,
 )
-from megatron.core.full_cuda_graph import FullCudaGraphWrapper
 from megatron.core.transformer.cuda_graphs import TECudaGraphHelper
 
 try:
@@ -161,6 +160,42 @@ except ImportError:
     HAS_INSPECTOR = False
 
 stimer = StragglerDetector()
+
+
+# ---------------------------------------------------------------------------
+# Full-iteration CUDA graph wrapper registry.
+# Models register their wrapper class via register_full_iteration_graph_wrapper()
+# during trainer construction; training_utils.train() looks up the wrapper here.
+# ---------------------------------------------------------------------------
+_FULL_ITER_GRAPH_REGISTRY: dict[str, type] = {}
+
+
+def register_full_iteration_graph_wrapper(model_name: str, wrapper_cls: type):
+    """Register a full-iteration CUDA graph wrapper for a given model."""
+    _FULL_ITER_GRAPH_REGISTRY[model_name] = wrapper_cls
+
+
+def get_full_iteration_graph_wrapper(model_name: str):
+    """Look up a registered full-iteration graph wrapper, or None."""
+    return _FULL_ITER_GRAPH_REGISTRY.get(model_name)
+
+
+# ---------------------------------------------------------------------------
+# Per-microbatch CUDA graph wrapper registry.
+# Models register their wrapper class via register_per_microbatch_graph_wrapper()
+# during trainer construction; training_utils.train() looks up the wrapper here.
+# ---------------------------------------------------------------------------
+_PER_MICROBATCH_GRAPH_REGISTRY: dict[str, type] = {}
+
+
+def register_per_microbatch_graph_wrapper(model_name: str, wrapper_cls: type):
+    """Register a per-microbatch CUDA graph wrapper for a given model."""
+    _PER_MICROBATCH_GRAPH_REGISTRY[model_name] = wrapper_cls
+
+
+def get_per_microbatch_graph_wrapper(model_name: str):
+    """Look up a registered per-microbatch CUDA graph wrapper, or None."""
+    return _PER_MICROBATCH_GRAPH_REGISTRY.get(model_name)
 
 
 def is_hf_checkpoint(load_path):
@@ -2435,12 +2470,43 @@ def train(
     num_microbatches = get_num_microbatches()
     eval_duration = 0.0
     eval_iterations = 0
-    # Wrap forward_backward_func for Full iteration CUDA graph
     forward_backward_func = get_forward_backward_func()
-    if args.cuda_graph_impl == "local" and args.cuda_graph_scope == "full_iteration":
-        forward_backward_func = FullCudaGraphWrapper(
-            forward_backward_func, cuda_graph_warmup_steps=args.cuda_graph_warmup_steps
+
+    # Full-iteration CUDA graph: wraps forward_backward_func when enabled.
+    # Wrapper class is registered by model-specific trainer (e.g. sft_groot.py).
+    # If no model-specific wrapper is registered, fall back to Megatron's
+    # FullCudaGraphWrapper (simpler, no loss-allreduce suppression or self-heal).
+    if (getattr(args, "cuda_graph_impl", "none") == "local" and
+            getattr(args, "cuda_graph_scope", "full") == "full_iteration"):
+        wrapper_cls = get_full_iteration_graph_wrapper(
+            getattr(args, "model_family", ""))
+        if wrapper_cls is None:
+            from megatron.core.full_cuda_graph import FullCudaGraphWrapper
+            wrapper_cls = FullCudaGraphWrapper
+        forward_backward_func = wrapper_cls(
+            forward_backward_func,
+            cuda_graph_warmup_steps=getattr(args, "cuda_graph_warmup_steps", 3),
         )
+        print_rank_0(f"[{wrapper_cls.__name__}] Enabled full-iteration CUDA graph")
+
+    # Per-microbatch CUDA graph mode: one sub-graph per microbatch with
+    # externalized RNG. Beta.sample + torch.randn run eagerly before each
+    # replay, achieving bit-exact loss alignment with pure eager at
+    # full_iteration performance.
+    # Wrapper class is registered by model-specific trainer (e.g. sft_groot.py).
+    if (getattr(args, "cuda_graph_impl", "none") == "local" and
+            getattr(args, "cuda_graph_scope", "full") == "per_microbatch"):
+        wrapper_cls = get_per_microbatch_graph_wrapper(
+            getattr(args, "model_family", ""))
+        if wrapper_cls is not None:
+            forward_backward_func = wrapper_cls(
+                forward_backward_func,
+                cuda_graph_warmup_steps=getattr(args, "cuda_graph_warmup_steps", 3),
+            )
+            print_rank_0(
+                f"[{wrapper_cls.__name__}] Per-microbatch CUDA graph mode enabled. "
+                "RNG externalized for bit-exact alignment with pure eager."
+            )
 
     prof = None
     if (

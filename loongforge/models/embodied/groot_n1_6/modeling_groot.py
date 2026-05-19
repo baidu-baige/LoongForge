@@ -167,6 +167,14 @@ class Gr00tN1d6ActionHead(nn.Module):
         """
         Sample time steps from beta distribution.
 
+        When running inside a CUDA graph capture (full-iteration graph), uses
+        the inverse CDF method which is graph-capturable.  For Beta(alpha, 1),
+        the inverse CDF is u^(1/alpha), which only requires torch.rand (CUDA RNG).
+
+        For general Beta(alpha, beta) with beta != 1, falls back to
+        torch.distributions.Beta.sample() which is NOT graph-capturable and
+        will raise a RuntimeError if called during graph capture.
+
         Args:
             batch_size: Number of samples to generate
             device: Device to place tensors on
@@ -175,7 +183,26 @@ class Gr00tN1d6ActionHead(nn.Module):
         Returns:
             Sampled time steps
         """
-        sample = self.beta_dist.sample([batch_size]).to(device, dtype=dtype)
+        # Use inverse CDF for Beta(alpha, 1) — always, not just during graph capture.
+        # This ensures identical RNG consumption in both eager and CUDA graph modes.
+        # For Beta(alpha, 1), the CDF is x^alpha, so the inverse CDF is u^(1/alpha).
+        # When --cuda-graph-scope=per_microbatch: use Beta.sample() to achieve
+        # bit-exact alignment with pure eager (sample_time runs outside the graph).
+        from loongforge.models.common.cuda_graph_config import is_per_microbatch_graph
+
+        if is_per_microbatch_graph():
+            sample = self.beta_dist.sample([batch_size]).to(device, dtype=dtype)
+        elif self.config.noise_beta_beta != 1.0:
+            if torch.cuda.is_current_stream_capturing():
+                raise RuntimeError(
+                    "sample_time() during CUDA graph capture requires noise_beta_beta=1.0, "
+                    f"got beta={self.config.noise_beta_beta}."
+                )
+            # Fallback to Beta.sample (beta != 1)
+            sample = self.beta_dist.sample([batch_size]).to(device, dtype=dtype)
+        else:
+            u = torch.rand(batch_size, device=device, dtype=dtype)
+            sample = u.pow(1.0 / self.config.noise_beta_alpha)
         sample = (1 - sample) * self.config.noise_s
         return sample
 
@@ -293,9 +320,25 @@ class Gr00tN1d6ActionHead(nn.Module):
             state_features = state_features + noise
 
         # Embed noised action trajectory (flow matching)
-        noise = torch.randn(actions.shape, device=actions.device, dtype=actions.dtype)
-        t = self.sample_time(actions.shape[0], device=actions.device, dtype=actions.dtype)
-        t = t[:, None, None]  # shape (B, 1, 1) for broadcast
+        # In per-microbatch graph mode: use external static buffers for noise/time
+        # so that graph captures reads from fixed addresses, and we can
+        # overwrite them with fresh Beta.sample() values before each replay.
+        _noise_buf = getattr(self, '_split_noise_buf', None)
+        if _noise_buf is not None:
+            # Split graph mode: read from pre-allocated static buffers.
+            # Buffers are allocated before capture with correct shape.
+            noise = self._split_noise_buf
+            t_1d = self._split_time_buf
+            t = t_1d[:, None, None]
+        else:
+            # Record action shape during warmup for later buffer allocation
+            if getattr(self, '_split_record_shape', False):
+                self._split_actions_shape = actions.shape
+                self._split_actions_device = actions.device
+                self._split_actions_dtype = actions.dtype
+            noise = torch.randn(actions.shape, device=actions.device, dtype=actions.dtype)
+            t = self.sample_time(actions.shape[0], device=actions.device, dtype=actions.dtype)
+            t = t[:, None, None]  # shape (B, 1, 1) for broadcast
 
         # Interpolate between noise and actions
         noisy_trajectory = (1 - t) * noise + t * actions
@@ -616,7 +659,9 @@ class Gr00tN1d6(nn.Module):
         self._checkpoint_max_state_dim = self._detect_checkpoint_state_dim()
         self._checkpoint_max_action_dim = self._detect_checkpoint_action_dim()
         self._checkpoint_action_horizon = self._detect_checkpoint_action_horizon()
-
+        # Pre-allocated padding buffers (lazily initialised on first forward call to
+        # avoid repeated torch.zeros/torch.full kernel launches inside CUDA Graph).
+        self._pad_bufs: dict | None = None
         # Collator is imported here to avoid circular dependency
         try:
             from .processor_groot import Gr00tN1d6DataCollator
@@ -699,6 +744,53 @@ class Gr00tN1d6(nn.Module):
             return 50  # N1.6 default
         return int(checkpoint_horizon)
 
+    def _init_pad_bufs(self, inputs: dict) -> None:
+        """Pre-allocate zero/one-filled buffers for checkpoint-dim padding.
+
+        Called lazily on the first forward pass so that batch size, device, and
+        dtypes are all known.  Each buffer covers the *full* expected shape so that
+        only a copy_ (no kernel for the zero tail) is needed on every subsequent
+        forward pass, eliminating repeated FillFunctor kernel launches.
+        """
+        bufs: dict = {}
+        max_S = self._checkpoint_max_state_dim
+        max_D = self._checkpoint_max_action_dim
+        exp_T = self._checkpoint_action_horizon
+
+        state = inputs.get("state")
+        if state is not None and torch.is_tensor(state):
+            dev, dt = state.device, state.dtype
+            if state.ndim == 2:
+                B = state.shape[0]
+                bufs["state_2d"] = torch.zeros(B, max_S, device=dev, dtype=dt)
+            elif state.ndim == 3:
+                B, T = state.shape[0], state.shape[1]
+                bufs["state_3d"] = torch.zeros(B, T, max_S, device=dev, dtype=dt)
+
+        action = inputs.get("action")
+        if action is not None and torch.is_tensor(action):
+            dev, dt = action.device, action.dtype
+            a = action if action.ndim == 3 else action.unsqueeze(1)
+            B = a.shape[0]
+            bufs["action"] = torch.zeros(B, exp_T, max_D, device=dev, dtype=dt)
+
+        for mask_key in ("action_mask", "action_is_pad"):
+            mask = inputs.get(mask_key)
+            if mask is None or not torch.is_tensor(mask):
+                continue
+            dev, dt = mask.device, mask.dtype
+            pad_val = 1 if mask_key == "action_is_pad" else 0
+            if mask.ndim == 2:
+                B = mask.shape[0]
+                buf = torch.full((B, exp_T), pad_val, device=dev, dtype=dt)
+                bufs[f"{mask_key}_2d"] = buf
+            elif mask.ndim == 3:
+                B = mask.shape[0]
+                buf = torch.full((B, exp_T, max_D), pad_val, device=dev, dtype=dt)
+                bufs[f"{mask_key}_3d"] = buf
+
+        self._pad_bufs = bufs
+
     def _pad_inputs_to_checkpoint_dims(self, inputs: dict) -> dict:
         """Pad / truncate state and action tensors to the dimensions expected by
         the checkpoint weights.
@@ -716,142 +808,121 @@ class Gr00tN1d6(nn.Module):
         """
         inputs = dict(inputs)  # shallow copy so we don't mutate the original
 
+        # Lazily initialise pre-allocated padding buffers on the first call
+        # (batch size / device / dtype are only known at runtime).
+        # Re-initialise if batch size changes (e.g. last micro-batch or eval).
+        _first_tensor = next((v for v in inputs.values() if torch.is_tensor(v)), None)
+        if _first_tensor is not None:
+            _B = _first_tensor.shape[0]
+            # Also check that existing buffers match current state ndim to avoid
+            # KeyError when state switches between 2D and 3D across iterations.
+            _state = inputs.get("state")
+            _state_buf_key = None
+            if _state is not None and torch.is_tensor(_state) and _state.ndim in (2, 3):
+                _state_buf_key = f"state_{_state.ndim}d"
+            # Also check mask ndim to avoid KeyError when mask switches between 2D/3D.
+            _mask_buf_missing = False
+            for _mk in ("action_mask", "action_is_pad"):
+                _m = inputs.get(_mk)
+                if _m is not None and torch.is_tensor(_m) and _m.ndim in (2, 3):
+                    _mk_key = f"{_mk}_{_m.ndim}d"
+                    if self._pad_bufs and _mk_key not in self._pad_bufs:
+                        _mask_buf_missing = True
+                        break
+            _need_reinit = (
+                self._pad_bufs is None
+                or not self._pad_bufs
+                or next(iter(self._pad_bufs.values())).shape[0] != _B
+                or (_state_buf_key is not None and _state_buf_key not in self._pad_bufs)
+                or _mask_buf_missing
+            )
+            if _need_reinit:
+                self._init_pad_bufs(inputs)
+
+        bufs = self._pad_bufs
+        max_state_dim = self._checkpoint_max_state_dim
+        max_action_dim = self._checkpoint_max_action_dim
+        expected_T = self._checkpoint_action_horizon
+
         # ---- state ----
         state = inputs.get("state")
         if state is not None and torch.is_tensor(state):
-            device = state.device
-            max_state_dim = self._checkpoint_max_state_dim
             if state.ndim == 2:
                 B, D = state.shape
                 if D < max_state_dim:
-                    inputs["state"] = torch.cat(
-                        [state, torch.zeros(
-                            B, max_state_dim - D, 
-                            device=device, 
-                            dtype=state.dtype
-                        )], 
-                        dim=1
-                    )
+                    buf = bufs["state_2d"]
+                    buf.zero_()
+                    buf[:, :D].copy_(state)
+                    inputs["state"] = buf
                 elif D > max_state_dim:
                     inputs["state"] = state[:, :max_state_dim]
             elif state.ndim == 3:
                 B, T, D = state.shape
                 if D < max_state_dim:
-                    inputs["state"] = torch.cat(
-                        [state, torch.zeros(
-                            B, T, max_state_dim - D, 
-                            device=device, 
-                            dtype=state.dtype
-                        )], 
-                        dim=2
-                    )
+                    buf = bufs["state_3d"]
+                    buf.zero_()
+                    buf[:, :, :D].copy_(state)
+                    inputs["state"] = buf
                 elif D > max_state_dim:
                     inputs["state"] = state[:, :, :max_state_dim]
 
         # ---- action ----
         action = inputs.get("action")
         if action is not None and torch.is_tensor(action):
-            device = action.device
-            max_action_dim = self._checkpoint_max_action_dim
-            expected_T = self._checkpoint_action_horizon
-
             # Ensure 3-D: [B, T, D]
             if action.ndim == 2:
                 action = action.unsqueeze(1)  # [B, D] -> [B, 1, D]
 
             B, T, D = action.shape
+            need_T_pad = T < expected_T
+            need_D_pad = D < max_action_dim
 
-            # Pad / truncate time dimension
-            if T < expected_T:
-                action = torch.cat(
-                    [action, torch.zeros(
-                        B, expected_T - T, D, 
-                        device=device, 
-                        dtype=action.dtype
-                    )], 
-                    dim=1
-                )
+            if need_T_pad or need_D_pad:
+                buf = bufs["action"]
+                t_copy = min(T, expected_T)
+                d_copy = min(D, max_action_dim)
+                buf.zero_()
+                buf[:, :t_copy, :d_copy].copy_(action[:, :t_copy, :d_copy])
+                action = buf
             elif T > expected_T:
                 action = action[:, :expected_T, :]
-
-            # Pad / truncate action dim
-            if D < max_action_dim:
-                action = torch.cat(
-                    [action, torch.zeros(
-                        B, expected_T, max_action_dim - D, 
-                        device=device, 
-                        dtype=action.dtype
-                    )],
-                    dim=2,
-                )
-            elif D > max_action_dim:
+            if D > max_action_dim:
                 action = action[:, :, :max_action_dim]
 
             inputs["action"] = action
 
         # ---- action_mask / action_is_pad ----
-        # Align time dimension to expected_T.
-        # action_mask is 3-D [B, T, D] and must also have its action_dim padded to
-        # max_action_dim so it can broadcast against pred_actions [B, T, max_action_dim].
-        # action_is_pad is 2-D [B, T] and only needs the time dimension aligned.
-        expected_T = self._checkpoint_action_horizon
-        max_action_dim = self._checkpoint_max_action_dim
+        # action_mask is 3-D [B, T, D]; action_is_pad is 2-D [B, T].
+        # Pad tail with 0 (mask) or 1 (is_pad); truncate if too long.
         for mask_key in ("action_mask", "action_is_pad"):
             mask = inputs.get(mask_key)
             if mask is None or not torch.is_tensor(mask):
                 continue
             if mask.ndim == 2:
-                # [B, T] — only align time dimension
                 B, T = mask.shape
                 if T < expected_T:
-                    pad_val = 1 if mask_key == "action_is_pad" else 0
-                    inputs[mask_key] = torch.cat(
-                        [mask,
-                         torch.full(
-                             (B, expected_T - T), 
-                             pad_val, 
-                             device=mask.device, 
-                             dtype=mask.dtype
-                         )],
-                        dim=1,
-                    )
+                    buf = bufs[f"{mask_key}_2d"]
+                    buf.fill_(1 if mask_key == "action_is_pad" else 0)
+                    buf[:, :T].copy_(mask)
+                    inputs[mask_key] = buf
                 elif T > expected_T:
                     inputs[mask_key] = mask[:, :expected_T]
             elif mask.ndim == 3:
-                # [B, T, D] — align both time and action_dim dimensions
                 B, T, D = mask.shape
-                # pad / truncate time
-                if T < expected_T:
-                    pad_val = 1 if mask_key == "action_is_pad" else 0
-                    mask = torch.cat(
-                        [mask,
-                         torch.full(
-                             (B, expected_T - T, D), 
-                             pad_val, 
-                             device=mask.device, 
-                             dtype=mask.dtype
-                         )],
-                        dim=1,
-                    )
-                elif T > expected_T:
-                    mask = mask[:, :expected_T, :]
-                # pad / truncate action_dim
-                T_now = mask.shape[1]
-                D_now = mask.shape[2]
-                if D_now < max_action_dim:
-                    # Pad with zeros — padded action dims carry no real signal,
-                    # so masking them out (0) prevents spurious loss contribution.
-                    mask = torch.cat(
-                        [mask,
-                         torch.zeros(
-                             B, T_now, max_action_dim - D_now, 
-                             device=mask.device, 
-                             dtype=mask.dtype
-                         )],
-                        dim=2,
-                    )
-                elif D_now > max_action_dim:
-                    mask = mask[:, :, :max_action_dim]
+                need_T_pad = T < expected_T
+                need_D_pad = D < max_action_dim
+                if need_T_pad or need_D_pad:
+                    buf = bufs[f"{mask_key}_3d"]
+                    t_copy = min(T, expected_T)
+                    d_copy = min(D, max_action_dim)
+                    buf.fill_(1 if mask_key == "action_is_pad" else 0)
+                    buf[:, :t_copy, :d_copy].copy_(mask[:, :t_copy, :d_copy])
+                    mask = buf
+                else:
+                    if T > expected_T:
+                        mask = mask[:, :expected_T, :]
+                    if mask.shape[2] > max_action_dim:
+                        mask = mask[:, :, :max_action_dim]
                 inputs[mask_key] = mask
 
         return inputs

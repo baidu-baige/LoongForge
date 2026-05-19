@@ -81,6 +81,12 @@ TRAINING_ARGS=(
     --no-load-rng
     --no-gradient-accumulation-fusion
     --deterministic-mode
+    # Optional: enable CUDA graph (per-microbatch)
+    #--cuda-graph-impl local
+    #--cuda-graph-scope per_microbatch
+    #--cuda-graph-warmup-steps 3
+    #--cuda-graph-pad-length 220          # required: pad seqs to fixed length for graph capture
+    #--no-check-for-nan-in-loss-and-grad  # required when CUDA graph enabled
 )
 
 MODEL_CONFIG_ARGS=(

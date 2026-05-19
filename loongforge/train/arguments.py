@@ -11,8 +11,13 @@ video processing, multimodal training, and parallel execution.
 import argparse
 
 from loongforge.data import get_support_templates
-from loongforge.models import get_support_model_archs
 from loongforge.utils import constants
+
+
+def get_support_model_archs(*args, **kwargs):
+    """Lazy import wrapper to avoid circular import with loongforge.models."""
+    from loongforge.models import get_support_model_archs as _fn
+    return _fn(*args, **kwargs)
 
 
 def loongforge_extra_train_args_provider(parser: argparse.ArgumentParser):
@@ -865,6 +870,30 @@ def _add_extra_video_args(parser):
 # Training Arguments
 # =============================================================================
 
+def _extend_cuda_graph_scope_choices(parser: argparse.ArgumentParser):
+    """Add ``'per_microbatch'`` to the choices of Megatron's ``--cuda-graph-scope``.
+
+    Avoids patching the upstream Megatron parser. Looks up the action by its
+    option string and mutates its ``choices``/``help`` in place. Silently
+    no-ops if the upstream definition has changed and the action can't be
+    found, so we never break parsing.
+    """
+    extra_help = (
+        ' "per_microbatch" scope (LoongForge extension) captures one CUDA graph per '
+        'micro-batch with eager RNG between sub-graphs for bit-exact '
+        'alignment with pure eager. Only supported with --cuda-graph-impl=local.'
+    )
+    for action in parser._actions:
+        if "--cuda-graph-scope" in getattr(action, "option_strings", ()):
+            choices = list(action.choices or [])
+            if "per_microbatch" not in choices:
+                choices.append("per_microbatch")
+                action.choices = choices
+            if action.help and "per_microbatch" not in action.help:
+                action.help = action.help.rstrip() + extra_help
+            return
+
+
 def _add_extra_training_args(parser: argparse.ArgumentParser):
     """Add arguments for training configuration.
     
@@ -933,6 +962,27 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         help="[DEPRECATED] This flag is ignored. Variable sequence length support "
              "is now automatic. Default: False"
     )
+
+    group.add_argument(
+        "--cuda-graph-pad-length",
+        type=int,
+        default=None,
+        dest="cuda_graph_pad_length",
+        help="Fixed sequence length for CUDA graph mode. "
+             "When set (e.g. --cuda-graph-pad-length 220), the data collator pads "
+             "all token sequences to this length (padding='max_length', truncation=True) "
+             "so all batches have identical tensor shapes — a prerequisite for CUDA graph "
+             "capture. When None (default), dynamic padding is used. "
+             "Should be set to a value slightly larger than the maximum actual token "
+             "length in the dataset to minimize wasted computation. "
+             "NOTE: currently only consumed by the groot SFT pipeline "
+             "(Gr00tN1d6DataCollator); other model pipelines ignore this flag.",
+    )
+
+    # Extend Megatron's --cuda-graph-scope to accept "per_microbatch" without patching
+    # the upstream parser. Mutates the already-registered action's choices/help
+    # in place (this provider runs after add_megatron_arguments).
+    _extend_cuda_graph_scope_choices(parser)
 
     # EMA (Exponential Moving Average) arguments
     group.add_argument(

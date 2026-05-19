@@ -190,11 +190,20 @@ def flash_attention_forward_for_packing(
     # FA2 always relies on the value set in the module, so remove it if present in kwargs to avoid passing it twice
     kwargs.pop("is_causal", None)
 
-    cu_seqlens = F.pad(
-        torch.cumsum(torch.tensor(seq_len_list, device=query.device, dtype=torch.int32), dim=0), (1, 0)
-    )
-    cu_seqlens = cu_seqlens.to(torch.int32)
-    max_seq_len = max(seq_len_list)
+    # Cache cu_seqlens on the module so its tensor address stays stable across iterations.
+    # torch.tensor(list) during CUDA graph capture triggers a host-device sync (not capturable).
+    if (
+        not hasattr(module, "_cu_seqlens_cache")
+        or module._cu_seqlens_cache.shape[0] != len(seq_len_list) + 1
+        or module._cu_seqlens_cache.device != query.device
+        or getattr(module, "_seq_len_list_cache", None) != seq_len_list
+    ):
+        seq_len_t = torch.tensor(seq_len_list, device=query.device, dtype=torch.int32)
+        module._cu_seqlens_cache = F.pad(torch.cumsum(seq_len_t, dim=0), (1, 0)).to(torch.int32)
+        module._max_seq_len_cache = max(seq_len_list)
+        module._seq_len_list_cache = list(seq_len_list)
+    cu_seqlens = module._cu_seqlens_cache
+    max_seq_len = module._max_seq_len_cache
     attn_output = _flash_attention_forward(
         query,
         key,
@@ -424,6 +433,16 @@ class Siglip2VisionEmbeddings(nn.Module):
         self.num_patches = config.num_patches
         self.position_embedding_size = int(self.num_patches**0.5)
         self.position_embedding = nn.Embedding(self.num_patches, self.embed_dim)
+        # Cached index permutation for graph-safe window reordering (fixed for constant batch config)
+        self.register_buffer("_window_sort_idx", None, persistent=False)
+        # Cached reverse mapping for graph-safe token reordering (fixed for constant batch config)
+        self.register_buffer("_reverse_mapping_cache", None, persistent=False)
+        # Cached batch_hw list from .tolist() for graph capture (shapes are fixed in training)
+        self._cached_batch_hw_list = None
+        # Cached spatial shapes GPU tensor for graph capture
+        self._cached_spatial_shapes = None
+        # Cached resized positional embeddings for graph capture (F.interpolate not capturable)
+        self._cached_resized_pos_emb = None
 
     def split_patch_embeddings_to_windows_with_meta(self, patch_embeds, batch_hw, window_size):
         """
@@ -442,7 +461,20 @@ class Siglip2VisionEmbeddings(nn.Module):
         """
 
         # 1. Compute start position of each image in the flat tensor
-        batch_hw = batch_hw.tolist()
+        # batch_hw.tolist() triggers GPU→CPU sync — not capturable in CUDA graph.
+        # Cache the result from the first eager call and reuse during graph capture,
+        # since shapes are fixed across iterations in training.
+        if torch.cuda.is_current_stream_capturing():
+            batch_hw = self._cached_batch_hw_list
+            if batch_hw is None:
+                raise RuntimeError(
+                    "split_patch_embeddings_to_windows_with_meta: CUDA graph capture "
+                    "started before warmup. _cached_batch_hw_list is None."
+                )
+        else:
+            batch_hw_list = batch_hw.tolist()
+            self._cached_batch_hw_list = batch_hw_list
+            batch_hw = batch_hw_list
         counts = [H * W for (H, W) in batch_hw]
         starts = [0] + list(accumulate(counts))[:-1]
 
@@ -515,7 +547,19 @@ class Siglip2VisionEmbeddings(nn.Module):
             key=lambda k: (all_meta[k]["img_idx"], all_meta[k]["win_xy"][0], all_meta[k]["win_xy"][1]),
         )
         all_windows = torch.cat(all_windows, dim=0)
-        all_windows = all_windows[sorted_idx]
+        # Use a persistent CUDA tensor for the index permutation so that the address is
+        # stable across iterations — required for CUDA graph capture/replay.
+        # Invalidate cache when content changes (not just length), since different
+        # image size combinations can produce the same window count but different orderings.
+        _new_sort_key = tuple(sorted_idx)
+        if (self._window_sort_idx is None or
+                self._window_sort_idx.shape[0] != len(sorted_idx) or
+                getattr(self, '_window_sort_key_cache', None) != _new_sort_key):
+            self._window_sort_idx = torch.tensor(
+                sorted_idx, dtype=torch.long, device=patch_embeds.device
+            )
+            self._window_sort_key_cache = _new_sort_key
+        all_windows = all_windows[self._window_sort_idx]
         win_meta_list = [all_meta[i] for i in sorted_idx]
 
         windows_list = []
@@ -559,7 +603,19 @@ class Siglip2VisionEmbeddings(nn.Module):
 
                 # After this window, advance offset by the number of effective tokens in the window
             offset += h_eff * w_eff
-        reverse_mapping = torch.tensor(mapping, dtype=torch.long)
+        # Cache on self for CUDA-graph-safe stable tensor address; also keeps the index on GPU
+        # to avoid CPU→GPU sync inside the graph (torch.tensor(list) from CPU is not capturable).
+        # Invalidate when content changes — same total_patches but different image sizes
+        # produces a different mapping.
+        _new_mapping_key = tuple(mapping)
+        if (self._reverse_mapping_cache is None or
+                self._reverse_mapping_cache.shape[0] != len(mapping) or
+                getattr(self, '_reverse_mapping_key_cache', None) != _new_mapping_key):
+            self._reverse_mapping_cache = torch.tensor(
+                mapping, dtype=torch.long, device=patch_embeds.device
+            )
+            self._reverse_mapping_key_cache = _new_mapping_key
+        reverse_mapping = self._reverse_mapping_cache
 
         return all_tokens, win_meta_list, reverse_mapping
 
@@ -598,12 +654,16 @@ class Siglip2VisionEmbeddings(nn.Module):
         for i in range(batch_size):
             # (1, dim, height, width) -> (1, dim, target_height, target_width)
             height, width = spatial_shapes[i]
+            # F.interpolate with antialias=True uses a kernel that is not
+            # CUDA-graph-capturable. Disable antialias during graph capture;
+            # the quality difference is negligible for positional embeddings.
+            antialias = not torch.cuda.is_current_stream_capturing()
             resized_embeddings = F.interpolate(
                 positional_embeddings,
                 size=(height, width),
                 mode="bilinear",
                 align_corners=False,
-                antialias=True,
+                antialias=antialias,
             )
 
             # (1, dim, target_height, target_width) -> (target_height * target_width, dim)
@@ -622,8 +682,24 @@ class Siglip2VisionEmbeddings(nn.Module):
         for shape in bchw_list:
             b, _, h, w = shape
             hw_list.extend([(h // self.patch_size, w // self.patch_size)] * b)
-        hw_tensor = torch.tensor(hw_list)
-        return hw_tensor
+        # Use cached GPU tensor during graph capture; torch.tensor() on CPU
+        # creates a CPU tensor whose implicit GPU transfer breaks CUDA graph.
+        if torch.cuda.is_current_stream_capturing():
+            if self._cached_spatial_shapes is None:
+                raise RuntimeError(
+                    "get_spatial_shapes: CUDA graph capture started before warmup. "
+                    "_cached_spatial_shapes is None."
+                )
+            return self._cached_spatial_shapes
+        target_device = self.position_embedding.weight.device
+        hw_tensor = torch.tensor(hw_list, device=target_device)
+        if (hasattr(self, '_cached_spatial_shapes') and
+                self._cached_spatial_shapes is not None and
+                self._cached_spatial_shapes.shape == hw_tensor.shape):
+            self._cached_spatial_shapes.copy_(hw_tensor)
+        else:
+            self._cached_spatial_shapes = hw_tensor
+        return self._cached_spatial_shapes
 
     def forward(self, pixel_values: torch.FloatTensor) -> torch.Tensor:
         """
@@ -648,9 +724,26 @@ class Siglip2VisionEmbeddings(nn.Module):
         )
         spatial_shapes = self.get_spatial_shapes(bchw_list)
 
-        resized_positional_embeddings = self.resize_positional_embeddings(
-            positional_embeddings, spatial_shapes
-        )
+        # F.interpolate is not CUDA-graph-capturable (uses torch.arange internally).
+        # Cache the result from the first eager call; it's constant for fixed batch shapes.
+        if torch.cuda.is_current_stream_capturing():
+            resized_positional_embeddings = self._cached_resized_pos_emb
+            if resized_positional_embeddings is None:
+                raise RuntimeError(
+                    "Siglip2VisionEmbeddings.forward: CUDA graph capture started before "
+                    "warmup. _cached_resized_pos_emb is None."
+                )
+        else:
+            resized_positional_embeddings = self.resize_positional_embeddings(
+                positional_embeddings, spatial_shapes
+            )
+            if (hasattr(self, '_cached_resized_pos_emb') and
+                    self._cached_resized_pos_emb is not None and
+                    self._cached_resized_pos_emb.shape == resized_positional_embeddings.shape):
+                self._cached_resized_pos_emb.copy_(resized_positional_embeddings)
+            else:
+                self._cached_resized_pos_emb = resized_positional_embeddings
+            resized_positional_embeddings = self._cached_resized_pos_emb
         # Add positional embeddings to patch embeddings
         embeddings = patch_embeds + resized_positional_embeddings
 
