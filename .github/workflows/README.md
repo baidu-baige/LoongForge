@@ -10,6 +10,7 @@ This directory contains the CI/CD workflows for LoongForge.
 | `license.yml` | PR | Check SPDX Apache-2.0 header on newly added source files |
 | `secrets.yml` | PR + push to master | Scan for leaked secrets via gitleaks |
 | `build.yml` | PR + push to master | Build sdist + wheel on Python 3.10 / 3.12 |
+| `submodule-sync.yml` | repository dispatch / workflow dispatch + manual | Sync `third_party/Loong-Megatron` to its tracked branch and push the submodule pointer update |
 | `auto-label.yml` | Issue/PR open/edit | Auto-label issues and PRs by keyword matching |
 
 All workflows support `workflow_dispatch` for manual re-runs from the Actions UI (except `auto-label.yml`).
@@ -32,3 +33,16 @@ All workflows support `workflow_dispatch` for manual re-runs from the Actions UI
 2. Set `permissions` to least-privilege (default: `contents: read`).
 3. Add a `concurrency` block to cancel stale runs on PR branches.
 4. Test locally where possible before pushing.
+
+## Submodule Sync
+
+`submodule-sync.yml` updates `third_party/Loong-Megatron` to the branch configured in `.gitmodules` and commits the submodule pointer when it changes.
+
+Fork validation defaults to `ci/initial-workflows`. It can also receive `submodule_repository` from workflow inputs or `repository_dispatch` payloads to test against a forked Loong-Megatron without changing `.gitmodules`. When this workflow is adopted upstream, change the default `target_branch` input and fallback value in `.github/workflows/submodule-sync.yml` to `master`.
+
+Required secrets:
+
+- `SUBMODULE_SYNC_APP_ID`
+- `SUBMODULE_SYNC_APP_PRIVATE_KEY`
+
+The GitHub App behind those secrets must be able to push to the configured target branch.
