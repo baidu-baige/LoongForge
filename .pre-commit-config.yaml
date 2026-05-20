@@ -1,0 +1,32 @@
+# Shared by local developer hooks and the license.yml workflow.
+# Run locally:  pre-commit run --all-files
+# Install hook: pre-commit install
+
+exclude: '^(third_party|patches)/'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']   # allow Hydra _target_ and custom tags
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        alias: spdx-check
+        name: SPDX header check
+        files: '\.(py|sh|cu|cpp|h)$'
+        exclude: '^(third_party|patches|tests/datasets)/'
+        args:
+          - --license-filepath=.license-header.txt
+          - --use-current-year
+          - --detect-license-in-X-top-lines=10
+          - --no-extra-eol

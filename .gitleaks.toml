@@ -1,0 +1,8 @@
+# LoongForge gitleaks configuration.
+#
+# Start from gitleaks' default ruleset. Project-specific allowlists
+# or custom rules should be added below with a comment citing the PR
+# or incident that justified the exemption.
+
+[extend]
+useDefault = true

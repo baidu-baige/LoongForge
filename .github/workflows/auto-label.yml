@@ -1,0 +1,75 @@
+name: Auto Label
+
+on:
+  issues:
+    types: [opened, edited]
+  pull_request_target:
+    types: [opened, edited, ready_for_review, synchronize]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const payload = context.payload;
+            const eventName = context.eventName;
+
+            if (payload.sender && payload.sender.type === 'Bot') {
+              console.log('Triggered by bot, skipping.');
+              return;
+            }
+
+            let text = "";
+            let targetNumber = null;
+
+            if (eventName === 'pull_request_target') {
+              text = (payload.pull_request.title + " " + (payload.pull_request.body || "")).toLowerCase();
+              targetNumber = payload.pull_request.number;
+            } else {
+              const issue = payload.issue;
+              text = (issue.title + " " + (issue.body || "")).toLowerCase();
+              targetNumber = issue.number;
+            }
+
+            const rules = [
+              ['bug', ['bug', 'error', 'fail', 'crash', 'broken']],
+              ['enhancement', ['feature', 'request', 'enhance', 'add support']],
+              ['documentation', ['doc', 'docs', 'readme', 'documentation']],
+              ['question', ['question', 'how to', 'help', 'why does']],
+              ['ci', ['ci', 'workflow', 'github actions', 'pre-commit']],
+              ['docker', ['docker', 'dockerfile', 'container', 'image']],
+              ['xpu', ['xpu', 'kunlun', 'p800']],
+              ['model', ['model', 'qwen', 'llama', 'deepseek', 'internvl', 'minimax', 'glm']],
+              ['training', ['train', 'pretrain', 'sft', 'fine-tun']],
+              ['checkpoint', ['checkpoint', 'ckpt', 'convert']],
+            ];
+
+            const labelsToAdd = new Set();
+
+            for (const [label, keywords] of rules) {
+              const matched = keywords.some(kw => {
+                const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(^|[^a-zA-Z0-9_])${escaped}(?=[^a-zA-Z0-9_]|$)`, 'i');
+                return regex.test(text);
+              });
+              if (matched) labelsToAdd.add(label);
+            }
+
+            if (labelsToAdd.size > 0) {
+              const labels = Array.from(labelsToAdd);
+              console.log(`Adding labels: ${labels.join(', ')}`);
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: targetNumber,
+                labels: labels,
+              });
+            } else {
+              console.log('No matching keywords found.');
+            }

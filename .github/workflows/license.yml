@@ -1,0 +1,56 @@
+name: License Header
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: license-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  spdx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install pre-commit
+
+      - name: Compute newly added files
+        id: new
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="HEAD~1"
+            HEAD="HEAD"
+          fi
+          git diff --name-only --diff-filter=A "$BASE" "$HEAD" \
+              -- '*.py' '*.sh' '*.cu' '*.cpp' '*.h' \
+            | grep -vE '^(third_party|patches)/' > new_files.txt || true
+          if [ -s new_files.txt ]; then
+            echo "has_files=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "--- newly added files ---"
+          cat new_files.txt || true
+
+      - name: Run SPDX check
+        if: steps.new.outputs.has_files == 'true'
+        shell: bash
+        run: |
+          xargs -a new_files.txt pre-commit run spdx-check --files

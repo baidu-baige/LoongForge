@@ -135,6 +135,39 @@ Before submitting a pull request, please make sure that:
 6. Your changes are fully tested.
 7. You submit the pull request against the correct development branch as required.
 
+## Continuous Integration
+
+Every PR runs the following GitHub Actions workflows on CPU runners (no GPU/XPU).
+
+| Workflow | What it checks | Reproduce locally |
+|---|---|---|
+| PR Title Check | Title matches `[<modules>] <type>: <description>` | n/a — edit the PR title |
+| License Header | Newly added `.py/.sh/.cu/.cpp/.h` files have the SPDX Apache-2.0 header | `pre-commit run spdx-check --files <path>` |
+| Secret Scan | gitleaks finds no leaked secrets in new commits | `gitleaks detect --config .gitleaks.toml` |
+| Build | `python -m build` succeeds on Python 3.10 and 3.12 | `python -m build --sdist --wheel --outdir dist/` |
+
+### Valid PR title modules
+
+`llm, vlm, vla, diffusion, train, data, ops, ckpt, peft, docker, xpu, ci, docs, tests, scripts, release`
+
+### Valid PR title types
+
+`feat, fix, refactor, perf, docs, test, chore, ci`
+
+### Example
+
+`[llm, ckpt] feat: support Qwen3-Next checkpoint conversion`
+
+### Setting up pre-commit locally
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files   # optional
+```
+
+Once installed, the SPDX header check and other hygiene hooks run automatically on `git commit`.
+
 ## License
 By contributing to LoongForge, you agree that your original contributions will be licensed under the [Apache License 2.0](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE).
 

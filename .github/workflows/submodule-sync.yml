@@ -1,0 +1,85 @@
+name: Submodule Sync
+
+on:
+  repository_dispatch:
+    types: [loong-megatron-submodule-updated]
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to update in this repository
+        required: true
+        default: master
+      submodule_path:
+        description: Submodule path to update
+        required: true
+        default: third_party/Loong-Megatron
+      submodule_branch:
+        description: Submodule branch to track
+        required: true
+        default: loong-main/core_v0.15.0
+      submodule_repository:
+        description: Optional owner/repo override for fork validation
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: submodule-sync-${{ github.event.inputs.target_branch || github.event.client_payload.target_branch || 'master' }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch || github.event.client_payload.target_branch || 'master' }}
+      SUBMODULE_PATH: ${{ github.event.inputs.submodule_path || github.event.client_payload.submodule_path || 'third_party/Loong-Megatron' }}
+      SUBMODULE_BRANCH: ${{ github.event.inputs.submodule_branch || github.event.client_payload.submodule_branch || 'loong-main/core_v0.15.0' }}
+      SUBMODULE_REPOSITORY: ${{ github.event.inputs.submodule_repository || github.event.client_payload.submodule_repository || '' }}
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          token: ${{ github.token }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update submodule pointer
+        id: update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- "$SUBMODULE_PATH"
+          if [ -n "$SUBMODULE_REPOSITORY" ]; then
+            git config "submodule.$SUBMODULE_PATH.url" "https://github.com/$SUBMODULE_REPOSITORY.git"
+          fi
+          git submodule update --init -- "$SUBMODULE_PATH"
+          git -C "$SUBMODULE_PATH" fetch origin "$SUBMODULE_BRANCH"
+          git submodule update --remote -- "$SUBMODULE_PATH"
+
+          if git diff --quiet -- "$SUBMODULE_PATH"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Submodule $SUBMODULE_PATH is already current on $SUBMODULE_BRANCH."
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "New submodule pointer:"
+          git diff --submodule=log -- "$SUBMODULE_PATH"
+
+      - name: Commit submodule update
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git add "$SUBMODULE_PATH"
+          git commit -m "[ci] chore: sync Loong-Megatron submodule"
+
+      - name: Push submodule update
+        if: steps.update.outputs.changed == 'true'
+        run: git push origin "HEAD:$TARGET_BRANCH"
