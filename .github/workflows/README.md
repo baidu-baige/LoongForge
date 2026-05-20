@@ -38,7 +38,7 @@ All workflows support `workflow_dispatch` for manual re-runs from the Actions UI
 
 `submodule-sync.yml` updates `third_party/Loong-Megatron` to the branch configured in `.gitmodules` and commits the submodule pointer when it changes.
 
-Fork validation defaults to `ci/initial-workflows`. It can also receive `submodule_repository` from workflow inputs or `repository_dispatch` payloads to test against a forked Loong-Megatron without changing `.gitmodules`. When this workflow is adopted upstream, change the default `target_branch` input and fallback value in `.github/workflows/submodule-sync.yml` to `master`.
+The workflow defaults to `master`. It can also receive `submodule_repository` from workflow inputs or `repository_dispatch` payloads to test against a forked Loong-Megatron without changing `.gitmodules`.
 
 Required secrets:
 

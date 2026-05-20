@@ -8,7 +8,7 @@ on:
       target_branch:
         description: Branch to update in this repository
         required: true
-        default: ci/initial-workflows
+        default: master
       submodule_path:
         description: Submodule path to update
         required: true
@@ -26,14 +26,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: submodule-sync-${{ github.event.inputs.target_branch || github.event.client_payload.target_branch || 'ci/initial-workflows' }}
+  group: submodule-sync-${{ github.event.inputs.target_branch || github.event.client_payload.target_branch || 'master' }}
   cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     env:
-      TARGET_BRANCH: ${{ github.event.inputs.target_branch || github.event.client_payload.target_branch || 'ci/initial-workflows' }}
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch || github.event.client_payload.target_branch || 'master' }}
       SUBMODULE_PATH: ${{ github.event.inputs.submodule_path || github.event.client_payload.submodule_path || 'third_party/Loong-Megatron' }}
       SUBMODULE_BRANCH: ${{ github.event.inputs.submodule_branch || github.event.client_payload.submodule_branch || 'loong-main/core_v0.15.0' }}
       SUBMODULE_REPOSITORY: ${{ github.event.inputs.submodule_repository || github.event.client_payload.submodule_repository || '' }}
