@@ -82,7 +82,7 @@
 |---|---|---|---|---|
 | Qwen3-30B-A3B | MoE | Megatron-LM<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 1024 · 32K | **1.16×** |
 | Qwen3-VL-30B-A3B | VLM | VeOmni<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 128 · 32K | **1.44×** |
-| GR00T N1.6 | VLA | LeRobot<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 128 · 224×224 | **1.60×** |
+| GR00T N1.6 | VLA | LeRobot<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 128 · 224×224 | **2.31×** |
 | Pi0.5 | VLA | OpenPI<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 112 · 224×224 | **1.65×** |
 
 受测试台规模限制，**DeepSeek-V3.2** 在减层配置下单独验证 —— LoongForge 的 **DSA 算子级优化** 相对 Megatron-LM 仍带来 **~5× 加速**，并可支持 **64K 序列长度**（基线在 8K 以上即 OOM）。
