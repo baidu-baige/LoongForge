@@ -4,6 +4,7 @@
 """attention module"""
 
 import torch
+import torch.distributed as dist
 
 from copy import deepcopy
 from megatron.core.transformer.attention import (
@@ -17,6 +18,7 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core import InferenceParams, parallel_state, tensor_parallel
+from megatron.core.packed_seq_params import PackedSeqParams
 import torch.nn as nn
 
 try:
@@ -27,6 +29,55 @@ try:
 except ImportError:
     HAVE_TE = False
     SplitAlongDim = None
+
+
+# [Packing][CP][Ulysses] All-to-all for THD format: scatter one tensor
+# dimension and gather another while preserving autograd through the inverse op.
+def _thd_all_to_all(input_: torch.Tensor, scatter_dim: int, gather_dim: int, group: dist.ProcessGroup):
+    world_size = dist.get_world_size(group)
+    if world_size == 1:
+        return input_
+    input_list = [t.contiguous() for t in torch.tensor_split(input_, world_size, scatter_dim)]
+    output_list = [torch.empty_like(input_list[0]) for _ in range(world_size)]
+    dist.all_to_all(output_list, input_list, group=group)
+    return torch.cat(output_list, dim=gather_dim).contiguous()
+
+
+class _THDSeqAllToAll(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input_, scatter_dim, gather_dim, group):
+        """Run THD sequence all-to-all in the forward pass."""
+        ctx.group = group
+        ctx.scatter_dim = scatter_dim
+        ctx.gather_dim = gather_dim
+        return _thd_all_to_all(input_, scatter_dim, gather_dim, group)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        """Run inverse THD sequence all-to-all for gradient propagation."""
+        return _thd_all_to_all(grad_output, ctx.gather_dim, ctx.scatter_dim, ctx.group), None, None, None
+
+
+def _thd_compact(x, cu_actual, cu_padded):
+    """Remove inter-sample padding from a THD tensor, returning compact tensor and indices."""
+    num_sequences = cu_actual.shape[0] - 1
+    indices = []
+    for sequence_index in range(num_sequences):
+        start_padded = cu_padded[sequence_index].item()
+        actual_len = cu_actual[sequence_index + 1].item() - cu_actual[sequence_index].item()
+        for token_offset in range(actual_len):
+            indices.append(start_padded + token_offset)
+    indices_t = torch.tensor(indices, dtype=torch.long, device=x.device)
+    return x.index_select(0, indices_t), indices_t
+
+
+def _thd_expand(x_compact, indices, total_padded_len, extra_dims):
+    """Scatter compact attention output back to padded positions."""
+    out = torch.zeros(
+        total_padded_len, *extra_dims, dtype=x_compact.dtype, device=x_compact.device
+    )
+    out.index_copy_(0, indices, x_compact)
+    return out
 
 
 class WanSelfAttention(SelfAttention):
@@ -40,14 +91,11 @@ class WanSelfAttention(SelfAttention):
     def __init__(self, config, submodules, **kwargs):
         super().__init__(config, submodules, **kwargs)
 
-        q_hidden_size = self.num_attention_heads_per_partition * self.hidden_size_per_attention_head
-        k_hidden_size = self.num_query_groups_per_partition * self.hidden_size_per_attention_head
-
         # Override q_layernorm and k_layernorm with custom ones if specified
         if submodules.q_layernorm is not None:
             self.q_layernorm = build_module(
                 submodules.q_layernorm,
-                hidden_size=q_hidden_size,
+                hidden_size=self.config.hidden_size,
                 config=self.config,
                 eps=self.config.layernorm_epsilon,
             )
@@ -56,7 +104,7 @@ class WanSelfAttention(SelfAttention):
         if submodules.k_layernorm is not None:
             self.k_layernorm = build_module(
                 submodules.k_layernorm,
-                hidden_size=k_hidden_size,
+                hidden_size=self.config.hidden_size,
                 config=self.config,
                 eps=self.config.layernorm_epsilon,
             )
@@ -187,6 +235,77 @@ class WanSelfAttention(SelfAttention):
         # ==================================
         # core attention computation
         # ==================================
+        # Squeeze batch dim for THD packed format (TE requires 3D: [S, H, D])
+        thd_mode = (packed_seq_params is not None and
+                    getattr(packed_seq_params, 'qkv_format', None) == 'thd')
+        if thd_mode and query.dim() == 4:
+            query = query.squeeze(1)   # [sq, b, np, hn] -> [sq, np, hn]
+            key = key.squeeze(1)
+            value = value.squeeze(1)
+
+        saved_cp_group = None
+        saved_cp_global_ranks = None
+        saved_cp_comm_type = None
+        saved_num_gqa_groups = None
+        saved_num_attn_heads = None
+        ulysses_group = None
+        compact_indices = None
+        total_padded_len = None
+        if thd_mode and hasattr(self.core_attention, 'cp_group') and self.core_attention.cp_group is not None:
+            cp_group = self.core_attention.cp_group
+            is_hierarchical = isinstance(cp_group, list)
+            is_ulysses = getattr(self.core_attention, 'cp_comm_type', 'p2p') in ('a2a', 'all_to_all')
+            if is_hierarchical:
+                # [Packing][CP][Ulysses] Do Ulysses a2a outside TE, keep TE ring on the ring subgroup.
+                saved_cp_group = cp_group
+                ulysses_group = cp_group[0]
+                ring_group = cp_group[1]
+                self.core_attention.cp_group = ring_group
+                saved_cp_global_ranks = getattr(self.core_attention, 'cp_global_ranks', None)
+                if saved_cp_global_ranks is not None:
+                    self.core_attention.cp_global_ranks = dist.get_process_group_ranks(ring_group)
+                saved_cp_comm_type = getattr(self.core_attention, 'cp_comm_type', None)
+                self.core_attention.cp_comm_type = "p2p"
+            elif is_ulysses:
+                # [Packing][CP][Ulysses] Pure Ulysses uses external a2a and no TE ring.
+                saved_cp_group = cp_group
+                ulysses_group = cp_group
+                self.core_attention.cp_group = None
+
+        attn_packed_seq_params = packed_seq_params
+        if thd_mode:
+            cu_q = packed_seq_params.cu_seqlens_q
+            cu_q_padded = packed_seq_params.cu_seqlens_q_padded
+            has_padding = (cu_q_padded is not None
+                           and not torch.equal(cu_q_padded[:-1], cu_q[:-1]))
+            if has_padding:
+                total_padded_len = query.shape[0]
+                query, compact_indices = _thd_compact(query, cu_q, cu_q_padded)
+                key, _ = _thd_compact(key, cu_q, cu_q_padded)
+                value, _ = _thd_compact(value, cu_q, cu_q_padded)
+                compact_cu = cu_q - cu_q[0]
+                max_seqlen = (cu_q[1:] - cu_q[:-1]).max().item()
+                attn_packed_seq_params = PackedSeqParams(
+                    qkv_format="thd",
+                    cu_seqlens_q=compact_cu,
+                    cu_seqlens_kv=compact_cu,
+                    max_seqlen_q=max_seqlen,
+                    max_seqlen_kv=max_seqlen,
+                )
+
+        if ulysses_group is not None:
+            # [Packing][CP][Ulysses] THD layout is [S, H, D]: scatter heads, gather sequence.
+            query = _THDSeqAllToAll.apply(query, 1, 0, ulysses_group)
+            key = _THDSeqAllToAll.apply(key, 1, 0, ulysses_group)
+            value = _THDSeqAllToAll.apply(value, 1, 0, ulysses_group)
+            ulysses_degree = dist.get_world_size(ulysses_group)
+            saved_num_gqa_groups = getattr(self.core_attention, 'num_gqa_groups_per_partition', None)
+            saved_num_attn_heads = getattr(self.core_attention, 'num_attention_heads', None)
+            if saved_num_gqa_groups is not None:
+                self.core_attention.num_gqa_groups_per_partition = saved_num_gqa_groups // ulysses_degree
+            if saved_num_attn_heads is not None:
+                self.core_attention.num_attention_heads = saved_num_attn_heads // ulysses_degree
+
         if self.checkpoint_core_attention and self.training:
             core_attn_out = self._checkpointed_attention_forward(
                 query,
@@ -195,7 +314,7 @@ class WanSelfAttention(SelfAttention):
                 attention_mask,
                 attn_mask_type=attn_mask_type,
                 attention_bias=attention_bias,
-                packed_seq_params=packed_seq_params,
+                packed_seq_params=attn_packed_seq_params,
             )
         else:
             core_attn_out = self.core_attention(
@@ -205,8 +324,33 @@ class WanSelfAttention(SelfAttention):
                 attention_mask,
                 attn_mask_type=attn_mask_type,
                 attention_bias=attention_bias,
-                packed_seq_params=packed_seq_params,
+                packed_seq_params=attn_packed_seq_params,
             )
+
+        if ulysses_group is not None:
+            # [Packing][CP][Ulysses] Invert pre-attention a2a: scatter sequence, gather heads.
+            core_attn_out = _THDSeqAllToAll.apply(core_attn_out, 0, 1, ulysses_group)
+
+        if compact_indices is not None:
+            core_attn_out = _thd_expand(
+                core_attn_out, compact_indices, total_padded_len, core_attn_out.shape[1:]
+            )
+
+        if saved_cp_group is not None:
+            self.core_attention.cp_group = saved_cp_group
+        if saved_cp_global_ranks is not None:
+            self.core_attention.cp_global_ranks = saved_cp_global_ranks
+        if saved_cp_comm_type is not None:
+            self.core_attention.cp_comm_type = saved_cp_comm_type
+        if saved_num_gqa_groups is not None:
+            self.core_attention.num_gqa_groups_per_partition = saved_num_gqa_groups
+        if saved_num_attn_heads is not None:
+            self.core_attention.num_attention_heads = saved_num_attn_heads
+
+        # Unsqueeze batch dim back for THD mode
+        if thd_mode and core_attn_out.dim() == 2:
+            core_attn_out = core_attn_out.unsqueeze(1)  # [sq, h] -> [sq, b, h]
+
         # =================
         # Output. [sq, b, h]
         # =================
@@ -297,6 +441,85 @@ class WanCrossAttention(CrossAttention):
             )
         )
 
+        # Squeeze batch dim for THD packed format (TE requires 3D: [S, H, D])
+        thd_mode = (packed_seq_params is not None and
+                    getattr(packed_seq_params, 'qkv_format', None) == 'thd')
+        if thd_mode and query.dim() == 4:
+            query = query.squeeze(1)
+            key = key.squeeze(1)
+            value = value.squeeze(1)
+
+        saved_cp_group = None
+        saved_cp_global_ranks = None
+        saved_cp_comm_type = None
+        saved_num_gqa_groups = None
+        saved_num_attn_heads = None
+        ulysses_group = None
+        compact_indices_q = None
+        total_padded_len_q = None
+        if thd_mode and hasattr(self.core_attention, 'cp_group') and self.core_attention.cp_group is not None:
+            cp_group = self.core_attention.cp_group
+            is_hierarchical = isinstance(cp_group, list)
+            is_ulysses = getattr(self.core_attention, 'cp_comm_type', 'p2p') in ('a2a', 'all_to_all')
+            if is_hierarchical:
+                # [Packing][CP][Ulysses] Do Ulysses a2a outside TE, keep TE ring on the ring subgroup.
+                saved_cp_group = cp_group
+                ulysses_group = cp_group[0]
+                ring_group = cp_group[1]
+                self.core_attention.cp_group = ring_group
+                saved_cp_global_ranks = getattr(self.core_attention, 'cp_global_ranks', None)
+                if saved_cp_global_ranks is not None:
+                    self.core_attention.cp_global_ranks = dist.get_process_group_ranks(ring_group)
+                saved_cp_comm_type = getattr(self.core_attention, 'cp_comm_type', None)
+                self.core_attention.cp_comm_type = "p2p"
+            elif is_ulysses:
+                # [Packing][CP][Ulysses] Pure Ulysses uses external a2a and no TE ring.
+                saved_cp_group = cp_group
+                ulysses_group = cp_group
+                self.core_attention.cp_group = None
+
+        attn_packed_seq_params = packed_seq_params
+        if thd_mode:
+            cu_q = packed_seq_params.cu_seqlens_q
+            cu_q_padded = packed_seq_params.cu_seqlens_q_padded
+            cu_kv = packed_seq_params.cu_seqlens_kv
+            cu_kv_padded = packed_seq_params.cu_seqlens_kv_padded
+            has_q_padding = (cu_q_padded is not None
+                             and not torch.equal(cu_q_padded[:-1], cu_q[:-1]))
+            has_kv_padding = (cu_kv_padded is not None
+                              and not torch.equal(cu_kv_padded[:-1], cu_kv[:-1]))
+            if has_q_padding or has_kv_padding:
+                total_padded_len_q = query.shape[0]
+                if has_q_padding:
+                    query, compact_indices_q = _thd_compact(query, cu_q, cu_q_padded)
+                if has_kv_padding:
+                    key, _ = _thd_compact(key, cu_kv, cu_kv_padded)
+                    value, _ = _thd_compact(value, cu_kv, cu_kv_padded)
+                compact_cu_q = cu_q - cu_q[0] if has_q_padding else cu_q
+                compact_cu_kv = cu_kv - cu_kv[0] if has_kv_padding else cu_kv
+                max_seqlen_q = (cu_q[1:] - cu_q[:-1]).max().item()
+                max_seqlen_kv = (cu_kv[1:] - cu_kv[:-1]).max().item()
+                attn_packed_seq_params = PackedSeqParams(
+                    qkv_format="thd",
+                    cu_seqlens_q=compact_cu_q,
+                    cu_seqlens_kv=compact_cu_kv,
+                    max_seqlen_q=max_seqlen_q,
+                    max_seqlen_kv=max_seqlen_kv,
+                )
+
+        if ulysses_group is not None:
+            # [Packing][CP][Ulysses] THD layout is [S, H, D]: scatter heads, gather sequence.
+            query = _THDSeqAllToAll.apply(query, 1, 0, ulysses_group)
+            key = _THDSeqAllToAll.apply(key, 1, 0, ulysses_group)
+            value = _THDSeqAllToAll.apply(value, 1, 0, ulysses_group)
+            ulysses_degree = dist.get_world_size(ulysses_group)
+            saved_num_gqa_groups = getattr(self.core_attention, 'num_gqa_groups_per_partition', None)
+            saved_num_attn_heads = getattr(self.core_attention, 'num_attention_heads', None)
+            if saved_num_gqa_groups is not None:
+                self.core_attention.num_gqa_groups_per_partition = saved_num_gqa_groups // ulysses_degree
+            if saved_num_attn_heads is not None:
+                self.core_attention.num_attention_heads = saved_num_attn_heads // ulysses_degree
+
         core_attn_out = self.core_attention(
             query,
             key,
@@ -304,8 +527,32 @@ class WanCrossAttention(CrossAttention):
             attention_mask,
             attn_mask_type=attn_mask_type,
             attention_bias=attention_bias,
-            packed_seq_params=packed_seq_params,
+            packed_seq_params=attn_packed_seq_params,
         )
+
+        if ulysses_group is not None:
+            # [Packing][CP][Ulysses] Invert pre-attention a2a: scatter sequence, gather heads.
+            core_attn_out = _THDSeqAllToAll.apply(core_attn_out, 0, 1, ulysses_group)
+
+        if compact_indices_q is not None:
+            core_attn_out = _thd_expand(
+                core_attn_out, compact_indices_q, total_padded_len_q, core_attn_out.shape[1:]
+            )
+
+        if saved_cp_group is not None:
+            self.core_attention.cp_group = saved_cp_group
+        if saved_cp_global_ranks is not None:
+            self.core_attention.cp_global_ranks = saved_cp_global_ranks
+        if saved_cp_comm_type is not None:
+            self.core_attention.cp_comm_type = saved_cp_comm_type
+        if saved_num_gqa_groups is not None:
+            self.core_attention.num_gqa_groups_per_partition = saved_num_gqa_groups
+        if saved_num_attn_heads is not None:
+            self.core_attention.num_attention_heads = saved_num_attn_heads
+
+        # Unsqueeze batch dim back for THD mode
+        if thd_mode and core_attn_out.dim() == 2:
+            core_attn_out = core_attn_out.unsqueeze(1)
 
         # =================
         # Output. [sq, b, h]

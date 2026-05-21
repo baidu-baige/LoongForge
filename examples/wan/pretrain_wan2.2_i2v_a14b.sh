@@ -102,6 +102,8 @@ TRAINING_ARGS=(
     --no-load-rng
     --no-strict-fsdp-dtensor-load
     --finetune
+    # --packing-sft-data
+    # --packing-buffer-size ${PACKING_BUFFER_SIZE:-512}
     ${RECOMPUTE_ARGS[@]}
 )
 
