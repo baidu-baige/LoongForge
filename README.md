@@ -18,7 +18,11 @@ site/
 │   ├── 2026-04-announcing-loongforge.html             # Announcing LoongForge（EN）
 │   ├── 2026-04-announcing-loongforge.zh.html          # Announcing LoongForge（ZH）
 │   ├── 2026-05-loongforge-v0.1.0-release.html         # v0.1.0 Release Notes（EN）
-│   └── 2026-05-loongforge-v0.1.0-release.zh.html      # v0.1.0 Release Notes（ZH）
+│   ├── 2026-05-loongforge-v0.1.0-release.zh.html      # v0.1.0 Release Notes（ZH）
+│   ├── 2026-05-loongforge-dp-load-balancing.html      # DP Load Balancing（EN）
+│   ├── 2026-05-loongforge-dp-load-balancing.zh.html   # DP Load Balancing（ZH）
+│   ├── 2026-05-loongforge-heterogeneous-parallel-training.html      # Heterogeneous Parallel Training（EN）
+│   └── 2026-05-loongforge-heterogeneous-parallel-training.zh.html   # Heterogeneous Parallel Training（ZH）
 ├── assets/
 │   ├── css/style.css
 │   ├── js/main.js          # 导航/暗黑/复制/Tab/scroll-spy/i18n

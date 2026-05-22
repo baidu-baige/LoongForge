@@ -143,7 +143,7 @@
       'about.ack.body': 'LoongForge is built upon NVIDIA\'s Megatron-LM. We also referenced and drew inspiration from excellent open-source projects including Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.',
 
       'bench.title': '📊 Benchmark',
-      'bench.subtitle': 'Measured in v0.1.0 on A800 across LLM, VLM, and VLA workloads',
+      'bench.subtitle': 'Measured on latest LoongForge across LLM, VLM, and VLA workloads',
       'bench.baseline': '1.0× baseline',
       'bench.ds.title': 'DeepSeek-V3.2 · DSA operator-level optimizations',
       'bench.ds.desc': 'Validated on reduced-layer configuration.',
@@ -308,7 +308,7 @@
       'about.ack.body': 'LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 Transformers、LLaMA-Factory、Megatron-Bridge 等优秀开源项目。真诚感谢这些社区的卓越贡献。',
 
       'bench.title': '📊 性能基准',
-      'bench.subtitle': '基于 v0.1.0，在 A800 上覆盖 LLM、VLM、VLA 工作负载实测',
+      'bench.subtitle': '基于 latest，在 A800 上覆盖 LLM、VLM、VLA 工作负载实测',
       'bench.baseline': '1.0× 基线',
       'bench.ds.title': 'DeepSeek-V3.2 · DSA 算子级优化',
       'bench.ds.desc': '基于裁剪层数配置实测。',
@@ -641,6 +641,7 @@
     const starEls = document.querySelectorAll('#gh-stars, [data-gh-stars]');
     const starTiles = document.querySelectorAll('[data-gh-stars-tile]');
     const contribEl = document.getElementById('gh-contrib');
+    const CONTRIB_FALLBACK = '14+';
     const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
     const showStarTile = n => {
       if (typeof n !== 'number' || n < STARS_MIN) return;
@@ -651,6 +652,7 @@
     const CACHE_TTL = 60 * 60 * 1000; // 1 hour
     let cached = null;
     try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { }
+    if (contribEl) contribEl.textContent = CONTRIB_FALLBACK;
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
       showStarTile(cached.stars);
       if (contribEl && cached.contrib) contribEl.textContent = cached.contrib;
@@ -679,7 +681,7 @@
             try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch (e) { }
           } else {
             return r.json().then(arr => {
-              if (Array.isArray(arr)) {
+              if (Array.isArray(arr) && arr.length > 0) {
                 next.contrib = String(arr.length);
                 contribEl.textContent = next.contrib;
                 try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch (e) { }

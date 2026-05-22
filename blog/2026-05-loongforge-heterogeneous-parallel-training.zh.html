@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>LoongForge 多模态异构并行训练加速，从问题到方案的全面解析 | LoongForge Blog</title>
+  <meta name="description"
+    content="LoongForge 在多模态大模型训练场景下的异构并行加速方案，包括异构 TP、异构 DP、全分离并行和 MoE A2A Overlap 融合。" />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline">← 返回博客</a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">多模态</span><span class="chip">异构并行</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">LoongForge 多模态异构并行训练加速，从问题到方案的全面解析</h1>
+      <div class="text-sm text-gray-500">2026-05-21 · LoongForge 团队</div>
+    </div>
+
+    <div class="prose-lf">
+<p>本文介绍 LoongForge 在多模态大模型训练场景下的异构并行加速方案，包括异构 TP、异构 DP 和全分离并行三级递进策略，以及与 MoE A2A Overlap 的深度融合。</p>
+<blockquote>
+<p>官方网页地址：https://baidu-baige.github.io/LoongForge/</p>
+<p>GitHub 地址：https://github.com/baidu-baige/LoongForge</p>
+</blockquote>
+<hr />
+<h2>1. 背景：多模态大模型的时代</h2>
+<h3>1.1. 从语言到多模态：大模型的能力跃迁</h3>
+<p>2023 年以来，大模型的发展进入了从「纯语言理解」向「多模态感知与推理」跃迁的新阶段。GPT-4V 的发布标志着多模态大模型（Multimodal Large Language Models, MLLM）正式成为行业主流方向，随后 Gemini、Claude 3、Qwen-VL 等一系列模型快速跟进，将图像、视频、音频等多种模态的理解能力融入语言模型。</p>
+<p>这一趋势背后的驱动力清晰而强烈：真实世界的信息本质上是多模态的。一个真正通用的智能体需要像人类一样同时理解文字、图像、语音和视频，才能完成复杂的现实任务——从文档理解、UI 操作、机器人控制到科学研究辅助。</p>
+<h3>1.2. 主流架构：Encoder-Projector-Decoder 范式</h3>
+<p>经过社区的广泛探索，当前多模态大模型已收敛到一个相对统一的架构范式：</p>
+<pre class="language-text"><code class="language-text">多模态大模型典型架构
+
+图像 / 视频
+  ↓
+[Vision Encoder (ViT)]
+  ↓
+[Projector]
+  ├──→ [LLM Decoder] → 输出
+  ↑
+文本 tokens
+</code></pre>
+<ul>
+<li>
+<p><strong>Vision Encoder</strong>：通常采用 ViT（Vision Transformer）架构，负责将图像/视频帧编码为视觉 token 序列。主流方案参数量在 0.3B \~ 6B 之间（如 Qwen3-VL 系列使用 0.6B 的 ViT，InternVL 2.5 使用 6B 的 InternViT）。</p>
+</li>
+<li>
+<p><strong>Projector</strong>：轻量级的模态对齐层（通常为 MLP 或 Cross-Attention），将视觉 token 映射到语言模型的表示空间。</p>
+</li>
+<li>
+<p><strong>LLM Decoder</strong>：大语言模型主干，负责融合多模态信息并生成最终输出。参数量从 7B 到 235B 不等，是模型的绝对主体。</p>
+</li>
+</ul>
+<h3>1.3. 编码器与解码器的规模差距不断扩大和 MoE 架构的普及</h3>
+<p>多模态大模型的参数规模正在快速攀升，而 ViT 部分的参数量基本不变：</p>
+<p>两个显著趋势值得关注：</p>
+<ul>
+<li>
+<p><strong>趋势一：解码器规模快速增长，编码器规模相对稳定。</strong> ViT 编码器的参数量长期维持在 0.3B \~ 6B，而 LLM 解码器已从最初的 7B 增长到 72B 乃至 235B。两者的规模差从最初的 \~10x 拉大到了 \~100x 甚至 \~400x。</p>
+</li>
+<li>
+<p><strong>趋势二：MoE 架构成为大规模多模态模型的主流选择。</strong> Qwen3-VL 系列全面转向 MoE 架构（30B-A3B 和 235B-A22B），在保持推理效率的同时大幅扩展模型容量。但 MoE 在训练时引入了 Expert Parallelism 和 All-to-All 通信，进一步增加了训练系统的复杂性。</p>
+</li>
+</ul>
+<h2>2. 当前训练范式的不足</h2>
+<p>解码器的规模远大于编码器，通常相差一到两个数量级。在分布式训练中，这种规模差异导致了一系列效率问题，同时还需要兼顾现有主流 MoE 模型的特点：</p>
+<p><strong>问题一：</strong><strong>统一 TP 导致编码器通信浪费</strong></p>
+<p>传统做法对整个模型使用统一的 Tensor Parallel（TP）配置。例如，为了满足 72B 解码器的显存需求，需要设置 TP=4 甚至 TP=8。然而对于仅 0.6B 的 ViT 编码器而言，TP=4 时每张卡上的编码器参数仅 150M，计算量极小，而 TP 带来的 AllReduce 通信开销反而占据了绝大比例的时间——<strong>编码器变成了 communication-bound 而非 compute-bound</strong>。</p>
+<pre class="language-text"><code class="language-text">传统方案（统一 TP=4）：
+GPU0: ViT_shard_0 → AllReduce → LLM_shard_0
+GPU1: ViT_shard_1 → AllReduce → LLM_shard_1
+GPU2: ViT_shard_2 → AllReduce → LLM_shard_2
+GPU3: ViT_shard_3 → AllReduce → LLM_shard_3
+                ↑
+    编码器 TP 通信成为瓶颈（计算量太小，通信占比过高）
+</code></pre>
+<p><strong>问题二：PP 流水线气泡</strong></p>
+<p>在 Pipeline Parallelism（PP）场景下，编码器通常只存在于第一级 Pipeline stage。这意味着在解码器均分的情况下，第一级流水线相比其他级别流水线参数量和计算量更多，从而导致流水线气泡。</p>
+<p>为了解决这一问题一般需要手动配置第一级流水线的解码器层数来达到计算均衡，但是由于编码器本身的计算特性与解码器相差很大，手动配置会比较繁琐困难，这同样会导致各级流水计算不均。</p>
+<pre class="language-text"><code class="language-text">传统方案（PP=4，编码器在 stage 0）：
+Stage 0: [ViT Forward] [LLM layers 0-7 fwd] ... [bwd] ...
+Stage 1: [  IDLE   ]  [LLM layers 8-15 fwd] ... [bwd] ...
+Stage 2: [  IDLE   ]  [  wait ] [layers 16-23 fwd] ... [bwd] ...
+Stage 3: [  IDLE   ]  [  wait ] [  wait ] [layers 24-31 fwd] ...
+              ↑
+    Stage 1/2/3 在编码阶段完全空闲
+</code></pre>
+<p><strong>问题三：MoE 通信叠加</strong></p>
+<p>当解码器采用 Mixture-of-Experts（MoE）架构时（如 Qwen3-VL-30B-A3B 使用 top-8 路由），Expert Parallelism（EP）引入的 All-to-All 通信成为另一个显著瓶颈。在传统方案中，编码器的低效与 MoE 通信开销叠加，恶化了整体训练效率。这要求了编码器的优化需要与解码器的优化能够同时开启，从而提高端到端整体效率。</p>
+<p>一个理想的多模态训练并行方案应该满足：</p>
+<ul>
+<li>
+<p><strong>编码器使用最优并行策略</strong>：消除不必要的 TP 通信开销；</p>
+</li>
+<li>
+<p><strong>充分利用所有 GPU 算力</strong>：消除编码阶段的 GPU 空闲；</p>
+</li>
+<li>
+<p><strong>与 MoE 优化正交</strong>：可以同时享受 A2A overlap 的通信隐藏收益。</p>
+</li>
+</ul>
+<h2>3. 方案设计：三级递进异构并行</h2>
+<p>LoongForge 设计了三级递进的异构并行方案。每一级在前一级基础上进一步扩大编码器的等效数据并行度，逐步最大化多模态训练效率。该方案参考了 Kimi 设计的分离并行方案（https://arxiv.org/abs/2602.02276）。</p>
+<h3>3.1. Level 1：异构 TP（Heterogeneous Tensor Parallelism）</h3>
+<h4>设计思路</h4>
+<p>最直接的优化思路是：既然编码器不需要那么大的 TP 度，就让编码器和解码器使用不同的 TP size。</p>
+<p>LoongForge 的异构 TP 将模型视为多个独立的子模块（编码器、解码器），每个子模块可以配置独立的 TP 进程组。系统在模块执行边界自动切换并行上下文。</p>
+<h4>实现机制</h4>
+<p>核心实现基于<strong>并行状态快照与切换</strong>机制：</p>
+<ul>
+<li>
+<p><strong>状态存储</strong>：<code>_ParallelStatesDict</code> 为每个子模块（<code>text_decoder</code>、<code>image_encoder</code>、<code>video_encoder</code>、<code>audio_encoder</code>）保存独立的并行状态（TP group、DP group、PP group 等所有 <code>mpu</code> 级别的变量）。</p>
+</li>
+<li>
+<p><strong>进程组创建</strong>：<code>create_parallel_state(module_name, tp_size)</code> 根据指定的 TP size 为编码器创建一组全新的进程组。例如，当解码器 TP=4 而编码器 TP=2 时，4 块 GPU 被划分为 2 个编码器 TP 组。</p>
+</li>
+<li>
+<p><strong>自动切换</strong>：通过 PyTorch 的 forward/backward hook，在编码器执行前调用 <code>change_parallel_state("image_encoder")</code> 切换到编码器的并行上下文，执行后切换回解码器<code>change_parallel_state("text_decoder")</code>。</p>
+</li>
+</ul>
+<pre><code class="language-python"># 伪代码：并行状态切换（简化）
+class OmniEncoderModel:
+    def _pre_forward_hook(self, module, input):
+        change_parallel_state(&quot;image_encoder&quot;)  # 切换到编码器 TP 组
+
+    def _post_forward_hook(self, module, input, output):
+        change_parallel_state(&quot;text_decoder&quot;)   # 切换回解码器 TP 组
+</code></pre>
+<h4>使用方法</h4>
+<p>只需在编码器的 YAML 配置中指定 TP size：</p>
+<pre class="language-text"><code class="language-text"># configs/models/image_encoder/qwen3_vit.yaml
+_target_: loongforge.models.encoder.Qwen3VisionModelConfig
+num_layers: 27
+hidden_size: 1152
+# ... 其他配置 ...
+tensor_model_parallel_size: 2   # 编码器 TP=2（解码器 TP 由 CLI 参数控制）
+</code></pre>
+<p><strong>性能</strong></p>
+<p>以 Qwen3-VL 为基准模型，在 32k 序列长度下 4 机 A 卡环境，开启异构 TP 后，性能吞吐大约 800 tokens/second，并以此为 base。</p>
+<h3>3.2. Level 2：异构 DP（Heterogeneous Data Parallelism）</h3>
+<h4>设计思路</h4>
+<p>异构 TP 解决了编码器通信浪费的问题，但并没有充分利用算力。当编码器 TP=1 而解码器 TP=4 时，一个 TP 组内的 4 块 GPU 各自持有一份完整的编码器副本，却只用其中一块 GPU 运行编码器——其余 3 块 GPU 上的编码器副本在前向阶段是空闲的。</p>
+<p>异构 DP 的核心洞察是：<strong>既然每块 GPU 上都有完整的编码器，不如让它们同时处理不同的数据</strong>。</p>
+<h4>实现机制</h4>
+<p>当启用异构 DP 时，TP 组内的每块 GPU 在编码阶段独立处理不同的 microbatch：</p>
+<pre class="language-text"><code class="language-text">异构 DP（解码器 TP=4，编码器 TP=1）：
+┌─── TP Group ────────────────────────────────┐
+│ GPU0: ViT(batch_0) → embed_0                │
+│ GPU1: ViT(batch_1) → embed_1                │  编码阶段：4路并行
+│ GPU2: ViT(batch_2) → embed_2                │
+│ GPU3: ViT(batch_3) → embed_3                │
+│                                             │
+│ 广播 embed_i → 所有 GPU                     │  embedding 分发
+│                                             │
+│ GPU0-3: 标准 TP=4 解码器 forward/backward   │  解码阶段：正常 TP
+└──────────────────────────────────────────────┘
+</code></pre>
+<p>具体实现要点：</p>
+<ul>
+<li>
+<p><strong>独立编码</strong>：每个 TP rank 根据自己的 <code>inner_group_id</code> 从 <code>batch_list</code> 中获取对应的 microbatch，独立运行编码器前向。</p>
+</li>
+<li>
+<p><strong>Embedding 广播</strong>：编码完成后，每个 rank 将自己的 embedding 通过 <code>hetero_dp_get_tensor</code> 广播给 TP 组内所有其他 rank（解码器的 TP 并行需要所有 rank 拥有相同的输入）。</p>
+</li>
+<li>
+<p><strong>梯度回传</strong>：在解码器反向传播时，通过注册的梯度 hook（<code>vit_grad_hook_factory</code>）捕获回传到 embedding 的梯度，只在对应的 owner rank 上触发编码器的反向传播。</p>
+</li>
+</ul>
+<pre><code class="language-python"># 伪代码：异构 DP 的前向逻辑（简化）
+def forward(self, batch_list, forward_group_id, inner_group_id):
+    # 每个 rank 处理自己对应的 batch
+    my_batch = batch_list[forward_group_id * tp_size + inner_group_id]
+    # 独立运行编码器
+    embedding = self.encoder(my_batch)
+    # 存储到上下文，供后续 broadcast 使用
+    self.vit_contexts[forward_group_id] = embedding
+    # 解码阶段：从对应 rank broadcast embedding
+    for i in range(tp_size):
+        emb_i = hetero_dp_get_tensor(self.vit_contexts, src=i)
+        # 拼接到解码器输入中
+</code></pre>
+<p>使用方法</p>
+<pre class="language-text"><code class="language-text">MODEL_PARALLEL_ARGS=(
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 2
+    --enable-encoder-hetero-dp    # 一个参数开启
+)
+</code></pre>
+<p>编码器 YAML 中需设置 <code>tensor_model_parallel_size: 1。</code></p>
+<p><strong>性能</strong></p>
+<p>以 Qwen3-VL 为基准模型，在 32k 序列长度下 4 机 A 卡环境，开启异构 DP 后，性能吞吐大约 855 tokens/second，相比 base 性能提升约 6.8%。</p>
+<h3>3.3. Level 3：全分离并行（Full Heterogeneous DP）</h3>
+<h4>设计思路</h4>
+<p>异构 DP 将编码器的等效 DP 度提升到了 TP size（通常 4\~8），但仍然局限在 TP 维度内。在使用 PP（Pipeline Parallelism）时，非首级 stage 的 GPU 在编码阶段依然空闲。</p>
+<p>全分离并行的核心思想是：<strong>将编码器的数据并行度扩展到整个模型并行组（TP × PP × CP），让所有 GPU 在编码阶段都参与视觉编码</strong>。举例说明，对于一个完整迭代，全分离方案首先用所有的卡计算所有 microbatch 的编码器结果，此时编码器的运行并不只在 PP stage0 上，而是所有 stage 都有 Encoder 并且都可同时执行编码器运算，运算完毕后会将中间结果存储起来，然后完整执行解码器，并用存储起来的中间结果作为解码器的输入，从而将编码器和解码器的计算完全分离开。</p>
+<p>这意味着编码阶段和解码阶段被完全解耦，从时间上完全分隔了编码器与解码器的运行，而不是像传统训练方式一样编码器与解码器的运行相互穿插，「全分离」之名由此而来。</p>
+<h4>实现机制</h4>
+<p>全分离并行将训练的一个 iteration 分为三个显式的阶段：</p>
+<pre class="language-text"><code class="language-text">全分离并行（TP=4, PP=2，模型并行组大小=8）：
+════════ Phase 1: 编码阶段（所有 GPU 独立编码）═══════════
+│ Stage0-GPU0: ViT(batch_0)  Stage0-GPU1: ViT(batch_1) │
+│ Stage0-GPU2: ViT(batch_2)  Stage0-GPU3: ViT(batch_3) │
+│ Stage1-GPU4: ViT(batch_4)  Stage1-GPU5: ViT(batch_5) │  编码器 DP=8
+│ Stage1-GPU6: ViT(batch_6)  Stage1-GPU7: ViT(batch_7) │
+│ → gather_variable_shape_embeddings() → rank 0         │  汇集所有 embedding
+════════ Phase 2: 解码阶段（标准 PP+TP 流水线）═════════════
+│ Stage 0 (TP=4): LLM layers 0-15 [1F1B schedule]       │
+│ Stage 1 (TP=4): LLM layers 16-31 [1F1B schedule]      │  正常流水线
+│ PreProcessNode: rank0 broadcast embedding → all ranks │  embedding 按需分发
+════════ Phase 3: 编码器反向（梯度回传到各 GPU）═══════════
+│ scatter_variable_shape_embeddings(grads) → 各 GPU     │  梯度散回
+│ 各 GPU: torch.autograd.backward(local_embedding)       │  独立编码器反向
+│ DDP bucket sync for encoder params                    │  编码器梯度同步
+════════════════════════════════════════════════════════════
+</code></pre>
+<p>关键实现细节：</p>
+<p><strong>变长 Embedding 的 Gather/Scatter</strong></p>
+<p><strong>由于不同样本包含不同数量的图像 token（尤其是视频场景下差异巨大），编码器输出的 tensor 形状在各 GPU 间不一致。LoongForge 实现了 gather_variable_shape_embeddings 和 scatter_variable_shape_embeddings两个通信原语，支持变长 tensor 的跨 rank 收集与分发：</strong></p>
+<pre><code class="language-python"># 先交换 shape 信息，再按需 gather 变长 tensor
+def gather_variable_shape_embeddings(embedding, model_parallel_group):
+    # 1. all_gather shapes
+    local_shape = torch.tensor(embedding.shape)
+    all_shapes = all_gather(local_shape, group=model_parallel_group)
+    # 2. pad to max shape, then all_gather data
+    max_shape = max(all_shapes)
+    padded = pad_to(embedding, max_shape)
+    all_embeddings = all_gather(padded, group=model_parallel_group)
+    # 3. unpad and return list
+    return [unpad(emb, shape) for emb, shape in zip(all_embeddings, all_shapes)]
+</code></pre>
+<p><strong>延迟编码器反向</strong></p>
+<p><strong>在传统的前向-反向交织执行中，编码器反向会在解码器的首个 microbatch 反向时立即触发。但在全分离模式下，编码器反向需要等到所有解码器 microbatch 的 forward-backward 完成后再统一执行。系统通过 full_hetero_dp_grad_hook_factory 捕获梯度并暂存到 grad_list，在 Phase 3 统一回传。</strong></p>
+<p><strong>编码器仅在首个 VPP chunk 实例化</strong></p>
+<p><strong>为避免在每个 PP stage 重复实例化编码器（浪费显存），全分离模式下编码器仅在第一个 Virtual Pipeline Parallel chunk 上创建：</strong></p>
+<pre><code class="language-python"># omni_model_provider.py
+if enable_full_hetero_dp:
+    add_encoder = (vp_stage == 0)  # 仅首个 VPP chunk
+else:
+    add_encoder = (pp_stage == 0)  # 仅首个 PP stage
+</code></pre>
+<p><strong>Mock Microbatch 填充</strong></p>
+<p><strong>当实际 microbatch 数量不能被模型并行组大小整除时，系统自动填充空的 mock microbatch，确保 gather/scatter 操作的对齐。</strong></p>
+<h4>全分离中间结果 offload</h4>
+<h4>开启全分离模式时，编码器与解码器分别独立运行。为确保解码器各 microbatch 均能获取对应的视觉特征，系统需要在解码器前向之前一次性完成整个 GBS（Global Batch Size）内所有数据的编码器计算，并将结果暂存于 GPU 显存中。当输入序列长度较大或 GBS 较高时，这些中间结果（包括 visual embedding、visual_pos_masks、deepstack_visual_embeds 等）会占用大量显存，可能导致解码器阶段出现 OOM。</h4>
+<h4>为解决这一问题，全分离模式支持编码器结果 offload 功能：在编码器前向完成后，将中间结果异步搬运至 CPU 内存；在解码器各 microbatch 实际需要时，再按需加载回 GPU。通过这种方式，以少量 CPU 内存和 H2D 传输开销为代价，显著降低 GPU 显存峰值占用，从而支持更长序列或更大 batch 的训练。</h4>
+<h4>使用方法</h4>
+<pre class="language-text"><code class="language-text">MODEL_PARALLEL_ARGS=(
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 2
+    --enable-full-hetero-dp         # 开启全分离
+    --full-hetero-dp-cpu-offload    # 开启全分离中间结果offload
+    --use-distributed-optimizer
+)
+</code></pre>
+<p>性能</p>
+<p>以 Qwen3-VL 为基准模型，在 32k 序列长度下 4 机 A 卡环境，开启全分离并行后，性能吞吐大约 900 tokens/second，相比 base 性能提升约 12.5%。</p>
+<h4>约束条件</h4>
+<h3>3.4. 三级方案对比</h3>
+<h2>4. 深入融合：全分离 + MoE A2A Overlap</h2>
+<h3>4.1. MoE 训练的通信瓶颈</h3>
+<p>对于 Qwen3-VL-30B-A3B 这类 MoE 架构的多模态模型，Expert Parallelism（EP）引入了大量 All-to-All 通信。在每个 Transformer 层中，MoE 操作涉及两次 All-to-All：</p>
+<pre class="language-text"><code class="language-text">Token Dispatch (A2A) → Expert Computation → Token Combine (A2A)
+       ↑                                          ↑
+ tokens 分发到对应 expert 所在 rank       expert 输出收集回原 rank
+</code></pre>
+<p>当 EP=8 时，每层两次 A2A 的通信量与序列长度和 expert hidden size 成正比，在长序列训练中成为显著瓶颈。</p>
+<h3>4.2. 1F1B A2A Overlap 原理</h3>
+<p>LoongForge 的 A2A Overlap 方案借鉴了 DeepSeek-V3 DualPipe 的思想，将 Transformer 层分解为细粒度的子操作节点，并在不同 microbatch 之间交错调度：</p>
+<pre class="language-text"><code class="language-text">细粒度节点分解：
+TransformerLayer = [Attn] → [PostAttn/Router] → [Dispatch A2A] → [Experts] → [Combine A2A] → [PostCombine]
+                    计算        计算             通信          计算         通信          计算
+
+跨 Microbatch 交错调度：
+MB0: [Attn] [PostAttn] [Dispatch─A2A] [Experts] [Combine─A2A] [PostCombine]
+MB1:                 [Attn─────────] [PostAttn] [Dispatch─A2A] [Experts] ...
+                       ↑                         ↑
+                    MB1 计算隐藏了 MB0 的 A2A 通信
+</code></pre>
+<p>实现上，每个子操作被封装为一个 <code>ScheduleNode</code>，分配到计算流（compute stream）或通信流（comm stream），由 1F1B 调度器自动交错执行。</p>
+<h3>4.3. 融合挑战与解决方案</h3>
+<p>全分离并行与 A2A Overlap 的融合面临一个关键挑战：A2A Overlap 的细粒度调度器需要通过 <code>PreProcessNode</code> 来获取编码器输出，但全分离模式下编码器输出是在 train_step 的 Phase 1 预计算的，而非在 <code>PreProcessNode</code> 中实时计算。</p>
+<p>两者的执行方式在设计上需要进行兼容。</p>
+<p>LoongForge 的解决方案是将异构 DP 的上下文信息完整传递到细粒度调度器中：</p>
+<pre><code class="language-python"># PreProcessNode 扩展（支持全分离模式）
+class PreProcessNode:
+    def __init__(self, ..., enable_full_hetero_dp=False,
+                 enable_encoder_hetero_dp=False,
+                 batch_list=None, forward_group_id=None, inner_group_id=None):
+        self.enable_full_hetero_dp = enable_full_hetero_dp
+        # ... 缓存上下文 ...
+
+    def forward_impl(self, ...):
+        if self.enable_full_hetero_dp:
+            # 从 embedding_list 获取预计算的 embedding
+            embedding = retrieve_precomputed_embedding(forward_group_id, inner_group_id)
+            # broadcast 到所有 TP ranks
+            hetero_dp_get_tensor(embedding, src=0)
+            # 注册梯度 hook 用于 Phase 3 反向
+            register_grad_hook(embedding, grad_list)
+        elif self.enable_encoder_hetero_dp:
+            # TP 组内独立编码 + broadcast
+            embedding = run_encoder_independently(batch_list, inner_group_id)
+            hetero_dp_get_tensor(embedding)
+        else:
+            # 标准路径：直接运行编码器
+            embedding = self.encoder(input)
+        return embedding
+</code></pre>
+<p>通过这一设计，<code>TransformerModelChunkSchedulePlan</code> 在构建调度计划时正确携带了异构 DP 的所有上下文，使得 A2A Overlap 的 microbatch 交错调度与全分离模式的预计算 embedding 无缝协作。</p>
+<h3>4.4. Fine-Grained Activation Offload</h3>
+<p>A2A Overlap 依赖模块级（block）交错执行，与传统的全层重计算（full-layer recomputation）不兼容。为了节省显存，LoongForge 提供了<strong>模块级选择性重计算 + 细粒度 activation offload</strong> 方案：</p>
+<ul>
+<li>
+<p><strong>选择性重计算</strong>：仅对 A2A overlap 涉及的模块进行重计算（<code>attn</code>、<code>post_attn</code>、<code>mlp</code>），保持调度结构不变</p>
+</li>
+<li>
+<p><strong>Tensor 级别 offload</strong>：将 <code>dispatched_input</code>、<code>pre_mlp_layernorm_output</code> 等中间激活异步搬运到 CPU，在需要时再异步加载回 GPU。</p>
+</li>
+</ul>
+<pre class="language-text"><code class="language-text">--recompute-granularity selective \
+--recompute-modules a2a_overlap_attn a2a_overlap_post_attn a2a_overlap_mlp \
+--fine-grained-activation-offloading \
+--offload-tensors dispatched_input pre_mlp_layernorm_output
+</code></pre>
+<p>这样在不牺牲 A2A overlap 效果的前提下，近似实现了全层重计算的显存节省</p>
+<h2>5. 功能兼容性</h2>
+<h3>5.1. 训练阶段兼容</h3>
+<p>两种训练阶段使用相同的模型架构和前向逻辑，通过 <code>@register_model_trainer(family, training_phase)</code> 统一注册，异构并行的实现对训练阶段完全透明。</p>
+<h3>5.2. Encoder Freeze 兼容</h3>
+<p>在 SFT 场景中，冻结视觉编码器是常见做法（保留预训练的视觉理解能力，仅训练解码器的多模态对齐能力）。LoongForge 支持配置级别的 freeze：</p>
+<pre class="language-text"><code class="language-text"># Hydra override 方式
++model.image_encoder.freeze=True
+</code></pre>
+<p>在异构 DP 和全分离模式下，encoder freeze 的行为完全正确：</p>
+<ul>
+<li>
+<p>编码器前向仍正常执行（为解码器提供 embedding）</p>
+</li>
+<li>
+<p>编码器参数的 <code>requires_grad=False</code>，不进行反向传播</p>
+</li>
+<li>
+<p>全分离模式下 Phase 3 的编码器反向被自动跳过</p>
+</li>
+<li>
+<p>编码器参数不参与分布式优化器的 gather/reduce</p>
+</li>
+</ul>
+<h3>5.3. ViT DP Load Balancing 兼容</h3>
+<p>不同样本包含不同数量的图像/视频帧，导致编码器计算量在各 DP rank 间不均衡。LoongForge 的use-vit-dp-balance 功能在数据加载阶段对样本进行重排，平衡各 rank 的编码器计算量。该功能在切换到编码器并行上下文后正确执行，与异构并行完全兼容。</p>
+<h3>5.4. 完整兼容性矩阵</h3>
+<h2>6. 快速上手</h2>
+<p>异构 TP、异构 DP 与全分离只需要在 Loongforge 训练参数中进行相应配置即可运行。其中 <code>--enable-encoder-hetero-dp</code>指定开启异构 DP，<code>--enable-full-hetero-dp</code>指定开启全分离，当开启异构 DP 与全分离时需要在 YAML 中指定TP=1。</p>
+<h3>6.1. 异构 TP</h3>
+<h3>在 YAML 中指定 ViT 的 tp size 即默认开启异构 TP。</h3>
+<pre class="language-text"><code class="language-text">_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+num_layers: 32
+hidden_size: 1280
+kv_channels: 80
+ffn_hidden_size: 3420
+patch_size: 14
+num_attention_heads: 16
+num_query_groups: 16
+image_size: [1344, 1344]
+activation_func: ${act:silu}
+add_bias_linear: true
+add_qkv_bias: true
+swiglu: true
+gated_linear_unit: true
+position_embedding_type: &quot;none&quot;
+bias_activation_fusion: False
+hidden_dropout: 0
+attention_dropout: 0
+normalization: &quot;RMSNorm&quot;
+apply_rope_fusion: true
+tensor_model_parallel_size: 1
+recompute_granularity: full
+recompute_method: uniform
+recompute_num_layers: 1
+model_type: &quot;qwen2_5_vit&quot;
+</code></pre>
+<h3>6.2. 异构 DP</h3>
+<pre class="language-text"><code class="language-text">#!/bin/bash
+# Qwen2.5-VL-7B SFT with Heterogeneous DP
+LOONGFORGE_PATH=/path/to/LoongForge
+MEGATRON_PATH=$LOONGFORGE_PATH/third_party/Loong-Megatron
+MODEL_PARALLEL_ARGS=(
+    --attention-backend flash
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 1
+    --use-distributed-optimizer
+    --enable-encoder-hetero-dp
+)
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+torchrun --nproc_per_node 8 --nnodes 1 \
+    $LOONGFORGE_PATH/loongforge/train.py \
+    --model-name qwen2_5_vl_7b \
+    --training-phase sft \
+    &quot;${MODEL_PARALLEL_ARGS[@]}&quot; \
+    +model.image_encoder.freeze=True \
+    --micro-batch-size 1 \
+    --global-batch-size 32 \
+    --lr 1e-5 \
+    # ... 其他训练参数
+</code></pre>
+<h3>6.3. 编码器和解码器全分离并行</h3>
+<pre class="language-text"><code class="language-text">#!/bin/bash
+# Qwen3-VL-30B-A3B SFT with Full Separation + A2A Overlap
+MODEL_PARALLEL_ARGS=(
+    --attention-backend flash
+    --tensor-model-parallel-size 1
+    --pipeline-model-parallel-size 2
+    --expert-model-parallel-size 4
+    --moe-token-dispatcher-type alltoall
+    --num-virtual-stages-per-pipeline-rank 2
+    --use-distributed-optimizer
+    --enable-full-hetero-dp
+    --overlap-moe-expert-parallel-comm
+    --delay-wgrad-compute
+)
+# 优化 A2A overlap 效果
+export CUDA_DEVICE_MAX_CONNECTIONS=32
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+torchrun --nproc_per_node 8 --nnodes 4 \
+    $LOONGFORGE_PATH/loongforge/train.py \
+    --model-name qwen3_vl_30b_a3b \
+    --training-phase sft \
+    &quot;${MODEL_PARALLEL_ARGS[@]}&quot; \
+    +model.image_encoder.freeze=True \
+    --micro-batch-size 1 \
+    --global-batch-size 64 \
+    --lr 1e-5 \
+    --recompute-granularity selective \
+    --recompute-modules a2a_overlap_attn a2a_overlap_post_attn a2a_overlap_mlp \
+    --fine-grained-activation-offloading \
+    --offload-tensors dispatched_input pre_mlm_layernorm_output \
+    # ... 其他训练参数
+</code></pre>
+<h2>7. 总结</h2>
+<p>LoongForge 的异构并行方案系统性地解决了多模态大模型训练中编码器与解码器的「算力异构」难题，通过三级递进策略逐步释放训练效率：</p>
+<p>方案的设计遵循了以下原则：</p>
+<ul>
+<li>
+<p><strong>渐进式优化</strong>：三级方案可根据模型规模和集群配置灵活选择，无需一步到位；</p>
+</li>
+<li>
+<p><strong>最小侵入性</strong>：通过 hook、并行状态切换、细粒度调度节点等机制实现，对模型代码无侵入；</p>
+</li>
+<li>
+<p><strong>配置驱动</strong>：用户只需添加 1-2 个 CLI 参数即可开启，无需修改训练脚本逻辑；</p>
+</li>
+<li>
+<p><strong>广泛兼容</strong>：与 pretrain、SFT、encoder freeze、LoRA、PP、EP、分布式优化器等全面兼容。</p>
+</li>
+</ul>
+<p>对于使用 MoE 架构的下一代多模态大模型（如 Qwen3-VL-235B-A22B），全分离 + A2A Overlap 的组合提供了当前最优的端到端训练效率方案。</p>
+    </div>
+
+    <div
+      class="mt-10 p-5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-sm">
+      🔗 <b>原文链接：</b> <a href="https://mp.weixin.qq.com/s/ZFWSxNZvDZJ38fyyb8t7vg" target="_blank"
+        rel="noopener" class="text-indigo-700 dark:text-indigo-300 hover:underline break-all">https://mp.weixin.qq.com/s/ZFWSxNZvDZJ38fyyb8t7vg</a>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-05-loongforge-dp-load-balancing.zh.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">← 上一篇：DP 负载均衡优化方案详解</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">所有文章 →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-05-loongforge-heterogeneous-parallel-training.html';
+      const POST_ZH = '2026-05-loongforge-heterogeneous-parallel-training.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        const cur = (localStorage.getItem('lf-lang') === 'zh') ? 'zh' : 'zh';
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === cur)
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="../assets/js/main.js"></script>
+</body>
+
+</html>

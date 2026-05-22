@@ -1,29 +1,81 @@
 [
     {
-        "slug": "2025-10-llava-onevision-case-study",
-        "date": "2025-10-15",
+        "slug": "2026-05-loongforge-heterogeneous-parallel-training",
+        "date": "2026-05-21",
         "featured": false,
         "tags_en": [
-            "Case Study",
-            "VLM",
-            "LLaVA"
+            "LoongForge",
+            "Multimodal",
+            "Parallelism"
         ],
         "tags_zh": [
-            "案例",
-            "VLM",
-            "LLaVA"
+            "LoongForge",
+            "多模态",
+            "异构并行"
         ],
         "en": {
-            "title": "128 GPUs, 4 days — Baidu Baige powers LLaVA-OneVision-1.5, a new record in multimodal training efficiency",
-            "author": "The LoongForge Team",
-            "summary": "LLaVA-OneVision-1.5 pretrained an 8B multimodal model in just 4 days on 128 A800 GPUs with performance rivaling top-tier large models — powered by Baidu Baige's AIAK training framework, the predecessor of LoongForge.",
-            "url": "blog/2025-10-llava-onevision-case-study.html"
+            "title": "LoongForge Multimodal Heterogeneous Parallel Training Acceleration: From Problems to Solutions",
+            "author": "LoongForge 团队",
+            "summary": "This article explains LoongForge's heterogeneous parallel acceleration for multimodal training, including heterogeneous TP, heterogeneous DP, full heterogeneous parallelism, and integration with MoE A2A Overlap.",
+            "url": "blog/2026-05-loongforge-heterogeneous-parallel-training.html"
         },
         "zh": {
-            "title": "128 卡 4 天时间！百度百舸助力 LLaVA-OneVision-1.5 刷新多模态大模型训练效率纪录",
+            "title": "LoongForge 多模态异构并行训练加速，从问题到方案的全面解析",
             "author": "LoongForge 团队",
-            "summary": "LLaVA-OneVision-1.5 在 128 张 A800 上仅用 4 天完成 8B 多模态模型预训练，性能媲美顶级大模型；底层由百度百舸 AIAK 训练框架（LoongForge 的前身）提供全链路加速。",
-            "url": "blog/2025-10-llava-onevision-case-study.zh.html"
+            "summary": "本文介绍 LoongForge 在多模态大模型训练场景下的异构并行加速方案，包括异构 TP、异构 DP 和全分离并行三级递进策略，以及与 MoE A2A Overlap 的深度融合。",
+            "url": "blog/2026-05-loongforge-heterogeneous-parallel-training.zh.html"
+        }
+    },
+    {
+        "slug": "2026-05-loongforge-dp-load-balancing",
+        "date": "2026-05-19",
+        "featured": false,
+        "tags_en": [
+            "LoongForge",
+            "Multimodal",
+            "Training"
+        ],
+        "tags_zh": [
+            "LoongForge",
+            "多模态",
+            "训练加速"
+        ],
+        "en": {
+            "title": "Accelerating Multimodal Model Training: A Deep Dive into LoongForge's DP Load Balancing Optimization",
+            "author": "LoongForge 团队",
+            "summary": "LoongForge addresses DP load imbalance in large language and multimodal model training with adaptive data redistribution based on real compute-cost modeling, reducing synchronization wait time and improving large-scale training throughput.",
+            "url": "blog/2026-05-loongforge-dp-load-balancing.html"
+        },
+        "zh": {
+            "title": "多模态模型训练加速，LoongForge 的 DP 负载均衡优化方案详解",
+            "author": "LoongForge 团队",
+            "summary": "当前大语言模型与多模态大模型训练普遍采用数据并行机制；LoongForge 通过基于真实计算开销建模的自适应数据重分配方案，缓解 DP 节点负载不均并提升大规模训练吞吐效率。",
+            "url": "blog/2026-05-loongforge-dp-load-balancing.zh.html"
+        }
+    },
+    {
+        "slug": "2026-05-loongforge-v0.1.0-release",
+        "date": "2026-05-09",
+        "featured": true,
+        "tags_en": [
+            "Release",
+            "v0.1.0"
+        ],
+        "tags_zh": [
+            "发布",
+            "v0.1.0"
+        ],
+        "en": {
+            "title": "LoongForge v0.1.0 Release Notes",
+            "author": "The LoongForge Team",
+            "summary": "First public release of LoongForge. Broad model coverage across LLM/VLM/VLA/Diffusion, Adaptive FP8, MoE optimizations, and native NVIDIA GPU & Kunlun XPU.",
+            "url": "blog/2026-05-loongforge-v0.1.0-release.html"
+        },
+        "zh": {
+            "title": "LoongForge v0.1.0 Release",
+            "author": "LoongForge 团队",
+            "summary": "LoongForge 首个对外版本：LLM/VLM/VLA/Diffusion 四类模态全覆盖，自适应 FP8、MoE 优化，原生支持 NVIDIA GPU 与昆仑 XPU。",
+            "url": "blog/2026-05-loongforge-v0.1.0-release.zh.html"
         }
     },
     {
@@ -54,28 +106,30 @@
         }
     },
     {
-        "slug": "2026-05-loongforge-v0.1.0-release",
-        "date": "2026-05-09",
-        "featured": true,
+        "slug": "2025-10-llava-onevision-case-study",
+        "date": "2025-10-15",
+        "featured": false,
         "tags_en": [
-            "Release",
-            "v0.1.0"
+            "Case Study",
+            "VLM",
+            "LLaVA"
         ],
         "tags_zh": [
-            "发布",
-            "v0.1.0"
+            "案例",
+            "VLM",
+            "LLaVA"
         ],
         "en": {
-            "title": "LoongForge v0.1.0 Release Notes",
+            "title": "128 GPUs, 4 days — Baidu Baige powers LLaVA-OneVision-1.5, a new record in multimodal training efficiency",
             "author": "The LoongForge Team",
-            "summary": "First public release of LoongForge. Broad model coverage across LLM/VLM/VLA/Diffusion, Adaptive FP8, MoE optimizations, and native NVIDIA GPU & Kunlun XPU.",
-            "url": "blog/2026-05-loongforge-v0.1.0-release.html"
+            "summary": "LLaVA-OneVision-1.5 pretrained an 8B multimodal model in just 4 days on 128 A800 GPUs with performance rivaling top-tier large models — powered by Baidu Baige's AIAK training framework, the predecessor of LoongForge.",
+            "url": "blog/2025-10-llava-onevision-case-study.html"
         },
         "zh": {
-            "title": "LoongForge v0.1.0 Release",
+            "title": "128 卡 4 天时间！百度百舸助力 LLaVA-OneVision-1.5 刷新多模态大模型训练效率纪录",
             "author": "LoongForge 团队",
-            "summary": "LoongForge 首个对外版本：LLM/VLM/VLA/Diffusion 四类模态全覆盖，自适应 FP8、MoE 优化，原生支持 NVIDIA GPU 与昆仑 XPU。",
-            "url": "blog/2026-05-loongforge-v0.1.0-release.zh.html"
+            "summary": "LLaVA-OneVision-1.5 在 128 张 A800 上仅用 4 天完成 8B 多模态模型预训练，性能媲美顶级大模型；底层由百度百舸 AIAK 训练框架（LoongForge 的前身）提供全链路加速。",
+            "url": "blog/2025-10-llava-onevision-case-study.zh.html"
         }
     }
 ]

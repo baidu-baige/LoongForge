@@ -456,6 +456,27 @@ pre.cite-pre>code[class*="language-"] {
   font-size: 0.9em;
 }
 
+.prose-lf pre {
+  background: #0B1020;
+  color: #E5E7EB;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.prose-lf pre code {
+  display: block;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  white-space: pre;
+}
+
 .prose-lf blockquote {
   border-left: 4px solid #6366F1;
   padding: .25rem 1rem;

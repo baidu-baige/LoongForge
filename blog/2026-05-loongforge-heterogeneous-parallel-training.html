@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>LoongForge Multimodal Heterogeneous Parallel Training Acceleration: From Problems to Solutions | LoongForge Blog</title>
+  <meta name="description"
+    content="LoongForge accelerates multimodal training with heterogeneous TP, heterogeneous DP, full separation parallelism, and deep integration with MoE A2A Overlap." />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline">← Back to blog</a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">Multimodal</span><span class="chip">Training</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">LoongForge Multimodal Heterogeneous Parallel Training Acceleration: From Problems to Solutions</h1>
+      <div class="text-sm text-gray-500">2026-05-21 · LoongForge 团队</div>
+    </div>
+
+    <div class="prose-lf">
+
+<p>This article introduces LoongForge's heterogeneous parallel acceleration solution for multimodal large-model training, including three progressive strategies—heterogeneous TP, heterogeneous DP, and full separation parallelism—and deep integration with MoE A2A Overlap.</p>
+<blockquote><p>Official website: <a href="https://baidu-baige.github.io/LoongForge/" target="_blank" rel="noopener">https://baidu-baige.github.io/LoongForge/</a></p><p>GitHub: <a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></p></blockquote>
+<h2>1. Background: the era of multimodal large models</h2>
+<h3>1.1. From language to multimodality: the capability leap of large models</h3>
+<p>Since 2023, large models have entered a new stage of development, moving from pure language understanding toward multimodal perception and reasoning. The release of GPT-4V marked multimodal large language models (MLLMs) as a mainstream industry direction. Gemini, Claude 3, Qwen-VL, and many other models quickly followed, integrating understanding of images, video, audio, and other modalities into language models.</p>
+<p>The force behind this trend is clear and strong: real-world information is inherently multimodal. A truly general-purpose agent must understand text, images, speech, and video at the same time, like humans do, before it can complete complex real-world tasks—from document understanding, UI operation, and robot control to scientific research assistance.</p>
+<h3>1.2. Mainstream architecture: the Encoder-Projector-Decoder paradigm</h3>
+<p>After broad exploration by the community, current multimodal large models have converged on a relatively unified architecture paradigm:</p>
+<pre class="language-text"><code class="language-text">Typical multimodal large-model architecture
+
+Image / Video
+  ↓
+[Vision Encoder (ViT)]
+  ↓
+[Projector]
+  ├──→ [LLM Decoder] → Output
+  ↑
+Text tokens</code></pre>
+<ul><li><strong>Vision Encoder</strong>: usually a ViT (Vision Transformer) architecture, responsible for encoding images or video frames into visual token sequences. Mainstream designs range from 0.3B to 6B parameters, such as the 0.6B ViT used by Qwen3-VL and the 6B InternViT used by InternVL 2.5.</li><li><strong>Projector</strong>: a lightweight modality-alignment layer, usually an MLP or Cross-Attention, that maps visual tokens into the representation space of the language model.</li><li><strong>LLM Decoder</strong>: the large-language-model backbone, responsible for fusing multimodal information and generating the final output. Its parameter count ranges from 7B to 235B, making it the dominant part of the model.</li></ul>
+<h3>1.3. The encoder-decoder scale gap keeps growing, and MoE architectures are becoming common</h3>
+<p>The parameter scale of multimodal large models is rising quickly, while the ViT part remains basically unchanged:</p>
+<p>Two notable trends deserve attention:</p>
+<ul><li><strong>Trend 1: decoder size grows rapidly while encoder size stays relatively stable.</strong> ViT encoder parameter counts have long remained around 0.3B to 6B, while LLM decoders have grown from the original 7B to 72B and even 235B. The scale gap has expanded from roughly 10x to roughly 100x and even 400x.</li><li><strong>Trend 2: MoE architectures are becoming the mainstream choice for large-scale multimodal models.</strong> The Qwen3-VL series fully shifts to MoE architectures (30B-A3B and 235B-A22B), greatly expanding model capacity while maintaining inference efficiency. But MoE introduces Expert Parallelism and All-to-All communication during training, further increasing training-system complexity.</li></ul>
+<h2>2. Limitations of the current training paradigm</h2>
+<p>The decoder is much larger than the encoder, usually by one to two orders of magnitude. In distributed training, this scale difference causes a series of efficiency problems, while the system must also account for characteristics of mainstream MoE models.</p>
+<h3>Problem 1: unified TP causes encoder communication waste</h3>
+<p>The traditional approach uses a unified Tensor Parallel (TP) configuration for the entire model. For example, to satisfy memory requirements for a 72B decoder, TP=4 or even TP=8 may be needed. But for a 0.6B ViT encoder, TP=4 leaves only 150M encoder parameters on each card. The compute amount is extremely small, while the AllReduce communication overhead introduced by TP occupies an overwhelming share of time. The <strong>encoder becomes communication-bound rather than compute-bound</strong>.</p>
+<pre class="language-text"><code class="language-text">Traditional solution (unified TP=4):
+GPU0: ViT_shard_0 → AllReduce → LLM_shard_0
+GPU1: ViT_shard_1 → AllReduce → LLM_shard_1
+GPU2: ViT_shard_2 → AllReduce → LLM_shard_2
+GPU3: ViT_shard_3 → AllReduce → LLM_shard_3
+                ↑
+    Encoder TP communication becomes the bottleneck
+    (compute is too small and communication share is too high)</code></pre>
+<h3>Problem 2: PP pipeline bubbles</h3>
+<p>In Pipeline Parallelism (PP), the encoder usually exists only in the first pipeline stage. This means that when decoder layers are evenly divided, the first pipeline stage has more parameters and compute than the other stages, causing pipeline bubbles.</p>
+<p>Solving this usually requires manually configuring the number of decoder layers in the first pipeline stage to reach compute balance. But because the encoder's compute characteristics are very different from the decoder's, manual configuration is cumbersome and difficult, and can still lead to imbalanced pipeline computation across stages.</p>
+<pre class="language-text"><code class="language-text">Traditional solution (PP=4, encoder in stage 0):
+Stage 0: [ViT Forward] [LLM layers 0-7 fwd] ... [bwd] ...
+Stage 1: [  IDLE   ]  [LLM layers 8-15 fwd] ... [bwd] ...
+Stage 2: [  IDLE   ]  [  wait ] [layers 16-23 fwd] ... [bwd] ...
+Stage 3: [  IDLE   ]  [  wait ] [  wait ] [layers 24-31 fwd] ...
+              ↑
+    Stage 1/2/3 are completely idle during encoding</code></pre>
+<h3>Problem 3: MoE communication stacks on top</h3>
+<p>When the decoder uses a Mixture-of-Experts (MoE) architecture, such as Qwen3-VL-30B-A3B with top-8 routing, All-to-All communication introduced by Expert Parallelism (EP) becomes another significant bottleneck. In the traditional solution, encoder inefficiency stacks with MoE communication overhead and worsens overall training efficiency. This requires encoder optimization and decoder optimization to be enabled together so that end-to-end efficiency improves.</p>
+<p>An ideal multimodal-training parallel solution should satisfy the following:</p>
+<ul><li><strong>Use the optimal parallel strategy for the encoder</strong>: eliminate unnecessary TP communication overhead.</li><li><strong>Fully utilize all GPU compute</strong>: eliminate GPU idleness during the encoding phase.</li><li><strong>Be orthogonal to MoE optimization</strong>: allow A2A overlap communication-hiding benefits to be used at the same time.</li></ul>
+<h2>3. Solution design: three progressive levels of heterogeneous parallelism</h2>
+<p>LoongForge designs a three-level progressive heterogeneous parallel solution. Each level further expands the encoder's effective data parallelism on top of the previous level, gradually maximizing multimodal training efficiency. The solution refers to Kimi's separated-parallelism design (<a href="https://arxiv.org/abs/2602.02276" target="_blank" rel="noopener">https://arxiv.org/abs/2602.02276</a>).</p>
+<h3>3.1. Level 1: Heterogeneous Tensor Parallelism</h3>
+<h4>Design idea</h4><p>The most direct optimization is: since the encoder does not need such a large TP degree, let the encoder and decoder use different TP sizes.</p>
+<p>LoongForge's heterogeneous TP treats the model as multiple independent submodules, such as encoder and decoder. Each submodule can configure an independent TP process group, and the system automatically switches parallel context at module execution boundaries.</p>
+<h4>Implementation mechanism</h4><p>The core implementation is based on a <strong>parallel-state snapshot and switching</strong> mechanism:</p>
+<ul><li><strong>State storage</strong>: <code>_ParallelStatesDict</code> stores independent parallel states for each submodule (<code>text_decoder</code>, <code>image_encoder</code>, <code>video_encoder</code>, <code>audio_encoder</code>), including TP group, DP group, PP group, and all other <code>mpu</code>-level variables.</li><li><strong>Process-group creation</strong>: <code>create_parallel_state(module_name, tp_size)</code> creates a completely new set of process groups for the encoder according to the specified TP size. For example, when decoder TP=4 and encoder TP=2, four GPUs are divided into two encoder TP groups.</li><li><strong>Automatic switching</strong>: PyTorch forward/backward hooks call <code>change_parallel_state("image_encoder")</code> before encoder execution to switch to the encoder parallel context, and call <code>change_parallel_state("text_decoder")</code> afterward to switch back to the decoder.</li></ul>
+<pre><code class="language-python"># Pseudo-code: parallel-state switching (simplified)
+class OmniEncoderModel:
+    def _pre_forward_hook(self, module, input):
+        change_parallel_state("image_encoder")  # switch to encoder TP group
+
+    def _post_forward_hook(self, module, input, output):
+        change_parallel_state("text_decoder")   # switch back to decoder TP group</code></pre>
+<h4>Usage</h4><p>Only the encoder TP size needs to be specified in the YAML configuration:</p>
+<pre><code class="language-yaml"># configs/models/image_encoder/qwen3_vit.yaml
+_target_: loongforge.models.encoder.Qwen3VisionModelConfig
+num_layers: 27
+hidden_size: 1152
+# ... other config ...
+tensor_model_parallel_size: 2   # encoder TP=2 (decoder TP is controlled by CLI args)</code></pre>
+<p><strong>Performance</strong></p><p>Using Qwen3-VL as the baseline model at 32k sequence length in a 4-machine A-card environment, enabling heterogeneous TP gives throughput of about 800 tokens/second, which is used as the base.</p>
+<h3>3.2. Level 2: Heterogeneous Data Parallelism</h3>
+<h4>Design idea</h4><p>Heterogeneous TP solves the encoder communication-waste problem, but it does not fully utilize compute. When encoder TP=1 and decoder TP=4, each of the four GPUs in a TP group holds a complete encoder replica, but only one GPU runs the encoder; the encoder replicas on the other three GPUs are idle during forward.</p>
+<p>The core insight of heterogeneous DP is: <strong>since every GPU has a complete encoder, let them process different data simultaneously</strong>.</p>
+<h4>Implementation mechanism</h4><p>When heterogeneous DP is enabled, each GPU inside a TP group independently processes a different microbatch during the encoding phase:</p>
+<pre class="language-text"><code class="language-text">Heterogeneous DP (decoder TP=4, encoder TP=1):
+┌─── TP Group ────────────────────────────────┐
+│ GPU0: ViT(batch_0) → embed_0                │
+│ GPU1: ViT(batch_1) → embed_1                │  encoding: 4-way parallel
+│ GPU2: ViT(batch_2) → embed_2                │
+│ GPU3: ViT(batch_3) → embed_3                │
+│                                             │
+│ broadcast embed_i → all GPUs                │  embedding distribution
+│                                             │
+│ GPU0-3: standard TP=4 decoder fwd/bwd       │  decoding: normal TP
+└──────────────────────────────────────────────┘</code></pre>
+<p>Key implementation points:</p><ul><li><strong>Independent encoding</strong>: each TP rank uses its <code>inner_group_id</code> to fetch the corresponding microbatch from <code>batch_list</code> and independently run encoder forward.</li><li><strong>Embedding broadcast</strong>: after encoding, each rank broadcasts its embedding to all other ranks in the TP group through <code>hetero_dp_get_tensor</code>, because decoder TP requires all ranks to have the same input.</li><li><strong>Gradient return</strong>: during decoder backward, a registered gradient hook (<code>vit_grad_hook_factory</code>) captures the gradient flowing back to the embedding and triggers encoder backward only on the corresponding owner rank.</li></ul>
+<pre><code class="language-python"># Pseudo-code: heterogeneous DP forward logic (simplified)
+def forward(self, batch_list, forward_group_id, inner_group_id):
+    # Each rank processes its corresponding batch
+    my_batch = batch_list[forward_group_id * tp_size + inner_group_id]
+    # Run encoder independently
+    embedding = self.encoder(my_batch)
+    # Store in context for later broadcast
+    self.vit_contexts[forward_group_id] = embedding
+    # Decoding phase: broadcast embedding from each corresponding rank
+    for i in range(tp_size):
+        emb_i = hetero_dp_get_tensor(self.vit_contexts, src=i)
+        # concatenate into decoder input</code></pre>
+<h4>Usage</h4><pre><code class="language-bash">MODEL_PARALLEL_ARGS=(
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 2
+    --enable-encoder-hetero-dp    # one argument enables it
+)</code></pre>
+<p>The encoder YAML must set <code>tensor_model_parallel_size: 1</code>.</p><p><strong>Performance</strong></p><p>Using Qwen3-VL as the baseline at 32k sequence length in a 4-machine A-card environment, heterogeneous DP reaches about 855 tokens/second, about 6.8% faster than the base.</p>
+<h3>3.3. Level 3: Full Heterogeneous DP</h3>
+<h4>Design idea</h4><p>Heterogeneous DP raises the encoder's effective DP degree to TP size, usually 4 to 8, but it is still limited to the TP dimension. When PP is used, GPUs in non-first stages remain idle during encoding.</p>
+<p>The core idea of full separation parallelism is: <strong>expand the encoder's data parallelism to the entire model-parallel group (TP × PP × CP), so all GPUs participate in visual encoding during the encoding phase</strong>. For a complete iteration, full separation first uses all cards to compute encoder results for all microbatches. The encoder no longer runs only on PP stage 0; all stages have an Encoder and can perform encoder computation simultaneously. After computation, intermediate results are stored, then the full decoder execution runs and uses the stored intermediate results as decoder input. This completely separates encoder and decoder computation.</p>
+<p>This means the encoding phase and decoding phase are fully decoupled and separated in time, rather than interleaving encoder and decoder execution as in traditional training. This is why it is called “full separation.”</p>
+<h4>Implementation mechanism</h4><p>Full separation parallelism splits one training iteration into three explicit phases:</p>
+<pre class="language-text"><code class="language-text">Full separation parallelism (TP=4, PP=2, model-parallel group size=8):
+════════ Phase 1: Encoding (all GPUs independently encode) ═══════════
+│ Stage0-GPU0: ViT(batch_0)  Stage0-GPU1: ViT(batch_1) │
+│ Stage0-GPU2: ViT(batch_2)  Stage0-GPU3: ViT(batch_3) │
+│ Stage1-GPU4: ViT(batch_4)  Stage1-GPU5: ViT(batch_5) │  encoder DP=8
+│ Stage1-GPU6: ViT(batch_6)  Stage1-GPU7: ViT(batch_7) │
+│ → gather_variable_shape_embeddings() → rank 0         │  gather all embeddings
+════════ Phase 2: Decoding (standard PP+TP pipeline) ═════════════
+│ Stage 0 (TP=4): LLM layers 0-15 [1F1B schedule]       │
+│ Stage 1 (TP=4): LLM layers 16-31 [1F1B schedule]      │  normal pipeline
+│ PreProcessNode: rank0 broadcast embedding → all ranks │  distribute embeddings on demand
+════════ Phase 3: Encoder backward (gradients return to GPUs) ═══════════
+│ scatter_variable_shape_embeddings(grads) → GPUs       │  scatter gradients
+│ GPUs: torch.autograd.backward(local_embedding)        │  independent encoder backward
+│ DDP bucket sync for encoder params                    │  encoder gradient sync
+════════════════════════════════════════════════════════════</code></pre>
+<p>Key implementation details:</p><p><strong>Gather/Scatter for variable-length embeddings</strong></p><p><strong>Because different samples contain different numbers of image tokens, especially with highly variable videos, encoder-output tensor shapes are inconsistent across GPUs. LoongForge implements two communication primitives, <code>gather_variable_shape_embeddings</code> and <code>scatter_variable_shape_embeddings</code>, to support collection and distribution of variable-length tensors across ranks:</strong></p>
+<pre><code class="language-python"># Exchange shape information first, then gather variable-length tensors as needed
+def gather_variable_shape_embeddings(embedding, model_parallel_group):
+    # 1. all_gather shapes
+    local_shape = torch.tensor(embedding.shape)
+    all_shapes = all_gather(local_shape, group=model_parallel_group)
+    # 2. pad to max shape, then all_gather data
+    max_shape = max(all_shapes)
+    padded = pad_to(embedding, max_shape)
+    all_embeddings = all_gather(padded, group=model_parallel_group)
+    # 3. unpad and return list
+    return [unpad(emb, shape) for emb, shape in zip(all_embeddings, all_shapes)]</code></pre>
+<p><strong>Delayed encoder backward</strong></p><p><strong>In traditional interleaved forward-backward execution, encoder backward is triggered immediately when the first decoder microbatch runs backward. In full separation mode, encoder backward must wait until all decoder microbatches finish forward-backward and then run uniformly. The system uses <code>full_hetero_dp_grad_hook_factory</code> to capture gradients and temporarily store them in <code>grad_list</code>, then returns them uniformly in Phase 3.</strong></p>
+<p><strong>Instantiate the encoder only in the first VPP chunk</strong></p><p><strong>To avoid repeated encoder instantiation on every PP stage and wasting memory, full separation creates the encoder only on the first Virtual Pipeline Parallel chunk:</strong></p>
+<pre><code class="language-python"># omni_model_provider.py
+if enable_full_hetero_dp:
+    add_encoder = (vp_stage == 0)  # only the first VPP chunk
+else:
+    add_encoder = (pp_stage == 0)  # only the first PP stage</code></pre>
+<p><strong>Mock microbatch padding</strong></p><p><strong>When the actual number of microbatches is not divisible by the model-parallel group size, the system automatically pads empty mock microbatches to keep gather/scatter operations aligned.</strong></p>
+<h4>Full-separation intermediate-result offload</h4><p>When full separation is enabled, the encoder and decoder run independently. To ensure each decoder microbatch can obtain its corresponding visual features, the system must compute encoder results for all data in the entire GBS (Global Batch Size) before decoder forward and temporarily store the results in GPU memory. When input sequence length is large or GBS is high, these intermediate results, including visual embedding, <code>visual_pos_masks</code>, and <code>deepstack_visual_embeds</code>, can occupy a large amount of memory and may cause OOM during the decoder phase.</p>
+<p>To solve this, full separation supports encoder-result offload. After encoder forward finishes, intermediate results are asynchronously moved to CPU memory. When each decoder microbatch actually needs them, they are loaded back to GPU on demand. In this way, with a small cost in CPU memory and H2D transfer overhead, peak GPU memory usage is significantly reduced, supporting longer sequences or larger batches.</p>
+<h4>Usage</h4><pre><code class="language-bash">MODEL_PARALLEL_ARGS=(
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 2
+    --enable-full-hetero-dp         # enable full separation
+    --full-hetero-dp-cpu-offload    # enable full-separation intermediate offload
+    --use-distributed-optimizer
+)</code></pre>
+<p><strong>Performance</strong></p><p>Using Qwen3-VL as the baseline model at 32k sequence length in a 4-machine A-card environment, full separation parallelism reaches about 900 tokens/second, about 12.5% faster than the base.</p>
+<h4>Constraints</h4>
+<h3>3.4. Comparison of the three-level solution</h3>
+<h2>4. Deep integration: full separation + MoE A2A Overlap</h2>
+<h3>4.1. Communication bottleneck in MoE training</h3><p>For MoE-architecture multimodal models such as Qwen3-VL-30B-A3B, Expert Parallelism (EP) introduces a large amount of All-to-All communication. In each Transformer layer, the MoE operation involves two All-to-All operations:</p>
+<pre class="language-text"><code class="language-text">Token Dispatch (A2A) → Expert Computation → Token Combine (A2A)
+       ↑                                          ↑
+ tokens are dispatched to ranks with experts      expert outputs are collected back to original ranks</code></pre>
+<p>When EP=8, the communication volume of two A2A operations per layer is proportional to sequence length and expert hidden size, becoming a significant bottleneck in long-sequence training.</p>
+<h3>4.2. Principle of 1F1B A2A Overlap</h3><p>LoongForge's A2A Overlap solution borrows from the idea of DeepSeek-V3 DualPipe. It decomposes a Transformer layer into fine-grained sub-operation nodes and interleaves scheduling across different microbatches:</p>
+<pre class="language-text"><code class="language-text">Fine-grained node decomposition:
+TransformerLayer = [Attn] → [PostAttn/Router] → [Dispatch A2A] → [Experts] → [Combine A2A] → [PostCombine]
+                    compute     compute           comm           compute      comm          compute
+
+Cross-microbatch interleaved scheduling:
+MB0: [Attn] [PostAttn] [Dispatch─A2A] [Experts] [Combine─A2A] [PostCombine]
+MB1:                 [Attn─────────] [PostAttn] [Dispatch─A2A] [Experts] ...
+                       ↑                         ↑
+                    MB1 compute hides MB0 A2A communication</code></pre>
+<p>In implementation, each sub-operation is encapsulated as a <code>ScheduleNode</code> and assigned to a compute stream or communication stream. The 1F1B scheduler automatically interleaves execution.</p>
+<h3>4.3. Fusion challenge and solution</h3><p>Integrating full separation parallelism with A2A Overlap faces a key challenge: the fine-grained A2A Overlap scheduler needs to obtain encoder outputs through <code>PreProcessNode</code>, but in full separation mode encoder outputs are precomputed in Phase 1 of <code>train_step</code> rather than computed in real time inside <code>PreProcessNode</code>.</p>
+<p>The two execution modes must be made compatible by design.</p><p>LoongForge's solution is to pass the full heterogeneous-DP context into the fine-grained scheduler:</p>
+<pre><code class="language-python"># PreProcessNode extension (supports full separation mode)
+class PreProcessNode:
+    def __init__(self, ..., enable_full_hetero_dp=False,
+                 enable_encoder_hetero_dp=False,
+                 batch_list=None, forward_group_id=None, inner_group_id=None):
+        self.enable_full_hetero_dp = enable_full_hetero_dp
+        # ... cache context ...
+
+    def forward_impl(self, ...):
+        if self.enable_full_hetero_dp:
+            # obtain precomputed embedding from embedding_list
+            embedding = retrieve_precomputed_embedding(forward_group_id, inner_group_id)
+            # broadcast to all TP ranks
+            hetero_dp_get_tensor(embedding, src=0)
+            # register gradient hook for Phase 3 backward
+            register_grad_hook(embedding, grad_list)
+        elif self.enable_encoder_hetero_dp:
+            # independent encoding inside TP group + broadcast
+            embedding = run_encoder_independently(batch_list, inner_group_id)
+            hetero_dp_get_tensor(embedding)
+        else:
+            # standard path: directly run encoder
+            embedding = self.encoder(input)
+        return embedding</code></pre>
+<p>With this design, <code>TransformerModelChunkSchedulePlan</code> carries all heterogeneous-DP context correctly when constructing the schedule plan, allowing A2A Overlap microbatch interleaving to work seamlessly with precomputed embeddings from full separation mode.</p>
+<h3>4.4. Fine-Grained Activation Offload</h3><p>A2A Overlap depends on block-level interleaved execution and is incompatible with traditional full-layer recomputation. To save memory, LoongForge provides <strong>module-level selective recomputation + fine-grained activation offload</strong>:</p>
+<ul><li><strong>Selective recomputation</strong>: only recompute modules involved in A2A overlap, namely <code>attn</code>, <code>post_attn</code>, and <code>mlp</code>, while preserving the scheduling structure.</li><li><strong>Tensor-level offload</strong>: asynchronously move intermediate activations such as <code>dispatched_input</code> and <code>pre_mlp_layernorm_output</code> to CPU and asynchronously load them back to GPU when needed.</li></ul>
+<pre><code class="language-bash">--recompute-granularity selective \
+--recompute-modules a2a_overlap_attn a2a_overlap_post_attn a2a_overlap_mlp \
+--fine-grained-activation-offloading \
+--offload-tensors dispatched_input pre_mlp_layernorm_output</code></pre>
+<p>This approximates the memory savings of full-layer recomputation without sacrificing A2A overlap effectiveness.</p>
+<h2>5. Feature compatibility</h2>
+<h3>5.1. Training-phase compatibility</h3>
+<p>The two training phases use the same model architecture and forward logic and are registered uniformly through <code>@register_model_trainer(family, training_phase)</code>. The heterogeneous-parallel implementation is completely transparent to the training phase.</p>
+<h3>5.2. Encoder Freeze compatibility</h3><p>In SFT scenarios, freezing the visual encoder is common: it preserves pretrained visual-understanding capability and trains only the decoder's multimodal-alignment capability. LoongForge supports configuration-level freeze:</p>
+<pre><code class="language-bash"># Hydra override style
++model.image_encoder.freeze=True</code></pre>
+<p>In heterogeneous DP and full separation modes, encoder-freeze behavior is fully correct:</p><ul><li>Encoder forward still runs normally to provide embeddings to the decoder.</li><li>Encoder parameters have <code>requires_grad=False</code> and do not run backward.</li><li>In full separation mode, Phase 3 encoder backward is skipped automatically.</li><li>Encoder parameters do not participate in distributed-optimizer gather/reduce.</li></ul>
+<h3>5.3. ViT DP Load Balancing compatibility</h3><p>Different samples contain different numbers of images or video frames, causing encoder compute imbalance across DP ranks. LoongForge's <code>use-vit-dp-balance</code> feature rearranges samples during data loading to balance encoder compute across ranks. This feature runs correctly after switching to the encoder parallel context and is fully compatible with heterogeneous parallelism.</p>
+<h3>5.4. Full compatibility matrix</h3>
+<h2>6. Quick start</h2><p>Heterogeneous TP, heterogeneous DP, and full separation can run by configuring the corresponding LoongForge training arguments. <code>--enable-encoder-hetero-dp</code> enables heterogeneous DP, and <code>--enable-full-hetero-dp</code> enables full separation. When heterogeneous DP or full separation is enabled, TP=1 must be specified in YAML.</p>
+<h3>6.1. Heterogeneous TP</h3><p>Specifying the ViT tp size in YAML enables heterogeneous TP by default.</p>
+<pre><code class="language-yaml">_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+num_layers: 32
+hidden_size: 1280
+kv_channels: 80
+ffn_hidden_size: 3420
+patch_size: 14
+num_attention_heads: 16
+num_query_groups: 16
+image_size: [1344, 1344]
+activation_func: ${act:silu}
+add_bias_linear: true
+add_qkv_bias: true
+swiglu: true
+gated_linear_unit: true
+position_embedding_type: "none"
+bias_activation_fusion: False
+hidden_dropout: 0
+attention_dropout: 0
+normalization: "RMSNorm"
+apply_rope_fusion: true
+tensor_model_parallel_size: 1
+recompute_granularity: full
+recompute_method: uniform
+recompute_num_layers: 1
+model_type: "qwen2_5_vit"</code></pre>
+<h3>6.2. Heterogeneous DP</h3><pre><code class="language-bash">#!/bin/bash
+# Qwen2.5-VL-7B SFT with Heterogeneous DP
+LOONGFORGE_PATH=/path/to/LoongForge
+MEGATRON_PATH=$LOONGFORGE_PATH/third_party/Loong-Megatron
+MODEL_PARALLEL_ARGS=(
+    --attention-backend flash
+    --tensor-model-parallel-size 4
+    --pipeline-model-parallel-size 1
+    --use-distributed-optimizer
+    --enable-encoder-hetero-dp
+)
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+torchrun --nproc_per_node 8 --nnodes 1 \
+    $LOONGFORGE_PATH/loongforge/train.py \
+    --model-name qwen2_5_vl_7b \
+    --training-phase sft \
+    "${MODEL_PARALLEL_ARGS[@]}" \
+    +model.image_encoder.freeze=True \
+    --micro-batch-size 1 \
+    --global-batch-size 32 \
+    --lr 1e-5 \
+    # ... other training args</code></pre>
+<h3>6.3. Full separation parallelism for encoder and decoder</h3><pre><code class="language-bash">#!/bin/bash
+# Qwen3-VL-30B-A3B SFT with Full Separation + A2A Overlap
+MODEL_PARALLEL_ARGS=(
+    --attention-backend flash
+    --tensor-model-parallel-size 1
+    --pipeline-model-parallel-size 2
+    --expert-model-parallel-size 4
+    --moe-token-dispatcher-type alltoall
+    --num-virtual-stages-per-pipeline-rank 2
+    --use-distributed-optimizer
+    --enable-full-hetero-dp
+    --overlap-moe-expert-parallel-comm
+    --delay-wgrad-compute
+)
+# Optimize A2A overlap
+export CUDA_DEVICE_MAX_CONNECTIONS=32
+PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
+torchrun --nproc_per_node 8 --nnodes 4 \
+    $LOONGFORGE_PATH/loongforge/train.py \
+    --model-name qwen3_vl_30b_a3b \
+    --training-phase sft \
+    "${MODEL_PARALLEL_ARGS[@]}" \
+    +model.image_encoder.freeze=True \
+    --micro-batch-size 1 \
+    --global-batch-size 64 \
+    --lr 1e-5 \
+    --recompute-granularity selective \
+    --recompute-modules a2a_overlap_attn a2a_overlap_post_attn a2a_overlap_mlp \
+    --fine-grained-activation-offloading \
+    --offload-tensors dispatched_input pre_mlm_layernorm_output \
+    # ... other training args</code></pre>
+<h2>7. Summary</h2><p>LoongForge's heterogeneous parallel solution systematically solves the compute-heterogeneity challenge between encoder and decoder in multimodal large-model training. Through three progressive levels, it gradually releases training efficiency:</p>
+<p>The design follows these principles:</p><ul><li><strong>Progressive optimization</strong>: the three-level solution can be selected flexibly according to model size and cluster configuration, without requiring an all-at-once switch.</li><li><strong>Minimal intrusion</strong>: implemented through hooks, parallel-state switching, fine-grained scheduling nodes, and related mechanisms, with no intrusion into model code.</li><li><strong>Configuration-driven</strong>: users only need to add one or two CLI arguments to enable it, without modifying training-script logic.</li><li><strong>Broad compatibility</strong>: fully compatible with pretrain, SFT, encoder freeze, LoRA, PP, EP, distributed optimizer, and more.</li></ul>
+<p>For next-generation multimodal large models using MoE architectures, such as Qwen3-VL-235B-A22B, the combination of full separation + A2A Overlap provides the current best end-to-end training-efficiency solution.</p>
+
+    </div>
+
+    <div
+      class="mt-10 p-5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-sm">
+      🔗 <b>Original WeChat post:</b> <a href="https://mp.weixin.qq.com/s/ZFWSxNZvDZJ38fyyb8t7vg" target="_blank"
+        rel="noopener" class="text-indigo-700 dark:text-indigo-300 hover:underline break-all">https://mp.weixin.qq.com/s/ZFWSxNZvDZJ38fyyb8t7vg</a>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-05-loongforge-dp-load-balancing.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">← Prev: DP Load Balancing Optimization</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-05-loongforge-heterogeneous-parallel-training.html';
+      const POST_ZH = '2026-05-loongforge-heterogeneous-parallel-training.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        const cur = (localStorage.getItem('lf-lang') === 'zh') ? 'zh' : 'en';
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === cur)
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="../assets/js/main.js"></script>
+</body>
+
+</html>

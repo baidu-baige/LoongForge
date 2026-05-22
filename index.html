@@ -215,33 +215,33 @@
     <div class="max-w-7xl mx-auto px-6 py-20 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
-        <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Measured in v0.1.0 on
-          A800 across LLM, VLM, and VLA workloads</p>
+        <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Measured on
+          latest LoongForge across LLM, VLM, and VLA workloads</p>
       </div>
       <div class="max-w-3xl mx-auto">
         <div class="space-y-4">
           <div class="bench-row">
-            <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
+            <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar bench-bar-top" style="width: 82.5%"><span class="bench-val">1.65×</span></div>
+              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">2.30×</span></div>
             </div>
           </div>
           <div class="bench-row">
-            <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
+            <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 80%"><span class="bench-val">1.60×</span></div>
+              <div class="bench-bar" style="width: 71.7%"><span class="bench-val">1.65×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Qwen3-VL-30B-A3B <span class="bench-type">VLM</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 72.5%"><span class="bench-val">1.45×</span></div>
+              <div class="bench-bar" style="width: 63%"><span class="bench-val">1.45×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Qwen3-30B-A3B <span class="bench-type">MoE</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 58%"><span class="bench-val">1.16×</span></div>
+              <div class="bench-bar" style="width: 50.4%"><span class="bench-val">1.16×</span></div>
             </div>
           </div>
         </div>
@@ -724,7 +724,8 @@ MODEL_PARALLEL_ARGS=(
             GitHub Stars</div>
         </div>
         <div>
-          <div class="text-2xl font-bold text-indigo-500"><span id="gh-contrib">—</span></div>
+          <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors" target="_blank" rel="noopener"
+            class="text-2xl font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"><span id="gh-contrib">14+</span></a>
           <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.contrib">
             Contributors</div>
         </div>
@@ -795,7 +796,7 @@ MODEL_PARALLEL_ARGS=(
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js"></script>
+  <script src="assets/js/main.js?v=20260522-benchmark"></script>
   <script src="assets/js/home-news.js"></script>
 </body>
 
