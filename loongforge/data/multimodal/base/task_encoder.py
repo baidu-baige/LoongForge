@@ -7,10 +7,9 @@ from abc import ABC, abstractmethod
 import bisect
 import dataclasses
 import json
+import logging
 import re
 import os
-import sys
-import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -762,9 +761,10 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
 
 
 def print_error_handler(exc: Exception, key: Optional[str]):
-    """Print error handler function called when an exception occurs during loading."""
-    print(
-        f"The following exception occurred in the dataloader for sample {key} and is skipped",
-        file=sys.stderr,
+    """Log dataloader sample errors and let Energon skip the sample."""
+    logging.warning(
+        "skip dataloader sample %s due to %s: %s",
+        key,
+        type(exc).__name__,
+        exc,
     )
-    traceback.print_exc()
