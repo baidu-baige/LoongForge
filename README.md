@@ -17,7 +17,8 @@
 [![English](https://img.shields.io/badge/English-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/en/latest/index.html)
 [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/zh-cn/latest/index.html)
 [![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?style=for-the-badge&logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
-[![WeChat](https://img.shields.io/badge/WeChat-Join_Community-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
+[![Slack](https://img.shields.io/badge/Slack-Join-4A154B.svg?style=for-the-badge&logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
+[![WeChat](https://img.shields.io/badge/WeChat-Join-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
 
 </p>
 
@@ -208,7 +209,7 @@ LoongForge is built upon NVIDIA's Megatron-LM. We also drew inspiration from sev
 ## 💬 Contact
 <a id="contact"></a>
 
-Open a GitHub issue for questions, feedback, or feature requests, or scan the WeChat QR code below to join our developer community.
+Open a GitHub issue for questions, feedback, or feature requests. You can also [join our Slack community](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw) or scan the WeChat QR code below to join our developer community.
 
 <img width="377" alt="LoongForge WeChat Community" src="https://github.com/user-attachments/assets/8d1660ed-5c94-423d-bfb0-f501aee63346" />
 
