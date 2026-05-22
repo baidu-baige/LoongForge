@@ -17,7 +17,8 @@
 [![English](https://img.shields.io/badge/English-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/en/latest/index.html)
 [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/zh-cn/latest/index.html)
 [![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?style=for-the-badge&logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
-[![WeChat](https://img.shields.io/badge/WeChat-%E5%8A%A0%E5%85%A5%E7%A4%BE%E5%8C%BA-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
+[![Slack](https://img.shields.io/badge/Slack-%E5%8A%A0%E5%85%A5-4A154B.svg?style=for-the-badge&logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
+[![WeChat](https://img.shields.io/badge/WeChat-%E5%8A%A0%E5%85%A5-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
 
 </p>
 
@@ -207,7 +208,7 @@ LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时也从 HuggingFace Tr
 ## 💬 联系我们
 <a id="contact"></a>
 
-欢迎通过 GitHub Issue 提交问题、反馈或功能建议，也可以扫描下方微信二维码加入开发者社区。
+欢迎通过 GitHub Issue 提交问题、反馈或功能建议，也可以[加入我们的 Slack 社区](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)，或扫描下方微信二维码加入开发者社区。
 
 <img width="377" alt="LoongForge WeChat Community" src="https://github.com/user-attachments/assets/8d1660ed-5c94-423d-bfb0-f501aee63346" />
 
