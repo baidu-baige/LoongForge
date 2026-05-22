@@ -28,10 +28,14 @@ name_map:
     transformer: language_model.model
     layer_prefix: layers
     input_layernorm: input_layernorm
-    attention.q_down: self_attn.q_a_proj
+    attention.q_down:
+      name: self_attn.q_a_proj
+      dtype: bf16
     attention.q_up: self_attn.q_b_proj
     attention.q_up_layernorm: self_attn.q_a_layernorm
-    attention.kv_down: self_attn.kv_a_proj_with_mqa
+    attention.kv_down:
+      name: self_attn.kv_a_proj_with_mqa
+      dtype: bf16
     attention.kv_up: self_attn.kv_b_proj
     attention.kv_up_layernorm: self_attn.kv_a_layernorm
     attention.dense: self_attn.o_proj
@@ -60,6 +64,7 @@ name_map:
       extra: true
       fp8: true
       fp8_ignore_tp: true
+      dtype: fp8
     attention.q_up:
       name: self_attention.linear_q_up_proj
       extra: true
@@ -72,6 +77,7 @@ name_map:
       extra: true
       fp8: true
       fp8_ignore_tp: true
+      dtype: fp8
     attention.kv_up:
       name: self_attention.linear_kv_up_proj
       extra: true
@@ -111,4 +117,3 @@ name_map:
     word_embeddings_for_head: language_model.output_layer
     transformer_tpl: model%d
 torch_dtype: bfloat16
-

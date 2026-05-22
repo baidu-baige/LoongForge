@@ -98,6 +98,9 @@ class Model():
         visual_args.fp8_force_no_requant = args.fp8_force_no_requant
         visual_args.force_pow_2_scales = args.force_pow_2_scales
         visual_args.amax_epsilon = args.amax_epsilon
+        visual_args.hf_dequantize_int4 = getattr(args, "hf_dequantize_int4", False)
+        visual_args.hf_dequantize_dtype = getattr(args, "hf_dequantize_dtype", "bfloat16")
+        visual_args.hf_quant_config_file = getattr(args, "hf_quant_config_file", None)
         visual_args.mtp_num_layers = 0
         visual_args.load_lora_ckpt_path = args.load_lora_ckpt_path
         visual_args.lora_alpha = args.lora_alpha

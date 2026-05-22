@@ -5,7 +5,7 @@ MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/convert_checkpoint"
 
 LOAD=/mnt/cluster/huggingface.co/moonshotai/Kimi-K2.5/
-SAVE=/mnt/cluster/LoongForge/moonshotai/Kimi-K2.5-entp8dtp8pp8ep32etp1
+SAVE=/mnt/cluster/LoongForge/moonshotai/Kimi-K2.5-entp1dtp8pp8ep16etp1
 
 MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/kimi_k2.5/kimi_k2_5.yaml
 
@@ -13,11 +13,23 @@ FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/kimi_k2/ckpt_convert/k
 IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/moon_vit_3d_convert.yaml
 IMAGE_PROJECTOR_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/patch_merger_adapter_convert.yaml
 
-ETP=8
+ETP=1
 DTP=8
 PP=8
-EP=32
+EP=16
 Expert_TP=1
+
+EXTRA_ARGS=(
+    --hf-dequantize-int4
+    --hf-dequantize-dtype "${HF_DEQUANTIZE_DTYPE:-bfloat16}"
+)
+
+QUANT_CONFIG_FILE="${LOAD%/}/config.json"
+if [[ -f "$QUANT_CONFIG_FILE" ]]; then
+    EXTRA_ARGS+=(--hf-quant-config-file "$QUANT_CONFIG_FILE")
+else
+    echo "WARNING: compressed-tensors config not found: $QUANT_CONFIG_FILE; using fallback Kimi INT4 quantization args."
+fi
 
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
@@ -40,4 +52,8 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --moe-grouped-gemm \
     --safetensors \
     --no_save_optim \
-    --no_load_optim
+    --no_load_optim \
+    --custom_pipeline_layers 8,8,8,8,8,8,8,5 \
+    --force_pow_2_scales \
+    --max_workers 64 \
+    "${EXTRA_ARGS[@]}"
