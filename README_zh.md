@@ -14,8 +14,8 @@
 
 <p align="center">
 
-[![English](https://img.shields.io/badge/English-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/en/latest/index.html)
-[![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/zh-cn/latest/index.html)
+[![文档](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/zh-cn/latest/index.html)
+[![Blog](https://img.shields.io/badge/Blog-%E8%AE%BF%E9%97%AE-FF6B35.svg?style=for-the-badge)](https://baidu-baige.github.io/LoongForge/blog/)
 [![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?style=for-the-badge&logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
 [![Slack](https://img.shields.io/badge/Slack-%E5%8A%A0%E5%85%A5-4A154B.svg?style=for-the-badge&logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
 [![WeChat](https://img.shields.io/badge/WeChat-%E5%8A%A0%E5%85%A5-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
@@ -39,6 +39,8 @@
 
 ## 🔥 最新动态
 
+- **[2026/05]** ✨ 新增 **Kimi K2.5 / K2.6** 训练支持，并支持 **INT4 / NVFP4** PTQ 量化能力。
+- **[2026/05]** ⚡ **Wan 2.2** 训练 **加速 130%**，并新增 CP（上下文并行）与数据 packing 策略支持。
 - **[2026/05]** 🎉 **v0.1.0** —— LoongForge 首个正式版本发布。
 - **[2026/05]** 🌟 支持 **LLaVA-OneVision-2.0** 模型训练并协助其公开发布。
 - **[2026/05]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；Pi0.5 与 GR00T 训练实现 **60%+ 加速**。
@@ -63,9 +65,9 @@
 ## ✨ 核心特性
 
 * **🧩 灵活的多模态组合** —— 通过配置驱动的方式，将可互换的 ViT 与 LLM 组件自由组装为 VLM。
-* **⚡ 异构并行** —— 针对模型不同组件（如 ViT vs LLM）独立配置 TP / DP / 重计算策略，获得最优吞吐与显存占用。
+* **⚡ 异构并行** —— 针对模型不同组件（如 ViT vs LLM）独立配置 TP / DP / 重计算策略，获得最优吞吐与显存占用。 [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)]
 * **🔀 Encoder-Decoder 解耦训练** —— 将 ViT 与 LLM 拆分为独立任务，消除 Encoder 带来的流水线气泡。
-* **⚖️ DP 负载均衡** —— 基于负载感知的数据重分发，缓解序列打包（sequence packing）不均衡问题，显著提升多节点扩展效率。
+* **⚖️ DP 负载均衡** —— 基于负载感知的数据重分发，缓解序列打包（sequence packing）不均衡问题，显著提升多节点扩展效率。 [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html)]
 * **🚀 MoE 原生优化** —— All2All / 激活卸载 / 计算全链路重叠，在 DeepSeek-V3、Qwen3-MoE 等模型上相对上游 Megatron-LM 实现**进一步显存降低**。
 * **🔬 自适应 FP8 训练** —— 面向 LLM 和 VLM 的端到端 FP8，支持标准 **blockwise FP8**；可选 **自适应** 模式根据 GEMM 形状与效率逐算子选择最佳精度。
 * **🔧 自定义融合算子** —— 为 DSA 类模型设计的 **FusedDSA** 等融合 Kernel —— TileLang 版本已开源，高性能 CUDA 版本在百度百舸平台提供。
@@ -121,7 +123,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOT
 | | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
 | | Qwen3.5 | qwen3.5-0.8b → qwen3.5-397b-a17b |
 | | Qwen3.6 | qwen3.6-27b, qwen3.6-35b-a3b |
-| | Kimi-K2.5 | kimi-k2.5 |
+| | Kimi-K2.5 | kimi-k2.5, kimi-k2.6 |
 | | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
 | | LLaVA-OneVision-1.5 | llava-onevision-1.5-4b |
 | | InternVL2.5 | internvl2.5-8b → internvl2.5-78b |
