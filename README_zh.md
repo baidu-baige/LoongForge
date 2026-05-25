@@ -136,7 +136,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOT
 ## 🚀 路线图
 
 **模型支持**
-- LLM / VLM：持续验证与发布新模型（如 DeepSeek-V4、Kimi 2.5 / 2.6）
+- LLM / VLM：持续验证与发布新模型（如 DeepSeek-V4）
 - Embodied AI：扩展 WAM 覆盖（如 DreamZero、LingBot VA）
 
 **性能与扩展性**
