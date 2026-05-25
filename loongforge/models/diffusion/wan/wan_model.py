@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch import Tensor
 
 import math
-from typing import Tuple, Dict, Literal, Optional
+from typing import Tuple, Dict, Literal, Optional, Any
 from einops import rearrange
 from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.transformer.spec_utils import ModuleSpec
@@ -22,8 +22,97 @@ from .communications import (
 from megatron.core.parallel_state import (
     get_context_parallel_group,
 )
+from megatron.core import parallel_state
+from megatron.core.packed_seq_params import PackedSeqParams
 from torch.amp import autocast
 
+
+# ---------------------------------------------------------------------------
+# Per-sample boundary CP split helpers
+# ---------------------------------------------------------------------------
+
+def _build_thd_reorder_indices(seq_len_padded, cp_size):
+    """Build indices that restore per-sample global THD order after CP gather.
+
+    Per-sample boundary CP split gathers tokens in chunk-major order:
+    ``[sample0_chunk0, sample1_chunk0, ..., sample0_chunk1, ...]``.
+    Packed attention and loss expect sample-major order:
+    ``[sample0_full, sample1_full, ...]``.
+    """
+    sample_lengths = [seq_len_padded[index].item() for index in range(seq_len_padded.shape[0])]
+    total_length = sum(sample_lengths)
+    chunk_lengths = [sample_length // cp_size for sample_length in sample_lengths]
+
+    sample_offsets = [0]
+    for sample_length in sample_lengths:
+        sample_offsets.append(sample_offsets[-1] + sample_length)
+
+    gathered_to_global = torch.empty(total_length, dtype=torch.long)
+    gathered_offset = 0
+    for cp_chunk_index in range(cp_size):
+        for sample_index, chunk_length in enumerate(chunk_lengths):
+            global_offset = sample_offsets[sample_index] + cp_chunk_index * chunk_length
+            for token_offset in range(chunk_length):
+                gathered_to_global[gathered_offset + token_offset] = global_offset + token_offset
+            gathered_offset += chunk_length
+
+    global_to_gathered = torch.empty(total_length, dtype=torch.long)
+    for global_index in range(total_length):
+        global_to_gathered[gathered_to_global[global_index].item()] = global_index
+
+    return gathered_to_global, global_to_gathered
+
+
+class _THDSplitForCP(torch.autograd.Function):
+    """Autograd function for per-sample boundary CP split with tight packing.
+
+    Forward: select this CP rank's per-sample chunks.
+    Backward: scatter gradients back to original positions.
+    """
+
+    @staticmethod
+    def forward(ctx, x, cu_seqlens, seq_len_padded, cp_size, cp_rank):
+        """Select this CP rank THD chunks for forward propagation."""
+        num_sequences = cu_seqlens.shape[0] - 1
+        indices = []
+        total_actual = cu_seqlens[-1].item()
+        for sequence_index in range(num_sequences):
+            actual_start = cu_seqlens[sequence_index].item()
+            actual_len = cu_seqlens[sequence_index + 1].item() - actual_start
+            padded_len = seq_len_padded[sequence_index].item()
+            chunk_len = padded_len // cp_size
+            local_offset = cp_rank * chunk_len
+            actual_take = min(chunk_len, max(0, actual_len - local_offset))
+            for token_offset in range(actual_take):
+                indices.append(actual_start + local_offset + token_offset)
+            for pad_offset in range(chunk_len - actual_take):
+                indices.append(total_actual + pad_offset)
+        indices_t = torch.tensor(indices, dtype=torch.long, device=x.device)
+        ctx.save_for_backward(indices_t)
+        ctx.cp_size = cp_size
+        ctx.total_len = x.shape[0]
+        return x.index_select(0, indices_t)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        """Scatter local THD chunk gradients back to original sequence positions."""
+        indices_t, = ctx.saved_tensors
+        grad_input = torch.zeros(
+            ctx.total_len, *grad_output.shape[1:],
+            dtype=grad_output.dtype, device=grad_output.device,
+        )
+        grad_input.index_add_(0, indices_t, grad_output)
+        return grad_input, None, None, None, None
+
+
+def thd_split_for_cp(x, cu_seqlens, seq_len_padded, cp_size, cp_rank):
+    """Per-sample boundary CP split with correct autograd."""
+    return _THDSplitForCP.apply(x, cu_seqlens, seq_len_padded, cp_size, cp_rank)
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
 
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
     return x * (1 + scale) + shift
@@ -103,6 +192,7 @@ class Head(nn.Module):
         ).chunk(2, dim=1)
         x = self.head(self.norm(x) * (1 + scale) + shift)
         return x
+
 
 from .wan_config import WanConfig
 class WanModel(VisionModule):
@@ -220,6 +310,32 @@ class WanModel(VisionModule):
             clip = torch.cat([clip, pad], dim=1)
         return pad_num, clip
 
+    def _build_packed_freqs(self, grid_sizes, seq_len_q_padded):
+        """Build per-sample 3D RoPE frequencies for packing mode."""
+        all_freqs = []
+        f_freqs = self.freqs_f
+        h_freqs = self.freqs_h
+        w_freqs = self.freqs_w
+        for i, (f, h, w) in enumerate(grid_sizes.tolist()):
+            seq_len = f * h * w
+            freq_i = torch.cat(
+                [
+                    f_freqs[:f].view(f, 1, 1, -1).expand(f, h, w, -1),
+                    h_freqs[:h].view(1, h, 1, -1).expand(f, h, w, -1),
+                    w_freqs[:w].view(1, 1, w, -1).expand(f, h, w, -1),
+                ],
+                dim=-1,
+            ).reshape(seq_len, 1, -1)
+            padded_len = seq_len_q_padded[i].item()
+            if freq_i.shape[0] < padded_len:
+                pad_shape = (padded_len - freq_i.shape[0], 1, freq_i.shape[2])
+                freq_i = torch.cat(
+                    [freq_i, torch.zeros(pad_shape, dtype=freq_i.dtype, device=freq_i.device)],
+                    dim=0,
+                )
+            all_freqs.append(freq_i)
+        return torch.cat(all_freqs, dim=0)
+
     def forward(
         self,
         x: torch.Tensor,
@@ -227,10 +343,30 @@ class WanModel(VisionModule):
         context: torch.Tensor,
         clip_feature: Optional[torch.Tensor] = None,
         y: Optional[torch.Tensor] = None,
+        packed_seq_params: Optional[Any] = None,
+        grid_sizes: Optional[torch.Tensor] = None,
         use_gradient_checkpointing: bool = False,
         use_gradient_checkpointing_offload: bool = False,
         **kwargs,
     ):
+        """Wan forward. Dispatches to _forward_packed or _forward_single."""
+        use_packing = grid_sizes is not None
+
+        if use_packing:
+            return self._forward_packed(
+                x, timestep, context, clip_feature, y,
+                packed_seq_params, grid_sizes, **kwargs,
+            )
+        else:
+            return self._forward_single(
+                x, timestep, context, clip_feature, y, **kwargs,
+            )
+
+
+    def _forward_single(
+        self, x, timestep, context, clip_feature, y, **kwargs,
+    ):
+        """Non-packing forward path (matches new baseline exactly)."""
         f, h, w = self._grid_f, self._grid_h, self._grid_w
         freqs = self.freqs_3d
         rotary_pos_cos = self.freqs_3d_cos
@@ -243,6 +379,7 @@ class WanModel(VisionModule):
         timestep_mod = None
         if self.pre_process:
             t = self.time_embedding(sinusoidal_embedding_1d(self.freq_dim, timestep))
+            t_s = t.unsqueeze(0)
             t_for_head = t
 
             timestep_mod = self.time_projection(t).unflatten(1, (6, self.hidden_size))
@@ -283,6 +420,11 @@ class WanModel(VisionModule):
                     rotary_pos_sin, get_context_parallel_group(), dim=0, grad_scale="down"
                 )
 
+            for layer in self.decoder.layers:
+                layer.t_s = t_s
+                layer._packing_cross_packed_seq_params = None
+                layer._packing_num_samples = None
+                layer._packing_cu_seqlens_q_padded = None
         else:
             x = None
             context = None
@@ -320,6 +462,222 @@ class WanModel(VisionModule):
 
         x = self.unpatchify(x, (f, h, w))
         return x
+
+
+    def _project_packed_latents(self, x, grid_sizes, seq_len_q_padded, cu_seqlens_q_padded):
+        """Apply Conv3d patch projection to each packed sample independently."""
+        patch_frames, patch_height, patch_width = self.patch_size
+        patch_chunks = []
+        for sample_index, grid_size in enumerate(grid_sizes.tolist()):
+            frame_count, height_count, width_count = grid_size
+            sample_seq_len = frame_count * height_count * width_count
+            sample_start = cu_seqlens_q_padded[sample_index].item()
+            sample_tokens = x[sample_start:sample_start + sample_seq_len].squeeze(1)
+            input_channels = sample_tokens.shape[-1] // (patch_frames * patch_height * patch_width)
+            sample_5d = sample_tokens.reshape(
+                frame_count, height_count, width_count,
+                input_channels, patch_frames, patch_height, patch_width,
+            )
+            sample_5d = sample_5d.permute(3, 0, 4, 1, 5, 2, 6).contiguous()
+            sample_5d = sample_5d.reshape(
+                1,
+                input_channels,
+                frame_count * patch_frames,
+                height_count * patch_height,
+                width_count * patch_width,
+            )
+            projected_5d = self.patch_embedding(sample_5d)
+            projected = projected_5d.squeeze(0).permute(1, 2, 3, 0).reshape(
+                -1, 1, self.hidden_size
+            )
+            pad_len = seq_len_q_padded[sample_index].item() - projected.shape[0]
+            if pad_len > 0:
+                projected = torch.nn.functional.pad(projected, (0, 0, 0, 0, 0, pad_len))
+            patch_chunks.append(projected)
+        return torch.cat(patch_chunks, dim=0)
+
+    def _embed_packed_context(self, context, cross_attn_params, num_samples):
+        """Apply text embedding without crossing packed sample boundaries."""
+        if num_samples == 1:
+            return self.text_embedding(context)
+
+        cu_seqlens_kv_padded = cross_attn_params.cu_seqlens_kv_padded
+        embedded_chunks = []
+        for sample_index in range(num_samples):
+            sample_start = cu_seqlens_kv_padded[sample_index].item()
+            sample_end = cu_seqlens_kv_padded[sample_index + 1].item()
+            embedded_chunks.append(self.text_embedding(context[sample_start:sample_end]))
+        return torch.cat(embedded_chunks, dim=0)
+
+    @staticmethod
+    def _build_local_padded_cu_seqlens(seq_len_padded, cp_size, device):
+        """Build local per-sample boundaries after CP split."""
+        boundaries = [0]
+        for sample_index in range(seq_len_padded.shape[0]):
+            local_len = seq_len_padded[sample_index].item() // cp_size
+            boundaries.append(boundaries[-1] + local_len)
+        return torch.tensor(boundaries, dtype=torch.int32, device=device)
+
+    def _split_packed_inputs_for_cp(
+        self,
+        x,
+        context,
+        freqs,
+        freqs_cos,
+        freqs_sin,
+        self_attn_params,
+        cross_attn_params,
+    ):
+        """Split packed video, text, and RoPE tensors on per-sample boundaries."""
+        cp_size = self.config.context_parallel_size
+        if cp_size <= 1:
+            return x, context, freqs, freqs_cos, freqs_sin, None
+
+        cp_rank = parallel_state.get_context_parallel_rank()
+        seq_len_q_padded = self_attn_params._seq_len_q_padded
+        cu_seqlens_q_padded = self_attn_params.cu_seqlens_q_padded
+        seq_len_kv_padded = cross_attn_params._seq_len_kv_padded
+        cu_seqlens_kv_padded = cross_attn_params.cu_seqlens_kv_padded
+
+        x = thd_split_for_cp(x, cu_seqlens_q_padded, seq_len_q_padded, cp_size, cp_rank)
+        context = thd_split_for_cp(
+            context, cu_seqlens_kv_padded, seq_len_kv_padded, cp_size, cp_rank
+        )
+        freqs = thd_split_for_cp(freqs, cu_seqlens_q_padded, seq_len_q_padded, cp_size, cp_rank)
+        freqs_cos = thd_split_for_cp(
+            freqs_cos.unsqueeze(1), cu_seqlens_q_padded, seq_len_q_padded, cp_size, cp_rank
+        ).squeeze(1)
+        freqs_sin = thd_split_for_cp(
+            freqs_sin.unsqueeze(1), cu_seqlens_q_padded, seq_len_q_padded, cp_size, cp_rank
+        ).squeeze(1)
+        local_cu_seqlens_q_padded = self._build_local_padded_cu_seqlens(
+            seq_len_q_padded, cp_size, self_attn_params.cu_seqlens_q.device
+        )
+        return x, context, freqs, freqs_cos, freqs_sin, local_cu_seqlens_q_padded
+
+    def _set_packing_state_on_layers(
+        self,
+        self_attn_params,
+        cross_attn_params,
+        num_samples,
+        local_cu_seqlens_q_padded,
+    ):
+        """Expose packed metadata needed by WAN layers."""
+        cp_size = self.config.context_parallel_size
+        for layer in self.decoder.layers:
+            layer._packing_cross_packed_seq_params = cross_attn_params
+            layer._packing_num_samples = num_samples
+            if cp_size > 1 and local_cu_seqlens_q_padded is not None:
+                layer._packing_cu_seqlens_q_padded = local_cu_seqlens_q_padded
+            else:
+                layer._packing_cu_seqlens_q_padded = self_attn_params.cu_seqlens_q_padded
+            layer.t_s = None
+
+    def _restore_packed_output_order(self, x, timestep_state, seq_len_q_padded, num_samples):
+        """Gather CP shards and restore packed sample-major token order."""
+        cp_size = self.config.context_parallel_size
+        if cp_size > 1:
+            num_trailing_tokens = 7 * num_samples
+            local_video_len = x.shape[0] - num_trailing_tokens
+            timestep_state = x[-num_samples:, :, :]
+            x_video_local = x[:local_video_len, :, :]
+            x_gathered = gather_forward_split_backward(
+                x_video_local, get_context_parallel_group(), dim=0, grad_scale="up"
+            )
+            _, global_to_gathered = _build_thd_reorder_indices(seq_len_q_padded, cp_size)
+            return x_gathered.index_select(0, global_to_gathered.to(x_gathered.device)), timestep_state
+
+        num_trailing_tokens = 7 * num_samples
+        timestep_state = x[-num_samples:, :, :]
+        return x[:-num_trailing_tokens, :, :], timestep_state
+
+    def _apply_packed_head(self, x, timestep_state, self_attn_params, seq_len_q_padded, num_samples):
+        """Apply output head independently for each packed sample."""
+        cp_size = self.config.context_parallel_size
+        if cp_size > 1:
+            packed_boundaries = [0]
+            for sample_index in range(num_samples):
+                packed_boundaries.append(
+                    packed_boundaries[-1] + seq_len_q_padded[sample_index].item()
+                )
+        else:
+            packed_boundaries = self_attn_params.cu_seqlens_q.tolist()
+
+        head_outputs = []
+        for sample_index in range(num_samples):
+            sample_start = packed_boundaries[sample_index]
+            sample_end = packed_boundaries[sample_index + 1]
+            sample_x = x[:, sample_start:sample_end, :]
+            sample_timestep_state = timestep_state[sample_index:sample_index + 1, 0, :].to(torch.bfloat16)
+            head_outputs.append(self.head(sample_x, sample_timestep_state))
+        return torch.cat(head_outputs, dim=1)
+
+    def _forward_packed(
+        self, x, timestep, context, clip_feature, y,
+        packed_seq_params, grid_sizes, **kwargs,
+    ):
+        """Forward pass for packed variable-length sequences."""
+        self_attn_params = packed_seq_params["self_attention"]
+        cross_attn_params = packed_seq_params["cross_attention"]
+        num_samples = grid_sizes.shape[0]
+        seq_len_q_padded = self_attn_params._seq_len_q_padded
+        freqs = self._build_packed_freqs(grid_sizes, seq_len_q_padded)
+        freqs_cos = freqs.real.squeeze(1).contiguous()
+        freqs_sin = freqs.imag.squeeze(1).contiguous()
+
+        if self.pre_process:
+            timestep_state = self.time_embedding(sinusoidal_embedding_1d(self.freq_dim, timestep))
+            timestep_mod = self.time_projection(timestep_state).unflatten(1, (6, self.hidden_size))
+            timestep_mod = rearrange(timestep_mod, "B S C -> S B C").contiguous()
+
+            x = x.to(dtype=self.patch_embedding.weight.dtype)
+            x = self._project_packed_latents(
+                x, grid_sizes, seq_len_q_padded, self_attn_params.cu_seqlens_q_padded
+            )
+            context = self._embed_packed_context(context, cross_attn_params, num_samples)
+            x, context, freqs, freqs_cos, freqs_sin, local_cu_seqlens_q_padded = (
+                self._split_packed_inputs_for_cp(
+                    x, context, freqs, freqs_cos, freqs_sin, self_attn_params, cross_attn_params
+                )
+            )
+            trailing_timestep_mod = timestep_mod.permute(1, 0, 2).reshape(-1, 1, self.hidden_size)
+            trailing_timestep_state = timestep_state.unsqueeze(1)
+            x = torch.cat([x, trailing_timestep_mod, trailing_timestep_state], dim=0)
+        else:
+            x = None
+            context = None
+            timestep_mod = None
+            timestep_state = None
+            local_cu_seqlens_q_padded = None
+
+        self._set_packing_state_on_layers(
+            self_attn_params, cross_attn_params, num_samples, local_cu_seqlens_q_padded
+        )
+
+        x = self.decoder(
+            hidden_states=x,
+            attention_mask=None,
+            context=context,
+            context_mask=None,
+            inference_params=None,
+            packed_seq_params=self_attn_params,
+            rotary_pos_emb=freqs,
+            rotary_pos_cos=freqs_cos,
+            rotary_pos_sin=freqs_sin,
+            timestep_mod=timestep_mod,
+        )
+        if not self.post_process:
+            return x
+
+        x, timestep_state = self._restore_packed_output_order(
+            x, timestep_state, seq_len_q_padded, num_samples
+        )
+        x = x.to(torch.bfloat16)
+        x = rearrange(x, "S B C -> B S C").contiguous()
+        x = self._apply_packed_head(
+            x, timestep_state, self_attn_params, seq_len_q_padded, num_samples
+        )
+        return rearrange(x, "B S C -> S B C").contiguous()
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
         if not isinstance(input_tensor, list):

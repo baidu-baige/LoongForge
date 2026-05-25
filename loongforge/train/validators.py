@@ -36,6 +36,7 @@ def validate_loongforge_extra_args(args, config):
 
 def validate_megatron_args(args):
     """Validate Megatron arguments"""
+    _align_wan_packing_seq_length(args)
     _validate_legacy_pipeline_args(args)
     validate_args(args)
 
@@ -43,6 +44,29 @@ def validate_megatron_args(args):
 def validate_custom_model_args(name, args):
     """Validate non foundational model arguments"""
     _validate_custom_model_args(name, args)
+
+
+def _get_wan_packing_cp_alignment(cp_size):
+    """Return WAN packing sequence alignment required by CP split."""
+    return 2 * cp_size
+
+
+def _align_wan_packing_seq_length(args):
+    """Align WAN packing seq-length before Megatron validation."""
+    if getattr(args, "model_name", None) != "wan2-2-i2v":
+        return
+    if not getattr(args, "packing_sft_data", False):
+        return
+    cp_size = getattr(args, "context_parallel_size", 1)
+    seq_length = getattr(args, "seq_length", None)
+    if cp_size <= 1 or seq_length is None:
+        return
+    alignment = _get_wan_packing_cp_alignment(cp_size)
+    aligned_seq_length = ((seq_length + alignment - 1) // alignment) * alignment
+    args.seq_length = aligned_seq_length
+    if getattr(args, "encoder_seq_length", None) is not None:
+        args.encoder_seq_length = aligned_seq_length
+    args.max_position_embeddings = max(args.max_position_embeddings, aligned_seq_length)
 
 
 # YAML key → args attribute name, for cases where TransformerConfig field
@@ -408,6 +432,14 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.num_virtual_stages_per_pipeline_rank is not None:
         warnings.warn(f"WARNING: Now for {name}, we do not support num_virtual_stages_per_pipeline_rank.")
         args.num_virtual_stages_per_pipeline_rank = None
+
+    if args.context_parallel_ulysses_degree is not None:
+        warnings.warn(f"WARNING: Now for {name}, we do not support context_parallel_ulysses_degree.")
+        args.context_parallel_ulysses_degree = 1
+
+    if args.context_parallel_size > 1:
+        warnings.warn(f"WARNING: Now for {name}, we only support context parallel size 1.")
+        args.context_parallel_size = 1
 
     if args.tp_comm_overlap:
         warnings.warn(f"WARNING: Now for {name}, we do not support tp_comm_overlap.")

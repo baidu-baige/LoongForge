@@ -132,6 +132,12 @@ class WanLayer(TransformerLayer):
         self.recompute_cross_attn = _sel
 
         self.t_mod = None
+        self.t_s   = None
+
+        # Packing state (set by WanModel._forward_packed)
+        self._packing_cross_packed_seq_params = None
+        self._packing_num_samples = None
+        self._packing_cu_seqlens_q_padded = None
 
     def modulate(self, x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
         return x * (1 + scale) + shift
@@ -158,6 +164,13 @@ class WanLayer(TransformerLayer):
         timestep_mod=None,
         **kwargs,
     ):
+        if self._packing_num_samples is not None:
+            return self._forward_packed(
+                hidden_states, context, rotary_pos_emb,
+                rotary_pos_cos, rotary_pos_sin,
+                packed_seq_params, timestep_mod,
+            )
+
         x = hidden_states
         t_mod = timestep_mod if timestep_mod is not None else self.t_mod
         if t_mod is None:
@@ -211,6 +224,122 @@ class WanLayer(TransformerLayer):
             inp=x, requires_grad=x.requires_grad, keep_graph=True
         )
 
+        return output, context
+
+    def _expand_packed_modulation(self, t_mod_block, cu_seqlens_q_padded, num_samples):
+        """Expand each sample's timestep modulation to its local token span."""
+        hidden_size = self.config.hidden_size
+        if num_samples == 1:
+            return (self.modulation.to(dtype=t_mod_block.dtype) + t_mod_block).chunk(6, dim=0)
+
+        t_mod_by_sample = t_mod_block.squeeze(1).reshape(num_samples, 6, hidden_size)
+        shift_msa_list = []
+        scale_msa_list = []
+        gate_msa_list = []
+        shift_mlp_list = []
+        scale_mlp_list = []
+        gate_mlp_list = []
+        base_modulation = self.modulation.squeeze(1)
+        for sample_index in range(num_samples):
+            sample_start = cu_seqlens_q_padded[sample_index].item()
+            sample_end = cu_seqlens_q_padded[sample_index + 1].item()
+            token_count = sample_end - sample_start
+            sample_t_mod = t_mod_by_sample[sample_index]
+            modulated = base_modulation.to(dtype=sample_t_mod.dtype) + sample_t_mod
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = modulated.chunk(6, dim=0)
+            shift_msa_list.append(shift_msa.expand(token_count, -1))
+            scale_msa_list.append(scale_msa.expand(token_count, -1))
+            gate_msa_list.append(gate_msa.expand(token_count, -1))
+            shift_mlp_list.append(shift_mlp.expand(token_count, -1))
+            scale_mlp_list.append(scale_mlp.expand(token_count, -1))
+            gate_mlp_list.append(gate_mlp.expand(token_count, -1))
+
+        return (
+            torch.cat(shift_msa_list, dim=0).unsqueeze(1),
+            torch.cat(scale_msa_list, dim=0).unsqueeze(1),
+            torch.cat(gate_msa_list, dim=0).unsqueeze(1),
+            torch.cat(shift_mlp_list, dim=0).unsqueeze(1),
+            torch.cat(scale_mlp_list, dim=0).unsqueeze(1),
+            torch.cat(gate_mlp_list, dim=0).unsqueeze(1),
+        )
+
+    def _forward_packed(
+        self, hidden_states, context, rotary_pos_emb,
+        rotary_pos_cos, rotary_pos_sin,
+        packed_seq_params, timestep_mod,
+    ):
+        """Forward for packed multi-sample sequences.
+
+        Layout: [video_tokens(S_local), t_mod(6*N), t_s(N)] concatenated in hidden_states.
+        Uses packed_seq_params for THD flash attention and per-sample modulation.
+        """
+        num_samples = self._packing_num_samples
+        cu_seqlens_q_padded = self._packing_cu_seqlens_q_padded
+        ca_params = self._packing_cross_packed_seq_params
+        dim = self.config.hidden_size
+
+        # Extract video, trailing t_mod, t_s from concatenated hidden_states
+        num_trailing = 7 * num_samples
+        x = hidden_states[:-num_trailing]
+        t_mod_start = hidden_states.shape[0] - num_trailing
+        t_mod_end = hidden_states.shape[0] - num_samples
+        t_s_start = hidden_states.shape[0] - num_samples
+        t_mod_block = hidden_states[t_mod_start:t_mod_end]
+        t_s_block = hidden_states[t_s_start:]
+
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+            self._expand_packed_modulation(t_mod_block, cu_seqlens_q_padded, num_samples)
+        )
+
+        # Self-attention
+        norm1 = self.norm1(x)
+        input_x = norm1 * (1 + scale_msa) + shift_msa
+        self_att_out, bias = self.self_attention(
+            input_x,
+            attention_mask=None,
+            rotary_pos_emb=rotary_pos_emb,
+            rotary_pos_cos=rotary_pos_cos,
+            rotary_pos_sin=rotary_pos_sin,
+            packed_seq_params=packed_seq_params,
+        )
+        self_att_out = self_att_out + bias
+        self_att_out = x + gate_msa * self_att_out
+
+        # Cross-attention
+        norm3 = self.norm3(self_att_out)
+        if self.recompute_cross_attn and self.training:
+            def _cross_attn_fwd(norm3, context):
+                out, bias = self.cross_attn(
+                    norm3, attention_mask=None, key_value_states=context,
+                    packed_seq_params=ca_params,
+                )
+                return out, bias
+            cross_out, bias = torch.utils.checkpoint.checkpoint(
+                _cross_attn_fwd, norm3, context, use_reentrant=False
+            )
+        else:
+            cross_out, bias = self.cross_attn(
+                norm3, attention_mask=None, key_value_states=context,
+                packed_seq_params=ca_params,
+            )
+        cross_out = cross_out + bias
+        cross_out = self_att_out + cross_out
+
+        # FFN
+        input_x = self.norm2(cross_out) * (1 + scale_mlp) + shift_mlp
+        if self.recompute_ffn and self.training:
+            ffn_out = torch.utils.checkpoint.checkpoint(
+                self.ffn, input_x, use_reentrant=False
+            )
+        else:
+            ffn_out = self.ffn(input_x)
+        x = cross_out + gate_mlp * ffn_out
+
+        # Reconstruct concatenated output with trailing tokens
+        output = torch.cat([x, t_mod_block, t_s_block], dim=0)
+        output = make_viewless_tensor(
+            inp=output, requires_grad=output.requires_grad, keep_graph=True
+        )
         return output, context
 
     def sharded_state_dict(

@@ -99,7 +99,7 @@ Each `.pth` file contains the following three keys:
 Edit `examples/wan/convert_wan2.2.sh` (section `hg2mcore`):
 - `--checkpoint_path` → source HF folder (`high_noise_model` / `low_noise_model`)
 - `--save_path` → target Megatron checkpoint folder
-- `--tp`, `--pp`, `--num_layers`, `--num_checkpoints` → match your conversion setup
+- `--num_layers`, `--num_checkpoints` → match your conversion setup
 
 Run from `examples/wan` because the script invokes conversion utilities with relative paths:
 ```bash
@@ -137,6 +137,7 @@ CP_RING_DEGREE = CP_SIZE / CP_ULYSSES_DEGREE
 - `DATASET_PATH` → output path from Section 1 (e.g. `./data/preprocessed`)
 - `--context-parallel-size 4`
 - `--context-parallel-ulysses-degree 2`
+- Optional packing: add `--packing-sft-data` to enable WAN sample packing, and tune `--packing-buffer-size` for the packing buffer size.
 
 **Step-2** Start  
 - Single-node:  
