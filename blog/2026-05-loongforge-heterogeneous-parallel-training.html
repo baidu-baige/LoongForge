@@ -57,6 +57,10 @@ Text tokens</code></pre>
 <ul><li><strong>Vision Encoder</strong>: usually a ViT (Vision Transformer) architecture, responsible for encoding images or video frames into visual token sequences. Mainstream designs range from 0.3B to 6B parameters, such as the 0.6B ViT used by Qwen3-VL and the 6B InternViT used by InternVL 2.5.</li><li><strong>Projector</strong>: a lightweight modality-alignment layer, usually an MLP or Cross-Attention, that maps visual tokens into the representation space of the language model.</li><li><strong>LLM Decoder</strong>: the large-language-model backbone, responsible for fusing multimodal information and generating the final output. Its parameter count ranges from 7B to 235B, making it the dominant part of the model.</li></ul>
 <h3>1.3. The encoder-decoder scale gap keeps growing, and MoE architectures are becoming common</h3>
 <p>The parameter scale of multimodal large models is rising quickly, while the ViT part remains basically unchanged:</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-heterogeneous-parallel-training/01.jpg" alt="Parameter-scale comparison between ViT encoders and LLM decoders in multimodal models" loading="lazy" />
+  <figcaption>ViT encoder and LLM decoder parameter-scale comparison</figcaption>
+</figure>
 <p>Two notable trends deserve attention:</p>
 <ul><li><strong>Trend 1: decoder size grows rapidly while encoder size stays relatively stable.</strong> ViT encoder parameter counts have long remained around 0.3B to 6B, while LLM decoders have grown from the original 7B to 72B and even 235B. The scale gap has expanded from roughly 10x to roughly 100x and even 400x.</li><li><strong>Trend 2: MoE architectures are becoming the mainstream choice for large-scale multimodal models.</strong> The Qwen3-VL series fully shifts to MoE architectures (30B-A3B and 235B-A22B), greatly expanding model capacity while maintaining inference efficiency. But MoE introduces Expert Parallelism and All-to-All communication during training, further increasing training-system complexity.</li></ul>
 <h2>2. Limitations of the current training paradigm</h2>
@@ -193,7 +197,15 @@ else:
 )</code></pre>
 <p><strong>Performance</strong></p><p>Using Qwen3-VL as the baseline model at 32k sequence length in a 4-machine A-card environment, full separation parallelism reaches about 900 tokens/second, about 12.5% faster than the base.</p>
 <h4>Constraints</h4>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-heterogeneous-parallel-training/02.jpg" alt="Constraints of full separation parallelism" loading="lazy" />
+  <figcaption>Constraints of full separation parallelism</figcaption>
+</figure>
 <h3>3.4. Comparison of the three-level solution</h3>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-heterogeneous-parallel-training/03.jpg" alt="Comparison of heterogeneous TP, heterogeneous DP, and full separation" loading="lazy" />
+  <figcaption>Comparison of the three heterogeneous-parallelism levels</figcaption>
+</figure>
 <h2>4. Deep integration: full separation + MoE A2A Overlap</h2>
 <h3>4.1. Communication bottleneck in MoE training</h3><p>For MoE-architecture multimodal models such as Qwen3-VL-30B-A3B, Expert Parallelism (EP) introduces a large amount of All-to-All communication. In each Transformer layer, the MoE operation involves two All-to-All operations:</p>
 <pre class="language-text"><code class="language-text">Token Dispatch (A2A) → Expert Computation → Token Combine (A2A)
@@ -247,6 +259,10 @@ class PreProcessNode:
 <p>This approximates the memory savings of full-layer recomputation without sacrificing A2A overlap effectiveness.</p>
 <h2>5. Feature compatibility</h2>
 <h3>5.1. Training-phase compatibility</h3>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-heterogeneous-parallel-training/04.jpg" alt="Compatibility between training phases and heterogeneous parallelism modes" loading="lazy" />
+  <figcaption>Training-phase compatibility</figcaption>
+</figure>
 <p>The two training phases use the same model architecture and forward logic and are registered uniformly through <code>@register_model_trainer(family, training_phase)</code>. The heterogeneous-parallel implementation is completely transparent to the training phase.</p>
 <h3>5.2. Encoder Freeze compatibility</h3><p>In SFT scenarios, freezing the visual encoder is common: it preserves pretrained visual-understanding capability and trains only the decoder's multimodal-alignment capability. LoongForge supports configuration-level freeze:</p>
 <pre><code class="language-bash"># Hydra override style
@@ -254,6 +270,10 @@ class PreProcessNode:
 <p>In heterogeneous DP and full separation modes, encoder-freeze behavior is fully correct:</p><ul><li>Encoder forward still runs normally to provide embeddings to the decoder.</li><li>Encoder parameters have <code>requires_grad=False</code> and do not run backward.</li><li>In full separation mode, Phase 3 encoder backward is skipped automatically.</li><li>Encoder parameters do not participate in distributed-optimizer gather/reduce.</li></ul>
 <h3>5.3. ViT DP Load Balancing compatibility</h3><p>Different samples contain different numbers of images or video frames, causing encoder compute imbalance across DP ranks. LoongForge's <code>use-vit-dp-balance</code> feature rearranges samples during data loading to balance encoder compute across ranks. This feature runs correctly after switching to the encoder parallel context and is fully compatible with heterogeneous parallelism.</p>
 <h3>5.4. Full compatibility matrix</h3>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-heterogeneous-parallel-training/05.jpg" alt="Full compatibility matrix for heterogeneous parallelism modes" loading="lazy" />
+  <figcaption>Full compatibility matrix</figcaption>
+</figure>
 <h2>6. Quick start</h2><p>Heterogeneous TP, heterogeneous DP, and full separation can run by configuring the corresponding LoongForge training arguments. <code>--enable-encoder-hetero-dp</code> enables heterogeneous DP, and <code>--enable-full-hetero-dp</code> enables full separation. When heterogeneous DP or full separation is enabled, TP=1 must be specified in YAML.</p>
 <h3>6.1. Heterogeneous TP</h3><p>Specifying the ViT tp size in YAML enables heterogeneous TP by default.</p>
 <pre><code class="language-yaml">_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
@@ -336,6 +356,10 @@ torchrun --nproc_per_node 8 --nnodes 4 \
     # ... other training args</code></pre>
 <h2>7. Summary</h2><p>LoongForge's heterogeneous parallel solution systematically solves the compute-heterogeneity challenge between encoder and decoder in multimodal large-model training. Through three progressive levels, it gradually releases training efficiency:</p>
 <p>The design follows these principles:</p><ul><li><strong>Progressive optimization</strong>: the three-level solution can be selected flexibly according to model size and cluster configuration, without requiring an all-at-once switch.</li><li><strong>Minimal intrusion</strong>: implemented through hooks, parallel-state switching, fine-grained scheduling nodes, and related mechanisms, with no intrusion into model code.</li><li><strong>Configuration-driven</strong>: users only need to add one or two CLI arguments to enable it, without modifying training-script logic.</li><li><strong>Broad compatibility</strong>: fully compatible with pretrain, SFT, encoder freeze, LoRA, PP, EP, distributed optimizer, and more.</li></ul>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-heterogeneous-parallel-training/06.jpg" alt="Summary of benefits from each heterogeneous parallelism level" loading="lazy" />
+  <figcaption>Benefit summary for each heterogeneous-parallelism level</figcaption>
+</figure>
 <p>For next-generation multimodal large models using MoE architectures, such as Qwen3-VL-235B-A22B, the combination of full separation + A2A Overlap provides the current best end-to-end training-efficiency solution.</p>
 
     </div>

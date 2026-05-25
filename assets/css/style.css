@@ -486,6 +486,25 @@ pre.cite-pre>code[class*="language-"] {
   margin: 1rem 0;
 }
 
+.prose-lf figure {
+  margin: 1.5rem 0;
+}
+
+.prose-lf figure img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid #E5E7EB;
+  background: #fff;
+}
+
+.prose-lf figcaption {
+  margin-top: .5rem;
+  color: #6B7280;
+  font-size: .9rem;
+  text-align: center;
+}
+
 .dark .prose-lf {
   color: #E5E7EB;
 }

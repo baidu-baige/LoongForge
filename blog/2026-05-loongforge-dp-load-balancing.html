@@ -43,9 +43,17 @@
 <p>Therefore, overall distributed-training throughput and compute utilization depend not only on the compute performance of each single-node GPU, but also heavily on consistency in progress across all DP compute nodes. The nature of distributed synchronization means that a compute delay on any one node is amplified globally during gradient synchronization, creating redundant waiting for all participants and directly reducing training efficiency.</p>
 <h3>1.2. Inherent defects of fixed-length packing</h3>
 <p>To improve GPU utilization and avoid redundant invalid computation caused by sequence padding, industrial training workloads commonly use a fixed-length packing strategy. Training samples with different original lengths are concatenated into fixed-length packs, such as 32K / 64K / 128K, as input sequences. This keeps the total number of training tokens consistent across DP nodes and provides a basic form of load balancing from the token-count dimension.</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/01.jpg" alt="Sample lengths sum to a fixed length under fixed-length packing" loading="lazy" />
+  <figcaption>Token-count constraint under fixed-length packing</figcaption>
+</figure>
 <p>However, this strategy has a fundamental limitation: it cannot fit the real compute characteristics of Transformer models. The core attention mechanism in the Transformer architecture has compute complexity that grows <strong>quadratically</strong> with sequence length. This means that even if two DP nodes process exactly the same total number of tokens, any difference in the sample-length distribution inside the nodes can create a huge gap in actual core compute cost. Basic token-level load balancing is not equivalent to real compute-load balancing.</p>
 <p>Take a 32K fixed-packing training configuration as an example. The input on DP 0 consists of eight short samples of length 4K, while the input on DP 1 consists of two long samples of length 16K. The two nodes process exactly the same total number of tokens, and the compute cost of the model's linear modules is basically comparable.</p>
 <p>But because attention complexity is quadratic, the attention cost of long-sequence samples on DP 1 is greatly amplified, significantly increasing total forward and backward computation time. DP 0, dominated by short samples, has very low attention pressure and finishes the iteration quickly. As a result, under fixed-length packing, DP nodes still suffer from severe compute-load imbalance: nodes with short samples finish early and then wait a long time for nodes with long samples, causing global waiting overhead to accumulate.</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/02.jpg" alt="Attention compute-cost differences cause DP load imbalance under fixed-length packing" loading="lazy" />
+  <figcaption>Attention compute-load differences under fixed-length packing</figcaption>
+</figure>
 <h3>1.3. The DP load-imbalance challenge in multimodal models</h3>
 <p>Compared with text-only large language models, the load-balancing problem in multimodal training is more complex and difficult. Multimodal training data contains text and image data, and image and video modalities themselves introduce significant load imbalance. Resolution differences between images directly lead to inconsistent compute; high-resolution images usually produce more patches or features and therefore higher compute and memory cost. The number of images in each sample may also differ, so multi-image samples cost more to encode than single-image samples. In video data, frame-count distributions are often highly uneven: long videos with many frames greatly lengthen forward and backward time, while short videos have much smaller compute cost.</p>
 <p>For multimodal models, image resolution, image count, and video frame count all vary. Therefore, in addition to maintaining DP load balance for the LLM text decoder backbone, the image and video feature-processing path in the visual encoder (ViT Encoder) also has an independent compute-load imbalance problem. This double imbalance across modules further aggravates the distributed-training bottleneck.</p>
@@ -59,15 +67,35 @@
 <h3>2.2. LoongForge DP load-balancing design</h3>
 <p>For these two core challenges, Baidu Baige's all-modality training framework LoongForge provides a DP load-balancing solution tailored to the compute characteristics of Transformer architectures and multimodal models. Through adaptive data-rearrangement optimization, it performs fine-grained cross-DP sample redistribution within a single training iteration and achieves all-dimensional compute-load balancing.</p>
 <p>The overall optimization process has two core stages. It is embedded throughout the native training process and requires no offline preprocessing.</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/03.jpg" alt="LoongForge DP load balancing consists of Cost Estimator and Sample Redistributor stages" loading="lazy" />
+  <figcaption>LoongForge DP load-balancing optimization flow</figcaption>
+</figure>
 <h4>2.2.1. Warm-up modeling: building an accurate compute-cost model</h4>
 <p>Through an online real-time performance-probing mechanism, LoongForge dynamically collects each DP node's real compute execution time, sample length, and other key features without disrupting normal training. Based on these data, it adaptively builds a DP-level cost-estimation model matching the model's compute characteristics. The process is fully automated and requires no manual parameter tuning or intervention.</p>
 <p><strong>The resulting model continuously adapts as the training environment and workload characteristics change. It has strong generality and can fit different model architectures, training configurations, and hardware platforms.</strong></p>
 <p>First, the compute load of a DP node is modeled in the following form:</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/04.jpg" alt="Compute-load modeling formula for a DP node" loading="lazy" />
+  <figcaption>Compute-load modeling formula for a DP node</figcaption>
+</figure>
 <p>Here, the first term describes the quadratic complexity cost of attention; the second term describes the linear cost associated with linear layers and communication; the third term describes fixed kernel-launch overhead. The coefficients x, y, and z are to be solved. Their values are jointly determined by model architecture, training configuration, and hardware platform, and are estimated adaptively from online data during warm-up.</p>
 <p>After n iterations in the warm-up stage, the following system of equations can be obtained:</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/05.jpg" alt="Iteration-level observation equations in the warm-up stage" loading="lazy" />
+  <figcaption>Iteration-level observation equations in the warm-up stage</figcaption>
+</figure>
 <p>This modeling process attempts to infer the parameters x, y, and z of the sample load model from a set of iteration-level observations. Because the DP rank that triggers the max operation can change across iterations, the overall objective function forms a highly discontinuous piecewise structure in parameter space. Directly enumerating or analytically solving every possible max combination is computationally infeasible. For this reason, LoongForge introduces softmax as a differentiable approximation to max, transforms the problem into a continuous differentiable optimization form, and solves the model parameters numerically with least squares.</p>
 <p>Specifically, the overall loss function is defined as:</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/06.jpg" alt="Overall loss function based on softmax approximation" loading="lazy" />
+  <figcaption>Overall loss function based on softmax approximation</figcaption>
+</figure>
 <p>The goal is to solve for the optimal parameters under non-negative constraints:</p>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/07.jpg" alt="Optimal parameter objective under non-negative constraints" loading="lazy" />
+  <figcaption>Optimal parameter objective under non-negative constraints</figcaption>
+</figure>
 <p>Based on this method, the optimal parameters can be solved iteratively. This process is triggered only once after the warm-up stage, so its impact on overall training efficiency is negligible.</p>
 <h4>2.2.2. Online adaptive redistribution: dynamically smoothing node load differences</h4>
 <p>After the optimal parameters are solved, LoongForge uses the compute-cost model trained in warm-up to evaluate in real time the compute pressure of pending samples on each DP node and dynamically perform adaptive cross-DP sample redistribution. The core optimization objective is to minimize the maximum total compute cost of any DP node in a single iteration, smoothing compute-time differences between nodes and greatly reducing global waiting overhead during gradient synchronization.</p>
@@ -92,6 +120,10 @@
 <h2>3. Experimental validation: significant DP load-balancing gains in large-scale distributed training</h2>
 <p>Under fixed experimental conditions without All-Reduce communication overlap optimization, controlled experiments were conducted at different DP parallel scales.</p>
 <ul><li><p>Before enabling DP load balancing:</p><p>As the parallel scale expanded from DP32 to DP512, overall model-training throughput (TGS) continuously declined. The degradation was especially significant when scaling from DP256 to DP512, showing an accelerating downward trend. The core reason is that in large-scale distributed training, the larger number of DP nodes continuously amplifies compute-load imbalance introduced by the sample-length distribution. This creates a severe global waiting bottleneck during gradient synchronization and becomes a key factor limiting DP-scale expansion and causing major throughput degradation.</p></li><li><p>After enabling LoongForge DP load balancing:</p><p>The above performance-decay trend was significantly mitigated. Training throughput improved clearly at every DP scale, and the larger the scale, the more significant the optimization benefit: about 3.3% at DP256 and nearly 10% at the ultra-large DP512 scale.</p></li></ul>
+<figure>
+  <img src="../assets/blog/2026-05-loongforge-dp-load-balancing/08.jpg" alt="TGS comparison before and after enabling DP load balancing at different DP scales" loading="lazy" />
+  <figcaption>Training-throughput comparison across DP scales</figcaption>
+</figure>
 <h3>3.1. Experimental conclusion: effectively breaking the bottleneck of ultra-large-scale DP training</h3>
 <p>The results show that LoongForge's DP load balancing fundamentally alleviates load imbalance through fine-grained compute-load modeling and adaptive dynamic data redistribution. It significantly reduces invalid waiting time during gradient synchronization, improves distributed-training throughput and GPU resource utilization, and is especially suitable for ultra-large-scale cluster training scenarios.</p>
 
