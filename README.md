@@ -39,6 +39,8 @@ Before going open-source, LoongForge was developed as **AIAK-Training-LLM**, Bai
 
 ## 🔥 Latest News
 
+- **[2026/05]** ✨ Added training support for **Kimi K2.5 / K2.6**, and introduced **NVFP4** PTQ quantization.
+- **[2026/05]** ⚡ Accelerated **Wan 2.2** training by **130%**, and added context parallelism (CP) and data packing support.
 - **[2026/05]** 🎉 **v0.1.0** — first official tagged release of LoongForge.
 - **[2026/05]** 🌟 Powered the training and public release of **LLaVA-OneVision-2.0**.
 - **[2026/05]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **60%+ speedup** on Pi0.5 and GR00T training.
@@ -121,7 +123,7 @@ LoongForge supports a broad range of [state-of-the-art models](https://loongforg
 | | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
 | | Qwen3.5 | qwen3.5-0.8b → qwen3.5-397b-a17b |
 | | Qwen3.6 | qwen3.6-27b, qwen3.6-35b-a3b |
-| | Kimi-K2.5 | kimi-k2.5 |
+| | Kimi-K2.5 | kimi-k2.5, kimi-k2.6 |
 | | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
 | | LLaVA-OneVision-1.5 | llava-onevision-1.5-4b |
 | | InternVL2.5 | internvl2.5-8b → internvl2.5-78b |
