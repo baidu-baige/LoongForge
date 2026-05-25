@@ -137,7 +137,7 @@ LoongForge supports a broad range of [state-of-the-art models](https://loongforg
 ## 🚀 Roadmap
 
 **Model Support**
-- LLM / VLM: ongoing validation and release of new models (e.g., DeepSeek-V4, Kimi 2.5 / 2.6)
+- LLM / VLM: ongoing validation and release of new models (e.g., DeepSeek-V4)
 - Embodied AI: expanded WAM coverage (e.g., DreamZero, LingBot VA)
 
 **Performance & Scaling**
