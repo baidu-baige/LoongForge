@@ -99,6 +99,19 @@ def _add_checkpoint_args(parser):
     group.add_argument('--hf-quant-config-file', '--hf_quant_config_file', dest='hf_quant_config_file',
                        type=str, default=None,
                        help='Optional HF config.json path for compressed-tensors quantization_config.')
+    group.add_argument('--hf-official-config-file', '--hf_official_config_file', dest='hf_official_config_file',
+                       type=str, default=None,
+                       help=('Official HuggingFace config.json used when saving HF checkpoints. '
+                             'For Kimi K2.5 this drives compressed-tensors INT4 output format.'))
+    group.add_argument('--hf-pack-quantized-from-config', '--hf_pack_quantized_from_config',
+                       dest='hf_pack_quantized_from_config', action='store_true',
+                       help=('When saving a HuggingFace checkpoint, pack matching .weight tensors '
+                             'with compressed-tensors according to --hf-official-config-file or '
+                             '--hf-quant-config-file.'))
+    group.add_argument('--hf-pack-quantized-target-regex', '--hf_pack_quantized_target_regex',
+                       dest='hf_pack_quantized_target_regex', type=str, default=None,
+                       help=('Regex over HF module names to select weights for pack-quantized '
+                             'compressed-tensors output. The suffix ".weight" is not included.'))
 
     group.add_argument('--fp8_quant_transfer_type', type=str, default="float32", choices=["float32", "bfloat16"],
                        help='The transfer dtype when convert from hf fp8 to mcore fp8')

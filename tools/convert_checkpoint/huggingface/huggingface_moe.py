@@ -47,6 +47,7 @@ class HuggingfaceMoe(HuggingfaceBase):
             self.update_h_to_4h(h_dict, spec_name, hf_prefix_path, weight, bias, weight_scale, expert_id=expert_id)
         else:
             # MOE_EXPERT_4H_TO_H
+            weight, weight_scale = self._materialize_fp8_weight_if_needed(weight, weight_scale)
             weight = weight.t() if weight is not None and need_transpose else weight
             if expert_id is None or is_dict_for_expert:
                 hf_path = f"{transformer}.{layer_prefix}.{hf_layer_id}."\
@@ -73,6 +74,7 @@ class HuggingfaceMoe(HuggingfaceBase):
                       hf_weight_scale_path=None, weight_scale=None, expert_id=None, is_dict_for_expert=False):
         if weight is None:
             return
+        weight, weight_scale = self._materialize_fp8_weight_if_needed(weight, weight_scale)
         if is_dict_for_expert:
             assert expert_id is not None, "expert_id must be specified when is_dict_for_expert"
             h_dict[hf_weight_path] = {LAYER_IS_DICT_FOR_EXPERT: True} if hf_weight_path not in h_dict else h_dict[hf_weight_path]

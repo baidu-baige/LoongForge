@@ -101,6 +101,9 @@ class Model():
         visual_args.hf_dequantize_int4 = getattr(args, "hf_dequantize_int4", False)
         visual_args.hf_dequantize_dtype = getattr(args, "hf_dequantize_dtype", "bfloat16")
         visual_args.hf_quant_config_file = getattr(args, "hf_quant_config_file", None)
+        visual_args.hf_official_config_file = getattr(args, "hf_official_config_file", None)
+        visual_args.hf_pack_quantized_from_config = getattr(args, "hf_pack_quantized_from_config", False)
+        visual_args.hf_pack_quantized_target_regex = getattr(args, "hf_pack_quantized_target_regex", None)
         visual_args.mtp_num_layers = 0
         visual_args.load_lora_ckpt_path = args.load_lora_ckpt_path
         visual_args.lora_alpha = args.lora_alpha
@@ -233,10 +236,44 @@ class Model():
         self.config.update_args(vars(args), group)
 
 
+def _is_conversion_rank_zero():
+    return int(os.getenv('RANK', '0')) == 0
+
+
+def _format_conversion_elapsed_time(elapsed_seconds):
+    elapsed_seconds = int(elapsed_seconds)
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 def main():
     """ main """
     args = parse_args()
+    if not args.distributed_convert:
+        os.environ['RANK'] = '0'
+        os.environ['WORLD_SIZE'] = '1'
 
+    start_epoch = time.time()
+    start_time = time.strftime("%F %T", time.localtime(start_epoch))
+    if _is_conversion_rank_zero():
+        logging.info(f"CONVERSION_START_TIME={start_time}")
+
+    try:
+        _convert_checkpoint(args)
+    finally:
+        if _is_conversion_rank_zero():
+            end_epoch = time.time()
+            end_time = time.strftime("%F %T", time.localtime(end_epoch))
+            elapsed_seconds = end_epoch - start_epoch
+            logging.info(f"CONVERSION_END_TIME={end_time}")
+            logging.info(
+                f"CONVERSION_ELAPSED={int(elapsed_seconds)}s "
+                f"({_format_conversion_elapsed_time(elapsed_seconds)})")
+
+
+def _convert_checkpoint(args):
+    """Convert checkpoint using parsed arguments."""
     config_path = args.common_config_path
     c_config = CommonConfig()
     if config_path is not None:
@@ -256,9 +293,6 @@ def main():
     if args.megatron_path is not None:
         sys.path.insert(0, args.megatron_path)
 
-    if not args.distributed_convert:
-        os.environ['RANK'] = '0'
-        os.environ['WORLD_SIZE'] = '1'
     rank_id = int(os.getenv('RANK', '0'))
     world_size = int(os.getenv("WORLD_SIZE", '1'))
     if utils.LOADED_STATE_DICT is None:

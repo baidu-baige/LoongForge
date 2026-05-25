@@ -164,16 +164,10 @@ def custom_partition_imbalanced(num_layers, num_parts, custom_layers):
             f'the argments of custom_pipeline_layers must be equal to pipeline size {num_parts}.'
         )
     assert num_layers == sum(splits), f'the sum of custom_pipeline_layers must be equal to num_layers {num_layers}.'
-    # First check for the trivial edge case
-    if num_layers <= num_parts:
-        parts = partition_uniform(num_layers, num_parts)
-    else:
-        parts = [0] * (num_parts + 1)
-        parts_count = [num_layers // num_parts] * num_parts
-        for i in range(num_parts):
-            parts_count[i] = splits[i]
-        for i in range(1, len(parts_count) + 1):
-            parts[i] = parts[i - 1] + parts_count[i - 1]
+    parts_count = splits
+    parts = [0] * (num_parts + 1)
+    for i in range(1, len(parts_count) + 1):
+        parts[i] = parts[i - 1] + parts_count[i - 1]
 
     return parts_count, parts
 

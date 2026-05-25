@@ -152,6 +152,11 @@ class McoreBase:
         self.expert_local_mapping, _, _ = get_ep_map(num_experts, self.ep)
         self.etp_to_tp_mapping, _ = get_etp_map(self.tp, self.ep, self.etp)
 
+    def _should_materialize_fp8_for_hf(self):
+        return getattr(self.args, "save_platform", None) == "huggingface"
+
+    def _get_hf_output_dtype(self):
+        return HuggingfaceBase.get_hf_output_dtype(self.c_config, self.args)
 
     @staticmethod
     def get_mcore_name_and_extra(obj):
@@ -555,14 +560,15 @@ class McoreBase:
         source = transpose_shape0(source, m_tp, 2) if need_transpose else source
         return source
 
-    def convert_fp8s_to_bf16(self, name, m_tp, chunk_dim, weight_list, weight_scale_list, need_transpose=False):
+    def convert_fp8s_to_bf16(self, name, m_tp, chunk_dim, weight_list, weight_scale_list,
+                             need_transpose=False, dtype=torch.float32):
         if weight_scale_list is not None:
             # fp8 need quantization.
             weight_bf16_s = []
             for i in range(len(weight_list)):
                 weight = weight_list[i]
                 weight_scale = weight_scale_list[i]
-                weight_bf16 = convert_fp8_to_bf16(weight, weight_scale, dtype=torch.float32)
+                weight_bf16 = convert_fp8_to_bf16(weight, weight_scale, dtype=dtype)
                 weight_bf16_s.append(weight_bf16)
         else:
             # bf16 convert_to_fp8
@@ -574,7 +580,16 @@ class McoreBase:
         need_transpose = (m_tp > 1 and self.transpose_mlp_dense and \
                 name in [MLP_DENSE_H_TO_4H, MOE_EXPERT_H_TO_4H])
         chunk_dim = self.tensor_parallel_dim.get(f"{name}.{WEIGHT}", None) if chunk_dim is None else chunk_dim
-        if chunk_dim is None or m_tp == 1 or ignore_tp:
+        if weight_list is not None and weight_scale_list is not None and self._should_materialize_fp8_for_hf():
+            dtype = self._get_hf_output_dtype()
+            if chunk_dim is None or m_tp == 1 or ignore_tp or (is_fp8 and fp8_ignore_tp):
+                weight = convert_fp8_to_bf16(weight_list[0], weight_scale_list[0], dtype=dtype)
+            else:
+                weight = self.convert_fp8s_to_bf16(
+                    name, m_tp, chunk_dim, weight_list, weight_scale_list,
+                    need_transpose=need_transpose, dtype=dtype)
+            weight_scale = None
+        elif chunk_dim is None or m_tp == 1 or ignore_tp:
             # need not chunk
             weight = weight_list[0] if weight_list is not None else None
             weight_scale = weight_scale_list[0] if weight_scale_list is not None else None
@@ -646,4 +661,3 @@ class McoreBase:
         """
         lora_weight = alpha / dim * (linear_out @ linear_in)
         return base_weight + lora_weight
-

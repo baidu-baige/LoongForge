@@ -35,6 +35,9 @@ from convert_checkpoint.huggingface.compressed_tensors_dequant import (
     dequantize_state_dict,
     get_packed_weight_keys,
 )
+from convert_checkpoint.huggingface.compressed_tensors_quant import (
+    pack_state_dict_from_official_config,
+)
 
 
 def _hf_dequantize_int4_enabled(args):
@@ -502,6 +505,21 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME
         from safetensors.torch import save_file
         os.makedirs(save_path, exist_ok=True)
+
+        if getattr(self.args, "hf_pack_quantized_from_config", False):
+            config_file = getattr(self.args, "hf_official_config_file", None) \
+                or getattr(self.args, "hf_quant_config_file", None)
+            if config_file is None:
+                raise ValueError(
+                    "--hf-pack-quantized-from-config requires --hf-official-config-file "
+                    "or --hf-quant-config-file"
+                )
+            pack_state_dict_from_official_config(
+                state_dict,
+                config_file=config_file,
+                target_regex=getattr(self.args, "hf_pack_quantized_target_regex", None),
+            )
+
         state_dict_split = split_torch_state_dict_into_shards(state_dict)
         self.print_memory_usage(f"before save {save_path}")
         has_safetensor_file = False

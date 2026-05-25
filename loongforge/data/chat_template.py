@@ -600,6 +600,51 @@ _register_chat_template(
     ),
 )
 
+# Kimi K2.6 uses the same chat format and media plugin as Kimi K2.5.
+_register_chat_template(
+    name="kimi-k2.6",
+    format_user=StringFormatter(
+        slots=["<|im_user|>user<|im_middle|>{{content}}<|im_end|><|im_assistant|>assistant<|im_middle|><think></think>"]
+    ),
+    format_system=StringFormatter(
+        slots=["<|im_system|>system<|im_middle|>{{content}}<|im_end|>"]
+    ),
+    format_assistant=StringFormatter(
+        slots=["{{content}}<|im_end|>"]
+    ),
+    format_separator=EmptyFormatter(slots=[""]),
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+    mm_plugin=KimiK25Plugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+    ),
+)
+
+_register_chat_template(
+    name="kimi-k2.6-think",
+    format_user=StringFormatter(
+        slots=["<|im_user|>user<|im_middle|>{{content}}<|im_end|><|im_assistant|>assistant<|im_middle|><think>"]
+    ),
+    format_system=StringFormatter(
+        slots=["<|im_system|>system<|im_middle|>{{content}}<|im_end|>"]
+    ),
+    format_assistant=StringFormatter(
+        slots=["{{content}}<|im_end|>"]
+    ),
+    format_separator=EmptyFormatter(slots=[""]),
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+    mm_plugin=KimiK25Plugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+    ),
+)
+
 _register_chat_template(
     name="glm5",
     format_user=StringFormatter(slots=["<|user|>{{content}}<|assistant|>"]),
@@ -609,4 +654,3 @@ _register_chat_template(
     stop_words=["<|user|>", "<|observation|>"],
     efficient_eos=True,
 )
-

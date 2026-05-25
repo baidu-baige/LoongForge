@@ -100,6 +100,7 @@ class VisionLanguageModelFamilies(_BaseFamilies):
     ERNIE4_5_VL = "ernie4_5_vl"
     QWEN3_5 = "qwen3_5"
     KIMI_K2_5 = "kimi_k2_5"
+    KIMI_K2_6 = "kimi_k2_6"
 
 
 class CustomModelFamilies(_BaseFamilies):

@@ -1,0 +1,33 @@
+{
+  "model_name": "nvidia/Kimi-K2.5-NVFP4",
+  "source": "https://huggingface.co/nvidia/Kimi-K2.5-NVFP4",
+  "recipe_from_hf_quant_config": {
+    "producer": {
+      "name": "modelopt",
+      "version": "0.41.0"
+    },
+    "quantization": {
+      "quant_algo": "NVFP4",
+      "kv_cache_quant_algo": "FP8",
+      "group_size": 16,
+      "exclude_modules": [
+        "language_model.lm_head",
+        "language_model.model.layers.*.self_attn*",
+        "mm_projector*",
+        "vision_tower*"
+      ]
+    }
+  },
+  "runtime_defaults": {
+    "qformat": "nvfp4_mlp_only",
+    "kv_cache_qformat": "fp8",
+    "dataset": "cnn_dailymail",
+    "calib_size": 512,
+    "calib_seq": 512
+  },
+  "output_config": {
+    "text_model_type": "deepseek_v3",
+    "transformers_version": "4.57.1",
+    "remove_torch_dtype": true
+  }
+}

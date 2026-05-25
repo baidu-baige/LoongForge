@@ -3,16 +3,20 @@
 
 """Base utilities for converting common checkpoints to and from HuggingFace format."""
 
+import json
 import torch
 import logging
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 
 from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.utils.utils import (
-    transpose_shape0
+    transpose_shape0,
+    convert_fp8_to_bf16,
 )
+from convert_checkpoint.huggingface.compressed_tensors_dequant import DTYPE_MAP
 
 from omegaconf import ListConfig
 from omegaconf.dictconfig import DictConfig
@@ -82,6 +86,99 @@ class HuggingfaceBase:
         self.transformer = self.name_map[TRANSFORMER]
         self.layer_prefix = self.name_map[LAYER_PREFIX]
         self.weight_scale_suffix = self.name_map.get("weight_scale_key", WEIGHT_SCALE)
+        self.output_dtype = self.get_hf_output_dtype(self.c_config, self.args)
+
+    @staticmethod
+    def _has_float8_dtype(weight):
+        return isinstance(weight, torch.Tensor) and weight.dtype in (
+            torch.float8_e4m3fn,
+            torch.float8_e5m2,
+        )
+
+    @staticmethod
+    def _has_fp8_storage(weight):
+        return HuggingfaceBase._has_float8_dtype(weight) or (
+            isinstance(weight, torch.Tensor) and weight.dtype == torch.uint8
+        )
+
+    @staticmethod
+    def _is_dequantizable_tensor_object(weight):
+        dequantize = getattr(weight, "dequantize", None)
+        if not callable(dequantize):
+            return False
+        if isinstance(weight, torch.Tensor):
+            return (
+                getattr(weight, "is_quantized", False)
+                or HuggingfaceBase._has_float8_dtype(weight)
+                or "float8" in type(weight).__name__.lower()
+                or "transformer_engine" in type(weight).__module__.lower()
+            )
+        return True
+
+    @staticmethod
+    def _call_dequantize(weight, dtype):
+        try:
+            return weight.dequantize(dtype=dtype)
+        except TypeError:
+            return weight.dequantize().to(dtype)
+
+    @staticmethod
+    def _dtype_from_hf_config_file(config_file):
+        if config_file is None:
+            return None
+        config_path = Path(config_file)
+        if not config_path.exists():
+            return None
+        with config_path.open("r", encoding="utf-8") as f:
+            config = json.load(f)
+        dtype_name = (
+            config.get("text_config", {}).get("dtype")
+            or config.get("text_config", {}).get("torch_dtype")
+            or config.get("dtype")
+            or config.get("torch_dtype")
+        )
+        if dtype_name is None:
+            return None
+        return DTYPE_MAP.get(str(dtype_name).lower())
+
+    @staticmethod
+    def get_hf_output_dtype(c_config, args):
+        for attr in ("hf_official_config_file", "hf_quant_config_file"):
+            dtype = HuggingfaceBase._dtype_from_hf_config_file(getattr(args, attr, None))
+            if dtype is not None:
+                return dtype
+        try:
+            return c_config.get_dtype()
+        except (AttributeError, TypeError, KeyError):
+            return torch.bfloat16
+
+    def _get_output_dtype(self):
+        return self.output_dtype
+
+    def _materialize_fp8_weight_if_needed(self, weight, weight_scale):
+        if weight is None:
+            return weight, weight_scale
+        output_dtype = self._get_output_dtype()
+
+        if weight_scale is not None and self._has_fp8_storage(weight):
+            weight = convert_fp8_to_bf16(weight, weight_scale, dtype=output_dtype)
+            return weight, None
+
+        if self._is_dequantizable_tensor_object(weight):
+            weight = self._call_dequantize(weight, output_dtype)
+            return weight, None
+
+        if weight_scale is None and isinstance(weight, torch.Tensor) and self._has_float8_dtype(weight):
+            return weight.to(output_dtype), None
+
+        if weight_scale is not None:
+            logging.warning(
+                "HF export saw %s with weight_scale but did not recognize FP8 storage; "
+                "leaving companion scale unchanged.",
+                type(weight),
+            )
+            return weight, weight_scale
+        return weight, weight_scale
 
     @staticmethod
     def get_hf_name_and_args(obj):
@@ -193,6 +290,7 @@ class HuggingfaceBase:
                       hf_weight_scale_path=None, weight_scale=None):
         if weight is None:
             return
+        weight, weight_scale = self._materialize_fp8_weight_if_needed(weight, weight_scale)
         h_dict[hf_weight_path] = weight
         if bias is not None and hf_bias_path is not None:
             h_dict[hf_bias_path] = bias
@@ -204,6 +302,7 @@ class HuggingfaceBase:
             return
         hf_name = self.name_map[name]
         tag_names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
+        weight, weight_scale = self._materialize_fp8_weight_if_needed(weight, weight_scale)
         weight_list = func(tag_names, weight) if weight is not None else None
         bias_list = func(tag_names, bias) if bias is not None else None
         weight_scale_list = func(tag_names, weight_scale) if weight_scale is not None else None
@@ -221,6 +320,7 @@ class HuggingfaceBase:
         if weight is None:
             return
         hf_name, is_direct_name, is_dict_for_expert, need_transpose, _, _, _ = self.get_hf_name_and_args(self.name_map[name])
+        weight, weight_scale = self._materialize_fp8_weight_if_needed(weight, weight_scale)
         weight = weight.t() if need_transpose else weight
         names = hf_name if isinstance(hf_name, (list, ListConfig)) else [hf_name]
         weight_list = torch.chunk(weight, len(names), dim=0)
@@ -412,4 +512,3 @@ class HuggingfaceBase:
             padded_tensor[:weight.shape[0]] = weight
             weight = padded_tensor
         return weight
-
