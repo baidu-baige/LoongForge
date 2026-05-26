@@ -1,0 +1,24 @@
+{
+    "torch25": {
+        "xpytorch": {
+            "version": "3.6.0.0",
+            "url": "https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260428/torch25/xpytorch-cp310-torch251-ubuntu2004-x64.run",
+            "type": "run"
+        },
+        "kunlun_ops": {
+            "version": "0.1.122",
+            "url": "https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260428/torch25/kunlun_ops-0.1.122%2Bb4984657-cp310-cp310-linux_x86_64.whl",
+            "type": "wheel"
+        },
+        "cocopod": {
+            "version": "0.0.0",
+            "url": "https://vllm-ai-models.bj.bcebos.com/aiak_share/latest/torch25/cocopod-0.0.0+torch25-cp310-cp310-linux_x86_64.whl",
+            "type": "wheel"
+        },
+        "xspeedgate": {
+            "version": "0.0.0",
+            "url": "https://aihc-private-hcd.bj.bcebos.com/xspeedgate_release/latest/torch25/xspeedgate_ops-0.0.0+torch25-cp310-cp310-linux_x86_64.whl",
+            "type": "wheel"
+        }
+    }
+}
