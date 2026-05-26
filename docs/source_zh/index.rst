@@ -23,34 +23,23 @@ LoongForge 中文文档
    get_started/optimization_guide
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: LLM 训练
 
    llm_tutorial/quick_start_llm_pretrain
    llm_tutorial/quick_start_llm_sft
    llm_tutorial/llm_ckpt_convert
-   features/fp8_training
-   features/adaptive_fp8
-   features/moe_all2all_overlap
-   features/optimizer_support
-   features/fused_linear_cross_entropy
-   features/mcore_bridge
-   usage/lora_usage
+   高级特性 <llm_tutorial/features_index>
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: VLM 训练
 
    vlm_tutorial/quick_start_vlm_pretrain
    vlm_tutorial/quick_start_vlm_sft
    vlm_tutorial/dataset_conversion
    vlm_tutorial/vlm_ckpt_convert
-   features/offline_data_packing
-   features/data_parallel_balancing
-   features/model_combination
-   features/fp8_training_for_vlm
-   features/heterogeneous_parallel
-   features/vit_data_parallel_balancing
+   高级特性 <vlm_tutorial/features_index>
 
 .. toctree::
    :maxdepth: 1
@@ -63,6 +52,7 @@ LoongForge 中文文档
    :caption: Diffusion 训练
 
    wan_tutorial/quick_start_wan_training
+   wan_tutorial/wan_packing
 
 .. toctree::
    :maxdepth: 1
