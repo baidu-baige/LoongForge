@@ -39,8 +39,8 @@ Before going open-source, LoongForge was developed as **AIAK-Training-LLM**, Bai
 
 ## 🔥 Latest News
 
-- **[2026/05]** ✨ Added training support for **Kimi K2.5 / K2.6**, and introduced **INT4 / NVFP4** PTQ.
 - **[2026/05]** ⚡ Accelerated **Wan 2.2** training by **116%**, and added CP and data packing support.
+- **[2026/05]** ✨ Added training support for **Kimi K2.5 / K2.6**, and introduced **INT4 / NVFP4** PTQ.
 - **[2026/05]** 🎉 **v0.1.0** — first official tagged release of LoongForge.
 - **[2026/05]** 🌟 Powered the training and public release of **LLaVA-OneVision-2.0**.
 - **[2026/05]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **60%+ speedup** on Pi0.5 and GR00T training.
