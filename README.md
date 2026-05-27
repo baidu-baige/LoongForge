@@ -80,7 +80,7 @@ See the full documentation for installation, tutorials, and advanced usage — [
 <a id="benchmark"></a>
 ## 📊 Benchmark
 
-Measured on **v0.1.1** across LLM, VLM, and VLA workloads against mainstream open-source training baselines:
+Measured on **v0.1.1** across LLM, VLM, VLA and DIT workloads against mainstream open-source training baselines:
 
 | Model | Type | Baseline | Configuration | Speedup |
 |---|---|---|---|---|
