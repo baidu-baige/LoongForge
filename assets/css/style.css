@@ -820,13 +820,14 @@ footer a:hover {
 }
 
 .bench-label {
-  flex: 0 0 190px;
+  flex: 0 0 230px;
   font-size: 0.9rem;
   font-weight: 600;
   color: #111827;
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  white-space: nowrap;
 }
 
 .dark .bench-label {
@@ -841,6 +842,8 @@ footer a:hover {
   border-radius: 999px;
   background: #eef2ff;
   color: #4f46e5;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .dark .bench-type {
@@ -882,6 +885,8 @@ footer a:hover {
   color: #fff;
   font-weight: 700;
   font-size: 0.9rem;
+  position: relative;
+  z-index: 3;
 }
 
 .bench-baseline {
@@ -927,6 +932,15 @@ footer a:hover {
   font-size: 0.95rem;
   color: #111827;
   margin-bottom: 0.25rem;
+}
+
+.bench-callout-title strong {
+  font-weight: 800;
+  color: var(--lf-primary, #6366F1);
+}
+
+.dark .bench-callout-title strong {
+  color: #a5b4fc;
 }
 
 .dark .bench-callout-title {

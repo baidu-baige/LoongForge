@@ -216,43 +216,50 @@
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
         <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Measured on
-          latest LoongForge across LLM, VLM, and VLA workloads</p>
+          latest LoongForge across LLM, VLM, VLA, and DIT workloads</p>
       </div>
       <div class="max-w-3xl mx-auto">
         <div class="space-y-4">
           <div class="bench-row">
             <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">2.30×</span></div>
+              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">2.31×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">Wan2.2 <span class="bench-type">DIT</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 93.5%"><span class="bench-val">2.16×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 71.7%"><span class="bench-val">1.65×</span></div>
+              <div class="bench-bar" style="width: 71.4%"><span class="bench-val">1.65×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Qwen3-VL-30B-A3B <span class="bench-type">VLM</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 63%"><span class="bench-val">1.45×</span></div>
+              <div class="bench-bar" style="width: 62.8%"><span class="bench-val">1.45×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Qwen3-30B-A3B <span class="bench-type">MoE</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 50.4%"><span class="bench-val">1.16×</span></div>
+              <div class="bench-bar" style="width: 50.2%"><span class="bench-val">1.16×</span></div>
             </div>
           </div>
         </div>
         <div class="bench-baseline" data-i18n="bench.baseline">1.0× baseline</div>
 
         <div class="bench-callout mt-8">
-          <div class="bench-callout-num">~5×</div>
+          <div class="bench-callout-num">5.04×</div>
           <div class="bench-callout-body">
-            <div class="bench-callout-title" data-i18n="bench.ds.title">DeepSeek-V3.2 · DSA operator-level optimizations
-            </div>
-            <div class="bench-callout-desc" data-i18n="bench.ds.desc">Validated on reduced-layer configuration</div>
+            <div class="bench-callout-title" data-i18n-html="bench.ds.title"><strong>DeepSeek-V3.2 Lite</strong> · DSA
+              operator-level optimizations</div>
+            <div class="bench-callout-desc" data-i18n="bench.ds.desc">Validated on a reduced-layer configuration due to
+              test-bed scale limits.</div>
           </div>
         </div>
       </div>
@@ -725,7 +732,8 @@ MODEL_PARALLEL_ARGS=(
         </div>
         <div>
           <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors" target="_blank" rel="noopener"
-            class="text-2xl font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"><span id="gh-contrib">14+</span></a>
+            class="text-2xl font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"><span
+              id="gh-contrib">14+</span></a>
           <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.contrib">
             Contributors</div>
         </div>

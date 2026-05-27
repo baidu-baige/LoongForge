@@ -143,10 +143,10 @@
       'about.ack.body': 'LoongForge is built upon NVIDIA\'s Megatron-LM. We also referenced and drew inspiration from excellent open-source projects including Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.',
 
       'bench.title': '📊 Benchmark',
-      'bench.subtitle': 'Measured on latest LoongForge across LLM, VLM, and VLA workloads',
+      'bench.subtitle': 'Measured on latest LoongForge across LLM, VLM, VLA, and DIT workloads',
       'bench.baseline': '1.0× baseline',
-      'bench.ds.title': 'DeepSeek-V3.2 · DSA operator-level optimizations',
-      'bench.ds.desc': 'Validated on reduced-layer configuration.',
+      'bench.ds.title': '<strong>DeepSeek-V3.2 Lite</strong> · DSA operator-level optimizations',
+      'bench.ds.desc': 'Validated on a reduced-layer configuration due to test-bed scale limits.',
       'hw.title': '💎 Hardware Compatibility',
       'hw.subtitle': 'One codebase, two silicon stacks — production-ready on NVIDIA GPU and Baidu Kunlun XPU',
       'hw.nv.t': 'NVIDIA GPU',
@@ -308,10 +308,10 @@
       'about.ack.body': 'LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 Transformers、LLaMA-Factory、Megatron-Bridge 等优秀开源项目。真诚感谢这些社区的卓越贡献。',
 
       'bench.title': '📊 性能基准',
-      'bench.subtitle': '基于 latest，在 A800 上覆盖 LLM、VLM、VLA 工作负载实测',
+      'bench.subtitle': '基于 latest，在 A800 上覆盖 LLM、VLM、VLA、DIT 工作负载实测',
       'bench.baseline': '1.0× 基线',
-      'bench.ds.title': 'DeepSeek-V3.2 · DSA 算子级优化',
-      'bench.ds.desc': '基于裁剪层数配置实测。',
+      'bench.ds.title': '<strong>DeepSeek-V3.2 Lite</strong> · DSA 算子级优化',
+      'bench.ds.desc': '受测试集群规模限制，基于减层模型配置验证。',
 
       'hw.title': '💎 硬件兼容性',
       'hw.subtitle': '同一套代码，两套芯片栈 —— NVIDIA GPU 与百度昆仑芯 XPU 均已生产化落地',
@@ -671,7 +671,7 @@
         .catch(() => { });
     }
     if (contribEl) {
-      fetch('https://api.github.com/repos/baidu-baige/LoongForge/contributors?per_page=1&anon=true')
+      fetch('https://api.github.com/repos/baidu-baige/LoongForge/contributors?per_page=1')
         .then(r => {
           const link = r.headers.get('Link') || '';
           const m = link.match(/page=(\d+)>;\s*rel="last"/);
