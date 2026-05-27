@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <b>🚀 训练加速最高可达 5.0×</b> &nbsp;·&nbsp;
+  <b>🚀 训练<a href="#benchmark">加速最高可达 5.04×</a></b> &nbsp;·&nbsp;
   <b>🌐 原生支持 NVIDIA GPU 与昆仑芯 XPU</b>
 </p>
 
@@ -77,21 +77,24 @@
 
 > 📖 深入阅读：[LLM 特性](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/features_index.html) · [VLM 特性](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/features_index.html)
 
+<a id="benchmark"></a>
 ## 📊 性能 Benchmark
 
-在主干分支上针对 LLM、VLM、VLA 三类工作负载，与主流开源训练方案的对比结果：
+在 **v0.1.1** 版本上针对 LLM、VLM、VLA、DIT 四类工作负载，与主流开源训练方案的对比结果：
 
 | 模型 | 类型 | 对比基线 | 配置 | 加速比 |
 |---|---|---|---|---|
 | Qwen3-30B-A3B | MoE | Megatron-LM<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 1024 · 32K | **1.16×** |
-| Qwen3-VL-30B-A3B | VLM | VeOmni<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 128 · 32K | **1.44×** |
+| DeepSeek-V3.2 Lite <sup>§</sup> | MoE + DSA | Megatron-LM<sup>†</sup> | 减层配置 · GBS 128 · 8K 序列 | **5.04×** |
+| Qwen3-VL-30B-A3B | VLM | VeOmni<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 128 · 32K | **1.45×** |
 | GR00T N1.6 | VLA | LeRobot<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 128 · 224×224 | **2.31×** |
 | Pi0.5 | VLA | OpenPI<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 112 · 224×224 | **1.65×** |
+| Wan2.2 | DIT | DiffSynth<sup>†</sup> | 8 × A800<sup>‡</sup> · 480×832x49 | **2.16×** |
 
-受测试台规模限制，**DeepSeek-V3.2** 在减层配置下单独验证 —— LoongForge 的 **DSA 算子级优化** 相对 Megatron-LM 仍带来 **~5× 加速**，并可支持 **64K 序列长度**（基线在 8K 以上即 OOM）。
+> <sup>§</sup> 受测试台规模限制，**DeepSeek-V3.2** 在减层配置下单独验证 —— LoongForge 的 **DSA CUDA Kernel 优化** 相对 Megatron-LM 仍带来 **~5× 加速**，并可支持 **64K 序列长度**（基线在 8K 以上即 OOM）。<br>
+> <sup>†</sup> 数据反映测量时对应基线的实现，后续可能随实现演进而变化。<br>
+> <sup>‡</sup> 更多硬件平台的验证将在后续版本中陆续推出。<br>
 
-> <sup>†</sup> 数据反映测量时对应基线与 LoongForge 版本的实现，后续可能随实现演进而变化。<br>
-> <sup>‡</sup> 更多硬件平台的验证将在后续版本中陆续推出。
 
 ## 🌟 基于 LoongForge 训练
 
@@ -212,5 +215,5 @@ LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时也从 HuggingFace Tr
 
 欢迎通过 GitHub Issue 提交问题、反馈或功能建议，也可以[加入我们的 Slack 社区](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)，或扫描下方微信二维码加入开发者社区。
 
-<img width="377" alt="LoongForge WeChat Community" src="https://github.com/user-attachments/assets/8d1660ed-5c94-423d-bfb0-f501aee63346" />
+<img width="377" alt="LoongForge WeChat Community" src="https://github.com/user-attachments/assets/4c69c950-f2e7-4b5e-bc9a-ffe0ebf09760" />
 
