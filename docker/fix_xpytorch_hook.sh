@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Fix xpytorch_import_hook.py and torch_xray_import_hook.py
 # Auto-detect pip isolated build environment and skip hook
 
