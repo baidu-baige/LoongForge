@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <b>🚀 Up to 5.0× training speedup</b> &nbsp;·&nbsp;
+  <b>🚀 Up to <a href="#benchmark">5.04× training speedup</a></b> &nbsp;·&nbsp;
   <b>🌐 Native NVIDIA GPU & Kunlun XPU support</b>
 </p>
 
@@ -77,6 +77,7 @@ See the full documentation for installation, tutorials, and advanced usage — [
 
 > 📖 Deep-dive: [LLM features](https://loongforge.readthedocs.io/en/latest/llm_tutorial/features_index.html) · [VLM features](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/features_index.html)
 
+<a id="benchmark"></a>
 ## 📊 Benchmark
 
 Measured on **v0.1.1** across LLM, VLM, and VLA workloads against mainstream open-source training baselines:
