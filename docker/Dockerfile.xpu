@@ -42,7 +42,7 @@ RUN set -exuo pipefail && \
         XPYTORCH_URL=$(python3 -c "import json; print(json.load(open('/workspace/LoongForge/docker/xpu_packages.json'))['torch25']['xpytorch']['url'])"); \
         echo "use default xpytorch version from json: ${XPYTORCH_URL}"; \
     fi && \
-    export http_proxy=http://10.63.229.53:8891 && export https_proxy=http://10.63.229.53:8891 && download_xpytorch "${XPYTORCH_URL}"
+    download_xpytorch "${XPYTORCH_URL}"
 
 # ======================== Fix xpytorch_import_hook ========================
 RUN source /opt/loongforge_kunlun/bin/activate && bash /workspace/LoongForge/docker/fix_xpytorch_hook.sh
