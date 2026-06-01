@@ -213,6 +213,7 @@ deepstack_visual_embeds_list = []
 deepstack_grad_list = []
 
 _cpu_offload_manager = None
+_encoder_data_iterator = None
 
 
 def get_cpu_offload_manager():
@@ -226,6 +227,15 @@ def get_cpu_offload_manager():
             enabled=args.full_hetero_dp_cpu_offload
         )
     return _cpu_offload_manager
+
+def get_encoder_data_iterator():
+    """Return the encoder data iterator for full_hetero_dp mode."""
+    return _encoder_data_iterator
+
+def set_encoder_data_iterator(iterator):
+    """Set the encoder data iterator for full_hetero_dp mode."""
+    global _encoder_data_iterator
+    _encoder_data_iterator = iterator
 
 def get_embedding_list():
     """Return the global embedding list."""
@@ -442,6 +452,26 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
         train_data_iterator, valid_data_iterator, test_data_iterator = (
             build_sft_cyclic_iterators(train_ds, None, None, collator)
         )
+
+        # Build encoder-specific iterator for full_hetero_dp
+        if getattr(args, 'enable_full_hetero_dp', False):
+            from loongforge.train.sft.utils import (
+                build_full_hetero_encoder_data_iterator,
+            )
+            from loongforge.train.initialize import (
+                get_model_size, get_num_real_micro_batches_per_decoder_dp,
+            )
+            pp_rank = mpu.get_pipeline_model_parallel_rank()
+            tp_size = mpu.get_tensor_model_parallel_world_size()
+            model_size = get_model_size()
+            num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
+            encoder_iter = build_full_hetero_encoder_data_iterator(
+                train_ds, args.consumed_train_samples, collator,
+                pp_rank=pp_rank, tp_size=tp_size, model_size=model_size,
+                num_real_microbatch=num_real_microbatch,
+            )
+            set_encoder_data_iterator(encoder_iter)
+
         return train_data_iterator, None, None
 
     else:
@@ -455,6 +485,26 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
 
         collator = build_sft_data_collator(VLMPretrainCollator)
         train_dataloader = get_train_loader(train_dataset, collator)
+
+        # Build encoder-specific iterator for full_hetero_dp (Energon path)
+        if getattr(args, 'enable_full_hetero_dp', False):
+            from loongforge.data.multimodal.dataloader_provider import (
+                build_full_hetero_encoder_energon_iterator,
+            )
+            from loongforge.train.initialize import (
+                get_model_size, get_num_real_micro_batches_per_decoder_dp,
+            )
+            pp_rank = mpu.get_pipeline_model_parallel_rank()
+            tp_size = mpu.get_tensor_model_parallel_world_size()
+            model_size = get_model_size()
+            num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
+            encoder_iter = build_full_hetero_encoder_energon_iterator(
+                task_encoder, collator,
+                pp_rank=pp_rank, tp_size=tp_size,
+                model_size=model_size, num_real_microbatch=num_real_microbatch,
+            )
+            set_encoder_data_iterator(encoder_iter)
+
         return train_dataloader, None, None
 
 

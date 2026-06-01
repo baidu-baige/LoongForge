@@ -440,3 +440,30 @@ def cyclic_iter(iter):
     while True:
         for x in iter:
             yield x
+
+
+def build_full_hetero_encoder_energon_iterator(
+    task_encoder, collator, pp_rank, tp_size, model_size, num_real_microbatch
+):
+    """Build encoder iterator for full_hetero_dp with Energon dataloader.
+
+    Creates a separate EnergonDataloader (same dataset config as decoder) and
+    wraps it with EncoderStridedIterator to yield only microbatches assigned
+    to this PP rank.
+    """
+    from loongforge.data.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
+    from loongforge.train.initialize import get_num_micro_batches_per_decoder_dp
+
+    encoder_dataset = get_train_dataset(task_encoder)
+    encoder_dataloader = get_train_loader(encoder_dataset, collator)
+
+    strided_iter = EncoderStridedIterator(
+        energon_dataloader=encoder_dataloader,
+        pp_rank=pp_rank,
+        tp_size=tp_size,
+        model_size=model_size,
+        num_real_microbatch=num_real_microbatch,
+    )
+    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+    prefetch_count = tp_size * encoder_rounds
+    return PrefetchIterator(strided_iter, prefetch_count=prefetch_count)

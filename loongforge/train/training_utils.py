@@ -1459,51 +1459,69 @@ def train_step(
             get_batch, get_embedding_list,
             get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
             get_deepstack_grad_list, _create_mock_batch,
+            get_encoder_data_iterator,
         )
 
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
         num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         unwrapped_model = unwrap_model(model[0])
-        if isinstance(data_iterator, list):
-            first_iter, backup_iter = itertools.tee(data_iterator[0])
-            data_iterator = [RerunDataIterator(first_iter)] + data_iterator[1:]
+
+        encoder_iter = get_encoder_data_iterator()
+        if encoder_iter is not None:
+            if isinstance(data_iterator, list):
+                data_iterator = [RerunDataIterator(data_iterator[0])] + data_iterator[1:]
+            else:
+                data_iterator = RerunDataIterator(data_iterator)
         else:
-            data_iterator, backup_iter = itertools.tee(data_iterator)
-            data_iterator = RerunDataIterator(data_iterator)
+            if isinstance(data_iterator, list):
+                first_iter, backup_iter = itertools.tee(data_iterator[0])
+                data_iterator = [RerunDataIterator(first_iter)] + data_iterator[1:]
+            else:
+                data_iterator, backup_iter = itertools.tee(data_iterator)
+                data_iterator = RerunDataIterator(data_iterator)
 
         pp_layer = mpu.get_pipeline_model_parallel_rank()
         tp_size = mpu.get_tensor_model_parallel_world_size()
-
         model_size = num_microbatch // encoder_rounds
-        iter_count = 0
+
+        all_raw_batches = None
+        if encoder_iter is None:
+            all_raw_batches = [next(backup_iter) for _ in range(num_real_microbatch)]
+
         batch_list = []
+        last_real_batch = None
+        has_any_real = (pp_layer * tp_size < num_real_microbatch)
         embedding_list = get_embedding_list()
         visual_pos_masks_list = get_visual_pos_masks_list()
         deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
         for round in range(encoder_rounds):
             batch_list.clear()
             front = pp_layer * tp_size + round * model_size
-            end = (pp_layer + 1) * tp_size + round * model_size
             all_mock_in_range = (front >= num_real_microbatch)
-            # Skip batches before this PP rank's range, but only for real data.
-            # When entire range is mock, save the last skipped batch as reference.
-            skip_count = max(0, min(front, num_real_microbatch) - iter_count)
-            last_skipped_batch = None
-            for skip_i in range(skip_count):
-                if skip_i == skip_count - 1 and all_mock_in_range:
-                    last_skipped_batch = copy.deepcopy(get_batch(backup_iter))
-                else:
-                    next(backup_iter)
             for tp_idx in range(tp_size):
                 global_mb_idx = front + tp_idx
                 if global_mb_idx >= num_real_microbatch:
                     # This microbatch is beyond real data — use mock batch
-                    mock_ref = batch_list[-1] if batch_list else last_skipped_batch
+                    if not batch_list and last_real_batch is None:
+                        # No real batch seen yet — need a reference for mock shape
+                        if encoder_iter is not None and has_any_real:
+                            last_real_batch = get_batch(encoder_iter)
+                        elif all_raw_batches is not None:
+                            last_real_batch = copy.deepcopy(get_batch(iter([all_raw_batches[num_real_microbatch - 1]])))
+                        else:
+                            iter_arg = (
+                                data_iterator if not isinstance(data_iterator, list) else data_iterator[0]
+                            )
+                            last_real_batch = get_batch(iter_arg)
+                    mock_ref = batch_list[-1] if batch_list else last_real_batch
                     batch_list.append(_create_mock_batch(mock_ref))
                 else:
-                    local_batch = copy.deepcopy(get_batch(backup_iter))
-                    batch_list.append(local_batch)
-            iter_count = min(end, num_real_microbatch)
+                    if encoder_iter is not None:
+                        batch = get_batch(encoder_iter)
+                    else:
+                        batch = copy.deepcopy(get_batch(iter([all_raw_batches[global_mb_idx]])))
+                    last_real_batch = batch
+                    batch_list.append(batch)
 
             input_embeds_list = []
             for i in range(tp_size):

@@ -233,6 +233,51 @@ def build_sft_cyclic_iterators(
     return train_iter, valid_iter, test_iter
 
 
+def build_full_hetero_encoder_data_iterator(
+    dataset: "Dataset",
+    consumed_samples: int,
+    data_collator: DataCollatorForSupervisedDataset,
+    pp_rank: int,
+    tp_size: int,
+    model_size: int,
+    num_real_microbatch: int,
+):
+    """Build a DataLoader iterator for the encoder in full_hetero_dp mode.
+
+    Uses EncoderStridedSampler to yield only microbatches assigned to this PP rank,
+    avoiding unnecessary disk IO for microbatches handled by other ranks.
+    """
+    from loongforge.data.encoder_strided_sampler import EncoderStridedSampler
+
+    args = get_args()
+    batch_sampler = EncoderStridedSampler(
+        dataset,
+        total_samples=len(dataset),
+        consumed_samples=consumed_samples,
+        micro_batch_size=args.micro_batch_size,
+        data_parallel_rank=mpu.get_data_parallel_rank(),
+        data_parallel_size=mpu.get_data_parallel_world_size(),
+        data_sharding=args.data_sharding,
+        pp_rank=pp_rank,
+        tp_size=tp_size,
+        model_size=model_size,
+        num_real_microbatch=num_real_microbatch,
+    )
+    dataloader = DataLoader(
+        dataset,
+        batch_sampler=batch_sampler,
+        collate_fn=data_collator,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        persistent_workers=True if args.num_workers > 0 else False,
+    )
+    from loongforge.data.encoder_strided_sampler import PrefetchIterator
+    from loongforge.train.initialize import get_num_micro_batches_per_decoder_dp
+    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+    prefetch_count = tp_size * encoder_rounds
+    return PrefetchIterator(iter(_cyclic_iter(dataloader)), prefetch_count=prefetch_count)
+
+
 ######## utils for get_batch ########
 def _get_position_ids(data: torch.Tensor):
     """create position ids"""
