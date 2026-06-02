@@ -1,6 +1,6 @@
-<div align="center">
+<p align="right"><sub><b>English</b> | <a href="./README_zh.md">简体中文</a></sub></p>
 
-**English** | [中文](./README_zh.md)
+<div align="center">
 
 <p align="center">
   <picture>
@@ -13,18 +13,30 @@
 <h4>A modular, scalable, high-performance training framework for LLMs, VLMs, diffusion, and embodied models.</h4>
 
 <p align="center">
+  <b>🚀 Up to <a href="#benchmark">5.04× training speedup</a></b> &nbsp;·&nbsp;
+  <b>🌐 Native NVIDIA GPU & Kunlun XPU support</b>
+</p>
 
-[![Docs](https://img.shields.io/badge/Docs-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/en/latest/index.html)
-[![Blog](https://img.shields.io/badge/Blog-Visit-FF6B35.svg?style=for-the-badge)](https://baidu-baige.github.io/LoongForge/blog/)
-[![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?style=for-the-badge&logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
-[![Slack](https://img.shields.io/badge/Slack-Join-4A154B.svg?style=for-the-badge&logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
-[![WeChat](https://img.shields.io/badge/WeChat-Join-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
+<p align="center">
+
+[![Home](https://img.shields.io/badge/LoongForge-Home-8A2CE3?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ikxvb25nRm9yZ2UgbG9nbyI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzYzNjZGMSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjYwJSIgc3RvcC1jb2xvcj0iIzhCNUNGNiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNGNTlFMEIiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjE0IiBmaWxsPSJ1cmwoI2cpIi8+CiAgPHBhdGggZD0iTTE4IDQwIEMgMjIgMzAsIDI4IDI4LCAzMiAzMiBDIDM2IDM2LCA0MiAzNCwgNDYgMjQiCiAgICAgICAgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMuMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWxsPSJub25lIi8+CiAgPGNpcmNsZSBjeD0iNDYiIGN5PSIyNCIgcj0iMy4yIiBmaWxsPSIjZmZmIi8+CiAgPGNpcmNsZSBjeD0iMTgiIGN5PSI0MCIgcj0iMi4yIiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjg1Ii8+CiAgPHBhdGggZD0iTTI0IDQ2IEw0MCA0NiIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iMC43Ii8+Cjwvc3ZnPgo=)](https://baidu-baige.github.io/LoongForge/)
+[![Docs](https://img.shields.io/badge/Docs-Latest-00A3FF?logo=readthedocs)](https://loongforge.readthedocs.io/en/latest/index.html)
+[![Blog](https://img.shields.io/badge/Blog-View-FF6B35.svg?logo=github)](https://baidu-baige.github.io/LoongForge/blog/)
+[![Release](https://img.shields.io/github/v/release/baidu-baige/LoongForge?include_prereleases&label=release&color=blue)](https://github.com/baidu-baige/LoongForge/releases)
+[![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
+[![Slack](https://img.shields.io/badge/Slack-Join-4A154B.svg?logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
+[![WeChat](https://img.shields.io/badge/WeChat-Join-07C160.svg?logo=wechat)](#contact)
 
 </p>
 
 <p align="center">
-  <b>🚀 Up to <a href="#benchmark">5.04× training speedup</a></b> &nbsp;·&nbsp;
-  <b>🌐 Native NVIDIA GPU & Kunlun XPU support</b>
+  <a href="#quickstart"><b>📖 Quick Start</b></a>
+  &nbsp;·&nbsp;
+  <a href="#benchmark"><b>📊 Benchmark</b></a>
+  &nbsp;·&nbsp;
+  <a href="#models"><b>🤖 Supported Models</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/baidu-baige/LoongForge/issues/74"><b>🚀 Roadmap</b></a>
 </p>
 
 </div>
@@ -48,6 +60,7 @@ Before going open-source, LoongForge was developed as **AIAK-Training-LLM**, Bai
 - **[2026/04]** 🚀 LoongForge source code publicly available on GitHub. [[blog]](https://baidu-baige.github.io/LoongForge/blog/2026-04-announcing-loongforge.html)
 - **[2025/10]** 🌟 Powered the training and public release of **LLaVA-OneVision-1.5** under **AIAK-Training-LLM**, the predecessor of LoongForge. [[blog]](https://baidu-baige.github.io/LoongForge/blog/2025-10-llava-onevision-case-study.html)
 
+<a id="quickstart"></a>
 ## ⚡ Quick Start
 
 See the full documentation for installation, tutorials, and advanced usage — [English](https://loongforge.readthedocs.io/en/latest/index.html) · [中文](https://loongforge.readthedocs.io/zh-cn/latest/index.html).
@@ -82,6 +95,13 @@ See the full documentation for installation, tutorials, and advanced usage — [
 
 Measured on **v0.1.1** across LLM, VLM, VLA and DIT workloads against mainstream open-source training baselines:
 
+<img width="2422" height="1264" alt="image" src="https://github.com/user-attachments/assets/1553b7eb-d379-4e63-b293-2a716c4996be" />
+
+<details>
+<summary><b>📋 Detailed configurations & footnotes</b></summary>
+
+<br>
+
 | Model | Type | Baseline | Configuration | Speedup |
 |---|---|---|---|---|
 | Qwen3-30B-A3B | MoE | Megatron-LM<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 1024 · 32K | **1.16×** |
@@ -95,6 +115,7 @@ Measured on **v0.1.1** across LLM, VLM, VLA and DIT workloads against mainstream
 > <sup>†</sup> Numbers reflect baseline and LoongForge versions at the time of measurement, and may evolve as implementations change.<br>
 > <sup>‡</sup> Validation on additional hardware is rolling out in upcoming releases.<br>
 
+</details>
 
 ## 🌟 Powered by LoongForge
 
@@ -102,6 +123,7 @@ Measured on **v0.1.1** across LLM, VLM, VLA and DIT workloads against mainstream
 - [LLaVA-OneVision-1.5](https://arxiv.org/abs/2509.23661) — Fully open framework for democratized multimodal training.
 - [Qianfan-VL](https://github.com/baidubce/Qianfan-VL) — Domain-Enhanced Vision-Language Models for Enterprise, 3B to 70B parameters.
 
+<a id="models"></a>
 ## 🏛️ Supported Models
 
 LoongForge supports a broad range of [state-of-the-art models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html) across LLM, VLM, diffusion, and VLA.
