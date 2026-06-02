@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <b>🚀 训练<a href="#benchmark">加速最高可达 5.04×</a></b> &nbsp;·&nbsp;
+  <b>🚀 训练加速最高可达 5.04×</b> &nbsp;·&nbsp;
   <b>🌐 原生支持 NVIDIA GPU 与昆仑芯 XPU</b>
 </p>
 
