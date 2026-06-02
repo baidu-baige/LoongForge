@@ -1,6 +1,6 @@
-<div align="center">
+<p align="right"><sub><a href="./README.md">English</a> | <b>简体中文</b></sub></p>
 
-[English](./README.md) | **中文**
+<div align="center">
 
 <p align="center">
   <picture>
@@ -13,18 +13,30 @@
 <h4>面向 LLM、VLM、Diffusion 与 Embodied 模型的模块化、可扩展、高性能训练框架。</h4>
 
 <p align="center">
-
-[![文档](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-Latest-blue?style=for-the-badge&logo=readthedocs)](https://loongforge.readthedocs.io/zh-cn/latest/index.html)
-[![Blog](https://img.shields.io/badge/Blog-%E8%AE%BF%E9%97%AE-FF6B35.svg?style=for-the-badge)](https://baidu-baige.github.io/LoongForge/blog/)
-[![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?style=for-the-badge&logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
-[![Slack](https://img.shields.io/badge/Slack-%E5%8A%A0%E5%85%A5-4A154B.svg?style=for-the-badge&logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
-[![WeChat](https://img.shields.io/badge/WeChat-%E5%8A%A0%E5%85%A5-07C160.svg?style=for-the-badge&logo=wechat)](#contact)
+  
+[![Home](https://img.shields.io/badge/LoongForge-主页-8A2CE3?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ikxvb25nRm9yZ2UgbG9nbyI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzYzNjZGMSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjYwJSIgc3RvcC1jb2xvcj0iIzhCNUNGNiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNGNTlFMEIiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjE0IiBmaWxsPSJ1cmwoI2cpIi8+CiAgPHBhdGggZD0iTTE4IDQwIEMgMjIgMzAsIDI4IDI4LCAzMiAzMiBDIDM2IDM2LCA0MiAzNCwgNDYgMjQiCiAgICAgICAgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMuMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWxsPSJub25lIi8+CiAgPGNpcmNsZSBjeD0iNDYiIGN5PSIyNCIgcj0iMy4yIiBmaWxsPSIjZmZmIi8+CiAgPGNpcmNsZSBjeD0iMTgiIGN5PSI0MCIgcj0iMi4yIiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjg1Ii8+CiAgPHBhdGggZD0iTTI0IDQ2IEw0MCA0NiIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iMC43Ii8+Cjwvc3ZnPgo=)](https://baidu-baige.github.io/LoongForge/)
+[![Docs](https://img.shields.io/badge/文档-Latest-00A3FF?logo=readthedocs)](https://loongforge.readthedocs.io/zh-cn/latest/index.html)
+[![Blog](https://img.shields.io/badge/博客-View-FF6B35.svg?logo=github)](https://baidu-baige.github.io/LoongForge/blog/)
+[![Release](https://img.shields.io/github/v/release/baidu-baige/LoongForge?include_prereleases&label=release&color=blue)](https://github.com/baidu-baige/LoongForge/releases)
+[![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
+[![Slack](https://img.shields.io/badge/Slack-加入-4A154B.svg?logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
+[![WeChat](https://img.shields.io/badge/WeChat-加入-07C160.svg?logo=wechat)](#contact)
 
 </p>
 
 <p align="center">
   <b>🚀 训练<a href="#benchmark">加速最高可达 5.04×</a></b> &nbsp;·&nbsp;
   <b>🌐 原生支持 NVIDIA GPU 与昆仑芯 XPU</b>
+</p>
+
+<p align="center">
+  <a href="#quickstart"><b>📖 快速开始</b></a>
+  &nbsp;·&nbsp;
+  <a href="#benchmark"><b>📊 性能数据</b></a>
+  &nbsp;·&nbsp;
+  <a href="#models"><b>🤖 支持模型</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/baidu-baige/LoongForge/issues/74"><b>🚀 路线图</b></a>
 </p>
 
 </div>
@@ -48,6 +60,7 @@
 - **[2026/04]** 🚀 LoongForge 源码在 GitHub 上正式公开。[[blog]](https://zhuanlan.zhihu.com/p/2031006068797600446)
 - **[2026/05]** 🌟 基于AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。[[blog]](https://mp.weixin.qq.com/s/1y7Br15pBpUZ-90j5OGncA)
 
+<a id="quickstart"></a>
 ## ⚡ 快速开始
 
 完整的安装、教程与进阶使用请查阅文档 —— [English](https://loongforge.readthedocs.io/en/latest/index.html) · [中文](https://loongforge.readthedocs.io/zh-cn/latest/index.html)。
@@ -81,6 +94,12 @@
 ## 📊 性能 Benchmark
 
 在 **v0.1.1** 版本上针对 LLM、VLM、VLA、DIT 四类工作负载，与主流开源训练方案的对比结果：
+<img width="2422" height="1264" alt="image" src="https://github.com/user-attachments/assets/1553b7eb-d379-4e63-b293-2a716c4996be" />
+
+<details>
+<summary><b>📋 细节描述</b></summary>
+
+<br>
 
 | 模型 | 类型 | 对比基线 | 配置 | 加速比 |
 |---|---|---|---|---|
@@ -94,7 +113,7 @@
 > <sup>§</sup> 受测试台规模限制，**DeepSeek-V3.2** 在减层配置下单独验证 —— LoongForge 的 **DSA CUDA Kernel 优化** 相对 Megatron-LM 仍带来 **~5× 加速**，并可支持 **64K 序列长度**（基线在 8K 以上即 OOM）。<br>
 > <sup>†</sup> 数据反映测量时对应基线的实现，后续可能随实现演进而变化。<br>
 > <sup>‡</sup> 更多硬件平台的验证将在后续版本中陆续推出。<br>
-
+</details>
 
 ## 🌟 基于 LoongForge 训练
 
@@ -102,6 +121,7 @@
 - [LLaVA-OneVision-1.5](https://arxiv.org/abs/2509.23661) —— 面向多模态训练民主化的全开源框架。
 - [Qianfan-VL](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B。
 
+<a id="models"></a>
 ## 🏛️ 支持的模型
 
 LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOTA 模型](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
