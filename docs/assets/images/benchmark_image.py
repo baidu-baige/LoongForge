@@ -24,7 +24,6 @@ import numpy as np
 ROWS = [
     ("DeepSeek-V3.2 Lite", "MoE + DSA", "Megatron-LM", "Reduced layers · GBS 128 · 8K",      5.04, "§"),
     ("GR00T N1.6",         "VLA",       "LeRobot",     "8 × A800 · GBS 128 · 224×224",       2.31, ""),
-    ("Wan 2.2",            "DIT",       "DiffSynth",   "8 × A800 · 480×832×49",              2.16, ""),
     ("Pi 0.5",             "VLA",       "OpenPI",      "8 × A800 · GBS 112 · 224×224",       1.65, ""),
     ("Qwen3-VL-30B-A3B",   "VLM",       "VeOmni",      "32 × A800 · GBS 128 · 32K",          1.45, ""),
     ("Qwen3-30B-A3B",      "MoE",       "Megatron-LM", "32 × A800 · GBS 1024 · 32K",         1.16, ""),
