@@ -45,7 +45,7 @@
 
 > 🐉 LoongForge 是百度百舸 **Loong** 开源系列的一员 —— 名字源于中国传统 **龙舟**，象征协同发力与破浪前行。
 
-**LoongForge** 是面向 **LLM、VLM、VLA 与 Diffusion 模型** 的统一训练框架，覆盖 **预训练（Pre-training）**、**持续预训练（Continued Pre-training）** 和 **SFT**。基于 Megatron-LM 在 **模型覆盖度**、**训练性能** 和 **硬件支持** 三个维度做了深度系统性增强，相对主流开源训练方案有**显著的性能提升**。
+**LoongForge** 是面向 **LLM、VLM、Diffusion 与 Embodied 模型** 的统一训练框架，覆盖 **预训练（Pre-training）**、**持续预训练（Continued Pre-training）** 和 **SFT**。基于 Megatron-LM 在 **模型覆盖度**、**训练性能** 和 **硬件支持** 三个维度做了深度系统性增强，相对主流开源训练方案有**显著的性能提升**。
 
 在开源之前，LoongForge 的前身是 **AIAK-Training-LLM** —— 百度百舸的训练加速栈，已在 **教育**、**计算机视觉** 和 **Embodied AI** 等多家企业客户的生产训练中落地，相对客户原有方案通常带来 **30%~50% 加速**，最大规模的生产训练任务达到 **5,000+ XPU**。
 
@@ -94,7 +94,7 @@
 ## 📊 性能 Benchmark
 
 在 **v0.1.1** 版本上针对 LLM、VLM、VLA、DIT 四类工作负载，与主流开源训练方案的对比结果：
-<img width="2422" height="1264" alt="image" src="https://github.com/user-attachments/assets/1553b7eb-d379-4e63-b293-2a716c4996be" />
+<img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" />
 
 <details>
 <summary><b>📋 细节描述</b></summary>
@@ -108,7 +108,6 @@
 | Qwen3-VL-30B-A3B | VLM | VeOmni<sup>†</sup> | 32 × A800<sup>‡</sup> · GBS 128 · 32K | **1.45×** |
 | GR00T N1.6 | VLA | LeRobot<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 128 · 224×224 | **2.31×** |
 | Pi0.5 | VLA | OpenPI<sup>†</sup> | 8 × A800<sup>‡</sup> · GBS 112 · 224×224 | **1.65×** |
-| Wan2.2 | DIT | DiffSynth<sup>†</sup> | 8 × A800<sup>‡</sup> · 480×832x49 | **2.16×** |
 
 > <sup>§</sup> 受测试台规模限制，**DeepSeek-V3.2** 在减层配置下单独验证 —— LoongForge 的 **DSA CUDA Kernel 优化** 相对 Megatron-LM 仍带来 **~5× 加速**，并可支持 **64K 序列长度**（基线在 8K 以上即 OOM）。<br>
 > <sup>†</sup> 数据反映测量时对应基线的实现，后续可能随实现演进而变化。<br>
