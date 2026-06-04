@@ -24,16 +24,14 @@ from queue import Empty
 from multiprocessing import Pool, Manager, Value
 import psutil
 
-import media_preprocess_utils
-from utils import (
-    TEMPLATES,
-    VALID_MEDIA_EXT,
-    parse_args,
-    get_cfg,
+from wds_pack.media import preprocess as media_preprocess_utils
+from wds_pack.core.config import get_cfg, parse_args
+from wds_pack.core.constants import TEMPLATES, VALID_MEDIA_EXT
+from wds_pack.core.paths import (
     get_temp_dir,
     get_sample_record_path,
     get_token_info_report_path,
-    get_log_file_path
+    get_log_file_path,
 )
 logger = logging.getLogger(__name__)
 

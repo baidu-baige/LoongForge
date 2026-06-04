@@ -12,30 +12,95 @@ from pathlib import Path
 from itertools import islice
 from tqdm import tqdm
 from collections import defaultdict
-from typing import List, Tuple, Dict, Optional, Union, Set
+from typing import Iterable, List, Mapping, Tuple, Dict, Optional, Union, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import queue
 import bisect
 
+from wds_pack.core.types import (
+    HASH_BUCKET_SAMPLE_ID_KEY,
+    HASH_BUCKET_TOKEN_LEN_KEY,
+    HASH_BUCKET_WEIGHT_KEY,
+    PackItem,
+    pack_item_from_hashbucket_record,
+    pack_item_to_hashbucket_tuple,
+)
+
+
+class _FenwickTree:
+    """Small integer-index tree for finding the first non-empty remaining-capacity bucket."""
+
+    def __init__(self, size: int):
+        self.size = size
+        self.tree = [0] * (size + 1)
+
+    def add(self, index: int, delta: int) -> None:
+        i = index + 1
+        while i <= self.size:
+            self.tree[i] += delta
+            i += i & -i
+
+    def prefix_sum(self, index: int) -> int:
+        if index < 0:
+            return 0
+        i = min(index + 1, self.size)
+        total = 0
+        while i > 0:
+            total += self.tree[i]
+            i -= i & -i
+        return total
+
+    def lower_bound(self, target: int) -> int:
+        idx = 0
+        bit = 1 << (self.size.bit_length() - 1)
+        while bit:
+            next_idx = idx + bit
+            if next_idx <= self.size and self.tree[next_idx] < target:
+                idx = next_idx
+                target -= self.tree[next_idx]
+            bit >>= 1
+        return idx
+
+    def find_first_at_least(self, index: int) -> Optional[int]:
+        before = self.prefix_sum(index - 1)
+        total = self.prefix_sum(self.size - 1)
+        if total <= before:
+            return None
+        return self.lower_bound(before + 1)
+
+
 class HashBucketProcessor:
     """Hash bucket processors are used to handle large data files and perform efficient boxing"""
+
+    TOKEN_LEN_DTYPE = np.uint32
+    MAX_TOKEN_LEN_VALUE = np.iinfo(TOKEN_LEN_DTYPE).max
     
     DTYPE_SAMPLE_INFO = np.dtype([
-        ("w", np.uint16),       # Used to store the weights of the ViT part (which can be the number of pixels of the ViT part or the processing capacity of the ViT part)
-        ("l", np.uint16),       # For storing the types of tokens in the llm part (several acres of tokens in the LLM input part)
-        ("name", "U256")        # sample‘s name
+        (HASH_BUCKET_WEIGHT_KEY, np.uint16),       # Used to store the weights of the ViT part (which can be the number of pixels of the ViT part or the processing capacity of the ViT part)
+        (HASH_BUCKET_TOKEN_LEN_KEY, TOKEN_LEN_DTYPE), # Stores token length. uint16 cannot represent 64k (=65536).
+        (HASH_BUCKET_SAMPLE_ID_KEY, object)        # Store sample ids as Python strings; fixed-width Unicode bloats pickle files.
     ])
 
-    def __init__(self, file_path: Union[str, Path], logger: Optional[logging.Logger] = None):
-        self.file_path = Path(file_path)
-        if not self.file_path.exists():
+    def __init__(self, file_path: Optional[Union[str, Path]] = None, logger: Optional[logging.Logger] = None):
+        self.file_path = Path(file_path) if file_path is not None else None
+        if self.file_path is not None and not self.file_path.exists():
             raise FileNotFoundError(f"The file does not exist: {file_path}")
             
         self.hash_buckets = defaultdict(lambda: np.array([], dtype=self.DTYPE_SAMPLE_INFO))
         self.total_lines = 0
         self.hb2_keys = []   # Which powers of 2 can be divided by
         self._logger = logger or self._setup_default_logger()
+
+    @classmethod
+    def from_items(
+        cls,
+        items: Iterable[Union[PackItem, Mapping[str, object]]],
+        logger: Optional[logging.Logger] = None,
+    ) -> "HashBucketProcessor":
+        processor = cls(file_path=None, logger=logger)
+        processor.build_buckets_from_items(items)
+        return processor
 
     @staticmethod
     def _setup_default_logger() -> logging.Logger:
@@ -58,6 +123,8 @@ class HashBucketProcessor:
     
     def _count_file_lines(self) -> int:
         """Calculate the total number of lines in the file using a more efficient method"""
+        if self.file_path is None:
+            return self.total_lines
         try:
             with self.file_path.open('rb') as f:
                 return sum(1 for _ in f)
@@ -75,19 +142,55 @@ class HashBucketProcessor:
         try:
             name, key_str = line.split(':', 1)
             key = int(key_str)
-            if 0 <= key <= 65535:
-                return (0, key, name)
+            if 0 <= key <= self.MAX_TOKEN_LEN_VALUE:
+                return pack_item_to_hashbucket_tuple(PackItem(sample_id=name, token_len=key))
         except (ValueError, IndexError):
             pass
         return None
+
+    def _parse_item(
+        self, item: Union[PackItem, Mapping[str, object]]
+    ) -> Optional[Tuple[int, int, str]]:
+        """Parse one structured pack item and return (weight, token_len, sample_id)."""
+        if isinstance(item, PackItem):
+            sample_id = item.sample_id
+            token_len = item.token_len
+            weight = item.weight
+        else:
+            sample_id = str(item.get("sample_id", ""))
+            token_len = int(item.get("token_len", 0))
+            weight = int(item.get("weight", 0))
+
+        if not sample_id:
+            return None
+        if 0 <= token_len <= self.MAX_TOKEN_LEN_VALUE:
+            return pack_item_to_hashbucket_tuple(
+                PackItem(sample_id=sample_id, token_len=token_len, weight=weight)
+            )
+        return None
+
+    def _bucket_pack_items(self) -> List[PackItem]:
+        """Return current hashbucket records as structured pack items."""
+        items = []
+        for arr in self.hash_buckets.values():
+            if len(arr) > 0:
+                items.extend(pack_item_from_hashbucket_record(record) for record in arr)
+        return items
+
+    def _pack_items_to_array(self, items: Iterable[PackItem]) -> np.ndarray:
+        """Return structured pack items in the legacy ndarray layout."""
+        return np.array(
+            [pack_item_to_hashbucket_tuple(item) for item in items],
+            dtype=self.DTYPE_SAMPLE_INFO,
+        )
         
     def _update_buckets(self, parsed_data: List[Tuple[int, int, str]]) -> None:
         """Update the hash bucket"""
         data_array = np.array(parsed_data, dtype=self.DTYPE_SAMPLE_INFO)
-        unique_l_values = np.unique(data_array['l'])
+        unique_l_values = np.unique(data_array[HASH_BUCKET_TOKEN_LEN_KEY])
 
         for l_val in unique_l_values:
-            mask = data_array['l'] == l_val
+            mask = data_array[HASH_BUCKET_TOKEN_LEN_KEY] == l_val
             chunk = data_array[mask]
             
             if l_val in self.hash_buckets:
@@ -97,6 +200,8 @@ class HashBucketProcessor:
                 
     def build_buckets(self, chunk_size: int = 100000) -> None:
         """Build a hash bucket"""
+        if self.file_path is None:
+            raise ValueError("build_buckets requires file_path; use build_buckets_from_items for structured input")
         self.total_lines = self._count_file_lines()
         self._logger.info(f"Start processing the file. Total number of lines: {self.total_lines}")
         
@@ -117,7 +222,29 @@ class HashBucketProcessor:
                             parsed_data.append(parsed)
 
                     if parsed_data:
-                        self._update_buckets(parsed_data)                                
+                        self._update_buckets(parsed_data)
+
+    def build_buckets_from_items(
+        self,
+        items: Iterable[Union[PackItem, Mapping[str, object]]],
+        chunk_size: int = 100000,
+    ) -> None:
+        """Build hash buckets from structured pack items."""
+        parsed_data = []
+        total = 0
+        for item in items:
+            parsed = self._parse_item(item)
+            if parsed is None:
+                continue
+            parsed_data.append(parsed)
+            total += 1
+            if len(parsed_data) >= chunk_size:
+                self._update_buckets(parsed_data)
+                parsed_data = []
+
+        if parsed_data:
+            self._update_buckets(parsed_data)
+        self.total_lines = total
 
     @staticmethod
     def factors_of_two(a: int, C: int) -> List[Tuple[int, int]]:
@@ -322,8 +449,9 @@ class HashBucketProcessor:
             arr = self.hash_buckets[key]
             print(f"Key {key} data count: {len(arr)}")
             print("First 3 data items:")
-            for item in arr[:3]:
-                print(f"  w: {item['w']}, l: {item['l']}, name: {item['name']}")
+            for record in arr[:3]:
+                item = pack_item_from_hashbucket_record(record)
+                print(f"  w: {item.weight}, l: {item.token_len}, name: {item.sample_id}")
         else:
             print(f"Key {key} does not exist.")
   
@@ -355,7 +483,7 @@ class HashBucketProcessor:
                     continue
     
                 idx, item = queue[0]
-                l_val = key #item['l']
+                l_val = key
                 if current_sum + l_val <= box_capacity:
                     queue.popleft()
                     current_box_items.append(item)
@@ -455,7 +583,7 @@ class HashBucketProcessor:
                     if not queue:
                         continue
                     idx, item = queue[0]
-                    l_val = item['l']
+                    l_val = pack_item_from_hashbucket_record(item).token_len
                     if current_sum + l_val <= box_capacity:
                         queue.popleft()
                         current_box.append((key, idx, item))
@@ -489,7 +617,7 @@ class HashBucketProcessor:
             # Mix all remaining elements and re-bucket
             mixed = defaultdict(list)
             for _, _, item in not_full_items:
-                mixed[item['l']].append(item)
+                mixed[pack_item_from_hashbucket_record(item).token_len].append(item)
             key_queues = {k: deque(enumerate(np.array(v, dtype=self.DTYPE_SAMPLE_INFO))) for k, v in mixed.items()}
             new_boxes, new_not_full_items = recursive_diversity_pack(key_queues)
             boxes.extend(new_boxes)
@@ -497,6 +625,84 @@ class HashBucketProcessor:
                 break
             not_full_items = new_not_full_items
         return boxes, not_full_items
+
+    def pack_best_fit_decreasing(self, box_capacity: int = 16384) -> List[np.ndarray]:
+        """Pack all current buckets with best-fit decreasing.
+
+        This path is intended for WDS-native offline packing where exact fill is
+        not required. It preserves every valid sample and lets training pad the
+        short tail, while keeping bins tightly filled in O(n log box_capacity).
+        """
+        if box_capacity <= 0:
+            raise ValueError(f"box_capacity must be positive, got {box_capacity}")
+
+        items = self._bucket_pack_items()
+
+        if not items:
+            self._logger.warning("No items available for best-fit decreasing packing")
+            return []
+
+        items.sort(key=lambda item: (item.token_len, item.sample_id), reverse=True)
+
+        boxes: List[List[PackItem]] = []
+        box_loads: List[int] = []
+        remaining_slots: List[List[int]] = [[] for _ in range(box_capacity + 1)]
+        remaining_index = _FenwickTree(box_capacity + 1)
+
+        def add_remaining(remaining: int, box_index: int) -> None:
+            remaining_slots[remaining].append(box_index)
+            if len(remaining_slots[remaining]) == 1:
+                remaining_index.add(remaining, 1)
+
+        def pop_remaining(remaining: int) -> int:
+            box_index = remaining_slots[remaining].pop()
+            if not remaining_slots[remaining]:
+                remaining_index.add(remaining, -1)
+            return box_index
+
+        skipped = []
+        for item in tqdm(items, unit="item", desc="Best-fit decreasing packing", dynamic_ncols=True):
+            token_len = item.token_len
+            if token_len < 0 or token_len > box_capacity:
+                skipped.append(item.sample_id)
+                continue
+
+            remaining = remaining_index.find_first_at_least(token_len)
+            if remaining is None:
+                box_index = len(boxes)
+                boxes.append([item])
+                box_loads.append(token_len)
+                add_remaining(box_capacity - token_len, box_index)
+                continue
+
+            box_index = pop_remaining(remaining)
+            boxes[box_index].append(item)
+            box_loads[box_index] += token_len
+            add_remaining(remaining - token_len, box_index)
+
+        output_boxes = [
+            self._pack_items_to_array(box)
+            for box in boxes
+            if box
+        ]
+
+        self.hash_buckets = defaultdict(lambda: np.array([], dtype=self.DTYPE_SAMPLE_INFO))
+
+        if skipped:
+            self._logger.warning(
+                "Skipped %d items longer than box capacity during best-fit decreasing packing",
+                len(skipped),
+            )
+
+        avg_load = sum(box_loads) / len(box_loads) if box_loads else 0
+        min_load = min(box_loads) if box_loads else 0
+        max_load = max(box_loads) if box_loads else 0
+        self._logger.info("Best-fit decreasing packing completed:")
+        self._logger.info(f"  Boxes: {len(output_boxes)}")
+        self._logger.info(f"  Packed items: {sum(len(box) for box in output_boxes)}")
+        self._logger.info(f"  Average load rate: {avg_load / box_capacity:.2%}")
+        self._logger.info(f"  Load range: {min_load}-{max_load}")
+        return output_boxes
 
     def pack_large_seed_parallel_multithread(self, box_capacity: int = 16384, min_ratio: float = 0.95, 
                                            max_workers: int = None) -> List[np.ndarray]:

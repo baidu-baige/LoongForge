@@ -358,7 +358,7 @@ def cooker_packed_multi_mix_qa(sample: dict):
         ["imgC.jpg", ...],
         ...
       ],
-      "media_type": "image" | "video"
+      "media_type": "image" | "video" | "text"
     }
     """
     data = sample["json"]
@@ -423,10 +423,14 @@ def cooker_packed_multi_mix_qa(sample: dict):
             videos = None
         images = None
 
+    elif media_type == "text":
+        images = None
+        videos = None
+
     else:
         raise ValueError(
             f"[cooker_packed_multi_mix_qa] unknown media_type='{media_type}'. "
-            f"Expect 'image' or 'video'."
+            f"Expect 'image', 'video', or 'text'."
         )
     if _ENERGON_NEEDS_SUBFLAVOR:
         return PackedMultiMixQASample(

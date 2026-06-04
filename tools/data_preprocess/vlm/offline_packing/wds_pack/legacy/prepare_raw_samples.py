@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils import get_init_file, parse_args, get_cfg, VALID_MEDIA_EXT
+from wds_pack.core.config import get_cfg, parse_args
+from wds_pack.core.constants import VALID_MEDIA_EXT
+from wds_pack.core.paths import get_init_file
 from collections import defaultdict
 
 args = parse_args()

@@ -612,17 +612,18 @@ class VLMTaskEncoder(BaseTaskEncoder):
             raise ValueError(
                 f"encode_packed_multi_mix_qa: cannot mix images and videos in same sample for key={sample.__key__}"
             )
+        has_text_only = not has_images and not has_videos
         media_list = images if has_images else videos
-        media_type = "image" if has_images else "video"
+        media_type = "image" if has_images else ("video" if has_videos else "text")
 
-        if len(media_list) != n_orig_sample:
+        if not has_text_only and len(media_list) != n_orig_sample:
             raise ValueError(
                 f"encode_packed_multi_mix_qa: media count ({len(media_list)}) "
                 f"!= context count ({n_orig_sample}) for key={sample.__key__}"
             )
         for idx in range(n_orig_sample):
             context = sample.contexts[idx]  # str
-            media_group = media_list[idx]  # List[Tensor] or List[AVData]
+            media_group = None if has_text_only else media_list[idx]  # List[Tensor] or List[AVData]
             answer_group = sample.answers[idx] if sample.answers else []  # List[str]
 
             if isinstance(answer_group, list):
@@ -647,7 +648,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 if _ENERGON_NEEDS_SUBFLAVOR:
                     init_kwargs["__subflavor__"] = None
                 cur_sample = MultiMixQASample(**init_kwargs)
-            else:  # has_videos
+            elif has_videos:
                 init_kwargs = {
                     "__key__": f"{sample.__key__}.q{idx:03d}",
                     "__restore_key__": sample.__restore_key__,
@@ -655,6 +656,19 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     "messages": messages,
                     "image": None,
                     "video": media_group,  # List[AVData]
+                    "system": None,
+                }
+                if _ENERGON_NEEDS_SUBFLAVOR:
+                    init_kwargs["__subflavor__"] = None
+                cur_sample = MultiMixQASample(**init_kwargs)
+            else:
+                init_kwargs = {
+                    "__key__": f"{sample.__key__}.q{idx:03d}",
+                    "__restore_key__": sample.__restore_key__,
+                    "__subflavors__": sample.__subflavors__,
+                    "messages": messages,
+                    "image": None,
+                    "video": None,
                     "system": None,
                 }
                 if _ENERGON_NEEDS_SUBFLAVOR:

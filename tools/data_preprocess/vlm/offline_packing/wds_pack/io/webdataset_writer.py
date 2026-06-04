@@ -6,9 +6,10 @@
 import json
 import logging
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, List, Optional, Sequence
+from typing import Dict, Iterator, List, Optional, Sequence
 
 import yaml
 import webdataset as wds
@@ -17,9 +18,43 @@ from tqdm import tqdm
 from megatron.energon.epathlib import EPath
 from megatron.energon.flavors import BaseWebdatasetFactory
 from megatron.energon.flavors.webdataset import MAIN_FOLDER_NAME
-from utils import get_cfg, get_init_file, parse_args
+from wds_pack.core.config import get_cfg, parse_args
+from wds_pack.core.paths import (
+    get_init_file,
+    get_manifest_sqlite_path,
+    get_pack_plan_path,
+)
+from wds_pack.manifest.sqlite import load_manifest_for_packing
 
 LOG = logging.getLogger(__name__)
+
+
+class ShardReaderCache:
+    """Read byte ranges from source tar shards without extracting files."""
+
+    def __init__(self, root: Path):
+        self.root = root
+        self._files = {}
+
+    def read(self, shard: str, offset: int, size: int) -> bytes:
+        path = self.root / shard
+        fh = self._files.get(path)
+        if fh is None:
+            fh = path.open("rb")
+            self._files[path] = fh
+        fh.seek(offset)
+        return fh.read(size)
+
+    def close(self):
+        for fh in self._files.values():
+            fh.close()
+        self._files.clear()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     
 def _flatten_media_paths(media: Sequence) -> List[str]:
@@ -72,15 +107,18 @@ def stream_samples_packed_multi_mix_qa(src_dir: Path) -> Iterator[dict]:
         media_files = raw.get("media_files") or []
         media_type = (raw.get("media_type") or raw.get("media") or "").lower()
 
-        if media_type not in {"image", "video"}:
+        if media_type not in {"image", "video", "text"}:
             raise ValueError(
-                f"[{sample_id}] unsupported media_type='{media_type}', expected 'image' or 'video'"
+                f"[{sample_id}] unsupported media_type='{media_type}', "
+                f"expected 'image', 'video', or 'text'"
             )
         if len(prompts) != len(captions):
             raise ValueError(
                 f"[{sample_id}] prompts/captions length mismatch: {len(prompts)} vs {len(captions)}"
             )
-        if len(media_files) != len(prompts):
+        if media_type == "text":
+            media_files = []
+        elif len(media_files) != len(prompts):
             raise ValueError(
                 f"[{sample_id}] media_files length mismatch: {len(media_files)} vs {len(prompts)} prompts"
             )
@@ -383,6 +421,127 @@ def convert_to_wds(cfg: PackedWDSConfig):
     )
     print("Dataset successfully converted to wds")
 
+
+def _safe_target_name(part: str, sample_index: int, used_names: set) -> str:
+    name = Path(part).name.replace(" ", "_")
+    if not name:
+        name = f"media_{sample_index:03d}.bin"
+    target = f"s{sample_index:03d}_{name}"
+    if target not in used_names:
+        used_names.add(target)
+        return target
+    stem = Path(target).stem
+    suffix = Path(target).suffix
+    counter = 1
+    while True:
+        candidate = f"{stem}_{counter}{suffix}"
+        if candidate not in used_names:
+            used_names.add(candidate)
+            return candidate
+        counter += 1
+
+
+def construct_native_packed_sample(plan: dict, samples: dict, members: dict, reader: ShardReaderCache):
+    media_type = plan["media_type"]
+    sample_ids = plan["sample_ids"]
+    packed = {"__key__": plan["pack_id"], "__restore_key__": plan["pack_id"]}
+    prompts = []
+    captions = []
+    token_lens = []
+    packed_media_files = []
+    used_names = set()
+
+    for sample_index, sample_id in enumerate(sample_ids):
+        if sample_id not in samples:
+            raise KeyError(f"Sample {sample_id} not found in manifest")
+        sample = samples[sample_id]
+        if sample.media_type != media_type:
+            raise ValueError(
+                f"Pack {plan['pack_id']} mixes media types: "
+                f"{sample_id} is {sample.media_type}, expected {media_type}"
+            )
+
+        prompts.append(sample.prompt)
+        captions.append(sample.caption)
+        token_lens.append(sample.token_len)
+
+        if media_type == "text":
+            packed_media_files.append([])
+            continue
+
+        sample_members = members.get(sample_id, {})
+        current_media = []
+        for part in sample.media_files:
+            if part not in sample_members:
+                raise KeyError(f"Member {part} for sample {sample_id} missing from manifest")
+            member = sample_members[part]
+            target_name = _safe_target_name(part, sample_index, used_names)
+            packed[target_name] = reader.read(
+                sample.shard,
+                member.offset_data,
+                member.size,
+            )
+            current_media.append(target_name)
+        packed_media_files.append(current_media)
+
+    packed["json"] = json.dumps(
+        {
+            "texts": {"prompts": prompts, "captions": captions},
+            "media_files": packed_media_files,
+            "media_type": media_type,
+            "_meta": {
+                "pack_id": plan["pack_id"],
+                "sample_ids": sample_ids,
+                "token_lens": token_lens,
+                "total_token_len": sum(token_lens),
+            },
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return packed
+
+
+def convert_native_to_wds(cfg: dict):
+    data_cfg = cfg.get("data", {})
+    output_dir = Path(data_cfg["packed_wds_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for pattern in ("pretrain-*.tar", "pretrain-*.tar.idx"):
+        for stale_path in output_dir.glob(pattern):
+            stale_path.unlink()
+    meta_dir = output_dir / MAIN_FOLDER_NAME
+    if meta_dir.exists():
+        shutil.rmtree(meta_dir)
+
+    manifest_sqlite = get_manifest_sqlite_path(cfg)
+    pack_plan = get_pack_plan_path(cfg)
+    if not manifest_sqlite.exists():
+        raise FileNotFoundError(f"Manifest sqlite not found: {manifest_sqlite}")
+    if not pack_plan.exists():
+        raise FileNotFoundError(f"Pack plan not found: {pack_plan}")
+
+    samples, members = load_manifest_for_packing(manifest_sqlite)
+    maxcount = int(cfg.get("packed_wds", {}).get("maxcount", 1000000))
+    maxsize = int(cfg.get("packed_wds", {}).get("maxsize", 100000000))
+    tar_pattern = output_dir / "pretrain-%06d.tar"
+
+    source_root = Path(data_cfg["wds_dir"])
+    with ShardReaderCache(source_root) as reader, \
+        wds.ShardWriter(str(tar_pattern), maxcount=maxcount, maxsize=maxsize) as sink, \
+        pack_plan.open("r", encoding="utf-8") as f:
+        for idx, line in enumerate(tqdm(f, desc="write packed wds", unit="pack")):
+            if not line.strip():
+                continue
+            plan = json.loads(line)
+            sample = construct_native_packed_sample(plan, samples, members, reader)
+            _log_json_presence(plan["pack_id"], sample, idx)
+            sink.write(sample)
+
+    write_config(
+        EPath(output_dir).absolute(),
+        sample_type=cfg.get("sample", {}).get("sample_type", "packed_multi_mix_qa"),
+    )
+    print("WDS-native packed dataset successfully converted to wds")
+
 def write_config(path: EPath, media=None, sample_type=None):
     (path / MAIN_FOLDER_NAME).mkdir(exist_ok=True)
     all_tars = list(path.glob("**/*.tar")) + list(path.glob("**/*.tgz"))
@@ -415,8 +574,11 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     )
     cfg = get_cfg(args.config)
-    runtime_cfg = build_runtime_config(cfg)
-    convert_to_wds(runtime_cfg)
+    if cfg.get("data", {}).get("input_format", "wds") == "wds":
+        convert_native_to_wds(cfg)
+    else:
+        runtime_cfg = build_runtime_config(cfg)
+        convert_to_wds(runtime_cfg)
 
 
 if __name__ == '__main__':

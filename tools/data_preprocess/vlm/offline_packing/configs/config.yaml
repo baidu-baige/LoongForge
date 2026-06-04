@@ -1,0 +1,72 @@
+
+# Data path configuration
+data:
+  # WDS-native input. The directory must contain uncompressed pretrain-*.tar shards.
+  input_format: "wds"
+  wds_dir: "/path/to/wds"
+  # Text field name
+  template_text_key: "texts"
+  # Packed wds dataset
+  packed_wds_dir: "/path/to/save/packed_wds"
+  # Directory for manifest, token reports, bins and pack_plan
+  work_dir: "/path/to/save/packed_wds/logs"
+
+model:
+  model_type: "kimi-k2.5"
+  # Use auto_processor for VLM datasets. auto_tokenizer is useful for text-only smoke tests.
+  processor_loader: "auto_tokenizer"
+  use_hf_chat_template: true
+  chat_template_path: "/path/to/chat_template.jinja"
+  chat_template_kwargs:
+    thinking: false
+  processor_kwargs:
+    pretrained_model_name_or_path: "/path/to/official/huggingface_checkpoint/Kimi-k25"
+    min_pixels: 3136   # 4*28*28
+    max_pixels: 4014080 # 5120*28*28(4014080,8192)
+    trust_remote_code: True
+    use_fast: False
+
+# Media file preprocessing configuration, optional preprocessing functions are defined in wds_pack/media/preprocess.py
+media_preprocess:
+  image: custom_image_preprocess
+
+sample:
+  # Max length of training data tokens
+  max_token_len: 131072
+  # Determine parsing method
+  sample_type: packed_multi_mix_qa
+
+packing:
+  # WDS-native production default. It keeps all valid samples and lets training
+  # pad non-exact bins instead of spending hours searching for exact 64k fills.
+  algorithm: "best_fit_decreasing"
+  # BFD compact plans are generated from the manifest and are re-checked when
+  # WDS is written, so Step 3 does not need another expensive manifest scan.
+  validate_pack_plan: false
+
+artifacts:
+  # Production keeps only artifacts required to resume/audit the packed dataset.
+  debug_artifacts: false
+  keep_intermediate: false
+
+packed_wds:
+  maxsize: 2000000000
+  maxcount: 1000000000
+
+# Parallel processing parameters
+process:
+  # Number of source tar shards scanned in parallel. Keep low when the processor is memory-heavy.
+  workers: 8
+  # Optional smoke-test limit for source shards; 0 means all shards.
+  max_shards: 0
+  # Chunk size for samples processed by each process
+  chunk_size: 5000
+  # Batch size for merge parameters (sorting)
+  merge_batch_size: 20
+  # Timeout setting (estimated based on data volume, 1M data ~ 45 minutes / 2700s)
+  time_out: 2000
+
+# Logging and temporary files
+log:
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"

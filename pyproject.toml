@@ -40,6 +40,7 @@ gpu = [
     "compressed-tensors==0.15.0.1",
     "huggingface_hub==1.5.0",
     "tiktoken==0.5.2",
+    "blobfile",
     # Training / Modeling utils
     "einops==0.8.1",
     "timm==1.0.3",
