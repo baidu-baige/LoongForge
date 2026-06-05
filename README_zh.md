@@ -20,7 +20,7 @@
 [![Release](https://img.shields.io/github/v/release/baidu-baige/LoongForge?include_prereleases&label=release&color=blue)](https://github.com/baidu-baige/LoongForge/releases)
 [![License](https://img.shields.io/github/license/baidu-baige/LoongForge.svg?logo=github)](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE)
 [![Slack](https://img.shields.io/badge/Slack-加入-4A154B.svg?logo=slack)](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
-[![WeChat](https://img.shields.io/badge/WeChat-加入-07C160.svg?logo=wechat)](#contact)
+[![WeChat](https://img.shields.io/badge/WeChat-Join-07C160.svg?logo=wechat)](https://github.com/baidu-baige/LoongForge/issues/80#issue-4594463290)
 
 </p>
 
@@ -218,7 +218,7 @@ LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时也从 HuggingFace Tr
 ## 💬 联系我们
 <a id="contact"></a>
 
-欢迎通过 GitHub Issue 提交问题、反馈或功能建议，也可以[加入我们的 Slack 社区](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)，或扫描下方微信二维码加入开发者社区。
+欢迎通过 GitHub Issue 提交问题、反馈或功能建议，也可以加入我们的开发者社区：
 
-<img width="377" alt="LoongForge WeChat Community"  src="https://github.com/user-attachments/assets/7516fcea-5f30-49ba-989f-a33e105bc32b" />
-
+- **微信群** — [扫码加入](https://github.com/baidu-baige/LoongForge/issues/80#issue-4594463290)
+- **Slack** — [点击加入](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
