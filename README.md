@@ -157,21 +157,6 @@ LoongForge supports a broad range of [state-of-the-art models](https://loongforg
 | **VLA** | Pi | pi0.5 |
 | | GR00T | groot-n1.6 |
 
-
-## 🚀 Roadmap
-
-**Model Support**
-- LLM / VLM: ongoing validation and release of new models (e.g., DeepSeek-V4)
-- Embodied AI: expanded WAM coverage (e.g., DreamZero, LingBot VA)
-
-**Performance & Scaling**
-- Adopt next-generation techniques introduced with DeepSeek-V4
-- Advanced MoE load-balancing strategies
-- Long-sequence training with ChunkPipe scheduling and Context Parallelism
-- Further diffusion-model acceleration (e.g., WAN)
-- INT4 quantization-aware training
-- MTP (Multi-Token Prediction) scaling for speculative decoding
-
 ## 🏗️ Repository Layout
 
 <details>

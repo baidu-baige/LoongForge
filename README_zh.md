@@ -155,20 +155,6 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOT
 | **VLA** | Pi | pi0.5 |
 | | GR00T | groot-n1.6 |
 
-## 🚀 路线图
-
-**模型支持**
-- LLM / VLM：持续验证与发布新模型（如 DeepSeek-V4）
-- Embodied AI：扩展 WAM 覆盖（如 DreamZero、LingBot VA）
-
-**性能与扩展性**
-- 跟进 DeepSeek-V4 引入的下一代训练技术
-- 更先进的 MoE 负载均衡策略
-- 基于 ChunkPipe 调度与 Context Parallelism 的长序列训练
-- Diffusion 模型（如 WAN）进一步加速
-- INT4 量化感知训练（QAT）
-- MTP（Multi-Token Prediction）扩展，用于投机推理
-
 ## 🏗️ 代码结构
 
 <details>
