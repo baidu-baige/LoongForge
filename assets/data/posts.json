@@ -1,5 +1,34 @@
 [
     {
+        "slug": "2026-06-loongforge-groot-n16-acceleration",
+        "date": "2026-06-02",
+        "featured": true,
+        "tags_en": [
+            "LoongForge",
+            "VLA",
+            "GR00T",
+            "Training"
+        ],
+        "tags_zh": [
+            "LoongForge",
+            "VLA",
+            "GR00T",
+            "训练加速"
+        ],
+        "en": {
+            "title": "Training Cycle Halved: LoongForge End-to-End Optimization for GR00T N1.6 Delivers 2.3× Throughput",
+            "author": "The LoongForge Team",
+            "summary": "Targeting IO stalls, communication overhead, and inefficient operator scheduling in GR00T N1.6 VLA training, LoongForge applies end-to-end system-level optimizations and achieves 2.3× throughput with a 56.6% shorter training cycle.",
+            "url": "blog/2026-06-loongforge-groot-n16-acceleration.html"
+        },
+        "zh": {
+            "title": "训练周期减半：LoongForge 全链路优化 GR00T N1.6 训练，吞吐提升至 2.3 倍",
+            "author": "LoongForge 团队",
+            "summary": "针对 GR00T N1.6 VLA 模型训练存在的 IO 阻塞、通信开销大、算子调度低效等问题，百度百舸 LoongForge 完成全链路优化，最终实现 2.3 倍训练吞吐提升，训练周期缩短 56.6%。",
+            "url": "blog/2026-06-loongforge-groot-n16-acceleration.zh.html"
+        }
+    },
+    {
         "slug": "2026-05-loongforge-heterogeneous-parallel-training",
         "date": "2026-05-21",
         "featured": false,

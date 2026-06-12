@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Training Cycle Halved: LoongForge End-to-End Optimization for GR00T N1.6 Delivers 2.3× Throughput | LoongForge Blog</title>
+  <meta name="description"
+    content="Baidu Baige's LoongForge applies end-to-end system-level optimizations to GR00T N1.6 VLA training, delivering up to 2.3× throughput and 56.6% shorter training cycles." />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline">← Back to blog</a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">VLA</span><span class="chip">GR00T</span><span class="chip">Training</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">Training Cycle Halved: LoongForge End-to-End Optimization for GR00T N1.6 Delivers 2.3× Throughput</h1>
+      <div class="text-sm text-gray-500">2026-06-02 · The LoongForge Team</div>
+    </div>
+
+    <div class="prose-lf">
+<p>To address IO stalls, communication overhead, and inefficient operator scheduling in GR00T N1.6 VLA model training, Baidu Baige's LoongForge delivers end-to-end system-level optimization, achieving up to 2.3× training throughput and shortening the overall training cycle by 56.6%.</p>
+<blockquote>
+<p>Official website: <a href="https://baidu-baige.github.io/LoongForge/" target="_blank" rel="noopener">https://baidu-baige.github.io/LoongForge/</a></p>
+<p>GitHub: <a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></p>
+</blockquote>
+<hr />
+<h2>1. Background: the capability leap and challenges of GR00T N1.6 as an embodied-intelligence foundation</h2>
+<p>As humanoid robots accelerate toward industrialization, Vision-Language-Action (VLA) models have become a core technical path for embodied intelligence, thanks to their ability to connect perception, understanding, and action end-to-end. Among the embodied-intelligence foundation models, NVIDIA's open-source GR00T N series stands out as a representative core technology stack for humanoid-robot scenarios and is widely used in robotic intelligence training and R&D deployment.</p>
+<p>Released in 2025, GR00T N1.6 further revamps both the model architecture and the action-generation paradigm, significantly strengthening end-to-end intelligent control of humanoid robots. The model uses Cosmos-Reason-2B as its multimodal vision-language perception core, and introduces a 32-layer DiT backbone for action generation, jointly modeling first-person robot video, proprioceptive state, and natural-language instructions as a shared policy representation—unifying perception, understanding, and action control.</p>
+<p>The deep DiT enables high-precision modeling of long action sequences and substantially improves intelligent-control quality, but it also turns model training into a workload that is both compute- and communication-intensive, with high training cost and difficulty.</p>
+<p>According to the official configuration, the pre-training stage uses a global batch size of 16,384 and runs roughly 300K steps on 1,024 H100 GPUs. Even fine-tuning on a downstream task on a single node takes several days. Data IO stalls, multi-GPU communication overhead, and inefficient training scheduling all combine to make GR00T N1.6 training expensive and slow, hindering rapid model iteration.</p>
+<h2>2. Solution overview: LoongForge end-to-end system-level optimization</h2>
+<p>To further improve GR00T N1.6 training efficiency, the Baidu Baige team applied system-level optimization and deep refactoring across the full training pipeline, on top of the in-house, open-source full-modal training framework LoongForge.</p>
+<p>Targeting the characteristics of VLA training, LoongForge focuses on three directions: <em>data IO pipeline</em>, <em>communication-computation overlap</em>, and <em>training scheduling</em>:</p>
+<ul>
+<li>Introduce asynchronous prefetch in data processing to mitigate GPU idling caused by data loading and transfer latency;</li>
+<li>Use a distributed optimizer with fine-grained communication-computation overlap to reduce extra cost from multi-GPU synchronization stalls;</li>
+<li>Adapt CUDA Graph to cut launch overhead from the large number of small-granularity operators.</li>
+</ul>
+<p>Compared to the official training implementation, LoongForge ultimately delivers up to 2.3× training throughput and reduces the overall training cycle by 56.6%. So how exactly does LoongForge release more GPU compute and accelerate GR00T N1.6 training? Below we systematically break down the key ideas and technical implementation.</p>
+<h2>3. Inside the 2.3× speedup: three engineering optimizations</h2>
+<p>To unlock GR00T N1.6's training potential, we did not stop at simple parameter tuning, but performed system-level optimization at three layers: data IO pipeline, communication-computation overlap, and training scheduling.</p>
+<h3>Optimization 1: IO pipeline — asynchronous data prefetch</h3>
+<p>GR00T N1.6 data preprocessing involves CPU-heavy operations such as video decoding, image augmentation, and multimodal encoding. In the Lerobot framework, the GPU spends a large fraction of time waiting on data—a classic IO stall.</p>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/01.png" alt="Baseline: data processing and forward executed serially" loading="lazy" />
+  <figcaption>Baseline: data processing and forward executed serially</figcaption>
+</figure>
+<p>LoongForge decouples data production from GPU training via a three-level asynchronous pipeline:</p>
+<ul>
+<li><strong>Level 1 — data reading</strong>: multiple DataLoader workers read from disk in parallel, each prefetching n additional batches.</li>
+<li><strong>Level 2 — CPU preprocessing</strong>: a dedicated daemon thread runs image / video / text preprocessing, decoupled from the training main loop via double-buffered queues to avoid cross-process tensor serialization overhead.</li>
+<li><strong>Level 3 — GPU DMA transfer</strong>: with pinned memory and non-blocking transfers, the GPU asynchronously moves data into VRAM on a dedicated copy stream, fully overlapping with computation.</li>
+</ul>
+<p>While the GPU computes the current batch, the next batch is being transferred, the one after is being preprocessed, and an even later batch is being read—forming a complete pipeline overlap.</p>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/02.png" alt="Optimized full data pipeline" loading="lazy" />
+  <figcaption>Optimized full data pipeline</figcaption>
+</figure>
+<p>With this IO-pipeline optimization, GPU data-wait time is dramatically compressed and IO stalls are largely hidden.</p>
+<h3>Optimization 2: communication-computation overlap — fine-grained overlap driven by the Megatron Distributed Optimizer</h3>
+<p>When training GR00T N1.6 in the Lerobot framework, the following bottlenecks are typical:</p>
+<ul>
+<li><strong>No parameter prefetch</strong>: forward must wait for the current layer to finish before fetching the next layer's parameters, so communication cannot start early.</li>
+<li><strong>Scattered gradient storage with delayed sync</strong>: per-layer gradients are stored independently, so async communication cannot be triggered bucket-by-bucket. AllReduce only fires after backward completes, serializing sync with computation.</li>
+</ul>
+<p>To resolve these bottlenecks, LoongForge integrates the Megatron Distributed Optimizer. Through contiguous gradient buffers and hook-based communication scheduling, parameter sync, gradient reduction, and model computation are deeply interleaved, achieving fine-grained communication-computation overlap, hiding communication overhead, and lifting training throughput.</p>
+<p>Comparison of baseline vs. LoongForge core optimization features:</p>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/03.png" alt="Baseline vs. LoongForge core optimization features" loading="lazy" />
+  <figcaption>Baseline vs. LoongForge core optimization features</figcaption>
+</figure>
+<p>Specific measures include:</p>
+<ul>
+<li><strong>Per-layer parameter prefetch in forward</strong>: during forward, a pre-hook issues an AllGather for the next layer's parameters on a dedicated NCCL communication stream, parallelizing communication with the current layer's computation. The total time goes from "Forward + Backward + Communication + Step" to "Forward + max(Backward, Communication) + Step", so communication overhead is almost fully hidden.</li>
+</ul>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/04.png" alt="Per-layer parameter prefetch in forward" loading="lazy" />
+  <figcaption>Per-layer parameter prefetch in forward</figcaption>
+</figure>
+<ul>
+<li><strong>Bucket-based gradient sync overlap</strong>: contiguous gradient buffers are arranged in reverse-backward order. As soon as a bucket finishes, AllReduce is launched on a dedicated NCCL stream, so computation and communication run in parallel. On the timeline, the compute stream and the NCCL communication stream are highly concurrent.</li>
+</ul>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/05.png" alt="Bucket-granularity communication-computation overlap" loading="lazy" />
+  <figcaption>Bucket-granularity communication-computation overlap</figcaption>
+</figure>
+<h3>Optimization 3: training-scheduling optimization — Per-Microbatch CUDA Graph for GR00T N1.6</h3>
+<p>Python scheduling and GPU kernel launch overhead are often invisible bottlenecks in large-model training. In VLA training such as GR00T N1.6, where forward, backward, and loss compute trigger a large number of tiny kernels, eager-mode launching keeps amplifying CPU overhead and prevents the GPU from being fully utilized.</p>
+<p>CUDA Graph is a widely used optimization in the GPU ecosystem that uses graph replay to cut Python scheduling and kernel launch overhead.</p>
+<p>Rather than reusing a generic CUDA Graph flow as-is, LoongForge adapts it for the actual GR00T N1.6 VLA training pipeline: stable, repeated forward/backward compute paths are captured into a CUDA Graph, while logic that benefits from flexibility—such as random-noise sampling and dynamic input handling—stays on the eager path. We also redraw the capture-and-replay boundaries to fit gradient accumulation across multiple microbatches and DDP overlap timing, enabling CUDA Graph to run stably in real multi-GPU GR00T N1.6 training.</p>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/06.png" alt="CUDA Graph execution modes: Eager vs. Full-Iteration vs. Per-Microbatch" loading="lazy" />
+  <figcaption>CUDA Graph execution modes: Eager vs. Full-Iteration vs. Per-Microbatch</figcaption>
+</figure>
+<p>In LoongForge, GR00T N1.6 training keeps three execution paths—Eager, Full-Iteration CUDA Graph, and Per-Microbatch CUDA Graph—each serving a different stage and scenario:</p>
+<ul>
+<li><strong>Eager mode</strong>: CUDA Graph is fully off. Used for functional verification, loss alignment, dynamic-graph debugging, and the early stages of integrating new models or new data shapes.</li>
+<li><strong>Full-Iteration CUDA Graph</strong>: captures multiple microbatch forward/backward and grad sync within a full iteration into a single CUDA Graph. This minimizes CPU scheduling and kernel launch overhead and is best suited for benchmarking the upper bound of CUDA Graph throughput.</li>
+<li><strong>Per-Microbatch CUDA Graph</strong>: pushes capture granularity down to the microbatch level. The capture stage produces smaller, reusable graphs for each microbatch's forward/backward subgraph; the replay stage reuses these graphs in microbatch order, keeping gradient sync logic on the last microbatch so DDP overlap continues to work.</li>
+</ul>
+<p>Compared to Full-Iteration, Per-Microbatch is no longer about chasing "a bigger graph" but about "drawing the right boundaries": random-number logic such as <code>beta.sample</code> and <code>torch.randn</code> stays on the eager path, so randomness is not frozen by capture and loss alignment is preserved; gradient sync points stay on appropriate microbatch boundaries, so the CUDA Graph optimization does not break the original communication-computation overlap rhythm.</p>
+<p>To make CUDA Graph robust on the real GR00T N1.6 workload, we performed graph-safe refactoring on the vision encoder, language backbone, and action DiT components: static buffer reuse, fixed-shape padding, cached positional encodings and window indices, avoidance of dynamic allocation during capture, and replacement of certain non-capturable operators—so CUDA Graph runs reliably in real multi-GPU training.</p>
+<p>With this optimization, GR00T N1.6 training gains close to 1.5× throughput in multi-GPU settings. Per-Microbatch mode keeps performance close to Full-Iteration while offering better loss alignment, providing a more efficient and stable execution path for GR00T N1.6 training.</p>
+<h2>4. Performance results: training cycle halved, time reduced by 56.6%</h2>
+<p>On an 8×A800 (80G) node, we trained GR00T N1.6 on the Libero dataset. Across the full training task, the overall training cycle is reduced by 56.6%, significantly speeding up model R&D and experimental iteration.</p>
+<p>Performance comparison across optimization stages:</p>
+<figure>
+  <img src="../assets/blog/2026-06-loongforge-groot-n16-acceleration/07.png" alt="GR00T N1.6 performance comparison across optimization stages" loading="lazy" />
+  <figcaption>GR00T N1.6 performance comparison across optimization stages</figcaption>
+</figure>
+<h2>5. Summary: raising effective GPU utilization</h2>
+<p>By applying system-level optimization across training scheduling, communication-computation overlap, and the data IO pipeline, we significantly cut Python scheduling overhead, communication waits, and data-supply idling, moving the GPU from "passive waiting" to "continuous computation". Without changing the model architecture, we deliver 2.3× speedup and a 56.6% shorter training cycle, substantially improving model iteration efficiency and R&D rhythm.</p>
+<p>These optimizations are now integrated into the full-modal training framework LoongForge. We welcome researchers and developers in embodied intelligence to explore more efficient VLA training together.</p>
+    </div>
+
+    <div
+      class="mt-10 p-5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 text-sm">
+      🔗 <b>Original article:</b> <a href="https://mp.weixin.qq.com/s/OxDi4424J5Oy1sv_fuLkVA" target="_blank"
+        rel="noopener" class="text-indigo-700 dark:text-indigo-300 hover:underline break-all">https://mp.weixin.qq.com/s/OxDi4424J5Oy1sv_fuLkVA</a>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-05-loongforge-heterogeneous-parallel-training.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: Multimodal Heterogeneous Parallel Training</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-06-loongforge-groot-n16-acceleration.html';
+      const POST_ZH = '2026-06-loongforge-groot-n16-acceleration.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        const cur = (localStorage.getItem('lf-lang') === 'zh') ? 'zh' : 'en';
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === cur)
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js"></script>
+</body>
+
+</html>

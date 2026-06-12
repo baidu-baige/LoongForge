@@ -3,6 +3,8 @@
   <url><loc>https://baidu-baige.github.io/LoongForge/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
   <url><loc>https://baidu-baige.github.io/LoongForge/blog.html</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
   <url><loc>https://baidu-baige.github.io/LoongForge/about.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.zh.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.zh.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
