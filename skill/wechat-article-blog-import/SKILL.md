@@ -46,7 +46,7 @@ Default outcome: import the article, update indexes/site references, run local p
 3. **Convert content deliberately**
    - Chinese page: preserve wording and order; only convert structure (headings/lists/code) and approved cleanup.
    - English page: translate faithfully with the same structure.
-   - Remove WeChat-hosted images unless explicitly requested otherwise.
+   - Image policy: prefer download-and-localize over removal. WeChat image URLs (`mmbiz.qpic.cn`) expire/hot-link-block, so save them under `assets/blog/{slug}/NN.png` (zero-padded, sequential) and rewrite `<img src>` to the local path. Skip purely decorative leading GIFs/banners; start numbering from the first content image. Only remove images entirely when the user explicitly asks.
    - Wrap code/commands/ASCII in `<pre><code class="language-*">`; use `language-python` for Python-like pseudocode, `language-bash` for shell, `language-yaml` for YAML, and `language-text` for diagrams/logs.
    - Avoid long box-drawing diagrams when CJK/full-width text causes alignment issues; prefer stable arrow/indent diagrams.
 
@@ -55,6 +55,7 @@ Default outcome: import the article, update indexes/site references, run local p
    - Update sitemap and README if the site tracks explicit post files.
    - Update homepage cards/benchmark text only when requested or directly relevant.
    - If shared JS text changes and the page references an unversioned JS file, add a cache-busting query string following site convention.
+   - **Featured/highlight slot**: inspect the list renderer (e.g. `blog.js`) before touching any `featured` field. If the renderer uses a "find featured" pattern, only **one** post may be `featured: true` at a time — leaving the previous one as `featured: true` while adding a new one will hide the previous post from the list entirely. Prefer renderers that always promote the most recent post by date so new imports do not require flipping flags. If forced to use the flag, flip the previous featured to `false` in the same change.
 
 5. **Load syntax dependencies**
    - Adding `language-*` classes is not enough. Ensure Prism/Highlight.js language components are loaded on every page that uses them.
@@ -109,7 +110,9 @@ Do not claim completion if local preview or source comparison was skipped. Say e
 | --- | --- |
 | Trusting WeChat fetch output without checking for verification pages | Search for verification text and refetch/ask for local source if blocked |
 | Changing Chinese wording during cleanup | Preserve text; only change markup unless user approves edits |
-| Removing images but leaving broken WeChat URLs | Grep for `mmbiz.qpic.cn`, `wx_fmt`, and `<img>` |
+| Removing images instead of localizing them | Default to download + rewrite `<img src>` to local; only remove if user asks |
+| Leaving broken WeChat URLs after edits | Grep for `mmbiz.qpic.cn` and `wx_fmt`; every `<img>` should resolve to a local file |
+| Two posts marked `featured: true` (when renderer expects one) | Flip the previous to `false` in the same change, or rewrite renderer to always feature the latest by date |
 | Adding `language-python` but no Prism Python component | Add the matching component script and hard-refresh/cache-bust |
 | Box-drawing diagrams misalign in CJK text | Use simpler arrow/indent text diagrams |
 | Updating JS i18n but user sees old copy | Add or update a cache-busting query on the script reference |

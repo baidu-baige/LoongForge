@@ -2,7 +2,7 @@
     {
         "slug": "2026-06-loongforge-groot-n16-acceleration",
         "date": "2026-06-02",
-        "featured": true,
+        "featured": false,
         "tags_en": [
             "LoongForge",
             "VLA",
@@ -85,7 +85,7 @@
     {
         "slug": "2026-05-loongforge-v0.1.0-release",
         "date": "2026-05-09",
-        "featured": true,
+        "featured": false,
         "tags_en": [
             "Release",
             "v0.1.0"
