@@ -99,9 +99,10 @@
     const filtered = (activeTag === allLabel || activeTag === 'All' || activeTag === '全部')
       ? views
       : views.filter(v => v.tags.includes(activeTag));
-    const featured = views.find(v => v.featured) || views[0];
+    // Always feature the most recent post (allPosts is already date-desc sorted).
+    const featured = views[0];
     renderFeatured(featured, lang);
-    renderList(filtered.filter(v => !v.featured));
+    renderList(filtered.filter(v => v.url !== (featured && featured.url)));
     renderTags(views.flatMap(v => v.tags), lang);
   }
 
