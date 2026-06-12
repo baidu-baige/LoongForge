@@ -24,8 +24,10 @@ from loongforge.data.multimodal import (
     PackedCaptioningSample,
     PackedVQASample,
     PackedMultiMixQASample,
+    PackedChatMixSample,
     MultiVidQASample,
     MultiMixQASample,
+    ChatMixSample,
 )
 
 from megatron.energon import (
@@ -149,6 +151,9 @@ class BaseTaskBatchPacked(Batch):
 
 _vlm_tags_cache: Optional[Dict[str, Dict]] = None
 
+_IMAGE_EXTS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff")
+_VIDEO_EXTS: Tuple[str, ...] = (".mp4", ".avi", ".mov", ".webm")
+
 
 def _load_vlm_tags(section: Optional[str] = None) -> Dict[str, any]:
     """Load and cache the VLM message tags from the dataset config file.
@@ -174,6 +179,8 @@ def _load_vlm_tags(section: Optional[str] = None) -> Dict[str, any]:
             user_tag: human
             assistant_tag: gpt
             system_tag: system
+            tool_tag: tool
+            function_tag: function
     """
     global _vlm_tags_cache
     args = get_args()
@@ -218,6 +225,7 @@ def _parse_messages(raw_messages, section: Optional[str] = None) -> Tuple[List[D
         tags.get("user_tag", "user"): "user",
         tags.get("assistant_tag", "assistant"): "assistant",
         tags.get("system_tag", "system"): "system",
+        tags.get("tool_tag", "tool"): "tool",
     }
 
     messages: List[Dict] = []
@@ -227,14 +235,24 @@ def _parse_messages(raw_messages, section: Optional[str] = None) -> Tuple[List[D
         role = message.get(role_tag)
         content = message.get(content_tag, "")
         role = role_map.get(role, role)
-        if role not in ("system", "user", "assistant"):
+        if role not in ("system", "user", "assistant", "tool"):
             raise ValueError(f"Unsupported role '{role}' in message: {message}")
         if role == "system":
             system = content
             continue
-        messages.append({"role": role, "content": content})
+        normalized = dict(message)
+        normalized["role"] = role
+        normalized["content"] = content
+        messages.append(normalized)
 
     return messages, system
+
+
+def _attach_tools(sample_obj, json_data: dict):
+    tools = json_data.get("tools")
+    if tools:
+        setattr(sample_obj, "tools", tools)
+    return sample_obj
 
 
 @stateless
@@ -251,7 +269,7 @@ def cooker_multi_mix_qa(sample: dict):
             image.append(sample.get(name))
 
     if _ENERGON_NEEDS_SUBFLAVOR:
-        return MultiMixQASample(
+        return _attach_tools(MultiMixQASample(
             __key__=sample["__key__"],
             __restore_key__=sample["__restore_key__"],
             __subflavor__=None,
@@ -260,9 +278,9 @@ def cooker_multi_mix_qa(sample: dict):
             image=image if len(image) > 0 else None,
             system=system,
             messages=messages,
-        )
+        ), sample["json"])
     else:
-        return MultiMixQASample(
+        return _attach_tools(MultiMixQASample(
             __key__=sample["__key__"],
             __restore_key__=sample["__restore_key__"],
             __subflavors__=sample.get("__subflavors__", {}),
@@ -270,7 +288,64 @@ def cooker_multi_mix_qa(sample: dict):
             image=image if len(image) > 0 else None,
             system=system,
             messages=messages,
+        ), sample["json"])
+
+@stateless
+def cooker_chat_mix(sample: dict) -> ChatMixSample:
+    """Convert raw sample dict into a ChatMixSample.
+
+    Expected json layout (one chat session per sample):
+      {
+        "messages": [...],          # OpenAI Chat Completions-style messages
+        "tools": [...],             # optional tool definitions
+        "media": "image"|"video"|"text",
+        "name": [...]               # media file names referenced by messages
+      }
+    """
+    data = sample["json"]
+    raw_messages = data.get("messages")
+    if raw_messages is None:
+        raise ValueError(
+            f"cooker_chat_mix: sample {sample.get('__key__')!r} has no "
+            "`messages` field. chat_mix shards must use OpenAI Chat "
+            "Completions-style `messages`."
         )
+
+    messages, system = _parse_messages(raw_messages)
+    tools = data.get("tools")
+
+    video: List = []
+    image: List = []
+    for name in data.get("name", []) or []:
+        obj = sample.get(name)
+        if obj is None:
+            continue
+        lower = name.lower()
+        if lower.endswith(_IMAGE_EXTS):
+            image.append(obj)
+        elif lower.endswith(_VIDEO_EXTS):
+            video.append(obj)
+        else:
+            raise ValueError(
+                f"cooker_chat_mix: sample {sample.get('__key__')!r} has media "
+                f"{name!r} with unrecognized extension; expected one of "
+                f"{_IMAGE_EXTS + _VIDEO_EXTS}"
+            )
+
+    init_kwargs = {
+        "__key__": sample["__key__"],
+        "__restore_key__": sample["__restore_key__"],
+        "__subflavors__": sample.get("__subflavors__", {}),
+        "messages": messages,
+        "image": image if len(image) > 0 else None,
+        "video": video if len(video) > 0 else None,
+        "system": system,
+        "tools": tools if tools else None,
+    }
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        init_kwargs["__subflavor__"] = None
+    return ChatMixSample(**init_kwargs)
+
 
 @stateless
 def cooker_multi_vid_vqa(sample: dict):
@@ -288,7 +363,7 @@ def cooker_multi_vid_vqa(sample: dict):
             image.append(sample.get(name))
 
     if _ENERGON_NEEDS_SUBFLAVOR:
-        return MultiVidQASample(
+        return _attach_tools(MultiVidQASample(
             __key__=sample["__key__"],
             __restore_key__=sample["__restore_key__"],
             __subflavor__=None,
@@ -296,16 +371,16 @@ def cooker_multi_vid_vqa(sample: dict):
             video=video if len(video) > 0 else None,
             system=system,
             messages=messages,
-        )
+        ), sample["json"])
     else:
-        return MultiVidQASample(
+        return _attach_tools(MultiVidQASample(
             __key__=sample["__key__"],
             __restore_key__=sample["__restore_key__"],
             __subflavors__=sample.get("__subflavors__", {}),
             video=video if len(video) > 0 else None,
             system=system,
             messages=messages,
-        )
+        ), sample["json"])
 
 
 @stateless
@@ -456,6 +531,116 @@ def cooker_packed_multi_mix_qa(sample: dict):
             answer_weights=None,
         )
 
+
+@stateless
+def cooker_packed_chat_mix(sample: dict):
+    """
+    Convert packed full chat/tool-calling json into a PackedChatMixSample.
+
+    Expected json layout (example):
+    {
+      "messages": [          # len = N
+        {
+          "messages": [...],  # OpenAI Chat Completions-style messages
+          "tools": [...],     # optional tool definitions
+          "source": {...}     # optional source metadata
+        },
+        ...
+      ],
+      "media_files": [       # length = N
+        ["imgA.jpg", "imgB.jpg", ...],
+        ["imgC.jpg", ...],
+        ...
+      ],
+      "media_type": "image" | "video" | "text"
+    }
+    """
+    data = sample["json"]
+
+    messages = data.get("messages")
+    if messages is None:
+        messages = data.get("texts", []) or []
+    if not isinstance(messages, list):
+        raise ValueError(
+            f"[cooker_packed_chat_mix] expected `messages` to be a list "
+            f"for key={sample['__key__']}, got {type(messages).__name__}"
+        )
+
+    media_files = data.get("media_files", []) or []
+    media_type = (data.get("media_type") or "").lower()
+
+    if len(media_files) != len(messages):
+        raise ValueError(
+            f"[cooker_packed_chat_mix] media_files/messages length mismatch "
+            f"for key={sample['__key__']}: {len(media_files)} vs {len(messages)}"
+        )
+
+    images = None
+    videos = None
+
+    if media_type == "image":
+        images = []
+        for group in media_files:
+            image_group = []
+            if isinstance(group, (list, tuple)):
+                for name in group:
+                    img = sample.get(name)
+                    if img is not None:
+                        image_group.append(img)
+            elif isinstance(group, str):
+                img = sample.get(group)
+                if img is not None:
+                    image_group.append(img)
+            images.append(image_group)
+        if all(len(g) == 0 for g in images):
+            images = None
+        videos = None
+    elif media_type == "video":
+        videos = []
+        for group in media_files:
+            video_group = []
+            if isinstance(group, (list, tuple)):
+                for name in group:
+                    vid = sample.get(name)
+                    if vid is not None:
+                        video_group.append(vid)
+            elif isinstance(group, str):
+                vid = sample.get(group)
+                if vid is not None:
+                    video_group.append(vid)
+            videos.append(video_group)
+        if all(len(g) == 0 for g in videos):
+            videos = None
+        images = None
+    elif media_type == "text":
+        images = None
+        videos = None
+    else:
+        raise ValueError(
+            f"[cooker_packed_chat_mix] unknown media_type='{media_type}'. "
+            f"Expect 'image', 'video', or 'text'."
+        )
+
+    if _ENERGON_NEEDS_SUBFLAVOR:
+        return PackedChatMixSample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavor__=None,
+            __subflavors__=sample.get("__subflavors__", {}),
+            packed_messages=messages,
+            packed_images=images,
+            packed_videos=videos,
+        )
+    else:
+        return PackedChatMixSample(
+            __key__=sample["__key__"],
+            __restore_key__=sample["__restore_key__"],
+            __subflavors__=sample.get("__subflavors__", {}),
+            packed_messages=messages,
+            packed_images=images,
+            packed_videos=videos,
+        )
+
 @stateless
 def cooker_packed_caption(sample: dict):
     """Convert raw sample dict into a PackedCaptioningSample."""
@@ -489,6 +674,8 @@ def cooker_default(sample: dict):
     args = get_args()
     if args.sample_type == "multi_mix_qa":
         return cooker_multi_mix_qa(sample)
+    elif args.sample_type == "chat_mix":
+        return cooker_chat_mix(sample)
     elif args.sample_type == "feature_vqa":
         return cooker_feature_qa(sample)
     elif args.sample_type == "packed_captioning":
@@ -497,6 +684,8 @@ def cooker_default(sample: dict):
         return cooker_packed_vqa(sample)
     elif args.sample_type == "packed_multi_mix_qa":
         return cooker_packed_multi_mix_qa(sample)
+    elif args.sample_type == "packed_chat_mix":
+        return cooker_packed_chat_mix(sample)
     else:
         raise NotImplementedError("Sample format not supported", sample)
 
@@ -505,11 +694,13 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
     """A simple task encoder for VLMs."""
     cookers = [
         Cooker(cooker_multi_mix_qa, has_subflavors={"sample_type": "multi_mix_qa"}),
+        Cooker(cooker_chat_mix, has_subflavors={"sample_type": "chat_mix"}),
         Cooker(cooker_multi_vid_vqa, has_subflavors={"sample_type": "multi_vid_vqa"}),
         Cooker(cooker_feature_qa, has_subflavors={"sample_type": "feature_vqa"}),
         Cooker(cooker_packed_caption, has_subflavors={"sample_type": "packed_captioning"}),
         Cooker(cooker_packed_vqa, has_subflavors={"sample_type": "packed_vqa"}),
         Cooker(cooker_packed_multi_mix_qa, has_subflavors={"sample_type": "packed_multi_mix_qa"}),
+        Cooker(cooker_packed_chat_mix, has_subflavors={"sample_type": "packed_chat_mix"}),
         Cooker(cooker_default,)
     ]
 
@@ -530,7 +721,12 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         """Generates an encoded sample from a raw sample."""
         assert not (
             self.args.packing_sft_data
-            and isinstance(sample, (PackedCaptioningSample, PackedVQASample, PackedMultiMixQASample))
+            and isinstance(sample, (
+                PackedCaptioningSample,
+                PackedVQASample,
+                PackedMultiMixQASample,
+                PackedChatMixSample,
+            ))
         ), (
             f"Configuration conflict: --packing-sft-data is enabled (online packing), "
             f"but the dataset contains offline-packed samples of type '{type(sample).__name__}'. "
@@ -543,6 +739,8 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             yield self.encode_vqa(sample)
         elif isinstance(sample, MultiVidQASample):
             yield self.encode_multi_vid_qa(sample)
+        elif isinstance(sample, ChatMixSample):
+            yield self.encode_chat_mix(sample)
         elif isinstance(sample, MultiMixQASample):
             yield self.encode_multi_mix_qa(sample)
         elif isinstance(sample, PackedCaptioningSample):
@@ -551,6 +749,8 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             yield self.encode_packed_vqa(sample)
         elif isinstance(sample, PackedMultiMixQASample):
             yield self.encode_packed_multi_mix_qa(sample)
+        elif isinstance(sample, PackedChatMixSample):
+            yield self.encode_packed_chat_mix(sample)
         else:
             raise NotImplementedError("Sample format not supported", sample)
 
@@ -565,6 +765,14 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> BaseTaskSample:
         """Generates an encoded multi_mix_qa sample from a raw sample."""
         raise NotImplementedError("encode_multi_mix_qa not supported", sample)
+
+    def encode_chat_mix(self, sample: ChatMixSample) -> BaseTaskSample:
+        """Generates an encoded chat-format multimodal sample (with tool calling)."""
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement encode_chat_mix to use "
+            f"chat_mix or packed_chat_mix sample types.",
+            sample,
+        )
 
     def encode_multi_vid_qa(self, sample: MultiVidQASample) -> BaseTaskSample:
         """Generates an encoded vid_qa sample from a raw sample."""
@@ -588,6 +796,10 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
     def encode_packed_multi_mix_qa(self, sample: PackedMultiMixQASample) -> BaseTaskSample:
         """Generates an encoded multimodal packed multimix sample from a raw sample."""
         raise NotImplementedError("encode_packed_multi_mix_qa not supported", sample)
+
+    def encode_packed_chat_mix(self, sample: PackedChatMixSample) -> BaseTaskSample:
+        """Generates an encoded multimodal packed chat (incl. tool calling) sample from a raw sample."""
+        raise NotImplementedError("encode_packed_chat_mix not supported", sample)
 
     def process_images(self, samples: List[Union[BaseTaskSample, BaseTaskSamplePacked]]) -> torch.Tensor:
         """Stack images to [num_tiles, c, h, w]. If there are no images (text-only), then use a dummy image."""

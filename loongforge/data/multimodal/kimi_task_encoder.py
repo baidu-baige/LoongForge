@@ -27,8 +27,13 @@ else:
 
 
 from loongforge.utils import constants, get_chat_template
+from loongforge.data.chat_template import HFChatTemplate
 from megatron.energon.task_encoder.base import stateless
-from loongforge.data.multimodal import MultiMixQASample, MultiVidQASample
+from loongforge.data.multimodal import (
+    ChatMixSample,
+    MultiMixQASample,
+    MultiVidQASample,
+)
 from .base.task_encoder import (
     BaseTaskEncoder,
     BaseTaskSample,
@@ -99,34 +104,78 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         else:
             self.merge_kernel_size = list(merge_kernel_size)
 
-    def _sample_sequence_limit(self) -> int:
-        sequence_limit = self.args.seq_length
-        packed_limit = getattr(self.args, "max_packed_tokens", None)
-        if self.is_packing_enabled and packed_limit is not None:
-            sequence_limit = min(sequence_limit, packed_limit)
-        return sequence_limit
+    def _gate_overlong(
+        self,
+        sample,
+        input_ids,
+        *,
+        image_grid_thw: Optional[torch.Tensor] = None,
+        video_grid_thw: Optional[torch.Tensor] = None,
+    ) -> bool:
+        """Drop-or-keep gate covering input length and visual-token budget.
 
-    def _should_discard_overlong(self, sample, input_ids) -> bool:
-        if not self.args.enable_discard_sample:
-            return False
+        Returns True when the caller should ``return None``.  Two independent
+        checks (previously inlined across every encode_xx method):
 
-        sequence_limit = self._sample_sequence_limit()
-        input_length = len(input_ids)
-        if input_length <= sequence_limit:
-            return False
+        - input-length gate: when ``enable_discard_sample`` is on, drop the
+          sample if ``len(input_ids)`` exceeds the relevant limit
+          (``min(seq_length, max_packed_tokens)`` when packing is enabled,
+          else ``seq_length``).
+        - visual-tokens trim-safety gate when ``enable_discard_sample`` is
+          off.  In that mode the batcher tail-trims silently, so any cut
+          point landing inside a media block desyncs ``pixel_values`` from
+          the expanded ``<|media_pad|>`` placeholders.  Requiring
+          ``visual_tokens <= seq_length`` guarantees at least one trim
+          point can preserve every media block intact.
 
-        logging.warning(
-            "discard overlong sample %s: input length %s > sequence limit %s",
-            sample.__key__,
-            input_length,
-            sequence_limit,
-        )
-        return True
+        All overlong cases log a warning and signal a drop instead of
+        raising, so upstream pipelines do not need ``except AssertionError``
+        to recover.
+        """
+        if self.args.enable_discard_sample:
+            sequence_limit = self.args.seq_length
+            packed_limit = getattr(self.args, "max_packed_tokens", None)
+            if self.is_packing_enabled and packed_limit is not None:
+                sequence_limit = min(sequence_limit, packed_limit)
+            if len(input_ids) > sequence_limit:
+                logging.warning(
+                    "discard overlong sample %s: input length %s > sequence limit %s",
+                    sample.__key__,
+                    len(input_ids),
+                    sequence_limit,
+                )
+                return True
+        else:
+            visual_tokens = 0
+            if video_grid_thw is not None:
+                for thw in video_grid_thw:
+                    visual_tokens += self._compute_image_tokens_from_grid_thw(thw)
+            if image_grid_thw is not None:
+                for thw in image_grid_thw:
+                    visual_tokens += self._compute_image_tokens_from_grid_thw(thw)
+            if visual_tokens > self.args.seq_length:
+                logging.warning(
+                    "discard sample %s: visual tokens %s > seq_length %s "
+                    "(video_grid_thw=%s, image_grid_thw=%s)",
+                    sample.__key__,
+                    visual_tokens,
+                    self.args.seq_length,
+                    video_grid_thw,
+                    image_grid_thw,
+                )
+                return True
+        return False
 
     @stateless(restore_seeds=True)
     def encode_sample(
         self,
-        sample: Union[CaptioningSample, VQASample, MultiVidQASample, MultiMixQASample],
+        sample: Union[
+            CaptioningSample,
+            VQASample,
+            MultiVidQASample,
+            MultiMixQASample,
+            ChatMixSample,
+        ],
     ):
         """Return tokenised multimodal sample."""
         if isinstance(sample, CaptioningSample):
@@ -135,6 +184,8 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
             encoded_sample = self.encode_vqa(sample)
         elif isinstance(sample, MultiVidQASample):
             encoded_sample = self.encode_multi_vid_qa(sample)
+        elif isinstance(sample, ChatMixSample):
+            encoded_sample = self.encode_chat_mix(sample)
         elif isinstance(sample, MultiMixQASample):
             encoded_sample = self.encode_multi_mix_qa(sample)
         else:
@@ -252,9 +303,9 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
     def _process(self, image, text):
         """Process the data to get the model's input for Kimi K2.5.
 
-        This method also expands <|media_content|> tokens to match the actual
-        image feature length, eliminating the need for _merge_input_ids_with_image_features
-        during model forward.
+        Expands `<|media_content|>` tokens to match the actual image feature
+        length, eliminating the need for ``_merge_input_ids_with_image_features``
+        during the model forward.
 
         Args:
             image: PIL Image or None
@@ -283,19 +334,15 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
             image_grid_thw = inputs["grid_thws"]
             pixel = [inputs["pixel_values"]]
 
-        # Build target labels - mask vision-related tokens
         target = input_ids.clone()
         media_begin_id, media_end_id, media_content_id, media_pad_id = (
             self._get_vision_token_ids()
         )
-
-        # Mask all vision tokens from loss computation
         target[target == media_begin_id] = IGNORE_INDEX
         target[target == media_end_id] = IGNORE_INDEX
         target[target == media_content_id] = IGNORE_INDEX
         target[target == media_pad_id] = IGNORE_INDEX
 
-        # Expand <|media_content|> tokens to match actual image feature length
         if image is not None and image_grid_thw is not None:
             input_ids, target, attn_mask = self._expand_media_content_tokens(
                 input_ids, target, attn_mask, image_grid_thw
@@ -323,16 +370,13 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         )
         return text
 
-    def _mask_user_turns_in_target(self, input_ids, target, answer):
+    def _mask_user_turns_in_target(self, input_ids, target):
         """Mask user turns and special tokens in target, only keep assistant answer for loss.
 
         For SFT, we only want to compute loss on the assistant's answer portion.
         """
-        # Get special token IDs
-        im_assistant_id = self.tokenizer.convert_tokens_to_ids(IM_ASSISTANT)
         im_middle_id = self.tokenizer.convert_tokens_to_ids(IM_MIDDLE)
         im_end_id = self.tokenizer.convert_tokens_to_ids(IM_END)
-        think_start_id = self.tokenizer.convert_tokens_to_ids(THINK_START)
         think_end_id = self.tokenizer.convert_tokens_to_ids(THINK_END)
 
         # Find the position after <think></think> in assistant turn
@@ -377,10 +421,11 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         text = self._build_kimi_chat_text(
             context, answer, has_image=(image is not None)
         )
-        input_ids, target, imgs, image_grid_thw, attn_mask = self._process(image, text)
+        input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
+            image, text
+        )
 
-        # Mask user turns, only compute loss on assistant answer
-        target = self._mask_user_turns_in_target(input_ids, target, answer)
+        target = self._mask_user_turns_in_target(input_ids, target)
 
         return input_ids, target, attn_mask, imgs, image_grid_thw
 
@@ -400,40 +445,23 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         )
         num_tiles = [len(image_grid_thw)] if image_grid_thw is not None else [0]
 
-        if self._should_discard_overlong(sample, input_ids):
+        if self._gate_overlong(
+            sample,
+            input_ids,
+            image_grid_thw=image_grid_thw,
+        ):
             return None
-        if not self.args.enable_discard_sample and image_grid_thw is not None:
-            assert (
-                image_grid_thw.prod() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} thw {image_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode VQA sample for Kimi K2.5."""
@@ -460,43 +488,26 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
 
         num_tiles = [len(image_grid_thw)] if image_grid_thw is not None else [0]
 
-        if self._should_discard_overlong(sample, input_ids):
+        if self._gate_overlong(
+            sample,
+            input_ids,
+            image_grid_thw=image_grid_thw,
+        ):
             return None
-        if not self.args.enable_discard_sample and image_grid_thw is not None:
-            assert (
-                image_grid_thw.prod() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def process_sft_qa(
-        self, messages: list, system: str, raw_video: list, raw_image: list
+        self, messages: list, system: str, raw_video: list, raw_image: list, tools=None
     ):
         """Process multi-turn conversation data for SFT with Kimi K2.5 format.
 
@@ -515,6 +526,12 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         pixel_values_images = []
         video = []
         image = []
+
+        if self.chat_template.mm_plugin is None:
+            raise ValueError(
+                "KimiTaskEncoder requires a chat template with KimiK25Plugin. "
+                "Use --chat-template kimi-k2.5 or kimi-k2.5-hf."
+            )
 
         if raw_image is not None:
             for i in raw_image:
@@ -539,17 +556,37 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
             image_grid_thw = mm_inputs["image_grid_thw"]
             pixel_values_images = [mm_inputs["pixel_values"]]
 
-        # Encode multi-turn conversation
-        encode_pairs = self.chat_template.encode_multiturn(
-            tokenizer=self.tokenizer,
-            messages=messages,
-            system=system,
-        )
+        if isinstance(self.chat_template, HFChatTemplate):
+            hf_messages = list(messages)
+            has_system_message = (
+                hf_messages
+                and hf_messages[0].get("role") == constants.DataRoles.SYSTEM
+            )
+            if system and not has_system_message:
+                hf_messages = [
+                    {"role": constants.DataRoles.SYSTEM, "content": system},
+                    *hf_messages,
+                ]
+            input_ids, target, _, _ = self.chat_template.encode_openai(
+                tokenizer=self.tokenizer,
+                messages=hf_messages,
+                tools=tools,
+                train_on_prompt=getattr(self.args, "train_on_prompt", False),
+                history_mask_loss=getattr(self.args, "history_mask_loss", False),
+                ignore_index=IGNORE_INDEX,
+            )
+        else:
+            # Encode multi-turn conversation
+            encode_pairs = self.chat_template.encode_multiturn(
+                tokenizer=self.tokenizer,
+                messages=messages,
+                system=system,
+            )
 
-        input_ids, target = [], []
-        for turn_idx, (source_ids, target_ids) in enumerate(encode_pairs):
-            input_ids += source_ids + target_ids
-            target += [IGNORE_INDEX] * len(source_ids) + target_ids
+            input_ids, target = [], []
+            for source_ids, target_ids in encode_pairs:
+                input_ids += source_ids + target_ids
+                target += [IGNORE_INDEX] * len(source_ids) + target_ids
 
         input_ids = torch.tensor(input_ids)
         target = torch.tensor(target)
@@ -597,7 +634,11 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
                 pixel_values_videos,
                 video_grid_thw,
             ) = self.process_sft_qa(
-                sample.messages, sample.system, sample.video, sample.image
+                sample.messages,
+                sample.system,
+                sample.video,
+                sample.image,
+                tools=getattr(sample, "tools", None),
             )
             if sample.video is not None:
                 num_tiles = [len(video_grid_thw)] if video_grid_thw is not None else []
@@ -608,56 +649,26 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
                 f"Unknown training phase {self.args.training_phase}"
             )
 
-        if self._should_discard_overlong(sample, input_ids):
+        if self._gate_overlong(
+            sample,
+            input_ids,
+            image_grid_thw=image_grid_thw,
+            video_grid_thw=video_grid_thw,
+        ):
             return None
-        if (
-            not self.args.enable_discard_sample
-            and sample.video is not None
-            and video_grid_thw is not None
-        ):
-            assert (
-                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
-        elif (
-            not self.args.enable_discard_sample
-            and sample.image is not None
-            and image_grid_thw is not None
-        ):
-            assert (
-                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=pixel_values_videos,
+            video_grid_thw=video_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def encode_multi_vid_qa(self, sample) -> BaseTaskSample:
         """Encode video QA sample for Kimi K2.5."""
@@ -670,47 +681,91 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
                 image_grid_thw,
                 video,
                 video_grid_thw,
-            ) = self.process_sft_qa(sample.messages, sample.system, sample.video, None)
+            ) = self.process_sft_qa(
+                sample.messages,
+                sample.system,
+                sample.video,
+                None,
+                tools=getattr(sample, "tools", None),
+            )
         else:
             raise NotImplementedError(
                 f"Unknown training phase {self.args.training_phase}"
             )
 
-        if self._should_discard_overlong(sample, input_ids):
+        if self._gate_overlong(
+            sample,
+            input_ids,
+            video_grid_thw=video_grid_thw,
+        ):
             return None
-        if not self.args.enable_discard_sample and video_grid_thw is not None:
-            assert (
-                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=video,
-                video_grid_thw=video_grid_thw,
-                num_tiles=[len(video_grid_thw)] if video_grid_thw is not None else [],
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=video,
+            video_grid_thw=video_grid_thw,
+            num_tiles=[len(video_grid_thw)] if video_grid_thw is not None else [],
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
+
+    def encode_chat_mix(
+        self,
+        sample: ChatMixSample,
+    ) -> Optional["VLMTaskSample"]:
+        """Encode ChatMixSample for Kimi K2.5 (with optional tool calling).
+
+        Overlong samples are dropped via ``_gate_overlong`` (logs a warning
+        and returns ``None``).
+        """
+        if self.args.training_phase != constants.TrainingPhase.SFT:
+            raise NotImplementedError(
+                f"encode_chat_mix only supports SFT, got {self.args.training_phase}"
             )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=video,
-                video_grid_thw=video_grid_thw,
-                num_tiles=[len(video_grid_thw)] if video_grid_thw is not None else [],
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+
+        (
+            input_ids,
+            target,
+            attn_mask,
+            imgs,
+            image_grid_thw,
+            pixel_values_videos,
+            video_grid_thw,
+        ) = self.process_sft_qa(
+            sample.messages,
+            sample.system,
+            sample.video,
+            sample.image,
+            sample.tools,
+        )
+
+        num_tiles = []
+        if video_grid_thw is not None:
+            num_tiles.append(len(video_grid_thw))
+        if image_grid_thw is not None:
+            num_tiles.append(len(image_grid_thw))
+
+        if self._gate_overlong(
+            sample,
+            input_ids,
+            image_grid_thw=image_grid_thw,
+            video_grid_thw=video_grid_thw,
+        ):
+            return None
+
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=pixel_values_videos,
+            video_grid_thw=video_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )

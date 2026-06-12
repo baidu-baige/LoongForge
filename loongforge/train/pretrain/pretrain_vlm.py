@@ -32,6 +32,7 @@ from loongforge.utils import constants, get_args, get_model_config
 # from loongforge.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
 from loongforge.train.megatron_trainer import MegatronTrainer
 from loongforge.train.trainer_builder import register_model_trainer
+from loongforge.train.training_utils import dump_model_input_example_once
 from loongforge.train.sft.utils import (
     build_sft_data_collator,
     build_sft_cyclic_iterators,
@@ -375,6 +376,10 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
             loss_mask,
             packed_seq_params,
         ) = batch_list[inner_group_id].values()
+
+        dump_model_input_example_once(
+            tokens, labels, attn_mask, cu_lengths, packed_seq_params,
+        )
 
         loss_func = getattr(model_config, "loss_func", default_loss_func)
 

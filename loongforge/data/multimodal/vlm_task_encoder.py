@@ -31,12 +31,16 @@ from .base.task_encoder import (
     BaseTaskSample,
     BaseTaskSamplePacked,
     BaseTaskBatchPacked,
+    _parse_messages,
 )
+from loongforge.data.chat_template import HFChatTemplate
 from loongforge.data.multimodal import (
     MultiMixQASample,
     PackedCaptioningSample,
     PackedVQASample,
     PackedMultiMixQASample,
+    PackedChatMixSample,
+    ChatMixSample,
 )
 
 IGNORE_INDEX = -100  # ID for labels that should be ignored.
@@ -244,13 +248,13 @@ class VLMTaskEncoder(BaseTaskEncoder):
             text = text[:-1]
         input_ids, _, imgs, image_grid_thw, attn_mask = self._process(image, text)
         target = torch.ones_like(input_ids) * IGNORE_INDEX
-        answer = self.tokenizer.tokenize(answer)
-        target[-len(answer) - 1 : -1] = torch.tensor(answer)
+        answer_ids = self.tokenizer.tokenize(answer)
+        target[-len(answer_ids) - 1 : -1] = torch.tensor(answer_ids)
 
         return input_ids, target, attn_mask, imgs, image_grid_thw
 
     def process_sft_qa(
-        self, messages: list, system: str, raw_video: list, raw_image: list
+        self, messages: list, system: str, raw_video: list, raw_image: list, tools=None
     ):
         """process the data for sft qa"""
         video_grid_thw = None
@@ -305,6 +309,27 @@ class VLMTaskEncoder(BaseTaskEncoder):
             video_grid_thw,
         )
 
+    def _make_sample_from(self, sample, *, cls=None, key=None, **fields):
+        """Derive a new sample from ``sample``, carrying its energon meta.
+
+        Forwards the source's ``__key__`` / ``__restore_key__`` /
+        ``__subflavors__`` (and ``__subflavor__`` on energon < 7.0) into a
+        freshly constructed ``cls`` instance. Used both for the final task
+        sample (``cls`` defaults to ``VLMTaskSample``) and for upstream
+        flavor samples re-fed into another encoder (e.g. ``ChatMixSample``).
+        Pass ``key`` to override ``sample.__key__`` (e.g. per-turn sub-keys).
+        """
+        if cls is None:
+            cls = VLMTaskSample
+        meta = {
+            "__key__": key if key is not None else sample.__key__,
+            "__restore_key__": sample.__restore_key__,
+            "__subflavors__": sample.__subflavors__,
+        }
+        if _ENERGON_NEEDS_SUBFLAVOR:
+            meta["__subflavor__"] = None
+        return cls(**meta, **fields)
+
     def encode_captioning(self, sample: CaptioningSample) -> BaseTaskSample:
         """Encode CaptioningSample."""
         """Preprocessing function for datasets like COCO, containing image-caption pairs.
@@ -327,34 +352,17 @@ class VLMTaskEncoder(BaseTaskEncoder):
             assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
         else:
             assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
-        
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
@@ -380,33 +388,16 @@ class VLMTaskEncoder(BaseTaskEncoder):
         else:
             assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def encode_multi_vid_qa(self, sample: VQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
@@ -419,7 +410,13 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 image_grid_thw,
                 video,
                 video_grid_thw,
-            ) = self.process_sft_qa(sample.messages, sample.system, sample.video, None)
+            ) = self.process_sft_qa(
+                sample.messages,
+                sample.system,
+                sample.video,
+                None,
+                tools=getattr(sample, "tools", None),
+            )
         else:
             raise NotImplementedError(
                 f"Unknown training phase {self.args.training_phase}"
@@ -435,37 +432,18 @@ class VLMTaskEncoder(BaseTaskEncoder):
             ), f"{sample.__key__} grid_thw: {video_grid_thw}"
 
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=video,
-                video_grid_thw=video_grid_thw,
-                num_tiles=[len(video_grid_thw)],
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=video,
-                video_grid_thw=video_grid_thw,
-                num_tiles=[len(video_grid_thw)],
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=video,
+            video_grid_thw=video_grid_thw,
+            num_tiles=[len(video_grid_thw)],
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> BaseTaskSample:
@@ -482,7 +460,11 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 pixel_values_videos,
                 video_grid_thw,
             ) = self.process_sft_qa(
-                sample.messages, sample.system, sample.video, sample.image
+                sample.messages,
+                sample.system,
+                sample.video,
+                sample.image,
+                tools=getattr(sample, "tools", None),
             )
             if sample.video is not None:
                 num_tiles = [len(video_grid_thw)]
@@ -507,37 +489,73 @@ class VLMTaskEncoder(BaseTaskEncoder):
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=pixel_values_videos,
+            video_grid_thw=video_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
+
+    def encode_chat_mix(self, sample: ChatMixSample) -> Optional[BaseTaskSample]:
+        """Encode chat-format multimodal sample (with optional tool calling)."""
+        if self.args.training_phase != constants.TrainingPhase.SFT:
+            raise NotImplementedError(
+                f"encode_chat_mix only supports SFT, got {self.args.training_phase}"
             )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+
+        (
+            input_ids,
+            target,
+            attn_mask,
+            imgs,
+            image_grid_thw,
+            pixel_values_videos,
+            video_grid_thw,
+        ) = self.process_sft_qa(
+            sample.messages,
+            sample.system,
+            sample.video,
+            sample.image,
+            tools=sample.tools,
+        )
+
+        num_tiles = []
+        if sample.video is not None:
+            num_tiles = [len(video_grid_thw)]
+        elif sample.image is not None:
+            num_tiles = [len(image_grid_thw)]
+
+        if self.args.enable_discard_sample:
+            assert (
+                len(input_ids) <= self.args.seq_length
+            ), f"{sample.__key__} input length {len(input_ids)}"
+        elif sample.video is not None:
+            assert (
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
+        elif sample.image is not None:
+            assert (
+                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
+            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
+
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=pixel_values_videos,
+            video_grid_thw=video_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def encode_packed_captioning(
         self, sample: PackedCaptioningSample
@@ -631,6 +649,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             else:
                 answer = answer_group or ""
 
+            system = None
             messages = [
                 {"role": "user", "content": context},
                 {"role": "assistant", "content": answer},
@@ -643,7 +662,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     "messages": messages,
                     "image": media_group,
                     "video": None,
-                    "system": None,
+                    "system": system,
                 }
                 if _ENERGON_NEEDS_SUBFLAVOR:
                     init_kwargs["__subflavor__"] = None
@@ -656,7 +675,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     "messages": messages,
                     "image": None,
                     "video": media_group,  # List[AVData]
-                    "system": None,
+                    "system": system,
                 }
                 if _ENERGON_NEEDS_SUBFLAVOR:
                     init_kwargs["__subflavor__"] = None
@@ -669,13 +688,88 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     "messages": messages,
                     "image": None,
                     "video": None,
-                    "system": None,
+                    "system": system,
                 }
                 if _ENERGON_NEEDS_SUBFLAVOR:
                     init_kwargs["__subflavor__"] = None
                 cur_sample = MultiMixQASample(**init_kwargs)
             l_VLMTaskSample.append(self.encode_multi_mix_qa4packing(cur_sample))
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
+        self.is_packing_enabled = True
+        return l_sample_packed
+
+    def encode_packed_chat_mix(
+        self,
+        sample: PackedChatMixSample,
+    ) -> BaseTaskSamplePacked:
+        """Encode an offline-packed chat/tool-calling sample.
+
+        Generic skeleton: unpacks the offline artifact, re-encodes each turn
+        through ``self.encode_chat_mix``, and re-packs via
+        ``pack_selected_samples``. Subclasses customise per-turn encoding by
+        overriding ``encode_chat_mix``; tool-calling support requires the
+        active chat template to be ``HFChatTemplate``.
+        """
+        n_orig_sample = len(sample.packed_messages)
+        images = sample.packed_images if sample.packed_images is not None else []
+        videos = sample.packed_videos if sample.packed_videos is not None else []
+
+        has_images = len(images) > 0
+        has_videos = len(videos) > 0
+        if has_images and has_videos:
+            raise ValueError(
+                f"encode_packed_chat_mix: cannot mix images and videos "
+                f"in same sample for key={sample.__key__}"
+            )
+        has_text_only = not has_images and not has_videos
+        media_list = images if has_images else videos
+        if not has_text_only and len(media_list) != n_orig_sample:
+            raise ValueError(
+                f"encode_packed_chat_mix: media count ({len(media_list)}) "
+                f"!= messages count ({n_orig_sample}) for key={sample.__key__}"
+            )
+
+        encoded_members = []
+        for idx, raw_sample in enumerate(sample.packed_messages):
+            raw_sample = raw_sample or {}
+            raw_messages = raw_sample.get("messages") or raw_sample.get("texts")
+            if raw_messages is None:
+                raise ValueError(
+                    f"packed_chat_mix sample {sample.__key__}.q{idx:03d} "
+                    "has neither `messages` nor `texts`."
+                )
+
+            messages, system = _parse_messages(raw_messages)
+            tools = raw_sample.get("tools")
+            if tools and not isinstance(self.chat_template, HFChatTemplate):
+                raise ValueError(
+                    f"packed_chat_mix turn {sample.__key__}.q{idx:03d} carries "
+                    f"tool definitions but the active chat template "
+                    f"({type(self.chat_template).__name__}) cannot render "
+                    f"tool_calls. Use HFChatTemplate or strip tools from the data."
+                )
+            media_group = None if has_text_only else media_list[idx]
+
+            cur_sample = self._make_sample_from(
+                sample,
+                cls=ChatMixSample,
+                key=f"{sample.__key__}.q{idx:03d}",
+                messages=messages,
+                image=media_group if has_images else None,
+                video=media_group if has_videos else None,
+                system=system,
+                tools=tools if tools else None,
+            )
+            encoded = self.encode_chat_mix(cur_sample)
+            if encoded is None:
+                raise ValueError(
+                    f"encode_packed_chat_mix: member {cur_sample.__key__} was "
+                    f"dropped during encode_chat_mix. Offline packed artifacts "
+                    f"must pre-validate that every member fits within seq_length."
+                )
+            encoded_members.append(encoded)
+
+        l_sample_packed = self.pack_selected_samples(encoded_members)
         self.is_packing_enabled = True
         return l_sample_packed
 
@@ -692,7 +786,11 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 pixel_values_videos,
                 video_grid_thw,
             ) = self.process_sft_qa(
-                sample.messages, sample.system, sample.video, sample.image
+                sample.messages,
+                sample.system,
+                sample.video,
+                sample.image,
+                tools=getattr(sample, "tools", None),
             )
 
             num_tiles = []
@@ -718,37 +816,18 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            pixel_values_videos=pixel_values_videos,
+            video_grid_thw=video_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
     
 
     def encode_vqa4packing(self, sample: VQASample) -> BaseTaskSample:
@@ -784,33 +863,16 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 image_grid_thw.prod() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
-        if _ENERGON_NEEDS_SUBFLAVOR:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavor__=None,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
-        else:
-            return VLMTaskSample(
-                __key__=sample.__key__,
-                __restore_key__=sample.__restore_key__,
-                __subflavors__=sample.__subflavors__,
-                imgs=imgs,
-                image_grid_thw=image_grid_thw,
-                num_tiles=num_tiles,
-                tokens=input_ids,
-                labels=target,
-                attn_mask=attn_mask,
-                total_len=len(input_ids),
-            )
+        return self._make_sample_from(
+            sample,
+            imgs=imgs,
+            image_grid_thw=image_grid_thw,
+            num_tiles=num_tiles,
+            tokens=input_ids,
+            labels=target,
+            attn_mask=attn_mask,
+            total_len=len(input_ids),
+        )
 
     def process_samples_grid(self, samples):
         """concat grid_thw for image and video"""

@@ -83,6 +83,23 @@ class ShareGPTColumns(Columns):
 
 
 @dataclass
+class OpenAIChatColumns(Columns):
+    """The field of OpenAI Chat Completions-style datasets."""
+
+    messages: Optional[str] = "messages"
+    """The messages for sft"""
+
+    tools: Optional[str] = "tools"
+    """The tools metadata for sft"""
+
+    images: Optional[str] = None
+    """Optional image paths"""
+
+    videos: Optional[str] = None
+    """Optional video paths"""
+
+
+@dataclass
 class ShareGPTTags(object):
     """The tag of the dataset."""
 
@@ -388,6 +405,13 @@ class SFTDataset(HuggingFaceDataset):
                 )
                 sft_format.tags.function_tag = _desc_tags.get("function_tag", None)
                 sft_format.tags.system_tag = _desc_tags.get("system_tag", None)
+        elif sft_format.format == SFTDataFormats.OPENAI_CHAT_COMPLETIONS:
+            sft_format.columns = OpenAIChatColumns()
+            if _desc_columns is not None:
+                sft_format.columns.messages = _desc_columns.get("messages", "messages")
+                sft_format.columns.tools = _desc_columns.get("tools", "tools")
+                sft_format.columns.images = _desc_columns.get("images", None)
+                sft_format.columns.videos = _desc_columns.get("videos", None)
         else:
             raise ValueError(f"Unknown dataset format {sft_format.format}")
 

@@ -4,7 +4,7 @@
 """Typed records shared by the WDS-native offline packing stages."""
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Any, Dict, Optional, Tuple
 
 HASH_BUCKET_WEIGHT_KEY = "w"
 HASH_BUCKET_TOKEN_LEN_KEY = "l"
@@ -65,6 +65,7 @@ class ManifestSample:
     prompt: str
     caption: str
     media_files: Tuple[str, ...]
+    raw_json: Optional[Dict[str, Any]] = None
 
     def pack_item(self) -> PackItem:
         return PackItem(sample_id=self.sample_id, token_len=self.token_len)

@@ -404,6 +404,11 @@ def convert_to_wds(cfg: PackedWDSConfig):
     if cfg.sample_type == "packed_multi_mix_qa":
         stream_fn = stream_samples_packed_multi_mix_qa
         construct_fn = construct_sample_packed_multi_mix_qa
+    elif cfg.sample_type == "packed_chat_mix":
+        raise ValueError(
+            "packed_chat_mix is only supported by the WDS-native "
+            "offline packing path with data.input_format='wds'."
+        )
     else:
         stream_fn = stream_samples_caption
         construct_fn = lambda entry, roots: construct_sample(entry, roots)
@@ -441,7 +446,13 @@ def _safe_target_name(part: str, sample_index: int, used_names: set) -> str:
         counter += 1
 
 
-def construct_native_packed_sample(plan: dict, samples: dict, members: dict, reader: ShardReaderCache):
+def construct_native_packed_sample(
+    plan: dict,
+    samples: dict,
+    members: dict,
+    reader: ShardReaderCache,
+    sample_type: str,
+):
     media_type = plan["media_type"]
     sample_ids = plan["sample_ids"]
     packed = {"__key__": plan["pack_id"], "__restore_key__": plan["pack_id"]}
@@ -449,6 +460,7 @@ def construct_native_packed_sample(plan: dict, samples: dict, members: dict, rea
     captions = []
     token_lens = []
     packed_media_files = []
+    raw_samples = []
     used_names = set()
 
     for sample_index, sample_id in enumerate(sample_ids):
@@ -464,6 +476,13 @@ def construct_native_packed_sample(plan: dict, samples: dict, members: dict, rea
         prompts.append(sample.prompt)
         captions.append(sample.caption)
         token_lens.append(sample.token_len)
+        raw_sample = sample.raw_json or {}
+        if sample_type == "packed_chat_mix" and isinstance(raw_sample, dict):
+            raw_sample = dict(raw_sample)
+            texts = raw_sample.pop("texts", None)
+            if "messages" not in raw_sample and texts is not None:
+                raw_sample["messages"] = texts
+        raw_samples.append(raw_sample)
 
         if media_type == "text":
             packed_media_files.append([])
@@ -484,8 +503,20 @@ def construct_native_packed_sample(plan: dict, samples: dict, members: dict, rea
             current_media.append(target_name)
         packed_media_files.append(current_media)
 
-    packed["json"] = json.dumps(
-        {
+    if sample_type == "packed_chat_mix":
+        payload = {
+            "messages": raw_samples,
+            "media_files": packed_media_files,
+            "media_type": media_type,
+            "_meta": {
+                "pack_id": plan["pack_id"],
+                "sample_ids": sample_ids,
+                "token_lens": token_lens,
+                "total_token_len": sum(token_lens),
+            },
+        }
+    elif sample_type == "packed_multi_mix_qa":
+        payload = {
             "texts": {"prompts": prompts, "captions": captions},
             "media_files": packed_media_files,
             "media_type": media_type,
@@ -495,9 +526,13 @@ def construct_native_packed_sample(plan: dict, samples: dict, members: dict, rea
                 "token_lens": token_lens,
                 "total_token_len": sum(token_lens),
             },
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
+        }
+    else:
+        raise ValueError(
+            f"WDS-native packing writer does not support sample_type={sample_type!r}"
+        )
+
+    packed["json"] = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     return packed
 
 
@@ -520,6 +555,7 @@ def convert_native_to_wds(cfg: dict):
         raise FileNotFoundError(f"Pack plan not found: {pack_plan}")
 
     samples, members = load_manifest_for_packing(manifest_sqlite)
+    sample_type = cfg.get("sample", {}).get("sample_type", "packed_multi_mix_qa")
     maxcount = int(cfg.get("packed_wds", {}).get("maxcount", 1000000))
     maxsize = int(cfg.get("packed_wds", {}).get("maxsize", 100000000))
     tar_pattern = output_dir / "pretrain-%06d.tar"
@@ -532,13 +568,15 @@ def convert_native_to_wds(cfg: dict):
             if not line.strip():
                 continue
             plan = json.loads(line)
-            sample = construct_native_packed_sample(plan, samples, members, reader)
+            sample = construct_native_packed_sample(
+                plan, samples, members, reader, sample_type
+            )
             _log_json_presence(plan["pack_id"], sample, idx)
             sink.write(sample)
 
     write_config(
         EPath(output_dir).absolute(),
-        sample_type=cfg.get("sample", {}).get("sample_type", "packed_multi_mix_qa"),
+        sample_type=sample_type,
     )
     print("WDS-native packed dataset successfully converted to wds")
 

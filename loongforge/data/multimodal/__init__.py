@@ -9,8 +9,10 @@ from loongforge.data.multimodal.flavors import (
     PackedCaptioningSample,
     PackedVQASample,
     PackedMultiMixQASample,
+    PackedChatMixSample,
     MultiVidQASample,
     MultiMixQASample,
+    ChatMixSample,
 )
 
 # Registry for multimodal task encoders so configs can swap them without
@@ -58,8 +60,10 @@ __all__ = [
     "PackedCaptioningSample",
     "PackedVQASample",
     "PackedMultiMixQASample",
+    "PackedChatMixSample",
     "MultiVidQASample",
     "MultiMixQASample",
+    "ChatMixSample",
     "TASK_ENCODER_REGISTRY",
     "resolve_task_encoder",
     "build_task_encoder",

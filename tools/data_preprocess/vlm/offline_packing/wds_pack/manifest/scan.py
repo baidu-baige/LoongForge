@@ -50,8 +50,10 @@ ROLE_ALIASES = {
     "bot": "assistant",
     "assistant": "assistant",
     "system": "system",
+    "tool": "tool",
+    "function": "tool",
 }
-FROM_ALIASES = {"user": "human", "assistant": "gpt"}
+FROM_ALIASES = {"user": "human", "assistant": "gpt", "tool": "tool"}
 MEDIA_CONTENT_ALIASES = {
     "image": {"image", "image_url"},
     "video": {"video", "video_url"},
@@ -433,6 +435,45 @@ def _count_media_placeholder_tokens(processor, model_inputs, placeholder_tokens:
     return sum(1 for token_id in input_ids if token_id in placeholder_ids)
 
 
+def _encode_text_input_ids(processor, text_input: str) -> Optional[List[int]]:
+    """Encode rendered chat text with the direct tokenizer API used at runtime."""
+    tokenizer = getattr(processor, "tokenizer", processor)
+    encode = getattr(tokenizer, "encode", None)
+    if encode is None:
+        return None
+
+    try:
+        input_ids = encode(text_input, add_special_tokens=False)
+    except TypeError:
+        input_ids = encode(text_input)
+
+    if hasattr(input_ids, "tolist"):
+        input_ids = input_ids.tolist()
+    if input_ids and isinstance(input_ids[0], list):
+        input_ids = input_ids[0]
+    return list(input_ids)
+
+
+def _count_media_placeholder_token_ids(
+    processor,
+    input_ids: Sequence[int],
+    placeholder_tokens: Sequence[str],
+) -> int:
+    tokenizer = getattr(processor, "tokenizer", processor)
+    convert_tokens_to_ids = getattr(tokenizer, "convert_tokens_to_ids", None)
+    if convert_tokens_to_ids is None:
+        return 0
+    placeholder_ids = {
+        convert_tokens_to_ids(token)
+        for token in placeholder_tokens
+        if token
+    }
+    placeholder_ids.discard(None)
+    if not placeholder_ids:
+        return 0
+    return sum(1 for token_id in input_ids if token_id in placeholder_ids)
+
+
 def _as_media_list(media_inputs: dict) -> List[dict]:
     medias = []
     for image in media_inputs.get("images", []):
@@ -480,16 +521,29 @@ def _compute_processor_token_len(
     media_inputs: dict,
     placeholder_tokens: Sequence[str] = DEFAULT_MEDIA_PLACEHOLDER_TOKENS,
 ) -> int:
+    direct_input_ids = _encode_text_input_ids(processor, text_input)
+    if not media_inputs and direct_input_ids is not None:
+        return len(direct_input_ids)
+
     model_inputs = _processor_model_inputs(processor, text_input, media_inputs)
-    token_len = _input_ids_len(model_inputs)
+    token_len = (
+        len(direct_input_ids)
+        if direct_input_ids is not None
+        else _input_ids_len(model_inputs)
+    )
 
     feature_lengths = _media_feature_lengths_from_grid(processor, model_inputs)
     if not feature_lengths:
         return token_len
 
-    placeholder_count = _count_media_placeholder_tokens(
-        processor, model_inputs, placeholder_tokens
-    )
+    if direct_input_ids is not None:
+        placeholder_count = _count_media_placeholder_token_ids(
+            processor, direct_input_ids, placeholder_tokens
+        )
+    else:
+        placeholder_count = _count_media_placeholder_tokens(
+            processor, model_inputs, placeholder_tokens
+        )
     replaced_tokens = min(placeholder_count, len(feature_lengths))
     return token_len - replaced_tokens + sum(feature_lengths)
 
@@ -569,7 +623,10 @@ def prepare_messages_for_hf_chat_template(messages: Sequence[dict], media_type: 
             else:
                 remaining_media -= count_structured_media_parts(content, media_type)
 
-        rendered_messages.append({"role": role, "content": content})
+        rendered_message = dict(message)
+        rendered_message["role"] = role
+        rendered_message["content"] = content
+        rendered_messages.append(rendered_message)
 
     if media_type in ("image", "video") and remaining_media != 0:
         raise ValueError(
@@ -587,9 +644,43 @@ def should_use_hf_chat_template(processor, cfg: dict) -> bool:
     return bool(model_cfg.get("chat_template_path"))
 
 
+def prepare_tools_for_hf_render(tokenizer, tools: Optional[Sequence[dict]], kwargs: dict):
+    if not tools:
+        return None, kwargs
+
+    tools = list(tools)
+    apply_chat_template = tokenizer.apply_chat_template
+    if hasattr(apply_chat_template, "__func__"):
+        apply_chat_template = apply_chat_template.__func__
+    apply_globals = getattr(apply_chat_template, "__globals__", {})
+    deep_sort_dict = apply_globals.get("deep_sort_dict")
+    encode_tools_to_typescript_style = apply_globals.get(
+        "encode_tools_to_typescript_style"
+    )
+
+    if deep_sort_dict is not None:
+        tools = deep_sort_dict(tools)
+
+    if (
+        "tools_ts_str" not in kwargs
+        and encode_tools_to_typescript_style is not None
+    ):
+        try:
+            kwargs["tools_ts_str"] = encode_tools_to_typescript_style(tools)
+        except Exception as exc:
+            LOG.warning(
+                "Failed to render tools_ts_str with HF tokenizer helper; "
+                "falling back to raw tools for chat template rendering: %s",
+                exc,
+            )
+
+    return tools, kwargs
+
+
 def render_chat_text(
     processor,
     messages: Sequence[dict],
+    tools: Optional[Sequence[dict]],
     cfg: dict,
     fallback_template: Optional[Template],
     media_type: str,
@@ -611,7 +702,11 @@ def render_chat_text(
         chat_kwargs = dict(cfg.get("model", {}).get("chat_template_kwargs", {}))
         chat_kwargs.pop("add_generation_prompt", None)
         chat_kwargs.pop("tokenize", None)
+        chat_kwargs.pop("tools", None)
         chat_kwargs.setdefault("thinking", False)
+        tools, chat_kwargs = prepare_tools_for_hf_render(tokenizer, tools, chat_kwargs)
+        if tools:
+            chat_kwargs["tools"] = tools
         return tokenizer.apply_chat_template(
             rendered_messages,
             tokenize=False,
@@ -622,7 +717,7 @@ def render_chat_text(
     if fallback_template is None:
         raise ValueError("No fallback chat template configured")
     template_text_key = cfg.get("data", {}).get("template_text_key", "messages")
-    render_payload = {template_text_key: messages, "messages": messages}
+    render_payload = {template_text_key: messages, "messages": messages, "tools": tools}
     return fallback_template.render(**render_payload)
 
 
@@ -714,6 +809,7 @@ def build_manifest_row(
     prompt: str,
     caption: str,
     media_files: Sequence[str],
+    raw_json: dict,
 ) -> dict:
     return {
         "sample_id": sample_id,
@@ -724,6 +820,7 @@ def build_manifest_row(
         "prompt": prompt,
         "caption": caption,
         "media_files": list(media_files),
+        "raw_json": raw_json,
         "members": manifest_member_rows(group, media_files),
     }
 
@@ -753,6 +850,7 @@ def process_group(
     messages, prompt, caption = load_messages_and_pair(json_data, template_text_key)
     if not messages:
         return None, skip_row("missing_messages", group.base_key)
+    tools = json_data.get("tools")
 
     media_files = resolve_media_files(json_data, group, media_type)
     missing_media = [part for part in media_files if part not in group.members]
@@ -774,6 +872,7 @@ def process_group(
         text_input = render_chat_text(
             processor,
             messages,
+            tools,
             cfg,
             chat_template,
             media_type,
@@ -822,6 +921,7 @@ def process_group(
         prompt=prompt,
         caption=caption,
         media_files=media_files,
+        raw_json=json_data,
     ), None
 
 
@@ -997,8 +1097,24 @@ def main() -> None:
     log_level = cfg.get("log", {}).get("level", "INFO")
     setup_logging(work_dir, log_level)
 
-    if cfg.get("sample", {}).get("sample_type") != "packed_multi_mix_qa":
-        raise ValueError("WDS-native V1 only supports sample.sample_type=packed_multi_mix_qa")
+    sample_type = cfg.get("sample", {}).get("sample_type")
+    supported_sample_types = {"packed_multi_mix_qa", "packed_chat_mix"}
+    if sample_type not in supported_sample_types:
+        raise ValueError(
+            "WDS-native V1 only supports sample.sample_type in "
+            f"{sorted(supported_sample_types)}, got {sample_type!r}"
+        )
+
+    model_cfg = cfg.get("model", {})
+    if (
+        sample_type == "packed_chat_mix"
+        and not model_cfg.get("use_hf_chat_template")
+        and not model_cfg.get("chat_template_path")
+    ):
+        raise ValueError(
+            "packed_chat_mix requires HF chat template rendering. "
+            "Set model.use_hf_chat_template=true or model.chat_template_path."
+        )
 
     wds_dir = Path(cfg["data"]["wds_dir"])
     shards = sorted(wds_dir.glob("*.tar"))
