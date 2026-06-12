@@ -1,0 +1,286 @@
+name: LoongForge Internal CI
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number (for manual trigger)'
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  INTERNAL_CI_CONFIG_FILE: ${{ vars.INTERNAL_CI_CONFIG_FILE }}
+  INTERNAL_CI_RUN_DIR: ${{ vars.INTERNAL_CI_RUN_DIR }}
+  INTERNAL_CI_RUNNER_LABEL: ${{ vars.INTERNAL_CI_RUNNER_LABEL }}
+
+concurrency:
+  group: internal-ci-pr-${{ github.event.issue.number || inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-notify:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        github.event.comment.body == '/loongforge-ci' &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.comment.author_association) ||
+          github.event.comment.user.login == github.event.issue.user.login
+        )
+      )
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Load config
+        run: |
+          set -euo pipefail
+
+          : "${INTERNAL_CI_CONFIG_FILE:?INTERNAL_CI_CONFIG_FILE repository variable is required}"
+          CONFIG_FILE="$INTERNAL_CI_CONFIG_FILE"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "配置文件不存在: $CONFIG_FILE"
+            echo "请先在 self-hosted runner 上创建该文件，并在 repository variables 中设置 INTERNAL_CI_CONFIG_FILE"
+            exit 1
+          fi
+
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              ''|'#'*) continue ;;
+            esac
+
+            key="${line%%=*}"
+            value="${line#*=}"
+            if ! printf '%s' "$key" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'; then
+              echo "配置项名称非法: $key"
+              exit 1
+            fi
+
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_ENV"
+          done < "$CONFIG_FILE"
+
+          : "${INTERNAL_CI_RUN_DIR:?INTERNAL_CI_RUN_DIR repository variable is required}"
+          echo "INTERNAL_CI_RUN_DIR=$INTERNAL_CI_RUN_DIR" >> "$GITHUB_ENV"
+          echo "INTERNAL_CI_RUNNER_LABEL=${INTERNAL_CI_RUNNER_LABEL:-self-hosted runner}" >> "$GITHUB_ENV"
+          grep -q '^BOS_BUCKET=' "$GITHUB_ENV" || { echo "BOS_BUCKET not found in config"; exit 1; }
+          grep -q '^BOS_PATH_PREFIX=' "$GITHUB_ENV" || { echo "BOS_PATH_PREFIX not found in config"; exit 1; }
+          echo "配置已加载"
+
+      - name: Get PR info
+        id: pr-info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            PR_NUM="${{ github.event.issue.number }}"
+          elif [ -n "${{ inputs.pr_number }}" ]; then
+            PR_NUM="${{ inputs.pr_number }}"
+          else
+            echo "No PR number found"
+            exit 1
+          fi
+
+          if ! printf '%s' "$PR_NUM" | grep -Eq '^[0-9]+$'; then
+            echo "Invalid PR number: $PR_NUM"
+            exit 1
+          fi
+
+          PR_DATA=$(curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/$PR_NUM")
+          BRANCH=$(printf '%s' "$PR_DATA" | jq -r '.head.ref')
+          HEAD_SHA=$(printf '%s' "$PR_DATA" | jq -r '.head.sha')
+
+          SHA7=$(printf '%s' "$HEAD_SHA" | cut -c1-7)
+          TIMESTAMP=$(date +%s)
+          SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's#[^A-Za-z0-9._-]#_#g' | cut -c1-120)
+
+          echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "safe_branch=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "sha7=$SHA7" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$TIMESTAMP" >> "$GITHUB_OUTPUT"
+          echo "PR #$PR_NUM, branch=$BRANCH, sha7=$SHA7"
+
+      - name: Checkout PR code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ steps.pr-info.outputs.pr_num }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$GITHUB_WORKSPACE"
+          find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+          git init "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git -C "$GITHUB_WORKSPACE" config --local gc.auto 0
+
+          AUTH_HEADER=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -C "$GITHUB_WORKSPACE" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH_HEADER" \
+            fetch --no-tags origin "+refs/pull/${PR_NUM}/head:refs/remotes/origin/pr/${PR_NUM}"
+          git -C "$GITHUB_WORKSPACE" checkout --force "refs/remotes/origin/pr/${PR_NUM}"
+          git -C "$GITHUB_WORKSPACE" remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git -C "$GITHUB_WORKSPACE" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH_HEADER" \
+            submodule update --init --recursive third_party/Loong-Megatron
+
+      - name: Repack code
+        id: repack
+        run: |
+          set -euo pipefail
+
+          PR_NUM="${{ steps.pr-info.outputs.pr_num }}"
+          STAGING_DIR="/tmp/loongforge_ci_${PR_NUM}"
+          OUTPUT_FILE="/tmp/LoongForge_pr${PR_NUM}.tar.gz"
+          MEGATRON_SHA=$(git ls-tree HEAD third_party/Loong-Megatron 2>/dev/null | awk '{print $3}')
+          echo "Loong-Megatron SHA: ${MEGATRON_SHA:-not found}"
+
+          rm -rf "$STAGING_DIR"
+          mkdir -p "$STAGING_DIR/LoongForge"
+
+          rsync -a --exclude='.git' --exclude='third_party/Loong-Megatron' ./ "$STAGING_DIR/LoongForge/"
+
+          TAR_INPUTS="LoongForge/"
+          if [ -d "third_party/Loong-Megatron" ]; then
+            rsync -a --exclude='.git' ./third_party/Loong-Megatron/ "$STAGING_DIR/Loong-Megatron/"
+            TAR_INPUTS="$TAR_INPUTS Loong-Megatron/"
+          else
+            echo "警告：third_party/Loong-Megatron 不存在，跳过"
+          fi
+
+          tar -czf "$OUTPUT_FILE" -C "$STAGING_DIR" $TAR_INPUTS
+
+          SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
+          echo "Package size: $SIZE"
+          echo "output_file=$OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to BOS
+        id: upload
+        run: |
+          set -euo pipefail
+
+          : "${BOS_BUCKET:?BOS_BUCKET is required}"
+          : "${BOS_PATH_PREFIX:?BOS_PATH_PREFIX is required}"
+
+          BOS_PREFIX="${BOS_PATH_PREFIX%/}"
+          BOS_PATH="$BOS_PREFIX/${{ steps.pr-info.outputs.safe_branch }}-${{ steps.pr-info.outputs.sha7 }}-${{ steps.pr-info.outputs.timestamp }}/LoongForge.tar.gz"
+          OUTPUT_FILE="${{ steps.repack.outputs.output_file }}"
+          PR_NUM="${{ steps.pr-info.outputs.pr_num }}"
+          LOCAL_RUN_DIR="$INTERNAL_CI_RUN_DIR"
+          LOCAL_UPLOAD_LOG="$LOCAL_RUN_DIR/pr${PR_NUM}_upload.log"
+
+          mkdir -p "$LOCAL_RUN_DIR"
+          chmod 700 "$LOCAL_RUN_DIR"
+          bcecmd bos cp "$OUTPUT_FILE" "bos:/$BOS_BUCKET/$BOS_PATH" > "$LOCAL_UPLOAD_LOG" 2>&1
+          chmod 600 "$LOCAL_UPLOAD_LOG"
+
+          BRANCH="${{ steps.pr-info.outputs.branch }}"
+          SHA7="${{ steps.pr-info.outputs.sha7 }}"
+          TIMESTAMP="${{ steps.pr-info.outputs.timestamp }}"
+          BOS_URL="https://$BOS_BUCKET.bj.bcebos.com/$BOS_PATH"
+          LOCAL_RUN_FILE="$LOCAL_RUN_DIR/pr${PR_NUM}.json"
+
+          jq -n \
+            --argjson pr_number "$PR_NUM" \
+            --arg branch "$BRANCH" \
+            --arg sha7 "$SHA7" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg bos_url "$BOS_URL" \
+            --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{pr_number:$pr_number,branch:$branch,sha7:$sha7,timestamp:$timestamp,bos_url:$bos_url,updated_at:$updated_at}' \
+            > "$LOCAL_RUN_FILE"
+          chmod 600 "$LOCAL_RUN_FILE"
+
+          echo "Uploaded package metadata written to local file: $LOCAL_RUN_FILE"
+
+      - name: Write CI trigger signal
+        run: |
+          set -euo pipefail
+
+          : "${BOS_BUCKET:?BOS_BUCKET is required}"
+          : "${BOS_PATH_PREFIX:?BOS_PATH_PREFIX is required}"
+
+          PR_NUM="${{ steps.pr-info.outputs.pr_num }}"
+          BRANCH="${{ steps.pr-info.outputs.branch }}"
+          SHA7="${{ steps.pr-info.outputs.sha7 }}"
+          TIMESTAMP="${{ steps.pr-info.outputs.timestamp }}"
+          BOS_PREFIX="${BOS_PATH_PREFIX%/}"
+          LOCAL_RUN_DIR="$INTERNAL_CI_RUN_DIR"
+          LOCAL_RUN_FILE="$LOCAL_RUN_DIR/pr${PR_NUM}.json"
+          LOCAL_SIGNAL_LOG="$LOCAL_RUN_DIR/pr${PR_NUM}_signal.log"
+
+          mkdir -p "$LOCAL_RUN_DIR"
+          chmod 700 "$LOCAL_RUN_DIR"
+          jq -n \
+            --argjson pr_number "$PR_NUM" \
+            --arg branch "$BRANCH" \
+            --arg sha7 "$SHA7" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg local_result_file "$LOCAL_RUN_FILE" \
+            --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{pr_number:$pr_number,branch:$branch,sha7:$sha7,timestamp:$timestamp,local_result_file:$local_result_file,status:"pending",updated_at:$updated_at}' \
+            > /tmp/ci_trigger.json
+
+          bcecmd bos cp /tmp/ci_trigger.json "bos:/$BOS_BUCKET/$BOS_PREFIX/ci_trigger_pr${PR_NUM}.json" > "$LOCAL_SIGNAL_LOG" 2>&1
+          chmod 600 "$LOCAL_SIGNAL_LOG"
+
+          echo "CI trigger signal uploaded"
+
+      - name: Notify via Ruliu group
+        if: always()
+        run: |
+          PR_NUM="${{ steps.pr-info.outputs.pr_num }}"
+          BRANCH="${{ steps.pr-info.outputs.branch }}"
+          SHA7="${{ steps.pr-info.outputs.sha7 }}"
+          STATUS="打包上传成功"
+          LOCAL_RUN_FILE="$INTERNAL_CI_RUN_DIR/pr${PR_NUM}.json"
+
+          if [ "${{ steps.upload.outcome }}" != "success" ]; then
+            STATUS="打包上传失败"
+            LOCAL_RUN_FILE="N/A"
+          fi
+
+          if [ -z "${RULIU_WEBHOOK:-}" ]; then
+            echo "RULIU_WEBHOOK 未配置，跳过通知"
+            exit 0
+          fi
+
+          CONTENT=$(cat <<EOF
+          ##### LoongForge CI 通知
+          **PR**: #${PR_NUM:-N/A}
+          **Branch**: ${BRANCH:-N/A}
+          **Commit**: ${SHA7:-N/A}
+          **状态**: ${STATUS}
+          **${INTERNAL_CI_RUNNER_LABEL} 本机结果文件**: ${LOCAL_RUN_FILE}
+
+          dodo 将自动触发内部流水线，请稍候...
+          EOF
+          )
+          PAYLOAD=$(jq -n --arg content "$CONTENT" '{message:{body:[{type:"MD",content:$content}]}}')
+
+          curl -sS -X POST "$RULIU_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD" || echo "如流通知发送失败（不影响主流程）"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          PR_NUM="${{ steps.pr-info.outputs.pr_num }}"
+          if [ -n "$PR_NUM" ]; then
+            rm -rf "/tmp/loongforge_ci_${PR_NUM}"
+            rm -f "/tmp/LoongForge_pr${PR_NUM}.tar.gz"
+          fi
+          rm -f /tmp/ci_trigger.json
