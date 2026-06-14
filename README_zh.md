@@ -55,7 +55,7 @@
 - **[2026/05]** ✨ 新增 **Kimi K2.5 / K2.6** 训练支持，并支持 **INT4 / NVFP4** PTQ 量化能力。
 - **[2026/05]** 🎉 **v0.1.0** —— LoongForge 首个正式版本发布。
 - **[2026/05]** 🌟 支持 **LLaVA-OneVision-2.0** 模型训练并协助其公开发布。
-- **[2026/05]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；Pi0.5 与 GR00T 训练实现 **60%+ 加速**。
+- **[2026/05]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；Pi0.5 与 GR00T 训练实现 **60%+ 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/04]** 🧩 新增 **MiniMax-M2.7** 在 NVIDIA GPU 与昆仑芯 XPU 上的训练支持。
 - **[2026/04]** 🚀 LoongForge 源码在 GitHub 上正式公开。[[blog]](https://zhuanlan.zhihu.com/p/2031006068797600446)
 - **[2025/10]** 🌟 基于AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。[[blog]](https://mp.weixin.qq.com/s/1y7Br15pBpUZ-90j5OGncA)
