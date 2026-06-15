@@ -15,7 +15,19 @@ permissions:
   pull-requests: write
   issues: write
   actions: read
+  # Required: anthropics/claude-code-action@v1 unconditionally requests an
+  # OIDC token in setupGitHubToken() during run.ts startup; without this
+  # permission ACTIONS_ID_TOKEN_REQUEST_URL is unset and the action fails
+  # with "Could not fetch an OIDC token" before it ever reads
+  # anthropic_api_key.
   id-token: write
+
+# Same-PR @claude bursts collapse to the latest run instead of piling up
+# behind the single self-hosted runner slot. Different PRs still run in
+# parallel (subject to runner availability).
+concurrency:
+  group: claude-review-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   claude:
@@ -54,19 +66,44 @@ jobs:
         (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
       )
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 30
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Trust workspace (self-hosted runner)
+        # The runner process runs as root but _work/ files were created
+        # by other users in earlier sessions, so git's CVE-2022-24765
+        # check (`fatal: detected dubious ownership`) trips when
+        # claude-code-action runs `git fetch` from outside the
+        # actions/checkout step's temporary HOME. Write safe.directory
+        # into BOTH /root/.gitconfig (for the default-HOME steps) and
+        # /ssd1/runner-home/.gitconfig (for the Claude action step,
+        # which we relocate below). Verified against runs 27542697733
+        # and 27544080883.
+        run: |
+          mkdir -p /ssd1/runner-home/.claude/downloads
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          HOME=/ssd1/runner-home git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Checkout PR head
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          # issue_comment events default to the repo's default branch — review
+          # tools (Read/Grep/Glob) would then see the wrong code. Resolve to
+          # the PR head SHA when available, otherwise refs/pull/<n>/head.
+          ref: ${{ github.event.pull_request.head.sha || format('refs/pull/{0}/head', github.event.issue.number) }}
+          fetch-depth: 50
+          # _work is reused across jobs on a self-hosted runner; don't leave
+          # GITHUB_TOKEN behind in .git/config for the next workflow.
+          persist-credentials: false
 
       - name: Claude Code Action Official
         uses: anthropics/claude-code-action@v1
         env:
           # Route Claude API traffic through the internal proxy.
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          # Override HOME so the action's install.sh writes the Claude CLI
+          # binary onto /ssd1 instead of the 19G root filesystem.
+          HOME: /ssd1/runner-home
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # track_progress shows a live checkbox list in the bot's
