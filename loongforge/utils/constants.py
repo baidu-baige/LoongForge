@@ -27,7 +27,7 @@ class SFTDataFormats(object):
 
     ALPACA = "alpaca"
     SHAREGPT = "sharegpt"
-    OPENAI_CHAT_COMPLETIONS = "openai_chat_completions"
+    OPENAI = "openai"
 
 
 class DataRoles(object):

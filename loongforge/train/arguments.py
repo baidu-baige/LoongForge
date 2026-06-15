@@ -428,6 +428,16 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--chat-template-kwargs",
+        type=str,
+        default=None,
+        help="Optional JSON object or path to a JSON file containing extra kwargs "
+             "for Hugging Face chat templates. Only valid with registered "
+             "`*-hf` chat templates. Example: '{\"enable_thinking\": false}'. "
+             "Default: None"
+    )
+
+    group.add_argument(
         "--sft-dataset-config",
         type=str,
         default=None,

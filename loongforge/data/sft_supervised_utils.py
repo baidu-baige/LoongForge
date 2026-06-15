@@ -344,7 +344,7 @@ def _preprocess_supervised_dataset(
             raise ValueError(
                 "HFChatTemplate requires OpenAI Chat Completions-style "
                 "`messages` samples. Use dataset format "
-                "`openai_chat_completions` with a registered `*-hf` chat template."
+                "`openai` with a registered `*-hf` chat template."
             )
         sample_count = len(samples["messages"])
     else:

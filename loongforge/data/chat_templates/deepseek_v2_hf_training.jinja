@@ -1,0 +1,23 @@
+{# Adapted from deepseek-ai/DeepSeek-V2-Chat tokenizer_config.json.
+   LoongForge adds Hugging Face generation blocks around assistant answer spans
+   so OpenAI-style SFT can build assistant-only loss masks. -#}
+
+{%- if not add_generation_prompt is defined -%}
+    {%- set add_generation_prompt = false -%}
+{%- endif -%}
+{{- bos_token -}}
+{%- for message in messages -%}
+    {%- if message["role"] == "user" -%}
+        {{- "User: " + message["content"] + "\n\n" -}}
+    {%- elif message["role"] == "assistant" -%}
+        {{- "Assistant:" -}}
+        {%- generation -%}
+            {{- " " + message["content"] + eos_token -}}
+        {%- endgeneration -%}
+    {%- elif message["role"] == "system" -%}
+        {{- message["content"] + "\n\n" -}}
+    {%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+    {{- "Assistant:" -}}
+{%- endif -%}

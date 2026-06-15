@@ -12,7 +12,11 @@ from megatron.training.global_vars import (
 )
 
 from loongforge.tokenizer import build_tokenizer
-from loongforge.data import ChatTemplate
+from loongforge.data import (
+    ChatTemplate,
+    HFChatTemplate,
+    load_chat_template_kwargs,
+)
 
 from .constants import TrainingPhase
 
@@ -94,6 +98,15 @@ def _build_chat_template(args) -> Optional["ChatTemplate"]:
         assert (
             _GLOBAL_CHAT_TEMPLATE is not None
         ), f"chat_template {args.chat_template} not supported."
+        raw_kwargs = getattr(args, "chat_template_kwargs", None)
+        if raw_kwargs is not None:
+            if not isinstance(_GLOBAL_CHAT_TEMPLATE, HFChatTemplate):
+                raise ValueError(
+                    "--chat-template-kwargs is only supported with HF chat templates"
+                )
+            _GLOBAL_CHAT_TEMPLATE.chat_template_kwargs = load_chat_template_kwargs(
+                raw_kwargs
+            )
         return _GLOBAL_CHAT_TEMPLATE
 
     return None

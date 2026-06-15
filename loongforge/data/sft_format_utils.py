@@ -267,7 +267,7 @@ def _normalize_openai_chat_message(
     return normalized
 
 
-def _convert_openai_chat_completions(
+def _convert_openai(
     samples: Dict[str, Any],
     openai_columns: "OpenAIChatColumns",
     dataset_dir: str,
@@ -347,9 +347,9 @@ def convert_to_unified_format(
             sharegpt_tags=data_format.tags,
             dataset_dir=os.path.dirname(dataset_path),
         )
-    elif data_format.format == SFTDataFormats.OPENAI_CHAT_COMPLETIONS:
+    elif data_format.format == SFTDataFormats.OPENAI:
         convert_func = partial(
-            _convert_openai_chat_completions,
+            _convert_openai,
             openai_columns=data_format.columns,
             dataset_dir=os.path.dirname(dataset_path),
         )
@@ -360,7 +360,7 @@ def convert_to_unified_format(
         col for col in next(iter(dataset)).keys() if col not in ["images", "videos"]
     ]
 
-    if data_format.format == SFTDataFormats.OPENAI_CHAT_COMPLETIONS:
+    if data_format.format == SFTDataFormats.OPENAI:
         features = Features(
             {
                 "messages": Value(dtype="string"),

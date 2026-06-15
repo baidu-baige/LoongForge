@@ -4,8 +4,6 @@
 """preprocess sft data"""
 
 import argparse
-import json
-from pathlib import Path
 
 from transformers import AutoProcessor
 from datasets import DatasetDict
@@ -17,6 +15,7 @@ from loongforge.data import (
     ChatTemplate,
     HFChatTemplate,
     get_support_templates,
+    load_chat_template_kwargs,
 )
 from loongforge.tokenizer import build_tokenizer
 from loongforge.utils import constants
@@ -201,14 +200,9 @@ def parse_args():
             raise ValueError(
                 "--chat-template-kwargs is only supported with HF chat templates"
             )
-        raw_kwargs = args.chat_template_kwargs
-        if not raw_kwargs.lstrip().startswith("{"):
-            kwargs_path = Path(raw_kwargs)
-            if kwargs_path.is_file():
-                raw_kwargs = kwargs_path.read_text(encoding="utf-8")
-        template.chat_template_kwargs = json.loads(raw_kwargs)
-        if not isinstance(template.chat_template_kwargs, dict):
-            raise ValueError("--chat-template-kwargs must be a JSON object")
+        template.chat_template_kwargs = load_chat_template_kwargs(
+            args.chat_template_kwargs
+        )
     args.template = template
  
     args.variable_seq_lengths = True

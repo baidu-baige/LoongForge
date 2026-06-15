@@ -20,10 +20,12 @@
 """Chat templates"""
 
 import importlib.resources as resources
+import json
 import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Type,
@@ -275,6 +277,23 @@ class ChatTemplate:
     def from_name(cls, name: str) -> "ChatTemplate":
         """build template."""
         return MAPPING_NAME_TO_TEMPLATE.get(name, None)
+
+
+def load_chat_template_kwargs(raw_kwargs: Optional[str]) -> Dict[str, Any]:
+    """Load HF chat template kwargs from a JSON object string or JSON file path."""
+    if raw_kwargs is None:
+        return {}
+
+    kwargs_text = raw_kwargs
+    if not kwargs_text.lstrip().startswith("{"):
+        kwargs_path = Path(kwargs_text)
+        if kwargs_path.is_file():
+            kwargs_text = kwargs_path.read_text(encoding="utf-8")
+
+    chat_template_kwargs = json.loads(kwargs_text)
+    if not isinstance(chat_template_kwargs, dict):
+        raise ValueError("chat_template_kwargs must be a JSON object")
+    return chat_template_kwargs
 
 
 @dataclass
@@ -802,20 +821,147 @@ def get_support_templates() -> List[str]:
     return list(MAPPING_NAME_TO_TEMPLATE.keys())
 
 
+def _read_builtin_chat_template(filename: str) -> str:
+    """Read a packaged Jinja chat template."""
+    return (
+        resources.files("loongforge.data.chat_templates")
+        .joinpath(filename)
+        .read_text(encoding="utf-8")
+    )
+
+
 _register_chat_template(
     name="kimi-k2.5-hf",
     cls=HFChatTemplate,
-    chat_template=(
-        resources.files("loongforge.data.chat_templates")
-        .joinpath("kimi_k2_5_training.jinja")
-        .read_text(encoding="utf-8")
-    ),
+    chat_template=_read_builtin_chat_template("kimi_k2_5_training.jinja"),
     mm_plugin=KimiK25Plugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
         temporal_merge_kernel_size=4,
     ),
+)
+
+
+_register_chat_template(
+    name="kimi-k2.6-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("kimi_k2_5_training.jinja"),
+    mm_plugin=KimiK25Plugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+    ),
+)
+
+
+_register_chat_template(
+    name="qwen1.5-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen_chat_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="qwen2-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen_chat_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="qwen2.5-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen2_5_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="qwen3-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="qwen3-coder-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_coder_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="qwen3-next-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_next_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="qwen3.5-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_5_think_hf_training.jinja"),
+    mm_plugin=Qwen3VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="qwen3.5-think-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_5_think_hf_training.jinja"),
+    mm_plugin=Qwen3VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="qwen3.5-nothink-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_5_nothink_hf_training.jinja"),
+    mm_plugin=Qwen3VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="qwen3.6-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_6_hf_training.jinja"),
+    mm_plugin=Qwen3VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="qwen2.5-vl-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen2_5_vl_hf_training.jinja"),
+    mm_plugin=Qwen2VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="qwen3-vl-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen3_vl_hf_training.jinja"),
+    mm_plugin=Qwen3VLPlugin(image_token="<|image_pad|>", video_token="<|video_pad|>"),
+)
+
+_register_chat_template(
+    name="llava-onevision-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("qwen_chat_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="deepseek-v2-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("deepseek_v2_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="deepseek-v3-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("deepseek_v3_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="internlm2.5-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("internlm2_5_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="mimo-v2-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("mimo_v2_hf_training.jinja"),
 )
 
 

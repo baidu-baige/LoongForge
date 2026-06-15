@@ -405,7 +405,7 @@ class SFTDataset(HuggingFaceDataset):
                 )
                 sft_format.tags.function_tag = _desc_tags.get("function_tag", None)
                 sft_format.tags.system_tag = _desc_tags.get("system_tag", None)
-        elif sft_format.format == SFTDataFormats.OPENAI_CHAT_COMPLETIONS:
+        elif sft_format.format == SFTDataFormats.OPENAI:
             sft_format.columns = OpenAIChatColumns()
             if _desc_columns is not None:
                 sft_format.columns.messages = _desc_columns.get("messages", "messages")

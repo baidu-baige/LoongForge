@@ -12,6 +12,7 @@ from .chat_template import (
     ChatTemplate,
     HFChatTemplate,
     get_support_templates,
+    load_chat_template_kwargs,
 )
 
 from .mm_plugin import MMPlugin
@@ -31,6 +32,7 @@ __all__ = [
     "ChatTemplate",
     "HFChatTemplate",
     "get_support_templates",
+    "load_chat_template_kwargs",
     "MMPlugin",
     "DataCollatorForSupervisedDataset",
     "MultiModalDataCollatorForSupervisedDataset",

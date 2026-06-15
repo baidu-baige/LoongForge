@@ -1,0 +1,18 @@
+{# Adapted from internlm/internlm2_5-7b-chat tokenizer_config.json.
+   LoongForge adds Hugging Face generation blocks around assistant answer spans
+   so OpenAI-style SFT can build assistant-only loss masks. -#}
+
+{{- bos_token -}}
+{%- for message in messages -%}
+    {%- if message["role"] == "assistant" -%}
+        {{- "<|im_start|>" + message["role"] + "\n" -}}
+        {%- generation -%}
+            {{- message["content"] + "<|im_end|>" + "\n" -}}
+        {%- endgeneration -%}
+    {%- else -%}
+        {{- "<|im_start|>" + message["role"] + "\n" + message["content"] + "<|im_end|>" + "\n" -}}
+    {%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+    {{- "<|im_start|>assistant\n" -}}
+{%- endif -%}

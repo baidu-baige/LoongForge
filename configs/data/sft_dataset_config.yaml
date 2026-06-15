@@ -32,8 +32,8 @@ sharegpt:
     assistant_tag: assistant
     system_tag: system
 
-openai_chat_completions:
-  format: openai_chat_completions
+openai:
+  format: openai
   columns:
     messages: messages
     tools: tools
