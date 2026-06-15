@@ -565,7 +565,11 @@ class HFChatTemplate(ChatTemplate):
 
     @staticmethod
     def _message_loss_mask_to_bool(value: Any) -> bool:
-        """Parse a per-message loss_mask value."""
+        """Parse an assistant message loss_mask value.
+
+        ``1``/``true``/``yes`` means this assistant turn contributes loss;
+        ``0``/``false``/``no`` means this assistant turn is masked out.
+        """
         if isinstance(value, bool):
             return value
         if isinstance(value, int) and value in (0, 1):
@@ -587,31 +591,31 @@ class HFChatTemplate(ChatTemplate):
         cls,
         messages: Sequence[Dict[str, Any]],
     ) -> Tuple[List[bool], bool]:
-        """Return assistant turn loss flags and whether any flag was explicit."""
-        assistant_loss_flags: List[bool] = []
-        has_explicit_loss_mask = False
+        """Return assistant turn loss flags and whether any assistant flag was explicit.
 
-        for message_index, message in enumerate(messages):
+        Input files may include a ``loss_mask`` field on every message for a
+        uniform schema. Only assistant messages map to HuggingFace generation
+        ranges, so non-assistant ``loss_mask`` fields are ignored. Assistant
+        messages without ``loss_mask`` keep the previous behavior and train on
+        that turn.
+        """
+        assistant_loss_flags: List[bool] = []
+        has_explicit_assistant_loss_mask = False
+
+        for message in messages:
             role = message.get("role")
             has_loss_mask = "loss_mask" in message
-            if has_loss_mask:
-                has_explicit_loss_mask = True
-                if role != DataRoles.ASSISTANT:
-                    raise ValueError(
-                        "message-level loss_mask is currently supported only for "
-                        f"assistant messages; got role {role!r} at message "
-                        f"index {message_index}"
-                    )
 
             if role == DataRoles.ASSISTANT:
                 if has_loss_mask:
+                    has_explicit_assistant_loss_mask = True
                     assistant_loss_flags.append(
                         cls._message_loss_mask_to_bool(message["loss_mask"])
                     )
                 else:
                     assistant_loss_flags.append(True)
 
-        return assistant_loss_flags, has_explicit_loss_mask
+        return assistant_loss_flags, has_explicit_assistant_loss_mask
 
     def _tokenize_with_generation_indices(
         self,
