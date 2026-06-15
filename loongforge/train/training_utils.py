@@ -2898,3 +2898,174 @@ def train(
         sys.exit(exit_code)
 
     return iteration, num_floating_point_operations_so_far
+
+
+_PRINTED_MODEL_INPUT_EXAMPLE = False
+
+_SAMPLE_DUMP_ANSI_COLOR = {
+    "T": "\033[92m",  # bright green — trainable (labels != IGNORE_INDEX)
+    "C": "\033[93m",  # yellow       — context (attended but not trained)
+    "P": "\033[90m",  # grey         — padded / masked
+}
+_SAMPLE_DUMP_ANSI_RESET = "\033[0m"
+
+
+def dump_model_input_example_once(
+    tokens, labels, attn_mask, cu_lengths=None, packed_seq_params=None
+):
+    """Dump the exact tensors flowing into ``model(...)``.
+
+    Runs once per process on (rank0, tp0, cp0). Decodes ``tokens`` with each
+    token segment colored by its role: green = trainable target (the model
+    is asked to predict this token), grey = padded (``attn_mask`` truthy),
+    yellow = context (attended but not trained). Consecutive same-role
+    tokens are decoded as one segment so multi-byte BPE pieces render
+    correctly. These are the same tensor objects the caller passes to
+    ``model(...)`` — any disalignment would mean someone mutated them in
+    between.
+
+    Labels here are already left-shifted by the collator for next-token
+    prediction (``labels[i]`` is the target the model produces from
+    ``tokens[:i+1]``, i.e. equal to ``tokens[i+1]``). So a token at
+    position ``i`` is trainable iff ``labels[i-1] != IGNORE_INDEX``;
+    position 0 is never a trainable target.
+
+    Pass ``cu_lengths`` / ``packed_seq_params`` only when the trainer packs
+    samples; for non-packed paths leave them as ``None``.
+    """
+    global _PRINTED_MODEL_INPUT_EXAMPLE
+    if _PRINTED_MODEL_INPUT_EXAMPLE:
+        return
+
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        if torch.distributed.get_rank() != 0:
+            return
+    else:
+        if int(os.environ.get("RANK", "0")) != 0:
+            return
+
+    try:
+        if mpu.get_tensor_model_parallel_rank() != 0:
+            return
+        if mpu.get_context_parallel_rank() != 0:
+            return
+    except Exception:
+        pass
+
+    _PRINTED_MODEL_INPUT_EXAMPLE = True
+
+    from loongforge.utils.global_vars import get_tokenizer as get_loongforge_tokenizer
+    from loongforge.utils.constants import IGNORE_INDEX
+
+    tokenizer = get_loongforge_tokenizer()
+
+    def to_cpu_list(x):
+        if torch.is_tensor(x):
+            return x.detach().cpu().tolist()
+        if x is None:
+            return None
+        return list(x)
+
+    def decode(ids):
+        if not ids:
+            return ""
+        try:
+            return tokenizer.detokenize(ids, skip_special_tokens=False)
+        except TypeError:
+            return tokenizer.detokenize(ids)
+
+    tok = tokens[0] if tokens.dim() == 2 else tokens
+    lab = labels[0] if labels.dim() == 2 else labels
+
+    cu = cu_lengths
+    if torch.is_tensor(cu):
+        cu = cu[0] if cu.dim() == 2 else cu
+    cu_list = to_cpu_list(cu) or []
+
+    tok_list = to_cpu_list(tok)
+    lab_list = to_cpu_list(lab)
+
+    am = attn_mask
+    am_list = None
+    if torch.is_tensor(am):
+        if am.dim() == 4:
+            # Megatron sometimes hands a (1,1,seq,seq) causal-style mask; we
+            # only care about per-position padding here, so collapse it.
+            am_view = am[0, 0].diagonal()
+        elif am.dim() == 2:
+            am_view = am[0]
+        elif am.dim() == 1:
+            am_view = am
+        else:
+            am_view = None
+        if am_view is not None:
+            am_list = am_view.detach().cpu().to(torch.bool).tolist()
+
+    seq_len = len(tok_list)
+    # `labels` is the next-token-prediction target the collator produced,
+    # i.e. labels[i] is the target after consuming tokens[0..i]. So token
+    # position `i` is a trainable target iff labels[i-1] != IGNORE_INDEX.
+    # Position 0 has no predecessor and is never a target.
+    trainable_total = sum(
+        1 for v in lab_list[:-1] if v != IGNORE_INDEX
+    ) if lab_list else 0
+
+    def role_at(i):
+        if i > 0 and lab_list[i - 1] != IGNORE_INDEX:
+            return "T"
+        if am_list is not None and i < len(am_list) and am_list[i]:
+            return "P"
+        return "C"
+
+    header = [
+        "===== model-input example (forward_step entry, same tensor as model(...)) =====",
+        f"tokens.shape={tuple(tokens.shape)} labels.shape={tuple(labels.shape)} "
+        f"attn_mask.shape={tuple(attn_mask.shape) if torch.is_tensor(attn_mask) else None}",
+        f"local_seq_len={seq_len} trainable_tokens={trainable_total}",
+        f"cu_lengths={cu_list}",
+        f"packed_seq_params={packed_seq_params}",
+        f"tp_rank={mpu.get_tensor_model_parallel_rank()} "
+        f"cp_rank={mpu.get_context_parallel_rank()}/{mpu.get_context_parallel_world_size()} "
+        f"pp_rank={mpu.get_pipeline_model_parallel_rank()}",
+        f"[mask_legend] {_SAMPLE_DUMP_ANSI_COLOR['T']}T=trainable target{_SAMPLE_DUMP_ANSI_RESET} "
+        f"{_SAMPLE_DUMP_ANSI_COLOR['C']}C=context attended{_SAMPLE_DUMP_ANSI_RESET} "
+        f"{_SAMPLE_DUMP_ANSI_COLOR['P']}P=padded/masked{_SAMPLE_DUMP_ANSI_RESET}",
+    ]
+
+    trainable_ids = [v for v in lab_list if v != IGNORE_INDEX]
+
+    # Decode contiguous same-role runs as single segments so multi-byte BPE
+    # pieces render correctly. Splitting per-token would break UTF-8 mid-codepoint.
+    colored_segments = []
+    if seq_len:
+        run_start = 0
+        run_role = role_at(0)
+        for i in range(1, seq_len):
+            r = role_at(i)
+            if r != run_role:
+                colored_segments.append(
+                    f"{_SAMPLE_DUMP_ANSI_COLOR[run_role]}"
+                    f"{decode(tok_list[run_start:i])}"
+                    f"{_SAMPLE_DUMP_ANSI_RESET}"
+                )
+                run_start = i
+                run_role = r
+        colored_segments.append(
+            f"{_SAMPLE_DUMP_ANSI_COLOR[run_role]}"
+            f"{decode(tok_list[run_start:seq_len])}"
+            f"{_SAMPLE_DUMP_ANSI_RESET}"
+        )
+    colored_decoded = "".join(colored_segments)
+
+    body = [
+        "[input_ids]",
+        str(tok_list),
+        "[decoded_input | colored by role]",
+        colored_decoded,
+        "[decoded_trainable_labels]",
+        decode(trainable_ids),
+    ]
+
+    print("\n".join(header + body + [
+        "===== end model-input example =====",
+    ]), flush=True)

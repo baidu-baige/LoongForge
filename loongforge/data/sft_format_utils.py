@@ -20,6 +20,7 @@
 """Preprocess data to unified format"""
 
 import os
+import json
 import logging
 from functools import partial
 
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
         AlpacaColumns,
         ShareGPTColumns,
         ShareGPTTags,
+        OpenAIChatColumns,
     )
 
 
@@ -212,6 +214,122 @@ def _convert_sharegpt(
     return outputs
 
 
+def _json_dumps(value: Any) -> str:
+    """Serialize nested chat data for stable HF Dataset features."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _content_len(value: Any) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        return len(value)
+    return len(json.dumps(value, ensure_ascii=False))
+
+
+def _normalize_openai_chat_message(
+    message: Dict[str, Any], index: int
+) -> Dict[str, Any]:
+    """Normalize OpenAI Chat Completions fields without flattening tools."""
+    normalized = dict(message)
+    role = normalized.get("role")
+
+    if role == "function":
+        normalized["role"] = "tool"
+        normalized.setdefault(
+            "tool_call_id", normalized.get("name", f"function_{index}")
+        )
+
+    if "function_call" in normalized and "tool_calls" not in normalized:
+        function_call = normalized.pop("function_call")
+        if function_call:
+            normalized["tool_calls"] = [
+                {
+                    "id": function_call.get("id", f"call_{index}"),
+                    "type": "function",
+                    "function": {
+                        "name": function_call.get("name", ""),
+                        "arguments": function_call.get("arguments", "{}"),
+                    },
+                }
+            ]
+
+    if (
+        normalized.get("role") == DataRoles.ASSISTANT
+        and normalized.get("content") is None
+    ):
+        normalized["content"] = ""
+
+    return normalized
+
+
+def _convert_openai_chat_completions(
+    samples: Dict[str, Any],
+    openai_columns: "OpenAIChatColumns",
+    dataset_dir: str,
+):
+    """
+    Preserve OpenAI Chat Completions-style messages/tools for chat templates.
+    """
+    outputs = {
+        "messages": [],
+        "tools": [],
+        "d_len": [],
+        "videos": [],
+        "images": [],
+    }
+    convert_path = partial(_convert_path, dataset_dir=dataset_dir)
+
+    messages_column = openai_columns.messages or "messages"
+    tools_column = openai_columns.tools
+    images_column = openai_columns.images
+    videos_column = openai_columns.videos
+
+    for i, raw_messages in enumerate(samples[messages_column]):
+        if isinstance(raw_messages, str):
+            raw_messages = json.loads(raw_messages)
+
+        messages = [
+            _normalize_openai_chat_message(message, index)
+            for index, message in enumerate(raw_messages or [])
+        ]
+
+        tools = (
+            samples[tools_column][i]
+            if tools_column and tools_column in samples
+            else None
+        )
+        images = (
+            samples[images_column][i]
+            if images_column and images_column in samples
+            else []
+        )
+        videos = (
+            samples[videos_column][i]
+            if videos_column and videos_column in samples
+            else []
+        )
+
+        d_len = sum(
+            _content_len(message.get("content"))
+            + _content_len(message.get("tool_calls"))
+            + _content_len(message.get("tool_call_id"))
+            for message in messages
+        ) + _content_len(tools)
+
+        outputs["messages"].append(_json_dumps(messages))
+        outputs["tools"].append(_json_dumps(tools))
+        outputs["d_len"].append(d_len)
+        outputs["videos"].append(convert_path(videos or []))
+        outputs["images"].append(convert_path(images or []))
+
+    return outputs
+
+
 def convert_to_unified_format(
     dataset: Union["Dataset", "IterableDataset"],
     dataset_path: str,
@@ -229,6 +347,12 @@ def convert_to_unified_format(
             sharegpt_tags=data_format.tags,
             dataset_dir=os.path.dirname(dataset_path),
         )
+    elif data_format.format == SFTDataFormats.OPENAI_CHAT_COMPLETIONS:
+        convert_func = partial(
+            _convert_openai_chat_completions,
+            openai_columns=data_format.columns,
+            dataset_dir=os.path.dirname(dataset_path),
+        )
     else:
         raise NotImplementedError()
 
@@ -236,20 +360,31 @@ def convert_to_unified_format(
         col for col in next(iter(dataset)).keys() if col not in ["images", "videos"]
     ]
 
-    features = Features(
-        {
-            "prompt": [
-                {"role": Value(dtype="string"), "content": Value(dtype="string")}
-            ],
-            "response": [
-                {"role": Value(dtype="string"), "content": Value(dtype="string")}
-            ],
-            "system": Value(dtype="string"),
-            "d_len": Value(dtype="int64"),
-            "videos": [Value(dtype="string")],
-            "images": [Value(dtype="string")],
-        }
-    )
+    if data_format.format == SFTDataFormats.OPENAI_CHAT_COMPLETIONS:
+        features = Features(
+            {
+                "messages": Value(dtype="string"),
+                "tools": Value(dtype="string"),
+                "d_len": Value(dtype="int64"),
+                "videos": [Value(dtype="string")],
+                "images": [Value(dtype="string")],
+            }
+        )
+    else:
+        features = Features(
+            {
+                "prompt": [
+                    {"role": Value(dtype="string"), "content": Value(dtype="string")}
+                ],
+                "response": [
+                    {"role": Value(dtype="string"), "content": Value(dtype="string")}
+                ],
+                "system": Value(dtype="string"),
+                "d_len": Value(dtype="int64"),
+                "videos": [Value(dtype="string")],
+                "images": [Value(dtype="string")],
+            }
+        )
 
     kwargs = {}
     if not config.streaming:

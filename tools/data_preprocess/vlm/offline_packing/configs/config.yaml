@@ -34,7 +34,7 @@ sample:
   # Max length of training data tokens
   max_token_len: 131072
   # Determine parsing method
-  sample_type: packed_multi_mix_qa
+  sample_type: packed_chat_mix
 
 packing:
   # WDS-native production default. It keeps all valid samples and lets training

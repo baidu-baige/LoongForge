@@ -4,6 +4,8 @@
 """preprocess sft data"""
 
 import argparse
+import json
+from pathlib import Path
 
 from transformers import AutoProcessor
 from datasets import DatasetDict
@@ -11,7 +13,11 @@ from datasets import DatasetDict
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
 from loongforge.data.sft_dataset import SFTDatasetConfig, SFTDataset
-from loongforge.data import ChatTemplate, get_support_templates
+from loongforge.data import (
+    ChatTemplate,
+    HFChatTemplate,
+    get_support_templates,
+)
 from loongforge.tokenizer import build_tokenizer
 from loongforge.utils import constants
 from loongforge.utils.utils import get_default_sft_dataset_config
@@ -119,6 +125,10 @@ def _add_arguments(parser: argparse.ArgumentParser):
                        choices=get_support_templates(),
                        help='The template to apply to instruction data.')
 
+    group.add_argument('--chat-template-kwargs', type=str, default=None,
+                       help='Optional JSON object of extra kwargs for tokenizer.apply_chat_template. '
+                            'Only valid with HF chat templates.')
+
     group.add_argument('--sft-dataset-config', type=str, default=None,
                        help="A json file that contains the dataset configuration."
                             "default: configs/dataset_config.jsoin")
@@ -185,6 +195,20 @@ def parse_args():
     assert args.chat_template is not None, "chat_template not specified"
     template = ChatTemplate.from_name(args.chat_template)
     assert template is not None, f"chat_template {args.chat_template} not supported."
+
+    if args.chat_template_kwargs is not None:
+        if not isinstance(template, HFChatTemplate):
+            raise ValueError(
+                "--chat-template-kwargs is only supported with HF chat templates"
+            )
+        raw_kwargs = args.chat_template_kwargs
+        if not raw_kwargs.lstrip().startswith("{"):
+            kwargs_path = Path(raw_kwargs)
+            if kwargs_path.is_file():
+                raw_kwargs = kwargs_path.read_text(encoding="utf-8")
+        template.chat_template_kwargs = json.loads(raw_kwargs)
+        if not isinstance(template.chat_template_kwargs, dict):
+            raise ValueError("--chat-template-kwargs must be a JSON object")
     args.template = template
  
     args.variable_seq_lengths = True

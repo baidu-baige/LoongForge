@@ -32,7 +32,8 @@ def create_manifest(path: Path) -> sqlite3.Connection:
             base_key TEXT NOT NULL,
             prompt TEXT NOT NULL,
             caption TEXT NOT NULL,
-            media_files_json TEXT NOT NULL
+            media_files_json TEXT NOT NULL,
+            raw_json TEXT NOT NULL
         )
         """
     )
@@ -57,8 +58,8 @@ def insert_manifest_row(conn: sqlite3.Connection, row: Mapping[str, object]) -> 
     conn.execute(
         """
         INSERT INTO samples
-        (sample_id, media_type, token_len, shard, base_key, prompt, caption, media_files_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (sample_id, media_type, token_len, shard, base_key, prompt, caption, media_files_json, raw_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             row["sample_id"],
@@ -69,6 +70,7 @@ def insert_manifest_row(conn: sqlite3.Connection, row: Mapping[str, object]) -> 
             row["prompt"],
             row["caption"],
             json.dumps(row["media_files"], ensure_ascii=False),
+            json.dumps(row.get("raw_json") or {}, ensure_ascii=False),
         ),
     )
     for member in row["members"]:
@@ -89,6 +91,9 @@ def insert_manifest_row(conn: sqlite3.Connection, row: Mapping[str, object]) -> 
 
 
 def _sample_from_row(row: sqlite3.Row) -> ManifestSample:
+    raw_json = None
+    if "raw_json" in row.keys():
+        raw_json = json.loads(row["raw_json"]) if row["raw_json"] else None
     return ManifestSample(
         sample_id=row["sample_id"],
         media_type=row["media_type"],
@@ -98,6 +103,7 @@ def _sample_from_row(row: sqlite3.Row) -> ManifestSample:
         prompt=row["prompt"],
         caption=row["caption"],
         media_files=tuple(json.loads(row["media_files_json"])),
+        raw_json=raw_json,
     )
 
 

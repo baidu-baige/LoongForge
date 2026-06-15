@@ -139,6 +139,7 @@ include = [
     "loongforge/data/*",
     "loongforge/**/*.yaml",
     "loongforge/**/*.json",
+    "loongforge/**/*.jinja",
 ]
 
 [tool.hatch.build.targets.wheel]

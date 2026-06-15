@@ -8,7 +8,11 @@ from .blended_hf_dataset_builder import BlendedHuggingFaceDatasetBuilder
 
 from .sft_dataset import SFTDataset, SFTDatasetConfig
 
-from .chat_template import ChatTemplate, get_support_templates
+from .chat_template import (
+    ChatTemplate,
+    HFChatTemplate,
+    get_support_templates,
+)
 
 from .mm_plugin import MMPlugin
 
@@ -25,6 +29,7 @@ __all__ = [
     "SFTDataset",
     "SFTDatasetConfig",
     "ChatTemplate",
+    "HFChatTemplate",
     "get_support_templates",
     "MMPlugin",
     "DataCollatorForSupervisedDataset",

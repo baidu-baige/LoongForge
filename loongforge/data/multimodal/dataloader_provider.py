@@ -51,8 +51,22 @@ def _fp8_padding_factor(fp8_recipe=None):
     return 16
 
 
-def _needs_packed_alignment(args):
-    return args.packing_sft_data and (
+def _has_packed_cu_lengths(batch: Dict[str, Any]) -> bool:
+    """Return whether a collated batch carries real packed sequence boundaries."""
+    cu_lengths = batch.get("cu_lengths")
+    if cu_lengths is None:
+        return False
+    if not torch.is_tensor(cu_lengths):
+        cu_lengths = torch.as_tensor(cu_lengths)
+    return cu_lengths.ndim >= 2 and cu_lengths.shape[-1] > 1
+
+
+def _needs_packed_alignment(args, batch: Optional[Dict[str, Any]] = None):
+    is_packed = args.packing_sft_data
+    if batch is not None:
+        is_packed = is_packed or _has_packed_cu_lengths(batch)
+
+    return is_packed and (
         args.context_parallel_size > 1
         or args.sequence_parallel
         or (
@@ -69,6 +83,7 @@ def seq_padding_for_cp(
     has_sp=False,
     fp8_enabled=False,
     fp8_recipe=None,
+    pad_token_id=PAD_TOKEN_ID,
 ):
     """Sequence padding for CP and/or SP
 
@@ -79,6 +94,10 @@ def seq_padding_for_cp(
         has_sp (bool): Model uses sequence parallelism.
         fp8_enabled (bool): Model uses FP8 execution.
         fp8_recipe (str): FP8 recipe. Affects required padding.
+        pad_token_id (int): Token id used to pad token slots that the
+            attention mask will mark as padded. Defaults to the module-level
+            ``PAD_TOKEN_ID`` when the caller cannot resolve a tokenizer-aware
+            value.
 
     Returns:
         data (dict): Padded data.
@@ -106,7 +125,7 @@ def seq_padding_for_cp(
             length, cp_size, tp_size, has_sp
         )
 
-        input_ids = F.pad(token, (0, mp_padding_needed), "constant", PAD_TOKEN_ID)
+        input_ids = F.pad(token, (0, mp_padding_needed), "constant", pad_token_id)
         label = F.pad(label, (0, mp_padding_needed), "constant", IGNORE_INDEX)
         mask = F.pad(mask, (0, mp_padding_needed), "constant", True)
 
@@ -138,7 +157,7 @@ def seq_padding_for_cp(
 
     if final_padding_needed > 0 and valid_tokens:
         valid_tokens[-1] = F.pad(
-            valid_tokens[-1], (0, final_padding_needed), "constant", PAD_TOKEN_ID
+            valid_tokens[-1], (0, final_padding_needed), "constant", pad_token_id
         )
         valid_labels[-1] = F.pad(
             valid_labels[-1], (0, final_padding_needed), "constant", IGNORE_INDEX
@@ -176,12 +195,16 @@ class VLMPretrainCollator:
     label_pad_token_id: int = IGNORE_INDEX
     return_tensors: str = "pt"
 
+    def _resolve_pad_token_id(self) -> int:
+        pad_token_id = getattr(self.tokenizer, "pad_token_id", None)
+        return PAD_TOKEN_ID if pad_token_id is None else pad_token_id
+
     def collate_energon(self, batch: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize raw Energon batch tensors, pad for TP/CP configs, then build masks/positions."""
         batch = self._ensure_tensor(batch)
         self._pad_sequences(batch)
         args = get_args()
-        if _needs_packed_alignment(args):
+        if _needs_packed_alignment(args, batch):
             seq_padding_for_cp(
                 batch,
                 tp_size=args.tensor_model_parallel_size,
@@ -189,6 +212,7 @@ class VLMPretrainCollator:
                 has_sp=args.sequence_parallel,
                 fp8_enabled=bool(getattr(args, "fp8", None)),
                 fp8_recipe=getattr(args, "fp8_recipe", None),
+                pad_token_id=self._resolve_pad_token_id(),
             )
         self._build_masks_and_positions(batch)
         return batch
@@ -233,8 +257,7 @@ class VLMPretrainCollator:
         pad_len = target_len - seq_len
         if pad_len <= 0:
             return
-        pad_token_id = getattr(self.tokenizer, "pad_token_id", None)
-        pad_token_id = PAD_TOKEN_ID if pad_token_id is None else pad_token_id
+        pad_token_id = self._resolve_pad_token_id()
         batch["tokens"] = F.pad(tokens, (0, pad_len), "constant", pad_token_id)
         batch["labels"] = F.pad(
             batch["labels"], (0, pad_len), "constant", self.label_pad_token_id

@@ -12,11 +12,17 @@ from loongforge.data.multimodal.flavors.multi_mix_qa import MultiMixQASample
 from loongforge.data.multimodal.flavors.packed_multi_mix_qa import (
     PackedMultiMixQASample,
 )
+from loongforge.data.multimodal.flavors.packed_chat_mix import (
+    PackedChatMixSample,
+)
+from loongforge.data.multimodal.flavors.chat_mix import ChatMixSample
 
 __all__ = [
     "PackedCaptioningSample",
     "PackedVQASample",
     "PackedMultiMixQASample",
+    "PackedChatMixSample",
     "MultiVidQASample",
     "MultiMixQASample",
+    "ChatMixSample",
 ]

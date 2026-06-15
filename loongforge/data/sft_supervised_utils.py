@@ -20,6 +20,7 @@
 
 import logging
 import bisect
+import json
 from functools import partial
 from collections import defaultdict
 
@@ -28,6 +29,7 @@ import datasets
 from datasets import Dataset, IterableDataset
 
 from loongforge.utils import constants
+from .chat_template import HFChatTemplate
 
 if TYPE_CHECKING:
     from datasets import Dataset, IterableDataset
@@ -140,6 +142,38 @@ def _encode_supervised_example(
     return input_ids, labels, loss_mask, ori_total_len
 
 
+def _encode_openai_example(
+    messages_json: str,
+    tools_json: Optional[str],
+    config: "SFTDatasetConfig",
+) -> Tuple[List[int], List[int], List[int], int]:
+    """Preprocess a single OpenAI-style messages/tools sample."""
+    messages = (
+        json.loads(messages_json)
+        if isinstance(messages_json, str)
+        else messages_json
+    )
+    if tools_json in (None, ""):
+        tools = None
+    else:
+        tools = json.loads(tools_json) if isinstance(tools_json, str) else tools_json
+    if not isinstance(messages, list):
+        raise ValueError(
+            f"OpenAI-style sample messages must be a list, got {type(messages)}"
+        )
+
+    input_ids, labels, loss_mask, ori_total_len = config.chat_template.encode_openai(
+        tokenizer=config.tokenizer,
+        messages=messages,
+        tools=tools,
+        train_on_prompt=config.train_on_prompt,
+        history_mask_loss=config.history_mask_loss,
+        ignore_index=config.ignore_index,
+        max_length=config.sequence_length,
+    )
+    return input_ids, labels, loss_mask, ori_total_len
+
+
 def _build_knapsacks(numbers: List[int], capacity: int) -> List[List[int]]:
     """
     An efficient greedy algorithm with binary search for the knapsack problem.
@@ -175,6 +209,81 @@ def _pad_sequence_to_multiple(config, sequence, multiple_of, pad_token_id):
     return [pad_token_id] * padding_length + sequence
 
 
+def _split_long_sequence(
+    input_ids: List[int],
+    labels: List[int],
+    loss_mask: List[int],
+    chunksize: int,
+    pad_token_id: int,
+    ignore_index: int,
+    mtp_num_layers: int = 0,
+) -> List[Tuple[List[int], List[int], List[int]]]:
+    """
+    Split a long sequence (len > chunksize) into chunks with a base length of chunksize.
+    Labels and loss_mask are pre-shifted to next-token prediction format:
+      - Non-final chunks: labels[i] = original_labels[start+i+1], covering the chunk boundary.
+      - Final chunk: last label is IGNORE (no next token to predict).
+    When MTP is enabled, append mtp_num_layers bridge tokens after the base chunk.
+    """
+    chunks = []
+    seq_len = len(input_ids)
+    num_chunks = (seq_len + chunksize - 1) // chunksize
+
+    for chunk_idx in range(num_chunks):
+        start = chunk_idx * chunksize
+        end = min(start + chunksize, seq_len)
+        is_final_chunk = (chunk_idx == num_chunks - 1)
+
+        chunk_input_ids = input_ids[start:end]
+
+        # Pre-shift labels and loss_mask for next-token prediction
+        if not is_final_chunk:
+            # Non-final chunk: shift by 1, end+1 naturally includes the boundary token
+            chunk_labels = labels[start + 1 : end + 1]
+            chunk_loss_mask = loss_mask[start + 1 : end + 1]
+        else:
+            # Final chunk: shift by 1, append IGNORE/0 at the end
+            chunk_labels = labels[start + 1 : end] + [ignore_index]
+            chunk_loss_mask = loss_mask[start + 1 : end] + [0]
+
+        # Pad the base chunk if needed
+        padding_len = chunksize - len(chunk_input_ids)
+        if padding_len > 0:
+            chunk_input_ids = chunk_input_ids + [pad_token_id] * padding_len
+            chunk_labels = chunk_labels + [ignore_index] * padding_len
+            chunk_loss_mask = chunk_loss_mask + [0] * padding_len
+
+        if mtp_num_layers > 0:
+            if not is_final_chunk:
+                bridge_end = min(end + mtp_num_layers, seq_len)
+                bridge_input_ids = input_ids[end:bridge_end]
+
+                bridge_label_end = min(end + 1 + mtp_num_layers, seq_len)
+                bridge_labels = labels[end + 1:bridge_label_end]
+                bridge_loss_mask = loss_mask[end + 1:bridge_label_end]
+
+                bridge_padding_len = mtp_num_layers - len(bridge_input_ids)
+                if bridge_padding_len > 0:
+                    bridge_input_ids += [pad_token_id] * bridge_padding_len
+
+                bridge_label_padding_len = mtp_num_layers - len(bridge_labels)
+                if bridge_label_padding_len > 0:
+                    bridge_labels += [ignore_index] * bridge_label_padding_len
+                    bridge_loss_mask += [0] * bridge_label_padding_len
+            else:
+                bridge_input_ids = [pad_token_id] * mtp_num_layers
+                bridge_labels = [ignore_index] * mtp_num_layers
+                bridge_loss_mask = [0] * mtp_num_layers
+
+            chunk_input_ids = chunk_input_ids + bridge_input_ids
+            chunk_labels = chunk_labels + bridge_labels
+            chunk_loss_mask = chunk_loss_mask + bridge_loss_mask
+
+        chunks.append((chunk_input_ids, chunk_labels, chunk_loss_mask))
+
+    return chunks
+
+
 def _preprocess_supervised_dataset(
     samples: Dict[str, List[Any]],
     config: "SFTDatasetConfig",
@@ -195,6 +304,16 @@ def _preprocess_supervised_dataset(
         # the loss mask is generated here separately
         model_inputs["loss_mask"] = []
 
+    if config.enable_chunkpipe:
+        # Track how many consecutive chunks belong to the same source sequence,
+        # so that the sampler can keep them together and in order.
+        model_inputs["chunk_group_size"] = []
+        # Per-chunk N_g: total response tokens of the source sequence this chunk
+        # belongs to. All chunks from the same source sequence carry the same
+        # value; bin-packed short sequences store the bin's total response
+        # tokens. Consumed by the SFT chunkpipe per-sample loss path.
+        model_inputs["group_total_tokens"] = []
+
     pad_to_multiple_of = 1
     if config.packing:
         all_input_ids, all_labels, all_loss_mask = [], [], []
@@ -208,69 +327,209 @@ def _preprocess_supervised_dataset(
             else 1
         )
 
-    for i in range(len(samples["prompt"])):
-        if len(samples["prompt"][i]) % 2 != 1 or len(samples["response"][i]) != 1:
-            logger.warning(
-                f"Ignore invalid sample, prompt: {samples['prompt'][i]}, response: {samples['response'][i]}"
-            )
-            continue
+    if config.enable_chunkpipe:
+        chunksize = config.chunksize
+        mtp_num_layers = getattr(config, "mtp_num_layers", 0) or 0
+        # Buffers for long sequences (len > chunksize): will be split into chunks
+        long_input_ids, long_labels, long_loss_mask = [], [], []
+        # Buffers for short sequences (len <= chunksize): will be binpacked
+        short_input_ids, short_labels, short_loss_mask = [], [], []
+        short_sample_lens = []
+        short_len_to_sample_indexs = defaultdict(list)
+        short_index = 0
 
-        input_ids, labels, loss_mask, ori_total_len = _encode_supervised_example(
-            prompt=samples["prompt"][i],
-            response=samples["response"][i],
-            system=samples["system"][i],
-            images=samples["images"][i] or [],
-            videos=samples["videos"][i] or [],
-            config=config,
-        )
+    use_hf_chat_template = isinstance(config.chat_template, HFChatTemplate)
+    if use_hf_chat_template:
+        if "messages" not in samples:
+            raise ValueError(
+                "HFChatTemplate requires OpenAI Chat Completions-style "
+                "`messages` samples. Use dataset format "
+                "`openai_chat_completions` with a registered `*-hf` chat template."
+            )
+        sample_count = len(samples["messages"])
+    else:
+        if "prompt" not in samples or "response" not in samples:
+            raise ValueError(
+                "Legacy ChatTemplate preprocessing requires `prompt` and "
+                "`response` samples. Use a registered `*-hf` chat template for "
+                "OpenAI Chat Completions-style `messages` samples."
+            )
+        sample_count = len(samples["prompt"])
+
+    for i in range(sample_count):
+        if use_hf_chat_template:
+            input_ids, labels, loss_mask, ori_total_len = _encode_openai_example(
+                messages_json=samples["messages"][i],
+                tools_json=samples["tools"][i] if "tools" in samples else None,
+                config=config,
+            )
+        else:
+            if (
+                len(samples["prompt"][i]) % 2 != 1
+                or len(samples["response"][i]) != 1
+            ):
+                logger.warning(
+                    f"Ignore invalid sample, prompt: {samples['prompt'][i]}, "
+                    f"response: {samples['response'][i]}"
+                )
+                continue
+
+            input_ids, labels, loss_mask, ori_total_len = _encode_supervised_example(
+                prompt=samples["prompt"][i],
+                response=samples["response"][i],
+                system=samples["system"][i],
+                images=samples["images"][i] or [],
+                videos=samples["videos"][i] or [],
+                config=config,
+            )
+
+        if not input_ids:
+            logger.warning("Ignore sample with no tokens after preprocessing.")
+            continue
 
         if config.enable_discard_sample:
             if ori_total_len > config.sequence_length:
                 continue
 
-        if not config.packing:
-            model_inputs["input_ids"].append(input_ids)
-            model_inputs["labels"].append(labels)
-            model_inputs["attention_mask"].append([1] * len(input_ids))
-            model_inputs["images"].append(samples["images"][i])
-            model_inputs["videos"].append(samples["videos"][i])
-            if not config.eod_mask_loss:
-                model_inputs["loss_mask"].append(loss_mask)
+        if config.enable_chunkpipe:
+            _sample_len = len(input_ids)
+            if _sample_len > chunksize:
+                # Long sequence: collect for later splitting
+                long_input_ids.append(input_ids)
+                long_labels.append(labels)
+                long_loss_mask.append(loss_mask)
+            else:
+                # Short sequence: collect for later binpacking
+                short_input_ids.append(input_ids)
+                short_labels.append(labels)
+                short_loss_mask.append(loss_mask)
+                short_sample_lens.append(_sample_len)
+                short_len_to_sample_indexs[_sample_len].append(short_index)
+                short_index += 1
 
         else:
-            # TODO: support packing for images/videos
-            assert samples["images"][i] in [None, []] and samples["videos"][i] in [
-                None,
-                [],
-            ], "packing is not supported for images/videos yet."
+            if not config.packing:
+                model_inputs["input_ids"].append(input_ids)
+                model_inputs["labels"].append(labels)
+                model_inputs["attention_mask"].append([1] * len(input_ids))
+                model_inputs["images"].append(samples["images"][i])
+                model_inputs["videos"].append(samples["videos"][i])
+                if not config.eod_mask_loss:
+                    model_inputs["loss_mask"].append(loss_mask)
 
-            if pad_to_multiple_of > 1:
-                input_ids = _pad_sequence_to_multiple(
-                    config, input_ids, pad_to_multiple_of, config.tokenizer.pad
-                )
-                labels = _pad_sequence_to_multiple(
-                    config, labels, pad_to_multiple_of, constants.IGNORE_INDEX
-                )
-                loss_mask = _pad_sequence_to_multiple(
-                    config, loss_mask, pad_to_multiple_of, 0
-                )
+            else:
+                # TODO: support packing for images/videos
+                assert samples["images"][i] in [None, []] and samples["videos"][i] in [
+                    None,
+                    [],
+                ], "packing is not supported for images/videos yet."
 
-            # prepare for packing
-            _sample_len = len(input_ids)
-            if _sample_len > config.sequence_length:
-                logger.warning(
-                    f"Ignore too long sample with length {_sample_len} > {config.sequence_length}."
+                if pad_to_multiple_of > 1:
+                    input_ids = _pad_sequence_to_multiple(
+                        config, input_ids, pad_to_multiple_of, config.tokenizer.pad
+                    )
+                    labels = _pad_sequence_to_multiple(
+                        config, labels, pad_to_multiple_of, constants.IGNORE_INDEX
+                    )
+                    loss_mask = _pad_sequence_to_multiple(
+                        config, loss_mask, pad_to_multiple_of, 0
+                    )
+
+                # prepare for packing
+                _sample_len = len(input_ids)
+                if _sample_len > config.sequence_length:
+                    logger.warning(
+                        f"Ignore too long sample with length {_sample_len} > {config.sequence_length}."
+                    )
+                    continue
+
+                all_input_ids.append(input_ids)
+                all_labels.append(labels)
+                all_loss_mask.append(loss_mask)
+                all_sampel_lens.append(_sample_len)
+                len_to_sample_indexs[_sample_len].append(index)
+                index += 1
+
+    if not config.packing and not config.enable_chunkpipe:
+        return model_inputs
+
+    if config.enable_chunkpipe:
+        pad_token_id = config.tokenizer.pad
+        ignore_index = config.ignore_index
+
+        # (c) Long sequence splitting: split each long sequence into chunks of chunksize
+        for idx in range(len(long_input_ids)):
+            chunks = _split_long_sequence(
+                long_input_ids[idx],
+                long_labels[idx],
+                long_loss_mask[idx],
+                chunksize,
+                pad_token_id,
+                ignore_index,
+                mtp_num_layers,
+            )
+            num_chunks = len(chunks)
+            # N_g = total response tokens across all chunks of this source
+            # sequence (sum of per-chunk loss masks). Shared by every chunk.
+            group_total_tokens = sum(
+                sum(chunk_loss_mask[:chunksize]) for _, _, chunk_loss_mask in chunks
+            )
+            for chunk_input_ids, chunk_labels, chunk_loss_mask in chunks:
+                model_inputs["input_ids"].append(chunk_input_ids)
+                model_inputs["labels"].append(chunk_labels)
+                model_inputs["attention_mask"].append(
+                    [1] * chunksize + [0] * mtp_num_layers
                 )
-                continue
+                model_inputs["images"].append([])
+                model_inputs["videos"].append([])
+                model_inputs["chunk_group_size"].append(num_chunks)
+                model_inputs["group_total_tokens"].append(group_total_tokens)
+                if not config.eod_mask_loss:
+                    model_inputs["loss_mask"].append(chunk_loss_mask)
 
-            all_input_ids.append(input_ids)
-            all_labels.append(labels)
-            all_loss_mask.append(loss_mask)
-            all_sampel_lens.append(_sample_len)
-            len_to_sample_indexs[_sample_len].append(index)
-            index += 1
+        # (d) Short sequence binpacking: pack short sequences into bins of chunksize
+        knapsacks = _build_knapsacks(short_sample_lens, chunksize)
+        for knapsack in knapsacks:
+            packed_input_ids, packed_labels, packed_loss_mask, packed_attention_mask = (
+                [], [], [], [],
+            )
+            for i, length in enumerate(knapsack):
+                idx = short_len_to_sample_indexs[length].pop()
+                packed_input_ids += short_input_ids[idx]
+                # Pre-shift labels and loss_mask per sequence for next-token prediction:
+                # shift left by 1, last position set to IGNORE/0 (end of sequence)
+                packed_labels += short_labels[idx][1:] + [ignore_index]
+                packed_loss_mask += short_loss_mask[idx][1:] + [0]
+                packed_attention_mask += [i + 1] * len(short_input_ids[idx])  # start from 1
 
-    if not config.packing:
+            # Pad to chunksize
+            padding_len = chunksize - len(packed_input_ids)
+            if padding_len > 0:
+                packed_input_ids += [pad_token_id] * padding_len
+                packed_labels += [ignore_index] * padding_len
+                packed_loss_mask += [0] * padding_len
+                packed_attention_mask += [0] * padding_len
+
+            if mtp_num_layers > 0:
+                packed_input_ids += [pad_token_id] * mtp_num_layers
+                packed_labels += [ignore_index] * mtp_num_layers
+                packed_loss_mask += [0] * mtp_num_layers
+                packed_attention_mask += [0] * mtp_num_layers
+
+            model_inputs["input_ids"].append(packed_input_ids)
+            model_inputs["labels"].append(packed_labels)
+            model_inputs["attention_mask"].append(packed_attention_mask)
+            model_inputs["images"].append([])
+            model_inputs["videos"].append([])
+            model_inputs["chunk_group_size"].append(1)
+            # Bin-packed chunk is treated as a single sample; N_g = total
+            # response tokens of the base chunk, excluding MTP bridge padding.
+            model_inputs["group_total_tokens"].append(
+                sum(packed_loss_mask[:chunksize])
+            )
+            if not config.eod_mask_loss:
+                model_inputs["loss_mask"].append(packed_loss_mask)
+
         return model_inputs
 
     # build packing
@@ -356,7 +615,7 @@ def convert_to_tokenized_data(
             load_from_cache_file=load_from_cache_file,
             desc="Converting dataset to tokenized data",
         )
-        if config.sort_batch and not config.packing:
+        if config.sort_batch and not config.packing and not config.enable_chunkpipe:
             dataset_list = list(dataset)
             # Sort the dataset by length of samples
             sorted_dataset = _chunked_sort(dataset_list, chunk_size=100000)
@@ -385,6 +644,9 @@ def convert_to_tokenized_data(
     features["videos"] = datasets.Sequence(
         datasets.Value(dtype="string", id=None), length=-1, id=None
     )
+    if config.enable_chunkpipe:
+        features["chunk_group_size"] = datasets.Value(dtype="int64", id=None)
+        features["group_total_tokens"] = datasets.Value(dtype="int64", id=None)
 
     dataset = dataset.map(
         partial(_preprocess_supervised_dataset, config=config),
