@@ -12,7 +12,7 @@ from .wan_layer_spec import get_wan_layer_with_te_spec
 import torch
 
 
-def wan2_2_i2v_model_provider(
+def wan_i2v_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
@@ -29,7 +29,7 @@ def wan2_2_i2v_model_provider(
     """
     args = get_args()
 
-    print_rank_0("building WAN2_2_I2V model ...")
+    print_rank_0(f"building {args.model_name} model ...")
 
     config = build_transformer_config(args, config_class=WanConfig)
     config.pipeline_dtype = torch.float32
@@ -58,3 +58,6 @@ def wan2_2_i2v_model_provider(
     )
 
     return model
+
+
+wan2_2_i2v_model_provider = wan_i2v_model_provider

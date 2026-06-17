@@ -117,6 +117,16 @@ base_first_part_list = [
     "time_projection.1.bias",
 ]
 extra_first_part_dict = {
+    "wan2_1_i2v": [
+        "img_emb.proj.0.weight",
+        "img_emb.proj.0.bias",
+        "img_emb.proj.1.weight",
+        "img_emb.proj.1.bias",
+        "img_emb.proj.3.weight",
+        "img_emb.proj.3.bias",
+        "img_emb.proj.4.weight",
+        "img_emb.proj.4.bias",
+    ],
     "wan2_2_i2v": []
 }
 first_part_list = base_first_part_list + extra_first_part_dict.get(model_name, [])
@@ -158,6 +168,15 @@ second_part_dict = {
     "decoder.layers.0.cross_attn.q_layernorm.weight": "blocks.0.cross_attn.norm_q.weight",
     "decoder.layers.0.cross_attn.k_layernorm.weight": "blocks.0.cross_attn.norm_k.weight",
 }
+wan2_1_second_part_dict = {
+    "decoder.layers.0.cross_attn.linear_k_img.weight": "blocks.0.cross_attn.k_img.weight",
+    "decoder.layers.0.cross_attn.linear_k_img.bias": "blocks.0.cross_attn.k_img.bias",
+    "decoder.layers.0.cross_attn.linear_v_img.weight": "blocks.0.cross_attn.v_img.weight",
+    "decoder.layers.0.cross_attn.linear_v_img.bias": "blocks.0.cross_attn.v_img.bias",
+    "decoder.layers.0.cross_attn.k_img_layernorm.weight": "blocks.0.cross_attn.norm_k_img.weight",
+}
+if model_name == "wan2_1_i2v":
+    second_part_dict.update(wan2_1_second_part_dict)
 # Parts that do not need transpose inside
 inside_blk_replace_dict = {
     "blocks.0.ffn.0.weight": "decoder.layers.0.ffn.0.weight",
@@ -171,6 +190,11 @@ inside_blk_replace_dict = {
     "blocks.0.cross_attn.norm_q.weight": "decoder.layers.0.cross_attn.q_layernorm.weight",
     "blocks.0.cross_attn.norm_k.weight": "decoder.layers.0.cross_attn.k_layernorm.weight",
 }
+wan2_1_inside_blk_replace_dict = {
+    "blocks.0.cross_attn.norm_k_img.weight": "decoder.layers.0.cross_attn.k_img_layernorm.weight",
+}
+if model_name == "wan2_1_i2v":
+    inside_blk_replace_dict.update(wan2_1_inside_blk_replace_dict)
 # Model last part
 third_part_dict = {
     "head.modulation",
@@ -242,6 +266,21 @@ for i in range(num_layers):
     new_state_dict["decoder.layers." + str(i) + ".cross_attn.linear_kv.bias"] = (
         concat_kv_bias
     )
+
+    if model_name == "wan2_1_i2v":
+        cross_k_img_w = state_dict["blocks." + str(i) + ".cross_attn.k_img.weight"]
+        cross_k_img_w = rearrange(cross_k_img_w, "(R N D) H -> (N R D) H", R=1, N=40, D=128, H=5120)
+        cross_k_img_b = state_dict["blocks." + str(i) + ".cross_attn.k_img.bias"]
+        cross_k_img_b = rearrange(cross_k_img_b, "(R N D H) -> (N R D H)", R=1, N=40, D=128, H=1)
+        new_state_dict["decoder.layers." + str(i) + ".cross_attn.linear_k_img.weight"] = cross_k_img_w
+        new_state_dict["decoder.layers." + str(i) + ".cross_attn.linear_k_img.bias"] = cross_k_img_b
+
+        cross_v_img_w = state_dict["blocks." + str(i) + ".cross_attn.v_img.weight"]
+        cross_v_img_w = rearrange(cross_v_img_w, "(R N D) H -> (N R D) H", R=1, N=40, D=128, H=5120)
+        cross_v_img_b = state_dict["blocks." + str(i) + ".cross_attn.v_img.bias"]
+        cross_v_img_b = rearrange(cross_v_img_b, "(R N D H) -> (N R D H)", R=1, N=40, D=128, H=1)
+        new_state_dict["decoder.layers." + str(i) + ".cross_attn.linear_v_img.weight"] = cross_v_img_w
+        new_state_dict["decoder.layers." + str(i) + ".cross_attn.linear_v_img.bias"] = cross_v_img_b
 
     # cross_attention o transpose
     cross_o_weight = state_dict["blocks." + str(i) + ".cross_attn.o.weight"]

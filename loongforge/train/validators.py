@@ -79,9 +79,24 @@ _YAML_KEY_ALIASES = {
 def _validate_extra_model_args(args, config):
     """Setup model config based on the given model name."""
     if config is not None:
+        # Collect dataclass field names from the config _target_ class (if resolvable)
+        # to allow YAML-only fields through even when not in argparse namespace.
+        _config_class_fields = set()
+        _target = config.get('_target_') if hasattr(config, 'get') else getattr(config, '_target_', None)
+        if _target:
+            try:
+                import importlib, dataclasses as _dc
+                _mod_path, _cls_name = _target.rsplit('.', 1)
+                _mod = importlib.import_module(_mod_path)
+                _cls = getattr(_mod, _cls_name)
+                if _dc.is_dataclass(_cls):
+                    _config_class_fields = {f.name for f in _dc.fields(_cls)}
+            except Exception:
+                pass
+
         for key in config:
             attr = _YAML_KEY_ALIASES.get(key, key)
-            if hasattr(args, attr):
+            if hasattr(args, attr) or attr in _config_class_fields:
                 setattr(args, attr, config[key])
                 suffix = f" (from YAML '{key}')" if attr != key else ""
                 print_rank_0(f"  {attr} = {config[key]}{suffix}", args.rank)

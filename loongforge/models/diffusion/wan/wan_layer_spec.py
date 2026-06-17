@@ -51,10 +51,13 @@ def get_wan_layer_with_te_spec() -> ModuleSpec:
                 submodules=WanCrossAttentionSubmodules(
                     linear_q=TEColumnParallelLinear,
                     linear_kv=TEColumnParallelLinear,
+                    linear_k_img=TEColumnParallelLinear,
+                    linear_v_img=TEColumnParallelLinear,
                     core_attention=TEDotProductAttention,
                     linear_proj=TERowParallelLinear,
                     q_layernorm=TENorm,
                     k_layernorm=TENorm,
+                    k_img_layernorm=TENorm,
                 ),
             ),
         ),

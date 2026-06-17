@@ -50,11 +50,14 @@ class WanCrossAttentionSubmodules:
 
     linear_q: Union[ModuleSpec, type] = None
     linear_kv: Union[ModuleSpec, type] = None
+    linear_k_img: Union[ModuleSpec, type] = None
+    linear_v_img: Union[ModuleSpec, type] = None
     core_attention: Union[ModuleSpec, type] = None
     linear_proj: Union[ModuleSpec, type] = None
     apply_rotary_fn: Union[ModuleSpec, type] = None
     q_layernorm: Union[ModuleSpec, type] = None
     k_layernorm: Union[ModuleSpec, type] = None
+    k_img_layernorm: Union[ModuleSpec, type] = None
 
 
 class WanLayer(TransformerLayer):

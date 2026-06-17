@@ -48,15 +48,11 @@ def wan_rope_apply(
         )
     x = rearrange(x, "s b n d -> b s n d")
 
-    if _TRITON_ROPE_AVAILABLE:
-        # freqs: complex (seqlen, 1, head_dim/2) -> cos/sin: (seqlen, head_dim/2)
-        if rotary_pos_cos is None or rotary_pos_sin is None:
-            cos = freqs.real.squeeze(1).contiguous()
-            sin = freqs.imag.squeeze(1).contiguous()
-        else:
-            seq_len = x.shape[1]
-            cos = rotary_pos_cos[:seq_len].contiguous()
-            sin = rotary_pos_sin[:seq_len].contiguous()
+    use_triton_rope = _TRITON_ROPE_AVAILABLE and getattr(config, "use_fused_wan_rope", False)
+    if use_triton_rope:
+        seq_len = x.shape[1]
+        cos = freqs[:seq_len].real.squeeze(1).contiguous()
+        sin = freqs[:seq_len].imag.squeeze(1).contiguous()
         x_out = apply_rotary_interleaved(x.contiguous(), cos, sin).flatten(2)
     else:
         x_out = torch.view_as_complex(
@@ -150,19 +146,19 @@ def receive_batch(broadcast):
     image_info = torch.empty(2, dtype=torch.int64, device=device)
     broadcast(image_info)
     image_emb = {}
-    if image_info[0] == 1:
+    if image_info[0].item() == 1:
         clip_shape = torch.empty(4, dtype=torch.int64, device=device)
         broadcast(clip_shape)
         clip_feature = torch.empty(
-            clip_shape.tolist(), dtype=torch.bfloat16, device=device
+            clip_shape.tolist(), dtype=prompt.dtype, device=device
         )
         broadcast(clip_feature)
         image_emb["clip_feature"] = clip_feature
 
-    if image_info[1] == 1:
+    if image_info[1].item() == 1:
         y_shape = torch.empty(6, dtype=torch.int64, device=device)
         broadcast(y_shape)
-        y = torch.empty(y_shape.tolist(), dtype=torch.bfloat16, device=device)
+        y = torch.empty(y_shape.tolist(), dtype=video.dtype, device=device)
         broadcast(y)
         image_emb["y"] = y
 

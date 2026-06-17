@@ -282,7 +282,8 @@ class WanModel(VisionModule):
         )
 
     def patchify(self, x: torch.Tensor):
-        x = self.patch_embedding(x)
+        with torch.backends.cudnn.flags(enabled=False):
+            x = self.patch_embedding(x)
         grid_size = x.shape[2:]
         x = rearrange(x, "b c f h w -> b (f h w) c").contiguous()
         return x, grid_size
@@ -373,43 +374,58 @@ class WanModel(VisionModule):
         rotary_pos_sin = self.freqs_3d_sin
 
         if self.has_image_input:
-            pad_num, clip_feature = self.pad_image(clip_feature)
+            if clip_feature is None:
+                raise ValueError("Wan2.1 I2V forward requires clip_feature when has_image_input=True.")
+            if y is None and self.require_vae_embedding:
+                raise ValueError("Wan2.1 I2V forward requires y when require_vae_embedding=True.")
+            _, clip_feature = self.pad_image(clip_feature)
 
         t_for_head = None
         timestep_mod = None
         if self.pre_process:
-            t = self.time_embedding(sinusoidal_embedding_1d(self.freq_dim, timestep))
+            target_dtype = next(self.decoder.parameters()).dtype
+            t = self.time_embedding(sinusoidal_embedding_1d(self.freq_dim, timestep)).to(dtype=target_dtype)
             t_s = t.unsqueeze(0)
             t_for_head = t
 
-            timestep_mod = self.time_projection(t).unflatten(1, (6, self.hidden_size))
-            context = self.text_embedding(context)
+            timestep_mod = self.time_projection(t).unflatten(1, (6, self.hidden_size)).to(dtype=target_dtype)
+            context = self.text_embedding(context).to(dtype=target_dtype)
             if y is not None and self.require_vae_embedding:
                 x = torch.cat([x, y], dim=1)
+            clip_embedding = None
             if clip_feature is not None and self.require_clip_embedding:
                 with autocast("cuda", dtype=torch.bfloat16):
-                    clip_embdding = self.img_emb(clip_feature)
-                    clip_embdding = rearrange(
-                        clip_embdding, f"B S C ->S B C"
+                    clip_embedding = self.img_emb(clip_feature)
+                    clip_embedding = rearrange(
+                        clip_embedding, "B S C -> S B C"
                     ).contiguous()
 
             x, (f, h, w) = self.patchify(x)
+            freqs = torch.cat([
+                self.freqs_f[:f].view(f, 1, 1, -1).expand(f, h, w, -1),
+                self.freqs_h[:h].view(1, h, 1, -1).expand(f, h, w, -1),
+                self.freqs_w[:w].view(1, 1, w, -1).expand(f, h, w, -1),
+            ], dim=-1).reshape(f * h * w, 1, -1).to(x.device)
+            rotary_pos_cos = freqs.real.squeeze(1).contiguous()
+            rotary_pos_sin = freqs.imag.squeeze(1).contiguous()
 
             x = rearrange(x, f"B S C ->S B C").contiguous()
             timestep_mod = rearrange(timestep_mod, f"B S C ->S B C").contiguous()
             context = rearrange(context, f"B S C ->S B C").contiguous()
 
             if self.has_image_input and clip_feature is not None and self.require_clip_embedding:
-                context = torch.cat([clip_embdding, context], dim=0)
+                context = torch.cat([clip_embedding, context], dim=0)
 
             cp = self.config.context_parallel_size
             if cp > 1:
                 x = split_forward_gather_backward(
                     x, get_context_parallel_group(), dim=0, grad_scale="down"
                 )
-                context = split_forward_gather_backward(
-                    context, get_context_parallel_group(), dim=0, grad_scale="down"
-                )
+                if not self.has_image_input:
+                    # Wan2.2: split context across CP group
+                    context = split_forward_gather_backward(
+                        context, get_context_parallel_group(), dim=0, grad_scale="down"
+                    )
                 freqs = split_forward_gather_backward(
                     freqs, get_context_parallel_group(), dim=0, grad_scale="down"
                 )
@@ -630,6 +646,10 @@ class WanModel(VisionModule):
             timestep_mod = self.time_projection(timestep_state).unflatten(1, (6, self.hidden_size))
             timestep_mod = rearrange(timestep_mod, "B S C -> S B C").contiguous()
 
+            if y is not None and self.require_vae_embedding:
+                raise NotImplementedError("Packed WAN I2V training with VAE image embeddings is not supported yet.")
+            if clip_feature is not None and self.require_clip_embedding:
+                raise NotImplementedError("Packed WAN I2V training with CLIP image embeddings is not supported yet.")
             x = x.to(dtype=self.patch_embedding.weight.dtype)
             x = self._project_packed_latents(
                 x, grid_sizes, seq_len_q_padded, self_attn_params.cu_seqlens_q_padded

@@ -159,9 +159,15 @@ def preprocess(
         preprocess_video(frames, device, torch_dtype), device=device, tiled=False
     ).to(dtype=torch_dtype, device=device)
 
+    # CLIP image encoding for Wan2.1 I2V.
+    clip_feature = None
+    image = preprocess_image(frames[0].resize((width, height)), device, torch_dtype)
+    if pipe.image_encoder is not None:
+        pipe.load_models_to_device(["image_encoder"])
+        clip_feature = pipe.image_encoder.encode_image([image]).to(dtype=torch_dtype, device=device)
+
     # VAE encode first frame -> y [1, C_z+4, T_l, H//8, W//8]
     # y = visibility mask (frame 0 = 1, others = 0) concatenated with first-frame latent.
-    image = preprocess_image(frames[0].resize((width, height)), device, torch_dtype)
     msk = torch.zeros(1, num_frames, height // 8, width // 8, device=device, dtype=torch_dtype)
     msk[:, 0] = 1.0
     # Expand the first-frame mask slot by the VAE temporal downsampling factor (4).
@@ -177,6 +183,7 @@ def preprocess(
     return {
         "context":               context.cpu(),
         "input_latents":         input_latents.cpu(),
+        "clip_feature":          clip_feature.cpu() if clip_feature is not None else None,
         "y":                     y.cpu(),
         "height":                height,
         "width":                 width,
@@ -258,7 +265,7 @@ def main():
                 max_timestep_boundary=args.max_timestep_boundary,
                 min_timestep_boundary=args.min_timestep_boundary,
             )
-            model_input_keys = ["input_latents", "context", "y"]
+            model_input_keys = ["input_latents", "context", "clip_feature", "y"]
             data = {key: result[key] for key in model_input_keys if key in result}
             torch.save(data, save_path)
             # torch.save(result, save_path)

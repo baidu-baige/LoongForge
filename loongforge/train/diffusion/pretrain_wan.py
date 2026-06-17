@@ -3,6 +3,7 @@
 
 """default pretrain for video diffusion model"""
 
+import os
 import torch
 from functools import partial
 
@@ -49,10 +50,11 @@ from loongforge.models.diffusion.wan.wan_utils import (
     broadcast_on_tp_group,
     broadcast_on_cp_group,
 )
-from loongforge.models.diffusion.wan.wan_provider import wan2_2_i2v_model_provider
+from loongforge.models.diffusion.wan.wan_provider import wan_i2v_model_provider
 
 SUPPORTED_MODELS = [
-    CustomModelFamilies.WAN2_2_I2V
+    CustomModelFamilies.WAN2_1_I2V,
+    CustomModelFamilies.WAN2_2_I2V,
 ]
 WAN_PATCH_SIZE = (1, 2, 2)
 
@@ -78,10 +80,10 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     )
     args.max_position_embeddings = args.seq_length
 
-    if args.model_name == "wan2-2-i2v":
-        model_provider = wan2_2_i2v_model_provider
+    if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
+        return wan_i2v_model_provider(pre_process, post_process, vp_stage)
 
-    return model_provider(pre_process, post_process, vp_stage)
+    raise ValueError(f"Unsupported WAN model: {args.model_name}")
 
 
 scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True)
@@ -105,7 +107,7 @@ def gen_time_steps(batch):
     """
     # torch.manual_seed(10086)
     args = get_args()
-    if args.model_name == "wan2-2-i2v":
+    if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
         latents = batch.pop("input_latents")
         if latents.size(0) == 1:
             latents = latents.squeeze(0)
@@ -194,10 +196,15 @@ def get_batch(data_iterator):
     args = get_args()
     use_packing = getattr(args, 'packing_sft_data', False)
 
+    should_broadcast_batch = False
     if use_packing:
         should_load_data = data_iterator is not None
     else:
-        should_load_data = data_iterator is not None and mpu.get_context_parallel_rank() == 0
+        should_broadcast_batch = data_iterator is not None and mpu.get_context_parallel_world_size() > 1
+        cp_src_rank = mpu.get_context_parallel_src_rank()
+        should_load_data = data_iterator is not None and torch.distributed.get_rank() == cp_src_rank
+        if data_iterator is not None and not should_load_data:
+            data_iterator = None
 
     if should_load_data:
         batch = next(data_iterator)
@@ -207,9 +214,13 @@ def get_batch(data_iterator):
         if not use_packing:
             batch["timestep"], batch["latents"], batch["training_target"], \
                 batch["scale"] = gen_time_steps(batch)
-            if args.model_name == "wan2-2-i2v":
+            if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
                 batch.setdefault("prompt_emb", {})["context"] = batch.pop("context")
-                batch.setdefault("image_emb", {})["y"] = batch.pop("y")
+                image_emb = batch.setdefault("image_emb", {})
+                if "y" in batch:
+                    image_emb["y"] = batch.pop("y")
+                if "clip_feature" in batch:
+                    image_emb["clip_feature"] = batch.pop("clip_feature")
         else:
             packed_seq_params = _build_packed_seq_params(batch)
             grid_sizes = batch.get("grid_sizes")
@@ -302,7 +313,7 @@ def get_batch(data_iterator):
             batch["training_target"] = training_target.unsqueeze(1)
             batch["timestep"] = timestep
 
-    if not use_packing:
+    if not use_packing and should_broadcast_batch:
         batch = broadcast_on_cp_group(batch)
 
     if batch is None:
@@ -315,9 +326,17 @@ def get_batch(data_iterator):
     scale = batch["scale"]
     image_emb = batch.get("image_emb", {})
     if "clip_feature" in image_emb:
-        image_emb["clip_feature"] = image_emb["clip_feature"][0].cuda()
+        clip_feature = image_emb["clip_feature"]
+        if clip_feature.dim() == 4 and clip_feature.size(0) == 1:
+            clip_feature = clip_feature[0]
+        image_emb["clip_feature"] = clip_feature.cuda().to(dtype=video.dtype)
     if "y" in image_emb:
-        image_emb["y"] = image_emb["y"][0].cuda()
+        y = image_emb["y"]
+        if y.dim() == 6 and y.size(0) == 1:
+            y = y[0]
+        image_emb["y"] = y.cuda().to(dtype=video.dtype)
+    if text is not None:
+        text = text.to(dtype=video.dtype)
 
     loss_mask = batch.get("loss_mask", None)
     seq_len_q_padded = batch.get("seq_len_q_padded", None)
@@ -476,8 +495,18 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
             pin_memory=True,
         )
     else:
+        keep_keys = None
+        if getattr(args, "model_name", None) in ("wan2-1-i2v", "wan2-2-i2v"):
+            keep_keys = {
+                "context", "input_latents", "y", "clip_feature",
+                "height", "width", "num_frames",
+                "max_timestep_boundary", "min_timestep_boundary",
+            }
         dataset = TensorDataset(
-            args.data_path[0], args.train_iters * args.global_batch_size
+            args.data_path[0],
+            args.train_iters * args.global_batch_size,
+            seed=args.seed,
+            keep_keys=keep_keys,
         )
         sampler = torch.utils.data.DistributedSampler(
             dataset, shuffle=False, num_replicas=dp_world_size, rank=dp_rank

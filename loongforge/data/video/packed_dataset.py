@@ -111,7 +111,16 @@ class PackedDataset(IterableDataset):
         self.sharding_factor = self.cp_chunk_factor if cp_world_size > 1 else 0
 
         # Initialize the base dataset
-        self.base_dataset = TensorDataset(data_path, steps_per_epoch)
+        keep_keys = None
+        if getattr(args, "model_name", None) in ("wan2-1-i2v", "wan2-2-i2v"):
+            keep_keys = {
+                "context", "input_latents", "y", "clip_feature",
+                "height", "width", "num_frames",
+                "max_timestep_boundary", "min_timestep_boundary",
+            }
+        self.base_dataset = TensorDataset(
+            data_path, steps_per_epoch, seed=args.seed, keep_keys=keep_keys,
+        )
 
         # Validate timestep boundaries
         max_ts = args.max_timestep_boundary
