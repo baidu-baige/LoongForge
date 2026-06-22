@@ -45,6 +45,8 @@
 
 > 🐉 LoongForge 是百度百舸 **Loong** 开源系列的一员 —— 名字源于中国传统 **龙舟**，象征协同发力与破浪前行。
 
+<img width="2834" height="1160" alt="loongforge-overview-notitle1" src="https://github.com/user-attachments/assets/4bc9d3f2-914c-4c01-91dc-10d22c08e02f" />
+
 **LoongForge** 是面向 **LLM、VLM、Diffusion 与 Embodied 模型** 的统一训练框架，覆盖 **预训练（Pre-training）**、**持续预训练（Continued Pre-training）** 和 **SFT**。基于 Megatron-LM 在 **模型覆盖度**、**训练性能** 和 **硬件支持** 三个维度做了深度系统性增强，相对主流开源训练方案有**显著的性能提升**。
 
 在开源之前，LoongForge 的前身是 **AIAK-Training-LLM** —— 百度百舸的训练加速栈，已在 **教育**、**计算机视觉** 和 **Embodied AI** 等多家企业客户的生产训练中落地，相对客户原有方案通常带来 **30%~50% 加速**，最大规模的生产训练任务达到 **5,000+ XPU**。
@@ -65,7 +67,7 @@
 
 完整的安装、教程与进阶使用请查阅文档 —— [English](https://loongforge.readthedocs.io/en/latest/index.html) · [中文](https://loongforge.readthedocs.io/zh-cn/latest/index.html)。
 
-**1. 安装** —— 可通过 [**Docker**](./docker)（*预构建镜像即将发布*）或 **源码构建**：
+**1. 安装** —— 可使用 **预构建镜像** 或 **源码构建**：
 - **NVIDIA GPU**：[安装指南](https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html)
 - **昆仑芯 XPU**：[安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
 

@@ -67,7 +67,7 @@ Before going open-source, LoongForge was developed as **AIAK-Training-LLM**, Bai
 
 See the full documentation for installation, tutorials, and advanced usage — [English](https://loongforge.readthedocs.io/en/latest/index.html) · [中文](https://loongforge.readthedocs.io/zh-cn/latest/index.html).
 
-**1. Install** — via [**Docker**](./docker) (*prebuilt images coming soon*) or **source build**:
+**1. Install** — using **prebuilt Docker images** or **source build**:
 - **NVIDIA GPU**: [Installation Guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.html)
 - **Kunlun XPU**: [Installation Guide](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
 
