@@ -190,3 +190,30 @@ Implementation notes:
 - Packed WDS JSON contains `_meta.pack_id`, `_meta.sample_ids`,
   `_meta.token_lens`, and `_meta.total_token_len` so a written packed sample can
   be audited without joining back to `pack_plan.jsonl`.
+
+## Acknowledgements
+
+The WDS-native offline packing workflow in LoongForge is based on the multimodal
+offline packing framework originally developed for LLaVA-OneVision-1.5 and later
+migrated and upgraded for LLaVA-OneVision-2.
+
+LoongForge previously collaborated with the LLaVA-OneVision work. Some historical
+repository or package names may still use the older `aiak-*` naming, while the
+current LoongForge repository has migrated and adapted part of the
+LLaVA-OneVision offline packing capabilities.
+
+Upstream references:
+
+- LLaVA-OneVision-1.5 offline packing:
+  https://github.com/fdcp/LLaVA-OneVision-1.5/tree/main/tools/data_preprocess/offline_packing
+- LLaVA-OneVision-1.5 offline packing examples:
+  https://github.com/fdcp/LLaVA-OneVision-1.5/tree/main/examples_offline_packing
+- LLaVA-OneVision-2 offline packing:
+  https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/main/offline_packing
+- LLaVA-OneVision-2 sample packing scripts:
+  https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/main/examples/llava_onevision1_5/sample_packing
+
+LoongForge refactors this workflow for native WebDataset tar-shard input,
+manifest/SQLite-based sample indexing, media-type-specific packing, pack-plan
+generation, tar byte-offset based WebDataset writing, and runtime handling for
+packed text/image/video samples.
