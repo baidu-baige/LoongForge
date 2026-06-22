@@ -83,17 +83,83 @@ After the build finishes, verify:
 docker images | grep loongforge
 ```
 
+### Pre-built Docker Images
+
+LoongForge Docker images are available on Docker Hub:
+[https://hub.docker.com/u/loongforge](https://hub.docker.com/u/loongforge).
+
+LoongForge publishes versioned pre-built Docker images. Select the desired tag
+from Docker Hub. LeRobot images use the same version tag with a `_lerobot` suffix
+when available.
+
+| Image | Tag Pattern | Description |
+|---|---|---|
+| `loongforge/loongforge` | `<version>` | Base image: LLM / VLM / Diffusion training only |
+| `loongforge/loongforge` | `<version>_lerobot` | Includes LeRobot dependencies for VLA training (Pi0.5 + GR00T) |
+
+```bash
+# Set the version tag you want to use, for example: 0.1.1
+LOONGFORGE_VERSION=<version>
+
+# Pull the base image
+docker pull loongforge/loongforge:${LOONGFORGE_VERSION}
+
+# Pull the image with LeRobot support
+docker pull loongforge/loongforge:${LOONGFORGE_VERSION}_lerobot
+```
+
+#### Dual Python Environment in the LeRobot Image
+
+The LeRobot image (`<version>_lerobot`) uses a **dual virtual-environment** setup to resolve
+dependency conflicts between Pi0.5 and GR00T:
+
+| Environment | Path | Default? | Use Case |
+|---|---|---|---|
+| Base (Pi0.5) | System Python | Yes | Pi0.5 VLA training |
+| GR00T | `/opt/venvs/gr00t` | No | GR00T-N1.6 VLA training |
+
+**To activate the GR00T environment inside the container:**
+
+```bash
+source /opt/venvs/gr00t/bin/activate
+# or use the convenience alias:
+use-gr00t
+```
+
+**To return to the base (Pi0.5) environment:**
+
+```bash
+deactivate
+```
+
+**For distributed training, use the venv's torchrun:**
+
+```bash
+/opt/venvs/gr00t/bin/torchrun ${DISTRIBUTED_ARGS[@]} ...
+```
+
 ### Run the container
 
 ```bash
+# Set the version tag you want to use, for example: 0.1.1
+LOONGFORGE_VERSION=<version>
+
+# Using the base image (LLM/VLM/Diffusion)
 docker run --runtime=nvidia --gpus all -itd --rm \
   -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
   -v /path/to/data:/mnt/cluster/LoongForge/ \
-  loongforge:latest /bin/bash
+  loongforge/loongforge:${LOONGFORGE_VERSION} /bin/bash
+
+# Using the LeRobot image (VLA: Pi0.5 + GR00T)
+docker run --runtime=nvidia --gpus all -itd --rm \
+  -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
+  -v /path/to/data:/mnt/cluster/LoongForge/ \
+  loongforge/loongforge:${LOONGFORGE_VERSION}_lerobot /bin/bash
 ```
 
 Once inside the container, navigate to `/workspace/LoongForge/examples/` and
-launch the desired training script.
+launch the desired training script. For GR00T training, remember to activate
+the GR00T virtual environment first (see Dual Python Environment above).
 
 ---
 
