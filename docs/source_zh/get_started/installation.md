@@ -75,7 +75,9 @@ docker build --build-arg COMPILE_ENV=hopper --build-arg ENABLE_LEROBOT=false \
 docker images | grep loongforge
 ```
 
-### 预构建 Docker 镜像
+---
+
+## 预构建 Docker 镜像
 
 LoongForge Docker 镜像保存在 Docker Hub：
 [https://hub.docker.com/u/loongforge](https://hub.docker.com/u/loongforge)。
@@ -99,7 +101,29 @@ docker pull loongforge/loongforge:${LOONGFORGE_VERSION}
 docker pull loongforge/loongforge:${LOONGFORGE_VERSION}_lerobot
 ```
 
-#### LeRobot 镜像中的双 Python 环境
+### 运行容器
+
+```bash
+# 设置需要使用的版本 tag，例如：0.1.1
+LOONGFORGE_VERSION=<version>
+
+# 使用基础镜像（LLM/VLM/Diffusion）
+docker run --runtime=nvidia --gpus all -itd --rm \
+  -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
+  -v /path/to/data:/mnt/cluster/LoongForge/ \
+  loongforge/loongforge:${LOONGFORGE_VERSION} /bin/bash
+
+# 使用 LeRobot 镜像（VLA: Pi0.5 + GR00T）
+docker run --runtime=nvidia --gpus all -itd --rm \
+  -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
+  -v /path/to/data:/mnt/cluster/LoongForge/ \
+  loongforge/loongforge:${LOONGFORGE_VERSION}_lerobot /bin/bash
+```
+
+进入容器后，导航到 `/workspace/LoongForge/examples/` 并启动所需的训练脚本。
+对于 GR00T 训练，请先激活 GR00T 虚拟环境（参见下方双 Python 环境说明）。
+
+### LeRobot 镜像中的双 Python 环境
 
 LeRobot 镜像（`<version>_lerobot`）使用**双虚拟环境**方案解决 Pi0.5 和 GR00T 之间的依赖冲突：
 
@@ -127,28 +151,6 @@ deactivate
 ```bash
 /opt/venvs/gr00t/bin/torchrun ${DISTRIBUTED_ARGS[@]} ...
 ```
-
-### 运行容器
-
-```bash
-# 设置需要使用的版本 tag，例如：0.1.1
-LOONGFORGE_VERSION=<version>
-
-# 使用基础镜像（LLM/VLM/Diffusion）
-docker run --runtime=nvidia --gpus all -itd --rm \
-  -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
-  -v /path/to/data:/mnt/cluster/LoongForge/ \
-  loongforge/loongforge:${LOONGFORGE_VERSION} /bin/bash
-
-# 使用 LeRobot 镜像（VLA: Pi0.5 + GR00T）
-docker run --runtime=nvidia --gpus all -itd --rm \
-  -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
-  -v /path/to/data:/mnt/cluster/LoongForge/ \
-  loongforge/loongforge:${LOONGFORGE_VERSION}_lerobot /bin/bash
-```
-
-进入容器后，导航到 `/workspace/LoongForge/examples/` 并启动所需的训练脚本。
-对于 GR00T 训练，请先激活 GR00T 虚拟环境（参见上方双 Python 环境说明）。
 
 ---
 
