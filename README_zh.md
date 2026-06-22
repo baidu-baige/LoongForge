@@ -65,7 +65,7 @@
 
 完整的安装、教程与进阶使用请查阅文档 —— [English](https://loongforge.readthedocs.io/en/latest/index.html) · [中文](https://loongforge.readthedocs.io/zh-cn/latest/index.html)。
 
-**1. 安装** —— 可通过 [**Docker**](./docker)（*预构建镜像即将发布*）或 **源码构建**：
+**1. 安装** —— 可使用 **预构建镜像** 或 **源码构建**：
 - **NVIDIA GPU**：[安装指南](https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html)
 - **昆仑芯 XPU**：[安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
 
