@@ -563,12 +563,66 @@ class HFChatTemplate(ChatTemplate):
             "or place `{% generation %}` boundaries exactly on tokenizer boundaries."
         )
 
+    @staticmethod
+    def _message_loss_mask_to_bool(value: Any) -> bool:
+        """Parse an assistant message loss_mask value.
+
+        ``1``/``true``/``yes`` means this assistant turn contributes loss;
+        ``0``/``false``/``no`` means this assistant turn is masked out.
+        """
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in ("1", "true", "yes"):
+                return True
+            if normalized in ("0", "false", "no"):
+                return False
+
+        raise ValueError(
+            "message loss_mask must be one of 0/1, true/false, or yes/no; "
+            f"got {value!r}"
+        )
+
+    @classmethod
+    def _assistant_loss_flags_from_messages(
+        cls,
+        messages: Sequence[Dict[str, Any]],
+    ) -> Tuple[List[bool], bool]:
+        """Return assistant turn loss flags and whether any assistant flag was explicit.
+
+        Input files may include a ``loss_mask`` field on every message for a
+        uniform schema. Only assistant messages map to HuggingFace generation
+        ranges, so non-assistant ``loss_mask`` fields are ignored. Assistant
+        messages without ``loss_mask`` keep the previous behavior and train on
+        that turn.
+        """
+        assistant_loss_flags: List[bool] = []
+        has_explicit_assistant_loss_mask = False
+
+        for message in messages:
+            role = message.get("role")
+            has_loss_mask = "loss_mask" in message
+
+            if role == DataRoles.ASSISTANT:
+                if has_loss_mask:
+                    has_explicit_assistant_loss_mask = True
+                    assistant_loss_flags.append(
+                        cls._message_loss_mask_to_bool(message["loss_mask"])
+                    )
+                else:
+                    assistant_loss_flags.append(True)
+
+        return assistant_loss_flags, has_explicit_assistant_loss_mask
+
     def _tokenize_with_generation_indices(
         self,
         tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
-    ) -> Tuple[List[int], List[int]]:
+    ) -> Tuple[List[int], List[int], bool]:
         """Render OpenAI chat messages and build assistant-token masks."""
         hf_tokenizer = tokenizer.hf_tokenizer()
         rendered, generation_ranges = self._render_with_generation_indices(
@@ -576,6 +630,23 @@ class HFChatTemplate(ChatTemplate):
             messages=messages,
             tools=tools,
         )
+        assistant_loss_flags, has_explicit_loss_mask = (
+            self._assistant_loss_flags_from_messages(messages)
+        )
+        if has_explicit_loss_mask:
+            if len(assistant_loss_flags) != len(generation_ranges):
+                raise ValueError(
+                    "assistant loss_mask count does not match HuggingFace "
+                    "generation ranges: "
+                    f"{len(assistant_loss_flags)} assistant messages vs "
+                    f"{len(generation_ranges)} generation ranges"
+                )
+            generation_ranges = [
+                span
+                for span, keep_loss in zip(generation_ranges, assistant_loss_flags)
+                if keep_loss
+            ]
+
         input_ids = self._encode_text(hf_tokenizer, rendered)
         assistant_masks = self._assistant_mask_from_generation_ranges(
             hf_tokenizer=hf_tokenizer,
@@ -583,7 +654,7 @@ class HFChatTemplate(ChatTemplate):
             input_ids=input_ids,
             generation_ranges=generation_ranges,
         )
-        return input_ids, assistant_masks
+        return input_ids, assistant_masks, has_explicit_loss_mask
 
     @staticmethod
     def _mask_to_final_span(mask: List[int]) -> List[int]:
@@ -673,12 +744,23 @@ class HFChatTemplate(ChatTemplate):
         max_length: Optional[int] = None,
     ) -> Tuple[List[int], List[int], List[int], int]:
         """Encode OpenAI-style chat data into input ids, labels, and loss mask."""
-        input_ids, assistant_masks = self._tokenize_with_generation_indices(
-            tokenizer=tokenizer,
-            messages=messages,
-            tools=tools,
+        input_ids, assistant_masks, has_explicit_loss_mask = (
+            self._tokenize_with_generation_indices(
+                tokenizer=tokenizer,
+                messages=messages,
+                tools=tools,
+            )
         )
         ori_total_len = len(input_ids)
+        if has_explicit_loss_mask and train_on_prompt:
+            raise ValueError(
+                "message-level loss_mask conflicts with train_on_prompt=True"
+            )
+        if has_explicit_loss_mask and history_mask_loss:
+            raise ValueError(
+                "message-level loss_mask conflicts with history_mask_loss=True"
+            )
+
         input_ids, assistant_masks = self._truncate_to_assistant_boundary(
             input_ids=input_ids,
             assistant_masks=assistant_masks,
