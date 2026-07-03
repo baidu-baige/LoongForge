@@ -1,0 +1,100 @@
+# DeepSeek-V4 Flash-Base lite (4 layers + 1 MTP) — matches
+# /ssd3/weizhihao/ckpt/DeepSeek-V4-Flash-Base-lite-lay4L-mtp1/config.json
+_target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
+
+num_layers: 4
+hidden_size: 4096
+ffn_hidden_size: 11008
+num_attention_heads: 64
+
+# -- MQA / MLA --
+group_query_attention: true
+num_query_groups: 1
+q_lora_rank: 1024
+head_dim: 512
+qk_rope_head_dim: 64
+multi_latent_attention: true
+kv_channels: 512
+v_head_dim: 512
+qk_pos_emb_head_dim: 64
+experimental_attention_variant: dsv4_hybrid
+
+# -- MoE --
+num_experts: 256
+moe_ffn_hidden_size: 2048
+moe_shared_expert_intermediate_size: 2048
+moe_n_hash_layers: 3
+actual_vocab_size: 129280
+moe_router_topk_scaling_factor: 1.5
+moe_router_score_function: sqrtsoftplus
+moe_router_enable_expert_bias: true
+norm_topk_prob: true
+
+# -- Hyper-Connections --
+hc_mult: 4
+hc_sinkhorn_iters: 20
+hc_eps: 1e-6
+
+# -- CSA / HCA: 4 decoder layers + 1 MTP entry, mirrors HF config compress_ratios head/tail --
+csa_window_size: 128
+csa_compress_ratios: [0, 0, 4, 128, 0]
+csa_compress_rotary_base: 160000.0
+
+# -- Lightning Indexer --
+index_head_dim: 128
+index_n_heads: 64
+index_topk: 512
+dsa_indexer_n_heads: 64
+dsa_indexer_head_dim: 128
+dsa_indexer_topk: 512
+
+# -- Grouped Output Projection --
+o_groups: 8
+o_lora_rank: 1024
+
+# -- SwiGLU Clamping --
+swiglu_limit: 10.0
+
+# -- RoPE (YaRN) --
+position_embedding_type: rope
+add_position_embedding: false
+rotary_interleaved: false
+rotary_base: 10000
+rotary_percent: 0.125
+rotary_scaling_factor: 16
+original_max_position_embeddings: 65536
+mscale: 1.0
+mscale_all_dim: 1.0
+beta_fast: 32
+beta_slow: 1
+apply_rope_fusion: true
+rope_type: yarn
+
+# -- Normalization --
+normalization: RMSNorm
+layernorm_epsilon: 1e-6
+
+# -- FFN --
+swiglu: true
+
+# -- Dropout --
+attention_dropout: 0
+hidden_dropout: 0
+
+# -- Linear bias --
+add_bias_linear: false
+add_qkv_bias: false
+qk_layernorm: true
+
+# -- Vocab / Embedding --
+untie_embeddings_and_output_weights: true
+vocab_size_in_config_file: 129280
+make_vocab_size_divisible_by: 128
+
+# -- MTP --
+mtp_num_layers: 1
+mtp_loss_coef: 0.1
+
+model_type: deepseek_v4
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek4/ckpt_convert/deepseek_v4_convert.yaml

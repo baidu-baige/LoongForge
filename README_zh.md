@@ -53,6 +53,7 @@
 
 ## 🔥 最新动态
 
+- **[2026/07]** ✨ 新增 **DeepSeek v4 flash / DeepSeek v4 pro** 训练支持。
 - **[2026/05]** ⚡ **Wan 2.2** 训练 **加速 116%**，并新增 CP（上下文并行）与数据 packing 策略支持。
 - **[2026/05]** ✨ 新增 **Kimi K2.5 / K2.6** 训练支持，并支持 **INT4 / NVFP4** PTQ 量化能力。
 - **[2026/05]** 🎉 **v0.1.0** —— LoongForge 首个正式版本发布。
@@ -131,6 +132,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOT
 |---------------|------------------|------------|
 | **LLM** | DeepSeek-V2 | deepseek-v2-lite, deepseek-v2 |
 | | DeepSeek-V3 | deepseek-v3, deepseek-v32 |
+| | DeepSeek-V4 | deepseek-v4-flash, deepseek-v4-pro |
 | | LLaMA2 | llama2-7b, llama2-13b, llama2-70b |
 | | LLaMA3 | llama3-8b, llama3-70b |
 | | LLaMA3.1 | llama3.1-8b, llama3.1-70b, llama3.1-405b |
