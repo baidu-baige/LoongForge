@@ -1123,6 +1123,13 @@ _register_chat_template(
 )
 
 _register_chat_template(
+    name="deepseek4",
+    format_user=StringFormatter(slots=["<｜User｜>{{content}}<｜Assistant｜><think>"]),
+    format_system=StringFormatter(slots=["{{content}}"]),
+    format_prefix=EmptyFormatter(slots=[{"bos_token"}]),
+)
+
+_register_chat_template(
     name="deepseek3.1-nothink",
     format_user=StringFormatter(slots=["<｜User｜>{{content}}<｜Assistant｜></think>"]),
     format_prefix=EmptyFormatter(slots=[{"bos_token"}]),

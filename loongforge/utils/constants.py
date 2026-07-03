@@ -83,6 +83,7 @@ class LanguageModelFamilies(_BaseFamilies):
     QWEN3 = "qwen3"
     QWEN3_NEXT = "qwen3_next"
     DEEPSEEK = "deepseek"
+    DEEPSEEK_V4 = "deepseek_v4"
     INTERNLM2_5 = "internlm2.5"
     MINIMAX = "minimax"
     MIMO = "mimo"

@@ -42,6 +42,7 @@ from megatron.core.transformer.multi_token_prediction import (
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import WrappedTensor, deprecate_inference_params
+from megatron.core.num_microbatches_calculator import get_num_microbatches
 
 from loongforge.models.foundation.language_transformer_block import TransformerBlock
 from loongforge.models.common.base_model_mixins import BaseMegatronLanguageModule
@@ -192,7 +193,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     cp_group=self.pg_collection.cp,
                 )
 
-        elif self.position_embedding_type == 'yarn':
+        elif self.position_embedding_type == 'yarn' and not self.config.multi_latent_attention:
             self.rotary_pos_emb = YarnRotaryEmbedding(
                 kv_channels=self.config.kv_channels,
                 rotary_percent=rotary_percent,
@@ -341,6 +342,15 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         # this is used to store combined cos/sin embeddings, exclusively for flash infer rope
         rotary_pos_cos_sin = None
 
+        chunk_offset = 0
+        if getattr(self.config, 'enable_chunkpipe', False):
+            if not hasattr(self.config, 'chunkpipe_chunk_idx_in_group'):
+                raise RuntimeError(
+                    "chunkpipe_chunk_idx_in_group is not set. "
+                    "Please ensure the scheduler is properly configured for chunkpipe."
+                )
+            chunk_offset = self.config.chunkpipe_chunk_idx_in_group * self.config.chunksize
+
         if self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
             use_flash_infer_fused_rope = (
                 hasattr(inference_context, 'use_flashinfer_fused_rope')
@@ -373,15 +383,16 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 )
                 rotary_pos_emb = self.rotary_pos_emb(
                     rotary_seq_len,
+                    offset=chunk_offset,
                     packed_seq=packed_seq_params is not None
                     and packed_seq_params.qkv_format == 'thd',
                 )
-        elif self.position_embedding_type == 'yarn':
+        elif self.position_embedding_type == 'yarn' and not self.config.multi_latent_attention:
             if self.training or not self.config.flash_decode:
                 rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
                     inference_context, self.decoder, decoder_input, self.config, packed_seq_params
                 )
-                rotary_pos_emb, _ = self.rotary_pos_emb(rotary_seq_len)
+                rotary_pos_emb, _ = self.rotary_pos_emb(rotary_seq_len, offset=chunk_offset)
             else:
                 raise NotImplementedError(
                     "Flash decoding uses precomputed cos and sin for RoPE, not implemented in "
@@ -505,11 +516,15 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         # Filter out next_batch from extra_block_kwargs before passing to decoder,
         # as decoder does not accept it. It will be used later in _postprocess for MTP.
         decoder_extra_kwargs = {
-            k: v for k, v in (extra_block_kwargs or {}).items() if k != 'next_batch'
-        } or None
+            k: v for k, v in (extra_block_kwargs or {}).items()
+            if k not in ('next_batch', 'mtp_batch')
+        }
+        # Thread input_ids into decoder for hash-based MoE routing (DeepSeek-V4).
+        if getattr(self.config, 'moe_n_hash_layers', 0) > 0 and input_ids is not None:
+            decoder_extra_kwargs['input_ids'] = input_ids
 
         # Run decoder.
-        hidden_states = self.decoder(
+        decoder_output = self.decoder(
             hidden_states=decoder_input,
             attention_mask=attention_mask,
             inference_context=inference_context,
@@ -519,8 +534,15 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             rotary_pos_cos_sin=rotary_pos_cos_sin,
             packed_seq_params=packed_seq_params,
             sequence_len_offset=sequence_len_offset,
-            **(decoder_extra_kwargs or {}),
+            **decoder_extra_kwargs,
         )
+
+        # When mHC + MTP, decoder returns (hidden_states, mhc_multistream)
+        if isinstance(decoder_output, tuple):
+            hidden_states, mhc_multistream = decoder_output
+        else:
+            hidden_states = decoder_output
+            mhc_multistream = None
 
         return self._postprocess(
             hidden_states=hidden_states,
@@ -540,6 +562,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             runtime_gather_output=runtime_gather_output,
             extra_block_kwargs=extra_block_kwargs,
             inference_context=inference_context,
+            mhc_multistream=mhc_multistream,
         )
 
     def _postprocess(
@@ -561,6 +584,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         runtime_gather_output=None,
         extra_block_kwargs=None,
         inference_context=None,
+        mhc_multistream=None,
     ):
         """Postprocesses decoder hidden states to generate logits or compute loss.
 
@@ -587,35 +611,47 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             mtp_input_ids = input_ids
             mtp_position_ids = position_ids
             mtp_labels = labels
+            mtp_group_total_tokens = None
+            mtp_step_num_groups = None
 
             if getattr(self.config, 'enable_chunkpipe', False):
-                # Extract next_batch from extra_block_kwargs before passing to MTP
-                next_batch = (extra_block_kwargs or {}).pop('next_batch', None)
+                if getattr(self.config, 'sft_chunkpipe_mode', False):
+                    mtp_batch = (extra_block_kwargs or {}).pop('mtp_batch', None)
+                    if mtp_batch is not None:
+                        mtp_input_ids = mtp_batch['tokens']
+                        mtp_position_ids = mtp_batch['position_ids']
+                        mtp_labels = mtp_batch.get('labels', labels)
+                        loss_mask = mtp_batch.get('loss_mask', loss_mask)
+                        mtp_group_total_tokens = mtp_batch.get('group_total_tokens', None)
+                        mtp_step_num_groups = mtp_batch.get('step_num_groups', None)
+                else:
+                    # Pretrain chunkpipe still uses next_batch from the iterator path.
+                    next_batch = (extra_block_kwargs or {}).pop('next_batch', None)
+                    chunk_idx = (self.config.chunkpipe_forward_microbatch
+                                 % self.config.chunk_num_per_seq)
+                    group_size = self.config.chunk_num_per_seq
+                    is_last_chunk = (chunk_idx + 1 >= group_size)
+                    if next_batch is not None and not is_last_chunk:
+                        next_input_ids = next_batch['tokens']
+                        mtp_input_ids = torch.cat([input_ids, next_input_ids[:, :self.config.mtp_num_layers]], dim=1)
 
-                # Determine if this is the last chunk in the sequence
-                chunk_idx = self.config.chunkpipe_forward_microbatch % self.config.chunk_num_per_seq
-                is_last_chunk = (chunk_idx + 1 >= self.config.chunk_num_per_seq)
-                if next_batch is not None and not is_last_chunk:
-                    # Append the first mtp_num_layers tokens from the next chunk
-                    # to current inputs, enabling MTP to predict across chunk boundaries
-                    next_input_ids = next_batch['tokens']
-                    mtp_input_ids = torch.cat([input_ids, next_input_ids[:, :self.config.mtp_num_layers]], dim=1)
-                        
-                    next_pos_ids = next_batch['position_ids']
-                    mtp_position_ids = torch.cat([position_ids, next_pos_ids[:, :self.config.mtp_num_layers]], dim=1)
+                        next_pos_ids = next_batch['position_ids']
+                        mtp_position_ids = torch.cat(
+                            [position_ids, next_pos_ids[:, :self.config.mtp_num_layers]], dim=1
+                        )
 
-                    next_labels = next_batch['labels']
-                    mtp_labels = torch.cat([labels, next_labels[:, :self.config.mtp_num_layers]], dim=1)
+                        next_labels = next_batch['labels']
+                        mtp_labels = torch.cat([labels, next_labels[:, :self.config.mtp_num_layers]], dim=1)
 
-                    # Extend loss_mask to cover the appended tokens from next chunk
-                    if loss_mask is not None:
-                        next_loss_mask = next_batch.get('loss_mask', torch.ones_like(next_labels))
-                        loss_mask = torch.cat([loss_mask, next_loss_mask[:, :self.config.mtp_num_layers]], dim=1)
+                        if loss_mask is not None:
+                            next_loss_mask = next_batch.get('loss_mask', torch.ones_like(next_labels))
+                            loss_mask = torch.cat([loss_mask, next_loss_mask[:, :self.config.mtp_num_layers]], dim=1)
 
             hidden_states = self.mtp(
                 input_ids=mtp_input_ids,
                 position_ids=mtp_position_ids,
                 hidden_states=hidden_states,
+                mhc_multistream=mhc_multistream,
                 attention_mask=attention_mask,
                 inference_params=inference_params,
                 rotary_pos_emb=rotary_pos_emb,
@@ -639,6 +675,19 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 if loss_mask is None:
                     # if loss_mask is not provided, use all ones as loss_mask
                     loss_mask = torch.ones_like(mtp_labels)
+
+                # SFT chunkpipe MTP bridge-token path: labels/loss_mask span
+                # [chunksize + mtp_num_layers] of a single contiguous sample, but
+                # packed_seq_params.cu_seqlens_q only describes [0, chunksize].
+                # Treat as contiguous for rolling to avoid leaving trailing k positions
+                # unrolled (which would lose the bridge token between chunk boundaries).
+                roll_packed_seq_params = packed_seq_params
+                if (
+                    getattr(self.config, 'sft_chunkpipe_mode', False)
+                    and mtp_labels.size(-1) > self.config.chunksize
+                ):
+                    roll_packed_seq_params = None
+
                 for mtp_layer_number in range(self.config.mtp_num_layers):
                     # Calc loss for the current Multi-Token Prediction (MTP) layers.
                     mtp_labels, _ = roll_tensor(
@@ -646,14 +695,14 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                         shifts=-1,
                         dims=-1,
                         cp_group=self.cp_group,
-                        packed_seq_params=packed_seq_params,
+                        packed_seq_params=roll_packed_seq_params,
                     )
                     loss_mask, num_tokens = roll_tensor(
                         loss_mask,
                         shifts=-1,
                         dims=-1,
                         cp_group=self.cp_group,
-                        packed_seq_params=packed_seq_params,
+                        packed_seq_params=roll_packed_seq_params,
                     )
 
                     # Compute mtp loss without storing logits to save memory.
@@ -671,14 +720,23 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     )       
                     
                     if self.config.enable_chunkpipe:
-                        # Apply loss mask only within the current chunk range
+                        # Apply loss mask only within the current chunk range.
+                        # For SFT chunkpipe, normalize each chunk's contribution by
+                        # the source sequence's total valid-token count so that all
+                        # chunks of the same sequence accumulate to a sequence-level mean.
                         loss_mask_chunk = loss_mask[:, :self.config.chunksize]
                         mtp_loss = loss_mask_chunk * mtp_loss
-                        # Total valid tokens across all chunks minus offset for this MTP layer
-                        num_tokens = (self.config.chunksize * self.config.chunk_num_per_seq
-                                      - mtp_layer_number - 1)
+                        if getattr(self.config, 'sft_chunkpipe_mode', False) and mtp_group_total_tokens is not None:
+                            num_tokens = mtp_group_total_tokens.to(
+                                device=mtp_loss.device, dtype=mtp_loss.dtype
+                            ).reshape(-1)[0]
+                        else:
+                            # Pretrain chunkpipe keeps the original next-batch normalization.
+                            num_tokens = (self.config.chunksize * self.config.chunk_num_per_seq
+                                          - mtp_layer_number - 1)
                     else:
                         mtp_loss = loss_mask * mtp_loss
+
 
                     # Log MTP loss during training; for chunkpipe, only log during
                     # forward recomputation in backward pass (chunkpipe_forward=False)
@@ -689,8 +747,21 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     if self.training and should_log_mtp_loss:
                         # TODO(shifangx): remove the use of parallel_state here
                         # after moving loss logging to loss_func in pretrain_gpt.py
+                        
+                        mtp_log_loss = torch.sum(mtp_loss) / num_tokens
+                        if getattr(self.config, 'sft_chunkpipe_mode', False):
+                            step_num_groups = 1.0
+                            if mtp_step_num_groups is not None:
+                                step_num_groups = mtp_step_num_groups.to(
+                                    device=mtp_loss.device, dtype=mtp_loss.dtype
+                                ).reshape(-1)[0]
+                            dp_size = parallel_state.get_data_parallel_world_size()
+                            mtp_log_loss = mtp_log_loss * (
+                                dp_size * get_num_microbatches() / step_num_groups
+                            )
+
                         MTPLossLoggingHelper.save_loss_to_tracker(
-                            torch.sum(mtp_loss) / num_tokens,
+                            mtp_log_loss,
                             mtp_layer_number,
                             self.config.mtp_num_layers,
                             avg_group=parallel_state.get_data_parallel_group(

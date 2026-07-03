@@ -29,6 +29,30 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3_2_warmup",
     },
+    "deepseek-v4-flash": {
+        "config_path": "configs/models/deepseek4",
+        "config_name": "deepseek_v4_flash_base",
+    },
+    "deepseek-v4-flash-lite": {
+        "config_path": "configs/models/deepseek4",
+        "config_name": "deepseek_v4_flash_lite",
+    },
+    "deepseek-v4-flash-lite-2l": {
+        "config_path": "configs/models/deepseek4",
+        "config_name": "deepseek_v4_flash_lite_2l",
+    },
+    "deepseek-v4-flash-lite-4l": {
+        "config_path": "configs/models/deepseek4",
+        "config_name": "deepseek_v4_flash_lite_4l",
+    },
+    "deepseek-v4-flash-lite-6l": {
+        "config_path": "configs/models/deepseek4",
+        "config_name": "deepseek_v4_flash_lite_6l",
+    },
+    "deepseek-v4-pro": {
+        "config_path": "configs/models/deepseek4",
+        "config_name": "deepseek_v4_pro_base",
+    },
     # internlm2.5
     "internlm2.5-8b": {
         "config_path": "configs/models/internlm2.5",

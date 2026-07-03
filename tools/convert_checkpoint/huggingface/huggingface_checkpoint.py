@@ -6,6 +6,7 @@
 import os
 import torch
 import json
+import re
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +29,7 @@ from convert_checkpoint.common.common_checkpoint import (
 )
 
 from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
-from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
+from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase, is_dsv4_hybrid_config
 from convert_checkpoint.huggingface.huggingface_moe import HuggingfaceMoe
 from convert_checkpoint.huggingface.compressed_tensors_dequant import (
     DTYPE_MAP as HF_DEQUANT_DTYPE_MAP,
@@ -81,6 +82,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     num_layers = ori_num_layers + mtp_num_layers
     mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
     mtp_layer_id = hargs.get("mtp_layer_id", None)
+    is_dsv4_hybrid = is_dsv4_hybrid_config(c_config)
 
     filenames_in_the_layer = set()
     dequant_weight_keys = set()
@@ -90,14 +92,18 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
             if c_name in name_map:
                 if name_map[c_name] is None:
                     continue
-                name = name_map[c_name] + ".weight"
-                _add_hf_weight_file(
-                    weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
-                )
+                hf_name, is_direct_name, _, _, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                for ext in ["", ".weight"]:
+                    name = hf_name + ext
+                    _add_hf_weight_file(
+                        weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
+                    )
+
     if args is not None and args.enable_full_hetero_dp:
         c_name = VISION_WORD_EMBEDDINGS
         if c_name in name_map and name_map[c_name] is not None:
-            name = name_map[c_name] + ".weight"
+            hf_name, _, _, _, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+            name = hf_name + ".weight"
             _add_hf_weight_file(
                 weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
             )
@@ -117,15 +123,20 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                             dequant_weight_keys=dequant_weight_keys
                         )
 
+
+
     if (num_layers - 1) in layer_ids:
         for c_name in LAST_LAYER_NAMES:
             if c_name in name_map:
                 if name_map[c_name] is None:
                     continue
-                name = name_map[c_name] + ".weight"
-                _add_hf_weight_file(
-                    weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
-                )
+                hf_name, is_direct_name, _, _, _, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                for ext in ["", ".weight"]:
+                    name = hf_name + ext
+                    _add_hf_weight_file(
+                        weight_map, filenames_in_the_layer, name, args=args,
+                        dequant_weight_keys=dequant_weight_keys
+                    )
         if mtp_num_layers > 0:
             for c_name in MTP_NAMES:
                 if c_name in name_map:
@@ -134,36 +145,55 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                     hf_name, _, _, _, no_layer_id, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                     if not no_layer_id:
                         continue
-                    name = hf_name + ".weight"
-                    _add_hf_weight_file(
-                        weight_map, filenames_in_the_layer, name, args=args,
-                        dequant_weight_keys=dequant_weight_keys
-                    )
+                    for ext in ["", ".weight"]:
+                        name = hf_name + ext
+                        _add_hf_weight_file(
+                            weight_map, filenames_in_the_layer, name, args=args,
+                            dequant_weight_keys=dequant_weight_keys
+                        )
+                        if is_dsv4_hybrid:
+                            # Also try without "layers." sub-prefix for V4-style MTP keys
+                            # (e.g. "mtp.layers.0.emb.tok_emb" -> "mtp.0.emb.tok_emb")
+                            alt_name = name.replace(".layers.", ".", 1) if ".layers." in name else None
+                            if alt_name and alt_name in weight_map:
+                                filenames_in_the_layer.add(weight_map[alt_name])
 
     ori_transformer = name_map[TRANSFORMER]
     layer_prefix = name_map[LAYER_PREFIX]
+    mtp_layer_prefix = name_map.get(MTP_LAYER_PREFIX, None)
     if expert_ids is not None:
         moe_expert = name_map[MOE_EXPERT]
     for layer_id in layer_ids:
         transformer = ori_transformer
         cur_layer_id = layer_id
-        if layer_id >= ori_num_layers and mtp_num_layers > 0 and mtp_transformer is not None:
+        is_mtp_layer = layer_id >= ori_num_layers and mtp_num_layers > 0 and mtp_transformer is not None
+        if is_mtp_layer:
             transformer = mtp_transformer
             if mtp_layer_id is not None:
                 cur_layer_id = mtp_layer_id
+        cur_layer_prefix = mtp_layer_prefix if is_mtp_layer and mtp_layer_prefix is not None else layer_prefix
+        name_prefix = ".".join([p for p in [transformer, cur_layer_prefix, str(cur_layer_id)] if p]) + "."
+        alt_prefixes = set()
+        alt_prefixes.add(name_prefix)
+        if is_dsv4_hybrid and is_mtp_layer:
+            mtp_relative_id = layer_id - ori_num_layers
+            # For DSV4 MTP layers, also try alternative prefixes that match original HF naming
+            # (e.g. "mtp.0." in weight_map but "mtp.layers.0." after preprocessing)
+            alt_prefixes.add(f"{mtp_transformer}.{mtp_relative_id}.")
+            if cur_layer_prefix:
+                alt_prefixes.add(f"{mtp_transformer}.{cur_layer_prefix}.{mtp_relative_id}.")
         for key, value in weight_map.items():
-            name_prefix = f"{transformer}.{layer_prefix}.{cur_layer_id}."
-            if not key.startswith(name_prefix):
+            matched = any(key.startswith(pfx) for pfx in alt_prefixes)
+            if not matched:
                 continue
             if expert_ids is None:
                 include_key = True
             else:
-                expert_root = f"{name_prefix}{moe_expert}."
-                include_key = not key.startswith(expert_root)
+                is_expert_key = any(key.startswith(f"{pfx}{moe_expert}.") for pfx in alt_prefixes)
+                include_key = not is_expert_key
                 if not include_key:
                     for expert_id in expert_ids:
-                        expert_prefix = f"{expert_root}{expert_id}."
-                        if key.startswith(expert_prefix):
+                        if any(key.startswith(f"{pfx}{moe_expert}.{expert_id}.") for pfx in alt_prefixes):
                             include_key = True
                             break
             if not include_key:
@@ -441,6 +471,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             dtype_name,
         )
 
+
     def load(self, load_path, load_safe=False, c_config=None, layer_ids=[], expert_ids=None, mtp_num_layers=0):
         """ load ckpt """
         dequant_weight_keys = None
@@ -491,6 +522,43 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     load_path, checkpoint_names, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
+
+        # DeepSeek-V4 key preprocessing: add model. prefix, rename FP8 scales,
+        # restructure MTP keys, split hyper-connection scale into alpha_pre/alpha_post/alpha_res
+        if (is_dsv4_hybrid_config(c_config) and self.state_dict
+                and any(k.startswith('layers.') or k.startswith('mtp.') or k == 'embed.weight' for k in self.state_dict.keys())):
+            new_sd = {}
+            for key, value in self.state_dict.items():
+                new_key = key
+                # Rename FP8 scale keys: *.scale -> *.weight_scale_inv
+                if new_key.endswith('.scale'):
+                    new_key = new_key[:-len('.scale')] + '.weight_scale_inv'
+                # Restructure MTP keys: mtp.{j}.* -> mtp.layers.{j}.*
+                if new_key.startswith('mtp.'):
+                    m = re.match(r'mtp\.([0-9]+)\.(.*)', new_key)
+                    if m:
+                        j = m.group(1)
+                        rest = m.group(2)
+                        new_key = f"mtp.layers.{j}.{rest}"
+                # Split per-layer hc_*_scale (shape [3]) into alpha_pre/alpha_post/alpha_res
+                if new_key.endswith('.hc_attn_scale'):
+                    prefix = new_key.rsplit('.', 1)[0]
+                    new_sd[f"{prefix}.hc_attn_alpha_pre"] = value[0:1]
+                    new_sd[f"{prefix}.hc_attn_alpha_post"] = value[1:2]
+                    new_sd[f"{prefix}.hc_attn_alpha_res"] = value[2:3]
+                    continue
+                elif new_key.endswith('.hc_ffn_scale'):
+                    prefix = new_key.rsplit('.', 1)[0]
+                    new_sd[f"{prefix}.hc_ffn_alpha_pre"] = value[0:1]
+                    new_sd[f"{prefix}.hc_ffn_alpha_post"] = value[1:2]
+                    new_sd[f"{prefix}.hc_ffn_alpha_res"] = value[2:3]
+                    continue
+                # hc_head_scale (shape [1]) kept as-is for mcore HyperHead
+                # mtp hc_head_scale kept as-is for mcore MTP HyperHead
+                new_sd[new_key] = value
+            # MTP e_proj and h_proj kept separate for mcore (upstream uses them independently)
+            self.state_dict = new_sd
+
         self.dequantize_compressed_tensors_if_needed(load_path, target_weight_keys=dequant_weight_keys)
 
     def print_memory_usage(self, desc):
@@ -498,7 +566,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         process = psutil.Process(os.getpid())
         mem = process.memory_info().rss / 1024**2  # Convert to MB
         logging.info(f"{desc} memory usage: {mem:.2f} MB")
-
+   
     def save(self, save_path, state_dict, h_config=None, save_optim=False):
         """ save ckpt """
         from huggingface_hub import split_torch_state_dict_into_shards

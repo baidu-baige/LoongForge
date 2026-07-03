@@ -44,6 +44,83 @@ ATTENTION_LIGHTHING_INDEXER_WK = ATTENTION_INDEXER_WK
 ATTENTION_LIGHTHING_INDEXER_WQ_B = ATTENTION_INDEXER_WQ_B
 # MLA end
 
+# DeepSeek V4 grouped output projection begin
+ATTENTION_WO_A = "attention.wo_a"
+ATTENTION_WO_B = "attention.wo_b"
+# DeepSeek V4 grouped output projection end
+
+# DeepSeek V4 attention sink begin
+ATTENTION_SINK = "attention.attn_sink"
+# DeepSeek V4 attention sink end
+
+# DeepSeek V4 KV/Q norm begin
+ATTENTION_KV_NORM = "attention.kv_norm"
+ATTENTION_Q_NORM = "attention.q_norm"
+# DeepSeek V4 KV/Q norm end
+
+# DeepSeek V4 compressor begin
+ATTENTION_COMPRESSOR_WKV = "attention.compressor.wkv"
+ATTENTION_COMPRESSOR_WGATE = "attention.compressor.wgate"
+ATTENTION_COMPRESSOR_APE = "attention.compressor.ape"
+ATTENTION_COMPRESSOR_NORM = "attention.compressor.norm"
+# DeepSeek V4 compressor end
+
+# DeepSeek V4 indexer compressor begin
+ATTENTION_INDEXER_COMPRESSOR_WKV = "attention.indexer.compressor.wkv"
+ATTENTION_INDEXER_COMPRESSOR_WGATE = "attention.indexer.compressor.wgate"
+ATTENTION_INDEXER_COMPRESSOR_APE = "attention.indexer.compressor.ape"
+ATTENTION_INDEXER_COMPRESSOR_NORM = "attention.indexer.compressor.norm"
+# DeepSeek V4 indexer compressor end
+
+# DeepSeek V4 Hyper-Connection begin
+HC_ATTN_FN = "hc_attn_fn"
+HC_ATTN_BASE = "hc_attn_base"
+HC_ATTN_SCALE = "hc_attn_scale"
+HC_ATTN_ALPHA_PRE = "hc_attn_alpha_pre"
+HC_ATTN_ALPHA_POST = "hc_attn_alpha_post"
+HC_ATTN_ALPHA_RES = "hc_attn_alpha_res"
+HC_FFN_FN = "hc_ffn_fn"
+HC_FFN_BASE = "hc_ffn_base"
+HC_FFN_SCALE = "hc_ffn_scale"
+HC_FFN_ALPHA_PRE = "hc_ffn_alpha_pre"
+HC_FFN_ALPHA_POST = "hc_ffn_alpha_post"
+HC_FFN_ALPHA_RES = "hc_ffn_alpha_res"
+# DeepSeek V4 Hyper-Connection end
+
+# DeepSeek V4 HyperHead begin
+HC_HEAD_FN = "hc_head_fn"
+HC_HEAD_BASE = "hc_head_base"
+HC_HEAD_SCALE = "hc_head_scale"
+HC_HEAD_ALPHA_PRE = "hc_head_alpha_pre"
+HC_HEAD_ALPHA_POST = "hc_head_alpha_post"
+HC_HEAD_ALPHA_RES = "hc_head_alpha_res"
+# DeepSeek V4 HyperHead end
+
+# DeepSeek V4 MTP specific begin
+MTP_E_PROJ = "mtp_e_proj"
+MTP_H_PROJ = "mtp_h_proj"
+MTP_NORM = "mtp_norm"
+MTP_HC_ATTN_FN = "mtp_hc_attn_fn"
+MTP_HC_ATTN_BASE = "mtp_hc_attn_base"
+MTP_HC_ATTN_SCALE = "mtp_hc_attn_scale"
+MTP_HC_ATTN_ALPHA_PRE = "mtp_hc_attn_alpha_pre"
+MTP_HC_ATTN_ALPHA_POST = "mtp_hc_attn_alpha_post"
+MTP_HC_ATTN_ALPHA_RES = "mtp_hc_attn_alpha_res"
+MTP_HC_FFN_FN = "mtp_hc_ffn_fn"
+MTP_HC_FFN_BASE = "mtp_hc_ffn_base"
+MTP_HC_FFN_SCALE = "mtp_hc_ffn_scale"
+MTP_HC_FFN_ALPHA_PRE = "mtp_hc_ffn_alpha_pre"
+MTP_HC_FFN_ALPHA_POST = "mtp_hc_ffn_alpha_post"
+MTP_HC_FFN_ALPHA_RES = "mtp_hc_ffn_alpha_res"
+MTP_HC_HEAD_FN = "mtp_hc_head_fn"
+MTP_HC_HEAD_BASE = "mtp_hc_head_base"
+MTP_HC_HEAD_SCALE = "mtp_hc_head_scale"
+MTP_HC_HEAD_ALPHA_PRE = "mtp_hc_head_alpha_pre"
+MTP_HC_HEAD_ALPHA_POST = "mtp_hc_head_alpha_post"
+MTP_HC_HEAD_ALPHA_RES = "mtp_hc_head_alpha_res"
+MTP_HEAD = "mtp_head"
+# DeepSeek V4 MTP specific end
+
 ATTENTION_QUERY_KEY_VALUE = "attention.query_key_value"
 ATTENTION_QUERY_GATE_KEY_VALUE = "attention.query_gate_key_value"
 MIXER_ATT_LOG = "mixer_att.log"
@@ -83,6 +160,9 @@ MOE_SHARED_EXPERT_4H_TO_H = "moe.shared_expert_4h_to_h"
 # shared expert
 MOE_SHARED_EXPERT = "moe.shared_expert"
 MOE_SHARED_EXPERT_GATE = "moe.shared_expert_gate"
+
+# DeepSeek V4 Hash Router tid2eid per-layer name
+MOE_GATE_TID2EID = "moe.gate.tid2eid"
 # ====MOE end====
 
 FINAL_LAYERNORM = "final_layernorm"
@@ -124,10 +204,34 @@ BASE_NAMES = [INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FRE
             ATTENTION_INDEXER_K_NORM, ATTENTION_INDEXER_WEIGHTS_PROJ,
             ATTENTION_INDEXER_WK, ATTENTION_INDEXER_WQ_B, MOE_SHARED_EXPERT_GATE,
             POST_ATTENTION_LAYERNORM, POST_ATTENTION_LAYERSCALE, ATTENTION_QNORM, ATTENTION_KNORM,
-            POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE]
+            POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE,
+            # DeepSeek V4 additions
+            ATTENTION_WO_A, ATTENTION_WO_B, ATTENTION_SINK, ATTENTION_KV_NORM, ATTENTION_Q_NORM,
+            ATTENTION_COMPRESSOR_WKV, ATTENTION_COMPRESSOR_WGATE, ATTENTION_COMPRESSOR_APE, ATTENTION_COMPRESSOR_NORM,
+            ATTENTION_INDEXER_COMPRESSOR_WKV, ATTENTION_INDEXER_COMPRESSOR_WGATE,
+            ATTENTION_INDEXER_COMPRESSOR_APE, ATTENTION_INDEXER_COMPRESSOR_NORM,
+            # DeepSeek V4 Hyper-Connection per-layer
+            HC_ATTN_FN, HC_ATTN_BASE, HC_ATTN_ALPHA_PRE, HC_ATTN_ALPHA_POST, HC_ATTN_ALPHA_RES, HC_FFN_FN, HC_FFN_BASE, HC_FFN_ALPHA_PRE, HC_FFN_ALPHA_POST, HC_FFN_ALPHA_RES,
+            # DeepSeek V4 Hash Router tid2eid
+            MOE_GATE_TID2EID]
 MOE_EXPERT_PROJS = [MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H]
-LAST_LAYER_NAMES = [FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD] # in the last layer
-MTP_NAMES = [MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD]
+LAST_LAYER_NAMES = [FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD,
+                    # DeepSeek V4 HyperHead global parameters
+                    HC_HEAD_FN, HC_HEAD_BASE, HC_HEAD_SCALE] # in the last layer
+
+# DeepSeek V4 Hyper-Connection per-layer names (not standard BASE_NAMES, handled separately)
+HC_NAMES = [HC_ATTN_FN, HC_ATTN_BASE, HC_ATTN_ALPHA_PRE, HC_ATTN_ALPHA_POST, HC_ATTN_ALPHA_RES, HC_FFN_FN, HC_FFN_BASE, HC_FFN_ALPHA_PRE, HC_FFN_ALPHA_POST, HC_FFN_ALPHA_RES]
+
+# DeepSeek V4 HyperHead global names (like FINAL_LAYERNORM, not per-layer)
+HC_HEAD_NAMES = [HC_HEAD_FN, HC_HEAD_BASE, HC_HEAD_SCALE]
+
+MTP_NAMES = [MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_HEAD_NORM, MTP_SHARED_HEAD_HEAD,
+             # DeepSeek V4 MTP additions
+             MTP_E_PROJ, MTP_H_PROJ, MTP_NORM,
+             MTP_HC_ATTN_FN, MTP_HC_ATTN_BASE, MTP_HC_ATTN_ALPHA_PRE, MTP_HC_ATTN_ALPHA_POST, MTP_HC_ATTN_ALPHA_RES,
+             MTP_HC_FFN_FN, MTP_HC_FFN_BASE, MTP_HC_FFN_ALPHA_PRE, MTP_HC_FFN_ALPHA_POST, MTP_HC_FFN_ALPHA_RES,
+             MTP_HC_HEAD_FN, MTP_HC_HEAD_BASE, MTP_HC_HEAD_SCALE,
+             MTP_HEAD]
 
 EMBED_NAMES = [WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD, VISION_WORD_EMBEDDINGS, MTP_SHARED_HEAD_HEAD]
 

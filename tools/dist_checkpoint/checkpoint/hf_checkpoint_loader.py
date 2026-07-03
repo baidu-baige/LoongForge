@@ -54,6 +54,39 @@ def _is_hf_checkpoint(checkpoint_path: str) -> bool:
     return has_config and (has_safetensors or has_pytorch_bin)
 
 
+def _log_loaded_param_stats(unwrapped_model):
+    """Print count + norm/mean of a small set of well-known parameters so we
+    can tell from logs whether ckpt values actually landed in the model.
+    strict=True only verifies key set + shapes, not actual values — this
+    closes that gap for the rank-0 sanity check."""
+    if dist.get_rank() != 0:
+        return
+    total = 0
+    total_nonzero = 0
+    samples = []
+    sample_targets = (
+        "embedding.word_embeddings.weight",
+        "decoder.layers.0.self_attention.linear_q_down_proj.weight",
+        "decoder.layers.0.mlp.router.weight",
+        "output_layer.weight",
+        "decoder.final_layernorm.weight",
+    )
+    for m in unwrapped_model:
+        for name, p in m.named_parameters():
+            n = p.numel()
+            total += n
+            if p.is_floating_point():
+                total_nonzero += int((p != 0).sum().item())
+            for tgt in sample_targets:
+                if name.endswith(tgt) and len(samples) < 16:
+                    pf = p.float()
+                    samples.append((name, n, pf.norm().item(), pf.abs().mean().item()))
+                    break
+    print_rank_0(f"[CKPT_LOAD] total params={total:,}, nonzero floats={total_nonzero:,}")
+    for name, n, norm, mean_abs in samples:
+        print_rank_0(f"[CKPT_LOAD]   {name}: numel={n:,} norm={norm:.4f} mean_abs={mean_abs:.6f}")
+
+
 @time_checkpoint_operation
 def load_hf_checkpoint_online(
     model,
@@ -195,24 +228,26 @@ def load_hf_checkpoint_online(
         mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
         torch.cuda.reset_peak_memory_stats()
 
+    # Handle both wrapped {'model': dict} and direct dict formats
+    model_state_dict = current_rank_state_dict.get('model', current_rank_state_dict) if isinstance(current_rank_state_dict, dict) else current_rank_state_dict
+    # strict=True — let PyTorch raise a RuntimeError that lists every
+    # missing / unexpected key and every size-mismatch. The prior
+    # strict=False (plus silent fallback) was masking real load failures
+    # (q_layernorm / kv_layernorm / hc_*_scale / tid2eid / expert_bias)
+    # and letting training run with randomly-initialized shards.
     if len(unwrapped_model) == 1:
-        missing_keys, unexpected_keys = unwrapped_model[0].load_state_dict(
-            current_rank_state_dict['model'],
-            strict=True
-        )
-    else: # vpp
-        missing_keys = []
-        unexpected_keys = []
+        unwrapped_model[0].load_state_dict(model_state_dict, strict=True)
+    else:  # vpp
         for i in range(len(unwrapped_model)):
-            model_key = f"model{i}"
-            tmp_missing_keys, tmp_unexpected_keys = unwrapped_model[i].load_state_dict(
-                current_rank_state_dict[model_key],
-                strict=True
+            unwrapped_model[i].load_state_dict(
+                current_rank_state_dict[f"model{i}"], strict=True
             )
-            if len(tmp_missing_keys) > 0:
-                missing_keys.extend(tmp_missing_keys)
-            if len(tmp_unexpected_keys) > 0:
-                unexpected_keys.extend(tmp_unexpected_keys)
+
+    # Positive sanity check — print weight stats for a handful of well-known
+    # parameters so we can tell (from logs) that ckpt values actually landed
+    # in the model rather than zeros / random init. Helps diagnose loss-jump
+    # symptoms where strict=True accepted shapes but values were off.
+    _log_loaded_param_stats(unwrapped_model)
 
     if torch.cuda.is_available():
         peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)

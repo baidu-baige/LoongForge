@@ -218,6 +218,8 @@ class McoreBase:
             layer_id = None
         if name == WORD_EMBEDDINGS_FOR_HEAD and not self.untie_embeddings_and_output_weights and self.pp == 1:
             name = WORD_EMBEDDINGS
+        if name not in self.name_map:
+            return None
         need_emb_padding = self.add_embed_padding and name in EMBED_NAMES
 
         # Get metadata from name_map
@@ -254,7 +256,7 @@ class McoreBase:
         # Check for custom bias name mapping
         bias_name = f"{name}.{BIAS}"
         if bias_name in self.name_map:
-            mcore_bias_name = self.name_map[bias_name]
+            (mcore_bias_name, _, _), (_, _), (_, _, _) = self.get_mcore_name_and_extra(self.name_map[bias_name])
             m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
             mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}" if layer_id is not None else mcore_bias_name
 
