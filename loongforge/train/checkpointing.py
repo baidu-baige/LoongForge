@@ -17,6 +17,7 @@ from enum import Enum, auto
 from logging import getLogger
 from pathlib import Path
 from time import time
+from typing import NamedTuple, Optional
 
 import numpy as np
 import torch
@@ -339,6 +340,160 @@ def read_metadata(tracker_filename):
         # initialized, in this case, just assume we have the latest
         max_iter = iteration
     return max_iter, release
+
+
+class CheckpointProbes(NamedTuple):
+    iteration: int
+    is_release: bool
+    model_present: bool
+    rng_present: Optional[bool]
+    dataloader_present: bool
+
+
+def read_tracker_iteration(checkpoints_path: str) -> Optional[tuple]:
+    """Read the tracker file and return (iteration, is_release), or None if unavailable.
+
+    Unlike read_metadata(), this function returns None instead of sys.exit()
+    on invalid/missing tracker files and skips the all-reduce consistency check.
+    Safe to call before initialize_megatron().
+    """
+    tracker_filename = get_checkpoint_tracker_filename(checkpoints_path)
+    if not isfile(tracker_filename):
+        return None
+
+    try:
+        with open_file(tracker_filename, 'r') as f:
+            metastring = f.read().strip()
+    except OSError:
+        return None
+
+    if metastring == "release":
+        return (0, True)
+
+    try:
+        iteration = int(metastring)
+    except ValueError:
+        return None
+
+    if iteration <= 0:
+        return None
+
+    return (iteration, False)
+
+
+def probe_checkpoint_components(
+    checkpoints_path: str,
+    check_rng: bool = True,
+    dp_rank: int = 0,
+) -> Optional[CheckpointProbes]:
+    """Probe a checkpoint directory for model, RNG, and dataloader state presence.
+
+    Safe to call before initialize_megatron() — uses get_checkpoint_name() with
+    explicit rank overrides to bypass mpu calls.
+
+    Args:
+        checkpoints_path: Path to the checkpoint directory (--load arg).
+        check_rng: If True, open the model checkpoint to check for RNG state.
+            Set to False to skip torch.load (faster, rng_present will be None).
+        dp_rank: Data parallel rank for dataloader state file naming.
+            Pass 0 when called before distributed init.
+    """
+    result = read_tracker_iteration(checkpoints_path)
+    if result is None:
+        return None
+
+    iteration, is_release = result
+
+    # Use explicit rank overrides to avoid mpu calls
+    model_ckpt_path = get_checkpoint_name(
+        checkpoints_path, iteration, release=is_release,
+        pipeline_parallel=False, tensor_rank=0, pipeline_rank=0,
+        expert_parallel=False,
+    )
+    if not isfile(model_ckpt_path):
+        return None
+
+    rng_present = None
+    if check_rng:
+        try:
+            sd = torch.load(model_ckpt_path, map_location="cpu", weights_only=False)
+            rng_present = "rng_state" in sd and sd["rng_state"] is not None
+            del sd
+        except Exception:
+            rng_present = False
+
+    dl_ckpt_path = get_checkpoint_name(
+        checkpoints_path, iteration, release=is_release,
+        pipeline_parallel=False, tensor_rank=0, pipeline_rank=0,
+        expert_parallel=False,
+        basename=f"train_dataloader_dprank{dp_rank:03d}.pt",
+    )
+    dataloader_present = isfile(dl_ckpt_path)
+
+    return CheckpointProbes(
+        iteration=iteration,
+        is_release=is_release,
+        model_present=True,
+        rng_present=rng_present,
+        dataloader_present=dataloader_present,
+    )
+
+
+def apply_resumption_flags(train_args) -> None:
+    """Auto-detect whether --load contains a resumable checkpoint and adjust flags.
+
+    Probes the checkpoint directory for model, RNG, and dataloader state.
+    Based on what exists, automatically adjusts train_args flags so the user
+    doesn't need to manually toggle --finetune / --no-load-optim / --no-load-rng.
+
+    Safe to call before initialize_megatron().
+
+    Flag adjustment rules:
+      - dataloader present + finetune=True   -> clear finetune (switch to resumption)
+      - dataloader absent                    -> keep finetune=True (start from iter 1)
+      - no_load_optim not set                -> set no_load_optim=True (always)
+      - RNG state missing + no_load_rng not set -> set no_load_rng=True
+
+    Optimizer loading is not supported for resumption due to TransformerEngine
+    bf16/fp32 precision incompatibility with fused_adam get_unscaled_state().
+    """
+    load_dir = getattr(train_args, "load", None)
+    if load_dir is None or not os.path.isdir(load_dir):
+        return
+
+    # If --finetune is set and load_dir has a release/ subdirectory,
+    # this is a fresh finetune from pretrained weights — skip detection.
+    if getattr(train_args, "finetune", False) and os.path.isdir(
+        os.path.join(load_dir, "release")
+    ):
+        return
+
+    probes = probe_checkpoint_components(load_dir, check_rng=True, dp_rank=0)
+    if probes is None:
+        return
+
+    changes = []
+
+    if not probes.dataloader_present:
+        changes.append("finetune=True (no dataloader state)")
+    else:
+        if getattr(train_args, "finetune", False):
+            train_args.finetune = False
+            changes.append("finetune=False (dataloader state found)")
+
+    if not getattr(train_args, "no_load_optim", False):
+        train_args.no_load_optim = True
+        changes.append("no_load_optim=True (optimizer loading not supported)")
+
+    if not probes.rng_present:
+        if not getattr(train_args, "no_load_rng", False):
+            train_args.no_load_rng = True
+            changes.append("no_load_rng=True (RNG state missing)")
+
+    if changes:
+        print_rank_0(
+            f"[resume] Checkpoint at iter {probes.iteration}: auto-adjusted {', '.join(changes)}"
+        )
 
 
 def get_rng_state(ckpt_format: str):
@@ -1327,7 +1482,7 @@ def _load_base_checkpoint(
                 load_dir, iteration, release, return_base_dir=False
             )
         try:
-            state_dict = torch.load(checkpoint_name, map_location='cpu')
+            state_dict = torch.load(checkpoint_name, map_location='cpu', weights_only=False)
         except ModuleNotFoundError:
             from megatron.legacy.fp16_deprecated import loss_scaler
 
@@ -1341,7 +1496,7 @@ def _load_base_checkpoint(
                 'megatron.legacy.fp16_deprecated.loss_scaler'
             ]
             sys.modules['megatron.model'] = sys.modules['megatron.legacy.model']
-            state_dict = torch.load(checkpoint_name, map_location='cpu')
+            state_dict = torch.load(checkpoint_name, map_location='cpu', weights_only=False)
             sys.modules.pop('fp16.loss_scaler', None)
             sys.modules.pop('megatron.fp16.loss_scaler', None)
             sys.modules.pop('megatron.model', None)
