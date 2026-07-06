@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 # Convert DeepSeek-V4 from Megatron Core format back to HF format (BF16 version)
 set -e
 

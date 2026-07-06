@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 # SFT FP8 training for DeepSeek-V4-Flash-Base
 # hidden_size=4096, 43 layers, 256 experts, hc_mult=4
 # Acceptance: script runs without checkpoint load (--no-load-optim --no-load-rng, CHECKPOINT_PATH="")
