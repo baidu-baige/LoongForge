@@ -23,17 +23,17 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     --save_platform=mcore \
     --config_file $MODEL_CONFIG_FILE \
     --convert_file $CONVERT_FILE \
-    --tensor_model_parallel_size=2 \
-    --pipeline_model_parallel_size=1 \
-    --expert_parallel_size=2 \
+    --tensor_model_parallel_size=1 \
+    --pipeline_model_parallel_size=3 \
+    --expert_parallel_size=8 \
     --expert_tensor_parallel_size=1 \
     --megatron_path=$MEGATRON_PATH \
     --load_ckpt_path=$HF_MODEL_PATH \
     --save_ckpt_path=$SAVE_ROOT \
     --safetensors \
-    --max_workers=4 \
+    --max_workers=32 \
     --moe-grouped-gemm \
-    --convert_to_fp8
+    --fp8_force_no_requant
 
 echo "=== HF -> mcore FP8 conversion completed ==="
 echo "Output: $SAVE_ROOT"
