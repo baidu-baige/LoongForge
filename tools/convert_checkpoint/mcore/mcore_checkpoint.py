@@ -27,7 +27,8 @@ from convert_checkpoint.utils.utils import (
 from convert_checkpoint.common.common_checkpoint import (
     TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX, WORD_EMBEDDINGS,
     FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES,
-    MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT, MTP_NAME_PREFIX_FOR_LAYER
+    MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT, MTP_NAME_PREFIX_FOR_LAYER,
+    HC_NAMES
 )
 
 
@@ -203,6 +204,8 @@ class McoreCheckpoint(AbstractCheckpoint):
                         layer_prefix = None
                         name_prefix = None
                     for c_name in BASE_NAMES:
+                        if layer_id >= num_layers and c_name in HC_NAMES:
+                            continue
                         self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
                                                     layer_prefix=layer_prefix, ep_id=ep_id, name_prefix=name_prefix, clear_source=clear_source)
                     # ====moe shared_expert

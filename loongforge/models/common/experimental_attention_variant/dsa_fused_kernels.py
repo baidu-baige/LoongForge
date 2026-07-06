@@ -2013,10 +2013,20 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
         sm_scale=None,
         d_v=512,
         return_p_out=False,
-        packed_seq_params=None
+        packed_seq_params=None,
+        topk_length=None,
+        attn_sink=None,
+        window_size=0,
+        fast_mode=False,
     ):
         """
         Flash MLA sparse_mla_forward.
+
+        Args:
+            topk_length: optional, [s_q], int32. Per-query valid topk length.
+            attn_sink: optional, [h_q], float32. Per-head attention sink logit.
+            window_size: int. Prefix topk length for sliding-window entries.
+            fast_mode: bool. Use dual-kernel fused backward (only h_q=128).
         """
         # q_flash [sq, n, d]
         # kv_flash [skv, 1, d]
@@ -2026,7 +2036,15 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
         indices_flash = indices
 
         sq = q.size(0)
-        
+
+        # Expand attn_sink to match h_q for the CUDA kernel
+        if attn_sink is not None:
+            h_q = q.size(1)
+            if attn_sink.numel() != h_q:
+                repeat_factor = h_q // attn_sink.numel()
+                attn_sink = attn_sink.flatten().repeat_interleave(repeat_factor)
+            attn_sink = attn_sink.contiguous().view(h_q)
+
         out, _, lse, *p_out = flash_mla_sparse_fwd(
             q_flash,  # q: [s_q, h_q, d_qk], bfloat16
             kv_flash,  # kv: [s_kv, h_kv, d_qk], bfloat16
@@ -2034,13 +2052,19 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
             sm_scale,
             d_v,
             q_start_index_s=chunk_offset,
-            write_p_out=return_p_out
+            write_p_out=return_p_out,
+            topk_length=topk_length,
+            attn_sink=attn_sink,
+            window_size=window_size,
         )
 
         ctx.save_for_backward(q_flash, kv_flash, indices_flash, out, lse)
         ctx.sm_scale = sm_scale
         ctx.chunk_offset = chunk_offset
         ctx.sq = sq
+        ctx.topk_length = topk_length
+        ctx.fast_mode = fast_mode
+        ctx.attn_sink = attn_sink
 
         out = out.unsqueeze(0)
 
@@ -2064,6 +2088,9 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
                 q, kv, out, grad_out, indices, lse,
                 sm_scale=ctx.sm_scale,
                 q_start_index_s=ctx.chunk_offset,
+                topk_length=ctx.topk_length,
+                fast_mode=ctx.fast_mode,
+                attn_sink=ctx.attn_sink,
             )
         else:
             log2e = 1.44269504
@@ -2082,7 +2109,7 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
                 delta=None
             )
             
-        return grad_q, grad_kv, None, None, None, None, None, None
+        return grad_q, grad_kv, None, None, None, None, None, None, None, None, None, None
 
 
 class DSADotProductAttention(MegatronModule):
@@ -2137,8 +2164,16 @@ class DSADotProductAttention(MegatronModule):
         attention_bias: Tensor = None,
         packed_seq_params: PackedSeqParams = None,
         return_p_out: bool = False,
+        window_size: int = 0,
+        topk_length: Optional[Tensor] = None,
+        attn_sink: Optional[Tensor] = None,
     ):
-        """Forward."""
+        """Forward.
+
+        Args:
+            topk_length: optional, [s_q], int32. Per-query valid topk length.
+            attn_sink: optional, [h_q], float32. Per-head attention sink logit.
+        """
         if attn_mask_type is None:
             attn_mask_type = AttnMaskType.causal
 
@@ -2197,22 +2232,41 @@ class DSADotProductAttention(MegatronModule):
         if indices.ndim == 4:
             indices = indices.squeeze(0)  # [b, sq, 1, topk] -> [sq, 1, topk]
 
+        # Pad topk to multiple of 64 (required by backward CUDA kernel)
+        topk = indices.size(-1)
+        topk_aligned = ((topk + 63) // 64) * 64
+        if topk_aligned != topk:
+            pad_size = topk_aligned - topk
+            indices = torch.nn.functional.pad(indices, (0, pad_size), value=-1)
+
+        # Determine d_v (value output dimension per head):
+        # - DSv3: d_qk = kv_lora_rank + qk_pos_emb_head_dim > v_head_dim, d_v = kv_lora_rank
+        # - DSv4: d_qk = v_head_dim (RoPE embedded in v_head_dim), d_v = v_head_dim
+        d_qk = query.size(-1)
+        if d_qk == self.config.v_head_dim:
+            d_v = self.config.v_head_dim
+        else:
+            d_v = self.config.kv_lora_rank
+
         args = (
             query,
             kv,
             indices,
             chunk_offset,
             self.softmax_scale,
-            self.config.kv_lora_rank,
+            d_v,
             return_p_out,
             packed_seq_params,
+            topk_length,
+            attn_sink,
+            window_size,
+            True,
         )
-        # core_attn_out [b, s/TP, h, d_v], p_out: list of [s/TP, h, topk]
+        # core_attn_out [1, s/TP, h, d_v] (bshd with b=1 from unsqueeze(0) in Function.forward)
+        # Note: with b=1, [1, s, h, d] is interchangeable with [s, 1, h, d] for downstream ops
         core_attn_out, *p_out = DSADotProductAttentionFunction.apply(*args)
-        
-        if qkv_format == 'sbhd':
-            core_attn_out = core_attn_out.contiguous()
-        elif qkv_format == 'thd':
+
+        if qkv_format == 'thd':
             # [1, t, h, d_v] -> [t, h, d_v]
             core_attn_out = core_attn_out.squeeze(0).contiguous()
         else:

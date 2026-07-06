@@ -268,8 +268,18 @@ class Qwen3Model(BaseGPTModel):
                 self.config,
                 packed_seq_params,
             )
+
+            chunk_offset = 0
+            if getattr(self.config, 'enable_chunkpipe', False):
+                if not hasattr(self.config, 'chunkpipe_chunk_idx_in_group'):
+                    raise RuntimeError(
+                        "chunkpipe_chunk_idx_in_group is not set. "
+                        "Please ensure the scheduler is properly configured for chunkpipe."
+                    )
+                chunk_offset = self.config.chunkpipe_chunk_idx_in_group * self.config.chunksize
             rotary_pos_emb = self.rotary_pos_emb(
                 rotary_seq_len,
+                offset=chunk_offset,
                 packed_seq=packed_seq_params is not None
                 and packed_seq_params.qkv_format == "thd",
             )

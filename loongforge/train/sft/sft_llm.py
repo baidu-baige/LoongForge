@@ -19,6 +19,7 @@ from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.rerun_state_machine import get_rerun_state_machine
+from megatron.core.num_microbatches_calculator import get_num_microbatches
 
 from megatron.training import get_timers
 from megatron.training.utils import average_losses_across_data_parallel_group
@@ -65,6 +66,89 @@ def get_batch(data_iterator):
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
 
+    # Extract chunk_group_size into args (for scheduler) and config (for model-side code).
+    args = get_args()
+    if args.enable_chunkpipe and "chunk_group_size" in batch:
+        group_size = batch["chunk_group_size"][0].item()
+        args.chunkpipe_current_chunk_group_size = group_size
+        config = get_model_config()
+        if config is not None and getattr(config, 'sft_chunkpipe_mode', False):
+            # Always write chunkpipe_current_group_size from the batch data, regardless of
+            # chunk_idx_in_group. This breaks the circular dependency where:
+            #   1. group_size_cache missing group N → fallback gives wrong chunk_idx
+            #   2. wrong chunk_idx ≠ 0 → get_batch() would not write group_size
+            #   3. scheduler reads stale _discovered_gs → group_size_cache[N] = wrong value
+            # By always writing, the scheduler post-step always gets the correct group_size
+            # to update group_size_cache, even when chunk_idx was computed via fallback.
+            config.chunkpipe_current_group_size = group_size
+
+            # Loong-Megatron scheduler: the scheduler must set
+            # config.chunkpipe_chunk_idx_in_group = 0 **before** invoking forward_step, so
+            # that get_batch (called inside forward_step) observes the correct index here.
+            #
+            # Timing chain:
+            #   scheduler sets chunk_idx = 0
+            #     → forward_step()
+            #       → get_batch() reads chunk_group_size from batch
+            #         → writes config.chunkpipe_current_group_size   ← here
+            #           → model code reads config.chunkpipe_current_group_size
+            #
+            # The ordering is currently correct but depends on this implicit call sequence.
+            # If the scheduler logic is refactored, ensure this contract is preserved.
+            if config.chunkpipe_chunk_idx_in_group == 0:
+                # Composite scheduling info: applied at every real-group start
+                # within the composite. The composite descriptor is the same
+                # for every chunk inside one composite (sampler repeats it
+                # per micro-batch), so re-writing on each real-group's chunk 0
+                # is idempotent and preserves the value across the composite
+                # for downstream readers (schedule.py + MLA chunk_keys).
+                if "composite_component_sizes" in batch:
+                    components = batch["composite_component_sizes"]
+                    if components:
+                        config.chunkpipe_component_sizes = list(components)
+                        config.chunkpipe_composite_group_size = sum(components)
+                    else:
+                        # No composite info → fall back to trivial (single
+                        # real group). Keeps behavior sane if the queues are
+                        # somehow not populated (e.g. ad-hoc test paths).
+                        config.chunkpipe_component_sizes = [group_size]
+                        config.chunkpipe_composite_group_size = group_size
+
+        # N_g and G for the per-sample loss path. N_g is per-chunk (same value
+        # for all chunks in one source sequence), G_total is per-step (same
+        # for all chunks in one step) and is the cross-rank sum of source
+        # group counts. Both are read by loss_func from args. Because
+        # micro_batch_size >= 1 chunk all share the same step, picking index 0
+        # is correct.
+        if "group_total_tokens" in batch:
+            args.chunkpipe_group_total_tokens = batch["group_total_tokens"][0].item()
+        if "step_num_groups" in batch:
+            step_num_groups = batch["step_num_groups"][0].item()
+            args.chunkpipe_step_num_groups = step_num_groups
+            if config is not None and getattr(config, 'sft_chunkpipe_mode', False):
+                config.chunkpipe_step_num_groups = step_num_groups
+
+    mtp_batch = None
+    if args.enable_chunkpipe and getattr(args, "sft_chunkpipe_mode", False):
+        if "mtp_tokens" in batch:
+            expected_length = args.chunksize + (args.mtp_num_layers or 0)
+            assert batch["tokens"].size(1) == args.chunksize, (
+                f"SFT chunkpipe main tokens must have base length "
+                f"{args.chunksize}, got {batch['tokens'].size(1)}."
+            )
+            assert batch["mtp_tokens"].size(1) == expected_length, (
+                f"SFT chunkpipe MTP tokens must have physical length "
+                f"{expected_length}, got {batch['mtp_tokens'].size(1)}."
+            )
+            mtp_batch = {
+                "tokens": batch["mtp_tokens"],
+                "position_ids": batch["mtp_position_ids"],
+                "labels": batch.get("mtp_labels"),
+                "loss_mask": batch.get("mtp_loss_mask"),
+                "group_total_tokens": batch.get("group_total_tokens"),
+                "step_num_groups": batch.get("step_num_groups"),
+            }
+
     output = (
         batch["tokens"],
         batch["labels"],
@@ -72,6 +156,7 @@ def get_batch(data_iterator):
         batch["position_ids"],
         batch["attention_mask"],
         batch["packed_seq_params"],
+        mtp_batch,
     )
 
     return output
@@ -134,6 +219,44 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
         )
 
     num_tokens = loss_mask.sum().clone().detach().to(torch.int)
+
+    # SFT chunkpipe per-sample loss path (default when sft_chunkpipe_mode=True
+    # and --calculate-per-token-loss is NOT set). Goal: final gradient equals
+    # (1/G_total) * sum_g (1/N_g) * sum_k d S_{g,k}/d theta, i.e. per-source-
+    # sequence equal weighting independent of chunk count per sequence and
+    # robust to per-rank G_local fluctuation.
+    #
+    # Derivation (legacy=True 2-tuple path, no CP for brevity; cp=1):
+    #   loss_func returns scaled = D * S_{g,k} * M_raw / (N_g * G_total * cp)
+    #   schedules legacy path multiplies by cp / M_raw
+    #   → backward sees D * S_{g,k} / (N_g * G_total)
+    #   DDP grad all-reduce averages by 1/D
+    #   → grad sees S_{g,k} / (N_g * G_total) accumulated over all chunks on
+    #     all ranks: (1/G_total) sum_g (1/N_g) sum_k S_{g,k}  ✓
+    #
+    # The D pre-compensation symmetrically applies to the reporting tensor so
+    # that the post-aggregation report (sum-across-mbs → all-reduce-sum →
+    # divide-by-DPxCP-world-size in training_utils) recovers the same
+    # (1/G_total) sum_g (1/N_g) sum_k S_{g,k} value. Using G_total instead of
+    # G_local also fixes a latent precision bug in the equal-DP case where
+    # LPT did not strictly guarantee G_local = G_total / D across ranks.
+    config = get_model_config()
+    sft_cp_mode = config is not None and getattr(config, "sft_chunkpipe_mode", False)
+    if sft_cp_mode and not args.calculate_per_token_loss:
+        N_g = args.chunkpipe_group_total_tokens
+        G_total = args.chunkpipe_step_num_groups
+        M_raw = get_num_microbatches()
+        cp = mpu.get_context_parallel_world_size()
+        D = mpu.get_data_parallel_world_size()
+
+        denom = N_g * G_total * cp
+        scaled = loss * (D * M_raw / denom)
+        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in training_utils.py.
+        # Without cp factor, the logged loss would be 1/cp times smaller than correct value.
+        reporting = (D * cp * loss / (N_g * G_total)).detach()
+        loss_reduced_dict = {'lm loss': reporting}
+        return scaled, loss_reduced_dict
+
     reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
 
     loss_reduced_dict = {'lm loss': reporting_loss if not args.legacy_reporting_loss_reduction
@@ -179,9 +302,17 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
             position_ids,
             attention_mask,
             packed_seq_params,
+            mtp_batch,
         ) = get_batch(data_iterator)
 
     timers("batch-generator").stop()
+
+    # SFT chunkpipe + MTP: MTP bridge tokens are appended during preprocessing.
+    # The main model consumes the base chunksize slice; the MTP branch consumes
+    # the full chunksize + mtp_num_layers tensors via extra_block_kwargs.
+    extra_block_kwargs = None
+    if mtp_batch is not None and mpu.is_pipeline_last_stage():
+        extra_block_kwargs = {"mtp_batch": mtp_batch}
 
     with stimer:
         if return_schedule_plan:
@@ -204,6 +335,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 labels=labels,
                 packed_seq_params=packed_seq_params,
                 loss_mask=loss_mask,
+                extra_block_kwargs=extra_block_kwargs,
             )
 
     return output_tensor, partial(loss_func, loss_mask)
@@ -257,6 +389,9 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         sort_batch=args.sft_sort_batch,
         packing_buffer_size=args.packing_buffer_size,
         context_parallel_size=args.context_parallel_size,
+        enable_chunkpipe=args.enable_chunkpipe,
+        chunksize=args.chunksize,
+        mtp_num_layers=args.mtp_num_layers or 0,
     )
 
     print_rank_0(

@@ -150,6 +150,8 @@ class McoreMoe(McoreBase):
                 t = etp_to_tp[et]
             if mt not in m_dict:
                 continue
+            if t_name not in m_dict[mt]:
+                continue
             m_dict[mt][t_name][f"{mcore_weight_path}"] = weight_list[mt]
             if bias_list is not None:
                 m_dict[mt][t_name][f"{mcore_bias_path}"] = bias_list[mt]

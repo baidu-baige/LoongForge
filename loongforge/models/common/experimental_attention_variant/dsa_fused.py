@@ -743,6 +743,8 @@ class DSAttentionFused(MegatronModule):
             softmax_scale=self.softmax_scale,
         )
 
+        self.attn_sink = None
+
         #padding num_attention_heads to 128 
         _DSA_MIN_HEAD_DIM = 128  # Minimum head count required by DSA sparse attention kernel
         self.num_attention_heads_padded = max(config.num_attention_heads, _DSA_MIN_HEAD_DIM)
@@ -824,7 +826,8 @@ class DSAttentionFused(MegatronModule):
             offset,
             attn_mask_type=attn_mask_type,
             packed_seq_params=packed_seq_params,
-            return_p_out=True
+            return_p_out=True,
+            attn_sink=self.attn_sink,
         )
 
         # Unpad output head dim back to original

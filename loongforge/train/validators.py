@@ -222,6 +222,94 @@ def _validate_extra_sft_args(args):
             "WARING: Setting args.padding_side to right when run sft.", args.rank
         )
 
+    # NOTE on ordering: this validator runs BEFORE megatron's `validate_args`,
+    # so `args.sft_chunkpipe_mode` and `args.data_parallel_size` are not yet
+    # populated. We are already inside the SFT branch (early-return above),
+    # which is exactly the condition under which `sft_chunkpipe_mode` is later
+    # set to True in megatron arguments.py, so we don't need to re-check it.
+    # `data_parallel_size` is recomputed locally with megatron's formula.
+    if getattr(args, "enable_chunkpipe", False):
+        if args.sft_data_streaming:
+            raise NotImplementedError(
+                "SFT chunkpipe does not support --sft-data-streaming."
+            )
+        if getattr(args, "dataloader_save", None):
+            raise NotImplementedError(
+                "SFT chunkpipe does not support --dataloader-save. "
+                "Please resume from iteration checkpoints via consumed_train_samples."
+            )
+        if args.context_parallel_size != 1:
+            raise NotImplementedError(
+                "SFT chunkpipe temporarily requires context_parallel_size == 1. "
+                f"Got context_parallel_size={args.context_parallel_size}."
+            )
+        if args.sequence_parallel and args.chunksize % args.tensor_model_parallel_size != 0:
+            raise ValueError(
+                "SFT chunkpipe requires chunksize to be divisible by "
+                "tensor_model_parallel_size when sequence_parallel is enabled. "
+                f"Got chunksize={args.chunksize}, "
+                f"tensor_model_parallel_size={args.tensor_model_parallel_size}."
+            )
+        if getattr(args, "mtp_num_layers", 0) and args.mtp_num_layers > 0:
+            if args.overlap_grad_reduce:
+                raise NotImplementedError(
+                    "SFT chunkpipe + MTP temporarily does not support "
+                    "--overlap-grad-reduce because MTP checkpoint/recompute can "
+                    "trigger duplicate grad-ready marking on output/shared embedding weights."
+                )
+
+        # SFT chunkpipe per-sample loss path: default when
+        # --calculate-per-token-loss is not set. Requires the new 2-tuple
+        # reporting format (legacy_reporting_loss_reduction=False); the new
+        # path returns a scalar S/(N*G), not the 2-tuple [loss, num_tokens]
+        # the legacy path expects.
+        if not args.calculate_per_token_loss:
+            assert not args.legacy_reporting_loss_reduction, (
+                "SFT chunkpipe per-sample loss path requires "
+                "legacy_reporting_loss_reduction=False. "
+                "Either drop --legacy-reporting-loss-reduction or pass "
+                "--calculate-per-token-loss to fall back to the "
+                "token-weighted path."
+            )
+            print_rank_0(
+                "INFO: SFT chunkpipe per-sample loss path enabled (default). "
+                "Pass --calculate-per-token-loss to fall back to the "
+                "token-weighted loss path.",
+                args.rank,
+            )
+
+        # Decide whether to enable the heterogeneous-DP synthesis path.
+        # attn_dp != expert_dp happens when EP > 1 or ETP differs from TP, in
+        # which case the LPT partition cannot guarantee identical group-size
+        # multisets across DP ranks; without synthesis the MoE All2All would
+        # desync. The sampler reads `args.chunkpipe_enable_synthesis` at
+        # construction time and switches to `_equal_size_partition`.
+        tp = args.tensor_model_parallel_size
+        pp = args.pipeline_model_parallel_size
+        cp = args.context_parallel_size
+        ep = getattr(args, "expert_model_parallel_size", 1) or 1
+        etp = getattr(args, "expert_tensor_parallel_size", None)
+        if etp is None:
+            etp = tp
+        attn_dp = args.world_size // (tp * pp * cp)
+        expert_dp = args.world_size // (etp * pp * ep)
+        vpp = args.num_virtual_stages_per_pipeline_rank or 1
+        if vpp != 1 and attn_dp != expert_dp:
+            raise NotImplementedError(
+                f"SFT chunkpipe with virtual pipeline parallelism (vpp={vpp}) is temporarily not supported "
+                f"when attn_dp ({attn_dp}) != expert_dp ({expert_dp}). "
+                f"Please set vpp=1, or ensure attn_dp == expert_dp."
+            )
+        args.chunkpipe_enable_synthesis = (attn_dp != expert_dp)
+        if args.chunkpipe_enable_synthesis:
+            print_rank_0(
+                f"INFO: SFT chunkpipe synthesis path enabled "
+                f"(attn_dp={attn_dp}, expert_dp={expert_dp}). "
+                f"Group-size multisets will be aligned across DP ranks via "
+                f"short-pool synthesis with all-or-nothing rollback.",
+                args.rank,
+            )
+
 
 def _validate_extra_training_args(args):
     """Validate training arguments"""

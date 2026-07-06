@@ -10,6 +10,7 @@ from .qwen3 import Qwen3Model, Qwen3Config
 from .qwen3_5 import Qwen35Model, Qwen35Config
 from .qwen3_next import Qwen3NextModel, Qwen3NextConfig
 from .deepseek import DeepseekConfig, DeepseekModelWithMTP
+from .deepseek_v4 import DeepseekV4Config, DeepseekV4Model
 from .mimo import MimoConfig, MimoModelWithMTP
 from .minimax import MinimaxConfig, MinimaxModelWithMTP
 from .llama import LLaMAConfig, LLaMAModel
@@ -26,6 +27,7 @@ AutoModel.register(Qwen35Config, Qwen35Model, exist_ok=True)
 AutoModel.register(GlmConfig, GlmModelWithMTP, exist_ok=True)
 AutoModel.register(InternLMConfig, InternLMModel)
 AutoModel.register(DeepseekConfig, DeepseekModelWithMTP)
+AutoModel.register(DeepseekV4Config, DeepseekV4Model, exist_ok=True)
 AutoModel.register(MimoConfig, MimoModelWithMTP)
 AutoModel.register(MinimaxConfig, MinimaxModelWithMTP)
 AutoModel.register(LLaMAConfig, LLaMAModel)
