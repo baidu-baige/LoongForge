@@ -1059,7 +1059,10 @@ def _save_state_dict_safetensors(
     for k, v in state_dict.items():
         if isinstance(v, DTensor):
             v = v.full_tensor()
-        clean_sd[k] = v.detach().cpu().clone()
+        # safetensors rejects non-contiguous tensors (e.g. Qwen3-VL
+        # visual.patch_embed.proj.weight, a permuted conv view). .clone()
+        # preserves strides, so repack with .contiguous() before saving.
+        clean_sd[k] = v.detach().cpu().contiguous().clone()
 
     save_file(clean_sd, filepath, metadata=metadata)
 

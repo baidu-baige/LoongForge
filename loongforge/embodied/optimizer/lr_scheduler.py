@@ -317,7 +317,26 @@ def build_scheduler(optimizer, training_args):
             f"cycle_len={cycle_len}"
         )
 
-        return LambdaLR(optimizer, _scheduler.schedule)
+        sched = LambdaLR(optimizer, _scheduler.schedule)
+
+        # --lr-step0-unscaled (default False -> torch's behavior; pass the flag
+        # for base parity): reproduce base deepcompile's step-0 LR exactly.
+        # Base's LambdaLinearScheduler.__init__ does NOT touch optimizer.lr, so
+        # its FIRST optimizer.step runs at the unscaled base_lr (multiplier 1.0).
+        # torch's LambdaLR.__init__ instead applies base_lr*schedule(0)=
+        # base_lr*f_start (~0). When enabled, reset each group back to its
+        # captured initial_lr for step-0 to match base bit-for-bit; the first
+        # lr_scheduler.step() (fired AFTER the step-0 optimizer update) then sets
+        # base_lr*schedule(1), so step>=1 is unaffected either way.
+        if training_args.lr_step0_unscaled:
+            for group in optimizer.param_groups:
+                group["lr"] = group.get("initial_lr", group["lr"])
+            logger.info(
+                "lr_step0_unscaled: reset optimizer lr to unscaled base_lr for "
+                "step-0 (matches base deepcompile; scheduler resumes at step>=1)."
+            )
+
+        return sched
     else:
         kwargs = {}
         style = training_args.lr_decay_style

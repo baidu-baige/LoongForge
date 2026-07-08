@@ -8,6 +8,7 @@ data-state implementations that previously lived in BaseTrainer. BaseTrainer now
 only declares these as abstract methods.
 """
 
+import json
 import logging
 from contextlib import nullcontext
 from typing import Dict, Tuple
@@ -44,8 +45,71 @@ class FinetuneTrainer(BaseTrainer):
 
     forward(batch) → (loss, log_loss_dict) → backward → step, over the single "vla"
     dataloader. Behaviorally equivalent to the former BCTrainer, with optional
-    model-owned hooks for pre-wrap preparation and training-time policy setup.
+    model-owned hooks for training-time policy setup.
+
+    Generic eager DeepSpeed ZeRO
+    ----------------------------
+    Passing ``--deepspeed-config <json>`` WITHOUT ``--use-deepcompile`` turns on a
+    DeepSpeed ZeRO engine (eager — no ``engine.compile()``): the engine owns
+    wrapping / zero_grad / backward / step, replacing the DDP + client-optimizer
+    path. This lets ANY standard FinetuneTrainer model get ZeRO-1/2/3 one-click
+    from the launch flags alone — no per-model trainer edits.
+
+    Custom subclasses that own their own wrapping/step machinery (Motus, Groot,
+    LingBot) are NOT touched by this: they override ``_build_optimizer`` /
+    ``_train_step`` / ``_wrap_model_for_training`` / ``_run_forward_backward_block``,
+    so the generic branches below never execute for them (e.g. Motus keeps its own
+    ``deepspeed+eager`` / ``PLAIN_COMPILE`` / ``--use-deepcompile`` paths). A trainer
+    may still set ``_supports_generic_ds_eager = True`` to force the generic path on
+    without the launch flag, but that is not required.
     """
+
+    # Force-on override for the generic eager DeepSpeed ZeRO path. Default False:
+    # enablement is driven purely by the launch flags (--deepspeed-config WITHOUT
+    # --use-deepcompile), so other models enable DeepSpeed with no trainer edits.
+    # A subclass may set True to force the path on even without --deepspeed-config
+    # (it must then still provide a config, else _load_deepspeed_config raises).
+    _supports_generic_ds_eager: bool = False
+
+    @property
+    def _ds_eager_enabled(self) -> bool:
+        """Generic eager DeepSpeed ZeRO gate.
+
+        True when a ``--deepspeed-config`` is provided WITHOUT
+        ``--use-deepcompile`` (launch-driven, default off), or when a subclass
+        force-enables via ``_supports_generic_ds_eager``. When True a DeepSpeed
+        ZeRO engine (eager, no compile) owns wrapping / zero_grad / backward /
+        step for this trainer.
+        """
+        launched = (
+            bool(getattr(self.training_args, "deepspeed_config", None))
+            and not bool(getattr(self.training_args, "use_deepcompile", False))
+        )
+        return launched or self._supports_generic_ds_eager
+
+    def _load_deepspeed_config(self) -> dict:
+        """Load the DeepSpeed JSON config and inject the batch / accumulation sizes.
+
+        ``train_micro_batch_size_per_gpu`` / ``gradient_accumulation_steps`` /
+        ``train_batch_size`` are derived from the launch flags (the bundled config
+        keeps them ``"auto"``), so the JSON stays the single source of truth for
+        the ZeRO stage / overlap / bf16 settings while the batch geometry follows
+        ``--per-device-batch-size`` × ``--gradient-accumulation-steps`` × world.
+        """
+        path = self.training_args.deepspeed_config
+        if not path:
+            raise ValueError(
+                "eager DeepSpeed ZeRO requires --deepspeed-config to point at the "
+                "DeepSpeed JSON (a ZeRO stage config; e.g. a zero1/zero2 config)."
+            )
+        with open(path) as f:
+            cfg = json.load(f)
+        micro = int(self.training_args.per_device_batch_size)
+        gas = int(self.training_args.gradient_accumulation_steps)
+        cfg["train_micro_batch_size_per_gpu"] = micro
+        cfg["gradient_accumulation_steps"] = gas
+        cfg["train_batch_size"] = micro * gas * self.ctx.world_size
+        return cfg
 
     # ═══════════════════════════════════════════════
     # Compute — model / data / paradigm
@@ -117,6 +181,26 @@ class FinetuneTrainer(BaseTrainer):
         accumulated into ``log_dict`` across micro-steps.
         """
         threshold = self.training_args.loss_spike_threshold
+        if self._ds_eager_enabled:
+            # DeepSpeed engine owns grad-accum scaling + cross-rank reduce + step.
+            # Call engine.backward/step every micro; DeepSpeed applies the update
+            # only on the accumulation boundary. No manual /grad_accum, no no_sync.
+            with self._stage_timers("backward-compute"):
+                loss_val = loss.detach().item()
+                is_nan = bool(torch.isnan(loss) or torch.isinf(loss))
+                if is_nan or loss_val > threshold:
+                    self.logger.log_loss_spike(self.completed_steps, loss_val)
+                    if is_nan:
+                        self._step_loss_is_nan = True
+                    self._step_loss_spiked = True
+                    loss = loss * 0.0
+                self.model.backward(loss)
+                self.model.step()
+            for key, value in log_loss_dict.items():
+                v = value.detach().item() if isinstance(value, torch.Tensor) else float(value)
+                log_dict[key] = log_dict.get(key, 0.0) + v / grad_accum
+            return
+
         with self._stage_timers("backward-compute"):
             # Scale + loss spike protection (zero out to prevent NaN propagation).
             raw_loss = loss
@@ -205,12 +289,99 @@ class FinetuneTrainer(BaseTrainer):
     # ═══════════════════════════════════════════════
 
     def _build_optimizer(self) -> torch.optim.Optimizer:
-        """Build AdamW with per-module LR groups."""
-        return build_optimizer(self.model, self.training_args)
+        """Build AdamW with per-module LR groups.
+
+        Generic eager DeepSpeed ZeRO path (``_ds_eager_enabled``): build the same
+        AdamW on the (still-unwrapped) model, then wrap the model with a DeepSpeed
+        ZeRO engine via ``deepspeed.initialize`` (no accelerate, no
+        ``engine.compile``). The engine replaces ``self.model`` (the loop calls
+        ``self.model(...)`` for forward and ``self.model.backward``/``.step`` in
+        ``_backward_loss``). The returned optimizer is the client AdamW so
+        ``_build_scheduler`` can read ``optimizer.defaults["lr"]`` / param_groups;
+        ZeRO wraps and steps these same param_groups in place, so scheduler LR
+        updates still drive the real step.
+        """
+        if not self._ds_eager_enabled:
+            return build_optimizer(self.model, self.training_args)
+
+        import deepspeed
+
+        if getattr(self.training_args, "zero_optimizer", False):
+            raise ValueError(
+                "eager DeepSpeed ZeRO (--deepspeed-config without --use-deepcompile) "
+                "is incompatible with --zero-optimizer: the DeepSpeed engine provides "
+                "ZeRO itself, so drop --zero-optimizer from the launch args."
+            )
+
+        adamw = build_optimizer(self.model, self.training_args)
+        ds_config = self._load_deepspeed_config()
+        # Eager: strip any compile block so deepspeed.initialize builds a plain
+        # ZeRO engine (no DeepCompile fx passes). ZeRO stage/overlap/bf16 stay.
+        ds_config.pop("compile", None)
+        engine, _, _, _ = deepspeed.initialize(
+            model=self.model,
+            optimizer=adamw,
+            config=ds_config,
+            dist_init_required=False,
+        )
+        self.model = engine
+        logger.info(
+            "FinetuneTrainer: DeepSpeed ZeRO engine initialized (eager, NO "
+            "engine.compile)."
+        )
+        return adamw
 
     def _build_scheduler(self):
         """Build LR scheduler."""
         return build_scheduler(self.optimizer, self.training_args)
+
+    def _wrap_model_for_training(self):
+        """Wrap the model for distributed training.
+
+        Generic eager DeepSpeed ZeRO path (``_ds_eager_enabled``): SKIP the
+        DDP/FSDP wrap — the DeepSpeed engine built in ``_build_optimizer`` wraps
+        the model, moves it to device, and applies bf16 per the ds config.
+        """
+        if self._ds_eager_enabled:
+            return
+        super()._wrap_model_for_training()
+
+    def _run_forward_backward_block(self) -> dict:
+        """Run zero_grad + the forward/backward gradient-accumulation loop.
+
+        Generic eager DeepSpeed ZeRO path: SKIP the client ``optimizer.zero_grad``
+        (the DeepSpeed engine clears grads inside ``engine.step()``); just run the
+        accumulation loop, whose ``_backward_loss`` drives ``engine.backward/step``.
+        """
+        if self._ds_eager_enabled:
+            return self._forward_backward()
+        return super()._run_forward_backward_block()
+
+    def _train_step(self):
+        """One optimizer step.
+
+        Generic eager DeepSpeed ZeRO path: the engine owns zero_grad / grad
+        reduce / clip (via ds config) / optimizer step inside ``engine.step()``
+        (called per micro in ``_backward_loss``), so skip the base clip +
+        ``optimizer.step`` + NaN cleanup and only advance the LR schedule. Returns
+        grad_norm 0.0 (not separately computed on the engine path). The default
+        path defers to the base skeleton.
+        """
+        if not self._ds_eager_enabled:
+            return super()._train_step()
+
+        self._step_loss_is_nan = False
+        self._step_loss_spiked = False
+
+        log_dict = self._run_forward_backward_block()
+
+        if self._step_loss_is_nan:
+            self.nan_iterations += 1
+        if self._step_loss_spiked:
+            self.skipped_iterations += 1
+
+        self.lr_scheduler.step()
+        return log_dict, 0.0
 
     def _clip_gradients(self, max_norm: float) -> float:
         """Gradient clipping. Returns the pre-clip global gradient norm."""

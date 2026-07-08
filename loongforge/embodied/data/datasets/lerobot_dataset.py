@@ -116,12 +116,14 @@ class LeRobotV3Dataset(LeRobotDataset):
         delta_timestamps_fn: Callable | None = None,
         length_fn: Callable | None = None,
         index_map_fn: Callable | None = None,
+        latent_cache_fn: Callable | None = None,
         **strategy_kwargs,
     ):
         self._action_horizon = action_horizon
         self._transform = transform
         self._length_fn = length_fn
         self._index_map_fn = index_map_fn
+        self._latent_cache_fn = latent_cache_fn
         self._strategy_kwargs = dict(strategy_kwargs)
 
         # Resolve root for reading info.json before parent __init__
@@ -168,6 +170,11 @@ class LeRobotV3Dataset(LeRobotDataset):
         data = super().__getitem__(idx)
         if self._transform is not None:
             data = self._transform(data)
+        # Optional latent-cache hook (default None -> model-agnostic). Given the
+        # resolved flat frame index, a model strategy may inject a precomputed
+        # value (e.g. Motus VAE latent) so the trainer can skip the online encode.
+        if self._latent_cache_fn is not None:
+            data = self._latent_cache_fn(self, idx, data)
         return data
 
 

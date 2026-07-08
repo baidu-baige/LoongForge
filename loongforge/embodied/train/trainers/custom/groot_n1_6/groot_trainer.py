@@ -48,6 +48,16 @@ class GrootN1d6Trainer(FinetuneTrainer):
         super().__init__(training_args, model_cfg, data_cfg)
         self._train_step_runner: GrootN1d6PerMicrobatchCudaGraphRunner | None = None
 
+    @property
+    def _ds_eager_enabled(self) -> bool:
+        """Hard-isolate GR00T from the generic eager DeepSpeed ZeRO path.
+
+        GR00T owns its own wrapping + per-microbatch CUDA-graph runner, so the
+        generic ``FinetuneTrainer`` eager-ZeRO branches must NEVER engage —
+        regardless of launch flags such as ``--deepspeed-config``. Force off.
+        """
+        return False
+
     def _wrap_model_for_training(self) -> None:
         """Wrap the model for training, installing a CUDA graph runner when enabled.
 
