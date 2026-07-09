@@ -374,6 +374,12 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "wan2_2_i2v",
     },
 
+    # qwen image
+    "qwen-image-edit-2511": {
+        "config_path": "configs/models/qwen_image",
+        "config_name": "qwen_image_edit_2511",
+    },
+
     # pi05
     "pi05": {
         # Hydra expects the directory, config name selects the file.

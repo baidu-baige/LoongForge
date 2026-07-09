@@ -20,6 +20,7 @@ except ImportError:
 
 from .sft import sft_llm, sft_vlm, sft_internvl, sft_ernie
 from .diffusion import pretrain_wan
+from .diffusion import pretrain_qwen_image
 
 
 __all__ = ["parse_train_args", "build_model_trainer" "parse_args_from_config", "parse_args_from_config"]

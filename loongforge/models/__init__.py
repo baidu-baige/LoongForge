@@ -5,6 +5,7 @@
 
 from .foundation import *
 from .encoder import *
+from .diffusion import *  # noqa: F401
 
 from .factory import (
     get_support_model_archs,
