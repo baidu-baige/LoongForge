@@ -109,6 +109,7 @@ class CustomModelFamilies(_BaseFamilies):
     """User defined Custom Vision model families"""
     WAN2_1_I2V = "wan2_1_i2v"
     WAN2_2_I2V = "wan2_2_i2v"
+    QWEN_IMAGE = "qwen_image"
 
 
 class VisionLanguageActionModelFamilies(_BaseFamilies):
@@ -126,5 +127,5 @@ def get_all_model_families() -> List[str]:
 
     for family_class in _BaseFamilies.__subclasses__():
         all_families.extend(family_class.names())
-        
+
     return all_families
