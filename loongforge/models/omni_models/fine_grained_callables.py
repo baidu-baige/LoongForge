@@ -61,14 +61,15 @@ def weak_method(method):
     return wrapped_func
 
 
-def should_free_input(name, is_moe, is_deepep):
+def should_free_input(name, is_moe, enable_deepep, enable_hybridep):
     """Determine if the node should free its input memory.
 
     Args:
         name: Node name
         is_moe: Whether it's a MoE model
-        is_deepep: Whether it's a DeepEP model
-
+        enable_deepep: Whether to use DeepEP dispatcher
+        enable_hybridep: Whether to use HybridEP dispatcher
+    
     Returns:
         bool: Whether to free input memory
     """
@@ -81,13 +82,13 @@ def should_free_input(name, is_moe, is_deepep):
     # The input and output of A2A are not needed anymore after the forward pass,
     # so we can free the input memory after the forward pass.
     free_input_nodes = {
-        "mlp": True,
+        "mlp": not enable_hybridep,
         "moe_combine": True,
-        "post_combine": is_deepep,
+        "post_combine": enable_deepep or enable_hybridep,
         # For non-deepep mode, the input is the un-dispatched tokens and probs before dispatch A2A
         # and it's not needed anymore after the forward pass
         # For deepep mode, they are both needed in backward pass, so they cannot be freed.
-        "moe_dispatch": not is_deepep,
+        "moe_dispatch": not (enable_deepep or enable_hybridep),
     }
 
     return free_input_nodes.get(name, False)
@@ -625,12 +626,13 @@ class TransformerLayerNode(ScheduleNode):
             it's the per_batch_state_context, o.w. nullcontext
             name (str): Node name, also used to determine memory strategy
             bwd_dw_callables (list): List of weight gradient functions for the layer.
-            extra_args (dict): Extra arguments for the node: is_moe, enable_deepep.
+            extra_args (dict): Extra arguments for nodes: is_moe, enable_deepep, enable_hybridep.
         """
         # determine whether to free input memory
         is_moe = extra_args.get("is_moe", False)
         enable_deepep = extra_args.get("enable_deepep", False)
-        free_input = should_free_input(name, is_moe, enable_deepep)
+        enable_hybridep = extra_args.get("enable_hybridep", False)
+        free_input = should_free_input(name, is_moe, enable_deepep, enable_hybridep)
         self.delay_wgrad_compute = extra_args.get("delay_wgrad_compute", False)
         self.layer_idx = extra_args.get("layer_idx", None)
 
@@ -727,7 +729,14 @@ def build_transformer_layer_callables(layer: TransformerLayer):
     """
 
     is_moe = isinstance(layer.mlp, MoELayer)
-    enable_deepep = layer.config.moe_enable_deepep
+    enable_deepep = (
+        layer.config.moe_token_dispatcher_type == "flex"
+        and layer.config.moe_flex_dispatcher_backend == "deepep"
+    )
+    enable_hybridep = (
+        layer.config.moe_token_dispatcher_type == "flex"
+        and layer.config.moe_flex_dispatcher_backend == "hybridep"
+    )
     is_alltoall_dispatcher = (
         is_moe and layer.config.moe_token_dispatcher_type == "alltoall"
     )
@@ -782,13 +791,17 @@ def build_transformer_layer_callables(layer: TransformerLayer):
             pre mlp layernorm->router->dispatch preprocess
         """
         if layer.a2a_overlap_post_attn_recompute:
+            metadata_holder = {}
             def custom_forward(hidden_states):
                 pre_mlp_layernorm_output = layer.pre_mlp_layernorm(hidden_states)
-                local_tokens, probs, _ = layer.mlp.router_and_preprocess(pre_mlp_layernorm_output)
-                return pre_mlp_layernorm_output, local_tokens, probs    
+                local_tokens, probs, metadata_holder['metadata'], _ = (
+                    layer.mlp.router_and_preprocess(pre_mlp_layernorm_output)
+                )
+                return pre_mlp_layernorm_output, local_tokens, probs  
 
             pre_mlp_layernorm_output, local_tokens, probs  = tensor_parallel.checkpoint(
                     custom_forward, False, hidden_states)
+            metadata = metadata_holder['metadata']
 
         else:
             if layer.offload_mlp_norm:
@@ -803,26 +816,30 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                 with get_fine_grained_offloading_context(layer.offload_mlp_norm):
                     pre_mlp_layernorm_output = layer.pre_mlp_layernorm(hidden_states)
 
-            local_tokens, probs, _ = layer.mlp.router_and_preprocess(pre_mlp_layernorm_output)
+            local_tokens, probs, metadata, _ = layer.mlp.router_and_preprocess(
+                pre_mlp_layernorm_output
+            )
+
+        node.layer_state.dispatch_metadata = metadata
 
         # Save token_dispatcher attributes to per-microbatch layer_state to protect against
         # recompute corruption when f_layer == b_layer in combined 1F1B schedule
         # (occurs at the middle layer when chunk has odd number of layers).
         # These attributes are used in combine_postprocess for unpermute and view operations.
-        node.layer_state.hidden_shape = layer.mlp.token_dispatcher.hidden_shape
+        node.layer_state.hidden_shape = metadata.hidden_shape
         # hidden_shape_before_permute and reversed_local_input_permutation_mapping are only
         # used in AlltoAll dispatcher's combine_postprocess (unpermute). AllGather uses them
         # in combine_preprocess which runs before post_combine, and Flex uses a different
         # attribute (reversed_mapping_for_combine). So we only save them for alltoall.
         if is_alltoall_dispatcher:
             node.layer_state.hidden_shape_before_permute = (
-                layer.mlp.token_dispatcher.hidden_shape_before_permute
+                metadata.hidden_shape_before_permute
             )
             # reversed_local_input_permutation_mapping is used as indices in unpermute.
             # It's an index tensor that doesn't require grad, so we save it directly
             # without using node.detach() to avoid adding it to the backward graph.
             node.layer_state.reversed_local_input_permutation_mapping = (
-                layer.mlp.token_dispatcher.reversed_local_input_permutation_mapping
+                metadata.reversed_local_input_permutation_mapping
             )
 
         # Detach here for mlp_bda residual connection
@@ -840,12 +857,13 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         Dispatches tokens to the experts based on the router output.
         """
         token_dispatcher = layer.mlp.token_dispatcher
-        if enable_deepep:
+        if enable_deepep or enable_hybridep:
             # update token_probs to be the detached version, prevents
             # backward graph from connecting to attn submodule
             token_dispatcher._comm_manager.token_probs = probs
 
-        dispatched_tokens, dispatched_probs = layer.mlp.dispatch(local_tokens, probs)
+        metadata = node.layer_state.dispatch_metadata
+        dispatched_tokens, dispatched_probs = layer.mlp.dispatch(local_tokens, probs, metadata)
         node.layer_state.dispatched_probs = node.detach(dispatched_probs)
         return dispatched_tokens
 
@@ -859,15 +877,16 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         shared_expert_output = None
         dispatched_probs = node.layer_state.dispatched_probs
         token_dispatcher = layer.mlp.token_dispatcher
-        if enable_deepep:
+        if enable_deepep or enable_hybridep:
             # update dispatched_probs to be detached version, prevents
             # backward graph from connecting to dispatch submodule
             token_dispatcher._comm_manager.dispatched_probs = dispatched_probs
 
         pre_mlp_layernorm_output = getattr(node.layer_state, 'pre_mlp_layernorm_output', None)
+        metadata = node.layer_state.dispatch_metadata
 
         dispatched_input, tokens_per_expert, permuted_probs = layer.mlp.pre_routed_experts_compute(
-            dispatched_tokens, dispatched_probs)
+            dispatched_tokens, dispatched_probs, metadata)
 
         if layer.a2a_overlap_mlp_recompute:
             def custom_forward(dispatched_input, tokens_per_expert, permuted_probs, pre_mlp_layernorm_output):
@@ -892,7 +911,7 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                 dispatched_input, tokens_per_expert, permuted_probs
             )   
 
-        expert_output = layer.mlp.post_routed_experts_compute(expert_output)
+        expert_output = layer.mlp.post_routed_experts_compute(expert_output, metadata)
 
         if layer.recompute_pre_mlp_layernorm:
             # discard the output of the pre-mlp layernorm and register the recompute
@@ -923,7 +942,8 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         Triggers token combine communication.
         This communication can be overlapped with computation from another microbatch.
         """
-        output = layer.mlp.combine(output)
+        metadata = node.layer_state.dispatch_metadata
+        output = layer.mlp.combine(output, metadata)
         return output
 
     def submodule_post_combine_forward(
@@ -935,6 +955,7 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         """
         residual = node.layer_state.residual
         shared_expert_output = getattr(node.layer_state, 'shared_expert_output', None)
+        metadata = node.layer_state.dispatch_metadata
 
         # Restore token_dispatcher attributes from per-microbatch layer_state before
         # combine_postprocess, to avoid corruption when backward recompute of another
@@ -942,7 +963,7 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         # in combined 1F1B).
         saved_hidden_shape = getattr(node.layer_state, 'hidden_shape', None)
         if saved_hidden_shape is not None:
-            layer.mlp.token_dispatcher.hidden_shape = saved_hidden_shape
+            metadata.hidden_shape = saved_hidden_shape
         # Only restore alltoall-specific attributes when using alltoall dispatcher.
         if is_alltoall_dispatcher:
             saved_hidden_shape_before_permute = getattr(
@@ -952,16 +973,16 @@ def build_transformer_layer_callables(layer: TransformerLayer):
                 node.layer_state, 'reversed_local_input_permutation_mapping', None
             )
             if saved_hidden_shape_before_permute is not None:
-                layer.mlp.token_dispatcher.hidden_shape_before_permute = saved_hidden_shape_before_permute
+                metadata.hidden_shape_before_permute = saved_hidden_shape_before_permute
             if saved_reversed_local_input_permutation_mapping is not None:
-                layer.mlp.token_dispatcher.reversed_local_input_permutation_mapping = (
+                metadata.reversed_local_input_permutation_mapping = (
                     saved_reversed_local_input_permutation_mapping
                 )
             # Release the index tensor reference early to allow GC before _release_state()
             node.layer_state.reversed_local_input_permutation_mapping = None
         
         # Post-process combine and add shared expert output
-        output = layer.mlp.post_combine(output, shared_expert_output)
+        output = layer.mlp.post_combine(output, metadata, shared_expert_output)
         mlp_output_with_bias = (output, None)
 
         with layer.bias_dropout_add_exec_handler():
@@ -984,6 +1005,7 @@ def build_transformer_layer_callables(layer: TransformerLayer):
             shared_expert_output.untyped_storage().resize_(0)
         node.layer_state.residual = None
         node.layer_state.shared_expert_output = None
+        node.layer_state.dispatch_metadata = None
 
         # final layer norm from decoder
         final_layernorm = node.chunk_state.model.foundation_model.decoder.final_layernorm
