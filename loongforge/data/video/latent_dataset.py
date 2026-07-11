@@ -31,8 +31,7 @@ class TensorDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         seed = (self.manual_seed + index) % 2**32
         numpy_random_state = np.random.RandomState(seed=seed)
-        data_id = numpy_random_state.randint(0, self.steps_per_epoch)
-        data_id = data_id % len(self.data_paths)
+        data_id = numpy_random_state.randint(0, len(self.data_paths))
         path = self.data_paths[data_id]
         data = torch.load(path, weights_only=False, map_location="cpu")
         if self.keep_keys is not None:
