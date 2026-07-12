@@ -15,7 +15,6 @@ import torch.nn.functional as F
 from torch.utils.data import IterableDataset
 from megatron.core import parallel_state
 
-from loongforge.utils import get_args, print_rank_0
 from loongforge.data.video.latent_dataset import TensorDataset
 from loongforge.data.video.sequence_packing_utils import first_fit
 

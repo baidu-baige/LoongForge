@@ -4,9 +4,7 @@
 """latent dataset"""
 
 import numpy as np
-import pandas as pd
 import torch
-import json
 from pathlib import Path
 class TensorDataset(torch.utils.data.Dataset):
     def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None, data_parallel_size=1):
