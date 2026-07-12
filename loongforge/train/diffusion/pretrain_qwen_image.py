@@ -317,12 +317,14 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
         args.train_iters * args.global_batch_size,
         seed=args.seed,
         keep_keys=keep_keys,
+        data_parallel_size=parallel_state.get_data_parallel_world_size(),
     )
     sampler = torch.utils.data.DistributedSampler(
         dataset,
         shuffle=False,
         num_replicas=parallel_state.get_data_parallel_world_size(),
         rank=parallel_state.get_data_parallel_rank(),
+        drop_last=True,
     )
     dataloader = DataLoader(dataset, batch_size=1, num_workers=args.num_workers, sampler=sampler, pin_memory=True)
     print_rank_0(f"> finished creating {args.model_name} datasets ...")

@@ -15,7 +15,6 @@ import torch.nn.functional as F
 from torch.utils.data import IterableDataset
 from megatron.core import parallel_state
 
-from loongforge.utils import get_args, print_rank_0
 from loongforge.data.video.latent_dataset import TensorDataset
 from loongforge.data.video.sequence_packing_utils import first_fit
 
@@ -102,6 +101,8 @@ class PackedDataset(IterableDataset):
         self.seq_length = seq_length
         self.dp_rank = dp_rank
         self.dp_world_size = dp_world_size
+        if self.packing_buffer_size <= 0:
+            raise ValueError("packing_buffer_size must be positive")
 
         self.context_max_len = getattr(args, "context_max_len", 512)
 
@@ -119,7 +120,8 @@ class PackedDataset(IterableDataset):
                 "max_timestep_boundary", "min_timestep_boundary",
             }
         self.base_dataset = TensorDataset(
-            data_path, steps_per_epoch, seed=args.seed, keep_keys=keep_keys,
+            data_path, self.steps_per_epoch, seed=args.seed, keep_keys=keep_keys,
+            data_parallel_size=self.dp_world_size,
         )
 
         # Validate timestep boundaries
@@ -168,10 +170,10 @@ class PackedDataset(IterableDataset):
     # ------------------------------------------------------------------
 
     def __iter__(self):
-        from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
-
         scheduler = self.scheduler
         if scheduler is None:
+            from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
+
             scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True)
             scheduler.set_timesteps(1000, training=True)
 
@@ -181,10 +183,15 @@ class PackedDataset(IterableDataset):
         batch_count = 0
 
         while batch_count < required_bins:
-            # Fill buffer
-            while len(buffer) < self.packing_buffer_size:
-                wrapped_idx = sample_idx % len(self.base_dataset)
-                buffer.append(self.base_dataset[wrapped_idx])
+            # Keep a packed bin inside one no-replacement physical epoch.
+            shard_size = self.base_dataset.samples_per_rank
+            shard_offset = (sample_idx // self.dp_world_size) % shard_size
+            buffer_target_size = min(
+                self.packing_buffer_size, shard_size - shard_offset
+            )
+            while len(buffer) < buffer_target_size:
+                # Rank-strided logical indices map to a fixed physical DP shard.
+                buffer.append(self.base_dataset[sample_idx])
                 sample_idx += self.dp_world_size
 
             bins = self._pack_samples(buffer)
