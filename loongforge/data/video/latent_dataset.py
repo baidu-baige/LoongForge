@@ -1,37 +1,26 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Latent dataset used by diffusion training."""
-
-from pathlib import Path
+"""latent dataset"""
 
 import numpy as np
+import pandas as pd
 import torch
-
-
+import json
+from pathlib import Path
 class TensorDataset(torch.utils.data.Dataset):
-    def __init__(
-        self,
-        data_path,
-        steps_per_epoch=0,
-        seed=0,
-        keep_keys=None,
-        data_parallel_size=1,
-    ):
+    def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None, data_parallel_size=1):
         self.data_paths = []
         self.load_data(data_path)
         self.steps_per_epoch = steps_per_epoch
-        self.data_parallel_size = data_parallel_size
-        if not 0 < self.data_parallel_size <= len(self.data_paths):
-            raise ValueError("Need at least one physical file per DP rank")
-        self.samples_per_rank = len(self.data_paths) // self.data_parallel_size
-
         print(
-            f"self.steps_per_epoch: {self.steps_per_epoch}, "
-            f"total_samples: {len(self.data_paths)}, "
-            f"dropped_samples: {len(self.data_paths) % self.data_parallel_size}"
+            f"self.steps_per_epoch: {self.steps_per_epoch}, total_samples: {len(self.data_paths)}"
         )
+        assert len(self.data_paths) > 0
         self.manual_seed = seed
+        self.data_parallel_size = data_parallel_size
+        assert 0 < self.data_parallel_size <= len(self.data_paths)
+        self.samples_per_rank = len(self.data_paths) // self.data_parallel_size
         self._shuffle_epoch = None
         self._shuffle_order = None
         # Optional whitelist of keys to keep from each loaded sample. Caller decides
@@ -45,7 +34,7 @@ class TensorDataset(torch.utils.data.Dataset):
         self.data_paths = sorted([str(p) for p in base_path.rglob("*") if p.is_file()])
 
     def __getitem__(self, index):
-        index = int(index)
+        seed = (self.manual_seed + index) % 2**32
         logical_rank = index % self.data_parallel_size
         shuffle_epoch, shard_offset = divmod(
             index // self.data_parallel_size, self.samples_per_rank
@@ -65,7 +54,6 @@ class TensorDataset(torch.utils.data.Dataset):
             data = {k: v for k, v in data.items() if k in self.keep_keys}
         data = {k: v for k, v in data.items() if v is not None}
         # used for generate timestep
-        seed = (self.manual_seed + index) % 2**32
         data["seed"] = seed
         return data
 
