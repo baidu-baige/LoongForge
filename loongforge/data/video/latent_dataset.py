@@ -17,7 +17,12 @@ class TensorDataset(torch.utils.data.Dataset):
         assert len(self.data_paths) > 0
         self.manual_seed = seed
         self.data_parallel_size = data_parallel_size
-        assert 0 < self.data_parallel_size <= len(self.data_paths)
+        if not (0 < self.data_parallel_size <= len(self.data_paths)):
+            raise ValueError(
+                f"data_parallel_size must not exceed the number of samples: "
+                f"data_parallel_size={self.data_parallel_size}, "
+                f"num_samples={len(self.data_paths)}, data_path={data_path}"
+            )
         self.samples_per_rank = len(self.data_paths) // self.data_parallel_size
         self._shuffle_epoch = None
         self._shuffle_order = None
