@@ -507,9 +507,11 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
             args.train_iters * args.global_batch_size,
             seed=args.seed,
             keep_keys=keep_keys,
+            data_parallel_size=dp_world_size,
         )
         sampler = torch.utils.data.DistributedSampler(
-            dataset, shuffle=False, num_replicas=dp_world_size, rank=dp_rank
+            dataset, shuffle=False, num_replicas=dp_world_size,
+            rank=dp_rank, drop_last=True,
         )
         dataloader = torch.utils.data.DataLoader(
             dataset,

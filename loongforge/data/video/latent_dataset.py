@@ -4,12 +4,10 @@
 """latent dataset"""
 
 import numpy as np
-import pandas as pd
 import torch
-import json
 from pathlib import Path
 class TensorDataset(torch.utils.data.Dataset):
-    def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None):
+    def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None, data_parallel_size=1):
         self.data_paths = []
         self.load_data(data_path)
         self.steps_per_epoch = steps_per_epoch
@@ -18,6 +16,11 @@ class TensorDataset(torch.utils.data.Dataset):
         )
         assert len(self.data_paths) > 0
         self.manual_seed = seed
+        self.data_parallel_size = data_parallel_size
+        assert 0 < self.data_parallel_size <= len(self.data_paths)
+        self.samples_per_rank = len(self.data_paths) // self.data_parallel_size
+        self._shuffle_epoch = None
+        self._shuffle_order = None
         # Optional whitelist of keys to keep from each loaded sample. Caller decides
         # the policy (e.g. wan2-1-i2v) so this dataset stays decoupled from global state.
         self.keep_keys = set(keep_keys) if keep_keys else None
@@ -30,9 +33,19 @@ class TensorDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         seed = (self.manual_seed + index) % 2**32
-        numpy_random_state = np.random.RandomState(seed=seed)
-        data_id = numpy_random_state.randint(0, self.steps_per_epoch)
-        data_id = data_id % len(self.data_paths)
+        logical_rank = index % self.data_parallel_size
+        shuffle_epoch, shard_offset = divmod(
+            index // self.data_parallel_size, self.samples_per_rank
+        )
+
+        if shuffle_epoch != self._shuffle_epoch:
+            rng = np.random.RandomState((self.manual_seed + shuffle_epoch) % 2**32)
+            self._shuffle_order = rng.permutation(self.samples_per_rank)
+            self._shuffle_epoch = shuffle_epoch
+
+        data_id = logical_rank * self.samples_per_rank + int(
+            self._shuffle_order[shard_offset]
+        )
         path = self.data_paths[data_id]
         data = torch.load(path, weights_only=False, map_location="cpu")
         if self.keep_keys is not None:
