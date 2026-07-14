@@ -298,6 +298,12 @@ class OmniCombinationModel(BaseMegatronModule):
 
                 if self.config.sequence_parallel:
                     combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+                    # `scatter_to_sequence_parallel_region` returns a view into
+                    # `combined_embeddings`, which keeps the full-seq tensor (and the
+                    # text/vision embeddings merged into it) alive until the view is
+                    # freed. Clone to let the full-seq tensor be garbage collected.
+                    if self.config.clone_scatter_output_in_embedding:
+                        combined_embeddings = combined_embeddings.clone()
             elif enable_encoder_hetero_dp and inner_group_id == 0:
                 batch_id = mpu.get_tensor_model_parallel_rank()
 
@@ -405,6 +411,10 @@ class OmniCombinationModel(BaseMegatronModule):
 
             if self.config.sequence_parallel:
                 combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+                # See the comment at the primary-path scatter call above: clone to
+                # break the view so the full-seq tensor can be garbage collected.
+                if self.config.clone_scatter_output_in_embedding:
+                    combined_embeddings = combined_embeddings.clone()
 
             # visual positional encoding communication
             if self.vit_contexts[forward_group_id]["local_visual_pos_masks"] is not None:
@@ -509,6 +519,10 @@ class OmniCombinationModel(BaseMegatronModule):
 
             if self.config.sequence_parallel:
                 combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+                # See the comment at the primary-path scatter call above: clone to
+                # break the view so the full-seq tensor can be garbage collected.
+                if self.config.clone_scatter_output_in_embedding:
+                    combined_embeddings = combined_embeddings.clone()
 
             if self.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                 # Reload visual_pos_masks from CPU if offloaded

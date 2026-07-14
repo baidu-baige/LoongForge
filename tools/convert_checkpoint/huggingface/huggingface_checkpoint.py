@@ -39,10 +39,18 @@ from convert_checkpoint.huggingface.compressed_tensors_dequant import (
 from convert_checkpoint.huggingface.compressed_tensors_quant import (
     pack_state_dict_from_official_config,
 )
+from convert_checkpoint.huggingface.mxfp4_dequant import (
+    dequantize_mxfp4_state_dict,
+    progress_print,
+)
 
 
 def _hf_dequantize_int4_enabled(args):
     return bool(args is not None and getattr(args, "hf_dequantize_int4", False))
+
+
+def _hf_dequantize_mxfp4_enabled(args):
+    return bool(args is not None and getattr(args, "hf_dequantize_mxfp4", False))
 
 
 def _packed_to_weight_key(key):
@@ -219,14 +227,22 @@ def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, m
     """
     if load_safe:
         from safetensors.torch import load_file
+    import time
     state_dict = {}
     current_chunks = [None] * len(checkpoint_names)
+    n_total = len(checkpoint_names)
+    done = []  # list.append is atomic under the GIL — safe as a thread counter
     def load_files(checkpoint_path, i):
+        t0 = time.perf_counter()
         if load_safe:
             current_chunks[i] = load_file(checkpoint_path, device=hf_checkpoint_device)
         else:
             current_chunks[i] = torch.load(checkpoint_path, map_location=hf_checkpoint_device, weights_only=False)
-        logging.info(f"Loaded huggingface checkpoint: {checkpoint_path}")
+        done.append(1)
+        progress_print(
+            f"[hf-load] {len(done)}/{n_total} {os.path.basename(checkpoint_path)} "
+            f"({time.perf_counter() - t0:.1f}s)"
+        )
     if max_workers is None:
         for i in range(len(checkpoint_names)):
             load_files(os.path.join(path, checkpoint_names[i]), i)
@@ -471,6 +487,57 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             dtype_name,
         )
 
+    def _drop_unowned_expert_tensors(self, c_config, expert_ids):
+        """Drop routed-expert tensors this rank does not own.
+
+        ``expert_ids`` narrows which shard FILES are read, but shards are read
+        whole and mix all experts, so after the merge the state_dict still
+        holds every expert of the loaded layers. Under expert parallelism a
+        rank only consumes its own ``expert_ids`` (the rest are re-read by
+        their owning ranks), so drop the others right away: host memory and
+        MXFP4 dequant then scale with 1/EP instead of the full expert count
+        (DSV4-Flash: 8 ranks x full PP-stage experts dequantized to BF16
+        OOM-killed the node at ~1.7TB).
+        """
+        if expert_ids is None or c_config is None or not self.state_dict:
+            return
+        name_map = c_config.get("name_map")["huggingface"]
+        moe_expert = name_map.get(MOE_EXPERT)
+        if not moe_expert:
+            return
+        keep = {str(e) for e in expert_ids}
+        pattern = re.compile(rf"(?:^|\.){re.escape(moe_expert)}\.([0-9]+)\.")
+        dropped = 0
+        for key in list(self.state_dict.keys()):
+            m = pattern.search(key)
+            if m and m.group(1) not in keep:
+                del self.state_dict[key]
+                dropped += 1
+        if dropped:
+            progress_print(
+                f"[hf-load] EP filter: dropped {dropped} expert tensor(s) not owned "
+                f"by this rank, kept experts {min(map(int, keep))}..{max(map(int, keep))}"
+            )
+
+    def dequantize_mxfp4_if_needed(self, target_weight_keys=None):
+        """On-the-fly MXFP4 (E2M1 + E8M0) packed FP4 -> floating-point materialization."""
+        if not _hf_dequantize_mxfp4_enabled(self.args):
+            return
+
+        dtype_name = getattr(self.args, "hf_dequantize_dtype", "bfloat16")
+        try:
+            output_dtype = HF_DEQUANT_DTYPE_MAP[dtype_name.lower()]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported --hf-dequantize-dtype: {dtype_name}") from exc
+
+        converted = dequantize_mxfp4_state_dict(
+            self.state_dict,
+            output_dtype=output_dtype,
+            target_weight_keys=target_weight_keys,
+        )
+        progress_print(
+            f"[mxfp4-dequant] done: materialized {converted} packed FP4 weight(s) to {dtype_name}."
+        )
 
     def load(self, load_path, load_safe=False, c_config=None, layer_ids=[], expert_ids=None, mtp_num_layers=0):
         """ load ckpt """
@@ -523,6 +590,18 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
 
+        # EP filter must run before the dequant hooks so per-rank memory and
+        # dequant work scale with 1/EP.
+        self._drop_unowned_expert_tensors(c_config, expert_ids)
+
+        self.dequantize_compressed_tensors_if_needed(load_path, target_weight_keys=dequant_weight_keys)
+        # MXFP4 dequant must run before the DSV4 `.scale` -> `.weight_scale_inv`
+        # rename below: it matches routed-expert scale companions by the raw
+        # `.scale` suffix and pops them once consumed. If the rename ran first,
+        # the pairing key would already be gone and the packed MXFP4 weights
+        # would reach mcore conversion still as int8 with a stale scale.
+        self.dequantize_mxfp4_if_needed()
+
         # DeepSeek-V4 key preprocessing: add model. prefix, rename FP8 scales,
         # restructure MTP keys, split hyper-connection scale into alpha_pre/alpha_post/alpha_res
         if (is_dsv4_hybrid_config(c_config) and self.state_dict
@@ -558,8 +637,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 new_sd[new_key] = value
             # MTP e_proj and h_proj kept separate for mcore (upstream uses them independently)
             self.state_dict = new_sd
-
-        self.dequantize_compressed_tensors_if_needed(load_path, target_weight_keys=dequant_weight_keys)
 
     def print_memory_usage(self, desc):
         import psutil

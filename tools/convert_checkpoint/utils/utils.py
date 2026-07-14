@@ -579,7 +579,9 @@ def get_etp_map(tp, ep, etp):
     return etp_to_tp_mapping, tp_to_ep
 
 def is_power_of_two(x):
-    return bool(((x.view(torch.int32) & 0x007FFFFF) == 0).all())
+    x = x.float()
+    mantissa, _ = torch.frexp(x)
+    return bool(((x > 0) & (mantissa == 0.5)).all())
 
 def get_quantizer_with_weight_scale_inv(weight, weight_scale_inv, dtype, amax_epsilon=False):
     from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer

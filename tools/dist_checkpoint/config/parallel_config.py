@@ -29,7 +29,10 @@ class ParallelConfig:
     fp8_force_no_requant: bool = False
     force_pow_2_scales: bool = False
     amax_epsilon: float = 0.0
+    quant_method: str = "te"
+    pretrain_as_fp8: bool = False
     hf_dequantize_int4: bool = False
+    hf_dequantize_mxfp4: bool = False
     hf_dequantize_dtype: str = "bfloat16"
     hf_quant_config_file: Optional[str] = None
     mtp_num_layers: int = 0

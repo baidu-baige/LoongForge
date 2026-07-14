@@ -1,0 +1,75 @@
+{# LoongForge Kimi K2.7-Code SFT training template.
+   Derived from checkpoints/Kimi-K2.7-Code/chat_template.jinja (the inference
+   template the offline packer rendered with) so packed boundary lengths match
+   what training sees. The ONLY change vs the inference template is that each
+   assistant turn's body plus its <|im_end|> terminator is wrapped in a
+   {% generation %} / {% endgeneration %} block, which HFChatTemplate needs to
+   build the assistant-only loss mask. Generation markers emit no text, so the
+   rendered string is byte-identical to the inference template. #}
+{%- macro render_content(msg) -%}
+    {%- set c = msg.get('content') -%}
+    {%- if c is string -%}
+      {{ c }}
+    {%- elif c is not none -%}
+      {% for content in c -%}
+        {% if content['type'] == 'image' or content['type'] == 'image_url' -%}
+          <|media_begin|>image<|media_content|><|media_pad|><|media_end|>
+        {% elif content['type'] == 'video' or content['type']== 'video_url'-%}
+          <|kimi_k25_video_placeholder|>
+        {% else -%}
+          {{ content['text'] }}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+{%- endmacro -%}
+{% macro set_roles(message) -%}
+  {%- set role_name =  message.get('name') or  message['role'] -%}
+  {%- if message['role'] == 'user' -%}
+    <|im_user|>{{role_name}}<|im_middle|>
+  {%- elif message['role'] == 'assistant' -%}
+    <|im_assistant|>{{role_name}}<|im_middle|>
+  {%- else -%}
+    <|im_system|>{{role_name}}<|im_middle|>
+  {%- endif -%}
+{%- endmacro -%}
+{%- macro render_toolcalls(message) -%}
+  <|tool_calls_section_begin|>
+  {%- for tool_call in message['tool_calls'] -%}
+    {%- set formatted_id = tool_call['id'] -%}
+    <|tool_call_begin|>{{ formatted_id }}<|tool_call_argument_begin|>{% if tool_call['function']['arguments'] is string %}{{ tool_call['function']['arguments'] }}{% else %}{{ tool_call['function']['arguments'] | tojson }}{% endif %}<|tool_call_end|>
+  {%- endfor -%}
+  <|tool_calls_section_end|>
+{%- endmacro -%}
+{%- if tools -%}
+  {%- if tools_ts_str -%}
+    <|im_system|>tool_declare<|im_middle|>{{ tools_ts_str }}<|im_end|>
+  {%- else -%}
+    <|im_system|>tool_declare<|im_middle|>{{ tools | tojson(separators=(',', ':')) }}<|im_end|>
+  {%- endif -%}
+{%- endif -%}
+{%- for message in messages -%}
+  {{set_roles(message)}}
+  {%- if message['role'] == 'assistant' -%}
+    {%- generation -%}
+    {%- set rc = message.get('reasoning', message.get('reasoning_content', '')) -%}
+    <think>{{rc}}</think>{{render_content(message)}}
+    {%- if message.get('tool_calls') -%}
+      {{render_toolcalls(message)}}
+    {%- endif -%}
+    {{- '<|im_end|>' -}}
+    {%- endgeneration -%}
+  {%- elif message['role'] == 'tool' -%}
+    {%- set tool_call_id = message.tool_call_id -%}
+    ## Return of {{ tool_call_id }}
+{{render_content(message)}}
+    {{- '<|im_end|>' -}}
+  {%- elif message['content'] is not none -%}
+    {{render_content(message)}}
+    {{- '<|im_end|>' -}}
+  {%- else -%}
+    {{- '<|im_end|>' -}}
+  {%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+  <|im_assistant|>assistant<|im_middle|><think>
+{%- endif -%}

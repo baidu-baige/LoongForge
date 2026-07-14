@@ -210,6 +210,29 @@ def is_hf_checkpoint(load_path):
             os.path.exists(bin_index_path) or os.path.exists(bin_path)
 
 
+def _resolve_convert_pp_layout(model_config):
+    """Resolve ``pipeline_model_parallel_layout`` for the Bridge converter.
+
+    For pure-LLM configs the layout lives on ``model_config`` itself. For VLM
+    (OmniCombinationModel / VLMModelConfig) configs it lives on the foundation
+    sub-config, because VLMModelConfig does not carry the field at the top
+    level. Returning None here makes the converter fall back to a balanced VPP
+    partition, which disagrees with the model's custom layout and breaks
+    ``load_state_dict(strict=True)`` during bridge online loading.
+    """
+    layout = getattr(model_config, 'pipeline_model_parallel_layout', None)
+    if layout is None:
+        foundation = getattr(model_config, 'foundation', None)
+        if foundation is not None:
+            layout = getattr(foundation, 'pipeline_model_parallel_layout', None)
+    if layout is None:
+        return None
+    # Parser._build_param_dict requires convert_pp_layout.layout to be populated.
+    if getattr(layout, 'layout', None) is None:
+        return None
+    return layout
+
+
 @torch.no_grad()
 def update_ema(ema_model, model, rate=0.9999):
     """
@@ -225,8 +248,11 @@ def enable_memory_history_record(memory_snapshot_path):
     """Enable memory history record"""
     torch.cuda.memory._record_memory_history(
         True,
-        # keep 100,000 alloc/free events from before the snapshot
-        trace_alloc_max_entries=100000,
+        # keep 500,000 alloc/free events from before the snapshot (5x the old
+        # 100k) so the trace covers the full PP warmup + steady-state window;
+        # 100k was truncating early events, leaving only the tail in the pickle.
+        # ~500k events lands the dump around 60-75 MB, still cheap to move.
+        trace_alloc_max_entries=500000,
         # record stack information for the trace events
         trace_alloc_record_context=True,
     )
@@ -775,8 +801,9 @@ def get_model(
             # Temporarily set args.load for load_hf_checkpoint_online
             orig_load = args.load
             args.load = args.pretrained_checkpoint
-            if hasattr(model_config, 'pipeline_model_parallel_layout'):
-                args.convert_pp_layout = model_config.pipeline_model_parallel_layout
+            _pp_layout = _resolve_convert_pp_layout(model_config)
+            if _pp_layout is not None:
+                args.convert_pp_layout = _pp_layout
 
             # Load HF checkpoint online
             iteration, num_fp_ops = load_hf_checkpoint_online(
@@ -1159,8 +1186,14 @@ def setup_model_and_optimizer(
         assert (not args.use_megatron_fsdp), "Megatron FSDP and HF checkpoint loading cannot be used together. " \
             "Please set --use-megatron-fsdp to False."
         timers("load-checkpoint", log_level=0).start(barrier=True)
-        if hasattr(model_config, 'pipeline_model_parallel_layout'):
-            args.convert_pp_layout = model_config.pipeline_model_parallel_layout
+        _pp_layout = _resolve_convert_pp_layout(model_config)
+        if _pp_layout is not None:
+            args.convert_pp_layout = _pp_layout
+            print_rank_0("[bridge] convert_pp_layout resolved (foundation-aware for VLM); "
+                         "converter will use the model's custom VPP layer layout.")
+        else:
+            print_rank_0("[bridge] WARNING: no pipeline_model_parallel_layout on model_config or its "
+                         "foundation; converter falls back to balanced VPP (likely wrong for custom layouts).")
         args.iteration, args.num_floating_point_operations_so_far = load_hf_checkpoint_online(
             model,
             optimizer,
@@ -2575,7 +2608,7 @@ def train(
         and args.use_pytorch_profiler
     ):
         if getattr(args, 'record_memory_history', False):
-            torch.cuda.memory._record_memory_history(max_entries=100000)
+            torch.cuda.memory._record_memory_history(max_entries=500000)
         prof = torch.profiler.profile(
             schedule=torch.profiler.schedule(
                 wait=max(args.profile_step_start - 1, 0),

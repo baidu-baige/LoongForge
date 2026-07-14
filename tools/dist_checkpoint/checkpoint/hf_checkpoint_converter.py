@@ -41,7 +41,10 @@ class HfCheckpointConverter:
         self.args.fp8_force_no_requant = parallel_config.fp8_force_no_requant
         self.args.force_pow_2_scales = parallel_config.force_pow_2_scales
         self.args.amax_epsilon = parallel_config.amax_epsilon
+        self.args.quant_method = parallel_config.quant_method
+        self.args.pretrain_as_fp8 = parallel_config.pretrain_as_fp8
         self.args.hf_dequantize_int4 = parallel_config.hf_dequantize_int4
+        self.args.hf_dequantize_mxfp4 = parallel_config.hf_dequantize_mxfp4
         self.args.hf_dequantize_dtype = parallel_config.hf_dequantize_dtype
         self.args.hf_quant_config_file = parallel_config.hf_quant_config_file
         self.args.mtp_num_layers = parallel_config.mtp_num_layers
@@ -98,6 +101,10 @@ class HfCheckpointConverter:
             self.hf_ckpt.load(ckpt_path, self.args.safetensors, self.config, self.layer_ids, expert_ids=expert_ids,
                          mtp_num_layers=self.args.mtp_num_layers)
             c_ckpt = self.hf_ckpt.convert_to_common(cur_layer_dict, expert_dict=self.expert_dict)
+            # HF-format tensors are no longer needed once converted to common;
+            # drop the dict entries so anything not aliased by c_ckpt is freed
+            # before the mcore sharding allocates its output copies.
+            self.hf_ckpt.state_dict = {}
             no_encoder: bool = self.vision_patch_config is None or (not self.args.enable_full_hetero_dp and p > 0)
             if no_encoder:
                 mcore_dict[p] = self.m_ckpt.convert_from_common(

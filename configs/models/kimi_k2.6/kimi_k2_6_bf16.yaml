@@ -1,0 +1,27 @@
+# Kimi K2.6 Model Config — bf16 training variant.
+#
+# Identical to kimi_k2_6.yaml except it points model.foundation.convert_file at
+# the bf16 ckpt convert config. With that, bridge online HF-load dequantizes
+# INT4 weights to bf16 and STOPS there — it does not requantize bf16 back to
+# FP8 (the FP8 requant crashes on Blackwell with pow_2_scale when FP8 training
+# is off and --force_pow_2_scales is unset). Use this for bf16-only training;
+# use kimi_k2_6.yaml for FP8 training.
+
+defaults:
+  - ../../models/image_encoder@model.image_encoder: moon_vit_3d
+  - ../../models/image_projector@model.image_projector: patch_merger_adapter
+  - ../../models/kimi_k2@model.foundation: kimi_k2
+  - _self_
+
+model:
+  model_type: kimi_k2_6
+  loss_func: ${loss_func:default}
+  image_encoder:
+    model_spec: ["loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec",
+                 "get_moon_vision_model_layer_with_te_spec"]
+  image_projector:
+    model_spec: ["loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec",
+     "get_adapeter_layer_with_te_spec"]
+  vision_token_id: 163603
+  foundation:
+    convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/kimi_k2/ckpt_convert/kimi_k2_convert_bf16.yaml
