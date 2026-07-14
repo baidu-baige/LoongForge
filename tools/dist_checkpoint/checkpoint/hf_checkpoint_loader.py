@@ -174,18 +174,10 @@ def load_hf_checkpoint_online(
 
     print_rank_0("Processing HF checkpoint...")
 
-    # Load HF checkpoint
-    print_rank_0(f"Loading HF checkpoint from {args.load}...")
-    mem_before = 0.0
-    if torch.cuda.is_available():
-        mem_before = torch.cuda.memory_allocated() / (1024 ** 3)
-        torch.cuda.reset_peak_memory_stats()
-    if torch.cuda.is_available():
-        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
-        mem_after = torch.cuda.memory_allocated() / (1024 ** 3)
-        print_rank_0(f"HF checkpoint loaded successfully. Memory: Before={mem_before:.2f}GB → Peak={peak_mem_gb:.2f}GB → After={mem_after:.2f}GB, Change={mem_after-mem_before:+.2f}GB")
-    else:
-        print_rank_0("HF checkpoint loaded successfully")
+    # All real work (safetensors shard reads, MXFP4 dequant, HF->Mcore
+    # sharding) happens inside get_mcore_ckpt below; rank 0 emits
+    # [hf-load] / [mxfp4-dequant] progress lines during it.
+    print_rank_0(f"Converting HF checkpoint from {args.load} (shard reads + dequant + Mcore sharding)...")
 
     # Convert to Mcore format
     mem_before = 0.0
@@ -258,6 +250,21 @@ def load_hf_checkpoint_online(
 
     if optimizer is not None:
         optimizer.reload_model_params()
+
+    # Free the bridge-time host copies now that the weights live in the model:
+    # the HF state_dict (~40GB/rank after MXFP4 dequant), the common/mcore
+    # intermediate dicts, and the per-rank shard. With 8 ranks per node these
+    # add up to hundreds of GB that would otherwise stay resident through
+    # training — and get COW-materialized by forked dataloader workers
+    # (rank got SIGKILLed by the host OOM killer during step 0 before this).
+    import gc
+    hf_converter.hf_ckpt.state_dict = {}
+    del model_state_dict
+    del current_rank_state_dict
+    del mcore_dict
+    del hf_converter
+    gc.collect()
+    print_rank_0("Bridge-time host buffers released.")
 
     # Step 8: Synchronize all ranks
     print_rank_0("Synchronizing all ranks...")

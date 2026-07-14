@@ -213,18 +213,62 @@ def _add_extra_bridge_args(parser):
     """Add bridge arguments"""
     group = parser.add_argument_group(title='extra-bridge')
 
-    # Arguments for defining manner of converting FP8 checkpoint
-    group.add_argument('--fp8_force_no_requant', action='store_true',
+    # Arguments for defining manner of converting FP8 checkpoint.
+    # Both kebab-case and snake_case option strings are registered so callers
+    # may use either convention (Megatron args are typically kebab, convert-tool
+    # args are snake_case).
+    group.add_argument('--fp8-force-no-requant', '--fp8_force_no_requant', dest='fp8_force_no_requant',
+                       action='store_true',
                        help=("If enabled, in converting FP8 checkpoint, skip the `dequantize + re-quantize`, "
                              "directly chunk/concate the quantized data.")
     )
-    group.add_argument('--force_pow_2_scales', action='store_true',
+    group.add_argument('--force-pow-2-scales', '--force_pow_2_scales', dest='force_pow_2_scales',
+                       action='store_true',
                        help=("Define whether to force destination checkpoint's scale to be power-of-two.")
     )
-    group.add_argument('--amax_epsilon', type=float, default=0.0,
+    group.add_argument('--amax-epsilon', '--amax_epsilon', dest='amax_epsilon',
+                       type=float, default=0.0,
                        help=("Epsilon value added to the amax calculation to avoid divised by zero "
                              "when converting to FP8. Only used in Transformer Engine FP8 conversion.")
     )
+
+    # Arguments for online dequantization of compressed-tensors INT4 HF checkpoints
+    # during Bridge online loading (load_hf_checkpoint_online). Mirrors the offline
+    # convert-tool flags in tools/convert_checkpoint/arguments.py so that INT4-quantized
+    # HF weights (e.g. Kimi K2.6) can be loaded directly without offline conversion.
+    group.add_argument('--hf-dequantize-int4', '--hf_dequantize_int4', dest='hf_dequantize_int4',
+                       action='store_true',
+                       help=("If enabled, on-the-fly dequantize compressed-tensors packed INT4 "
+                             "weights to bf16/fp32 during HF checkpoint online loading.")
+    )
+    group.add_argument('--hf-dequantize-mxfp4', '--hf_dequantize_mxfp4', dest='hf_dequantize_mxfp4',
+                       action='store_true',
+                       help=("If enabled, on-the-fly dequantize MXFP4 packed FP4 weights "
+                             "(E2M1 two-per-byte in uint8 + per-block E8M0 scale, block_size=32, "
+                             "e.g. DeepSeek-V4 routed experts) to bf16/fp32 during HF checkpoint "
+                             "online loading.")
+    )
+    group.add_argument('--hf-dequantize-dtype', '--hf_dequantize_dtype', dest='hf_dequantize_dtype',
+                       default='bfloat16',
+                       help=("Target dtype for INT4 dequantization (bfloat16 or float32). "
+                             "Default: bfloat16")
+    )
+    group.add_argument('--hf-quant-config-file', '--hf_quant_config_file', dest='hf_quant_config_file',
+                       default=None,
+                       help=("Path to config.json carrying the compressed-tensors quantization_config; "
+                             "used to locate the INT4-packed weight keys. Default: None")
+    )
+    # fp8 conversion args used by the mcore converter during Bridge online loading
+    # (bf16->fp8 when training is fp8). Mirrors tools/convert_checkpoint/arguments.py.
+    # Defaults match TransformerEngine-based training; no need to pass explicitly.
+    group.add_argument('--quant-method', '--quant_method', dest='quant_method',
+                       default='te', choices=['te', 'pt'],
+                       help="fp8 quantization backend for bf16->fp8 conversion during bridge load. "
+                            "Default: te (TransformerEngine)")
+    group.add_argument('--pretrain-as-fp8', '--pretrain_as_fp8', dest='pretrain_as_fp8',
+                       action='store_true',
+                       help="Treat the loaded checkpoint as fp8 for pretrain (bf16 saved ckpt + pretrain fp8). "
+                            "Default: False")
     return parser
 
 

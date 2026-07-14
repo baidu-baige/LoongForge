@@ -28,6 +28,41 @@ from loongforge.train.initialize import change_parallel_state
 from loongforge.data.dp_balance.vit_balance import dp_balance_vit_encoder
 from loongforge.utils import get_args
 
+
+class _DummyEncoderPassthrough(torch.autograd.Function):
+    """Ties encoder/projector params into the autograd graph without paying
+    the cost of an out-of-place op on the full [seq, hidden] input_embeds.
+
+    Forward is a pure passthrough of input_embeds (no computation touching
+    encoder_output — avoids the `.sum()` reduction and the O(seq*hidden)
+    broadcast-add that `input_embeds + encoder_output.sum() * 0.0` incurred,
+    which allocated a full-size copy of input_embeds per call — ~3.5GB at
+    seq_length=262144, hidden_size=7168, and PP warm-up keeps ~PP_size of
+    these in flight simultaneously). Backward routes the real gradient to
+    input_embeds unchanged and zeros out encoder_output's gradient, matching
+    the original semantics (encoder/projector params get a real zero grad
+    for DDP sync, contributing nothing to the loss). Works whether or not
+    the encoder/projector are frozen.
+    """
+
+    @staticmethod
+    def forward(ctx, input_embeds, encoder_output):
+        """forward."""
+        ctx.encoder_output_shape = encoder_output.shape
+        ctx.encoder_output_dtype = encoder_output.dtype
+        return input_embeds
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        """backward"""
+        grad_encoder_output = torch.zeros(
+            ctx.encoder_output_shape,
+            dtype=ctx.encoder_output_dtype,
+            device=grad_output.device,
+        )
+        return grad_output, grad_encoder_output
+
+
 def make_encoder_forward_pre_hook(module_name):
     """
     Create a forward pre-hook function that switches the tensor-parallel
@@ -534,8 +569,7 @@ class OmniEncoderModel(torch.nn.Module):
             encoder_output = projector_model(encoder_output, window_index)
         if isinstance(encoder_output, (tuple, list)):
             encoder_output = encoder_output[0]
-        input_embeds = input_embeds + encoder_output.sum() * 0.0
-        return input_embeds
+        return _DummyEncoderPassthrough.apply(input_embeds, encoder_output)
 
 
 def _load_state_dict_hook_ignore_param_names(

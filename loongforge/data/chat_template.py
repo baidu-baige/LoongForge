@@ -857,6 +857,19 @@ _register_chat_template(
 
 
 _register_chat_template(
+    name="kimi-k2.7-code-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("kimi_k2_7_code_training.jinja"),
+    mm_plugin=KimiK25Plugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+    ),
+)
+
+
+_register_chat_template(
     name="qwen1.5-hf",
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("qwen_chat_hf_training.jinja"),

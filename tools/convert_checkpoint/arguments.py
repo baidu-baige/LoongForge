@@ -95,7 +95,15 @@ def _add_checkpoint_args(parser):
     group.add_argument('--hf-dequantize-dtype', '--hf_dequantize_dtype', dest='hf_dequantize_dtype',
                        type=str, default='bfloat16',
                        choices=['bf16', 'bfloat16', 'fp16', 'float16', 'fp32', 'float32'],
-                       help='Floating dtype used for on-the-fly HF INT4 dequantization.')
+                       help='Floating dtype used for on-the-fly HF INT4/MXFP4 dequantization.')
+    group.add_argument('--hf-dequantize-mxfp4', '--hf_dequantize_mxfp4', dest='hf_dequantize_mxfp4',
+                       action='store_true',
+                       help=('When loading a HuggingFace checkpoint, materialize MXFP4 packed '
+                             'FP4 weights (E2M1 two-per-byte in uint8 + per-block E8M0 scale, '
+                             'block_size=32, e.g. DeepSeek-V4 routed experts) into floating-point '
+                             '.weight tensors before the common/mcore conversion. Only acts on '
+                             'uint8/int8 .weight tensors that have a paired .scale. Uses '
+                             '--hf-dequantize-dtype for the output dtype.'))
     group.add_argument('--hf-quant-config-file', '--hf_quant_config_file', dest='hf_quant_config_file',
                        type=str, default=None,
                        help='Optional HF config.json path for compressed-tensors quantization_config.')

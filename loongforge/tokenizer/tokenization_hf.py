@@ -3,6 +3,7 @@
 
 """auto tokenizer"""
 
+import logging
 from typing import Dict, List, Union, Optional
 
 from transformers import AutoTokenizer
@@ -40,6 +41,16 @@ class AutoTokenizerFromHF(MegatronLegacyTokenizer):
             trust_remote_code=True,
             **kwargs,
         )
+        # Some trust_remote_code tokenizers (e.g. Kimi K2.6) emit a logger.warning
+        # on every encode() call that passes kwargs (add_special_tokens=False, ...).
+        # The HFChatTemplate chunk-tokenization fallback invokes encode() once per
+        # chunk, which on packed multi-turn data floods the log with thousands of
+        # identical warnings and slows I/O. The fallback itself works correctly, so
+        # silence that module's logger. Only acts when no explicit level was set
+        # upstream (so debug overrides still win).
+        _mod_logger = logging.getLogger(self.tokenizer.__class__.__module__)
+        if _mod_logger.level == logging.NOTSET:
+            _mod_logger.setLevel(logging.ERROR)
 
     def tokenize(self, text: str, **kwargs) -> List[int]:
         """tokenize text
