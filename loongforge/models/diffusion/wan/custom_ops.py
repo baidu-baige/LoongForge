@@ -66,7 +66,7 @@ def _rotary_interleaved_kernel(
     tl.store(OUT_ptr, out.to(tl.float32), mask=seq_mask & k_mask)
 
 
-def apply_rotary_interleaved(
+def _apply_rotary_interleaved(
     x: torch.Tensor,
     cos: torch.Tensor,
     sin: torch.Tensor,
@@ -117,3 +117,21 @@ def apply_rotary_interleaved(
             num_stages=1,
         )
     return output
+
+
+class _FusedWanRope(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, cos, sin):
+        ctx.save_for_backward(cos, sin)
+        return _apply_rotary_interleaved(x, cos, sin)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        cos, sin = ctx.saved_tensors
+        grad_input = _apply_rotary_interleaved(grad_output.contiguous(), cos, -sin)
+        return grad_input, None, None
+
+
+def apply_rotary_interleaved(x, cos, sin, **kwargs):
+    """Apply fused interleaved RoPE with autograd support."""
+    return _FusedWanRope.apply(x, cos, sin)
