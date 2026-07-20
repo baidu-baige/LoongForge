@@ -1,0 +1,8 @@
+_target_: loongforge.models.encoder.MLPAdapterConfig
+
+# Qwen2-VL uses LayerNorm for visual.merger.ln_q.
+normalization: "LayerNorm"
+add_bias_linear: True
+model_type: "qwen2_vl_adapter"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen2_vl_mlp_adapter_convert.yaml
