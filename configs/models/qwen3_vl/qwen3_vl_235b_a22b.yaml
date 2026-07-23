@@ -22,6 +22,8 @@ model:
   image_projector:
     activation_func: ${act:gelu}
     normalization: "LayerNorm"
+    model_type: "qwen3_vl_adapter"
+    convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
     bias_activation_fusion: False
     gated_linear_unit: False
     model_spec: ["loongforge.models.encoder.qwen3_vl_vision_models.qwen3_vl_layer_spec",

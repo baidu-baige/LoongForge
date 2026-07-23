@@ -17,3 +17,4 @@ model:
     convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
   image_projector:
     normalization: "LayerNorm"
+    convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/llava_mlp_adapter_convert.yaml
