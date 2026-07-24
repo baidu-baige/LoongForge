@@ -1,6 +1,8 @@
-# LoongForge-VLA Offline Eval
+# Evaluation Module
 
-This directory contains the LoongForge-VLA offline evaluation module. It runs benchmark clients and model policy servers as separate processes connected by a WebSocket/msgpack-numpy RPC protocol.
+> **Note:** This module is still under active development and may see changes or adjustments in the future.
+
+This directory contains the LoongForge-Embodied offline evaluation module. It runs benchmark clients and model policy servers as separate processes connected by a WebSocket/msgpack-numpy RPC protocol.
 
 ## Docs
 
