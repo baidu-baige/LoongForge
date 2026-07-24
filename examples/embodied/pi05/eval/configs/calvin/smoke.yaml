@@ -1,0 +1,59 @@
+# pi0.5 CALVIN link smoke (open-source template).
+# No CALVIN-domain pi05 weight yet → server.random_init: true (not task-success).
+#
+# Optional overrides (edit this file):
+#   suite: task_D_D | other CALVIN suites
+#   num_sequences / max_steps_per_subtask (30 short smoke; 360 full subtask budget)
+#   server.random_init: false + ckpt_path / dataset_statistics_path for real eval
+
+benchmark:
+  name: calvin
+  suite: task_D_D
+  dataset_path: /path/to/calvin/task_D_D
+  calvin_config_path: /path/to/calvin/calvin_models/conf
+  eval_sequences_path: /path/to/calvin/eval_sequences.json
+  num_sequences: 1
+  max_steps_per_subtask: 30  # short smoke; 360 for full subtask budget
+  control_hz: 30
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-calvin-smoke
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+
+server:
+  host: 127.0.0.1
+  port: 12113
+  health_port: 12114
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/calvin/smoke/policy_server.log
+  start_timeout_sec: 900
+  random_init: true
+  ckpt_path: ""
+  dataset_statistics_path: ""
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/calvin/smoke
+  seed: 7
+  save_trace: true
+  save_replay: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3000

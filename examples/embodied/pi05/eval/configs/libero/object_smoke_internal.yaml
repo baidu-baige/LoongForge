@@ -1,0 +1,60 @@
+# pi0.5 LIBERO task-success (internal one-click).
+# Verified: libero_object + /ssd1/sunyuehang/pi05_libero_finetuned_v044
+#
+# Optional overrides (edit in place):
+#   suite: libero_object | libero_spatial | libero_goal | libero_10
+#   max_tasks / episodes_per_task: multi-task / multi-episode
+#   max_steps: raise for harder suites
+#   run.save_trace / run.save_replay: false to save disk
+
+benchmark:
+  name: libero
+  suite: libero_object  # optional: libero_spatial | libero_goal | libero_10
+  max_tasks: 1          # optional: larger / omit for more tasks
+  episodes_per_task: 1  # optional: e.g. 5 for regression
+  max_steps: 300
+  num_steps_wait: 10
+  continuous_gripper: true
+  # control_mode: auto  # LIBERO OSC: auto|absolute|delta (auto=delta when no action_postprocess)
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-object-smoke
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+
+server:
+  host: 127.0.0.1
+  port: 12093
+  health_port: 12094
+  python: /workspace/miniconda3/envs/loongforge/bin/python
+  log: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke/policy_server.log
+  start_timeout_sec: 900
+  ckpt_path: /ssd1/sunyuehang/pi05_libero_finetuned_v044
+  dataset_statistics_path: /ssd1/sunyuehang/pi05_libero_finetuned_v044/dataset_statistics.json
+  loongforge_root: /workspace/LoongForge-VLA
+  tokenizer_path: /ssd1/huangyi/model/paligemma-3b-pt-224
+  use_bf16: false
+
+env:
+  eval_root: /workspace/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /ssd1/sunyuehang/vla_eval_runs/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /ssd1/opt/nvidia_lib
+
+run:
+  output_dir: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke
+  seed: 7
+  save_trace: true
+  save_replay: true
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

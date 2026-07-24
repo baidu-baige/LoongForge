@@ -1,0 +1,70 @@
+# pi0.5 SimplerEnv Bridge link smoke (internal one-click).
+# No Bridge/WidowX pi05 finetune → server.random_init: true (not task-success).
+# Task-success path: xvla + X-VLA-WidowX under examples/embodied/xvla.
+#
+# Optional task_name / max_steps / real ckpt: see public YAML comments.
+
+benchmark:
+  name: simplerenv
+  task_name: widowx_stack_cube  # optional: widowx_put_eggplant_in_basket | widowx_carrot_on_plate | widowx_spoon_on_towel
+  robot_setup: widowx
+  scene_name: bridge_table_1_v1
+  sim_freq: 500
+  control_freq: 5
+  control_mode: arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos
+  action_scale: 1.0
+  rotation_mode: euler
+  max_steps: 20
+  success_settle_steps: 0
+  robot_init_x: 0.147
+  robot_init_y: 0.028
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-simplerenv-smoke
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+
+server:
+  host: 127.0.0.1
+  port: 12193
+  health_port: 12194
+  python: /workspace/miniconda3/envs/loongforge/bin/python
+  log: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/simplerenv/widowx_stack_cube_smoke/policy_server.log
+  start_timeout_sec: 900
+  random_init: true
+  ckpt_path: ""
+  dataset_statistics_path: ""
+  loongforge_root: /workspace/LoongForge-VLA
+  tokenizer_path: /ssd1/huangyi/model/paligemma-3b-pt-224
+  use_bf16: false
+
+env:
+  eval_root: /workspace/LoongForge-VLA/loongforge/embodied/eval
+  simplerenv_root: /workspace/SimplerEnv
+  ld_library_path: /ssd1/opt/nvidia_lib
+  nvidia_lib_dir: /ssd1/opt/nvidia_lib
+  nvidia_icd_json: /ssd1/opt/nvidia_lib/10_nvidia.json
+
+run:
+  output_dir: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/simplerenv/widowx_stack_cube_smoke
+  seed: 7
+  episode_idx: 0
+  obj_episode_id: 0
+  save_trace: true
+  save_replay: true
+  action_ensemble: true
+  action_ensemble_horizon: 7
+  action_ensemble_alpha: 0.1
+  cfg_scale: 1.5
+  disable_action_cache: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

@@ -1,0 +1,64 @@
+# X-VLA RoboTwin-2.0 task-success (internal one-click).
+# Weight: /ssd1/sunyuehang/X-VLA-RoboTwin2
+# Protocol: domain_id=6, action_bridge=ee6d_dual, take_action(action_type='ee')
+#
+# Optional overrides (edit in place):
+#   task_name / task_config / episodes_per_task / max_steps / start_seed
+#   server.random_init: true + max_steps: 5 for RPC smoke without weights
+#   run.disable_eval_video_log: false to keep official mp4
+
+benchmark:
+  name: robotwin
+  task_name: adjust_bottle  # optional: other RoboTwin tasks
+  task_config: demo_clean
+  start_seed: 100001
+  episodes_per_task: 1
+  max_steps: 300
+  disable_expert_check: false
+  domain_id: 6
+  action_bridge: ee6d_dual
+
+model:
+  backend: loongforge
+  model_type: xvla
+  action_mode: ee6d
+  num_actions: 30
+  action_horizon: 30
+  max_action_dim: 20
+  real_action_dim: 20
+
+server:
+  host: 127.0.0.1
+  port: 13223
+  health_port: 13224
+  python: /workspace/miniconda3/envs/loongforge/bin/python
+  log: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/robotwin/adjust_bottle_smoke/policy_server.log
+  start_timeout_sec: 2400
+  random_init: false
+  # random_init: true   # optional: link smoke without ckpt (pair with max_steps: 5)
+  ckpt_path: /ssd1/sunyuehang/X-VLA-RoboTwin2
+  processor_path: /ssd1/sunyuehang/X-VLA-RoboTwin2
+  tokenizer_path: /ssd1/sunyuehang/X-VLA-RoboTwin2
+  dataset_statistics_path: ""
+  use_bf16: false
+  loongforge_root: /workspace/LoongForge-VLA
+  state_format: ee6d
+
+env:
+  eval_root: /workspace/LoongForge-VLA/loongforge/embodied/eval
+  robotwin_root: /workspace/RoboTwin
+  robotwin_python: /workspace/miniconda3/envs/robotwin/bin/python
+
+run:
+  output_dir: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/robotwin/adjust_bottle_smoke
+  seed: 0
+  ckpt_setting: loongforge_xvla_robotwin2
+  worker_local_files: true
+  disable_eval_video_log: true
+  keep_config: true
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600

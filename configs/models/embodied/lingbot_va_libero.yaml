@@ -1,0 +1,62 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# LingBot-VA embodied trainer config.
+model:
+  model_type: lingbot_va
+  num_layers: 30
+  hidden_size: 3072
+  ffn_hidden_size: 14336
+  num_attention_heads: 24
+  latent_in_channels: 48
+  latent_out_channels: 48
+  latent_patch_size: [1, 2, 2]
+  latent_space_scale: 0.5
+  latent_time_scale: 1.0
+  num_latent_frames: 13
+  max_latent_height: 128
+  max_latent_width: 256
+  vae_temporal_compress: 1
+  vae_spatial_compress: 8
+  action_dim: 30
+  text_dim: 4096
+  freq_dim: 256
+  norm_epsilon: 1e-6
+  rope_max_seq_len: 1024
+  cross_attn_norm: true
+  attention_dropout: 0.0
+  hidden_dropout: 0.0
+  attention_backend: unfused
+  recompute_granularity: null
+  recompute_method: null
+  recompute_num_layers: null
+  lingbot_va_num_train_timesteps: 1000
+  lingbot_va_snr_shift: 5.0
+  lingbot_va_action_snr_shift: 0.05
+  lingbot_va_sigma_min: 0.0
+  lingbot_va_extra_one_step: true
+  lingbot_va_noisy_cond_prob: 0.5
+  lingbot_va_action_noisy_cond_prob: 0.0
+  lingbot_va_video_loss_weight: 1.0
+  lingbot_va_action_loss_weight: 1.0
+  lingbot_va_window_size: 64
+  lingbot_va_chunk_size: 4
+  lingbot_va_use_flex_attention: true
+  lingbot_va_diffusers_checkpoint_path: null
+
+data:
+  dataset_path: null
+  empty_emb_path: null
+  obs_cam_keys: [observation.images.agentview_rgb, observation.images.eye_in_hand_rgb]
+  inverse_used_action_channel_ids: [0,1,2,3,4,5,6,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7]
+  norm_q01: [-0.6589285731315613,-0.84375,-0.9375,-0.12107142806053162,-0.15964286029338837,-0.26571428775787354,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  norm_q99: [0.8999999761581421,0.8544642925262451,0.9375,0.17142857611179352,0.1842857152223587,0.34392857551574707,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  cfg_prob: 0.1
+  env_type: none
+  revision: v2.1
+  video_backend: pyav
+  action_dim: 30
+  latent_dir_name: latents
+  metadata_filename: info.json
+  allow_missing_lerobot: false
+  pad_to_multiple: 1

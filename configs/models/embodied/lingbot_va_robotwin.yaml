@@ -1,0 +1,62 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# LingBot-VA embodied trainer config.
+model:
+  model_type: lingbot_va
+  num_layers: 30
+  hidden_size: 3072
+  ffn_hidden_size: 14336
+  num_attention_heads: 24
+  latent_in_channels: 48
+  latent_out_channels: 48
+  latent_patch_size: [1, 2, 2]
+  latent_space_scale: 0.5
+  latent_time_scale: 1.0
+  num_latent_frames: 13
+  max_latent_height: 128
+  max_latent_width: 256
+  vae_temporal_compress: 1
+  vae_spatial_compress: 8
+  action_dim: 30
+  text_dim: 4096
+  freq_dim: 256
+  norm_epsilon: 1e-6
+  rope_max_seq_len: 1024
+  cross_attn_norm: true
+  attention_dropout: 0.0
+  hidden_dropout: 0.0
+  attention_backend: unfused
+  recompute_granularity: null
+  recompute_method: null
+  recompute_num_layers: null
+  lingbot_va_num_train_timesteps: 1000
+  lingbot_va_snr_shift: 5.0
+  lingbot_va_action_snr_shift: 1.0
+  lingbot_va_sigma_min: 0.0
+  lingbot_va_extra_one_step: true
+  lingbot_va_noisy_cond_prob: 0.5
+  lingbot_va_action_noisy_cond_prob: 0.0
+  lingbot_va_video_loss_weight: 1.0
+  lingbot_va_action_loss_weight: 1.0
+  lingbot_va_window_size: 64
+  lingbot_va_chunk_size: 4
+  lingbot_va_use_flex_attention: true
+  lingbot_va_diffusers_checkpoint_path: null
+
+data:
+  dataset_path: null
+  empty_emb_path: null
+  obs_cam_keys: [observation.images.cam_high, observation.images.cam_left_wrist, observation.images.cam_right_wrist]
+  inverse_used_action_channel_ids: [0,1,2,3,4,5,6,8,9,10,11,12,13,14,16,16,16,16,16,16,16,16,16,16,16,16,16,16,7,15]
+  norm_q01: [-0.06172713458538055,-3.6716461181640625e-05,-0.08783501386642456,-1,-1,-1,-1,-0.3547105032205582,-1.3113021850585938e-06,-0.11975435614585876,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  norm_q99: [0.3462600058317184,0.39966784834861746,0.14745532035827624,1,1,1,1,0.034201726913452024,0.39142737388610793,0.1792279863357542,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
+  cfg_prob: 0.1
+  env_type: robotwin_tshape
+  revision: v2.1
+  video_backend: pyav
+  action_dim: 30
+  latent_dir_name: latents
+  metadata_filename: info.json
+  allow_missing_lerobot: false
+  pad_to_multiple: 1

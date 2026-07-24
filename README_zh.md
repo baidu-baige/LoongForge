@@ -45,9 +45,7 @@
 
 > 🐉 LoongForge 是百度百舸 **Loong** 开源系列的一员 —— 名字源于中国传统 **龙舟**，象征协同发力与破浪前行。
 
-<img width="2834" height="1160" alt="loongforge-overview-notitle1" src="https://github.com/user-attachments/assets/4bc9d3f2-914c-4c01-91dc-10d22c08e02f" />
-
-**LoongForge** 是面向 **LLM、VLM、Diffusion 与 Embodied 模型** 的统一训练框架，覆盖 **预训练（Pre-training）**、**持续预训练（Continued Pre-training）** 和 **SFT**。基于 Megatron-LM 在 **模型覆盖度**、**训练性能** 和 **硬件支持** 三个维度做了深度系统性增强，相对主流开源训练方案有**显著的性能提升**。
+**LoongForge** 是面向 **LLM、VLM、Diffusion 与 Embodied 模型** 的统一训练框架，覆盖 **预训练（Pre-training）**、**持续预训练（Continued Pre-training）** 和 **SFT**。其中 LLM/VLM/Diffusion 核心栈基于 Megatron-LM 在 **模型覆盖度**、**训练性能** 和 **硬件支持** 三个维度做了深度系统性增强，具身模型则采用独立的 torch-native 技术栈；整体相对主流开源训练方案有**显著的性能提升**。
 
 在开源之前，LoongForge 的前身是 **AIAK-Training-LLM** —— 百度百舸的训练加速栈，已在 **教育**、**计算机视觉** 和 **Embodied AI** 等多家企业客户的生产训练中落地，相对客户原有方案通常带来 **30%~50% 加速**，最大规模的生产训练任务达到 **5,000+ XPU**。
 
@@ -120,14 +118,17 @@
 
 ## 🌟 基于 LoongForge 训练
 
+以下项目基于 LoongForge 或其前身 AIAK-Training-LLM 训练：
+
 - [LLaVA-OneVision-2.0](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) —— 新一代多模态模型，配套全新的 VideoCaption 和 Spatial 数据集。
+- [Innovator-VL](https://github.com/InnovatorLM/Innovator-VL/tree/main) —— 面向高级推理的科学多模态大模型。
 - [LLaVA-OneVision-1.5](https://arxiv.org/abs/2509.23661) —— 面向多模态训练民主化的全开源框架。
 - [Qianfan-VL](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B。
 
 <a id="models"></a>
 ## 🏛️ 支持的模型
 
-LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOTA 模型](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
+LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等多模态的[广泛的 SOTA 模型](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
 
 | **模态** | **架构** | **模型** |
 |---------------|------------------|------------|
@@ -157,8 +158,10 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 VLA 等多模态的[广泛的 SOT
 | | InternVL3.5 | internvl3.5-8b → internvl3.5-241b-a28b |
 | | CustomCombinedModel | ViT + LLM backbone 灵活组合（[示例](https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)） |
 | **Diffusion** | WAN2.2 | wan2.2_i2v_a14b |
-| **VLA** | Pi | pi0.5 |
-| | GR00T | groot-n1.6 |
+| **Embodied** | Pi | pi0.5 |
+| | GR00T N1.6 | groot_n1_6 |
+| | XVLA | xvla |
+| | FastWAM | fastwam |
 
 ## 🏗️ 代码结构
 
@@ -171,15 +174,15 @@ LoongForge/
 │   ├── train/                    # 训练入口与训练器
 │   │   ├── pretrain/             #   预训练（LLM、VLM）
 │   │   ├── sft/                  #   SFT（LLM、VLM、InternVL、ERNIE）
-│   │   ├── diffusion/            #   Diffusion（WAN）
-│   │   └── embodied/             #   Embodied AI（Pi0.5、GR00T）
+│   │   └── diffusion/            #   Diffusion（WAN）
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── foundation/           #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
 │   │   ├── encoder/              #   视觉编码器（ViT、Qwen-VL、InternVL、...）
 │   │   ├── omni_models/          #   多模态组合
 │   │   ├── diffusion/            #   Diffusion 模型（WAN）
-│   │   ├── embodied/             #   Embodied 模型（Pi0.5、GR00T）
 │   │   └── common/               #   公共 Layer 与工具
+│   ├── embodied/                 # LoongForge-Embodied：独立的 torch-native（DDP/FSDP）具身
+│   │                             #   （VLA + 世界-动作）训练子系统，详见 loongforge/embodied/README_zh.md
 │   ├── data/                     # 数据流水线（多模态、视频、DP 负载均衡）
 │   ├── tokenizer/                # Tokenizer
 │   └── utils/                    # 配置映射、常量等

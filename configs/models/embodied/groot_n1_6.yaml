@@ -1,0 +1,70 @@
+# GR00T-N1.6 embodied trainer config
+model:
+  model_type: Gr00tN1d6
+  backbone_model_type: eagle
+  tune_top_llm_layers: 4
+  tune_llm: false
+  tune_visual: false
+  tune_projector: true
+  tune_diffusion_model: true
+  tune_vlln: true
+  use_alternate_vl_dit: true
+
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 128
+  max_state_dim: 128
+  input_embedding_dim: 1536
+
+  select_layer: 16
+  reproject_vision: false
+  use_flash_attention: true
+  load_bf16: true
+  backbone_trainable_params_fp32: true
+
+  diffusion_model_cfg:
+    positional_embeddings: null
+    num_layers: 32
+    num_attention_heads: 32
+    attention_head_dim: 48
+    norm_type: ada_norm
+    dropout: 0.2
+    final_dropout: true
+    output_dim: 1024
+    interleave_self_attention: true
+
+  add_pos_embed: true
+  use_vlln: true
+  max_seq_len: 1024
+  attend_text_every_n_blocks: 2
+
+  num_inference_timesteps: 4
+  noise_beta_alpha: 1.5
+  noise_beta_beta: 1.0
+  noise_s: 0.999
+  num_timestep_buckets: 1000
+
+data:
+  embodiment_tag: libero_panda
+  groot_preprocess_mode: sample
+
+  preprocess_action_horizon: 16
+  preprocess_max_action_dim: 29
+  preprocess_max_state_dim: 29
+
+  image_crop_size: [224, 224]
+  image_target_size: [224, 224]
+  shortest_image_edge: 256
+  crop_fraction: 0.95
+  random_rotation_angle: null
+  color_jitter_params:
+    brightness: 0.3
+    contrast: 0.4
+    saturation: 0.5
+    hue: 0.08
+  use_albumentations_transforms: true
+  formalize_language: true
+  apply_sincos_state_encoding: false
+  use_relative_action: true
+  use_processor_image_size: false

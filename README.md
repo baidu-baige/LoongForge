@@ -45,9 +45,7 @@
 
 > 🐉 LoongForge is part of Baidu Baige's **Loong** open-source series — named after the traditional Chinese **loong boat (龙舟)**, a symbol of coordinated power and forward momentum.
 
-<img width="2834" height="1160" alt="loongforge-overview-notitle1" src="https://github.com/user-attachments/assets/4bc9d3f2-914c-4c01-91dc-10d22c08e02f" />
-
-**LoongForge** is a unified training framework for **LLMs, VLMs, diffusion, and embodied models**, covering **pre-training**, **continued pre-training**, and **SFT**. Built upon Megatron-LM with deep systemic enhancements across **model coverage**, **training performance**, and **hardware support**, it delivers **significant speedups over mainstream open-source baselines**.
+**LoongForge** is a unified training framework for **LLMs, VLMs, diffusion, and embodied models**, covering **pre-training**, **continued pre-training**, and **SFT**. Its core LLM/VLM/diffusion stacks are built upon Megatron-LM with deep systemic enhancements across **model coverage**, **training performance**, and **hardware support**, while embodied models are trained on a dedicated torch-native stack — together delivering **significant speedups over mainstream open-source baselines**.
 
 Before going open-source, LoongForge was developed as **AIAK-Training-LLM**, Baidu Baige's training acceleration stack. It has supported production training for enterprise customers across **Education**, **Computer Vision**, and **Embodied AI**, typically delivering **30%~50% speedup over customer baselines**, with the largest production runs reaching **5,000+ XPUs**.
 
@@ -122,14 +120,17 @@ Measured on **v0.1.1** across LLM, VLM, VLA and DIT workloads against mainstream
 
 ## 🌟 Powered by LoongForge
 
+Projects trained with LoongForge or its predecessor AIAK-Training-LLM:
+
 - [LLaVA-OneVision-2.0](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) — Next-generation multimodal model, with new VideoCaption and Spatial datasets.
-- [LLaVA-OneVision-1.5](https://arxiv.org/abs/2509.23661) — Fully open framework for democratized multimodal training.
+- [Innovator-VL](https://github.com/InnovatorLM/Innovator-VL/tree/main) — Scientific Multimodal Large Language Model for Advanced Reasoning.
+- [LLaVA-OneVision-1.5](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) — Fully open framework for democratized multimodal training.
 - [Qianfan-VL](https://github.com/baidubce/Qianfan-VL) — Domain-Enhanced Vision-Language Models for Enterprise, 3B to 70B parameters.
 
 <a id="models"></a>
 ## 🏛️ Supported Models
 
-LoongForge supports a broad range of [state-of-the-art models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html) across LLM, VLM, diffusion, and VLA.
+LoongForge supports a broad range of [state-of-the-art models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html) across LLM, VLM, diffusion, and embodied.
 
 | **Modality** | **Architectures** | **Models** |
 |---------------|------------------|------------|
@@ -159,8 +160,10 @@ LoongForge supports a broad range of [state-of-the-art models](https://loongforg
 | | InternVL3.5 | internvl3.5-8b → internvl3.5-241b-a28b |
 | | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
 | **Diffusion** | WAN2.2 | wan2.2_i2v_a14b |
-| **VLA** | Pi | pi0.5 |
-| | GR00T | groot-n1.6 |
+| **Embodied** | Pi | pi0.5 |
+| | GR00T N1.6 | groot_n1_6 |
+| | XVLA | xvla |
+| | FastWAM | fastwam |
 
 ## 🏗️ Repository Layout
 
@@ -173,15 +176,15 @@ LoongForge/
 │   ├── train/                    # Training entry points & trainers
 │   │   ├── pretrain/             #   Pretrain (LLM, VLM)
 │   │   ├── sft/                  #   SFT (LLM, VLM, InternVL, ERNIE)
-│   │   ├── diffusion/            #   Diffusion (WAN)
-│   │   └── embodied/             #   Embodied AI (Pi0.5, GR00T)
+│   │   └── diffusion/            #   Diffusion (WAN)
 │   ├── models/                   # Unified model abstractions
 │   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
 │   │   ├── omni_models/          #   Multi-modal composition
 │   │   ├── diffusion/            #   Diffusion models (WAN)
-│   │   ├── embodied/             #   Embodied models (Pi0.5, GR00T)
 │   │   └── common/               #   Shared layers and utilities
+│   ├── embodied/                 # LoongForge-Embodied: standalone torch-native (DDP/FSDP)
+│   │                             #   embodied (VLA + world-action) subsystem — see loongforge/embodied/README.md
 │   ├── data/                     # Data pipelines (multi-modal, video, DP balance)
 │   ├── tokenizer/                # Tokenizers
 │   └── utils/                    # Config map, constants, etc.
@@ -229,7 +232,6 @@ Open a GitHub issue for questions, feedback, or feature requests. You can also j
 
 - **WeChat** — [Scan QR code to join](https://github.com/baidu-baige/LoongForge/issues/80#issue-4594463290)
 - **Slack** — [Join here](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
-
 
 
 

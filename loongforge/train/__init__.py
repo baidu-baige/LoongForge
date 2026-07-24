@@ -8,16 +8,6 @@ from .trainer_builder import build_model_trainer
 
 from .pretrain import pretrain_llm, pretrain_vlm
 
-try:
-    from .embodied import sft_pi05
-except ImportError:
-    sft_pi05 = None
-
-try:
-    from .embodied import sft_groot
-except ImportError:
-    sft_groot = None
-
 from .sft import sft_llm, sft_vlm, sft_internvl, sft_ernie
 from .diffusion import pretrain_wan
 from .diffusion import pretrain_qwen_image

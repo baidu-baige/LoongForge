@@ -1,0 +1,103 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# GR00T-N1.7 embodied trainer config
+model:
+  model_type: Gr00tN1d7
+  base_model_path: nvidia/Cosmos-Reason2-2B
+  model_name: nvidia/GR00T-N1.7-3B
+  backbone_model_type: qwen
+  model_dtype: bfloat16
+
+  tune_top_llm_layers: 0
+  tune_llm: false
+  tune_visual: false
+  tune_projector: true
+  tune_diffusion_model: true
+  tune_vlln: true
+
+  backbone_embedding_dim: 2048
+  select_layer: 16
+  reproject_vision: false
+  use_flash_attention: true
+  load_bf16: false
+  backbone_trainable_params_fp32: true
+
+  max_state_dim: 132
+  max_action_dim: 132
+  action_horizon: 40
+  hidden_size: 1024
+  input_embedding_dim: 1536
+  state_history_length: 1
+
+  add_pos_embed: true
+  attn_dropout: 0.2
+  use_vlln: true
+  max_seq_len: 1024
+  use_alternate_vl_dit: true
+  attend_text_every_n_blocks: 2
+  diffusion_model_cfg:
+    positional_embeddings: null
+    num_layers: 32
+    num_attention_heads: 32
+    attention_head_dim: 48
+    norm_type: ada_norm
+    dropout: 0.2
+    final_dropout: true
+    output_dim: 1024
+    interleave_self_attention: true
+  use_vl_self_attention: true
+  vl_self_attention_cfg:
+    positional_embeddings: null
+    num_layers: 4
+    num_attention_heads: 32
+    attention_head_dim: 64
+    dropout: 0.2
+    final_dropout: true
+
+  num_inference_timesteps: 4
+  noise_beta_alpha: 1.5
+  noise_beta_beta: 1.0
+  noise_s: 0.999
+  num_timestep_buckets: 1000
+
+  use_bf16: true
+  state_dropout_prob: 0.2
+  max_num_embodiments: 32
+
+data:
+  embodiment_tag: new_embodiment
+  groot_preprocess_mode: sharded
+  max_token_len: null
+
+  preprocess_action_horizon: 16
+
+  state_dropout_prob: 0.2
+  exclude_state: false
+  use_mean_std: false
+  use_percentiles: true
+  clip_outliers: true
+  apply_sincos_state_encoding: false
+  use_relative_action: true
+
+  image_crop_size: [230, 230]
+  image_target_size: [256, 256]
+  shortest_image_edge: 256
+  crop_fraction: 0.95
+  random_rotation_angle: 0
+  color_jitter_params:
+    brightness: 0.3
+    contrast: 0.4
+    saturation: 0.5
+    hue: 0.08
+  use_albumentations_transforms: true
+  extra_augmentation_config: null
+  formalize_language: true
+
+  shard_size: 1024
+  episode_sampling_rate: 0.1
+  num_shards_per_epoch: 100000
+  allow_padding: false
+
+  use_image_transform: false
+  use_action_transform: false
