@@ -60,7 +60,7 @@
     <|im_system|>tool_declare<|im_middle|>{{ tools | tojson(separators=(',', ':')) }}<|im_end|>
   {%- endif -%}
 {%- endif -%}
-
+  
 {%- for message in hist_msgs -%}
   {{set_roles(message)}}
   {%- if message['role'] == 'assistant' -%}
