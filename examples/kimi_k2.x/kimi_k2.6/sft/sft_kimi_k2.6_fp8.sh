@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
-# This script is used for SFT training of Kimi K2.6 multimodal model.
+
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}

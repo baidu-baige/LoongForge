@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Transformer Engine parallel layer performance benchmark.
 
 Benchmarks forward + backward timing for four TE Linear layer types:

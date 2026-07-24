@@ -3,7 +3,6 @@
 # This script is used for SFT training Minimax2.1 in FP8 mixed precision.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 

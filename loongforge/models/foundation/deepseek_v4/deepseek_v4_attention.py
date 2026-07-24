@@ -39,7 +39,6 @@ if HAVE_TE:
 else:
     (TEColumnParallelLinear, TELinear, set_save_original_input) = (None, None, None)
 
-
 class _ActivationOffloadContext:
     """Local no-op/offload wrapper for DSv4 attention groups."""
 
@@ -147,14 +146,29 @@ class DSv4HybridAttention(Attention):
         rope_base = self.config.rotary_base
         if compress_ratio > 1:
             rope_base = self.config.csa_compress_rotary_base
-        if self.config.rope_type == "rope":
+
+        # Match Community RoPE by disabling Yarn and fused Yarn RoPE on these layers.
+        self._dsv4_disable_yarn_rope_for_ratio0 = compress_ratio == 0
+        self._dsv4_effective_rope_type = (
+            "rope" if self._dsv4_disable_yarn_rope_for_ratio0 else self.config.rope_type
+        )
+        self._dsv4_apply_rope_fusion = (
+            self.config.apply_rope_fusion and not self._dsv4_disable_yarn_rope_for_ratio0
+        )
+        # Community keeps the full qk_pos_emb_head_dim rotary dimension for ratio-0 W layers.
+        # AIAK config still carries rotary_percent=0.125 for Yarn, which would rotate only 8/64 dims.
+        self._dsv4_effective_rotary_percent = (
+            1.0 if self._dsv4_disable_yarn_rope_for_ratio0 else self.config.rotary_percent
+        )
+
+        if self._dsv4_effective_rope_type == "rope":
             self.rotary_pos_emb = RotaryEmbedding(
                 self.config.qk_pos_emb_head_dim,
-                rotary_percent=self.config.rotary_percent,
+                rotary_percent=self._dsv4_effective_rotary_percent,
                 rotary_base=rope_base,
                 cp_group=self.pg_collection.cp,
             )
-        elif self.config.rope_type == "yarn":
+        elif self._dsv4_effective_rope_type == "yarn":
             self.rotary_pos_emb = YarnRotaryEmbedding(
                 self.config.qk_pos_emb_head_dim,
                 rotary_base=rope_base,
@@ -168,7 +182,7 @@ class DSv4HybridAttention(Attention):
             )
         else:
             raise ValueError(
-                f"Unsupported RoPE type: {self.config.rope_type}, supported types are "
+                f"Unsupported RoPE type: {self._dsv4_effective_rope_type}, supported types are "
                 "'rope' and 'yarn'"
             )
 
@@ -355,10 +369,10 @@ class DSv4HybridAttention(Attention):
         mscale = 1.0
         rotary_pos_cos = None
         rotary_pos_sin = None
-        if self.config.rope_type == "rope":
+        if self._dsv4_effective_rope_type == "rope":
             rotary_pos_emb = self.rotary_pos_emb(rope_seqlen, packed_seq=packed_seq)
         else:
-            if self.config.apply_rope_fusion:
+            if self._dsv4_apply_rope_fusion:
                 rotary_pos_cos, rotary_pos_sin = self.rotary_pos_emb.get_cached_cos_sin(
                     rope_seqlen, dtype=hidden_states.dtype, packed_seq=packed_seq
                 )
@@ -373,7 +387,7 @@ class DSv4HybridAttention(Attention):
                 # concentration factor (mscale) is NOT part of the DSv4 model contract --
                 # the model relies on Q/KV RMS-norm + unit-magnitude rotation. Force 1.0.
                 mscale = 1.0
-        if self.config.apply_rope_fusion:
+        if self._dsv4_apply_rope_fusion:
             if packed_seq:
                 core_attn_out = core_attn_out.squeeze(1)
             core_attn_out = fused_mla_rope_inplace(
@@ -533,13 +547,13 @@ class DSv4HybridSelfAttention(DSv4HybridAttention):
             config=self.config,
             eps=self.config.layernorm_epsilon,
         )
-
+        
         self.q_layernorm = submodules.q_layernorm(
             hidden_size=self.config.q_lora_rank,
             config=self.config,
             eps=self.config.layernorm_epsilon,
         )
-
+        
     def get_query_key_value_tensors(
         self,
         hidden_states,
@@ -575,10 +589,10 @@ class DSv4HybridSelfAttention(DSv4HybridAttention):
         rotary_pos_cos = None
         rotary_pos_sin = None
         packed_seq = packed_seq_params is not None and packed_seq_params.qkv_format == 'thd'
-        if self.config.rope_type == "rope":
+        if self._dsv4_effective_rope_type == "rope":
             rotary_pos_emb = self.rotary_pos_emb(rotary_seq_len, packed_seq=packed_seq)
         else:
-            if self.config.apply_rope_fusion:
+            if self._dsv4_apply_rope_fusion:
                 rotary_pos_cos, rotary_pos_sin = self.rotary_pos_emb.get_cached_cos_sin(
                     rotary_seq_len, dtype=hidden_states.dtype, packed_seq=packed_seq
                 )
@@ -667,7 +681,7 @@ class DSv4HybridSelfAttention(DSv4HybridAttention):
             if k_pos_emb is not None:
                 k_pos_emb = torch.unsqueeze(k_pos_emb, -2)
 
-            if self.config.apply_rope_fusion:
+            if self._dsv4_apply_rope_fusion:
                 cp_rank = self.pg_collection.cp.rank()
                 cp_size = self.pg_collection.cp.size()
                 query = fused_mla_rope_inplace(

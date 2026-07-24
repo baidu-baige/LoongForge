@@ -60,6 +60,7 @@ def _add_log_tensor_args(parser):
     model training. When enabled (via --enable-log-tensor), the system will
     register hooks to capture tensor statistics during training.
 
+    Required dependency: llm-inspector (internal Baige library)
 
     Usage:
         These arguments are typically used together:

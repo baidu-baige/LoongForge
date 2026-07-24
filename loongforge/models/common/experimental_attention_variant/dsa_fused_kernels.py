@@ -2220,9 +2220,15 @@ class DSADotProductAttention(MegatronModule):
             query = query.transpose(0, 1).contiguous()
             kv = kv.unsqueeze(2).transpose(0, 1).contiguous()
 
-        # indices: [b, sq, topk] -> [b, sq, 1, topk]
+        # indices shape handling depends on qkv_format:
+        #   non-THD: [b, sq, topk] -> unsqueeze(2) -> [b, sq, 1, topk] -> squeeze(0) -> [sq, 1, topk]
+        #   THD:     [total_q, topk] -> unsqueeze(1) -> [total_q, 1, topk]
         assert indices is not None, "DSADotProductAttention need topk_indices."
-        indices = indices.unsqueeze(2)
+        if qkv_format == 'thd':
+            # THD: indices is [total_q, topk], add h_kv dim at position 1
+            indices = indices.unsqueeze(1)  # [total_q, topk] -> [total_q, 1, topk]
+        else:
+            indices = indices.unsqueeze(2)  # [b, sq, topk] -> [b, sq, 1, topk]
 
         # FlashMLA does not support batched input
         if query.ndim == 4:
