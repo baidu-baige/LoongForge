@@ -3,7 +3,7 @@
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 MEGATRON_PATH=/workspace/ernie/Loong-Megatron
-LOONGFORGE_PATH=/workspace/ernie/LoongForge/
+export LOONGFORGE_PATH=/workspace/ernie/LoongForge/
 DATASET_PATH=/workspace/dataset/wds/
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/ernie/ERNIE-4.5-VL-28B-A3B-PT/"}
 TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/ernie4.5vl/"}

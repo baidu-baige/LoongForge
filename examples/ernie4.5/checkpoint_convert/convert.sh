@@ -18,7 +18,7 @@
 #       PP_LAYER_OFFSETS="0,4,8,12,16,20,24,26"
 
 MEGATRON_PATH=/workspace/ernie/Loong-Megatron/
-LOONGFORGE_PATH=/workspace/ernie/LoongForge/
+export LOONGFORGE_PATH=/workspace/ernie/LoongForge/
 
 export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH
 

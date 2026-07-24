@@ -1,6 +1,6 @@
-#!/usr/bin/env python
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
+
 """Download Kimi K2.6 ModelOpt calibration samples into a local JSONL file."""
 
 from __future__ import annotations
