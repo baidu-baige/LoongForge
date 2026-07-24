@@ -1,0 +1,68 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# Cosmos3 DROID action-policy SFT recipe.
+# Adds action heads on top of the vision-only cosmos3_nano.yaml.
+# Training parameters are provided via CLI args (--lr, --batch-size, etc.)
+
+
+model:
+  model_type: "cosmos3"
+  qwen3_vl_path: "/mnt/cluster/models/Qwen/Qwen3-VL-8B-Instruct"
+  qk_norm_for_text: true
+  qk_norm_for_diffusion: true
+  vision_gen: true
+  action_gen: true
+  sound_gen: false
+  latent_patch_size: 2
+  latent_channel_size: 48
+  latent_downsample_factor: 16
+  position_embedding_type: "unified_3d_mrope"
+  enable_fps_modulation: true
+  base_fps: 24
+  unified_3d_mrope_reset_spatial_ids: true
+  unified_3d_mrope_temporal_modality_margin: 15000
+  max_latent_h: 32
+  max_latent_w: 32
+  max_latent_t: 32
+  joint_attn_implementation: "two_way"
+  train_time_distribution: "waver"
+  train_time_weight_method: "uniform"
+  shift: 5
+  # VAE encoder.
+  vae_path: "/mnt/cluster/models/Wan-AI/Wan2.2-TI2V-5B/Wan2.2_VAE.pth"
+  vae_temporal_compression: 4
+  vae_spatial_compression: 16
+  # Conditioning distribution: vision-only path uses [0.7, 0.2, 0.1] but
+  # the action-policy path overrides condition_frame_indexes_vision per-sample.
+  condition_frame_distribution: [0.7, 0.2, 0.1]
+  num_embodiment_domains: 32
+  max_action_dim: 64
+  action_loss_weight: 10.0
+  encode_exact_durations: [33]
+  train_modules:
+    - "_moe_gen"
+    - "time_embedder"
+    - "vae2llm"
+    - "llm2vae"
+    - "latent_pos_embed"
+    - "action2llm"
+    - "llm2action"
+    - "action_modality_embed"
+    - "time_embedder_action"
+  keys_to_skip_loading:
+    - "net_ema."
+    - "action2llm"
+    - "llm2action"
+    - "action_modality_embed"
+    - "action_pos_embed"
+
+# Data config.
+data:
+  cfg_dropout_rate: 0.1
+  target_h: 480
+  target_w: 480
+  max_text_tokens: 99999
+  action_chunk_length: 32
+  action_fps: 15.0
+  video_backend: "torchcodec"

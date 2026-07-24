@@ -1,0 +1,48 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# DreamZero Wan2.1-I2V-14B training config for AgiBot-format LeRobot data
+
+model:
+  model_type: dreamzero
+  backbone_variant: wan21_14b
+
+  # Action head
+  num_frames: 33
+  action_horizon: 24
+  n_action_steps: 24
+  num_frame_per_block: 2
+  num_action_per_block: 24
+  max_chunk_size: 4
+
+  # State/action padding
+  max_state_dim: 64
+
+  # Checkpoint paths
+  text_encoder_pretrained_path: ${oc.env:WAN21_CKPT_DIR}/models_t5_umt5-xxl-enc-bf16.pth
+  image_encoder_pretrained_path: ${oc.env:WAN21_CKPT_DIR}/models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth
+  vae_pretrained_path: ${oc.env:WAN21_CKPT_DIR}/Wan2.1_VAE.pth
+  dit_pretrained_path: ${oc.env:WAN21_CKPT_DIR}
+  dit_init_checkpoint_path: ${oc.env:DREAMZERO_AGIBOT_CKPT_DIR}
+
+data:
+  embodiment_tag: agibot
+
+  # AgiBot transforms
+  relative_action: true
+  relative_action_keys:
+    - left_arm_joint_position
+    - right_arm_joint_position
+    - left_effector_position
+    - right_effector_position
+    - head_position
+    - waist_position
+  language_chunk_sampling: true
+
+  # AgiBot sampler
+  sampler_type: sharded
+  sampler_seed: 42
+  shard_sampling_rate: 0.1
+  num_steps_per_shard: 10000
+  num_shards_to_sample: 1048576
+  allow_padding_at_end: false

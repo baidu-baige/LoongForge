@@ -1,0 +1,67 @@
+# X-VLA LIBERO object smoke (open-source template).
+# Task-success verified with official 2toINF/X-VLA-LIBERO (or local mirror).
+#
+# Open weight: https://huggingface.co/2toINF/X-VLA-LIBERO
+# Protocol: domain_id=3, action_postprocess=ee6d_to_axis_angle, state_format=ee6d,
+#   control_mode=absolute (LIBERO OSC), chunk_execute_steps=10 (open-loop).
+#
+# Optional overrides (edit this file or copy it):
+#   suite: libero_object | libero_spatial | libero_goal | libero_10
+#   max_tasks / episodes_per_task: raise for multi-task / multi-episode
+#   max_steps: 800 typical for X-VLA; long-horizon suites may need higher
+
+benchmark:
+  name: libero
+  suite: libero_object  # optional: libero_spatial | libero_goal | libero_10
+  max_tasks: 1          # optional: 0 / larger for full suite
+  episodes_per_task: 1  # optional: e.g. 10 for full regression
+  max_steps: 800
+  num_steps_wait: 10
+  continuous_gripper: true
+  domain_id: 3
+  action_postprocess: ee6d_to_axis_angle
+  control_mode: absolute  # LIBERO OSC; auto|absolute|delta (auto≈absolute when postprocess set)
+
+model:
+  backend: loongforge
+  model_type: xvla
+  action_mode: ee6d
+  num_actions: 30
+  action_horizon: 30
+  max_action_dim: 20
+  real_action_dim: 20
+
+server:
+  host: 127.0.0.1
+  port: 13183
+  health_port: 13184
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/libero/libero_weight_object_smoke/policy_server.log
+  start_timeout_sec: 2400
+  ckpt_path: /path/to/X-VLA-LIBERO
+  processor_path: /path/to/X-VLA-LIBERO
+  tokenizer_path: /path/to/X-VLA-LIBERO
+  dataset_statistics_path: ""
+  use_bf16: false
+  loongforge_root: /path/to/LoongForge-VLA
+  state_format: ee6d
+  chunk_execute_steps: 10  # official X-VLA open-loop; 0=default 10; -1=no truncate
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/libero/libero_weight_object_smoke
+  seed: 7
+  save_trace: true
+  save_replay: true
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600

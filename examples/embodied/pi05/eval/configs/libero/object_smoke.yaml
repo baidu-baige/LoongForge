@@ -1,0 +1,65 @@
+# pi0.5 LIBERO task-success template (open-source).
+# Verified suite: libero_object with a pi0.5 LIBERO finetune.
+#
+# Open weight: pi05_libero family / local model.safetensors + dataset_statistics.json
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+#
+# Optional overrides (edit this file or copy it):
+#   suite: libero_object | libero_spatial | libero_goal | libero_10
+#   max_tasks / episodes_per_task: raise for multi-task / multi-episode eval
+#   max_steps: 300 typical; long-horizon suites may need higher
+#   continuous_gripper: true recommended for pi05 continuous gripper
+
+benchmark:
+  name: libero
+  suite: libero_object  # optional: libero_spatial | libero_goal | libero_10
+  max_tasks: 1          # optional: null or larger for full suite
+  episodes_per_task: 1  # optional: e.g. 5 / 50 for regression
+  max_steps: 300
+  num_steps_wait: 10
+  continuous_gripper: true
+  # control_mode: auto  # LIBERO OSC: auto|absolute|delta (auto=delta when no action_postprocess)
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-object-smoke
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+
+server:
+  host: 127.0.0.1
+  port: 12093
+  health_port: 12094
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke/policy_server.log
+  start_timeout_sec: 900
+  ckpt_path: /path/to/pi05_libero_finetuned
+  dataset_statistics_path: /path/to/pi05_libero_finetuned/dataset_statistics.json
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke
+  seed: 7
+  save_trace: true
+  save_replay: true
+  # save_trace: false   # optional: save disk on smoke
+  # save_replay: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

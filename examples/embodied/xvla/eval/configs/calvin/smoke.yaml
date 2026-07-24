@@ -1,0 +1,64 @@
+# X-VLA CALVIN link smoke (open-source template).
+# No CALVIN-domain X-VLA weight wired yet → server.random_init: true (not task-success).
+# Official weight when available: 2toINF/X-VLA-Calvin-ABC_D (domain_id=2).
+#
+# Optional overrides (edit this file):
+#   suite: task_D_D | other CALVIN suites
+#   num_sequences / max_steps_per_subtask (30 short smoke; 720 official EP_LEN)
+#   server.random_init: false + ckpt_path / tokenizer_path for real eval
+#   domain_id: 2 (official Calvin) + action_postprocess: ee6d_to_calvin_abs
+
+benchmark:
+  name: calvin
+  suite: task_D_D
+  dataset_path: /path/to/calvin/task_D_D
+  calvin_config_path: /path/to/calvin/calvin_models/conf
+  eval_sequences_path: /path/to/calvin/eval_sequences.json
+  num_sequences: 1
+  max_steps_per_subtask: 30  # short smoke; 720 for full subtask budget
+  control_hz: 30
+  domain_id: 2
+  action_postprocess: ee6d_to_calvin_abs
+
+model:
+  backend: loongforge
+  model_type: xvla
+  action_mode: ee6d
+  num_actions: 30
+  action_horizon: 30
+  max_action_dim: 20
+  real_action_dim: 20
+
+server:
+  host: 127.0.0.1
+  port: 13203
+  health_port: 13204
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/calvin/smoke/policy_server.log
+  start_timeout_sec: 900
+  random_init: true
+  ckpt_path: ""
+  processor_path: ""
+  tokenizer_path: ""
+  dataset_statistics_path: ""
+  use_bf16: false
+  loongforge_root: /path/to/LoongForge-VLA
+  state_format: ee6d
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/calvin/smoke
+  seed: 7
+  save_trace: true
+  save_replay: false
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3000

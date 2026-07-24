@@ -1,0 +1,40 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# DreamZero Wan2.2-TI2V-5B training config for LIBERO-format LeRobot data
+
+model:
+  model_type: dreamzero
+  backbone_variant: wan22_5b
+
+  # Action head
+  num_frames: 33
+  action_horizon: 16
+  n_action_steps: 16
+  num_frame_per_block: 2
+  num_action_per_block: 16
+  max_chunk_size: 4
+
+  # State/action padding
+  max_state_dim: 64
+  action_loss_embodiment_ids: [21]
+
+  # Checkpoint paths
+  text_encoder_pretrained_path: ${oc.env:WAN22_CKPT_DIR}/models_t5_umt5-xxl-enc-bf16.pth
+  image_encoder_pretrained_path: ${oc.env:WAN21_CKPT_DIR}/models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth
+  vae_pretrained_path: ${oc.env:WAN22_CKPT_DIR}/Wan2.2_VAE.pth
+  dit_pretrained_path: ${oc.env:WAN22_CKPT_DIR}
+
+data:
+  embodiment_tag: libero_sim
+
+  # LIBERO transforms
+  image_height: 256
+  image_width: 256
+  metadata_version: "local"
+
+  # LIBERO sampler
+  use_mixture_dataset: true
+  sampler_type: global_batch_shard
+  sampler_seed: 0
+  mixture_sampling_seed: 42

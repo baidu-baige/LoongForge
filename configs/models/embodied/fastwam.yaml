@@ -1,0 +1,35 @@
+# FastWAM video/action world model adapter
+
+model:
+  model_type: fastwam
+  variant: uncond
+
+  # Model IDs — change when switching pretrained weights
+  model_id: Wan-AI/Wan2.2-TI2V-5B
+  tokenizer_model_id: Wan-AI/Wan2.1-T2V-1.3B
+
+  # Task dimensions — change per robot/task
+  action_dim: 7
+  action_horizon: 32
+  proprio_dim: 8
+  max_action_dim: null
+
+  # Training knobs
+  tokenizer_max_len: 128
+  load_text_encoder: false
+  mot_checkpoint_mixed_attn: false
+  skip_dit_load_from_pretrain: false
+  action_dit_pretrained_path: checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt
+  redirect_common_files: true
+  dtype: bfloat16
+
+data:
+  num_video_frames: 9
+  image_size: 224
+  image_normalize_mode: siglip
+  image_resize_strategy: center_crop
+  text_embedding_cache_dir: data/text_embeds_cache/libero
+  use_image_transform: true
+  normalization_mode: q99
+  action_padding_strategy: zero
+  action_video_freq_ratio: 4
