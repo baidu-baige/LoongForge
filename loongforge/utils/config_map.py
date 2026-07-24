@@ -380,19 +380,6 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen_image_edit_2511",
     },
 
-    # pi05
-    "pi05": {
-        # Hydra expects the directory, config name selects the file.
-        "config_path": "configs/models/pi05",
-        "config_name": "pi05",
-    },
-
-    # groot
-    "groot_n1_6": {
-        "config_path": "configs/models/groot",
-        "config_name": "groot_n1_6",
-    },
-
     # mimo
     "mimo": {
         "config_path": "configs/models/mimo",

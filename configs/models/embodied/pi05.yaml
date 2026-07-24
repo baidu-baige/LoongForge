@@ -1,0 +1,28 @@
+# Pi05
+
+model:
+  model_type: pi05
+
+  # Task dimensions
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 32
+  max_state_dim: 32
+
+  # Training
+  gradient_checkpointing: false
+  compile_model: true
+  compile_mode: max-autotune
+  # torch.compile granularity 
+  # Ignored when compile_model=false.
+  #   backbone     (default) single compile over PaliGemmaWithExpertModel.forward — legacy behavior.
+  #   multi_group  per-layer + final_norms + action-head bundle.
+  #   per_layer    only per-layer _compute_layer_complete is compiled; everything else eager.
+  compile_scope: multi_group
+  # compile_fullgraph: true    # only applies to scope=backbone; sub-graphs force fullgraph=true.
+  # compile_dynamic: false
+
+data:
+  image_size: 224
+  image_normalize_mode: identity

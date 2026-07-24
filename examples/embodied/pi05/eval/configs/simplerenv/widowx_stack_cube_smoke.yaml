@@ -1,0 +1,75 @@
+# pi0.5 SimplerEnv Bridge link smoke (open-source template).
+# No Bridge/WidowX pi05 finetune yet → server.random_init: true (not task-success).
+# For task-success on this benchmark see xvla + X-VLA-WidowX (examples/embodied/xvla).
+#
+# Optional overrides (edit this file):
+#   task_name / robot_setup / scene_name / max_steps — other Bridge tasks:
+#     widowx_put_eggplant_in_basket + widowx_sink_camera_setup + bridge_table_1_v2
+#     widowx_carrot_on_plate / widowx_spoon_on_towel (same robot_setup as stack_cube often)
+#   server.random_init: false + ckpt_path / dataset_statistics_path for real Bridge weights
+
+benchmark:
+  name: simplerenv
+  task_name: widowx_stack_cube  # optional: widowx_put_eggplant_in_basket | widowx_carrot_on_plate | widowx_spoon_on_towel
+  robot_setup: widowx
+  scene_name: bridge_table_1_v1
+  # rgb_overlay_path: /path/to/SimplerEnv/ManiSkill2_real2sim/data/real_inpainting/bridge_real_eval_1.png
+  sim_freq: 500
+  control_freq: 5
+  control_mode: arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos
+  action_scale: 1.0
+  rotation_mode: euler
+  max_steps: 20  # short smoke; raise when using real domain weights
+  success_settle_steps: 0
+  robot_init_x: 0.147
+  robot_init_y: 0.028
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-simplerenv-smoke
+  action_dim: 7
+  state_dim: 7
+  action_horizon: 50
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+
+server:
+  host: 127.0.0.1
+  port: 12193
+  health_port: 12194
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/simplerenv/widowx_stack_cube_smoke/policy_server.log
+  start_timeout_sec: 900
+  random_init: true
+  ckpt_path: ""
+  dataset_statistics_path: ""
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  simplerenv_root: /path/to/SimplerEnv
+  ld_library_path: /path/to/nvidia_lib
+  nvidia_lib_dir: /path/to/nvidia_lib
+  nvidia_icd_json: /path/to/nvidia_icd.json
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/simplerenv/widowx_stack_cube_smoke
+  seed: 7
+  episode_idx: 0
+  obj_episode_id: 0
+  save_trace: true
+  save_replay: true
+  action_ensemble: true
+  action_ensemble_horizon: 7
+  action_ensemble_alpha: 0.1
+  cfg_scale: 1.5
+  disable_action_cache: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

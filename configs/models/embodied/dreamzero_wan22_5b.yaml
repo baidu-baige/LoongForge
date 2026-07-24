@@ -1,0 +1,49 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# DreamZero Wan2.2-TI2V-5B training config for DROID-format LeRobot data
+
+model:
+  model_type: dreamzero
+  backbone_variant: wan22_5b
+
+  # Action head
+  num_frames: 33
+  action_horizon: 24
+  n_action_steps: 24
+  num_frame_per_block: 2
+  num_action_per_block: 24
+  max_chunk_size: 4
+
+  # Performance switches
+  flash_attention_dense: true
+  avoid_rope_reconcat: true
+  batch_vae_encode: true
+  prompt_emb_cache: gpu
+
+  # State/action padding
+  max_state_dim: 64
+
+  # Checkpoint paths
+  text_encoder_pretrained_path: ${oc.env:WAN22_CKPT_DIR}/models_t5_umt5-xxl-enc-bf16.pth
+  image_encoder_pretrained_path: ${oc.env:WAN21_CKPT_DIR}/models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth
+  vae_pretrained_path: ${oc.env:WAN22_CKPT_DIR}/Wan2.2_VAE.pth
+  dit_pretrained_path: ${oc.env:WAN22_CKPT_DIR}
+
+data:
+  embodiment_tag: oxe_droid
+  image_height: 160
+
+  # DROID transforms
+  relative_action: true
+  relative_action_keys: ["joint_position"]
+  language_chunk_sampling: true
+  require_full_language_chunks: true
+
+  # DROID sampler
+  sampler_type: sharded
+  sampler_seed: 42
+  shard_sampling_rate: 0.1
+  num_steps_per_shard: 10000
+  num_shards_to_sample: 1048576
+  allow_padding_at_end: false

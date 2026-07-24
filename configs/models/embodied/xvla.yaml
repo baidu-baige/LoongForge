@@ -1,0 +1,94 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# model: — everything under this block maps 1:1 to XVLAConfig(**model).
+# XVLAPolicy.from_pretrained reads these from the nested `model` block (falling
+# back to top level for backward compatibility), so the composed HF config is
+# unchanged. Transformer action head + action/proprio layout + florence backbone.
+# ─────────────────────────────────────────────────────────────────────────────
+model:
+  model_type: xvla
+  hidden_size: 1024
+  depth: 24
+  num_heads: 16
+  mlp_ratio: 4.0
+  num_domains: 30
+  len_soft_prompts: 32
+  dim_time: 32
+  max_len_seq: 512
+  use_hetero_proj: false
+  attn_dropout: 0.1
+  mlp_dropout: 0.1
+  soft_prompt_length: 32
+
+  action_mode: ee6d
+  use_proprio: true
+  num_actions: 30
+  action_horizon: 30
+  max_action_dim: 20
+  real_action_dim: 20
+
+  enable_torch_compile: true
+
+  # florence_config — passed as one block to Florence2Config(**florence_config).
+  # Mirrors configs/models/embodied/config.json exactly so the composed HF config
+  # is identical whether built from this YAML or from the checkpoint config.json.
+  florence_config:
+    model_type: florence2
+    bos_token_id: 0
+    eos_token_id: 2
+    ignore_index: -100
+    pad_token_id: 1
+    projection_dim: 1024
+    vocab_size: 51289
+    torch_dtype: float32
+    is_encoder_decoder: true
+
+    # text_config -> Florence2LanguageConfig(**text_config)
+    text_config:
+      vocab_size: 51289
+      activation_dropout: 0.1
+      activation_function: gelu
+      attention_dropout: 0.1
+      d_model: 1024
+      decoder_attention_heads: 16
+      decoder_layers: 12
+      encoder_attention_heads: 16
+      encoder_layers: 12
+      dropout: 0.1
+      max_position_embeddings: 4096
+      num_hidden_layers: 12
+      # NOTE: config.json lists `num_beams: 3`, but transformers v5.3.0 removed
+      # generation params (num_beams, ...) from PretrainedConfig — they now live
+      # in GenerationConfig. Florence2LanguageConfig(**text_config) drops it via
+      # **kwargs, so it cannot pass through and is intentionally omitted here.
+
+    # vision_config -> Florence2VisionConfig(**vision_config)
+    vision_config:
+      model_type: davit
+      drop_path_rate: 0.1
+      patch_size: [7, 3, 3, 3]
+      patch_stride: [4, 2, 2, 2]
+      patch_padding: [3, 1, 1, 1]
+      patch_prenorm: [false, true, true, true]
+      enable_checkpoint: false
+      dim_embed: [256, 512, 1024, 2048]
+      num_heads: [8, 16, 32, 64]
+      num_groups: [8, 16, 32, 64]
+      depths: [1, 1, 9, 1]
+      window_size: 12
+      projection_dim: 1024
+      visual_temporal_embedding:
+        type: COSINE
+        max_temporal_embeddings: 100
+      image_pos_embed:
+        type: learned_abs_2d
+        max_pos_embeddings: 50
+      image_feature_source: [spatial_avg_pool, temporal_avg_pool]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# data: — consumed by the embodied data pipeline, NOT by XVLAConfig.
+# Image resize/normalization is handled inside XVLAPreprocessor via the
+# checkpoint's AutoImageProcessor; action_horizon lives on the model block.
+# Only the number of camera views is needed here.
+# ─────────────────────────────────────────────────────────────────────────────
+data:
+  num_image_views: 3

@@ -1,0 +1,70 @@
+# X-VLA ManiSkill link smoke (open-source template).
+# No ManiSkill-domain X-VLA weight yet → server.random_init: true (not task-success).
+#
+# Optional overrides (edit this file):
+#   task_name: PickCube-v1 | other ManiSkill tasks
+#   obs_mode: rgbd | state   (state + allow_dummy_image for no-camera smoke)
+#   max_steps: short for smoke; raise when using a real domain ckpt
+#   server.random_init: false + ckpt_path / tokenizer_path for real eval
+#   action_postprocess: ee6d_to_axis_angle required for X-VLA 20D → ManiSkill 7D
+#   processor_path / tokenizer_path: any full X-VLA dir (needed even under random_init)
+
+benchmark:
+  name: maniskill
+  task_name: PickCube-v1
+  robot_uid: panda
+  instruction: pick up the cube
+  obs_mode: rgbd  # optional: state (+ allow_dummy_image: true)
+  control_mode: pd_ee_delta_pose
+  control_freq: 5
+  render_mode: rgb_array
+  sim_backend: auto
+  render_backend: gpu
+  camera_name: base_camera
+  action_scale: 1.0
+  max_steps: 20
+  action_postprocess: ee6d_to_axis_angle  # X-VLA ee6d → pos3+axis_angle3+grip1
+  # allow_dummy_image: true  # optional with obs_mode: state
+
+model:
+  backend: loongforge
+  model_type: xvla
+  action_mode: ee6d
+  num_actions: 30
+  action_horizon: 30
+  max_action_dim: 20
+  real_action_dim: 20
+
+server:
+  host: 127.0.0.1
+  port: 13233
+  health_port: 13234
+  start_timeout_sec: 900
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/maniskill/pick_cube_smoke/policy_server.log
+  random_init: true
+  ckpt_path: ""
+  processor_path: /path/to/X-VLA-LIBERO  # tokenizer/processor only under random_init
+  tokenizer_path: /path/to/X-VLA-LIBERO
+  dataset_statistics_path: ""
+  use_bf16: false
+  loongforge_root: /path/to/LoongForge-VLA
+  state_format: ee6d
+
+timeouts:
+  policy_call_ms: 20000
+  per_step_sec: 20
+  per_episode_sec: 600
+
+run:
+  seed: 7
+  episode_idx: 0
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/maniskill/pick_cube_smoke
+  save_replay: true
+  save_trace: true
+  timestamped_output: true
+  disable_action_cache: false
+  cfg_scale: 1.5
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval

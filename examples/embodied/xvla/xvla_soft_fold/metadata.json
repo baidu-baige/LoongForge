@@ -1,0 +1,14 @@
+{
+  "dataset_name": "AIR-AGILEX",
+  "robot_type": "AIR-AGILEX",
+  "datalist": [
+    "/mnt/cfs/pxy/data/XVLA-Soft-Fold/0928_10am_new/episode_0.hdf5",
+    "/mnt/cfs/pxy/data/XVLA-Soft-Fold/0928_10am_new/episode_1.hdf5"
+  ],
+  "observation_key": [
+    "observations/images/cam_high",
+    "observations/images/cam_left_wrist",
+    "observations/images/cam_right_wrist"
+  ],
+  "language_instruction_key": "language_instruction"
+}

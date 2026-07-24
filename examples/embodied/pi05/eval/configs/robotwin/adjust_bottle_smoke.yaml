@@ -1,0 +1,72 @@
+# pi0.5 RoboTwin-2.0 task-success template (open-source).
+# Verified: adjust_bottle / demo_clean + openpi Aloha protocol.
+#
+# Open weight: pi0.5 finetuned on RoboTwin-2.0 joints (model.safetensors).
+# Stats: convert openpi assets/*/norm_stats.json → observation.state / action (q01/q99).
+# Protocol: action_bridge=pi05_aloha_14d (adapt_to_pi + delta joint → abs)
+#
+# Optional overrides (edit this file or copy it):
+#   task_name: other RoboTwin tasks (same joint protocol if trained that way)
+#   task_config: demo_clean | demo_randomized | ...
+#   episodes_per_task / max_steps / start_seed
+#   action_bridge: pi05_aloha_14d (formal)
+#     # strict_14d     — raw 14D joints, no adapt_to_pi (not the openpi protocol)
+#     # duplicate_7d   — 7D→14D RPC smoke only, not for scores
+#   server.random_init: true + max_steps: 5  — RPC/link smoke without real weights
+#   run.disable_eval_video_log: false        — enable official mp4 if disk allows
+
+benchmark:
+  name: robotwin
+  task_name: adjust_bottle  # optional: other RoboTwin task names
+  task_config: demo_clean
+  start_seed: 100001
+  episodes_per_task: 1
+  max_steps: 300
+  disable_expert_check: false
+  action_bridge: pi05_aloha_14d  # optional smoke-only: strict_14d | duplicate_7d
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-robotwin2
+  action_dim: 14
+  state_dim: 14
+  action_horizon: 32
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+  action_mode: abs
+
+server:
+  host: 127.0.0.1
+  port: 12495
+  health_port: 12496
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/robotwin/adjust_bottle_smoke/policy_server.log
+  start_timeout_sec: 900
+  random_init: false
+  # random_init: true   # optional: link smoke without ckpt (pair with max_steps: 5)
+  ckpt_path: /path/to/pi0.5_robotwin2
+  dataset_statistics_path: /path/to/pi05_robotwin2_dataset_stats.json
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  robotwin_root: /path/to/RoboTwin
+  robotwin_python: /path/to/robotwin/bin/python
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/robotwin/adjust_bottle_smoke
+  seed: 0
+  ckpt_setting: loongforge_pi05_robotwin2
+  worker_local_files: true
+  disable_eval_video_log: true
+  keep_config: true
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600
