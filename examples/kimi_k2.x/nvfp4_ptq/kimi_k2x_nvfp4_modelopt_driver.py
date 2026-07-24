@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
+
 """Kimi K2.x BF16 HF -> NVIDIA-style ModelOpt NVFP4 converter.
 
 This wraps NVIDIA ModelOpt's HF PTQ example using a runtime ModelOpt checkout.

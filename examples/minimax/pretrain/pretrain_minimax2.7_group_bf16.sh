@@ -3,7 +3,6 @@
 # This script is used for pre-training Minimax2.7 in BF16 mixed precision.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
-
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
