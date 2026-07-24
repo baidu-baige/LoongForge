@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Setup LoongForge environment — TransformerEngine only.
 
 This script handles cloning, patching, and building TransformerEngine.

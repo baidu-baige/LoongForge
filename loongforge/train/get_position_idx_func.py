@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Get position index function"""
 import torch
 from loongforge.utils import get_model_config

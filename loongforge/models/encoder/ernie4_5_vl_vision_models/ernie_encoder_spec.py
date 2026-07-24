@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """ERNIE-4.5-VL vision encoder layer spec.
 
 Reuses the standard Megatron TransformerLayer plumbing with ERNIE-specific
