@@ -93,7 +93,7 @@ Why this is required: the X-VLA client protocol outputs Euler xyz (rot6d → eul
 
 ## Matching eval YAML fields
 
-See `configs/simplerenv/widowx_stack_cube_smoke_internal.yaml`:
+See `configs/simplerenv/widowx_stack_cube_smoke.yaml`:
 
 ```yaml
 benchmark:

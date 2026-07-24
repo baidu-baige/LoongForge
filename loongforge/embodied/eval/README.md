@@ -34,7 +34,7 @@ LoongForge training source under the repo root is not patched by this eval modul
 Use YAML as the only user-facing entrypoint:
 
 ```bash
-cd /workspace/LoongForge-VLA
+cd /path/to/LoongForge
 examples/embodied/pi05/eval/run_libero_eval.sh
 ```
 
@@ -42,25 +42,25 @@ The LIBERO simulator runs in the benchmark environment. The policy server is lau
 
 ## Configs
 
-Environment details for each benchmark are recorded in `benchmark_envs.md`. User-editable eval configs and launch scripts live under `examples/embodied/<model>/eval`. Public scripts use public configs with `/path/to/...` placeholders. Scripts ending in `_internal.sh` call matching `_internal.yaml` configs and are intended to run directly in the internal environment.
+Environment details for each benchmark are recorded in `benchmark_envs.md`. User-editable eval configs and launch scripts live under `examples/embodied/<model>/eval`. Scripts use public configs with `/path/to/...` placeholders.
 
-Each benchmark ships **one public + one internal** YAML pair (optional knobs in file-header comments; no extra full-suite files).
+Each benchmark ships one public YAML (optional knobs in file-header comments; no extra full-suite files).
 
 ### pi05 (`examples/embodied/pi05/eval/`)
 
-- `configs/libero/object_smoke.yaml` (+ `_internal`): **task-success** (`libero_object`); other suites via YAML comments.
-- `configs/robotwin/adjust_bottle_smoke.yaml` (+ `_internal`): **task-success** (`pi05_aloha_14d`); stats: `assets/pi05_robotwin2_dataset_stats.json`.
-- `configs/calvin/smoke.yaml` (+ `_internal`): **link smoke only**, `server.random_init: true` (no CALVIN-domain pi05 weight).
-- `configs/simplerenv/widowx_stack_cube_smoke.yaml` (+ `_internal`): **link smoke only**, `random_init: true` (no Bridge pi05 weight; task-success is xvla + X-VLA-WidowX).
-- `configs/maniskill/pick_cube_smoke.yaml` (+ `_internal`): **link smoke only**, `random_init: true` (no ManiSkill-domain pi05 weight).
+- `configs/libero/object_smoke.yaml`: **task-success** (`libero_object`); other suites via YAML comments.
+- `configs/robotwin/adjust_bottle_smoke.yaml`: **task-success** (`pi05_aloha_14d`); stats: `assets/pi05_robotwin2_dataset_stats.json`.
+- `configs/calvin/smoke.yaml`: **link smoke only**, `server.random_init: true` (no CALVIN-domain pi05 weight).
+- `configs/simplerenv/widowx_stack_cube_smoke.yaml`: **link smoke only**, `random_init: true` (no Bridge pi05 weight; task-success is xvla + X-VLA-WidowX).
+- `configs/maniskill/pick_cube_smoke.yaml`: **link smoke only**, `random_init: true` (no ManiSkill-domain pi05 weight).
 
 ### xvla (`examples/embodied/xvla/eval/`)
 
-- `configs/libero/libero_weight_object_smoke.yaml` (+ `_internal`): **task-success** (full suite: edit `max_tasks` / `episodes_per_task` in the same YAML; historical full run under `reports/xvla/libero/libero_weight_object_full/`).
-- `configs/robotwin/adjust_bottle_smoke.yaml` (+ `_internal`): **task-success** (`ee6d_dual`).
-- `configs/simplerenv/widowx_stack_cube_smoke.yaml` (+ `_internal`): **task-success** (requires patch in `SIMPLERENV_PATCH_en.md`).
-- `configs/calvin/smoke.yaml` (+ `_internal`): **link smoke** (needs official ABC_D weight for formal scores).
-- `configs/maniskill/pick_cube_smoke.yaml` (+ `_internal`): **link smoke** (no matching open weight).
+- `configs/libero/libero_weight_object_smoke.yaml`: **task-success** (full suite: edit `max_tasks` / `episodes_per_task` in the same YAML; historical full run under `reports/xvla/libero/libero_weight_object_full/`).
+- `configs/robotwin/adjust_bottle_smoke.yaml`: **task-success** (`ee6d_dual`).
+- `configs/simplerenv/widowx_stack_cube_smoke.yaml`: **task-success** (requires patch in `SIMPLERENV_PATCH_en.md`).
+- `configs/calvin/smoke.yaml`: **link smoke** (needs official ABC_D weight for formal scores).
+- `configs/maniskill/pick_cube_smoke.yaml`: **link smoke** (no matching open weight).
 
 ### Task-success status (2026-07-21)
 
@@ -69,7 +69,7 @@ Each benchmark ships **one public + one internal** YAML pair (optional knobs in 
 | pi05 | success (finetuned) | no Bridge ckpt | success (`pi05_aloha_14d`) | smoke only |
 | xvla | success (~94% object full) | success (WidowX + patch) | success (`ee6d_dual`) | need domain ckpt |
 
-See `user_guide_en.md` §2.1–2.3 / §9 / §11 for open vs internal examples, open weights, bridges, and verified runs.
+See `user_guide_en.md` §2.1–2.3 / §9 / §11 for examples, open weights, bridges, and verified runs.
 
 The pi05 configs use:
 

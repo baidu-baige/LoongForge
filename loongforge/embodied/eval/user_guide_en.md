@@ -1,6 +1,6 @@
 # LoongForge-VLA Offline Eval User Guide
 
-This document explains how to run LoongForge-VLA offline evaluation under `/workspace/LoongForge-VLA/loongforge/embodied/eval` with a single YAML config. The module currently serves LoongForge **pi05** and **xvla** policy servers. LIBERO / SimplerEnv / RoboTwin already have verified task-success runs; the full matrix is in §2.1 and §11.
+This document explains how to run LoongForge-VLA offline evaluation under `/path/to/LoongForge/loongforge/embodied/eval` with a single YAML config. The module currently serves LoongForge **pi05** and **xvla** policy servers. LIBERO / SimplerEnv / RoboTwin already have verified task-success runs; the full matrix is in §2.1 and §11.
 
 ## 1. Module role
 
@@ -78,43 +78,40 @@ flowchart LR
 
 "Success" means at least one task episode passed the official/local success criterion, not RPC-only smoke.
 
-### 2.2 Examples: public templates vs internal one-shot
+### 2.2 Examples: public templates
 
 User-editable YAML and launch scripts live under `examples/embodied/<model>/eval/`:
 
 | Layer | Naming | Paths | Use |
 |---|---|---|---|
-| **Public** | `*.yaml` / `run_*_eval.sh` without `_internal` | always `/path/to/...` placeholders | External templates; replace paths/weights |
-| **Internal** | `*_internal.yaml` / `run_*_eval_internal.sh` | real machine paths (`/workspace`, `/ssd1/...`) | Run as-is on internal hosts |
+| **Public** | `*.yaml` / `run_*_eval.sh` | `/path/to/...` placeholders | Templates; replace paths/weights |
 
-Do not put machine-specific absolute paths in non-`_internal` files.
+Use `/path/to/...` placeholders; do not hardcode machine-specific absolute paths.
 
 ```text
 examples/embodied/
   pi05/eval/
-    configs/<benchmark>/*.yaml              # public (libero/robotwin/calvin/simplerenv/maniskill)
-    configs/<benchmark>/*_internal.yaml     # internal
+    configs/<benchmark>/*.yaml              # libero/robotwin/calvin/simplerenv/maniskill
     assets/pi05_robotwin2_dataset_stats.json
-    run_*_eval.sh / run_*_eval_internal.sh
+    run_*_eval.sh
   xvla/eval/
     configs/<benchmark>/*.yaml              # same five benchmarks
-    configs/<benchmark>/*_internal.yaml
-    run_*_eval.sh / run_*_eval_internal.sh
+    run_*_eval.sh
     SIMPLERENV_PATCH_en.md
     xvla_libero_diagnosis.md
 ```
 
-Each benchmark ships **one public + one internal** pair. Optional knobs go in file-header comments (no extra full-suite YAML files unless explicitly requested).
+Each benchmark ships one public YAML. Optional knobs go in file-header comments (no extra full-suite YAML files unless explicitly requested).
 
 ### 2.3 Task-success combos: open weights and configs
 
-| Combo | Open weights | Public config | Internal one-shot |
-|---|---|---|---|
-| **pi05 + LIBERO** | pi0.5 LIBERO finetune (e.g. openpi `pi05_libero` family / local `model.safetensors` + `dataset_statistics.json`) | `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml` | `run_libero_eval_internal.sh` → `object_smoke_internal.yaml` |
-| **pi05 + RoboTwin** | pi0.5 RoboTwin-2.0 joint finetune (`model.safetensors` + openpi `norm_stats` → LoongForge stats, §9.2) | `.../pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml` | `run_robotwin_eval_internal.sh` → `adjust_bottle_smoke_internal.yaml` |
-| **xvla + LIBERO** | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) | `.../xvla/eval/configs/libero/libero_weight_object_smoke.yaml` (full suite: raise `max_tasks` / `episodes_per_task` in the same YAML; historical full artifacts under `reports/xvla/libero/libero_weight_object_full/`) | `run_libero_eval_internal.sh` → `libero_weight_object_smoke_internal.yaml` |
-| **xvla + RoboTwin** | [2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2) | `.../xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml` | `run_robotwin_eval_internal.sh` → `adjust_bottle_smoke_internal.yaml` |
-| **xvla + SimplerEnv** | [2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX) | `.../xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml` | `run_simplerenv_eval_internal.sh` → `widowx_stack_cube_smoke_internal.yaml` |
+| Combo | Open weights | Public config |
+|---|---|---|
+| **pi05 + LIBERO** | pi0.5 LIBERO finetune (e.g. openpi `pi05_libero` family / local `model.safetensors` + `dataset_statistics.json`) | `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml` |
+| **pi05 + RoboTwin** | pi0.5 RoboTwin-2.0 joint finetune (`model.safetensors` + openpi `norm_stats` → LoongForge stats, §9.2) | `.../pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml` |
+| **xvla + LIBERO** | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) | `.../xvla/eval/configs/libero/libero_weight_object_smoke.yaml` (full suite: raise `max_tasks` / `episodes_per_task` in the same YAML) |
+| **xvla + RoboTwin** | [2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2) | `.../xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml` |
+| **xvla + SimplerEnv** | [2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX) | `.../xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml` |
 
 Key protocol fields (task-success combos):
 
@@ -126,34 +123,14 @@ Key protocol fields (task-success combos):
 | xvla + RoboTwin | X-VLA-RoboTwin2; `domain_id: 6`; **`action_bridge: ee6d_dual`** |
 | xvla + SimplerEnv | X-VLA-WidowX; `domain_id: 0`; `max_steps: 1200`; `control_mode: arm_pd_ee_target_base_pose_gripper_pd_joint_pos`; `action_postprocess: ee6d_to_simpler_abs_euler`; **must apply** `examples/embodied/xvla/eval/SIMPLERENV_PATCH_en.md` |
 
-**Public usage:** download weights → replace `/path/to/...` in public YAML/scripts → run `run_*_eval.sh`. Overridable env vars: `REPO_ROOT`, `CONFIG`, `BENCHMARK_PYTHON`, `CUDA_VISIBLE_DEVICES`, `LD_LIBRARY_PATH`, `VK_ICD_FILENAMES`.
-
-**Internal one-shot** (paths filled in):
-
-```bash
-bash examples/embodied/pi05/eval/run_libero_eval_internal.sh      # pi05 LIBERO
-bash examples/embodied/pi05/eval/run_robotwin_eval_internal.sh    # pi05 RoboTwin
-bash examples/embodied/xvla/eval/run_libero_eval_internal.sh      # xvla LIBERO
-bash examples/embodied/xvla/eval/run_robotwin_eval_internal.sh    # xvla RoboTwin
-bash examples/embodied/xvla/eval/run_simplerenv_eval_internal.sh  # xvla SimplerEnv
-```
-
-Internal task-success weight locations:
-
-| Combo | Local checkpoint | Stats / notes |
-|---|---|---|
-| pi05 + LIBERO | `/ssd1/sunyuehang/pi05_libero_finetuned_v044` | same-dir `dataset_statistics.json`; tokenizer `/ssd1/huangyi/model/paligemma-3b-pt-224` |
-| pi05 + RoboTwin | `/ssd1/sunyuehang/pi0.5_robotwin2` | `examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json` (§9.2) |
-| xvla + LIBERO | `/ssd1/sunyuehang/xvla-libero` (HF X-VLA-LIBERO) | stats optional; `domain_id=3` |
-| xvla + RoboTwin | `/ssd1/sunyuehang/X-VLA-RoboTwin2` | `domain_id=6`; `ee6d_dual` |
-| xvla + SimplerEnv | `/ssd1/sunyuehang/X-VLA-WidowX` | `domain_id=0`; see `SIMPLERENV_PATCH_en.md` |
+**Usage:** download weights → replace `/path/to/...` in the public YAML/scripts → run `run_*_eval.sh`. Overridable env vars: `REPO_ROOT`, `CONFIG`, `BENCHMARK_PYTHON`, `CUDA_VISIBLE_DEVICES`, `LD_LIBRARY_PATH`, `VK_ICD_FILENAMES`.
 
 ## 3. Environment requirements
 
 Isolate by role:
 
-- Benchmark env: simulator client, one conda env per benchmark, e.g. LIBERO `/workspace/miniconda3/envs/libero/bin/python`, CALVIN `.../calvin/...`, SimplerEnv `.../simplerenv/...`, RoboTwin `.../robotwin/...`, ManiSkill `.../maniskill/...`.
-- Model server env: LoongForge pi05/xvla, e.g. `/workspace/miniconda3/envs/loongforge/bin/python`.
+- Benchmark env: simulator client, one conda env per benchmark, e.g. LIBERO `/path/to/envs/libero/bin/python`, CALVIN `.../calvin/...`, SimplerEnv `.../simplerenv/...`, RoboTwin `.../robotwin/...`, ManiSkill `.../maniskill/...`.
+- Model server env: LoongForge pi05/xvla, e.g. `/path/to/envs/loongforge/bin/python`.
 
 `lerobot==0.5.0` needs Python >= 3.12, so the LoongForge server must not use an old 3.10 env. Per-benchmark isolation and key dependency versions: `benchmark_envs.md`.
 
@@ -183,17 +160,17 @@ server:
   host: 127.0.0.1
   port: 12093
   health_port: 12094
-  python: /workspace/miniconda3/envs/loongforge/bin/python
+  python: /path/to/envs/loongforge/bin/python
   log: /path/to/policy_server.log
   start_timeout_sec: 900
   ckpt_path: /path/to/checkpoint_or_model_dir
   dataset_statistics_path: /path/to/dataset_statistics.json
   tokenizer_path: /path/to/paligemma-3b-pt-224
   use_bf16: false
-  loongforge_root: /workspace/LoongForge-VLA
+  loongforge_root: /path/to/LoongForge
 
 run:
-  output_dir: /workspace/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke
+  output_dir: /path/to/LoongForge/loongforge/embodied/eval/reports/pi05/libero/object_smoke
   seed: 7
   save_trace: true
   save_replay: true
@@ -218,38 +195,33 @@ Key fields:
 ## 5. Running LIBERO
 
 ```bash
-cd /workspace/LoongForge-VLA
+cd /path/to/LoongForge
 examples/embodied/pi05/eval/run_libero_eval.sh
 ```
 
-pi05 LIBERO ships **one task-success pair** only:
+pi05 LIBERO ships one task-success config:
 
-- Public: `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml`
-- Internal: `examples/embodied/pi05/eval/configs/libero/object_smoke_internal.yaml`
+- `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml`
 
 Default `suite: libero_object`. Change suite / episode counts inside the YAML (header comments list options).
 
 ```bash
-cd /workspace/LoongForge-VLA
-# public (edit /path/to/... first)
+cd /path/to/LoongForge
+# edit /path/to/... in the YAML first
 examples/embodied/pi05/eval/run_libero_eval.sh
-# internal one-shot
-examples/embodied/pi05/eval/run_libero_eval_internal.sh
 ```
 
 ## 6. Running CALVIN
 
 CALVIN is long-horizon Franka language manipulation (5 subtasks per sequence). Metrics: `success_count`, Avg. Length, Task 1–5 success rates. `benchmark.dataset_path` must point at a tree that contains `validation/`.
 
-pi05 has **no CALVIN-domain weight**; examples keep **one link-smoke pair** with **`server.random_init: true`**:
+pi05 has **no CALVIN-domain weight**; examples keep **one link-smoke config** with **`server.random_init: true`**:
 
-- Public: `examples/embodied/pi05/eval/configs/calvin/smoke.yaml`
-- Internal: `.../smoke_internal.yaml`
+- `examples/embodied/pi05/eval/configs/calvin/smoke.yaml`
 
 ```bash
-cd /workspace/LoongForge-VLA
-examples/embodied/pi05/eval/run_calvin_eval.sh           # public
-examples/embodied/pi05/eval/run_calvin_eval_internal.sh  # internal
+cd /path/to/LoongForge
+examples/embodied/pi05/eval/run_calvin_eval.sh
 ```
 
 Edit suite / sequence count / step budget in YAML. With a CALVIN-domain checkpoint: set `random_init: false` and fill `ckpt_path` / `dataset_statistics_path`. xvla also has calvin smoke configs under `examples/embodied/xvla/eval/configs/calvin/` (formal scores need official ABC_D weights, `domain_id=2`, `action_postprocess: ee6d_to_calvin_abs`).
@@ -258,22 +230,20 @@ Edit suite / sequence count / step budget in YAML. With a CALVIN-domain checkpoi
 
 ### 7.1 pi05 × SimplerEnv (link smoke only, `random_init`)
 
-pi05 has no Bridge/WidowX finetune weight; examples keep **one pair** with **`server.random_init: true`** (no fake weights, no task-success claim):
+pi05 has no Bridge/WidowX finetune weight; examples keep **one config** with **`server.random_init: true`** (no fake weights, no task-success claim):
 
-- Public: `examples/embodied/pi05/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`
-- Internal: `.../widowx_stack_cube_smoke_internal.yaml`
+- `examples/embodied/pi05/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`
 
 ```bash
-cd /workspace/LoongForge-VLA
+cd /path/to/LoongForge
 examples/embodied/pi05/eval/run_simplerenv_eval.sh
-examples/embodied/pi05/eval/run_simplerenv_eval_internal.sh
 ```
 
 Switch Bridge tasks (eggplant / carrot / spoon, …) via `task_name` / `robot_setup` / `scene_name` in the same YAML. The runner re-execs before importing SAPIEN so `LD_LIBRARY_PATH` and `VK_ICD_FILENAMES` take effect.
 
 ### 7.2 X-VLA × SimplerEnv (task-success)
 
-Use WidowX-domain weights (e.g. `/ssd1/sunyuehang/X-VLA-WidowX`), aligned with official `evaluation/simpler/WidowX`:
+Use WidowX-domain weights (e.g. `/path/to/X-VLA-WidowX`), aligned with official `evaluation/simpler/WidowX`:
 
 ```yaml
 benchmark:
@@ -290,11 +260,11 @@ Upstream SimplerEnv does **not** ship absolute EE control by default; follow `ex
 
 SimplerEnv, RoboTwin, and ManiSkill depend on SAPIEN rendering. Before adapting a new SAPIEN benchmark, verify the Vulkan ICD — not only `nvidia-smi`. If `vulkaninfo` shows only `llvmpipe` / `lavapipe`, visual obs / camera / replay may segfault; a state-only rollout passing does **not** prove the visual path works.
 
-Internal quick check:
+Quick check:
 
 ```bash
-LD_LIBRARY_PATH=/ssd1/opt/nvidia_lib:/usr/lib64:${LD_LIBRARY_PATH:-} \
-VK_ICD_FILENAMES=/ssd1/opt/nvidia_lib/10_nvidia.json \
+LD_LIBRARY_PATH=/path/to/nvidia_lib:/usr/lib64:${LD_LIBRARY_PATH:-} \
+VK_ICD_FILENAMES=/path/to/nvidia_lib/10_nvidia.json \
 vulkaninfo
 ```
 
@@ -304,17 +274,15 @@ Expect `deviceName = NVIDIA ...` and `driverName = NVIDIA`. Set `LD_LIBRARY_PATH
 
 ManiSkill is a SAPIEN-based, GPU-friendly manipulation suite. Shipped examples keep **one link-smoke pair** with **`server.random_init: true`** (no formal task-success claim for open weights):
 
-- Public: `examples/embodied/pi05/eval/configs/maniskill/pick_cube_smoke.yaml`
-- Internal: `.../pick_cube_smoke_internal.yaml`
+- `examples/embodied/pi05/eval/configs/maniskill/pick_cube_smoke.yaml`
 
 Default `PickCube-v1`, `pd_ee_delta_pose`, 7D action. Task / `obs_mode` (rgbd vs state) in YAML comments.
 
 **Proprio / `model_state`:** the ManiSkill adapter maps Panda `qpos` to a numeric vector for the model. When `qpos` is 9D (7 arm + 2 finger), it emits **8D** = 7 joints + mean of the two finger joints (RLinf/openpi ManiSkill-style). Joint list in structured `state` remains full `qpos`. Single-camera `base_camera` only (no wrist packing in the adapter).
 
 ```bash
-cd /workspace/LoongForge-VLA
+cd /path/to/LoongForge
 examples/embodied/pi05/eval/run_maniskill_eval.sh
-examples/embodied/pi05/eval/run_maniskill_eval_internal.sh
 ```
 
 With a ManiSkill-domain checkpoint: set `random_init: false` and fill `ckpt_path` / `dataset_statistics_path` (state dim must match training, typically 8 for openpi/RLinf ManiSkill stats). xvla has matching smoke configs under `examples/embodied/xvla/eval/configs/maniskill/`.
@@ -338,12 +306,12 @@ RoboTwin is launched via official `script/eval_policy.py`; the bridge is `loongf
 
 ### 9.2 pi05 + RoboTwin (task-success)
 
-Weight example: `/ssd1/sunyuehang/pi0.5_robotwin2` (PyTorch `model.safetensors` + openpi `assets/.../norm_stats.json` in the checkpoint). Training side: `adapt_to_pi=True`, `use_delta_joint_actions=True`, `action_horizon=32`, three views head/left/right.
+Weight example: `/path/to/pi0.5_robotwin2` (PyTorch `model.safetensors` + openpi `assets/.../norm_stats.json` in the checkpoint). Training side: `adapt_to_pi=True`, `use_delta_joint_actions=True`, `action_horizon=32`, three views head/left/right.
 
 ```bash
-cd /workspace/LoongForge-VLA
-CONFIG=examples/embodied/pi05/eval/configs/robotwin/adjust_bottle_smoke_internal.yaml \
-  examples/embodied/pi05/eval/run_robotwin_eval_internal.sh
+cd /path/to/LoongForge
+CONFIG=examples/embodied/pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml \
+  examples/embodied/pi05/eval/run_robotwin_eval.sh
 ```
 
 Key YAML fields:
@@ -371,7 +339,7 @@ It is **not** re-computed at train time; it is the openpi `norm_stats.json` from
 
 | Item | Detail |
 |---|---|
-| Source checkpoint | internal: `/ssd1/sunyuehang/pi0.5_robotwin2` |
+| Source checkpoint | internal: `/path/to/pi0.5_robotwin2` |
 | Source file | `assets/pi0.5_clean_randomize_joint_training/norm_stats.json` (openpi training asset, ships with weights) |
 | openpi shape | `{"norm_stats": {"state": {mean,std,q01,q99}, "actions": {...}}}` |
 | LoongForge shape | `{"observation.state": {mean,std,q01,q99}, "action": {...}}` (keys aligned with LeRobot / pi05 `dataset_stats`) |
@@ -397,17 +365,17 @@ On the joint path the adapter sets `model_state = joint` (14D); `pi05_aloha_14d`
 
 ### 9.3 X-VLA + RoboTwin (task-success)
 
-Aligned with official `evaluation/robotwin-2.0`: `domain_id: 6`, `action_bridge: ee6d_dual`, weights e.g. `/ssd1/sunyuehang/X-VLA-RoboTwin2`.
+Aligned with official `evaluation/robotwin-2.0`: `domain_id: 6`, `action_bridge: ee6d_dual`, weights e.g. `/path/to/X-VLA-RoboTwin2`.
 
 ```bash
-cd /workspace/LoongForge-VLA
-CONFIG=examples/embodied/xvla/eval/configs/robotwin/adjust_bottle_smoke_internal.yaml \
-  examples/embodied/xvla/eval/run_robotwin_eval_internal.sh
+cd /path/to/LoongForge
+CONFIG=examples/embodied/xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml \
+  examples/embodied/xvla/eval/run_robotwin_eval.sh
 ```
 
 ### 9.4 Link smoke (no formal weight)
 
-pi05 RoboTwin examples keep only `adjust_bottle_smoke(_internal).yaml`. Without formal weights, temporarily edit the same YAML:
+pi05 RoboTwin examples keep only `adjust_bottle_smoke.yaml`. Without formal weights, temporarily edit the same YAML:
 
 - `server.random_init: true`, `max_steps: 5`: random 14D, official runner connectivity
 - `action_bridge: duplicate_7d` (and model `action_dim: 7`): interface smoke only — **not** a score
@@ -465,9 +433,9 @@ YAML `run.output_dir` should point at a stable run-tag directory, e.g. `reports/
 
 | Date | Model | Benchmark | Config / weight highlights | Result |
 |---|---|---|---|---|
-| 2026-07-21 | pi05 | RoboTwin | `adjust_bottle_smoke_internal.yaml`; `/ssd1/sunyuehang/pi0.5_robotwin2`; `action_bridge: pi05_aloha_14d` | **1/1**, ~135 steps Success |
+| 2026-07-21 | pi05 | RoboTwin | `adjust_bottle_smoke.yaml`; `/path/to/pi0.5_robotwin2`; `action_bridge: pi05_aloha_14d` | **1/1**, ~135 steps Success |
 | 2026-07-21 | pi05 | LIBERO | `libero_object` 2 task × 2 ep; `pi05_libero_finetuned_v044` (post–RoboTwin-change regression) | **4/4** |
-| 2026-07-20 | xvla | RoboTwin | `adjust_bottle_smoke_internal.yaml`; `X-VLA-RoboTwin2`; `domain_id: 6`; `ee6d_dual` | **1/1** |
+| 2026-07-20 | xvla | RoboTwin | `adjust_bottle_smoke.yaml`; `X-VLA-RoboTwin2`; `domain_id: 6`; `ee6d_dual` | **1/1** |
 | 2026-07-20 | xvla | SimplerEnv | WidowX stack_cube smoke; `X-VLA-WidowX`; `domain_id: 0` + `SIMPLERENV_PATCH_en.md` | **success** (smoke episode) |
 | 2026-07-17 | xvla | LIBERO | open X-VLA LIBERO weights; absolute control + rot6d column-major; full `libero_object` | **~94/100**, see `examples/embodied/xvla/eval/xvla_libero_diagnosis.md` |
 | 2026-07-15 | pi05 | LIBERO | `pi05_libero_finetuned_v044`; libero10 / goal smoke, etc. | multiple successes (incl. task0 1/1, high smoke rates) |

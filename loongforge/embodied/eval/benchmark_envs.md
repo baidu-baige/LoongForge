@@ -11,11 +11,11 @@ User-editable benchmark configs live under `examples/embodied/pi05/eval/configs`
 Current benchmark environments:
 
 ```text
-LIBERO      /workspace/miniconda3/envs/libero
-CALVIN      /workspace/miniconda3/envs/calvin
-SimplerEnv  /workspace/miniconda3/envs/simplerenv
-RoboTwin    /workspace/miniconda3/envs/robotwin
-ManiSkill   /workspace/miniconda3/envs/maniskill
+LIBERO      /path/to/miniconda3/envs/libero
+CALVIN      /path/to/miniconda3/envs/calvin
+SimplerEnv  /path/to/miniconda3/envs/simplerenv
+RoboTwin    /path/to/miniconda3/envs/robotwin
+ManiSkill   /path/to/miniconda3/envs/maniskill
 ```
 
 No benchmark currently uses uv for environment isolation.
@@ -31,7 +31,7 @@ conda 26.3.2
 Runtime Python:
 
 ```text
-/workspace/miniconda3/envs/libero/bin/python
+/path/to/miniconda3/envs/libero/bin/python
 ```
 
 Selected dependency versions:
@@ -63,18 +63,18 @@ examples/embodied/pi05/eval/configs/libero/*.yaml
 Runtime Python:
 
 ```text
-/workspace/miniconda3/envs/calvin/bin/python
+/path/to/miniconda3/envs/calvin/bin/python
 ```
 
 CALVIN evaluation uses the original-format CALVIN validation dataset and config assets, including `validation/.hydra/merged_config.yaml`, `calvin_models/conf`, and `eval_sequences.json`. LeRobot-format CALVIN datasets are useful for training/statistics but are not sufficient by themselves for official online long-horizon rollout.
 
-Current internal CALVIN status:
+Current CALVIN status:
 
 ```text
-benchmark env:       /workspace/miniconda3/envs/calvin
-repo/config assets:  /ssd1/sunyuehang/calvin
-validation dataset:  /ssd1/sunyuehang/calvin_debug_dataset
-pi05 configs:        only smoke(_internal).yaml
+benchmark env:       /path/to/miniconda3/envs/calvin
+repo/config assets:  /path/to/calvin
+validation dataset:  /path/to/calvin_debug_dataset
+pi05 configs:        only smoke.yaml
                      server.random_init: true (link smoke, not task-success)
 smoke status:        pass; 1 sequence, first subtask capped at 30 steps
 model score status:  need CALVIN-domain ckpt + dataset_statistics.json
@@ -84,7 +84,6 @@ Used by:
 
 ```text
 examples/embodied/pi05/eval/configs/calvin/smoke.yaml
-examples/embodied/pi05/eval/configs/calvin/smoke_internal.yaml
 ```
 
 ## SAPIEN Vulkan Runtime
@@ -99,11 +98,11 @@ VK_ICD_FILENAMES=/path/to/nvidia_icd.json
 XDG_RUNTIME_DIR=/tmp/runtime-<uid>
 ```
 
-Internal hosts currently use:
+Example host values:
 
 ```text
-LD_LIBRARY_PATH=/ssd1/opt/nvidia_lib:/usr/lib64:$LD_LIBRARY_PATH
-VK_ICD_FILENAMES=/ssd1/opt/nvidia_lib/10_nvidia.json
+LD_LIBRARY_PATH=/path/to/nvidia_lib:/usr/lib64:$LD_LIBRARY_PATH
+VK_ICD_FILENAMES=/path/to/nvidia_lib/10_nvidia.json
 ```
 
 These variables must be effective before Python imports SAPIEN, svulkan2, ManiSkill, or the benchmark renderer. Runners that depend on SAPIEN should prepare the variables and re-exec the benchmark Python process once before constructing the environment. Setting `LD_LIBRARY_PATH` only after Python has already started is not sufficient for this renderer stack.
@@ -111,8 +110,8 @@ These variables must be effective before Python imports SAPIEN, svulkan2, ManiSk
 Use this quick check before debugging benchmark adapter code:
 
 ```bash
-LD_LIBRARY_PATH=/ssd1/opt/nvidia_lib:/usr/lib64:${LD_LIBRARY_PATH:-} \
-VK_ICD_FILENAMES=/ssd1/opt/nvidia_lib/10_nvidia.json \
+LD_LIBRARY_PATH=/path/to/nvidia_lib:/usr/lib64:${LD_LIBRARY_PATH:-} \
+VK_ICD_FILENAMES=/path/to/nvidia_lib/10_nvidia.json \
 vulkaninfo
 ```
 
@@ -123,7 +122,7 @@ Expected signal: `deviceName = NVIDIA ...` and `driverName = NVIDIA`. If the out
 Runtime Python:
 
 ```text
-/workspace/miniconda3/envs/simplerenv/bin/python
+/path/to/miniconda3/envs/simplerenv/bin/python
 ```
 
 Selected dependency versions:
@@ -150,7 +149,7 @@ Current SimplerEnv status:
 X-VLA WidowX status:   task success after absolute EE controller patch
                        (see examples/embodied/xvla/eval/SIMPLERENV_PATCH_en.md)
                        configs: examples/embodied/xvla/eval/configs/simplerenv/*
-pi05 configs:          only widowx_stack_cube_smoke(_internal).yaml
+pi05 configs:          only widowx_stack_cube_smoke.yaml
                        server.random_init: true (link smoke, not task-success)
                        other Bridge tasks: edit task_name in-file comments
 ```
@@ -169,7 +168,7 @@ examples/embodied/xvla/eval/configs/simplerenv/*.yaml
 Runtime Python:
 
 ```text
-/workspace/miniconda3/envs/robotwin/bin/python
+/path/to/miniconda3/envs/robotwin/bin/python
 ```
 
 Selected dependency versions:
@@ -191,7 +190,7 @@ pyyaml            6.0.3
 Video logging dependency:
 
 ```text
-/workspace/miniconda3/envs/robotwin/bin/ffmpeg
+/path/to/miniconda3/envs/robotwin/bin/ffmpeg
 ffmpeg version 7.0.2-static
 ```
 
@@ -204,12 +203,12 @@ Official evaluator:    script/eval_policy.py via robotwin_runner + bridges/robot
 action_bridge modes:   strict_14d | duplicate_7d | pi05_aloha_14d | ee6d_dual
 pi05 RoboTwin2:        task success (adjust_bottle demo_clean)
                        action_bridge=pi05_aloha_14d, action_dim=14, action_horizon=32
-                       checkpoint example: /ssd1/sunyuehang/pi0.5_robotwin2
+                       checkpoint example: /path/to/pi0.5_robotwin2
                        stats: examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json
                        (from ckpt assets/.../norm_stats.json: state→observation.state, actions→action)
 xvla RoboTwin2:        task success (adjust_bottle demo_clean)
                        action_bridge=ee6d_dual, domain_id=6
-                       checkpoint example: /ssd1/sunyuehang/X-VLA-RoboTwin2
+                       checkpoint example: /path/to/X-VLA-RoboTwin2
 Smoke-only:            edit adjust_bottle_smoke*.yaml (random_init / duplicate_7d); no separate YAML
 ```
 
@@ -225,13 +224,13 @@ examples/embodied/xvla/eval/configs/robotwin/*.yaml
 Runtime Python:
 
 ```text
-/workspace/miniconda3/envs/maniskill/bin/python
+/path/to/miniconda3/envs/maniskill/bin/python
 ```
 
 Current ManiSkill status:
 
 ```text
-pi05 configs:          only pick_cube_smoke(_internal).yaml
+pi05 configs:          only pick_cube_smoke.yaml
                        server.random_init: true (link smoke, not task-success)
 Task:                  PickCube-v1, 7D, pd_ee_delta_pose
 Model score status:    need ManiSkill-domain ckpt + dataset_statistics.json
@@ -250,28 +249,28 @@ examples/embodied/pi05/eval/configs/maniskill/*.yaml
 ```text
 examples/embodied/pi05/eval/configs/libero/*.yaml
 examples/embodied/xvla/eval/configs/libero/*.yaml
-  benchmark env: /workspace/miniconda3/envs/libero
-  runtime:       /workspace/miniconda3/envs/libero/bin/python
+  benchmark env: /path/to/miniconda3/envs/libero
+  runtime:       /path/to/miniconda3/envs/libero/bin/python
 
 examples/embodied/pi05/eval/configs/calvin/*.yaml
 examples/embodied/xvla/eval/configs/calvin/*.yaml
-  benchmark env: /workspace/miniconda3/envs/calvin
-  runtime:       /workspace/miniconda3/envs/calvin/bin/python
+  benchmark env: /path/to/miniconda3/envs/calvin
+  runtime:       /path/to/miniconda3/envs/calvin/bin/python
 
 examples/embodied/pi05/eval/configs/simplerenv/*.yaml
 examples/embodied/xvla/eval/configs/simplerenv/*.yaml
-  benchmark env: /workspace/miniconda3/envs/simplerenv
-  runtime:       /workspace/miniconda3/envs/simplerenv/bin/python
+  benchmark env: /path/to/miniconda3/envs/simplerenv
+  runtime:       /path/to/miniconda3/envs/simplerenv/bin/python
 
 examples/embodied/pi05/eval/configs/robotwin/*.yaml
 examples/embodied/xvla/eval/configs/robotwin/*.yaml
-  benchmark env: /workspace/miniconda3/envs/robotwin
-  runtime:       /workspace/miniconda3/envs/robotwin/bin/python
+  benchmark env: /path/to/miniconda3/envs/robotwin
+  runtime:       /path/to/miniconda3/envs/robotwin/bin/python
 
 examples/embodied/pi05/eval/configs/maniskill/*.yaml
 examples/embodied/xvla/eval/configs/maniskill/*.yaml
-  benchmark env: /workspace/miniconda3/envs/maniskill
-  runtime:       /workspace/miniconda3/envs/maniskill/bin/python
+  benchmark env: /path/to/miniconda3/envs/maniskill
+  runtime:       /path/to/miniconda3/envs/maniskill/bin/python
 ```
 
 ## Re-check Commands
@@ -279,9 +278,9 @@ examples/embodied/xvla/eval/configs/maniskill/*.yaml
 Use these commands to refresh version information after environment changes:
 
 ```bash
-/workspace/miniconda3/bin/conda list -n libero
-/workspace/miniconda3/bin/conda list -n calvin
-/workspace/miniconda3/bin/conda list -n simplerenv
-/workspace/miniconda3/bin/conda list -n robotwin
-/workspace/miniconda3/bin/conda list -n maniskill
+/path/to/miniconda3/bin/conda list -n libero
+/path/to/miniconda3/bin/conda list -n calvin
+/path/to/miniconda3/bin/conda list -n simplerenv
+/path/to/miniconda3/bin/conda list -n robotwin
+/path/to/miniconda3/bin/conda list -n maniskill
 ```

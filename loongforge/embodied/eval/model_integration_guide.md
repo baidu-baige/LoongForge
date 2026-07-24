@@ -23,11 +23,9 @@ pi05 与 xvla 在这些配置点上的取值几乎完全不同，本文以二者
 
 ### 0.1 配置与脚本布局（pi05 / xvla 约定）
 
-- 每个 benchmark **只保留一对** YAML：公开模板 `*.yaml`（`/path/to/...` 占位）+
-  内部一键 `*_internal.yaml`（本机绝对路径）。可选 knobs 写在文件头注释，
+- 每个 benchmark **只保留一个**公开 YAML 模板 `*.yaml`（`/path/to/...` 占位）。可选 knobs 写在文件头注释，
   **不要**额外再放 full-suite / 备用 smoke 文件（用户明确要求时除外）。
-- 脚本成对：`run_<benchmark>_eval.sh` ↔ 公开 YAML；
-  `run_<benchmark>_eval_internal.sh` ↔ `_internal` YAML。
+- 脚本：`run_<benchmark>_eval.sh` ↔ 公开 YAML。
 - **task-success vs 链路 smoke：** 仅在有匹配域权重且已验证时写 task-success；
   无域权重时用 `server.random_init: true`、空 `ckpt_path`、短 `max_steps`，
   并在注释中标明 **not task-success**（见 pi05/xvla 的 CALVIN、ManiSkill；
