@@ -17,7 +17,7 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 # ── Paths ─────────────────────────────────────────────────────
 TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen/Qwen3-VL-8B-Instruct"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/xiaojunjie/code/cosmos-framework/examples/checkpoints/Cosmos3-Nano"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/checkpoints/Cosmos3-Nano"}
 DATASET_PATH=${DATASET_PATH:-"/mnt/cluster/datasets/nvidia/Cosmos3-DROID/success/"}
 OUTPUT_DIR=${OUTPUT_DIR:-"outputs/cosmos3_nano_droid_fsdp_$(date +%Y%m%d_%H%M%S)"}
 
