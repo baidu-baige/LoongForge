@@ -60,8 +60,8 @@
       </h1>
       <p class="max-w-3xl mx-auto text-lg md:text-xl text-gray-200 mb-10" data-i18n-html="hero.subtitle_html">
         A <b>modular</b>, <b>scalable</b>, <b>high-performance</b> training framework for <b>LLMs</b>, <b>VLMs</b>,
-        <b>diffusion</b>, and <b>embodied</b> models — built on Megatron-LM with native NVIDIA GPU &amp; Kunlun XPU
-        support
+        <b>diffusion</b>, and <b>embodied</b> models — multi-backend (<b>Megatron-LM</b> for LLM/VLM/diffusion,
+        <b>torch-native DDP/FSDP</b> for embodied), with native NVIDIA GPU &amp; Kunlun XPU support
       </p>
       <div class="flex flex-wrap gap-3 justify-center">
         <a href="#quickstart"
@@ -135,6 +135,14 @@
       </div>
 
       <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- Embodied (highlighted first) -->
+        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+          <span class="feat-tag feat-tag-embodied" data-i18n="feat.cat.7.title">Embodied</span>
+          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.7.item.1.t">Embodied Training</div>
+          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.7.item.1.d">Dedicated torch-native
+            DDP/FSDP subsystem for VLA &amp; WAM models, with DDP / ZeRO-1 / FSDP / HSDP.</div>
+        </div>
+
         <!-- MoE -->
         <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
           <span class="feat-tag feat-tag-moe" data-i18n="feat.cat.1.title">MoE</span>
@@ -146,15 +154,9 @@
         <!-- Multimodal -->
         <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
           <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.2.item.2.t">Heterogeneous Parallelism</div>
+          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.2.item.2.t">Heterogeneous &amp; Disaggregated</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.2.d">Independent TP / PP / DP
-            per model component.</div>
-        </div>
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.2.item.3.t">Disaggregated Training</div>
-          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.3.d">Decoupled ViT / LLM
-            scheduling kills pipeline bubbles.</div>
+            per component + decoupled ViT / LLM scheduling that kills pipeline bubbles.</div>
         </div>
         <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
           <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
@@ -217,38 +219,38 @@
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
         <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Measured on
-          latest LoongForge across LLM, VLM, VLA, and DIT workloads</p>
+          latest LoongForge across VLA, WAM, and VLM workloads</p>
       </div>
       <div class="max-w-3xl mx-auto">
         <div class="space-y-4">
           <div class="bench-row">
-            <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
+            <div class="bench-label">DreamZero <span class="bench-type">WAM</span></div>
             <div class="bench-track">
-              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">2.31×</span></div>
+              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">2.67×</span></div>
             </div>
           </div>
           <div class="bench-row">
-            <div class="bench-label">Wan2.2 <span class="bench-type">DIT</span></div>
+            <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 93.5%"><span class="bench-val">2.16×</span></div>
+              <div class="bench-bar" style="width: 86.5%"><span class="bench-val">2.31×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 71.4%"><span class="bench-val">1.65×</span></div>
+              <div class="bench-bar" style="width: 83.5%"><span class="bench-val">2.23×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">LingBot VA <span class="bench-type">WAM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 67.4%"><span class="bench-val">1.80×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Qwen3-VL-30B-A3B <span class="bench-type">VLM</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 62.8%"><span class="bench-val">1.45×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">Qwen3-30B-A3B <span class="bench-type">MoE</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 50.2%"><span class="bench-val">1.16×</span></div>
+              <div class="bench-bar" style="width: 54.3%"><span class="bench-val">1.45×</span></div>
             </div>
           </div>
         </div>
@@ -312,7 +314,7 @@
           <button data-tab="llm" class="tab-btn active">LLM</button>
           <button data-tab="vlm" class="tab-btn">VLM</button>
           <button data-tab="diff" class="tab-btn">Diffusion</button>
-          <button data-tab="vla" class="tab-btn">VLA</button>
+          <button data-tab="vla" class="tab-btn">Embodied</button>
         </div>
 
         <div data-panel="llm" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -327,6 +329,10 @@
           <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">DeepSeek-V3.2</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">v3.2</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">DeepSeek-V4</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">v4-flash</span><span class="chip">v4-pro</span></div>
           </div>
           <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">LLaMA2</h4>
@@ -401,6 +407,10 @@
             <div class="flex flex-wrap gap-1.5"><span class="chip">27B</span><span class="chip">35B-A3B</span></div>
           </div>
           <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Kimi-K2.x</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">k2.5</span><span class="chip">k2.6</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">ERNIE4.5-VL</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">28B-A3B</span></div>
           </div>
@@ -426,21 +436,53 @@
           </div>
         </div>
 
-        <div data-panel="diff" class="hidden grid md:grid-cols-2 gap-4">
+        <div data-panel="diff" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-            <h4 class="font-semibold mb-2">WAN2.2</h4>
-            <div class="flex flex-wrap gap-1.5"><span class="chip">wan2.2_i2v_a14b</span></div>
+            <h4 class="font-semibold mb-2">Wan2.1</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">wan2-1-i2v</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Wan2.2</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">wan2-2-i2v</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Qwen-Image</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">qwen-image-edit-2511</span></div>
           </div>
         </div>
 
-        <div data-panel="vla" class="hidden grid md:grid-cols-2 gap-4">
+        <div data-panel="vla" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Pi</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">pi0.5</span></div>
           </div>
           <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">GR00T</h4>
-            <div class="flex flex-wrap gap-1.5"><span class="chip">groot-n1.6</span></div>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">groot_n1_6</span><span class="chip">groot_n1_7</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">XVLA</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">xvla</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">FastWAM</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">fastwam</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">LingBot-VA</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">lingbot_va</span></div>
+          </div>
+          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Cosmos3</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">cosmos3_nano</span></div>
+          </div>
+          <div
+            class="rounded-2xl p-5 bg-gradient-to-br from-indigo-500/10 to-amber-500/10 border border-indigo-200 dark:border-indigo-900 md:col-span-2 lg:col-span-3 card-hover">
+            <h4 class="font-semibold mb-2">DreamZero</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">lora_wan22_5b</span><span
+                class="chip">full_wan22_5b</span><span class="chip">lora_wan21_14b</span><span
+                class="chip">full_wan21_14b</span><span class="chip">libero_wan22_5b</span><span
+                class="chip">agibot_wan21_14b</span><span class="chip">yam_wan21_14b</span></div>
           </div>
         </div>
       </div>
@@ -645,9 +687,9 @@ MODEL_PARALLEL_ARGS=(
     <div class="max-w-7xl mx-auto px-6 py-20 reveal">
       <h2 class="text-3xl md:text-4xl font-bold text-center mb-3" data-i18n="powered.title">🌟 Powered by LoongForge
       </h2>
-      <p class="text-center text-gray-600 dark:text-gray-400 mb-10" data-i18n="powered.subtitle">Open-source projects
-        trained on LoongForge — ordered from newest to earliest</p>
-      <div class="grid md:grid-cols-3 gap-5">
+      <p class="text-center text-gray-600 dark:text-gray-400 mb-10" data-i18n="powered.subtitle">Open-source models
+        trained with LoongForge or its predecessor AIAK-Training-LLM</p>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
         <a href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2" target="_blank"
           class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="flex items-center gap-2 mb-2">
@@ -660,18 +702,30 @@ MODEL_PARALLEL_ARGS=(
           <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.1.d">Next-generation fully open
             multimodal model — improved data, training recipe, and scaling.</p>
         </a>
-        <a href="https://arxiv.org/abs/2509.23661" target="_blank"
+        <a href="https://github.com/InnovatorLM/Innovator-VL/tree/main" target="_blank"
+          class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-2xl">🧪</span>
+            <span
+              class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
+              data-i18n="powered.new">NEW</span>
+          </div>
+          <h3 class="font-semibold mb-1" data-i18n="powered.2.t">Innovator-VL</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.2.d">Scientific multimodal large
+            language model for advanced reasoning.</p>
+        </a>
+        <a href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5" target="_blank"
           class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="text-2xl mb-2">🔬</div>
-          <h3 class="font-semibold mb-1" data-i18n="powered.2.t">LLaVA-OneVision-1.5</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.2.d">Fully open framework for
+          <h3 class="font-semibold mb-1" data-i18n="powered.3.t">LLaVA-OneVision-1.5</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.3.d">Fully open framework for
             democratized multimodal training.</p>
         </a>
         <a href="https://github.com/baidubce/Qianfan-VL" target="_blank"
           class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="text-2xl mb-2">🎯</div>
-          <h3 class="font-semibold mb-1" data-i18n="powered.3.t">Qianfan-VL</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.3.d">Domain-enhanced universal
+          <h3 class="font-semibold mb-1" data-i18n="powered.4.t">Qianfan-VL</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.4.d">Domain-enhanced universal
             vision-language models.</p>
         </a>
       </div>
@@ -805,7 +859,7 @@ MODEL_PARALLEL_ARGS=(
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js?v=20260522-benchmark"></script>
+  <script src="assets/js/main.js?v=20260612-embodied3"></script>
   <script src="assets/js/home-news.js"></script>
 </body>
 
