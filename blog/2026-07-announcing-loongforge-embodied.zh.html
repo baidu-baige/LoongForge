@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>LoongForge-Embodied 正式发布：面向具身模型的高性能训练子系统 | LoongForge Blog</title>
+    <meta name="description"
+        content="LoongForge 正式发布 LoongForge-Embodied——面向 VLA 与 WAM 的 torch-native 训练子系统，覆盖 Pi0.5、GR00T N1.6、X-VLA、FastWAM、LingBot-VA、Cosmos3、DreamZero 等主流具身模型，同等硬件下相对官方实现取得 1.6×~2.67× 加速。" />
+    <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <link rel="stylesheet" href="../assets/css/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+    <div id="scroll-progress"></div>
+
+    <!-- Shared navbar (rendered by main.js) -->
+    <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+    <article class="max-w-4xl mx-auto px-6 py-14">
+        <a href="../blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline">← 返回博客</a>
+        <div class="mt-6 mb-8">
+            <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span
+                    class="chip">具身智能</span><span class="chip">VLA</span><span class="chip">WAM</span><span
+                    class="chip">发布</span></div>
+            <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">LoongForge-Embodied 正式发布：面向具身模型的高性能训练子系统
+            </h1>
+            <div class="text-sm text-gray-500">2026-07-01 · LoongForge 团队</div>
+        </div>
+
+        <div class="prose-lf">
+            <blockquote>
+                <p>今天，我们在 LoongForge 中正式发布 <strong>LoongForge-Embodied</strong>——一个专为 <strong>VLA（视觉-语言-动作）</strong> 与
+                    <strong>WAM（世界-动作模型）</strong> 打造的 torch-native 训练子系统。它一次覆盖 Pi0.5、GR00T
+                    N1.6、X-VLA、FastWAM、LingBot-VA、Cosmos3、DreamZero 等主流具身模型，并在同等硬件下相对各模型官方实现取得 <strong>1.6× ~
+                        2.67×</strong> 的训练加速。</p>
+            </blockquote>
+            <p>📚 GitHub：<a href="https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied"
+                    target="_blank"
+                    rel="noopener">https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied</a></p>
+            <h2>1. 它是什么：一个 torch-native 的具身训练子系统</h2>
+            <p>LoongForge 是一套统一的训练框架，覆盖 LLM / VLM / Diffusion / Embodied。其中 LLM / VLM / Diffusion 构建在
+                <strong>Megatron-LM</strong> 之上，面向大规模、模型并行的预训练与 SFT；而具身模型有着截然不同的形态，我们为它单独构建了一套子系统。</p>
+            <p>原因在于，具身模型与典型大模型的差别是本质性的：它参数量小得多（通常在 10B 以内），一个典型 VLA 往往就是一个 VLM 叠加一个动作头。这个规模并不需要为超大模型准备的 TP / PP / EP
+                模型并行——硬套只会徒增复杂度与开销。因此 LoongForge-Embodied 直接构建在<strong>原生 PyTorch 的 DDP / FSDP</strong>
+                之上，聚焦于中小规模、数据并行场景下的训练效率与模型接入体验。</p>
+            <p>两套栈共享同一个代码仓库、发布流程与工具链，但不共享 Megatron 核心引擎，也不共享 args / parser / core，从而各自独立演进：</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>维度</th>
+                        <th>LoongForge 核心（LLM / VLM / Diffusion）</th>
+                        <th>LoongForge-Embodied</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>计算 / 分布式</td>
+                        <td>Megatron-LM —— TP / PP / EP / CP / FSDP</td>
+                        <td>torch-native DDP / FSDP</td>
+                    </tr>
+                    <tr>
+                        <td>负载特征</td>
+                        <td>大规模、模型并行的预训练 / SFT</td>
+                        <td>中小规模、数据并行的 SFT</td>
+                    </tr>
+                    <tr>
+                        <td>模型规模</td>
+                        <td>数十亿至数千亿参数</td>
+                        <td>通常 10B 以内</td>
+                    </tr>
+                </tbody>
+            </table>
+            <h2>2. 支持的模型：主流 VLA 与 WAM 一次到位</h2>
+            <p>首个版本即覆盖主流的 VLA 与 WAM 模型，且接入方式统一：</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>类别</th>
+                        <th>模型</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Pi</strong></td>
+                        <td>pi0.5</td>
+                    </tr>
+                    <tr>
+                        <td><strong>GR00T</strong></td>
+                        <td>groot_n1_6、groot_n1_7</td>
+                    </tr>
+                    <tr>
+                        <td><strong>XVLA</strong></td>
+                        <td>xvla</td>
+                    </tr>
+                    <tr>
+                        <td><strong>FastWAM</strong></td>
+                        <td>fastwam</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LingBot-VA</strong>（WAM）</td>
+                        <td>lingbot_va</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cosmos3</strong></td>
+                        <td>cosmos3_nano</td>
+                    </tr>
+                    <tr>
+                        <td><strong>DreamZero</strong></td>
+                        <td>系列变体（Wan2.1 14B / Wan2.2 5B，LoRA 与全量微调，覆盖 DROID / LIBERO / AgiBot / YAM 等数据集）</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>全量微调是标准能力，数据侧支持 LeRobot / HDF5 等多种格式（各模型支持的格式不尽相同）；部分模型（如 DreamZero）另提供 LoRA 变体。</p>
+            <h2>3. 性能：同等硬件下的实测加速</h2>
+            <p>以下为 LoongForge-Embodied 在与各模型官方实现相同硬件配置下的实测加速：</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>模型</th>
+                        <th>类型</th>
+                        <th>对比基线</th>
+                        <th>加速比</th>
+                        <th>测量版本</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Pi0.5</td>
+                        <td>VLA</td>
+                        <td>OpenPI</td>
+                        <td><strong>2.23×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>GR00T N1.6</td>
+                        <td>VLA</td>
+                        <td>LeRobot</td>
+                        <td><strong>2.31×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>X-VLA</td>
+                        <td>VLA</td>
+                        <td>X-VLA</td>
+                        <td><strong>1.6×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>DreamZero（DROID Wan2.2-5B 全量）</td>
+                        <td>WAM</td>
+                        <td>DreamZero</td>
+                        <td><strong>2.67×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>LingBot VA</td>
+                        <td>WAM</td>
+                        <td>LingBot-VA</td>
+                        <td><strong>1.80×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>这份加速横跨 VLA 与 WAM 两大类、多个主流实现，而不是只在单个模型上成立。</p>
+            <blockquote>
+                <p>上述数字反映测量时各基线与 LoongForge 版本的表现（见"测量版本"列），随实现演进可能变化；具体加速幅度也因模型、数据与配置而异。</p>
+            </blockquote>
+            <h2>4. 架构设计：公共能力共享，模型差异下沉</h2>
+            <p>这套子系统的设计哲学可以概括为一句话：<strong>共享公共能力，下沉模型差异</strong>——公共层做深，模型层做薄，新增一个模型无需改动训练主循环。</p>
+            <p><strong>① 模型层（<code>model/</code>）—— 一个模型一个目录。</strong> 每个模型通过 <code>@register_model</code>
+                注册到统一入口：<code>modeling_&lt;name&gt;.py</code> 负责组网 / 前向 /
+                损失，<code>model_configuration_&lt;name&gt;.py</code> 是架构超参数据类。对上层暴露统一接口，接入新模型不触碰训练循环。</p>
+            <p><strong>② 数据流水线（<code>data/</code>）—— 公共后端 + 每模型差异。</strong>
+                数据集读取后端（<code>lerobot / hdf5 / dummy</code>）、有状态的分布式采样器、可组合的 transform 框架统一沉淀为公共能力；模型特有的数据读取（如
+                <code>fastwam</code> 的多帧几何）、动作 / 图像变换、batch 拼装下沉到 <code>datasets/&lt;name&gt;/</code>；每个模型用
+                <code>DataConfig</code> 声明图像尺寸、动作维度、归一化统计等。</p>
+            <p><strong>③ 三层配置解析（<code>train/parser.py</code>）—— 冻结为不可变对象。</strong> YAML <code>model:</code> 段 →
+                <code>ModelConfig</code>、YAML <code>data:</code> 段 → <code>DataConfig</code>、命令行 →
+                <code>TrainingArgs</code>；<code>--model-name</code> 经 <code>config_map.py</code> 路由到对应 YAML 与类型，命令行还可用
+                dotlist 覆盖字段（如 <code>model.action_horizon=64</code>），最终统一冻结为全局单例。</p>
+            <p><strong>④ 分布式训练器（<code>train/trainers/</code>、<code>distributed/</code>）—— 策略灵活。</strong> 标准 SFT 直接用
+                <code>FinetuneTrainer</code>，多流、CUDA Graph 等特殊范式继承 <code>BaseTrainer</code> 并在
+                <code>trainer_builder.py</code> 注册，通过 <code>--trainer-type</code> 选择；分布式则可在
+                <code>ddp</code>（数据并行）、<code>ddp</code> + <code>--zero-optimizer</code>（ZeRO
+                Stage-1）、<code>fsdp</code>（全分片）、<code>hsdp</code>（混合分片）之间按需切换，贴合具身模型的规模与显存特征。<code>BaseTrainer</code>
+                还把优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 续训、确定性控制等收敛到公共层，让每个模型复用同一套实现。</p>
+            <p><strong>新增一个模型只需 5 步</strong>：① 加 <code>model/&lt;name&gt;/</code> 的组网与配置并 <code>@register_model</code>；②
+                加 <code>data/datasets/&lt;name&gt;/</code>（DataConfig + transform + collator）；③ 在
+                <code>configs/models/embodied/</code> 加 YAML 并在 <code>config_map.py</code> 登记；④ 范式不同则继承
+                <code>BaseTrainer</code>，否则复用 <code>FinetuneTrainer</code>；⑤ 在 <code>examples/</code> 加启动脚本。</p>
+            <h2>5. 快速开始</h2>
+            <p>训练通过 <code>torchrun</code> 启动 <code>loongforge/embodied/train.py</code>：</p>
+            <pre><code class="language-bash">export LOONGFORGE_PATH=/workspace/LoongForge
+
+PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
+  torchrun --nproc_per_node 8 --nnodes 1 \
+    $LOONGFORGE_PATH/loongforge/embodied/train.py \
+    --model-name pi05 \
+    --trainer-type FinetuneTrainer \
+    --dataset-format lerobot_datasets \
+    --distributed-strategy fsdp \
+    --train-iters 30000 \
+    ...</code></pre>
+            <p>不同模型在数据格式、处理流程、性能优化配置上各有差异，可直接运行的命令因模型而异。开箱即用的示例脚本见 <code>examples/embodied/</code>：</p>
+            <pre><code class="language-bash">bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh        # 另有 ddp / ddp_zero1 变体
+bash examples/embodied/groot_n1_6/run_groot_n1_6_ddp_finetune.sh</code></pre>
+            <h2>6. 评测：离线 benchmark，进程解耦</h2>
+            <p>训练之外，LoongForge-Embodied 内置一套离线评测模块，覆盖 <strong>LIBERO / CALVIN / SimplerEnv / RoboTwin /
+                    ManiSkill</strong>。它将 benchmark 客户端与模型策略服务器拆分为独立进程，通过 WebSocket / msgpack-numpy 的 RPC 协议连接，以 YAML
+                作为唯一用户入口：</p>
+            <pre><code class="language-bash">cd /path/to/LoongForge
+examples/embodied/pi05/eval/run_libero_eval.sh</code></pre>
+            <p>模型侧只需实现统一的 <code>predict_action</code> 接口，通用策略层 <code>GenericPredictActionPolicy</code> 负责图像视图选择、动作 shape
+                校验、chunk 缓存、延迟统计与归一化统计加载；接入新模型只需在 <code>eval/factories/</code> 下新增一个轻量工厂，无需改动服务器主流程。</p>
+            <blockquote>
+                <p>评测模块仍在持续开发中，后续会有更多 benchmark 与能力加入。</p>
+            </blockquote>
+            <h2>7. 写在最后</h2>
+            <p>LoongForge-Embodied 的发布，标志着 LoongForge 面向具身模型的训练能力，从此前散落在主框架中的 VLA 支持，正式沉淀为一个独立、解耦的子系统：主流 VLA 与 WAM
+                一次到位、接入统一，同时在同等硬件下相对官方实现带来 1.6× ~ 2.67× 的训练加速。</p>
+            <p>我们相信，具身模型的研发效率，取决于能否用最贴合其形态的基础设施去训练它。欢迎试用，也欢迎通过 GitHub Issue、微信或 Slack 加入社区，一起把它打磨得更好。</p>
+            <ul>
+                <li><strong>GitHub</strong>：<a href="https://github.com/baidu-baige/LoongForge" target="_blank"
+                        rel="noopener">https://github.com/baidu-baige/LoongForge</a></li>
+                <li><strong>文档</strong>：<a href="https://loongforge.readthedocs.io/" target="_blank"
+                        rel="noopener">https://loongforge.readthedocs.io/</a></li>
+                <li><strong>更多 blog</strong>：<a href="https://baidu-baige.github.io/LoongForge/blog/" target="_blank"
+                        rel="noopener">https://baidu-baige.github.io/LoongForge/blog/</a></li>
+            </ul>
+        </div>
+
+        <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+            <a href="2026-06-loongforge-groot-n16-acceleration.zh.html"
+                class="text-indigo-600 dark:text-indigo-300 hover:underline">← 上一篇：GR00T N1.6 训练加速</a>
+            <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">所有文章 →</a>
+        </div>
+    </article>
+
+    <footer class="border-t border-gray-200 dark:border-gray-800">
+        <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache
+            2.0
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const POST_EN = '2026-07-announcing-loongforge-embodied.html';
+            const POST_ZH = '2026-07-announcing-loongforge-embodied.zh.html';
+            document.querySelectorAll('[data-post-lang]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const target = btn.dataset.postLang;
+                    try { localStorage.setItem('lf-lang', target); } catch (e) { }
+                    location.href = target === 'zh' ? POST_ZH : POST_EN;
+                });
+            });
+            try {
+                const cur = (localStorage.getItem('lf-lang') === 'en') ? 'en' : 'zh';
+                document.querySelectorAll('[data-post-lang]').forEach(b =>
+                    b.classList.toggle('active', b.dataset.postLang === cur)
+                );
+            } catch (e) { }
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="../assets/js/main.js"></script>
+</body>
+
+</html>

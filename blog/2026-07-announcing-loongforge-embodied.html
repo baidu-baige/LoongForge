@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Announcing LoongForge-Embodied: a high-performance training subsystem for embodied models | LoongForge Blog
+    </title>
+    <meta name="description"
+        content="LoongForge releases LoongForge-Embodied — a torch-native training subsystem for VLA and WAM models, covering Pi0.5, GR00T N1.6, X-VLA, FastWAM, LingBot-VA, Cosmos3, and DreamZero, with 1.6x-2.67x training speedups over official implementations on the same hardware." />
+    <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <link rel="stylesheet" href="../assets/css/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+    <div id="scroll-progress"></div>
+
+    <!-- Shared navbar (rendered by main.js) -->
+    <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+    <article class="max-w-4xl mx-auto px-6 py-14">
+        <a href="../blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline">← Back to blog</a>
+        <div class="mt-6 mb-8">
+            <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span
+                    class="chip">Embodied</span><span class="chip">VLA</span><span class="chip">WAM</span><span
+                    class="chip">Release</span></div>
+            <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">Announcing LoongForge-Embodied: a
+                high-performance training subsystem for embodied models</h1>
+            <div class="text-sm text-gray-500">2026-07-01 · The LoongForge Team</div>
+        </div>
+
+        <div class="prose-lf">
+            <blockquote>
+                <p>Today we are releasing <strong>LoongForge-Embodied</strong> inside LoongForge — a torch-native
+                    training subsystem purpose-built for <strong>VLA (Vision-Language-Action)</strong> and <strong>WAM
+                        (World-Action Model)</strong> models. It covers mainstream embodied models such as Pi0.5, GR00T
+                    N1.6, X-VLA, FastWAM, LingBot-VA, Cosmos3, and DreamZero in one shot, and delivers <strong>1.6× ~
+                        2.67×</strong> training speedups over each model's official implementation on the same hardware.
+                </p>
+            </blockquote>
+            <p>📚 GitHub: <a href="https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied"
+                    target="_blank"
+                    rel="noopener">https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied</a></p>
+            <h2>1. What it is: a torch-native embodied training subsystem</h2>
+            <p>LoongForge is a unified training framework spanning LLM / VLM / Diffusion / Embodied. The LLM / VLM /
+                Diffusion stacks are built on <strong>Megatron-LM</strong>, targeting large-scale, model-parallel
+                pre-training and SFT. Embodied models have a fundamentally different shape, so we built a dedicated
+                subsystem for them.</p>
+            <p>The reason is that embodied models differ from typical large models in a fundamental way: they have far
+                fewer parameters (usually under 10B), and a typical VLA is often just a VLM plus an action head. This
+                scale does not need the TP / PP / EP model parallelism designed for giant models — forcing it on only
+                adds complexity and overhead. LoongForge-Embodied is therefore built directly on <strong>native PyTorch
+                    DDP / FSDP</strong>, focusing on training efficiency and model-onboarding experience in
+                small-to-medium, data-parallel scenarios.</p>
+            <p>The two stacks share the same repository, release process, and toolchain, but do not share the Megatron
+                core engine, nor args / parser / core, so each can evolve independently:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Dimension</th>
+                        <th>LoongForge core (LLM / VLM / Diffusion)</th>
+                        <th>LoongForge-Embodied</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Compute / distributed</td>
+                        <td>Megatron-LM — TP / PP / EP / CP / FSDP</td>
+                        <td>torch-native DDP / FSDP</td>
+                    </tr>
+                    <tr>
+                        <td>Workload profile</td>
+                        <td>Large-scale, model-parallel pre-training / SFT</td>
+                        <td>Small-to-medium, data-parallel SFT</td>
+                    </tr>
+                    <tr>
+                        <td>Model scale</td>
+                        <td>Billions to hundreds of billions of parameters</td>
+                        <td>Usually under 10B</td>
+                    </tr>
+                </tbody>
+            </table>
+            <h2>2. Supported models: mainstream VLA and WAM, all at once</h2>
+            <p>The first release already covers mainstream VLA and WAM models, with a unified onboarding path:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Models</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Pi</strong></td>
+                        <td>pi0.5</td>
+                    </tr>
+                    <tr>
+                        <td><strong>GR00T</strong></td>
+                        <td>groot_n1_6, groot_n1_7</td>
+                    </tr>
+                    <tr>
+                        <td><strong>XVLA</strong></td>
+                        <td>xvla</td>
+                    </tr>
+                    <tr>
+                        <td><strong>FastWAM</strong></td>
+                        <td>fastwam</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LingBot-VA</strong> (WAM)</td>
+                        <td>lingbot_va</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cosmos3</strong></td>
+                        <td>cosmos3_nano</td>
+                    </tr>
+                    <tr>
+                        <td><strong>DreamZero</strong></td>
+                        <td>Series variants (Wan2.1 14B / Wan2.2 5B, LoRA and full fine-tuning, covering DROID / LIBERO
+                            / AgiBot / YAM and other datasets)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>Full fine-tuning is a standard capability; on the data side it supports formats such as LeRobot / HDF5
+                (supported formats vary by model), and some models (e.g. DreamZero) also provide LoRA variants.</p>
+            <h2>3. Performance: measured speedups on the same hardware</h2>
+            <p>The following are measured speedups for LoongForge-Embodied on the same hardware configuration as each
+                model's official implementation:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Type</th>
+                        <th>Baseline</th>
+                        <th>Speedup</th>
+                        <th>Measured version</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Pi0.5</td>
+                        <td>VLA</td>
+                        <td>OpenPI</td>
+                        <td><strong>2.23×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>GR00T N1.6</td>
+                        <td>VLA</td>
+                        <td>LeRobot</td>
+                        <td><strong>2.31×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>X-VLA</td>
+                        <td>VLA</td>
+                        <td>X-VLA</td>
+                        <td><strong>1.6×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>DreamZero (DROID Wan2.2-5B full)</td>
+                        <td>WAM</td>
+                        <td>DreamZero</td>
+                        <td><strong>2.67×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                    <tr>
+                        <td>LingBot VA</td>
+                        <td>WAM</td>
+                        <td>LingBot-VA</td>
+                        <td><strong>1.80×</strong></td>
+                        <td>main · 2026-07</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>This speedup spans both VLA and WAM categories and multiple mainstream implementations, rather than
+                holding for a single model only.</p>
+            <blockquote>
+                <p>The numbers above reflect the performance of each baseline and LoongForge version at measurement time
+                    (see the "Measured version" column) and may change as implementations evolve; the exact speedup also
+                    varies with model, data, and configuration.</p>
+            </blockquote>
+            <h2>4. Architecture: share common capabilities, push model differences down</h2>
+            <p>The design philosophy of this subsystem can be summed up in one line: <strong>share common capabilities,
+                    push model differences down</strong> — make the common layer deep and the model layer thin, so
+                adding a model requires no changes to the training main loop.</p>
+            <p><strong>① Model layer (<code>model/</code>) — one directory per model.</strong> Each model registers into
+                a unified entry point via <code>@register_model</code>: <code>modeling_&lt;name&gt;.py</code> handles
+                the network / forward / loss, and <code>model_configuration_&lt;name&gt;.py</code> is the
+                architecture-hyperparameter dataclass. A unified interface is exposed upward, so onboarding a new model
+                does not touch the training loop.</p>
+            <p><strong>② Data pipeline (<code>data/</code>) — common backends + per-model differences.</strong>
+                Dataset-reading backends (<code>lerobot / hdf5 / dummy</code>), a stateful distributed sampler, and a
+                composable transform framework are consolidated as common capabilities; model-specific data reading
+                (such as <code>fastwam</code>'s multi-frame geometry), action / image transforms, and batch assembly are
+                pushed down to <code>datasets/&lt;name&gt;/</code>; each model declares image size, action dimensions,
+                normalization statistics, etc. via <code>DataConfig</code>.</p>
+            <p><strong>③ Three-layer config parsing (<code>train/parser.py</code>) — frozen into immutable
+                    objects.</strong> The YAML <code>model:</code> section → <code>ModelConfig</code>, the YAML
+                <code>data:</code> section → <code>DataConfig</code>, the command line → <code>TrainingArgs</code>;
+                <code>--model-name</code> is routed via <code>config_map.py</code> to the corresponding YAML and type,
+                and the command line can also override fields via dotlist (e.g. <code>model.action_horizon=64</code>),
+                all finally frozen into a global singleton.</p>
+            <p><strong>④ Distributed trainer (<code>train/trainers/</code>, <code>distributed/</code>) — flexible
+                    strategies.</strong> Standard SFT uses <code>FinetuneTrainer</code> directly; special paradigms such
+                as multi-stream and CUDA Graph inherit <code>BaseTrainer</code> and register in
+                <code>trainer_builder.py</code>, selected via <code>--trainer-type</code>; distribution can switch on
+                demand among <code>ddp</code> (data parallel), <code>ddp</code> + <code>--zero-optimizer</code> (ZeRO
+                Stage-1), <code>fsdp</code> (full sharding), and <code>hsdp</code> (hybrid sharding), matching the scale
+                and memory characteristics of embodied models. <code>BaseTrainer</code> also consolidates optimizer / LR
+                scheduling, gradient clipping and NaN cleanup, checkpoint resume, and determinism control into the
+                common layer, letting every model reuse the same implementation.</p>
+            <p><strong>Adding a new model takes just 5 steps</strong>: ① add the network and config under
+                <code>model/&lt;name&gt;/</code> and <code>@register_model</code>; ② add
+                <code>data/datasets/&lt;name&gt;/</code> (DataConfig + transform + collator); ③ add a YAML under
+                <code>configs/models/embodied/</code> and register it in <code>config_map.py</code>; ④ inherit
+                <code>BaseTrainer</code> if the paradigm differs, otherwise reuse <code>FinetuneTrainer</code>; ⑤ add a
+                launch script under <code>examples/</code>.</p>
+            <h2>5. Quick start</h2>
+            <p>Training is launched with <code>torchrun</code> running <code>loongforge/embodied/train.py</code>:</p>
+            <pre><code class="language-bash">export LOONGFORGE_PATH=/workspace/LoongForge
+
+PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
+  torchrun --nproc_per_node 8 --nnodes 1 \
+    $LOONGFORGE_PATH/loongforge/embodied/train.py \
+    --model-name pi05 \
+    --trainer-type FinetuneTrainer \
+    --dataset-format lerobot_datasets \
+    --distributed-strategy fsdp \
+    --train-iters 30000 \
+    ...</code></pre>
+            <p>Different models differ in data format, processing pipeline, and performance-optimization config, so the
+                ready-to-run command varies by model. Out-of-the-box example scripts live under
+                <code>examples/embodied/</code>:</p>
+            <pre><code class="language-bash">bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh        # ddp / ddp_zero1 variants also available
+bash examples/embodied/groot_n1_6/run_groot_n1_6_ddp_finetune.sh</code></pre>
+            <h2>6. Evaluation: offline benchmarks, process-decoupled</h2>
+            <p>Beyond training, LoongForge-Embodied ships with an offline evaluation module covering <strong>LIBERO /
+                    CALVIN / SimplerEnv / RoboTwin / ManiSkill</strong>. It splits the benchmark client and the model
+                policy server into separate processes, connected via a WebSocket / msgpack-numpy RPC protocol, with YAML
+                as the sole user entry point:</p>
+            <pre><code class="language-bash">cd /path/to/LoongForge
+examples/embodied/pi05/eval/run_libero_eval.sh</code></pre>
+            <p>The model side only needs to implement a unified <code>predict_action</code> interface; the generic
+                policy layer <code>GenericPredictActionPolicy</code> handles image-view selection, action shape
+                validation, chunk caching, latency statistics, and normalization-statistics loading. Onboarding a new
+                model only requires adding a lightweight factory under <code>eval/factories/</code>, with no changes to
+                the server main flow.</p>
+            <blockquote>
+                <p>The evaluation module is still under active development; more benchmarks and capabilities will be
+                    added.</p>
+            </blockquote>
+            <h2>7. Closing thoughts</h2>
+            <p>The release of LoongForge-Embodied marks the point where LoongForge's training capabilities for embodied
+                models graduate from scattered VLA support inside the main framework into an independent, decoupled
+                subsystem: mainstream VLA and WAM in one shot with unified onboarding, delivering 1.6× ~ 2.67× training
+                speedups over official implementations on the same hardware.</p>
+            <p>We believe the R&D efficiency of embodied models depends on whether you can train them with
+                infrastructure that best fits their shape. We welcome you to try it out, and to join the community via
+                GitHub Issues, WeChat, or Slack to help us make it better together.</p>
+            <ul>
+                <li><strong>GitHub</strong>: <a href="https://github.com/baidu-baige/LoongForge" target="_blank"
+                        rel="noopener">https://github.com/baidu-baige/LoongForge</a></li>
+                <li><strong>Docs</strong>: <a href="https://loongforge.readthedocs.io/" target="_blank"
+                        rel="noopener">https://loongforge.readthedocs.io/</a></li>
+                <li><strong>More blogs</strong>: <a href="https://baidu-baige.github.io/LoongForge/blog/"
+                        target="_blank" rel="noopener">https://baidu-baige.github.io/LoongForge/blog/</a></li>
+            </ul>
+        </div>
+
+        <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+            <a href="2026-06-loongforge-groot-n16-acceleration.html"
+                class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: GR00T N1.6 Training
+                Acceleration</a>
+            <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+        </div>
+    </article>
+
+    <footer class="border-t border-gray-200 dark:border-gray-800">
+        <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache
+            2.0
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const POST_EN = '2026-07-announcing-loongforge-embodied.html';
+            const POST_ZH = '2026-07-announcing-loongforge-embodied.zh.html';
+            document.querySelectorAll('[data-post-lang]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const target = btn.dataset.postLang;
+                    try { localStorage.setItem('lf-lang', target); } catch (e) { }
+                    location.href = target === 'zh' ? POST_ZH : POST_EN;
+                });
+            });
+            try {
+                const cur = (localStorage.getItem('lf-lang') === 'zh') ? 'zh' : 'en';
+                document.querySelectorAll('[data-post-lang]').forEach(b =>
+                    b.classList.toggle('active', b.dataset.postLang === cur)
+                );
+            } catch (e) { }
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="../assets/js/main.js"></script>
+</body>
+
+</html>

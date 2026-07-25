@@ -16,7 +16,7 @@
       'footer.training': 'Training framework', 'footer.workflow': 'Agent framework',
 
       'hero.badge': '🐉 Part of the Baidu-Baige Loong open-source series',
-      'hero.subtitle_html': 'A <b>modular</b>, <b>scalable</b>, <b>high-performance</b> training framework for <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — built on Megatron-LM with native NVIDIA GPU & Kunlun XPU support',
+      'hero.subtitle_html': 'A <b>modular</b>, <b>scalable</b>, <b>high-performance</b> training framework for <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — multi-backend (<b>Megatron-LM</b> for LLM/VLM/diffusion, <b>torch-native DDP/FSDP</b> for embodied), with native NVIDIA GPU & Kunlun XPU support',
       'hero.cta.start': '🚀 Quick Start',
       'hero.cta.github': '⭐ View on GitHub',
       'hero.cta.docs': '📚 Read the Docs',
@@ -49,10 +49,8 @@
       'feat.cat.2.subtitle': 'Parallelism built for VLM / VLA',
       'feat.cat.2.item.1.t': 'Model Composition',
       'feat.cat.2.item.1.d': 'Swap ViT × LLM for VLMs via YAML.',
-      'feat.cat.2.item.2.t': 'Heterogeneous Parallelism',
-      'feat.cat.2.item.2.d': 'Independent TP / PP / DP per model component.',
-      'feat.cat.2.item.3.t': 'Disaggregated Training',
-      'feat.cat.2.item.3.d': 'Decoupled ViT / LLM scheduling kills pipeline bubbles.',
+      'feat.cat.2.item.2.t': 'Heterogeneous & Disaggregated',
+      'feat.cat.2.item.2.d': 'Independent TP / PP / DP per component + decoupled ViT / LLM scheduling that kills pipeline bubbles.',
       'feat.cat.2.item.4.t': 'DP Load Balancing',
       'feat.cat.2.item.4.d': 'Fixes packing-induced imbalance at cluster scale.',
 
@@ -75,6 +73,10 @@
       'feat.cat.6.title': 'Training',
       'feat.cat.6.item.1.t': 'Pretrain + SFT + LoRA',
       'feat.cat.6.item.1.d': 'One codebase covers key training stages.',
+
+      'feat.cat.7.title': 'Embodied',
+      'feat.cat.7.item.1.t': 'Embodied Training',
+      'feat.cat.7.item.1.d': 'Dedicated torch-native DDP/FSDP subsystem for VLA & WAM models, with DDP / ZeRO-1 / FSDP / HSDP.',
 
 
       'models.title': '🏛️ Supported Models',
@@ -99,14 +101,16 @@
       'qs.footer.browse_html': 'Browse <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/configs/models" target="_blank" rel="noopener"><code class="mono">configs/models/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples" target="_blank" rel="noopener"><code class="mono">examples/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples_xpu" target="_blank" rel="noopener"><code class="mono">examples_xpu/</code></a>',
 
       'powered.title': '🌟 Powered by LoongForge',
-      'powered.subtitle': 'Open-source projects trained on LoongForge — ordered from newest to earliest',
+      'powered.subtitle': 'Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM',
       'powered.new': 'NEW',
       'powered.1.t': 'LLaVA-OneVision-2.0',
       'powered.1.d': 'Next-generation fully open multimodal model — improved data, training recipe, and scaling.',
-      'powered.2.t': 'LLaVA-OneVision-1.5',
-      'powered.2.d': 'Fully open framework for democratized multimodal training.',
-      'powered.3.t': 'Qianfan-VL',
-      'powered.3.d': 'Domain-enhanced universal vision-language models.',
+      'powered.2.t': 'Innovator-VL',
+      'powered.2.d': 'Scientific multimodal large language model for advanced reasoning.',
+      'powered.3.t': 'LLaVA-OneVision-1.5',
+      'powered.3.d': 'Fully open framework for democratized multimodal training.',
+      'powered.4.t': 'Qianfan-VL',
+      'powered.4.d': 'Domain-enhanced universal vision-language models.',
 
       'cta.title': 'Join the Community',
       'cta.desc': 'Report bugs, propose features, contribute code, or just say hi. We ❤️ community.',
@@ -143,7 +147,7 @@
       'about.ack.body': 'LoongForge is built upon NVIDIA\'s Megatron-LM. We also referenced and drew inspiration from excellent open-source projects including Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.',
 
       'bench.title': '📊 Benchmark',
-      'bench.subtitle': 'Measured on latest LoongForge across LLM, VLM, VLA, and DIT workloads',
+      'bench.subtitle': 'Measured on latest LoongForge across VLA, WAM, and VLM workloads',
       'bench.baseline': '1.0× baseline',
       'bench.ds.title': '<strong>DeepSeek-V3.2 Lite</strong> · DSA operator-level optimizations',
       'bench.ds.desc': 'Validated on a reduced-layer configuration due to test-bed scale limits.',
@@ -186,7 +190,7 @@
       'footer.training': '训练框架', 'footer.workflow': '智能体框架',
 
       'hero.badge': '🐉 百度百舸 Loong 开源家族成员',
-      'hero.subtitle_html': '面向 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与<b>具身智能</b>模型的<b>模块化</b>、<b>可扩展</b>、<b>高性能</b>训练框架 —— 基于 Megatron-LM 深度定制，原生支持 NVIDIA GPU 与昆仑芯 XPU',
+      'hero.subtitle_html': '面向 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与<b>具身智能</b>模型的<b>模块化</b>、<b>可扩展</b>、<b>高性能</b>训练框架 —— 多后端架构（LLM/VLM/Diffusion 基于 <b>Megatron-LM</b>，具身模型基于 <b>torch-native DDP/FSDP</b>），原生支持 NVIDIA GPU 与昆仑芯 XPU',
       'hero.cta.start': '🚀 快速上手',
       'hero.cta.github': '⭐ 访问 GitHub',
       'hero.cta.docs': '📚 阅读文档',
@@ -217,10 +221,8 @@
       'feat.cat.2.title': '多模态',
       'feat.cat.2.item.1.t': '模型拼接',
       'feat.cat.2.item.1.d': '通过 YAML 自由拼接 ViT × LLM 构建 VLM。',
-      'feat.cat.2.item.2.t': '异构并行',
-      'feat.cat.2.item.2.d': '不同组件独立设置 TP / PP / DP。',
-      'feat.cat.2.item.3.t': '分离训练',
-      'feat.cat.2.item.3.d': 'ViT 与 LLM 解耦调度，消除流水气泡。',
+      'feat.cat.2.item.2.t': '异构并行 & 分离训练',
+      'feat.cat.2.item.2.d': '不同组件独立设置 TP / PP / DP，并通过 ViT / LLM 解耦调度消除流水气泡。',
       'feat.cat.2.item.4.t': 'DP 负载均衡',
       'feat.cat.2.item.4.d': '修复 packing 带来的 DP 倾斜。',
 
@@ -241,6 +243,10 @@
       'feat.cat.6.title': '训练范式',
       'feat.cat.6.item.1.t': 'Pretrain + SFT + LoRA',
       'feat.cat.6.item.1.d': '同一套代码覆盖关键训练阶段。',
+
+      'feat.cat.7.title': '具身智能',
+      'feat.cat.7.item.1.t': '具身模型训练',
+      'feat.cat.7.item.1.d': '面向 VLA 与 WAM 模型的独立 torch-native DDP/FSDP 子系统，支持 DDP / ZeRO-1 / FSDP / HSDP。',
 
       'models.title': '🏛️ 支持的模型',
       'models.subtitle': '从紧凑的小模型到大规模 MoE 巨兽 —— 开箱即用',
@@ -264,14 +270,16 @@
       'qs.footer.browse_html': '浏览 <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/configs/models" target="_blank" rel="noopener"><code class="mono">configs/models/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples" target="_blank" rel="noopener"><code class="mono">examples/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples_xpu" target="_blank" rel="noopener"><code class="mono">examples_xpu/</code></a>',
 
       'powered.title': '🌟 由 LoongForge 驱动',
-      'powered.subtitle': '基于 LoongForge 训练的开源项目 —— 按时间从新到旧排列',
+      'powered.subtitle': '基于 LoongForge 或其前身 AIAK-Training-LLM 训练的开源模型',
       'powered.new': 'NEW',
       'powered.1.t': 'LLaVA-OneVision-2.0',
       'powered.1.d': '新一代完全开放的多模态模型 —— 在数据、训练配方与 Scale 上全面升级。',
-      'powered.2.t': 'LLaVA-OneVision-1.5',
-      'powered.2.d': '面向多模态训练民主化的完全开放框架。',
-      'powered.3.t': 'Qianfan-VL',
-      'powered.3.d': '领域增强的通用视觉-语言模型。',
+      'powered.2.t': 'Innovator-VL',
+      'powered.2.d': '面向高阶推理的科学多模态大语言模型。',
+      'powered.3.t': 'LLaVA-OneVision-1.5',
+      'powered.3.d': '面向多模态训练民主化的完全开放框架。',
+      'powered.4.t': 'Qianfan-VL',
+      'powered.4.d': '领域增强的通用视觉-语言模型。',
 
       'cta.title': '加入社区',
       'cta.desc': '报告 Bug、提出建议、贡献代码，或只是打个招呼。我们 ❤️ 社区。',
@@ -308,7 +316,7 @@
       'about.ack.body': 'LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 Transformers、LLaMA-Factory、Megatron-Bridge 等优秀开源项目。真诚感谢这些社区的卓越贡献。',
 
       'bench.title': '📊 性能基准',
-      'bench.subtitle': '基于 latest，在 A800 上覆盖 LLM、VLM、VLA、DIT 工作负载实测',
+      'bench.subtitle': '基于 latest，覆盖 VLA、WAM、VLM 工作负载实测',
       'bench.baseline': '1.0× 基线',
       'bench.ds.title': '<strong>DeepSeek-V3.2 Lite</strong> · DSA 算子级优化',
       'bench.ds.desc': '受测试集群规模限制，基于减层模型配置验证。',

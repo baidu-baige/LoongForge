@@ -190,6 +190,11 @@ pre,
   color: #15803d;
 }
 
+.feat-tag-embodied {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
 .dark .feat-tag-moe {
   background: rgb(67 56 202 / 0.2);
   color: #a5b4fc;
@@ -218,6 +223,11 @@ pre,
 .dark .feat-tag-train {
   background: rgb(21 128 61 / 0.25);
   color: #86efac;
+}
+
+.dark .feat-tag-embodied {
+  background: rgb(126 34 206 / 0.25);
+  color: #e9d5ff;
 }
 
 /* Gradient-border card */
@@ -505,8 +515,49 @@ pre.cite-pre>code[class*="language-"] {
   text-align: center;
 }
 
+.prose-lf table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2rem 0;
+  font-size: .92rem;
+  display: block;
+  overflow-x: auto;
+}
+
+.prose-lf thead th {
+  background: #EEF2FF;
+  color: #3730A3;
+  font-weight: 700;
+  text-align: left;
+}
+
+.prose-lf th,
+.prose-lf td {
+  border: 1px solid #E5E7EB;
+  padding: .55rem .75rem;
+  vertical-align: top;
+}
+
+.prose-lf tbody tr:nth-child(even) {
+  background: #F9FAFB;
+}
+
 .dark .prose-lf {
   color: #E5E7EB;
+}
+
+.dark .prose-lf thead th {
+  background: #1E1B4B;
+  color: #C7D2FE;
+}
+
+.dark .prose-lf th,
+.dark .prose-lf td {
+  border-color: #374151;
+}
+
+.dark .prose-lf tbody tr:nth-child(even) {
+  background: #111827;
 }
 
 .dark .prose-lf blockquote {
