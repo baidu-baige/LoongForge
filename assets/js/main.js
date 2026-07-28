@@ -27,7 +27,6 @@
       'hero.slogan': 'Train LLMs, VLMs, Diffusion & Embodied models — faster.',
       'sb.models': 'Model families supported',
       'sb.chips': 'NVIDIA & Kunlun backends',
-      'sb.scale': 'Production cluster scale',
       'sb.license': 'Open source license',
 
       'hero.vp.1.k': 'Easy',
@@ -225,7 +224,6 @@
       'hero.slogan': '更快地训练 LLM、VLM、Diffusion 与具身智能模型。',
       'sb.models': '支持模型家族',
       'sb.chips': 'NVIDIA 与昆仑芯后端',
-      'sb.scale': '生产集群规模',
       'sb.license': '开源许可协议',
 
       'hero.vp.1.k': '易用',
