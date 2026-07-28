@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 10 1786 830" width="100%" font-family="'Comic Sans MS','Comic Sans','Chalkboard SE','Bradley Hand',cursive">
+  <defs>
+    <filter id="sketch" x="-4%" y="-4%" width="108%" height="108%">
+      <feTurbulence type="turbulence" baseFrequency="0.013" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+
+  <!-- dark card background -->
+  <rect x="12" y="14" width="1778" height="822" rx="24" fill="#0F1420" stroke="#2A3040" stroke-width="2"/>
+
+  <!-- ============ SHAPES (hand-drawn / filtered) ============ -->
+  <g filter="url(#sketch)">
+    <!-- MODEL row cards -->
+    <rect x="320" y="118" width="820" height="214" rx="18" fill="#171D30" stroke="#6E82FF" stroke-width="2.6"/>
+    <rect x="1160" y="118" width="560" height="214" rx="18" fill="#241B10" stroke="#F0A040" stroke-width="2.6"/>
+
+    <!-- model tag pills : Foundation (blue) -->
+    <rect x="356" y="196" width="70" height="30" rx="9" fill="#4E63E6"/>
+    <rect x="356" y="240" width="70" height="30" rx="9" fill="#4E63E6"/>
+    <rect x="356" y="284" width="104" height="30" rx="9" fill="#4E63E6"/>
+    <!-- model tag pills : Embodied (amber) -->
+    <rect x="1192" y="210" width="66" height="30" rx="9" fill="#E89A32"/>
+    <rect x="1192" y="262" width="66" height="30" rx="9" fill="#E89A32"/>
+
+    <!-- ENGINE row cards -->
+    <rect x="320" y="360" width="820" height="320" rx="18" fill="#171D30" stroke="#6E82FF" stroke-width="2.6"/>
+    <rect x="1160" y="360" width="560" height="320" rx="18" fill="#241B10" stroke="#F0A040" stroke-width="2.6"/>
+
+    <!-- Megatron capability chips (2 x 3) -->
+    <rect x="350" y="425" width="372" height="72" rx="12" fill="#1E2540" stroke="#5566D8" stroke-width="1.6"/>
+    <rect x="738" y="425" width="372" height="72" rx="12" fill="#1E2540" stroke="#5566D8" stroke-width="1.6"/>
+    <rect x="350" y="511" width="372" height="72" rx="12" fill="#1E2540" stroke="#5566D8" stroke-width="1.6"/>
+    <rect x="738" y="511" width="372" height="72" rx="12" fill="#1E2540" stroke="#5566D8" stroke-width="1.6"/>
+    <rect x="350" y="597" width="372" height="72" rx="12" fill="#1E2540" stroke="#5566D8" stroke-width="1.6"/>
+    <rect x="738" y="597" width="372" height="72" rx="12" fill="#1E2540" stroke="#5566D8" stroke-width="1.6"/>
+
+    <!-- torch-native track capability chips (1 x 4) -->
+    <rect x="1192" y="428" width="496" height="54" rx="12" fill="#2C2114" stroke="#B5772A" stroke-width="1.6"/>
+    <rect x="1192" y="490" width="496" height="54" rx="12" fill="#2C2114" stroke="#B5772A" stroke-width="1.6"/>
+    <rect x="1192" y="552" width="496" height="54" rx="12" fill="#2C2114" stroke="#B5772A" stroke-width="1.6"/>
+    <rect x="1192" y="614" width="496" height="54" rx="12" fill="#2C2114" stroke="#B5772A" stroke-width="1.6"/>
+
+    <!-- HARDWARE band -->
+    <rect x="320" y="710" width="1400" height="100" rx="18" fill="#0E2420" stroke="#2BB9A8" stroke-width="2.6"/>
+    <!-- hardware backends (uniform: both are supported accelerators) -->
+    <rect x="360" y="732" width="640" height="56" rx="14" fill="#16382F" stroke="#2BB9A8" stroke-width="2.4"/>
+    <rect x="1040" y="732" width="640" height="56" rx="14" fill="#16382F" stroke="#2BB9A8" stroke-width="2.4"/>
+  </g>
+
+  <!-- ============ ICONS (small accents) ============ -->
+  <g filter="url(#sketch)">
+    <!-- star before Foundation title -->
+    <path transform="translate(370,150)" d="M0,-10 C1,-3 3,-1 10,0 C3,1 1,3 0,10 C-1,3 -3,1 -10,0 C-3,-1 -1,-3 0,-10 Z" fill="#6E82FF"/>
+    <!-- sparkle before Embodied title -->
+    <path transform="translate(1206,150)" d="M0,-10 C1,-3 3,-1 10,0 C3,1 1,3 0,10 C-1,3 -3,1 -10,0 C-3,-1 -1,-3 0,-10 Z" fill="#F0A040"/>
+    <!-- lightning before Megatron title -->
+    <path transform="translate(370,395)" d="M3,-13 L-5,3 L0,3 L-3,13 L8,-3 L2,-3 Z" fill="#6E82FF"/>
+    <!-- lightning before torch-native title -->
+    <path transform="translate(1208,395)" d="M3,-13 L-5,3 L0,3 L-3,13 L8,-3 L2,-3 Z" fill="#F0A040"/>
+    <!-- pillar icons (left axis) -->
+    <g transform="translate(160,205)" fill="#B79BFF">
+      <rect x="-16" y="-16" width="13" height="13" rx="3"/>
+      <rect x="3" y="-16" width="13" height="13" rx="3"/>
+      <rect x="-16" y="3" width="13" height="13" rx="3"/>
+      <rect x="3" y="3" width="13" height="13" rx="3"/>
+    </g>
+    <path transform="translate(160,500)" d="M5,-17 L-8,4 L-1,4 L-5,17 L9,-5 L2,-5 Z" fill="#8496FF"/>
+    <g transform="translate(160,740)" stroke="#33D0BE" stroke-width="2.6" fill="none">
+      <rect x="-13" y="-13" width="26" height="26" rx="4" fill="#33D0BE" opacity="0.2"/>
+      <line x1="-5" y1="-13" x2="-5" y2="-19"/><line x1="5" y1="-13" x2="5" y2="-19"/>
+      <line x1="-5" y1="13" x2="-5" y2="19"/><line x1="5" y1="13" x2="5" y2="19"/>
+      <line x1="-13" y1="-5" x2="-19" y2="-5"/><line x1="-13" y1="5" x2="-19" y2="5"/>
+      <line x1="13" y1="-5" x2="19" y2="-5"/><line x1="13" y1="5" x2="19" y2="5"/>
+    </g>
+  </g>
+
+  <!-- ============ TEXT (crisp) ============ -->
+  <g fill="#DBE0EC">
+    <!-- Title -->
+    <text x="875" y="64" text-anchor="middle" font-size="48" font-weight="bold" letter-spacing="0.5" fill="#F2F5FA">LoongForge Architecture</text>
+
+    <!-- ===== value pillars (left axis, aligned to each layer) ===== -->
+    <text x="160" y="253" font-size="26" font-weight="bold" fill="#B79BFF" text-anchor="middle">Unified</text>
+    <text x="160" y="548" font-size="26" font-weight="bold" fill="#8496FF" text-anchor="middle">High-Performance</text>
+    <text x="160" y="788" font-size="26" font-weight="bold" fill="#33D0BE" text-anchor="middle">Multi-Chip</text>
+
+    <!-- ===== Foundation & Multimodal Models ===== -->
+    <text x="390" y="159" font-size="27" font-weight="bold" fill="#8496FF">Foundation &amp; Multimodal Models</text>
+    <text x="391" y="217" font-size="16" font-weight="bold" letter-spacing="0.8" fill="#FFFFFF" text-anchor="middle">LLM</text>
+    <text x="391" y="261" font-size="16" font-weight="bold" letter-spacing="0.8" fill="#FFFFFF" text-anchor="middle">VLM</text>
+    <text x="408" y="305" font-size="16" font-weight="bold" letter-spacing="0.4" fill="#FFFFFF" text-anchor="middle">Diffusion</text>
+    <text x="480" y="217" font-size="19" fill="#DBE0EC">DeepSeek &#183; Qwen &#183; GLM &#183; LLaMA &#183; MiniMax &#183; MIMO</text>
+    <text x="480" y="261" font-size="19" fill="#DBE0EC">Qwen-VL &#183; InternVL &#183; LLaVA-OV &#183; Kimi &#183; ERNIE &#183; Custom</text>
+    <text x="480" y="305" font-size="19" fill="#DBE0EC">Wan2.2 &#183; Wan2.1 &#183; Qwen-Image</text>
+
+    <!-- ===== Embodied Models ===== -->
+    <text x="1226" y="159" font-size="27" font-weight="bold" fill="#F5A93D">Embodied Models</text>
+    <text x="1225" y="231" font-size="16" font-weight="bold" letter-spacing="0.8" fill="#FFFFFF" text-anchor="middle">VLA</text>
+    <text x="1225" y="283" font-size="16" font-weight="bold" letter-spacing="0.8" fill="#FFFFFF" text-anchor="middle">WAM</text>
+    <text x="1272" y="231" font-size="18" fill="#DBE0EC">GR00T N1.6/N1.7 &#183; Pi0.5 &#183; X-VLA</text>
+    <text x="1272" y="283" font-size="18" fill="#DBE0EC">FastWAM &#183; DreamZero &#183; LingBot-VA &#183; Cosmos3</text>
+
+    <!-- ===== Megatron Track ===== -->
+    <text x="390" y="405" font-size="27" font-weight="bold" fill="#8496FF">Megatron Track</text>
+    <text x="700" y="406" font-size="16" font-style="italic" fill="#AAB2C1">LLM &#183; VLM &#183; Diffusion</text>
+
+    <!-- Megatron chips -->
+    <text x="366" y="455" font-size="17" font-weight="bold" fill="#EAEEF6">MoE Parallelism</text>
+    <text x="366" y="477" font-size="13" fill="#BBC4D2">Overlapped All2All &#183; offload &#183; compute &#183; EP balance</text>
+    <text x="754" y="455" font-size="17" font-weight="bold" fill="#EAEEF6">Heterogeneous Parallelism</text>
+    <text x="754" y="477" font-size="13" fill="#BBC4D2">Per-component TP/DP/recompute &#183; decoupled ED</text>
+    <text x="366" y="541" font-size="17" font-weight="bold" fill="#EAEEF6">Long-Seq Training</text>
+    <text x="366" y="563" font-size="14" fill="#BBC4D2">Context Parallel &#183; ChunkPipe</text>
+    <text x="754" y="541" font-size="17" font-weight="bold" fill="#EAEEF6">DP Load Balancing</text>
+    <text x="754" y="563" font-size="14" fill="#BBC4D2">Data packing &#183; load-aware</text>
+    <text x="366" y="627" font-size="17" font-weight="bold" fill="#EAEEF6">Compute Efficiency</text>
+    <text x="366" y="649" font-size="14" fill="#BBC4D2">Adaptive FP8 &#183; fused ops</text>
+    <text x="754" y="627" font-size="17" font-weight="bold" fill="#EAEEF6">Checkpoint Bridge</text>
+    <text x="754" y="649" font-size="14" fill="#BBC4D2">Megatron &#8596; HF &#183; online/offline</text>
+
+    <!-- ===== torch-native Track ===== -->
+    <text x="1228" y="405" font-size="27" font-weight="bold" fill="#F5A93D">torch-native Track</text>
+    <text x="1525" y="406" font-size="16" font-style="italic" fill="#AAB2C1">VLA &#183; WAM</text>
+    <text x="1212" y="452" font-size="17" font-weight="bold" fill="#EAEEF6">Flexible Sharding</text>
+    <text x="1212" y="471" font-size="14" fill="#BBC4D2">DDP &#183; ZeRO-1 &#183; FSDP &#183; HSDP</text>
+    <text x="1212" y="514" font-size="17" font-weight="bold" fill="#EAEEF6">Data Pipeline</text>
+    <text x="1212" y="533" font-size="14" fill="#BBC4D2">LeRobot/HDF5 &#183; async prefetch</text>
+    <text x="1212" y="576" font-size="17" font-weight="bold" fill="#EAEEF6">Fast Iteration</text>
+    <text x="1212" y="595" font-size="14" fill="#BBC4D2">CUDA Graph &#183; torch.compile &#183; fusion</text>
+    <text x="1212" y="638" font-size="17" font-weight="bold" fill="#EAEEF6">Offline Eval</text>
+    <text x="1212" y="657" font-size="14" fill="#BBC4D2">LIBERO &#183; CALVIN &#183; SimplerEnv &#183; RoboTwin</text>
+
+    <!-- ===== Hardware backends ===== -->
+    <text x="680" y="768" font-size="22" font-weight="bold" letter-spacing="0.5" fill="#33D0BE" text-anchor="middle">NVIDIA GPU</text>
+    <text x="1360" y="768" font-size="22" font-weight="bold" letter-spacing="0.5" fill="#33D0BE" text-anchor="middle">Kunlun XPU</text>
+  </g>
+</svg>
