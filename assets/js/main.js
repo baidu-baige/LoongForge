@@ -16,7 +16,7 @@
       'footer.training': 'Training framework', 'footer.workflow': 'Agent framework',
 
       'hero.badge': '🐉 Part of the Baidu-Baige Loong open-source series',
-      'hero.subtitle_html': 'A <b>modular</b>, <b>scalable</b>, <b>high-performance</b> training framework for <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — multi-backend (<b>Megatron-LM</b> for LLM/VLM/diffusion, <b>torch-native DDP/FSDP</b> for embodied), with native NVIDIA GPU & Kunlun XPU support',
+      'hero.subtitle_html': 'A <b>unified</b>, <b>high-performance</b> framework for training <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — <span class="whitespace-nowrap">multi-backend</span>, with native NVIDIA GPU & Kunlun XPU support',
       'hero.cta.start': '🚀 Quick Start',
       'hero.cta.github': '⭐ View on GitHub',
       'hero.cta.docs': '📚 Read the Docs',
@@ -24,6 +24,11 @@
       'hero.stat.xpu': 'XPU production scale',
       'hero.stat.modal': 'LLM · VLM · VLA · Diffusion',
       'hero.stat.fp8': 'Adaptive FP8 precision',
+      'hero.slogan': 'Train LLMs, VLMs, Diffusion & Embodied models — faster.',
+      'sb.models': 'Model families supported',
+      'sb.chips': 'NVIDIA & Kunlun backends',
+      'sb.scale': 'Production cluster scale',
+      'sb.license': 'Open source license',
 
       'hero.vp.1.k': 'Easy',
       'hero.vp.1.t': 'One framework, broad coverage',
@@ -36,6 +41,9 @@
       'hero.vp.3.d': 'Native heterogeneous hardware support — one framework, minimal migration between GPU and XPU.',
 
       'news.title': '🔥 Latest News', 'news.all': 'All posts →',
+
+      'arch.title': '🏗️ Architecture',
+      'arch.subtitle': 'One unified stack — from model composition down to GPU / XPU silicon.',
 
       'feat.title': '✨ Key Features',
       'feat.subtitle_html': 'A quick tour of what sets LoongForge apart',
@@ -87,7 +95,23 @@
       'models.custom.d_html': 'Compose any ViT + any LLM backbone via a YAML file. <a href="https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml" target="_blank" class="text-indigo-500 underline">Example →</a>',
 
       'qs.title': '🚀 Quick Start',
-      'qs.subtitle': 'YAML-driven — a few steps from install to launch',
+      'qs.subtitle': 'From install to launch — jump straight to the tutorial for your model type',
+      'qs2.install.t': 'Install',
+      'qs2.install.d': 'Recommended: one Docker image bundles the CUDA/XPU toolchains, patched Megatron, and TransformerEngine — so every node trains from the same environment. Source build is also supported.',
+      'qs2.docs': 'Read the Docs ↗',
+      'qs2.docker': 'Show Docker build commands',
+      'qs2.guide': 'Installation guide ↗',
+      'qs2.path.t': 'Pick your path',
+      'qs2.path.d': 'Choose your model type — each card opens a runnable, step-by-step tutorial.',
+      'qs2.open': 'Open tutorial ↗',
+      'qs2.cat.llm.d': 'Dense & MoE LLMs — pretrain, SFT & LoRA.',
+      'qs2.cat.vlm.d': 'Vision-language models — composable ViT × LLM.',
+      'qs2.cat.diff.d': 'Video & image diffusion — WAN & Qwen-Image.',
+      'qs2.cat.vla.d': 'VLA & world-action models — DDP / FSDP.',
+      'qs2.cat.xpu.d': 'Run the same codebase on Baidu Kunlun XPU.',
+      'qs2.explore.t': 'Explore & launch',
+      'qs2.explore.d': 'Browse ready-to-run configs and example scripts, or expand a common launch command.',
+      'qs2.cmd': 'Show a common torchrun launch command',
       'qs.s1.tab': 'Install', 'qs.s2.tab': 'Compose', 'qs.s2.opt': 'optional', 'qs.s3.tab': 'Weights', 'qs.s4.tab': 'Data', 'qs.s5.tab': 'Configure', 'qs.s6.tab': 'Launch',
       'qs.s1.desc': 'Docker is the recommended path — a single image bundles CUDA/XPU toolchains, the patched Megatron submodule, and TransformerEngine, so every developer and every node trains from the same environment. Source install is also fully supported for advanced setups.',
       'qs.s2.desc': 'Optional — only needed for custom combinations. LoongForge uses declarative configs to compose different modality components into a full multimodal model. Take <code class="mono">qwen3_vl_30b_a3b</code> as an example: a single YAML assembles the vision encoder, projector, and language backbone. To swap the language backbone to DeepSeek V3, change one line under <code class="mono">model.foundation</code>.',
@@ -190,7 +214,7 @@
       'footer.training': '训练框架', 'footer.workflow': '智能体框架',
 
       'hero.badge': '🐉 百度百舸 Loong 开源家族成员',
-      'hero.subtitle_html': '面向 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与<b>具身智能</b>模型的<b>模块化</b>、<b>可扩展</b>、<b>高性能</b>训练框架 —— 多后端架构（LLM/VLM/Diffusion 基于 <b>Megatron-LM</b>，具身模型基于 <b>torch-native DDP/FSDP</b>），原生支持 NVIDIA GPU 与昆仑芯 XPU',
+      'hero.subtitle_html': '面向 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与<b>具身智能</b>模型训练的<b>统一</b>、<b>高性能</b>框架 —— 多后端架构，原生支持 NVIDIA GPU 与昆仑芯 XPU',
       'hero.cta.start': '🚀 快速上手',
       'hero.cta.github': '⭐ 访问 GitHub',
       'hero.cta.docs': '📚 阅读文档',
@@ -198,6 +222,11 @@
       'hero.stat.xpu': 'XPU 集群规模',
       'hero.stat.modal': '覆盖模态：LLM/VLM/VLA/Diffusion',
       'hero.stat.fp8': '端到端自适应精度',
+      'hero.slogan': '更快地训练 LLM、VLM、Diffusion 与具身智能模型。',
+      'sb.models': '支持模型家族',
+      'sb.chips': 'NVIDIA 与昆仑芯后端',
+      'sb.scale': '生产集群规模',
+      'sb.license': '开源许可协议',
 
       'hero.vp.1.k': '易用',
       'hero.vp.1.t': '一套框架，广泛覆盖',
@@ -210,6 +239,9 @@
       'hero.vp.3.d': '原生异构硬件支持 —— 同一套框架，GPU 与 XPU 之间迁移成本极低。',
 
       'news.title': '🔥 最新动态', 'news.all': '查看全部 →',
+
+      'arch.title': '🏗️ 架构',
+      'arch.subtitle': '一套统一架构 —— 从模型组装贯通到 GPU / XPU 芯片。',
 
       'feat.title': '✨ 关键特性',
       'feat.subtitle_html': 'LoongForge 差异化能力速览',
@@ -256,7 +288,23 @@
       'models.custom.d_html': '通过 YAML 自由组合任意 ViT + 任意 LLM 主干。<a href="https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml" target="_blank" class="text-indigo-500 underline">示例 →</a>',
 
       'qs.title': '🚀 快速开始',
-      'qs.subtitle': 'YAML 驱动，简单几步完成从安装到启动',
+      'qs.subtitle': '从安装到启动 —— 按你的模型类型直达对应教程',
+      'qs2.install.t': '安装',
+      'qs2.install.d': '推荐使用 Docker：单一镜像打包了 CUDA/XPU 工具链、打过补丁的 Megatron 与 TransformerEngine，保证每个节点环境一致；同时也完整支持源码安装。',
+      'qs2.docs': '查看文档 ↗',
+      'qs2.docker': '展开 Docker 构建命令',
+      'qs2.guide': '安装指南 ↗',
+      'qs2.path.t': '选择你的路径',
+      'qs2.path.d': '选择你的模型类型 —— 每张卡片直达可运行的分步教程。',
+      'qs2.open': '查看教程 ↗',
+      'qs2.cat.llm.d': '稠密与 MoE 大语言模型 —— 预训练、SFT、LoRA。',
+      'qs2.cat.vlm.d': '视觉-语言模型 —— 可组合 ViT × LLM。',
+      'qs2.cat.diff.d': '视频与图像扩散 —— WAN、Qwen-Image。',
+      'qs2.cat.vla.d': '具身 VLA 与世界-动作模型 —— DDP / FSDP。',
+      'qs2.cat.xpu.d': '同一套代码运行于百度昆仑芯 XPU。',
+      'qs2.explore.t': '探索与启动',
+      'qs2.explore.d': '浏览开箱即用的配置与示例脚本，或展开查看通用启动命令。',
+      'qs2.cmd': '展开查看通用 torchrun 启动命令',
       'qs.s1.tab': '安装', 'qs.s2.tab': '组装模型', 'qs.s2.opt': '可选', 'qs.s3.tab': '准备权重', 'qs.s4.tab': '准备训练数据', 'qs.s5.tab': '配置训练参数', 'qs.s6.tab': '启动训练',
       'qs.s1.desc': '推荐使用 Docker —— 单一镜像打包 CUDA/XPU 工具链、已打补丁的 Megatron 子模块以及 TransformerEngine，让每位开发者、每个节点都在完全一致的环境中训练。如需更灵活的部署方式，也完整支持源码安装。',
       'qs.s2.desc': '可选步骤 —— 仅当你需要自定义组合时再来这一步。LoongForge 通过声明式配置，支持将不同模态组件灵活组合为完整的多模态模型。以 <code class="mono">qwen3_vl_30b_a3b</code> 为例，一份 YAML 即可完成视觉编码器、投影层与语言主干的组网。如果需要将语言主干替换为 DeepSeek V3，仅需要修改 <code class="mono">model.foundation</code> 即可。',
@@ -420,19 +468,19 @@
       const ghSvg = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.79 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.83 1.24 1.83 1.24 1.07 1.83 2.8 1.3 3.49.99.11-.77.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.96 0-1.32.47-2.39 1.24-3.23-.12-.3-.54-1.52.12-3.16 0 0 1.01-.32 3.3 1.23a11.48 11.48 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.64.24 2.86.12 3.16.77.84 1.24 1.91 1.24 3.23 0 4.63-2.8 5.65-5.48 5.95.43.37.81 1.1.81 2.22 0 1.6-.01 2.89-.01 3.28 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg>`;
       host.className = 'sticky top-0 z-40 backdrop-blur bg-white/80 dark:bg-gray-950/75 border-b border-gray-200 dark:border-gray-800';
       host.innerHTML = `
-    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-      <a href="${base}index.html" class="flex items-center gap-2 font-bold text-lg">
-        <img src="${base}assets/img/logo.svg" class="w-8 h-8" alt="logo" />
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-4 flex items-center justify-between">
+      <a href="${base}index.html" class="flex items-center gap-2.5 font-bold text-xl">
+        <img src="${base}assets/img/logo.svg" class="w-9 h-9" alt="logo" />
         <span>LoongForge</span>
       </a>
-      <nav class="hidden md:flex items-center gap-7 text-sm font-medium">
+      <nav class="hidden md:flex items-center gap-8 text-[15px] font-medium">
         <a href="${base}index.html" class="${act('home')}" data-i18n="nav.home">Home</a>
         <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link class="ext ${act('docs')}" data-i18n="nav.docs">Docs</a>
         <a href="${base}blog.html" class="${act('blog')}" data-i18n="nav.blog">Blog</a>
         <a href="${base}about.html" class="${act('about')}" data-i18n="nav.about">About</a>
         <a href="${base}index.html#community" class="hover:text-indigo-600 dark:hover:text-indigo-300" data-i18n="nav.contact">Contact</a>
       </nav>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-3">
         <div class="lang-switch hidden sm:inline-flex" role="group" aria-label="Language">${langBtns}</div>
         <a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener"
           class="gh-pill hidden sm:inline-flex" aria-label="Star LoongForge on GitHub" title="Star LoongForge on GitHub ★">
@@ -442,13 +490,13 @@
           <span class="star">★</span>
           <span data-gh-stars>Star</span>
         </a>
-        <button data-theme-toggle class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Toggle theme">
+        <button data-theme-toggle class="p-2.5 rounded-lg text-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Toggle theme">
           <span data-theme-icon>🌙</span>
         </button>
-        <button data-mobile-toggle class="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Menu">☰</button>
+        <button data-mobile-toggle class="md:hidden p-2.5 rounded-lg text-xl leading-none hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Menu">☰</button>
       </div>
     </div>
-    <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 dark:border-gray-800 px-6 py-3 space-y-2 text-sm">
+    <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 dark:border-gray-800 px-5 sm:px-8 py-4 space-y-2 text-base">
       <a href="${base}index.html" class="${actMob('home')}" data-i18n="nav.home">Home</a>
       <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link class="block py-1 ext" data-i18n="nav.docs">Docs</a>
       <a href="${base}blog.html" class="${actMob('blog')}" data-i18n="nav.blog">Blog</a>
@@ -602,6 +650,34 @@
     });
   }
 
+  // ===== Animated stat counters =====
+  function initCounters() {
+    const els = document.querySelectorAll('[data-count-to]');
+    if (!els.length) return;
+    const run = el => {
+      const to = parseFloat(el.dataset.countTo);
+      const pre = el.dataset.prefix || '';
+      const suf = el.dataset.suffix || '';
+      const dur = 1100;
+      const start = performance.now();
+      const tick = now => {
+        const p = Math.min(1, (now - start) / dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = pre + Math.round(to * eased) + suf;
+        if (p < 1) requestAnimationFrame(tick);
+        else el.textContent = pre + to + suf;
+      };
+      requestAnimationFrame(tick);
+    };
+    if (!('IntersectionObserver' in window)) { els.forEach(run); return; }
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (en.isIntersecting) { run(en.target); io.unobserve(en.target); }
+      });
+    }, { threshold: 0.4 });
+    els.forEach(e => io.observe(e));
+  }
+
   // ===== Init =====
   document.addEventListener('DOMContentLoaded', () => {
     renderSiteHeader();
@@ -613,6 +689,7 @@
     initTocSpy();
     initScrollProgress();
     initQuickStart();
+    initCounters();
     window.LF = { toggleTheme, toggleMobileMenu, setLang };
 
     document.querySelectorAll('[data-theme-toggle]').forEach(el => el.addEventListener('click', toggleTheme));

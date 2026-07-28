@@ -3,7 +3,7 @@
 /* Reserve navbar height before JS injects the shared header (prevents layout shift) */
 header[data-site-header]:empty {
   display: block;
-  min-height: 61px;
+  min-height: 73px;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid #e5e7eb;
@@ -22,6 +22,241 @@ header[data-site-header]:empty {
   --lf-primary-dark: #4F46E5;
   --lf-accent: #F59E0B;
   --lf-ink: #0B1020;
+
+  /* Airy light surfaces + spacing scale (visual refresh) */
+  --lf-surface: #ffffff;
+  --lf-surface-soft: #F7F8FF;
+  /* very light indigo wash for light sections */
+  --lf-hero-from: #FFFFFF;
+  --lf-hero-to: #EEF1FF;
+  /* white -> soft indigo hero */
+  --lf-card-radius: 1.25rem;
+  --lf-card-pad: 1.75rem;
+  --lf-card-shadow: 0 12px 32px -18px rgba(79, 70, 229, .28);
+  --lf-card-shadow-hover: 0 24px 56px -24px rgba(79, 70, 229, .40);
+
+  /* Round 2: signature gradient + fresh secondary accent */
+  --lf-cyan: #06B6D4;
+  --lf-grad: linear-gradient(120deg, #4F46E5 0%, #7C3AED 50%, #DB2777 100%);
+  --lf-grad-soft: linear-gradient(120deg, #6366F1 0%, #8B5CF6 55%, #06B6D4 100%);
+}
+
+/* ===== Round 2 components ===== */
+
+/* Gradient primary button */
+.lf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .85rem 1.6rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--lf-grad);
+  box-shadow: 0 14px 30px -12px rgba(124, 58, 237, .55);
+  transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+
+.lf-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -14px rgba(124, 58, 237, .65);
+  filter: saturate(1.08);
+}
+
+.lf-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .85rem 1.6rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  color: #4F46E5;
+  background: #fff;
+  border: 1.5px solid #C7D2FE;
+  transition: all .2s ease;
+}
+
+.lf-btn-ghost:hover {
+  background: #EEF2FF;
+  border-color: #A5B4FC;
+  transform: translateY(-2px);
+}
+
+.dark .lf-btn-ghost {
+  background: rgba(255, 255, 255, .08);
+  color: #E0E7FF;
+  border-color: rgba(255, 255, 255, .2);
+}
+
+.dark .lf-btn-ghost:hover {
+  background: rgba(255, 255, 255, .16);
+}
+
+/* Gradient stat band (the "grand" anchor under the hero) */
+.lf-statband {
+  background: var(--lf-grad);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.lf-statband::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 260px at 15% 0%, rgba(255, 255, 255, .18), transparent 60%),
+    radial-gradient(600px 260px at 85% 100%, rgba(6, 182, 212, .28), transparent 60%);
+  pointer-events: none;
+}
+
+.lf-statband .lf-stat-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+
+.lf-statband .lf-stat {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  border-right: 1px solid rgba(255, 255, 255, .18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.lf-statband .lf-stat:last-child {
+  border-right: 0;
+}
+
+.lf-statband .lf-stat-num {
+  font-size: clamp(1.75rem, 2.4vw, 2.3rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  height: 2.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lf-statband .lf-stat-label {
+  margin-top: .35rem;
+  font-size: .82rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .82);
+}
+
+.dark .lf-statband {
+  background: linear-gradient(120deg, #3730A3 0%, #5B21B6 50%, #9D174D 100%);
+}
+
+@media (max-width: 900px) {
+  .lf-statband .lf-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lf-statband .lf-stat:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .lf-statband .lf-stat {
+    border-bottom: 1px solid rgba(255, 255, 255, .18);
+  }
+}
+
+/* Round icon chip for feature cards */
+.lf-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: .9rem;
+  font-size: 1.4rem;
+  background: linear-gradient(135deg, #EEF2FF, #F5F3FF);
+  border: 1px solid #E0E7FF;
+}
+
+.dark .lf-ico {
+  background: linear-gradient(135deg, rgba(99, 102, 241, .18), rgba(139, 92, 246, .16));
+  border-color: rgba(99, 102, 241, .3);
+}
+
+/* Circular step number badge (Quick Start) */
+.lf-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background: var(--lf-grad);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.1rem;
+  box-shadow: 0 8px 20px -8px rgba(124, 58, 237, .5);
+  flex-shrink: 0;
+}
+
+/* Highlighted quick-start example chip */
+.qs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .6rem 1.05rem;
+  border-radius: 9999px;
+  font-size: .9rem;
+  font-weight: 600;
+  background: #EEF2FF;
+  color: #4338CA;
+  border: 1px solid #E0E7FF;
+  transition: all .15s ease;
+}
+
+.qs-chip code {
+  color: inherit;
+}
+
+.qs-chip:hover {
+  background: #E0E7FF;
+  border-color: #C7D2FE;
+  transform: translateY(-1px);
+}
+
+.dark .qs-chip {
+  background: rgba(99, 102, 241, .15);
+  color: #C7D2FE;
+  border-color: rgba(99, 102, 241, .3);
+}
+
+.dark .qs-chip:hover {
+  background: rgba(99, 102, 241, .25);
+}
+
+/* Big, airy card block */
+.lf-card {
+  border-radius: var(--lf-card-radius);
+  padding: var(--lf-card-pad);
+  background: var(--lf-surface);
+  border: 1px solid #E9EBF5;
+  box-shadow: var(--lf-card-shadow);
+  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+
+.lf-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--lf-card-shadow-hover);
+  border-color: #C7D2FE;
+}
+
+.dark .lf-card {
+  background: #0f172a;
+  border-color: #1f2937;
+  box-shadow: none;
 }
 
 html {
@@ -53,22 +288,37 @@ pre,
   box-shadow: 0 0 8px rgba(99, 102, 241, .6);
 }
 
-/* Animated gradient hero background */
+/* Airy light hero background (light mode) */
 .hero-gradient {
+  background:
+    radial-gradient(1100px 520px at 12% -8%, rgba(99, 102, 241, 0.16), transparent 60%),
+    radial-gradient(900px 480px at 88% 8%, rgba(245, 158, 11, 0.12), transparent 60%),
+    radial-gradient(820px 520px at 50% 108%, rgba(139, 92, 246, 0.14), transparent 60%),
+    linear-gradient(180deg, var(--lf-hero-from) 0%, var(--lf-hero-to) 100%);
+  position: relative;
+}
+
+/* Dark mode keeps the original deep background */
+.dark .hero-gradient {
   background:
     radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, 0.35), transparent 60%),
     radial-gradient(900px 500px at 90% 10%, rgba(245, 158, 11, 0.22), transparent 60%),
     radial-gradient(800px 500px at 50% 100%, rgba(139, 92, 246, 0.25), transparent 60%),
     linear-gradient(180deg, #0B1020 0%, #0B1020 100%);
-  position: relative;
 }
 
 .hero-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(99, 102, 241, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.06) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+}
+
+.dark .hero-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 
 /* Floating glow orbs in hero */
@@ -76,9 +326,13 @@ pre,
   position: absolute;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: .45;
+  opacity: .28;
   pointer-events: none;
   animation: orb-float 18s ease-in-out infinite alternate;
+}
+
+.dark .hero-orb {
+  opacity: .45;
 }
 
 .hero-orb.o1 {
@@ -121,12 +375,37 @@ pre,
   }
 }
 
-/* Text gradient */
+/* Text gradient (light mode: deeper brand hues for contrast on light hero) */
 .text-gradient {
+  background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #DB2777 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.dark .text-gradient {
   background: linear-gradient(90deg, #A5B4FC 0%, #FDE68A 50%, #F472B6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Wave divider between hero and content */
+.lf-wave {
+  line-height: 0;
+  margin-top: -1px;
+}
+
+.lf-wave svg {
+  display: block;
+  width: 100%;
+  height: 120px;
+}
+
+@media (max-width: 640px) {
+  .lf-wave svg {
+    height: 64px;
+  }
 }
 
 /* Card hover */
@@ -135,8 +414,8 @@ pre,
 }
 
 .card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 20px 40px -20px rgba(99, 102, 241, .35);
+  transform: translateY(-4px);
+  box-shadow: var(--lf-card-shadow-hover);
 }
 
 /* Key Features — flat card grid with category tag */
@@ -233,7 +512,7 @@ pre,
 /* Gradient-border card */
 .gradient-border {
   position: relative;
-  border-radius: 1rem;
+  border-radius: var(--lf-card-radius);
   background: #fff;
 }
 
@@ -626,7 +905,7 @@ pre.cite-pre>code[class*="language-"] {
   border: 1px solid #E5E7EB;
   border-radius: 9999px;
   padding: 2px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -636,7 +915,7 @@ pre.cite-pre>code[class*="language-"] {
 }
 
 .lang-switch button {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 9999px;
   color: #6B7280;
   transition: all .15s ease;
@@ -656,13 +935,13 @@ pre.cite-pre>code[class*="language-"] {
 .gh-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 7px;
+  padding: 8px 14px;
   border-radius: 9999px;
   border: 1px solid #D1D5DB;
   background: #fff;
   color: #111827;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   transition: all .15s ease;
 }
@@ -684,8 +963,8 @@ pre.cite-pre>code[class*="language-"] {
 }
 
 .gh-pill svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .gh-pill .star {
@@ -843,7 +1122,7 @@ footer a:hover {
 
 .stats-strip>div {
   flex: 1 1 200px;
-  padding: 1.25rem;
+  padding: 1.75rem;
   text-align: center;
   border-right: 1px solid rgba(99, 102, 241, .12);
 }

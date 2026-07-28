@@ -45,166 +45,259 @@
   <header data-site-header data-active="home"></header>
 
   <!-- ===== Hero ===== -->
-  <section class="hero-gradient text-white relative overflow-hidden">
+  <section class="hero-gradient text-gray-900 dark:text-white relative overflow-hidden">
     <div class="hero-orb o1"></div>
     <div class="hero-orb o2"></div>
     <div class="hero-orb o3"></div>
     <div class="absolute inset-0 hero-grid"></div>
-    <div class="relative max-w-7xl mx-auto px-6 pt-24 pb-28 text-center">
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs mb-6"
-        data-i18n="hero.badge">
-        🐉 Part of the Baidu-Baige Loong open-source series
+    <div
+      class="relative max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-24 pb-28 text-center">
+      <!-- Copy -->
+      <div class="max-w-5xl mx-auto">
+        <div
+          class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-indigo-200 text-indigo-700 dark:bg-white/10 dark:border-white/15 dark:text-white text-xs mb-6"
+          data-i18n="hero.badge">
+          🐉 Part of the Baidu-Baige Loong open-source series
+        </div>
+        <h1 class="text-6xl md:text-8xl font-extrabold tracking-tight mb-4 leading-[1.05]">
+          <span class="text-gradient">LoongForge</span>
+        </h1>
+        <div
+          class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-5 md:whitespace-nowrap [text-wrap:balance]"
+          data-i18n="hero.slogan">
+          Train LLMs, VLMs, Diffusion &amp; Embodied models — faster.
+        </div>
+        <p class="max-w-[60rem] mx-auto text-base md:text-lg text-gray-600 dark:text-gray-300 mb-8 [text-wrap:balance]"
+          data-i18n-html="hero.subtitle_html">
+          A <b>unified</b>, <b>high-performance</b> framework for training <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>,
+          and <b>embodied</b> models — <span class="whitespace-nowrap">multi-backend</span>, with native NVIDIA GPU
+          &amp;
+          Kunlun XPU support
+        </p>
+        <div class="flex flex-wrap gap-3 justify-center mb-6">
+          <a href="#quickstart" class="lf-btn" data-i18n="hero.cta.start">🚀 Quick Start</a>
+          <a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener" class="lf-btn-ghost"
+            data-i18n="hero.cta.github">⭐ View on GitHub</a>
+          <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link
+            class="lf-btn-ghost" data-i18n="hero.cta.docs">📚 Read the Docs</a>
+        </div>
+        <div class="flex flex-wrap gap-2 justify-center text-xs font-semibold">
+          <span
+            class="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-white/10 dark:text-indigo-200 dark:border-white/10"
+            data-i18n="hero.vp.1.k">Easy</span>
+          <span
+            class="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 dark:bg-white/10 dark:text-amber-200 dark:border-white/10"
+            data-i18n="hero.vp.2.k">Efficient</span>
+          <span
+            class="px-3 py-1 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 dark:bg-white/10 dark:text-cyan-200 dark:border-white/10"
+            data-i18n="hero.vp.3.k">Multi-chip</span>
+        </div>
       </div>
-      <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
-        <span class="text-gradient">LoongForge</span>
-      </h1>
-      <p class="max-w-3xl mx-auto text-lg md:text-xl text-gray-200 mb-10" data-i18n-html="hero.subtitle_html">
-        A <b>modular</b>, <b>scalable</b>, <b>high-performance</b> training framework for <b>LLMs</b>, <b>VLMs</b>,
-        <b>diffusion</b>, and <b>embodied</b> models — multi-backend (<b>Megatron-LM</b> for LLM/VLM/diffusion,
-        <b>torch-native DDP/FSDP</b> for embodied), with native NVIDIA GPU &amp; Kunlun XPU support
-      </p>
-      <div class="flex flex-wrap gap-3 justify-center">
-        <a href="#quickstart"
-          class="px-6 py-3 rounded-full bg-white text-indigo-700 font-semibold hover:bg-indigo-50 shadow-lg shadow-indigo-900/30 transition"
-          data-i18n="hero.cta.start">🚀 Quick Start</a>
-        <a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener"
-          class="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 font-semibold transition"
-          data-i18n="hero.cta.github">⭐ View on GitHub</a>
-        <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link
-          class="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 font-semibold transition"
-          data-i18n="hero.cta.docs">📚 Read the Docs</a>
-      </div>
+    </div>
+    <!-- Wave divider -->
+    <div class="lf-wave" aria-hidden="true">
+      <svg viewBox="0 0 1440 120" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="lfWave" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#4F46E5" />
+            <stop offset=".5" stop-color="#7C3AED" />
+            <stop offset="1" stop-color="#DB2777" />
+          </linearGradient>
+        </defs>
+        <path d="M0,64 C240,120 480,16 720,48 C960,80 1200,120 1440,56 L1440,120 L0,120 Z" fill="url(#lfWave)" />
+      </svg>
+    </div>
+  </section>
 
-      <!-- Quick stats -->
-      <!-- Value props (Easy · Efficient · Multi-chip) -->
-      <div class="mt-14 grid md:grid-cols-3 gap-5 max-w-6xl mx-auto text-left">
-        <div class="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-sm hover:bg-white/10 transition">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="text-2xl">🧩</span>
-            <span class="text-sm font-semibold uppercase tracking-wider text-indigo-200"
-              data-i18n="hero.vp.1.k">Easy</span>
-          </div>
-          <div class="text-lg font-semibold text-white mb-1.5" data-i18n="hero.vp.1.t">One framework, broad coverage
-          </div>
-          <div class="text-sm text-gray-300" data-i18n="hero.vp.1.d">Full coverage of mainstream open-source LLMs, VLMs,
-            MoE, diffusion, and VLA models. Ready-to-run configs and launch scripts included.</div>
+  <!-- ===== Stat band ===== -->
+  <section class="lf-statband reveal">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 lf-stat-grid">
+      <div class="lf-stat">
+        <div class="lf-stat-num" data-count-to="5" data-prefix="~" data-suffix="×">~5×</div>
+        <div class="lf-stat-label" data-i18n="hero.stat.speedup">Max training speedup</div>
+      </div>
+      <div class="lf-stat">
+        <div class="lf-stat-num" data-count-to="35" data-suffix="+">35+</div>
+        <div class="lf-stat-label" data-i18n="sb.models">Model families supported</div>
+      </div>
+      <div class="lf-stat">
+        <div class="lf-stat-num">GPU·XPU</div>
+        <div class="lf-stat-label" data-i18n="sb.chips">NVIDIA &amp; Kunlun backends</div>
+      </div>
+      <div class="lf-stat">
+        <div class="lf-stat-num" data-count-to="5000" data-suffix="+">5000+</div>
+        <div class="lf-stat-label" data-i18n="sb.scale">Production cluster scale</div>
+      </div>
+      <div class="lf-stat">
+        <div class="lf-stat-num">Apache 2.0</div>
+        <div class="lf-stat-label" data-i18n="sb.license">Open source license</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Why LoongForge (value props) ===== -->
+  <section
+    class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-16 md:pt-20 pb-10 reveal">
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="lf-card">
+        <div class="lf-ico mb-4">🧩</div>
+        <div class="text-sm font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300 mb-1"
+          data-i18n="hero.vp.1.k">Easy</div>
+        <div class="text-lg font-bold text-gray-900 dark:text-white mb-2" data-i18n="hero.vp.1.t">One framework, broad
+          coverage</div>
+        <div class="text-sm text-gray-600 dark:text-gray-300" data-i18n="hero.vp.1.d">Full coverage of mainstream
+          open-source LLMs, VLMs, MoE, diffusion, and VLA models. Ready-to-run configs and launch scripts included.
         </div>
-        <div class="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-sm hover:bg-white/10 transition">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="text-2xl">⚡</span>
-            <span class="text-sm font-semibold uppercase tracking-wider text-amber-200"
-              data-i18n="hero.vp.2.k">Efficient</span>
-          </div>
-          <div class="text-lg font-semibold text-white mb-1.5" data-i18n="hero.vp.2.t">Up to ~5× training speedup</div>
-          <div class="text-sm text-gray-300" data-i18n="hero.vp.2.d">Deep performance optimizations — fused kernels,
-            adaptive FP8, MoE A2A overlap, and multimodal pipeline scheduling.</div>
-        </div>
-        <div class="rounded-2xl bg-white/5 border border-white/10 p-6 backdrop-blur-sm hover:bg-white/10 transition">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="text-2xl">💎</span>
-            <span class="text-sm font-semibold uppercase tracking-wider text-emerald-200"
-              data-i18n="hero.vp.3.k">Multi-chip</span>
-          </div>
-          <div class="text-lg font-semibold text-white mb-1.5" data-i18n="hero.vp.3.t">NVIDIA GPU &amp; Kunlun XPU</div>
-          <div class="text-sm text-gray-300" data-i18n="hero.vp.3.d">Native heterogeneous hardware support — one
-            framework, minimal migration between GPU and XPU.</div>
-        </div>
+      </div>
+      <div class="lf-card">
+        <div class="lf-ico mb-4">⚡</div>
+        <div class="text-sm font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-300 mb-1"
+          data-i18n="hero.vp.2.k">Efficient</div>
+        <div class="text-lg font-bold text-gray-900 dark:text-white mb-2" data-i18n="hero.vp.2.t">Up to ~5× training
+          speedup</div>
+        <div class="text-sm text-gray-600 dark:text-gray-300" data-i18n="hero.vp.2.d">Deep performance optimizations —
+          fused kernels, adaptive FP8, MoE A2A overlap, and multimodal pipeline scheduling.</div>
+      </div>
+      <div class="lf-card">
+        <div class="lf-ico mb-4">💎</div>
+        <div class="text-sm font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-300 mb-1"
+          data-i18n="hero.vp.3.k">Multi-chip</div>
+        <div class="text-lg font-bold text-gray-900 dark:text-white mb-2" data-i18n="hero.vp.3.t">NVIDIA GPU &amp;
+          Kunlun
+          XPU</div>
+        <div class="text-sm text-gray-600 dark:text-gray-300" data-i18n="hero.vp.3.d">Native heterogeneous hardware
+          support — one framework, minimal migration between GPU and XPU.</div>
       </div>
     </div>
   </section>
 
   <!-- ===== Latest News ===== -->
-  <section class="max-w-7xl mx-auto px-6 py-16 reveal">
+  <section
+    class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-10 pb-20 md:pb-24 reveal">
     <div class="flex items-end justify-between mb-8">
       <h2 class="text-2xl md:text-3xl font-bold" data-i18n="news.title">🔥 Latest News</h2>
       <a href="blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline" data-i18n="news.all">All
         posts →</a>
     </div>
-    <div id="home-news-list" class="grid md:grid-cols-3 gap-5">
+    <div id="home-news-list" class="grid md:grid-cols-3 gap-6">
       <!-- Auto-rendered from assets/data/posts.json by assets/js/home-news.js -->
     </div>
   </section>
 
   <!-- ===== Features ===== -->
-  <section id="features" class="bg-gray-50 dark:bg-gray-900/50 border-y border-gray-200 dark:border-gray-800">
-    <div class="max-w-7xl mx-auto px-6 py-16 reveal">
+  <section id="features" class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="feat.title">✨ Key Features</h2>
         <p class="text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" data-i18n-html="feat.subtitle_html">A quick tour
           of what sets LoongForge apart</p>
       </div>
 
-      <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Embodied (highlighted first) -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-embodied" data-i18n="feat.cat.7.title">Embodied</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.7.item.1.t">Embodied Training</div>
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🤖</span>
+            <span class="feat-tag feat-tag-embodied" data-i18n="feat.cat.7.title">Embodied</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.7.item.1.t">Embodied
+            Training</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.7.item.1.d">Dedicated torch-native
             DDP/FSDP subsystem for VLA &amp; WAM models, with DDP / ZeRO-1 / FSDP / HSDP.</div>
         </div>
 
         <!-- MoE -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-moe" data-i18n="feat.cat.1.title">MoE</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.1.item.1.t">Tri-Stream Overlap</div>
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🧠</span>
+            <span class="feat-tag feat-tag-moe" data-i18n="feat.cat.1.title">MoE</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.1.item.1.t">Tri-Stream
+            Overlap</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.1.item.1.d">MoE EP comm × compute ×
             offload in parallel — higher throughput than upstream.</div>
         </div>
 
         <!-- Multimodal -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.2.item.2.t">Heterogeneous &amp; Disaggregated</div>
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🎛️</span>
+            <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.2.item.2.t">
+            Heterogeneous &amp; Disaggregated</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.2.d">Independent TP / PP / DP
             per component + decoupled ViT / LLM scheduling that kills pipeline bubbles.</div>
         </div>
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.2.item.4.t">DP Load Balancing</div>
-          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.4.d">Fixes packing-induced
-            imbalance at cluster scale.</div>
-        </div>
 
-        <!-- Performance -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-compute" data-i18n="feat.cat.3.title">Performance</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.3.item.1.t">Adaptive FP8</div>
+        <!-- Performance: Adaptive FP8 -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">⚡</span>
+            <span class="feat-tag feat-tag-compute" data-i18n="feat.cat.3.title">Performance</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.3.item.1.t">Adaptive
+            FP8</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.3.item.1.d">Per-operator FP8
             decisions by GEMM shape.</div>
         </div>
 
-        <!-- Row 2 starts -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-compute" data-i18n="feat.cat.3.title">Performance</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.3.item.2.t">Fused Operators</div>
+        <!-- Performance: Fused Operators -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🔧</span>
+            <span class="feat-tag feat-tag-compute" data-i18n="feat.cat.3.title">Performance</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.3.item.2.t">Fused
+            Operators</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.3.item.2.d">FusedDSA / Sparse MLA
             kernels for end-to-end speedup.</div>
         </div>
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-compute" data-i18n="feat.cat.3.title">Performance</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.4.item.1.t">ChunkPipe</div>
+
+        <!-- Performance: ChunkPipe -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🧵</span>
+            <span class="feat-tag feat-tag-compute" data-i18n="feat.cat.3.title">Performance</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.4.item.1.t">ChunkPipe
+          </div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.4.item.1.d">Chunked long-sequence
             pipelining toward million-length contexts.</div>
         </div>
 
+        <!-- Multimodal: DP Load Balancing -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">⚖️</span>
+            <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.2.item.4.t">DP Load
+            Balancing</div>
+          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.4.d">Fixes packing-induced
+            imbalance at cluster scale.</div>
+        </div>
+
         <!-- Training Paradigms -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-train" data-i18n="feat.cat.6.title">Training</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.6.item.1.t">Pretrain + SFT + LoRA</div>
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🎯</span>
+            <span class="feat-tag feat-tag-train" data-i18n="feat.cat.6.title">Training</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.6.item.1.t">Pretrain +
+            SFT + LoRA</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.6.item.1.d">One codebase covers key
             training stages.</div>
         </div>
 
-        <!-- Usability -->
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-eco" data-i18n="feat.cat.5.title">Usability</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.2.item.1.t">Model Composition</div>
-          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.1.d">Swap ViT × LLM for VLMs
-            via YAML.</div>
-        </div>
-        <div class="feat-card rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-          <span class="feat-tag feat-tag-eco" data-i18n="feat.cat.5.title">Usability</span>
-          <div class="font-semibold mt-3 mb-1" data-i18n="feat.cat.5.item.1.t">HF ↔ Megatron</div>
+        <!-- Usability: HF <-> Megatron -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🔁</span>
+            <span class="feat-tag feat-tag-eco" data-i18n="feat.cat.5.title">Usability</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.5.item.1.t">HF ↔
+            Megatron</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.5.item.1.d">Bidirectional checkpoint
             conversion + online HF load/save.</div>
         </div>
@@ -212,10 +305,26 @@
     </div>
   </section>
 
+  <!-- ===== Architecture ===== -->
+  <section class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
+    <div class="text-center mb-10">
+      <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="arch.title">🏗️ Architecture</h2>
+      <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="arch.subtitle">One unified stack — from
+        model composition down to GPU / XPU silicon.</p>
+    </div>
+
+    <div class="lf-card max-w-6xl mx-auto">
+      <img src="assets/img/loongforge-architecture.svg" alt="LoongForge architecture" loading="lazy"
+        class="w-full h-auto block dark:hidden" />
+      <img src="assets/img/loongforge-architecture-dark.svg" alt="LoongForge architecture" loading="lazy"
+        class="w-full h-auto hidden dark:block" />
+    </div>
+  </section>
+
   <!-- ===== Benchmark ===== -->
   <section id="benchmark"
     class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
-    <div class="max-w-7xl mx-auto px-6 py-20 reveal">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
         <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Measured on
@@ -270,14 +379,14 @@
   </section>
 
   <!-- ===== Hardware Compatibility ===== -->
-  <section class="max-w-7xl mx-auto px-6 py-20 reveal">
+  <section class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
     <div class="text-center mb-10">
       <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="hw.title">💎 Hardware Compatibility</h2>
       <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="hw.subtitle">One codebase, two silicon
         stacks — production-ready on NVIDIA GPU and Baidu Kunlun XPU</p>
     </div>
     <div class="grid md:grid-cols-2 gap-6">
-      <div class="gradient-border p-7">
+      <div class="gradient-border p-8">
         <div class="flex items-center gap-3 mb-3">
           <div
             class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 text-white flex items-center justify-center font-bold shadow-lg shadow-green-900/20">
@@ -287,7 +396,7 @@
         <p class="text-gray-600 dark:text-gray-400" data-i18n="hw.nv.d">Built on the community Megatron +
           TransformerEngine ecosystem, with LoongForge optimizations layered on top.</p>
       </div>
-      <div class="gradient-border p-7">
+      <div class="gradient-border p-8">
         <div class="flex items-center gap-3 mb-3">
           <div
             class="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-900/20">
@@ -301,8 +410,8 @@
   </section>
 
   <!-- ===== Models ===== -->
-  <section id="models" class="bg-gray-50 dark:bg-gray-900/50 border-y border-gray-200 dark:border-gray-800">
-    <div class="max-w-7xl mx-auto px-6 py-20 reveal">
+  <section id="models" class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="models.title">🏛️ Supported Models</h2>
         <p class="text-gray-600 dark:text-gray-400" data-i18n="models.subtitle">From compact SLMs to large-scale MoE
@@ -317,112 +426,137 @@
           <button data-tab="vla" class="tab-btn">Embodied</button>
         </div>
 
-        <div data-panel="llm" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+        <div data-panel="llm" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">DeepSeek-V2</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">v2-lite</span><span class="chip">v2</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">DeepSeek-V3</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">v3</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">DeepSeek-V3.2</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">v3.2</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">DeepSeek-V4</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">v4-flash</span><span class="chip">v4-pro</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">LLaMA2</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">7B</span><span class="chip">13B</span><span
                 class="chip">70B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">LLaMA3</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">8B</span><span class="chip">70B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">LLaMA3.1</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">8B</span><span class="chip">70B</span><span
                 class="chip">405B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">1.8B → 72B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen1.5</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">0.5B → 72B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen2</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">0.5B → 72B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen2.5</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">0.5B → 72B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen3</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">0.6B → 480B-A35B</span><span
                 class="chip">Coder-30B-A3B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen3-Next</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">80B-A3B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">MiniMax</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">m2.1</span><span class="chip">m2.5</span><span
                 class="chip">m2.7</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">MIMO</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">mimo-7b</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">GLM</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">glm5</span></div>
           </div>
         </div>
 
-        <div data-panel="vlm" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+        <div data-panel="vlm" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen2.5-VL</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">3B → 72B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen3-VL</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">30B-A3B</span><span class="chip">235B-A22B</span>
             </div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen3.5</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">0.8B → 397B-A17B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen3.6</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">27B</span><span class="chip">35B-A3B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Kimi-K2.x</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">k2.5</span><span class="chip">k2.6</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">ERNIE4.5-VL</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">28B-A3B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">LLaVA-OneVision-1.5</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">4B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">InternVL2.5</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">8B → 78B</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">InternVL3.5</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">8B → 241B-A28B</span></div>
           </div>
@@ -436,43 +570,53 @@
           </div>
         </div>
 
-        <div data-panel="diff" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+        <div data-panel="diff" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Wan2.1</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">wan2-1-i2v</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Wan2.2</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">wan2-2-i2v</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Qwen-Image</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">qwen-image-edit-2511</span></div>
           </div>
         </div>
 
-        <div data-panel="vla" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+        <div data-panel="vla" class="hidden grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Pi</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">pi0.5</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">GR00T</h4>
-            <div class="flex flex-wrap gap-1.5"><span class="chip">groot_n1_6</span><span class="chip">groot_n1_7</span></div>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">groot_n1_6</span><span class="chip">groot_n1_7</span>
+            </div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">XVLA</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">xvla</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">FastWAM</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">fastwam</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">LingBot-VA</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">lingbot_va</span></div>
           </div>
-          <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Cosmos3</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">cosmos3_nano</span></div>
           </div>
@@ -489,209 +633,184 @@
     </div>
   </section>
 
-  <!-- ===== Quick Start (5-step workflow, faithful to docs) ===== -->
-  <section id="quickstart" class="max-w-7xl mx-auto px-6 py-20 reveal">
-    <div class="text-center mb-10">
+  <!-- ===== Quick Start (launchpad by model type) ===== -->
+  <section id="quickstart"
+    class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
+    <div class="text-center mb-12">
       <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="qs.title">🚀 Quick Start</h2>
-      <p class="text-gray-600 dark:text-gray-400" data-i18n="qs.subtitle">YAML-driven — a few steps from install to
-        launch
-      </p>
+      <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="qs.subtitle">From install to launch —
+        jump straight to the tutorial for your model type</p>
     </div>
 
-    <div id="qs-interactive" class="max-w-6xl mx-auto gradient-border p-6 md:p-8">
-      <!-- Step tabs -->
-      <div class="flex flex-wrap gap-2 mb-5" role="tablist">
-        <button type="button" class="qs-tab active" data-qs-step="1"><span class="qs-tab-num">1</span><span
-            data-i18n="qs.s1.tab">Install</span></button>
-        <button type="button" class="qs-tab" data-qs-step="2"><span class="qs-tab-num">2</span><span
-            data-i18n="qs.s2.tab">Compose</span><span class="qs-opt" data-i18n="qs.s2.opt">optional</span></button>
-        <button type="button" class="qs-tab" data-qs-step="3"><span class="qs-tab-num">3</span><span
-            data-i18n="qs.s3.tab">Weights</span></button>
-        <button type="button" class="qs-tab" data-qs-step="4"><span class="qs-tab-num">4</span><span
-            data-i18n="qs.s4.tab">Data</span></button>
-        <button type="button" class="qs-tab" data-qs-step="5"><span class="qs-tab-num">5</span><span
-            data-i18n="qs.s5.tab">Configure</span></button>
-        <button type="button" class="qs-tab" data-qs-step="6"><span class="qs-tab-num">6</span><span
-            data-i18n="qs.s6.tab">Launch</span></button>
-      </div>
+    <div class="space-y-6">
 
       <!-- Step 1: Install -->
-      <div class="qs-panel active" data-qs-panel="1">
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" data-i18n-html="qs.s1.desc">
-          Docker is the recommended path — a single image bundles CUDA/XPU toolchains, the patched Megatron submodule,
-          and TransformerEngine, so every developer and every node trains from the same environment. Source install is
-          also fully supported for advanced setups.
-        </p>
-        <pre
-          class="cmd-block"><span class="prompt">$</span> <span class="cmt"># NVIDIA GPU (Docker)</span>
-<span class="prompt">$</span> git clone <span class="val">--recurse-submodules</span> https://github.com/baidu-baige/LoongForge.git
-<span class="prompt">$</span> docker build <span class="flag">--build-arg</span> <span class="val">COMPILE_ENV=hopper</span> <span class="flag">--build-arg</span> <span class="val">ENABLE_LEROBOT=false</span> <span class="flag">-t</span> <span class="val">loongforge:latest</span> <span class="flag">-f</span> ./LoongForge/docker/Dockerfile .
-
-<span class="prompt">$</span> <span class="cmt"># Kunlun XPU (Docker)</span>
-<span class="prompt">$</span> docker build <span class="flag">--build-arg</span> <span class="val">BASE_IMAGE=loongforge/loongforge_kunlun:py310_torch25</span> <span class="flag">--build-arg</span> <span class="val">ENABLE_LEROBOT=false</span> <span class="flag">-t</span> <span class="val">loongforge-kunlun:latest</span> <span class="flag">-f</span> LoongForge/docker/Dockerfile.xpu .</pre>
+      <div class="lf-card">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="lf-step-num">1</span>
+          <h3 class="text-xl font-bold" data-i18n="qs2.install.t">Install</h3>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4" data-i18n="qs2.install.d">Recommended: one Docker image
+          bundles the CUDA/XPU toolchains, patched Megatron, and TransformerEngine — so every node trains from the same
+          environment. Source build is also supported.</p>
+        <details class="mt-1">
+          <summary
+            class="cursor-pointer select-none text-sm font-semibold text-indigo-600 dark:text-indigo-300 hover:underline"
+            data-i18n="qs2.docker">Show Docker build commands</summary>
+          <div class="grid md:grid-cols-2 gap-4 mt-4">
+            <div class="rounded-xl border border-gray-200 dark:border-gray-800 p-4 bg-gray-50/60 dark:bg-gray-900/40">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-sm font-bold flex items-center gap-2"><span
+                    class="w-2 h-2 rounded-full bg-emerald-500"></span>NVIDIA GPU</div>
+                <a class="qs-link text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline"
+                  target="_blank" rel="noopener"
+                  data-href-en="https://loongforge.readthedocs.io/en/latest/get_started/installation.html"
+                  data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html"
+                  href="https://loongforge.readthedocs.io/en/latest/get_started/installation.html"
+                  data-i18n="qs2.guide">Installation guide ↗</a>
+              </div>
+              <pre class="cmd-block" style="font-size:12px;line-height:1.7;"><span class="prompt">$</span> git clone <span class="val">--recurse-submodules</span> \
+    https://github.com/baidu-baige/LoongForge.git
+<span class="prompt">$</span> docker build <span class="flag">--build-arg</span> <span class="val">COMPILE_ENV=hopper</span> <span class="flag">--build-arg</span> <span class="val">ENABLE_LEROBOT=false</span> \
+    <span class="flag">-t</span> <span class="val">loongforge:latest</span> \
+    <span class="flag">-f</span> ./LoongForge/docker/Dockerfile .</pre>
+            </div>
+            <div class="rounded-xl border border-gray-200 dark:border-gray-800 p-4 bg-gray-50/60 dark:bg-gray-900/40">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-sm font-bold flex items-center gap-2"><span
+                    class="w-2 h-2 rounded-full bg-indigo-500"></span>Kunlun XPU</div>
+                <a class="qs-link text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline"
+                  target="_blank" rel="noopener"
+                  data-href-en="https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html"
+                  data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html"
+                  href="https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html"
+                  data-i18n="qs2.guide">Installation guide ↗</a>
+              </div>
+              <pre class="cmd-block" style="font-size:12px;line-height:1.7;"><span class="prompt">$</span> docker build <span class="flag">--build-arg</span> <span class="val">ENABLE_LEROBOT=false</span> \
+    <span class="flag">--build-arg</span> <span class="val">BASE_IMAGE=loongforge/loongforge_kunlun:py310_torch25</span> \
+    <span class="flag">-t</span> <span class="val">loongforge-kunlun:latest</span> \
+    <span class="flag">-f</span> LoongForge/docker/Dockerfile.xpu .</pre>
+            </div>
+          </div>
+        </details>
       </div>
 
-      <!-- Step 2: Compose -->
-      <div class="qs-panel" data-qs-panel="2">
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" data-i18n-html="qs.s2.desc">
-          Optional — only needed for custom combinations. LoongForge uses declarative configs to compose different
-          modality components into a full multimodal model. Take <code class="mono">qwen3_vl_30b_a3b</code> as an
-          example: a single YAML assembles the vision encoder, projector, and language backbone. To swap the language
-          backbone to DeepSeek V3, change one line under <code class="mono">model.foundation</code>. Mainstream
-          open-source models are already built in under <code class="mono">configs/models/</code> for you to pick from.
-        </p>
-        <pre class="cmd-block"><span class="cmt"># configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml</span>
-defaults:
-  - ../../models/image_encoder@model.image_encoder: <span class="val">qwen3_vit</span>
-  - ../../models/image_projector@model.image_projector: <span class="val">qwen_mlp_adapter</span>
-  - ../../models/qwen3@model.foundation: <span class="val">qwen3_30b_a3b</span>
-  - _self_
-
-model:
-  model_type: <span class="val">qwen3_vl</span>
-  ...
-
-<span class="cmt"># Swap the language backbone — one line change:</span>
-<span class="flag">-</span>  - ../../models/qwen3@model.foundation: qwen3_30b_a3b
-<span class="val">+</span>  - ../../models/deepseek3@model.foundation: deepseek_v3</pre>
-      </div>
-
-      <!-- Step 3: Weights -->
-      <div class="qs-panel" data-qs-panel="3">
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" data-i18n-html="qs.s3.desc">
-          LoongForge supports offline conversion of HuggingFace weights into the Megatron training format, and also
-          supports loading HuggingFace-format weights directly at startup — skipping the conversion step. On
-          completion, weights can be exported back to HF format with one flag, for seamless hand-off to the downstream
-          community ecosystem.
-        </p>
-        <pre class="cmd-block">TRAINING_ARGS=(
-    <span class="flag">--load</span> <span class="val">$CHECKPOINT_PATH</span>            <span class="cmt"># point directly at the HF model directory</span>
-    <span class="flag">--save</span> <span class="val">$CHECKPOINT_PATH</span>            <span class="cmt"># high-performance training checkpoints</span>
-    <span class="flag">--save-interval</span> <span class="val">40</span>
-    <span class="flag">--save-hf</span> <span class="val">true</span>                     <span class="cmt"># export HF weights on finish</span>
-    <span class="flag">--save-hf-path</span> <span class="val">/path/to/output</span>
-    ...
-)</pre>
-      </div>
-
-      <!-- Step 4: Data -->
-      <div class="qs-panel" data-qs-panel="4">
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" data-i18n-html="qs.s4.desc">
-          LoongForge ships a built-in data preprocessing toolchain that converts your raw data into the
-          framework-compatible format. Below is a multimodal data preprocessing example — refer to the per-model-family
-          user guide for details.
-        </p>
-        <pre class="cmd-block"><span class="prompt">$</span> python tools/data_preprocess/vlm/convert_to_webdataset.py \
-    <span class="flag">--output_dir</span> <span class="val">/workspace/wds_data/</span> \
-    <span class="flag">--json_file</span> <span class="val">tests/datasets/vlm/mllm_demo.json</span> \
-    <span class="flag">--image_dir</span> <span class="val">tests/datasets/vlm/</span> \
-    <span class="flag">--video_dir</span> <span class="val">tests/datasets/vlm/</span> \
-    <span class="flag">--media</span> <span class="val">mix</span> \
-    <span class="flag">--columns_messages</span> <span class="val">messages</span> \
-    <span class="flag">--maxcount</span> <span class="val">10000</span> \
-    <span class="flag">--maxsize</span> <span class="val">3000000000</span> \
-    <span class="flag">--sample_type</span> <span class="val">multi_mix_qa</span></pre>
-      </div>
-
-      <!-- Step 5: Configure -->
-      <div class="qs-panel" data-qs-panel="5">
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" data-i18n-html="qs.s5.desc.outer">
-          The outer layer is fully Megatron-compatible — familiar training arguments can be reused as-is.
-        </p>
-        <pre class="cmd-block">TRAINING_ARGS=(
-    <span class="flag">--training-phase</span> <span class="val">sft</span>
-    <span class="flag">--seq-length</span> <span class="val">32768</span>
-    <span class="flag">--micro-batch-size</span> <span class="val">1</span>
-    ...
-)
-
-MODEL_PARALLEL_ARGS=(
-    <span class="flag">--tensor-model-parallel-size</span> <span class="val">1</span>
-    <span class="flag">--pipeline-model-parallel-size</span> <span class="val">2</span>
-    <span class="flag">--expert-model-parallel-size</span> <span class="val">8</span>
-    ...
-)</pre>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-5 mb-3" data-i18n-html="qs.s5.desc.inner">
-          The inner layer uses Hydra overrides to assign parallelism (TP / PP / EP / DP) and freeze behavior per model
-          component — ideal for heterogeneous VLM training where ViT and LLM backbones have very different compute
-          profiles.
-        </p>
-        <pre class="cmd-block"><span class="cmt"># Per-component overrides (Hydra): different TP / freeze per component</span>
-+model.image_encoder.tensor-model-parallel-size=<span class="val">1</span>
-+model.foundation.tensor-model-parallel-size=<span class="val">4</span>
-+model.image_encoder.freeze=<span class="val">True</span></pre>
-      </div>
-
-      <!-- Step 6: Launch -->
-      <div class="qs-panel" data-qs-panel="6">
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" data-i18n-html="qs.s6.desc">
-          LoongForge ships example launch scripts for open-source models that you can run as-is. Browse
-          <code class="mono">examples/</code> (NVIDIA GPU) and <code class="mono">examples_xpu/</code> (Kunlun XPU). The
-          snippet below shows the common <code class="mono">torchrun</code> launch pattern shared across examples.
-        </p>
-        <pre class="cmd-block"><span class="prompt">$</span> <span class="cmt"># e.g. examples/qwen3_vl/finetuning/sft_qwen3_vl_30b_a3b.sh</span>
-<span class="prompt">$</span> PYTHONPATH=<span class="val">$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH</span> \
-    torchrun <span class="flag">--nproc_per_node</span> <span class="val">8</span> <span class="flag">--nnodes</span> <span class="val">$NNODES</span> \
-        <span class="val">$LOONGFORGE_PATH/loongforge/train.py</span> \
-        <span class="flag">--config-file</span> <span class="val">$LOONGFORGE_PATH/configs/models/qwen3_vl/qwen3_vl_30b_a3b.yaml</span> \
-        "${DATA_ARGS[@]}" "${TRAINING_ARGS[@]}" "${MOE_ARGS[@]}" "${MODEL_PARALLEL_ARGS[@]}" \
-        +model.image_encoder.freeze=<span class="val">True</span></pre>
-      </div>
-
-      <!-- Footer: snippets are illustrative — here are the full runnable tutorials -->
-      <div
-        class="qs-footer mt-6 pt-5 border-t border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span class="text-gray-500 dark:text-gray-400" data-i18n="qs.footer.label">📖 Full runnable tutorials:</span>
-          <a class="qs-link" target="_blank" rel="noopener"
+      <!-- Step 2: Pick your path -->
+      <div class="lf-card">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="lf-step-num">2</span>
+          <h3 class="text-xl font-bold" data-i18n="qs2.path.t">Pick your path</h3>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-5" data-i18n="qs2.path.d">Choose your model type — each
+          card opens a runnable, step-by-step tutorial.</p>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <a class="qs-link group card-hover rounded-[1.25rem] p-5 bg-gray-50/70 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex flex-col"
+            target="_blank" rel="noopener"
             data-href-en="https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html"
             data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html"
-            href="https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html">LLM ↗</a>
-          <a class="qs-link" target="_blank" rel="noopener"
+            href="https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="lf-ico">🧠</span>
+                <span class="feat-tag feat-tag-moe">LLM</span>
+              </div>
+              <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition">→</span>
+            </div>
+            <div class="font-bold text-gray-900 dark:text-white mb-1">Large Language Models</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="qs2.cat.llm.d">Dense &amp; MoE language
+              models — pretrain / SFT / LoRA.</div>
+            <div class="mt-auto pt-4 text-sm font-semibold text-indigo-600 dark:text-indigo-300" data-i18n="qs2.open">
+              Open tutorial ↗</div>
+          </a>
+          <a class="qs-link group card-hover rounded-[1.25rem] p-5 bg-gray-50/70 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex flex-col"
+            target="_blank" rel="noopener"
             data-href-en="https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html"
             data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html"
-            href="https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html">VLM ↗</a>
-          <a class="qs-link" target="_blank" rel="noopener"
-            data-href-en="https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_pi05_training.html"
-            data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/vla_tutorial/quick_start_pi05_training.html"
-            href="https://loongforge.readthedocs.io/en/latest/vla_tutorial/quick_start_pi05_training.html">VLA ↗</a>
-          <a class="qs-link" target="_blank" rel="noopener"
+            href="https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="lf-ico">🖼️</span>
+                <span class="feat-tag feat-tag-mm">VLM</span>
+              </div>
+              <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition">→</span>
+            </div>
+            <div class="font-bold text-gray-900 dark:text-white mb-1">Vision-Language Models</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="qs2.cat.vlm.d">Vision-language models —
+              composable ViT × LLM via YAML.</div>
+            <div class="mt-auto pt-4 text-sm font-semibold text-indigo-600 dark:text-indigo-300" data-i18n="qs2.open">
+              Open tutorial ↗</div>
+          </a>
+          <a class="qs-link group card-hover rounded-[1.25rem] p-5 bg-gray-50/70 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex flex-col"
+            target="_blank" rel="noopener"
             data-href-en="https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html"
             data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html"
-            href="https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html">Diffusion
-            ↗</a>
-          <a class="qs-link" target="_blank" rel="noopener"
-            data-href-en="https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.html"
-            data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html"
-            href="https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.html"
-            data-i18n="qs.footer.xpu">Kunlun XPU ↗</a>
-        </div>
-        <div class="text-xs text-gray-500 dark:text-gray-400" data-i18n-html="qs.footer.browse_html">
-          Browse
-          <a class="underline hover:text-indigo-600"
-            href="https://github.com/baidu-baige/LoongForge/tree/master/configs/models" target="_blank"
-            rel="noopener"><code class="mono">configs/models/</code></a> ·
-          <a class="underline hover:text-indigo-600"
-            href="https://github.com/baidu-baige/LoongForge/tree/master/examples" target="_blank" rel="noopener"><code
-              class="mono">examples/</code></a> ·
-          <a class="underline hover:text-indigo-600"
-            href="https://github.com/baidu-baige/LoongForge/tree/master/examples_xpu" target="_blank"
-            rel="noopener"><code class="mono">examples_xpu/</code></a>
+            href="https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="lf-ico">🎬</span>
+                <span class="feat-tag feat-tag-seq">Diffusion</span>
+              </div>
+              <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition">→</span>
+            </div>
+            <div class="font-bold text-gray-900 dark:text-white mb-1">Diffusion Models</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="qs2.cat.diff.d">Video &amp; image diffusion
+              (WAN, Qwen-Image).</div>
+            <div class="mt-auto pt-4 text-sm font-semibold text-indigo-600 dark:text-indigo-300" data-i18n="qs2.open">
+              Open tutorial ↗</div>
+          </a>
+          <a class="qs-link group card-hover rounded-[1.25rem] p-5 bg-gray-50/70 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex flex-col"
+            target="_blank" rel="noopener"
+            data-href-en="https://loongforge.readthedocs.io/en/latest/embodied_tutorial/overview.html"
+            data-href-zh="https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/overview.html"
+            href="https://loongforge.readthedocs.io/en/latest/embodied_tutorial/overview.html">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="lf-ico">🤖</span>
+                <span class="feat-tag feat-tag-embodied">Embodied</span>
+              </div>
+              <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition">→</span>
+            </div>
+            <div class="font-bold text-gray-900 dark:text-white mb-1">Embodied (VLA &amp; WAM)</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="qs2.cat.vla.d">VLA &amp; world-action
+              models
+              — torch-native DDP/FSDP.</div>
+            <div class="mt-auto pt-4 text-sm font-semibold text-indigo-600 dark:text-indigo-300" data-i18n="qs2.open">
+              Open tutorial ↗</div>
+          </a>
         </div>
       </div>
+
+      <!-- Step 3: Explore & launch -->
+      <div class="lf-card">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="lf-step-num">3</span>
+          <h3 class="text-xl font-bold" data-i18n="qs2.explore.t">Explore &amp; launch</h3>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4" data-i18n="qs2.explore.d">Browse ready-to-run configs
+          and example scripts to launch your first run.</p>
+        <div class="flex flex-wrap gap-3">
+          <a class="qs-chip" href="https://github.com/baidu-baige/LoongForge/tree/master/examples" target="_blank"
+            rel="noopener">📂 <code class="mono">examples/</code></a>
+          <a class="qs-chip" href="https://github.com/baidu-baige/LoongForge/tree/master/examples_xpu" target="_blank"
+            rel="noopener">📂 <code class="mono">examples_xpu/</code></a>
+          <a class="qs-chip" href="https://github.com/baidu-baige/LoongForge/tree/master/configs/models" target="_blank"
+            rel="noopener">⚙️ <code class="mono">configs/models/</code></a>
+        </div>
+      </div>
+
     </div>
   </section>
 
   <!-- ===== Powered By ===== -->
-  <section class="bg-amber-50/50 dark:bg-amber-950/15 border-y border-amber-100 dark:border-amber-900/30">
-    <div class="max-w-7xl mx-auto px-6 py-20 reveal">
+  <section class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <h2 class="text-3xl md:text-4xl font-bold text-center mb-3" data-i18n="powered.title">🌟 Powered by LoongForge
       </h2>
       <p class="text-center text-gray-600 dark:text-gray-400 mb-10" data-i18n="powered.subtitle">Open-source models
         trained with LoongForge or its predecessor AIAK-Training-LLM</p>
-      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         <a href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2" target="_blank"
-          class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="flex items-center gap-2 mb-2">
             <span class="text-2xl">✨</span>
             <span
@@ -703,7 +822,7 @@ MODEL_PARALLEL_ARGS=(
             multimodal model — improved data, training recipe, and scaling.</p>
         </a>
         <a href="https://github.com/InnovatorLM/Innovator-VL/tree/main" target="_blank"
-          class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="flex items-center gap-2 mb-2">
             <span class="text-2xl">🧪</span>
             <span
@@ -715,14 +834,14 @@ MODEL_PARALLEL_ARGS=(
             language model for advanced reasoning.</p>
         </a>
         <a href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5" target="_blank"
-          class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="text-2xl mb-2">🔬</div>
           <h3 class="font-semibold mb-1" data-i18n="powered.3.t">LLaVA-OneVision-1.5</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.3.d">Fully open framework for
             democratized multimodal training.</p>
         </a>
         <a href="https://github.com/baidubce/Qianfan-VL" target="_blank"
-          class="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
           <div class="text-2xl mb-2">🎯</div>
           <h3 class="font-semibold mb-1" data-i18n="powered.4.t">Qianfan-VL</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.4.d">Domain-enhanced universal
@@ -733,16 +852,16 @@ MODEL_PARALLEL_ARGS=(
   </section>
 
   <!-- ===== Community ===== -->
-  <section id="community" class="bg-gray-50 dark:bg-gray-900/50 border-y border-gray-200 dark:border-gray-800">
-    <div class="max-w-7xl mx-auto px-6 py-20 reveal">
+  <section id="community" class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="comm.title">🤝 Community</h2>
         <p class="text-gray-600 dark:text-gray-400" data-i18n="comm.subtitle">Built in the open — join discussions,
           report issues, and contribute</p>
       </div>
-      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         <a href="https://github.com/baidu-baige/LoongForge/issues" target="_blank"
-          class="group rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
+          class="group rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
           <div class="text-3xl mb-3">🐛</div>
           <h3 class="font-semibold mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-300"
             data-i18n="comm.1.t">GitHub Issues</h3>
@@ -751,7 +870,7 @@ MODEL_PARALLEL_ARGS=(
           </p>
         </a>
         <a href="https://github.com/baidu-baige/LoongForge/discussions" target="_blank"
-          class="group rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
+          class="group rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
           <div class="text-3xl mb-3">💬</div>
           <h3 class="font-semibold mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-300"
             data-i18n="comm.2.t">Discussions</h3>
@@ -759,7 +878,7 @@ MODEL_PARALLEL_ARGS=(
           </p>
         </a>
         <a href="https://github.com/baidu-baige/LoongForge/blob/master/CONTRIBUTING.md" target="_blank"
-          class="group rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
+          class="group rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
           <div class="text-3xl mb-3">🛠️</div>
           <h3 class="font-semibold mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-300"
             data-i18n="comm.3.t">Contributing</h3>
@@ -767,8 +886,8 @@ MODEL_PARALLEL_ARGS=(
             PR.
           </p>
         </a>
-        <a href="https://github.com/baidu-baige/LoongForge#contact" target="_blank" rel="noopener"
-          class="group rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-gray-900 border border-emerald-200 dark:border-emerald-900/50 card-hover block">
+        <a href="https://github.com/baidu-baige/LoongForge/issues/80" target="_blank" rel="noopener"
+          class="group rounded-[1.25rem] p-7 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-gray-900 border border-emerald-200 dark:border-emerald-900/50 card-hover block">
           <div class="text-3xl mb-3">💚</div>
           <h3 class="font-semibold mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-300"
             data-i18n="comm.4.t">Join us on WeChat</h3>
@@ -781,24 +900,24 @@ MODEL_PARALLEL_ARGS=(
       <!-- Stats strip -->
       <div class="stats-strip mt-10">
         <div data-gh-stars-tile hidden>
-          <div class="text-2xl font-bold text-amber-500">★ <span data-gh-stars>—</span></div>
+          <div class="text-3xl md:text-4xl font-bold text-amber-500">★ <span data-gh-stars>—</span></div>
           <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.stars">
             GitHub Stars</div>
         </div>
         <div>
           <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors" target="_blank" rel="noopener"
-            class="text-2xl font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"><span
+            class="text-3xl md:text-4xl font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"><span
               id="gh-contrib">14+</span></a>
           <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.contrib">
             Contributors</div>
         </div>
         <div>
-          <div class="text-2xl font-bold text-emerald-500">Apache 2.0</div>
+          <div class="text-3xl md:text-4xl font-bold text-emerald-500">Apache 2.0</div>
           <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.license">
             License</div>
         </div>
         <div>
-          <div class="text-2xl font-bold text-violet-500">🐉 Loong</div>
+          <div class="text-3xl md:text-4xl font-bold text-violet-500">🐉 Loong</div>
           <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.series">
             Baige Loong Series</div>
         </div>
@@ -809,7 +928,8 @@ MODEL_PARALLEL_ARGS=(
 
   <!-- ===== Footer ===== -->
   <footer class="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
-    <div class="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-4 gap-8 text-sm">
+    <div
+      class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-12 grid md:grid-cols-4 gap-8 text-sm">
       <div>
         <div class="flex items-center gap-2 font-bold mb-3">
           <img src="assets/img/logo.svg" class="w-7 h-7" alt="" />LoongForge
@@ -859,7 +979,7 @@ MODEL_PARALLEL_ARGS=(
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js?v=20260612-embodied3"></script>
+  <script src="assets/js/main.js?v=20260728-r17"></script>
   <script src="assets/js/home-news.js"></script>
 </body>
 
