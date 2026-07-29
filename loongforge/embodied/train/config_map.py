@@ -30,6 +30,10 @@ from loongforge.embodied.model.dreamzero.model_configuration_dreamzero import Dr
 from loongforge.embodied.data.datasets.dreamzero.transforms.data_configuration_dreamzero import DreamZeroDataConfig
 from loongforge.embodied.model.lingbot_va.model_configuration_lingbot_va import LingBotVAModelConfig
 from loongforge.embodied.data.datasets.lingbot_va.transforms.data_configuration_lingbot_va import LingBotVADataConfig
+from loongforge.embodied.model.wall_oss_0_5.model_configuration_wall_oss_0_5 import WallOss05ModelConfig
+from loongforge.embodied.data.datasets.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
+    WallOss05DataConfig,
+)
 
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -80,6 +84,7 @@ MODEL_SCHEMA = {
     "dreamzero_yam_wan21_14b": ModelSchema(
         "dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
     ),
+    "wall_oss_0_5": ModelSchema("wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
 }
 
 def get_model_schema(model_name: str) -> ModelSchema:

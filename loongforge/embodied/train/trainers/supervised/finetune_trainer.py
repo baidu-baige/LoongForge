@@ -229,8 +229,11 @@ class FinetuneTrainer(BaseTrainer):
             raw.set_frozen_modules_to_eval_mode()
 
     def _on_train_begin(self):
+        model = unwrap_model(self.model)
+        hook = getattr(model, "on_train_begin", None)
+        if callable(hook):
+            hook(ctx=self.ctx)
         if self.ctx.is_main:
-            model = unwrap_model(self.model)
             logger.info(f"Model: {model.__class__.__name__}")
 
     # ═══════════════════════════════════════════════

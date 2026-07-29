@@ -517,6 +517,15 @@ class _LearningRateArgs:
         default=1e-6,
         metadata={"help": "Lower bound the LR schedule decays to (floor)."},
     )
+    custom_lr_lambda: bool = field(
+        default=False,
+        metadata={
+            "help": "Use the custom cosine LR lambda (warmup + cosine decay to "
+                    "--min-lr) instead of the built-in HF scheduler. Only applies "
+                    "when --lr-decay-style is cosine_with_min_lr or "
+                    "cosine_warmup_with_min_lr."
+        },
+    )
     # ── lambda_linear scheduler params ──
     lambda_f_max: float = field(
         default=0.4,
@@ -580,7 +589,7 @@ class _OptimizerArgs:
         default="AdamW",
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
-                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD. TEFusedAdamW "
+                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon. TEFusedAdamW "
                     "requires TransformerEngine; ApexFusedAdamW requires Apex."
         },
     )
@@ -592,7 +601,10 @@ class _OptimizerArgs:
     )
     weight_decay: float = field(
         default=0.01,
-        metadata={"help": "Decoupled weight decay coefficient (AdamW)."},
+        metadata={
+            "help": "Decoupled weight decay coefficient (AdamW, and DMuon's "
+                    "AdamW route; the Muon route uses --dmuon-muon-weight-decay)."
+        },
     )
     weight_decay_grouping: str = field(
         default="all",
@@ -606,23 +618,90 @@ class _OptimizerArgs:
         default=0.9,
         metadata={
             "help": "Adam beta1 — exponential decay rate for the first moment "
-                    "(mean)."
+                    "(mean). Also used by DMuon's AdamW route."
         },
     )
     adam_beta2: float = field(
         default=0.95,
         metadata={
             "help": "Adam beta2 — exponential decay rate for the second moment "
-                    "(variance)."
+                    "(variance). Also used by DMuon's AdamW route."
         },
     )
     adam_eps: float = field(
         default=1e-8,
         metadata={
-            "help": "Adam epsilon added to the denominator for numerical stability."
+            "help": "Adam epsilon added to the denominator for numerical "
+                    "stability. Also used by DMuon's AdamW route."
         },
     )
-
+    dmuon_muon_lr: float = field(
+        default=0.02,
+        metadata={"help": "DMuon Muon-route learning rate."},
+    )
+    dmuon_momentum: float = field(
+        default=0.95,
+        metadata={"help": "DMuon momentum for Muon-route parameters."},
+    )
+    dmuon_ns_steps: int = field(
+        default=5,
+        metadata={"help": "Number of Newton-Schulz iterations used by DMuon."},
+    )
+    dmuon_muon_weight_decay: float = field(
+        default=0.0,
+        metadata={"help": "DMuon decoupled weight decay for Muon-route parameters."},
+    )
+    dmuon_adamw_lr: float = field(
+        default=1e-3,
+        metadata={
+            "help": "DMuon AdamW-route learning rate for non-Muon parameters. The "
+                    "remaining AdamW hyper-parameters are shared with "
+                    "--adam-beta1, --adam-beta2, --adam-eps and --weight-decay."
+        },
+    )
+    dmuon_ns_backend: str = field(
+        default="gram",
+        metadata={
+            "choices": ["gram", "direct"],
+            "help": "DMuon Newton-Schulz backend.",
+        },
+    )
+    dmuon_ns_coefficients: str = field(
+        default="default",
+        metadata={
+            "choices": ["default", "wallx_muon"],
+            "help": "DMuon Newton-Schulz coefficient set.",
+        },
+    )
+    dmuon_nesterov: bool = field(
+        default=True,
+        metadata={"help": "Enable DMuon Nesterov momentum."},
+    )
+    dmuon_forward_prefetch_depth: int = field(
+        default=1,
+        metadata={
+            "help": "Number of subsequent DMuon parameter groups to prefetch "
+                    "during forward execution."
+        },
+    )
+    dmuon_adamw_foreach: bool = field(
+        default=False,
+        metadata={
+            "help": "Batch the DMuon AdamW update over the FSDP2 symmetric "
+                    "shards into multi-tensor (foreach) kernels instead of "
+                    "updating one tensor at a time. Numerically identical to the "
+                    "scalar path; the DMuon-dedicated parameters keep using it."
+        },
+    )
+    dmuon_adamw_foreach_bucket_mib: float = field(
+        default=64.0,
+        metadata={
+            "help": "Upper bound in MiB on the temporary buffers one foreach "
+                    "AdamW bucket may allocate. Larger buckets mean fewer kernel "
+                    "launches and more peak memory. Requires "
+                    "--dmuon-adamw-foreach."
+        },
+    )
 
 @dataclass(frozen=True)
 class _DataArgs:
@@ -1174,6 +1253,13 @@ class _DistributedArgs:
                     "child once in registration order."
         },
     )
+    fsdp_root_optimizer_prefetch: bool = field(
+        default=False,
+        metadata={
+            "help": "Update the root FSDP AdamW shard first, asynchronously "
+                    "unshard it, then update the remaining optimizer groups."
+        },
+    )
     ddp_broadcast_buffers: bool = field(
         default=True,
         metadata={
@@ -1324,6 +1410,9 @@ class TrainingArgs(
     """
 
     def __post_init__(self):
+        if self.dmuon_adamw_foreach_bucket_mib <= 0:
+            raise ValueError("--dmuon-adamw-foreach-bucket-mib must be positive")
+
         # Deterministic mode needs a seeded dataloader (sampler shuffle +
         # per-worker RNG); otherwise data ordering and augmentation are not
         # reproducible run-to-run. Force it on and warn when left off.
