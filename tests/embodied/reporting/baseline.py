@@ -116,6 +116,36 @@ def _rel_diff(actual, expected):
     return abs(actual - expected) / max(abs(expected), 1e-12)
 
 
+def throughput_comparison(actual_records, baseline_records):
+    """Return stable-iteration throughput means and improvement over benchmark."""
+    base_by_iter = {r["iteration"]: r for r in baseline_records}
+    act_by_iter = {r["iteration"]: r for r in actual_records}
+    common_iters = sorted(set(base_by_iter) & set(act_by_iter))
+    stable_iters = common_iters[_PERF_WARMUP_ITERS:]
+
+    throughput_iters = [
+        it for it in stable_iters
+        if "throughput" in base_by_iter[it] and "throughput" in act_by_iter[it]
+    ]
+    if not throughput_iters:
+        return None
+
+    base_values = [base_by_iter[it]["throughput"] for it in throughput_iters]
+    act_values = [act_by_iter[it]["throughput"] for it in throughput_iters]
+
+    benchmark_mean = sum(base_values) / len(base_values)
+    actual_mean = sum(act_values) / len(act_values)
+    if (not math.isfinite(benchmark_mean) or not math.isfinite(actual_mean)
+            or abs(benchmark_mean) < 1e-12):
+        return None
+
+    return {
+        "actual_mean": actual_mean,
+        "benchmark_mean": benchmark_mean,
+        "improvement_percent": (actual_mean / benchmark_mean - 1.0) * 100.0,
+    }
+
+
 def compare(actual_records, baseline_records, accuracy_tol, performance_tol,
             check_loss_only=False, max_report=10):
     """Return (failed_metrics, warnings). A non-empty failed_metrics means failure."""

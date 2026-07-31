@@ -99,11 +99,21 @@ def run_script(model_name, script_path, args, log_dir, logger):
     _inject_model_env(env, model_name, logger)
 
     cmd = ["bash", script_path]
+    train_iters = env.get("EMBODIED_TRAIN_ITERS", "").strip()
+    if train_iters:
+        cmd.extend(["--train-iters", train_iters])
+    seed = env.get("EMBODIED_SEED", "").strip()
+    if seed:
+        cmd.extend(["--seed", seed])
+    if env.get("EMBODIED_DETERMINISTIC_MODE", "").strip().lower() in (
+        "true", "1", "yes", "on"
+    ):
+        cmd.append("--deterministic-mode")
     log_file = os.path.join(out_dir, "train.log")
     logger.info(f"[{model_name}] Executing script {script_path}, log: {log_file}")
 
     if args.dry_run:
-        logger.info(f"[{model_name}] dry_run: OUTPUT_DIR={output_dir} bash {script_path}")
+        logger.info(f"[{model_name}] dry_run: OUTPUT_DIR={output_dir} {' '.join(cmd)}")
         result["duration_sec"] = round(time.time() - start, 1)
         return result
 
@@ -159,6 +169,13 @@ def run_script(model_name, script_path, args, log_dir, logger):
     )
     result["failed_metrics"] = failed
     result["warnings"] = warnings
+    throughput = baseline_mod.throughput_comparison(records, expected)
+    if throughput is not None:
+        logger.info(
+            f"[{model_name}] Throughput: actual={throughput['actual_mean']:.3f} "
+            f"samples/sec/per_device, benchmark={throughput['benchmark_mean']:.3f} "
+            f"samples/sec/per_device, improvement={throughput['improvement_percent']:+.1f}%"
+        )
     for w in warnings:
         logger.warning(f"[{model_name}] {w}")
     if failed:

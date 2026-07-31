@@ -32,6 +32,13 @@ export EMBODIED_LOG_ROOT=${EMBODIED_LOG_ROOT:-"${EMBODIED_CI_ROOT}/logs"}
 # (e.g. when running the same checkout from multiple machines).
 export EMBODIED_BASELINE_ROOT=${EMBODIED_BASELINE_ROOT:-"${_EMBODIED_SUITE_ROOT}/baseline"}
 
+# ── Training test defaults ─────────────────────────────────────
+# Regression runs use deterministic kernels unless explicitly disabled.
+export EMBODIED_DETERMINISTIC_MODE=${EMBODIED_DETERMINISTIC_MODE:-true}
+# Keep regression runs short and reproducible; override for longer or varied runs.
+export EMBODIED_TRAIN_ITERS=${EMBODIED_TRAIN_ITERS:-20}
+export EMBODIED_SEED=${EMBODIED_SEED:-42}
+
 # ── BOS source prefix (used by config/prepare.sh) ─────────────
 export BOS_VLA_ARTIFACTS_ROOT=${BOS_VLA_ARTIFACTS_ROOT:-"bos:/path/to/vla_artifacts/"}
 
