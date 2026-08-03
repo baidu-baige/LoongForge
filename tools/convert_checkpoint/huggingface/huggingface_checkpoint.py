@@ -60,6 +60,34 @@ def _packed_to_weight_key(key):
     return None
 
 
+def _drop_duplicate_tied_lm_head(state_dict):
+    """Drop a tied lm_head alias before saving with safetensors."""
+    storage_to_keys = {}
+    for key, value in state_dict.items():
+        if not torch.is_tensor(value) or value.numel() == 0:
+            continue
+        try:
+            storage_key = (
+                value.device,
+                value.untyped_storage().data_ptr(),
+                value.storage_offset(),
+                tuple(value.size()),
+                tuple(value.stride()),
+                value.dtype,
+            )
+        except RuntimeError:
+            continue
+        storage_to_keys.setdefault(storage_key, []).append(key)
+    for keys in storage_to_keys.values():
+        if len(keys) > 1 and "lm_head.weight" in keys:
+            state_dict.pop("lm_head.weight")
+            logging.info(
+                "Dropped tied tensor before safetensors save: lm_head.weight "
+                "(alias of %s)",
+                next(key for key in keys if key != "lm_head.weight"),
+            )
+
+
 def _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=None):
     if not _hf_dequantize_int4_enabled(args) or dequant_weight_keys is None:
         return
@@ -456,7 +484,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 for c_name in MTP_NAMES:
                     self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
                                              hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
-                
+
 
         if num_layers - 1 in layer_ids:
             for c_name in LAST_LAYER_NAMES:
@@ -643,7 +671,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         process = psutil.Process(os.getpid())
         mem = process.memory_info().rss / 1024**2  # Convert to MB
         logging.info(f"{desc} memory usage: {mem:.2f} MB")
-   
+
     def save(self, save_path, state_dict, h_config=None, save_optim=False):
         """ save ckpt """
         from huggingface_hub import split_torch_state_dict_into_shards
@@ -665,6 +693,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 target_regex=getattr(self.args, "hf_pack_quantized_target_regex", None),
             )
 
+        _drop_duplicate_tied_lm_head(state_dict)
         state_dict_split = split_torch_state_dict_into_shards(state_dict)
         self.print_memory_usage(f"before save {save_path}")
         has_safetensor_file = False
@@ -740,7 +769,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             return
         vision_num_layers = c_vision_patch_config.get_args("common")["num_layers"]
         vision_layer_dict = {}
-        vision_layer_dict[0] = list(range(vision_num_layers)) 
+        vision_layer_dict[0] = list(range(vision_num_layers))
         state_dict = hf_ckpt.convert_from_common(c_ckpt, layer_dict, expert_dict=expert_dict, save_path=save_path, save_file=False)
         vision_ckpt = hf_vision_ckpt.convert_from_common(c_vision_ckpt, vision_layer_dict, save_file=False)
         state_dict.update(vision_ckpt)

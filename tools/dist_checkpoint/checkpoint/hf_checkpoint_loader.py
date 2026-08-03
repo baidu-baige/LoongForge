@@ -87,6 +87,31 @@ def _log_loaded_param_stats(unwrapped_model):
         print_rank_0(f"[CKPT_LOAD]   {name}: numel={n:,} norm={norm:.4f} mean_abs={mean_abs:.6f}")
 
 
+def _load_model_state_dict(module, state_dict, *, allow_missing_mtp=False):
+    """Load one model shard while preserving strict checkpoint validation."""
+    if not allow_missing_mtp:
+        module.load_state_dict(state_dict, strict=True)
+        return []
+
+    incompatible = module.load_state_dict(state_dict, strict=False)
+    missing_mtp = [
+        key for key in incompatible.missing_keys if "mtp" in key.split(".")
+    ]
+    missing_non_mtp = sorted(set(incompatible.missing_keys) - set(missing_mtp))
+    unexpected = sorted(incompatible.unexpected_keys)
+    if missing_non_mtp or unexpected:
+        problems = []
+        if missing_non_mtp:
+            problems.append(f"Missing key(s) in state_dict: {missing_non_mtp}")
+        if unexpected:
+            problems.append(f"Unexpected key(s) in state_dict: {unexpected}")
+        raise RuntimeError(
+            f"Error(s) in loading state_dict for {module.__class__.__name__}:\n\t"
+            + "\n\t".join(problems)
+        )
+    return sorted(missing_mtp)
+
+
 @time_checkpoint_operation
 def load_hf_checkpoint_online(
     model,
@@ -222,18 +247,35 @@ def load_hf_checkpoint_online(
 
     # Handle both wrapped {'model': dict} and direct dict formats
     model_state_dict = current_rank_state_dict.get('model', current_rank_state_dict) if isinstance(current_rank_state_dict, dict) else current_rank_state_dict
-    # strict=True — let PyTorch raise a RuntimeError that lists every
-    # missing / unexpected key and every size-mismatch. The prior
-    # strict=False (plus silent fallback) was masking real load failures
-    # (q_layernorm / kv_layernorm / hc_*_scale / tid2eid / expert_bias)
-    # and letting training run with randomly-initialized shards.
+    # Keep strict validation unless MTP was explicitly requested and the source
+    # checkpoint contains no MTP tensors. In that case only MTP keys may remain
+    # initialized; every other incompatibility still fails the load.
+    allow_missing_mtp = bool(getattr(args, "mtp_num_layers", 0)) and not (
+        hf_converter.source_has_mtp_weights
+    )
+    initialized_mtp_keys = []
     if len(unwrapped_model) == 1:
-        unwrapped_model[0].load_state_dict(model_state_dict, strict=True)
+        initialized_mtp_keys.extend(
+            _load_model_state_dict(
+                unwrapped_model[0],
+                model_state_dict,
+                allow_missing_mtp=allow_missing_mtp,
+            )
+        )
     else:  # vpp
         for i in range(len(unwrapped_model)):
-            unwrapped_model[i].load_state_dict(
-                current_rank_state_dict[f"model{i}"], strict=True
+            initialized_mtp_keys.extend(
+                _load_model_state_dict(
+                    unwrapped_model[i],
+                    current_rank_state_dict[f"model{i}"],
+                    allow_missing_mtp=allow_missing_mtp,
+                )
             )
+    if initialized_mtp_keys:
+        print_rank_0(
+            "Source checkpoint has no MTP tensors; kept deterministic model "
+            f"initialization for {len(initialized_mtp_keys)} MTP tensor(s)."
+        )
 
     # Positive sanity check — print weight stats for a handful of well-known
     # parameters so we can tell (from logs) that ckpt values actually landed

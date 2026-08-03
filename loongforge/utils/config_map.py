@@ -364,6 +364,12 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen3_vl_235b_a22b",
     },
 
+    # minicpm-v
+    "minicpm-v-4.6": {
+        "config_path": "configs/models/minicpm_v_4_6",
+        "config_name": "minicpm_v_4_6",
+    },
+
     # wan
     "wan2-1-i2v": {
         "config_path": "configs/models/wan",

@@ -9,6 +9,7 @@ from tools.dist_checkpoint.config.parallel_config import ParallelConfig
 from tools.convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
 from tools.convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
 from tools.convert_checkpoint.common.common_config import CommonConfig
+from tools.convert_checkpoint.common.common_checkpoint import LAYER_PREFIX
 from tools.convert_checkpoint.utils.utils import(
     _flatten_expert_ids,
     get_ep_map,
@@ -16,6 +17,19 @@ from tools.convert_checkpoint.utils.utils import(
 )
 
 from tools.convert_checkpoint.module_convertor.model import Model
+
+
+def _common_checkpoint_has_mtp_weights(common_checkpoint, num_layers):
+    """Return whether common state contains a decoder layer beyond the backbone."""
+    prefix = f"{LAYER_PREFIX}."
+    for key in common_checkpoint.model_dict:
+        if not key.startswith(prefix):
+            continue
+        layer_id = key[len(prefix):].split(".", 1)[0]
+        if layer_id.isdigit() and int(layer_id) >= num_layers:
+            return True
+    return False
+
 
 class HfCheckpointConverter:
     """Converter for Huggingface checkpoint."""
@@ -61,6 +75,7 @@ class HfCheckpointConverter:
         self.ep_ranks = parallel_config.ep_ranks
         self.tp_ranks = parallel_config.tp_ranks
         self.etp_ranks = parallel_config.etp_ranks
+        self.source_has_mtp_weights = False
 
         self.config = config
         self.vision_patch_config = vision_patch_config
@@ -101,6 +116,11 @@ class HfCheckpointConverter:
             self.hf_ckpt.load(ckpt_path, self.args.safetensors, self.config, self.layer_ids, expert_ids=expert_ids,
                          mtp_num_layers=self.args.mtp_num_layers)
             c_ckpt = self.hf_ckpt.convert_to_common(cur_layer_dict, expert_dict=self.expert_dict)
+            if self.args.mtp_num_layers:
+                num_layers = self.config.get_args("common")["num_layers"]
+                self.source_has_mtp_weights |= _common_checkpoint_has_mtp_weights(
+                    c_ckpt, num_layers
+                )
             # HF-format tensors are no longer needed once converted to common;
             # drop the dict entries so anything not aliased by c_ckpt is freed
             # before the mcore sharding allocates its output copies.

@@ -1,0 +1,37 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_encoder@module: ???
+  - _self_
+
+args:
+  common:
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+    num_key_value_heads: ${module.num_query_groups}
+  huggingface: {}
+  mcore:
+    use_rotary_position_embeddings: false
+    use_distributed_optimizer: false
+    transpose_mlp_dense: false
+    transpose_query_key_value: false
+
+name_map:
+  huggingface:
+    transformer: model.vision_tower.encoder
+    layer_prefix: layers
+  mcore:
+    transformer: model
+    layer_prefix: vision_model.encoder.layers
+
+prefix_map:
+  vision_model: model.vision_tower
+
+vision_patch:
+  vision_model.embeddings.patch_embedding.weight: model.vision_tower.embeddings.patch_embedding.weight
+
+torch_dtype: bfloat16

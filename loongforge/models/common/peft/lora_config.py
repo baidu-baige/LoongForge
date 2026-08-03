@@ -22,6 +22,9 @@ class LoraConfig(BasePeftModelConfig):
     lora_B_init_method: str = "zero"
     a2a_experimental: bool = False
     lora_dtype: torch.dtype = None
+    canonical: bool = False
+    adapter_backend: Literal["parallel", "auto"] = "parallel"
+    fc1_adapter_order: Literal["up_gate", "gate_up"] = "up_gate"
 
 @dataclass
 class VLMLoraConfig(LoraConfig):

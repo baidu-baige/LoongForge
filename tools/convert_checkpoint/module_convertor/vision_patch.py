@@ -21,7 +21,12 @@ from convert_checkpoint.utils.ckpt_util import (
     save_huggingface_checkpoint
 )
 
-from convert_checkpoint.utils.config_utils import parse_at_configs, load_config, parallel_param_parser
+from convert_checkpoint.utils.config_utils import (
+    load_config,
+    parallel_param_parser,
+    parse_at_configs,
+    remap_state_dict_prefixes,
+)
 
 
 args = parse_args()
@@ -30,6 +35,7 @@ with open(args.config_file, 'r') as f:
 module_type = args.convert_file.split('/')[-3]
 cfg = load_config(args.convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
 name_map = cfg.vision_patch
+prefix_map = getattr(cfg, "prefix_map", None)
 
 model_cfg = load_config(args.config_file)
 
@@ -49,8 +55,13 @@ if (args.load_platform, args.save_platform) == ('mcore', 'huggingface'):
         else:
             assert 'model0' in state_dict[0][0].keys()  # vpp
             source = state_dict[0][0]['model0']
-    for k1, k2 in name_map.items():
-        target[k2] = source[k1]
+    if prefix_map is not None:
+        target.update(
+            remap_state_dict_prefixes(source, prefix_map, mcore_to_hf=True)
+        )
+    else:
+        for k1, k2 in name_map.items():
+            target[k2] = source[k1]
     save_huggingface_checkpoint(target, args.save_ckpt_path)
 
 elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
@@ -60,12 +71,18 @@ elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
     tp = parallel_param_parser(args, model_cfg, 'tensor_model_parallel_size', module_type)
     source = load_huggingface_checkpoint(args.load_ckpt_path)
     target = {}
-    for k1, k2 in name_map.items():
-        target[k1] = source[k2]
-        print(f" > {k1}")
+    if prefix_map is not None:
+        target.update(
+            remap_state_dict_prefixes(source, prefix_map, mcore_to_hf=False)
+        )
+        for key in target:
+            print(f" > {key}")
+    else:
+        for k1, k2 in name_map.items():
+            target[k1] = source[k2]
+            print(f" > {k1}")
     state_dict = [{'model': deepcopy(target)} for i in range(tp)]
     save_megatron_checkpoint(state_dict, os.path.join(args.save_ckpt_path, 'release'))
 
 else:
     raise NotImplementedError
-

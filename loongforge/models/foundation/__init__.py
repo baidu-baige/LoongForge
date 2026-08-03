@@ -8,6 +8,7 @@ from transformers import AutoModel
 from .qwen2 import Qwen2Model, Qwen2Config
 from .qwen3 import Qwen3Model, Qwen3Config
 from .qwen3_5 import Qwen35Model, Qwen35Config
+from .minicpm_v_4_6 import MiniCPMV46Config, MiniCPMV46Model
 from .qwen3_next import Qwen3NextModel, Qwen3NextConfig
 from .deepseek import DeepseekConfig, DeepseekModelWithMTP
 from .deepseek_v4 import DeepseekV4Config, DeepseekV4Model
@@ -24,6 +25,7 @@ AutoModel.register(Qwen2Config, Qwen2Model, exist_ok=True)  # overwrite existing
 AutoModel.register(Qwen3Config, Qwen3Model, exist_ok=True)  # overwrite existing Qwen3Config
 AutoModel.register(Qwen3NextConfig, Qwen3NextModel, exist_ok=True)
 AutoModel.register(Qwen35Config, Qwen35Model, exist_ok=True)
+AutoModel.register(MiniCPMV46Config, MiniCPMV46Model, exist_ok=True)
 AutoModel.register(GlmConfig, GlmModelWithMTP, exist_ok=True)
 AutoModel.register(InternLMConfig, InternLMModel)
 AutoModel.register(DeepseekConfig, DeepseekModelWithMTP)

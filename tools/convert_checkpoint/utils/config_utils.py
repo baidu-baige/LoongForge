@@ -23,6 +23,8 @@ from convert_checkpoint.common.common_checkpoint import (
     LAYER_PREFIX,
     LAYERNORM_BIAS,
     LAYERNORM_WEIGHT,
+    MTP_LAYER_PREFIX,
+    MTP_WORD_EMBEDDING,
     VISION_MAP,
     VISION_WORD_EMBEDDINGS,
     WEIGHT,
@@ -44,7 +46,7 @@ def load_config(config_path, config_name=None, hydra_overrides=None):
     """
     # Convert to absolute path
     config_path = os.path.abspath(config_path)
-    
+
     # Handle full file path case
     if config_path.endswith('.yaml'):
         config_dir = os.path.dirname(config_path)
@@ -65,6 +67,27 @@ def load_config(config_path, config_name=None, hydra_overrides=None):
         cfg = compose(config_name=config_name, overrides=hydra_overrides)
 
     return cfg
+
+
+def remap_state_dict_prefixes(source, prefix_map, *, mcore_to_hf):
+    """Copy tensors between MCore and Hugging Face module prefixes."""
+    target = {}
+    for mcore_prefix, hf_prefix in prefix_map.items():
+        source_prefix, target_prefix = (
+            (mcore_prefix, hf_prefix)
+            if mcore_to_hf
+            else (hf_prefix, mcore_prefix)
+        )
+        source_prefix = f"{source_prefix}."
+        target_prefix = f"{target_prefix}."
+        for key, value in source.items():
+            if not key.startswith(source_prefix):
+                continue
+            target_key = f"{target_prefix}{key[len(source_prefix):]}"
+            if target_key in target:
+                raise ValueError(f"Prefix mappings produced duplicate key: {target_key}")
+            target[target_key] = value
+    return target
 
 def parse_at_configs(yaml_lines):
     """
@@ -124,6 +147,16 @@ def get_adapter_config(config_file, convert_file):
         module_names = parse_at_configs(f.readlines())
     module_type = convert_file.split('/')[-3]
     name_map = load_config(convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
+    if OmegaConf.select(name_map, "prefix_map") is not None:
+        model_cfg = load_config(config_file)
+        return {
+            "__prefix_map__": OmegaConf.to_container(name_map.prefix_map, resolve=True),
+            "__module_config__": name_map.module,
+            "__module_kwargs__": {
+                "input_size": model_cfg.model.image_encoder.hidden_size,
+                "output_size": model_cfg.model.foundation.hidden_size,
+            },
+        }
     adapter_name_map = {}
     for k1, k2 in name_map.items():
         if k1 != 'name_map' and k1 != 'module':
@@ -136,6 +169,12 @@ def get_vision_patch_config(config_file, convert_file):
             module_names = parse_at_configs(f.readlines())
     module_type = convert_file.split('/')[-3]
     cfg = load_config(convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
+    if OmegaConf.select(cfg, "prefix_map") is not None:
+        return {
+            "__prefix_map__": OmegaConf.to_container(cfg.prefix_map, resolve=True),
+            "__module_config__": cfg.module,
+            "__module_kwargs__": {},
+        }
 
     return cfg.vision_patch
 
@@ -176,7 +215,11 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
     if adapter is not None:
         c_config = replace_vlm_config(c_config, adapter, vision_patch)
     if for_vlm:
-        for name in [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES:
+        for name in (
+            [LAYER_PREFIX, MTP_LAYER_PREFIX, MTP_WORD_EMBEDDING]
+            + FIRST_LAYER_NAMES
+            + LAST_LAYER_NAMES
+        ):
             if name not in c_config.get("name_map")["mcore"]:
                 continue
             old_key = c_config.get("name_map")["mcore"].get(name, None)
@@ -202,24 +245,39 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
     return c_config
 
 def replace_vlm_config(c_config, adapter, vision_patch):
+    if c_config.get("name_map") is None:
+        c_config.data["name_map"] = {"huggingface": {}, "mcore": {}}
     name_map = {}
-    for k1, k2 in adapter.items():
-        if k1 in name_map:
-            continue
-        extra_data = True
-        if k1.startswith("adapter.linear_fc1") or k1.startswith("adapter.linear_fc2"):
-            extra_data = False
-        name_map[k1] = {
-            LAYER_NAME: k2,
-            LAYER_EXTRA_DATA: extra_data
-        }
-    for k1, k2 in vision_patch.items():
-        if k1 in name_map:
-            continue
-        name_map[k1] = {
-            LAYER_NAME: k2,
-            LAYER_EXTRA_DATA: False
-        }
+    if "__prefix_map__" in adapter:
+        expanded_adapter = _expand_prefix_map(
+            adapter["__module_config__"],
+            adapter["__prefix_map__"],
+            **adapter["__module_kwargs__"],
+        )
+        for k1, k2 in expanded_adapter.items():
+            name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: False}
+    else:
+        for k1, k2 in adapter.items():
+            if k1 in name_map:
+                continue
+            extra_data = not (
+                k1.startswith("adapter.linear_fc1")
+                or k1.startswith("adapter.linear_fc2")
+            )
+            name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: extra_data}
+    if "__prefix_map__" in vision_patch:
+        expanded_vision = _expand_prefix_map(
+            vision_patch["__module_config__"],
+            vision_patch["__prefix_map__"],
+            **vision_patch["__module_kwargs__"],
+        )
+        for k1, k2 in expanded_vision.items():
+            if k1 not in name_map:
+                name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: False}
+    else:
+        for k1, k2 in vision_patch.items():
+            if k1 not in name_map:
+                name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: False}
     c_config.get("name_map")["vision_patch"] = None
 
     hf_dict = {}
@@ -238,10 +296,10 @@ def replace_vlm_config(c_config, adapter, vision_patch):
         if new_prefix:
             mcore_name = f"{new_prefix}.{rest}"
         for suffix in key_suffixes:
-            if value[LAYER_NAME].endswith(suffix):
-                hf_name = value[LAYER_NAME][:-len(suffix)]
+            if hf_name.endswith(suffix):
+                hf_name = hf_name[:-len(suffix)]
                 hf_is_direct = False
-            if key.endswith(suffix):
+            if mcore_name.endswith(suffix):
                 mcore_name = mcore_name[:-len(suffix)]
                 mcore_is_direct = False
                 if suffix in [f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]:
@@ -263,3 +321,22 @@ def replace_vlm_config(c_config, adapter, vision_patch):
             new_key = f"{new_prefix}.{rest}"
             c_config.get("name_map")["mcore"][key] = new_key
     return c_config
+
+
+def _expand_prefix_map(module_config, prefix_map, **module_kwargs):
+    """Expand direct prefix mappings from the configured module state dict."""
+    from hydra.utils import instantiate
+    from transformers import AutoModel
+
+    from loongforge.train.parser import register_custom_resolvers
+
+    register_custom_resolvers()
+    if module_config is None:
+        raise ValueError("prefix_map expansion requires a resolved module config.")
+    config = instantiate(module_config)
+    module = AutoModel.from_config(config, **module_kwargs)
+    expanded = {}
+    for mcore_prefix, hf_prefix in prefix_map.items():
+        for key in module.state_dict():
+            expanded[f"{mcore_prefix}.{key}"] = f"{hf_prefix}.{key}"
+    return expanded

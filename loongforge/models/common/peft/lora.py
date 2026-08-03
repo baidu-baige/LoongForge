@@ -1,3 +1,7 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from NVIDIA NeMo Megatron-Bridge under the Apache-2.0 License.
 # Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -186,6 +190,7 @@ class LoRA(PEFT, ModuleMatcher):
                 disable_tensor_parallel_comm=attrs.disable_tensor_parallel_comm,
                 disable_sequence_parallel_comm=attrs.disable_sequence_parallel_comm,
                 base_linear_is_parallel=attrs.base_linear_is_parallel,
+                lora_dtype=self.lora_dtype,
             )
             if isinstance(module, TopKRouter):
                 return LoRATopKRouter(module, adapter)

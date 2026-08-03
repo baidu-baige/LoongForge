@@ -22,13 +22,13 @@ def get_support_model_archs(*args, **kwargs):
 
 def loongforge_extra_train_args_provider(parser: argparse.ArgumentParser):
     """Add Loongforge-specific arguments to the argument parser.
-    
+
     This function serves as the main entry point for adding all Loongforge-specific
     training arguments, organized by functional groups.
-    
+
     Args:
         parser: The base argument parser to extend.
-        
+
     Returns:
         The modified argument parser with all Loongforge arguments added.
     """
@@ -98,7 +98,7 @@ def _add_log_tensor_args(parser):
              "will be traced during training using the llm-inspector library. "
              "Requires llm-inspector to be installed. Default: False"
     )
-    
+
     group.add_argument(
         "--log-tensor-name-pattern",
         type=str,
@@ -107,7 +107,7 @@ def _add_log_tensor_args(parser):
              "When None (default), logs all modules. "
              "Example: '.*attention.*' to log only attention modules. Default: None"
     )
-    
+
     group.add_argument(
         "--log-tensor-stage",
         type=str,
@@ -118,7 +118,7 @@ def _add_log_tensor_args(parser):
              "Multiple stages can be specified comma-separated, e.g., 'forward,backward'. "
              "Default: forward"
     )
-    
+
     group.add_argument(
         "--log-tensor-iter-pattern",
         type=str,
@@ -127,7 +127,7 @@ def _add_log_tensor_args(parser):
              "Example: '8,15,20' logs tensors at iterations 8, 15, and 20. "
              "When None, logs at all iterations. Default: None"
     )
-    
+
     group.add_argument(
         "--log-tensor-mbs-pattern",
         type=str,
@@ -136,7 +136,7 @@ def _add_log_tensor_args(parser):
              "Example: '0,2,4' logs tensors for micro-batches 0, 2, and 4. "
              "Default: None"
     )
-    
+
     group.add_argument(
         "--log-tensor-layer-pattern",
         type=str,
@@ -145,7 +145,7 @@ def _add_log_tensor_args(parser):
              "Example: '0,5,10' logs tensors for layers 0, 5, and 10. "
              "Default: None"
     )
-    
+
     group.add_argument(
         "--log-tensor-rank",
         type=str,
@@ -162,7 +162,7 @@ def _add_log_tensor_args(parser):
         help="[llm-inspector] Save logged tensors to disk files for offline analysis. "
              "When False, only prints tensor norms to log file. Default: False"
     )
-    
+
     group.add_argument(
         "--save-tensor-dir",
         type=str,
@@ -188,7 +188,7 @@ def _add_log_tensor_args(parser):
 
 def _add_extra_training_rice_vl_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add arguments specific to Rice-VL model training.
-    
+
     Rice-VL is a vision-language model that requires special handling
     for answer length during training.
     """
@@ -279,7 +279,7 @@ def _add_extra_bridge_args(parser):
 
 def _add_extra_model_args(parser: argparse.ArgumentParser):
     """Add arguments for model configuration and loading.
-    
+
     These arguments control model architecture selection, parameter freezing,
     and checkpoint handling.
     """
@@ -353,7 +353,7 @@ def _add_extra_model_args(parser: argparse.ArgumentParser):
 
 def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
     """Add arguments for tokenizer configuration.
-    
+
     These arguments control tokenizer type selection, special token handling,
     and vocabulary configuration.
     """
@@ -361,7 +361,7 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
         title="Tokenizer Configuration",
         description="Arguments for tokenizer initialization and behavior"
     )
-    
+
     group.add_argument(
         "--tokenizer-type",
         type=str,
@@ -453,7 +453,7 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
 
 def _add_extra_sft_args(parser: argparse.ArgumentParser):
     """Add arguments for supervised fine-tuning data configuration.
-    
+
     These arguments control dataset selection, preprocessing, packing,
     and training behavior for SFT tasks.
     """
@@ -461,7 +461,7 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
         title="SFT Data Configuration",
         description="Arguments for supervised fine-tuning data processing"
     )
-    
+
     group.add_argument(
         "--chat-template",
         type=str,
@@ -639,7 +639,7 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
 
 def _add_extra_video_args(parser):
     """Add arguments for video and vision task configuration.
-    
+
     These arguments control video latent processing, frame handling,
     and InternVL-specific vision settings.
     """
@@ -951,7 +951,7 @@ def _extend_cuda_graph_scope_choices(parser: argparse.ArgumentParser):
 
 def _add_extra_training_args(parser: argparse.ArgumentParser):
     """Add arguments for training configuration.
-    
+
     These arguments control training phase, checkpointing, logging,
     and EMA (Exponential Moving Average).
     """
@@ -968,7 +968,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         help="Training phase: 'pretrain' for pre-training, 'sft' for supervised fine-tuning. "
              "Default: pretrain"
     )
-    
+
 
     group.add_argument(
         "--use-dsa-fused",
@@ -1083,7 +1083,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
              "'fsdp_dtensor': FSDP with DTensor format. "
              "Default: torch"
     )
-    
+
     group.add_argument(
         "--log-memory-stats",
         action="store_true",
@@ -1122,7 +1122,17 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         action="store_true",
         help="Use legacy loss reduction method for backward compatibility. Default: False"
     )
-    
+
+    group.add_argument(
+        "--optimizer-backend",
+        type=str,
+        default="default",
+        choices=["default", "torch-fused"],
+        help="Optimizer implementation backend. 'default' preserves Megatron's "
+             "configured backend; 'torch-fused' uses fused torch Adam/AdamW. "
+             "Default: default"
+    )
+
     group.add_argument(
         "--force-all-weight-decay",
         action="store_false",
@@ -1134,7 +1144,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     group.add_argument(
         "--should-get-embedding-weights-for-mtp",
         action="store_true",
-        help="For models such as GLM-5, MTP does not have separate embedding weights," 
+        help="For models such as GLM-5, MTP does not have separate embedding weights,"
              "and in pipeline scenarios, weights need to be copied from the first PP stage. "
              "Default: False"
     )
@@ -1148,7 +1158,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
 
 def _add_extra_multimodal_args(parser):
     """Add arguments for multimodal model configuration.
-    
+
     These arguments control vision-language model settings, image/video
     processing parameters, and data packing strategies.
     """
@@ -1156,7 +1166,7 @@ def _add_extra_multimodal_args(parser):
         title="Multimodal Configuration",
         description="Arguments for vision-language and multimodal models"
     )
-    
+
     group.add_argument(
         "--language-model-type",
         type=str,
@@ -1281,7 +1291,7 @@ def _add_extra_multimodal_args(parser):
 
 def _add_extra_parallel_args(parser):
     """Add arguments for distributed parallel execution.
-    
+
     These arguments control model parallelism (tensor, pipeline, context),
     data parallelism balancing, and distributed training configuration.
     """
@@ -1308,7 +1318,7 @@ def _add_extra_parallel_args(parser):
              "Example: '19,20,20,21' for 4 stages with different layer counts. "
              "Default: None"
     )
-    
+
     group.add_argument(
         '--custom-virtual-pipeline-layers',
         type=str,
@@ -1359,7 +1369,7 @@ def _add_extra_parallel_args(parser):
         help="Enable dynamic load balancing across data parallel ranks for ViT models. "
              "Adjusts computation distribution based on runtime statistics. Default: False"
     )
-    
+
     group.add_argument(
         '--vlm-dp-balance-warmup-iters',
         nargs='+',

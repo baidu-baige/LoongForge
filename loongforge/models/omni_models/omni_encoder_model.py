@@ -280,6 +280,30 @@ class OmniEncoderModel(torch.nn.Module):
         else:
             self.audio_projector = None
 
+    @staticmethod
+    def _project_embeddings(projector, embeddings, window_index, grid_thw):
+        """Invoke projectors with only the metadata their implementation declares."""
+        if projector is None:
+            return embeddings
+        if getattr(projector, "requires_target_sizes", False):
+            return projector(
+                embeddings,
+                window_index,
+                image_grid_thw=grid_thw,
+                target_sizes=window_index if torch.is_tensor(window_index) else None,
+            )
+        return projector(embeddings, window_index)
+
+    @staticmethod
+    def _flatten_projected_embeddings(embeddings):
+        """Flatten per-media projector outputs into one token sequence."""
+        if isinstance(embeddings, (list, tuple)):
+            return torch.cat(
+                [embedding.reshape(-1, embedding.shape[-1]) for embedding in embeddings],
+                dim=0,
+            )
+        return embeddings
+
     def _aggregate_deepstack_embeds(
         self,
         images_mask: Optional[bool],
@@ -290,35 +314,35 @@ class OmniEncoderModel(torch.nn.Module):
         """Aggregates deepstack embeddings and position masks from image and video modalities."""
         visual_pos_masks = None
         deepstack_visual_embeds = None
-        
+
         if (
-            len(deepstack_image_embeds) != 0 
+            len(deepstack_image_embeds) != 0
             or len(deepstack_video_embeds) != 0
         ):
             if images_mask is not None and videos_mask is not None:
                 images_mask = images_mask[..., 0]
                 videos_mask = videos_mask[..., 0]
                 visual_pos_masks = images_mask | videos_mask
-                
+
                 deepstack_visual_embeds = []
                 images_mask_joint = images_mask[visual_pos_masks]
                 videos_mask_joint = videos_mask[visual_pos_masks]
-                
+
                 for img_embed, vid_embed in zip(deepstack_image_embeds, deepstack_video_embeds):
                     # Create a zero tensor to hold joint embeddings, size is (N_visual_tokens, Hidden_size)
                     embed_joint = img_embed.new_zeros(
-                        visual_pos_masks.sum().item(), 
+                        visual_pos_masks.sum().item(),
                         img_embed.shape[-1]
                     ).to(img_embed.device)
                     embed_joint[images_mask_joint, :] = img_embed
                     embed_joint[videos_mask_joint, :] = vid_embed
                     deepstack_visual_embeds.append(embed_joint)
-                    
+
             elif images_mask is not None:
                 images_mask = images_mask[..., 0]
                 visual_pos_masks = images_mask
                 deepstack_visual_embeds = deepstack_image_embeds
-                
+
             elif videos_mask is not None:
                 videos_mask = videos_mask[..., 0]
                 visual_pos_masks = videos_mask
@@ -365,10 +389,14 @@ class OmniEncoderModel(torch.nn.Module):
                 images, image_grid_thw=image_grid_thw
             )
         if self.image_projector is not None:
-            image_embeddings = self.image_projector(image_embeddings, window_index)
+            image_embeddings = self._project_embeddings(
+                self.image_projector,
+                image_embeddings,
+                window_index,
+                image_grid_thw,
+            )
 
-        if isinstance(image_embeddings, (list, tuple)):
-            image_embeddings = torch.cat([e.reshape(-1, e.shape[-1]) for e in image_embeddings], dim=0)
+        image_embeddings = self._flatten_projected_embeddings(image_embeddings)
 
         image_token_id = self.image_encoder.config.image_token_id
         n_image_tokens = (input_ids == image_token_id).sum().item()
@@ -407,7 +435,7 @@ class OmniEncoderModel(torch.nn.Module):
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for video encoding."""
         if self.mix_used_vision_encoder:
-            video_embeddings, window_index, deepstack_video_embeds = self.image_encoder(pixel_values_videos, 
+            video_embeddings, window_index, deepstack_video_embeds = self.image_encoder(pixel_values_videos,
                                                                  image_grid_thw=video_grid_thw)
             video_token_id = self.image_encoder.config.video_token_id
         else:
@@ -419,7 +447,7 @@ class OmniEncoderModel(torch.nn.Module):
             video_embeddings = self.image_projector(video_embeddings, window_index)
         elif self.video_projector is not None:
             video_embeddings = self.video_projector(video_embeddings, window_index)
-        
+
         n_video_tokens = (input_ids == video_token_id).sum().item()
         n_video_features = video_embeddings.shape[0]
         if n_video_tokens != n_video_features:
@@ -494,7 +522,7 @@ class OmniEncoderModel(torch.nn.Module):
         decoder_inputs: Dict[str, torch.Tensor] = {}
         for modality in self.encoder_modality:
             self.encoder_modality[modality] = False
-        
+
         images_mask, videos_mask = None, None
         deepstack_image_embeds, deepstack_video_embeds = [], []
         # Process image modality
@@ -542,14 +570,14 @@ class OmniEncoderModel(torch.nn.Module):
                     **video_inputs,
                 )
             self.encoder_modality["video"] = True
-        
+
         visual_pos_masks, deepstack_visual_embeds = self._aggregate_deepstack_embeds(
             images_mask=images_mask,
             videos_mask=videos_mask,
             deepstack_image_embeds=deepstack_image_embeds,
             deepstack_video_embeds=deepstack_video_embeds,
         )
-                 
+
         return input_embeds, decoder_inputs, visual_pos_masks, deepstack_visual_embeds
 
     def encoder_dummy_forward(self, input_embeds, encoder_model, projector_model):
@@ -566,7 +594,13 @@ class OmniEncoderModel(torch.nn.Module):
             encoder_output = encoder_ret
             window_index = None
         if projector_model is not None:
-            encoder_output = projector_model(encoder_output, window_index)
+            dummy_grid_thw = dummy_input[1] if len(dummy_input) > 1 else None
+            encoder_output = self._project_embeddings(
+                projector_model,
+                encoder_output,
+                window_index,
+                dummy_grid_thw,
+            )
         if isinstance(encoder_output, (tuple, list)):
             encoder_output = encoder_output[0]
         return _DummyEncoderPassthrough.apply(input_embeds, encoder_output)

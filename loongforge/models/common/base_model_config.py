@@ -13,6 +13,14 @@ import torch
 from collections import defaultdict
 
 
+def _initialize_pretrained_config(config: PretrainedConfig) -> None:
+    post_init = getattr(PretrainedConfig, "__post_init__", None)
+    if post_init is not None:
+        post_init(config)
+    else:
+        PretrainedConfig.__init__(config)
+
+
 @dataclasses.dataclass
 class BasePeftModelConfig():    
     """configuration class for the peft transformer"""
@@ -45,7 +53,7 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     When left at 0 (default), auto-computed from ``args.seq_length * args.micro_batch_size``."""
 
     def __post_init__(self):
-        PretrainedConfig.__init__(self)
+        _initialize_pretrained_config(self)
         TransformerConfig.__post_init__(self)
 
 
@@ -65,7 +73,7 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     fp8_dynamic_num_tokens: int = 0
 
     def __post_init__(self):
-        PretrainedConfig.__init__(self)
+        _initialize_pretrained_config(self)
         MLATransformerConfig.__post_init__(self)
 
 
@@ -135,4 +143,3 @@ class BaseModelStditConfig(TransformerConfig):
             raise ValueError(
                 f'latent_space_scale: {self.latent_space_scale} must be 1.0 / latent_patch_size[1].'
             )
-
