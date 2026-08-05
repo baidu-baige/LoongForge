@@ -125,8 +125,10 @@ class BaseTrainer(ABC):
         self.ctx = DistributedContext()
         self.ctx.init()
 
-        # 2. Seed — use the same seed on all ranks (align with lerobot/accelerate baseline).
-        # DistributedSampler handles per-rank data partitioning internally via its own seed+rank offset.
+        # 2. Seed — set the SAME seed on every rank (align with lerobot/accelerate baseline).
+        # DistributedSampler still yields disjoint data per rank: it shuffles the full index
+        # list with an identical seed on all ranks (so the permutation matches everywhere),
+        # then each rank takes its own stride [rank::world_size].
         set_seed(training_args.seed)
         if training_args.deterministic_mode:
             set_deterministic()

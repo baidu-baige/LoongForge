@@ -482,6 +482,22 @@ class _LearningRateArgs:
                     "Only used when --lr-decay-style=lambda_linear."
         },
     )
+    lr_step0_unscaled: bool = field(
+        default=False,
+        metadata={
+            "help": "lambda_linear: run the FIRST optimizer step (step-0) at the "
+                    "unscaled base LR (multiplier 1.0) instead of base_lr*schedule(0) "
+                    "(=lambda_f_start, ~0). torch's LambdaLR applies schedule(0) at "
+                    "construction, which zeros the step-0 update; the reference "
+                    "(base) LambdaLinearScheduler does NOT touch optimizer.lr at "
+                    "init, so its step-0 runs at the unscaled base LR. Disabled by "
+                    "default (torch's behavior); pass --lr-step0-unscaled to match "
+                    "base bit-for-bit. The first lr_scheduler.step() (after the "
+                    "step-0 update) resumes base_lr*schedule(1) so step>=1 is "
+                    "unaffected either way. "
+                    "Only used when --lr-decay-style=lambda_linear."
+        },
+    )
     # ── polynomial scheduler params ──
     lr_end: float = field(
         default=1e-7,
@@ -583,12 +599,6 @@ class _DataArgs:
                     "to 'default'."
         },
     )
-    split: str = field(
-        default="train",
-        metadata={
-            "help": "Dataset split to load (RLDS), e.g. 'train' or 'train[:95%%]'."
-        },
-    )
     lerobotdataset_version: str = field(
         default="v3.0",
         metadata={
@@ -672,6 +682,17 @@ class _DataArgs:
         metadata={
             "help": "Number of synthetic samples to generate. Only effective "
                     "when --dataset-format=dummy_datasets."
+        },
+    )
+    latent_cache_dir: str = field(
+        default="",
+        metadata={
+            "help": "If set, load precomputed VAE latents from this directory "
+                    "(keyed by flat frame index, one {idx:08d}.pt per anchor, "
+                    "produced by precompute_latent_cache.py) instead of running "
+                    "the frozen VAE encode online. Empty (default) = inert. "
+                    "Requires the cache to be built on the same GPU arch / "
+                    "torch-cuDNN / batch size for bit-parity."
         },
     )
 
@@ -1191,6 +1212,30 @@ class _DistributedArgs:
             "choices": ["none", "fp32"],
             "help": "Optional DDP ZeRO-1 master parameter dtype. 'fp32' keeps rank-local fp32 "
                     "master parameters and broadcasts updated model shards after each step.",
+        },
+    )
+    use_deepcompile: bool = field(
+        default=False,
+        metadata={
+            "help": "Enable DeepSpeed DeepCompile (ZeRO-1 + compiled ZeRO-aware "
+                    "gradient reduce scheduled into the inductor graph). The model "
+                    "is wrapped by a DeepSpeed engine (direct deepspeed.initialize, "
+                    "no accelerate) which replaces DDP/FSDP wrapping and takes over "
+                    "the optimizer/backward/step. Requires --distributed-strategy ddp "
+                    "and forces model_cfg.use_cuda_graph=False (mutually exclusive).",
+        },
+    )
+    deepspeed_config: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Path to a DeepSpeed JSON config. WITH --use-deepcompile it is "
+                    "the DeepCompile config (ZeRO-1 + compile.deepcompile=true). "
+                    "WITHOUT --use-deepcompile it enables a generic eager DeepSpeed "
+                    "ZeRO engine (no compile) for any standard FinetuneTrainer model: "
+                    "the engine replaces DDP/FSDP wrapping and takes over the "
+                    "optimizer/backward/step. Any 'compile' block is stripped on the "
+                    "eager path. gradient_accumulation_steps and batch sizes are "
+                    "injected from the training args at init.",
         },
     )
 
