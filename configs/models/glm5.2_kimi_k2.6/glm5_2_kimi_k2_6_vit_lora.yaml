@@ -1,0 +1,28 @@
+# GLM-5.2 language model with Kimi-K2.6 MoonViT and foundation LoRA.
+defaults:
+  - ../../models/image_encoder@model.image_encoder: moon_vit_3d
+  - ../../models/image_projector@model.image_projector: patch_merger_adapter
+  - ../../models/glm5@model.foundation: glm5_2
+  - ../../models/lora@model.peft_config: vlm_lora
+  - _self_
+
+model:
+  model_type: vlm
+  loss_func: ${loss_func:default}
+  vision_token_id: 154854  # GLM-5.2 <|image|>
+  image_encoder:
+    model_spec: ["loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec",
+                 "get_moon_vision_model_layer_with_te_spec"]
+    image_token_id: 154854
+    freeze: true
+  image_projector:
+    model_spec: ["loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec",
+                 "get_adapeter_layer_with_te_spec"]
+    add_bias_linear: true
+  peft_config:
+    apply_to_foundation: true
+    target_modules:
+      - linear_q_down_proj
+      - linear_q_up_proj
+      - linear_kv_down_proj
+      - linear_proj

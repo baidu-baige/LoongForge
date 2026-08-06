@@ -74,6 +74,7 @@ class MLASelfAttentionFused(MLASelfAttention):
         attn_mask_type: AttnMaskType = AttnMaskType.padding,
         cp_comm_type: Optional[str] = None,
         pg_collection: ProcessGroupCollection = None,
+        is_mtp_layer: bool = False,
     ) -> None:
         if config.enable_chunkpipe:
             patched_config = config
@@ -87,6 +88,7 @@ class MLASelfAttentionFused(MLASelfAttention):
             attn_mask_type=attn_mask_type,
             cp_comm_type=cp_comm_type,
             pg_collection=pg_collection,
+            is_mtp_layer=is_mtp_layer,
         )
         # Note: chunkpipe cache is initialized in parent class MLASelfAttention.__init__
         # via init_chunk_key_value_cache_mla() when config.enable_chunkpipe is True
@@ -879,6 +881,7 @@ class MLASelfAttentionFused(MLASelfAttention):
         packed_seq_params=None,
         position_ids=None,
         sequence_len_offset=None,
+        index_share_carrier=None,
         *,
         inference_params=None,
     ):
@@ -935,6 +938,8 @@ class MLASelfAttentionFused(MLASelfAttention):
                 extra_kwargs = {
                     "x": hidden_states,
                     "qr": q_compressed,
+                    # Per-forward carrier for cross-layer top-k index sharing (IndexShare).
+                    "index_share_carrier": index_share_carrier,
                 }
                 with get_fine_grained_offloading_context(self.offload_core_attention):
                     core_attn_out = self.core_attention(

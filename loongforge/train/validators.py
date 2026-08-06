@@ -340,6 +340,25 @@ def _validate_extra_training_args(args):
             "eliminated in the DSA fused path.",
             args.rank,
         )
+    if getattr(args, "dsa_indexer_topk_freq", 1) > 1:
+        if getattr(args, "experimental_attention_variant", None) != "dsa":
+            raise ValueError(
+                "--dsa-indexer-topk-freq > 1 (IndexShare) requires "
+                "experimental_attention_variant='dsa'."
+            )
+        if getattr(args, "overlap_moe_expert_parallel_comm", False):
+            raise ValueError(
+                "DSA IndexShare is not supported with --overlap-moe-expert-parallel-comm: "
+                "the fine-grained a2a path calls TransformerLayer._forward_attention directly "
+                "and does not thread the per-forward index-share carrier."
+            )
+        print_rank_0(
+            "INFO: DSA IndexShare is enabled "
+            f"(topk_freq={args.dsa_indexer_topk_freq}, "
+            f"skip_topk_offset={args.dsa_indexer_skip_topk_offset}); "
+            "each pipeline stage must start on a computing layer.",
+            args.rank,
+        )
     if args.num_experts is None and args.moe_token_dispatcher_type in ['allgather', 'alltoall_seq']:
         args.moe_token_dispatcher_type = 'alltoall'
         warnings.warn(

@@ -68,6 +68,8 @@ class KimiK25Plugin(MMPlugin):
         video_token: Optional[str] = MEDIA_CONTENT,
         merge_kernel_size: Tuple[int, int] = (2, 2),
         temporal_merge_kernel_size: int = 4,
+        image_prefix: str = f"{MEDIA_BEGIN}image",
+        image_suffix: str = MEDIA_END,
     ) -> None:
         """Initialize KimiK25Plugin.
 
@@ -76,10 +78,14 @@ class KimiK25Plugin(MMPlugin):
             video_token: Token used for video placeholders (default: <|media_content|>)
             merge_kernel_size: Spatial merge kernel size [h, w] (default: [2, 2])
             temporal_merge_kernel_size: Temporal merge kernel size (default: 4)
+            image_prefix: Text before expanded image tokens.
+            image_suffix: Text after expanded image tokens.
         """
         super().__init__(image_token=image_token, video_token=video_token)
         self.merge_kernel_size = merge_kernel_size
         self.temporal_merge_kernel_size = temporal_merge_kernel_size
+        self.image_prefix = image_prefix
+        self.image_suffix = image_suffix
         # Kimi uses <|media_content|> as the placeholder token
         self.media_placeholder_token_id = 163605
 
@@ -211,7 +217,7 @@ class KimiK25Plugin(MMPlugin):
         """
         # Kimi uses multiple <|media_content|> tokens as placeholders
         tokens_str = self.image_token * num_tokens
-        return f"{MEDIA_BEGIN}image{tokens_str}{MEDIA_END}"
+        return f"{self.image_prefix}{tokens_str}{self.image_suffix}"
 
     def _build_video_chunk_placeholder(self, num_tokens: int, timestamp: str = "") -> str:
         """Build video chunk placeholder string with timestamp.

@@ -148,7 +148,7 @@ LoongForge supports a broad range of [state-of-the-art models](https://loongforg
 | | Qwen3-Next | qwen3-next-80b-a3b |
 | | MiniMax | minimax-m2.1, minimax-m2.5, minimax-m2.7 |
 | | MIMO | mimo-7b |
-| | GLM | glm5 |
+| | GLM | glm5, glm5.2 |
 | **VLM** | Qwen2.5-VL | qwen2.5-vl-3b → qwen2.5-vl-72b |
 | | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
 | | Qwen3.5 | qwen3.5-0.8b → qwen3.5-397b-a17b |

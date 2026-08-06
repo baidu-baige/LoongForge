@@ -77,6 +77,7 @@ LoongForge supports bidirectional conversion between Mcore and Hugging Face (HF)
 |                  | qwen3_235b_a22b | qwen3_moe_convert | ❌ | ❌ |
 |                  | qwen3_480b_a35b | qwen3_moe_convert | ❌ | ❌ |
 | **Glm5**         | glm5 | glm5_convert | ✅ | ✅ |
+|                  | glm5_2 | glm5_2_convert | ✅ | ✅ |
 ---
 
 ## Usage Example

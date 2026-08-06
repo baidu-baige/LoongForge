@@ -187,13 +187,16 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
                 old_key = old_key[LAYER_NAME]
             else:
                 node_is_dict = False
-            old_prefix, rest = old_key.split('.', 1)
-            if old_prefix == "language_model":
-                new_key = f"foundation_model.{rest}"
-                if node_is_dict:
-                    c_config.get("name_map")["mcore"][name][LAYER_NAME] = new_key
-                else:
-                    c_config.get("name_map")["mcore"][name] = new_key
+            if old_key.startswith("language_model."):
+                new_key = f"foundation_model.{old_key.removeprefix('language_model.')}"
+            elif old_key.startswith("foundation_model."):
+                continue
+            else:
+                new_key = f"foundation_model.{old_key}"
+            if node_is_dict:
+                c_config.get("name_map")["mcore"][name][LAYER_NAME] = new_key
+            else:
+                c_config.get("name_map")["mcore"][name] = new_key
 
         word_embeddings = c_config.get("name_map")["mcore"].get(WORD_EMBEDDINGS, None)
         if word_embeddings == "foundation_model.embedding.word_embeddings":

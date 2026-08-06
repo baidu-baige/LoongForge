@@ -22,6 +22,7 @@ else:
 
 from megatron.energon.task_encoder.base import stateless
 from transformers import AutoProcessor
+from transformers.processing_utils import ProcessorMixin
 from loongforge.utils import constants, get_chat_template
 from qwen_vl_utils.vision_process import smart_nframes, smart_resize
 from torchvision import transforms
@@ -128,7 +129,21 @@ class VLMTaskEncoder(BaseTaskEncoder):
         super().__init__()
         if args.training_phase in ['sft']:
             self.chat_template = get_chat_template()
-        self.processor = AutoProcessor.from_pretrained(self.args.hf_tokenizer_path, trust_remote_code=True)
+        processor_path = getattr(self.args, "hf_processor_path", None)
+        if processor_path:
+            # Transformers 5.3 logs this processor via repr; Kimi's repr is not pickle-safe.
+            original_repr = ProcessorMixin.__repr__
+            ProcessorMixin.__repr__ = object.__repr__
+            try:
+                self.processor = AutoProcessor.from_pretrained(
+                    processor_path, trust_remote_code=True
+                )
+            finally:
+                ProcessorMixin.__repr__ = original_repr
+        else:
+            self.processor = AutoProcessor.from_pretrained(
+                self.args.hf_tokenizer_path, trust_remote_code=True
+            )
         if args.image_resolution:
             setattr(self.processor, "image_resolution", args.image_resolution)
         # video
@@ -285,18 +300,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             image_grid_thw = mm_inputs["image_grid_thw"]
             pixel_values_images = [mm_inputs["pixel_values"]]
 
-        encode_pairs = self.chat_template.encode_multiturn(
-            tokenizer=self.tokenizer,
-            messages=messages,
-            system=system,
-        )
-
-        input_ids, target = [], []
-        for turn_idx, (source_ids, target_ids) in enumerate(encode_pairs):
-            input_ids += source_ids + target_ids
-            target += [IGNORE_INDEX] * len(source_ids) + target_ids
-        input_ids = torch.tensor(input_ids)
-        target = torch.tensor(target)
+        input_ids, target = self._encode_sft_messages(messages, system, tools)
         attn_mask = torch.zeros_like(input_ids).bool()
 
         return (
@@ -308,6 +312,49 @@ class VLMTaskEncoder(BaseTaskEncoder):
             pixel_values_videos,
             video_grid_thw,
         )
+
+    def _encode_sft_messages(self, messages, system=None, tools=None):
+        """Encode SFT messages with either an HF or legacy chat template.
+
+        Args:
+            messages: Normalized conversation messages.
+            system: Optional system prompt.
+            tools: Optional tool definitions for HF chat templates.
+
+        Returns:
+            Token IDs and training targets.
+        """
+        if isinstance(self.chat_template, HFChatTemplate):
+            hf_messages = list(messages)
+            has_system_message = (
+                hf_messages
+                and hf_messages[0].get("role") == constants.DataRoles.SYSTEM
+            )
+            if system and not has_system_message:
+                hf_messages = [
+                    {"role": constants.DataRoles.SYSTEM, "content": system},
+                    *hf_messages,
+                ]
+            input_ids, target, _, _ = self.chat_template.encode_openai(
+                tokenizer=self.tokenizer,
+                messages=hf_messages,
+                tools=tools,
+                train_on_prompt=getattr(self.args, "train_on_prompt", False),
+                history_mask_loss=getattr(self.args, "history_mask_loss", False),
+                ignore_index=IGNORE_INDEX,
+            )
+        else:
+            encode_pairs = self.chat_template.encode_multiturn(
+                tokenizer=self.tokenizer,
+                messages=messages,
+                system=system,
+            )
+            input_ids, target = [], []
+            for source_ids, target_ids in encode_pairs:
+                input_ids += source_ids + target_ids
+                target += [IGNORE_INDEX] * len(source_ids) + target_ids
+
+        return torch.tensor(input_ids), torch.tensor(target)
 
     def _make_sample_from(self, sample, *, cls=None, key=None, **fields):
         """Derive a new sample from ``sample``, carrying its energon meta.

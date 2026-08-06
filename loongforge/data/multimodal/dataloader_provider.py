@@ -377,6 +377,46 @@ def get_train_dataset(task_encoder):
     return train_ds
 
 
+def get_val_dataset(task_encoder):
+    """Build the validation split from the configured Energon dataset."""
+    args = get_args()
+    valid_data_path = getattr(args, "valid_data_path", None)
+
+    worker_config = energon.WorkerConfig(
+        rank=parallel_state.get_data_parallel_rank(),
+        world_size=parallel_state.get_data_parallel_world_size(),
+        num_workers=args.num_workers,
+        data_parallel_group=parallel_state.get_data_parallel_group(),
+        worker_debug_path=None,
+        worker_log_level=0,
+    )
+    if valid_data_path:
+        if isinstance(valid_data_path, (list, tuple)) and len(valid_data_path) > 1:
+            data_paths, data_weights = get_blend_from_list(list(valid_data_path))
+            path = create_metadataset_yaml(data_paths, data_weights, split="val")
+        else:
+            path = (
+                valid_data_path[0]
+                if isinstance(valid_data_path, (list, tuple))
+                else valid_data_path
+            )
+    elif len(args.data_path) == 1:
+        path = args.data_path[0]
+    else:
+        data_paths, data_weights = get_blend_from_list(args.data_path)
+        path = create_metadataset_yaml(data_paths, data_weights, split="val")
+    return energon.get_val_dataset(
+        path,
+        split_part="val",
+        batch_size=args.micro_batch_size,
+        task_encoder=task_encoder,
+        worker_config=worker_config,
+        packing_buffer_size=args.packing_buffer_size,
+        handler=print_error_handler,
+        image_decode="pil",
+    )
+
+
 def create_metadataset_yaml(data_paths, data_weights, split="train"):
     """
     Create a temporary metadataset.yaml file for multiple datasets
@@ -407,7 +447,7 @@ def create_metadataset_yaml(data_paths, data_weights, split="train"):
 
     # Create a temporary yaml file
     temp_dir = tempfile.gettempdir()
-    yaml_path = os.path.join(temp_dir, f"metadataset_{os.getpid()}.yaml")
+    yaml_path = os.path.join(temp_dir, f"metadataset_{os.getpid()}_{split}.yaml")
 
     with open(yaml_path, "w") as f:
         yaml.dump(metadataset_config, f, default_flow_style=False)
@@ -415,7 +455,7 @@ def create_metadataset_yaml(data_paths, data_weights, split="train"):
     return yaml_path
 
 
-def get_train_loader(train_ds, collator=None):
+def get_train_loader(train_ds, collator=None, restore_state=True):
     """Get the training loader"""
     args = get_args()
     from importlib.metadata import version
@@ -424,7 +464,7 @@ def get_train_loader(train_ds, collator=None):
     else:
         train_dataloader = energon.get_savable_loader(train_ds, watchdog_initial_timeout_seconds=600)
     
-    if args.load is not None:
+    if restore_state and args.load is not None:
         if getattr(args, "dataloader_save", None):
             dp_rank = parallel_state.get_data_parallel_rank()
             data_save_name = get_checkpoint_name(

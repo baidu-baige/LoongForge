@@ -91,6 +91,7 @@ class GlmModelWithMTP(BaseGPTModel):
         pg_collection: Optional[ProcessGroupCollection] = None,
         **kwargs,
     ) -> None:
+        """Initialize the GLM transformer and optionally freeze its parameters."""
 
         if config.model_spec is None:
             model_spec = [
@@ -130,6 +131,8 @@ class GlmModelWithMTP(BaseGPTModel):
         self.register_load_state_dict_post_hook(
             _load_state_dict_hook_ignore_extra_state
         )
+        if hasattr(config, "freeze") and config.freeze:
+            self.freeze()
 
     def forward(
         self,

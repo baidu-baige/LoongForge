@@ -39,6 +39,7 @@ from loongforge.train.sft.utils import (
 )
 from loongforge.data.multimodal.dataloader_provider import (
     get_train_dataset,
+    get_val_dataset,
     get_train_loader,
     VLMPretrainCollator,
 )
@@ -490,6 +491,13 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
 
         collator = build_sft_data_collator(VLMPretrainCollator)
         train_dataloader = get_train_loader(train_dataset, collator)
+        valid_dataloader = None
+        if args.eval_interval and args.eval_iters > 0:
+            valid_dataset = get_val_dataset(task_encoder)
+            if valid_dataset is not None:
+                valid_dataloader = get_train_loader(
+                    valid_dataset, collator, restore_state=False
+                )
 
         # Build encoder-specific iterator for full_hetero_dp (Energon path)
         if getattr(args, 'enable_full_hetero_dp', False):
@@ -510,7 +518,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
             )
             set_encoder_data_iterator(encoder_iter)
 
-        return train_dataloader, None, None
+        return train_dataloader, valid_dataloader, None
 
 
 def get_embedding_ranks(pp_ranks: List[int]):

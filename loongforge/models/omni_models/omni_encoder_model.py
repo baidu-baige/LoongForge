@@ -230,7 +230,7 @@ class OmniEncoderModel(torch.nn.Module):
             if allow_missing_adapter_checkpoint:
                 adapter_param_names = [
                     f"encoder_model.image_projector.{name}"
-                    for name in self.image_projector.state_dict().keys()
+                    for name in self.image_projector.state_dict()
                 ]
                 self.image_projector.register_load_state_dict_post_hook(
                     partial(
@@ -375,7 +375,7 @@ class OmniEncoderModel(torch.nn.Module):
         n_image_features = image_embeddings.shape[0]
 
         if n_image_tokens != n_image_features:
-            logging.getLogger(__name__).warning(
+            raise ValueError(
                 f"Image features {n_image_features} != image tokens {n_image_tokens}"
             )
         if inference_params is not None:

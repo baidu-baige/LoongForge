@@ -45,6 +45,9 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.experimental_attention_variant.dsa import (
     DSAIndexerLossAutoScaler,
     DSAIndexerLossLoggingHelper as DSAIndexerLossLoggingHelperFused,
+    get_dsa_index_share_topk_holder,
+    is_dsa_skip_topk_layer,
+    source_dsa_compute_layer,
 )
 
 from loongforge.utils import get_args
@@ -454,10 +457,14 @@ class DSAIndexerFused(MegatronModule):
                 )
                 extra_kwargs["offsets"] = offsets
 
-            # DSA Indexer's q_pe/k_pe are non-interleaved (unlike MLA's interleaved layout),
-            # so we must disable the MLA de-interleave preprocessing in apply_rotary_pos_emb.
+            # `multi_latent_attention` is what selects the interleaved layout inside
+            # apply_rotary_pos_emb: it de-interleaves (x[0::2], x[1::2]) before rotate_half.
+            # DeepSeek-V3.2's indexer stores q_pe/k_pe non-interleaved, GLM-5.x stores them
+            # interleaved (HF indexer_rope_interleave), so drive it off the DSA config field.
             indexer_rope_config = copy.copy(self.config)
-            indexer_rope_config.multi_latent_attention = False
+            indexer_rope_config.multi_latent_attention = getattr(
+                self.config, "dsa_indexer_rope_interleaved", False
+            )
 
             x_pe = apply_rotary_pos_emb(
                 x_pe,
@@ -584,8 +591,11 @@ class DSAIndexerFused(MegatronModule):
         # =========================================
         # Rotate activation
         # =========================================
-        q = rotate_activation(q)
-        k = rotate_activation(k)
+        # The Hadamard transform is orthogonal (Hq.Hk == q.k), so this only shapes the FP8
+        # quantization error. DeepSeek-V3.2 applies it; GLM-5.x does not.
+        if getattr(self.config, "dsa_indexer_rotate_activation", True):
+            q = rotate_activation(q)
+            k = rotate_activation(k)
 
         # =========================================
         # Chunkpipe: register hook to combine gradients from subsequent chunks
@@ -719,17 +729,42 @@ class DSAttentionFused(MegatronModule):
         v_channels: Optional[int] = None,
         cp_comm_type: str = "p2p",
         pg_collection: ProcessGroupCollection = None,
+        is_mtp_layer: bool = False,
     ):
         super().__init__(config=config)
 
         self.layer_number = layer_number
+        if is_mtp_layer:
+            # Keep MTP layers off the decoder layers' indexer-loss tracker slots.
+            self.layer_number = self.layer_number + self.config.num_layers
         self.pg_collection = pg_collection
         args = get_args()
         self.use_dsa_sp_first = getattr(args, "use_dsa_sp_first", False) if args is not None else False
 
-        self.indexer = build_module(
-            submodules.indexer, config=self.config, pg_collection=pg_collection
+        # Cross-layer top-k index sharing (IndexShare, GLM-5.2). MTP layers always own an indexer.
+        self.index_topk_freq = getattr(self.config, "dsa_indexer_topk_freq", 1)
+        self.index_skip_topk_offset = getattr(self.config, "dsa_indexer_skip_topk_offset", 0)
+        self.index_share = self.index_topk_freq > 1
+        self.skip_topk = (
+            self.index_share
+            and not is_mtp_layer
+            and is_dsa_skip_topk_layer(
+                self.layer_number, self.index_skip_topk_offset, self.index_topk_freq
+            )
         )
+        self.source_layer = (
+            source_dsa_compute_layer(
+                self.layer_number, self.index_skip_topk_offset, self.index_topk_freq
+            )
+            if self.skip_topk
+            else self.layer_number
+        )
+
+        self.indexer = None
+        if not self.skip_topk:
+            self.indexer = build_module(
+                submodules.indexer, config=self.config, pg_collection=pg_collection
+            )
 
         if softmax_scale is None:
             softmax_scale = 1.0 / math.sqrt(
@@ -761,6 +796,7 @@ class DSAttentionFused(MegatronModule):
         attn_mask_type: AttnMaskType = None,
         attention_bias: torch.Tensor = None,
         packed_seq_params: PackedSeqParams = None,
+        index_share_carrier: object = None,
     ):
         """
         Forward pass for MQA Sparse Attention.
@@ -775,6 +811,7 @@ class DSAttentionFused(MegatronModule):
             attn_mask_type: Type of attention mask.
             attention_bias: Optional attention bias.
             packed_seq_params: Packed sequence parameters.
+            index_share_carrier: Per-forward object holding cross-layer top-k state.
 
         Returns:
             output: Output tensor [sq, b, hidden_size]
@@ -782,19 +819,55 @@ class DSAttentionFused(MegatronModule):
         sq = query.size(0)
         skv = key.size(0)
 
-        # Detach x and qr to prevent gradients of indexer from flowing back to the main model.
-        x = x.detach()
-        qr = qr.detach()
-
-        # ===================================
-        # Get index scores and top-k indices
-        # ===================================
-        (
-            index_scores,  # [s / TP, topk]
-            topk_indices  # [s / TP, topk]
-        ) = self.indexer(
-            x, qr, packed_seq_params=packed_seq_params
+        topk_holder = (
+            get_dsa_index_share_topk_holder(
+                packed_seq_params, index_share_carrier, self.skip_topk, self.layer_number,
+                self.source_layer
+            )
+            if self.index_share
+            else None
         )
+
+        if self.skip_topk:
+            # ===================================
+            # Reuse top-k indices from the source computing layer (IndexShare).
+            # This layer owns no indexer weights, so it also contributes no indexer loss --
+            # matching HF, where shared layers have no indexer parameters at all.
+            # ===================================
+            if self.source_layer not in topk_holder:
+                raise RuntimeError(
+                    "DSA index-share skip layer "
+                    f"(layer_number={self.layer_number}) needs top-k indices from source "
+                    f"computing layer {self.source_layer}, but that layer did not run before "
+                    "it in this pipeline stage. Cross-PP top-k sharing is not supported. "
+                    "Ensure every pipeline stage starts on a computing layer "
+                    f"(dsa_indexer_topk_freq={self.index_topk_freq}, "
+                    f"dsa_indexer_skip_topk_offset={self.index_skip_topk_offset}). "
+                    f"Holder has layers {sorted(topk_holder)}."
+                )
+            index_scores = None
+            topk_indices = topk_holder[self.source_layer]
+        else:
+            # Detach x and qr to prevent gradients of indexer from flowing back to the main model.
+            x = x.detach()
+            qr = qr.detach()
+
+            # ===================================
+            # Get index scores and top-k indices
+            # ===================================
+            (
+                index_scores,  # [s / TP, topk]
+                topk_indices  # [s / TP, topk]
+            ) = self.indexer(
+                x, qr, packed_seq_params=packed_seq_params
+            )
+
+        if topk_holder is not None and not self.skip_topk:
+            # Publish for the skip layers that follow in this pipeline stage. topk_indices is
+            # [s/TP, topk] with TP-sharded query rows and global KV indices, and every layer in
+            # the stage shares the same TP group and chunk offset, so consumers can reuse it
+            # verbatim.
+            topk_holder[self.layer_number] = topk_indices
 
         # ===================================
         # Run sparse attention kernel
@@ -838,7 +911,9 @@ class DSAttentionFused(MegatronModule):
         # ===================================
         # Attach indexer loss
         # ===================================
-        if self.training and torch.is_grad_enabled():
+        # Skip layers own no indexer weights, so they have no index_scores and contribute no
+        # indexer loss -- matching HF, where shared layers carry no indexer parameters.
+        if self.training and torch.is_grad_enabled() and not self.skip_topk:
             # Compute KL divergence loss between indexer scores and true attention scores
             indexer_loss_coeff = getattr(self.config, 'dsa_indexer_loss_coeff', 0.0)
 
