@@ -60,6 +60,34 @@ def _packed_to_weight_key(key):
     return None
 
 
+def _drop_duplicate_tied_lm_head(state_dict):
+    """Drop a tied lm_head alias before saving with safetensors."""
+    storage_to_keys = {}
+    for key, value in state_dict.items():
+        if not torch.is_tensor(value) or value.numel() == 0:
+            continue
+        try:
+            storage_key = (
+                value.device,
+                value.untyped_storage().data_ptr(),
+                value.storage_offset(),
+                tuple(value.size()),
+                tuple(value.stride()),
+                value.dtype,
+            )
+        except RuntimeError:
+            continue
+        storage_to_keys.setdefault(storage_key, []).append(key)
+    for keys in storage_to_keys.values():
+        if len(keys) > 1 and "lm_head.weight" in keys:
+            state_dict.pop("lm_head.weight")
+            logging.info(
+                "Dropped tied tensor before safetensors save: lm_head.weight "
+                "(alias of %s)",
+                next(key for key in keys if key != "lm_head.weight"),
+            )
+
+
 def _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=None):
     if not _hf_dequantize_int4_enabled(args) or dequant_weight_keys is None:
         return
@@ -678,6 +706,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 target_regex=getattr(self.args, "hf_pack_quantized_target_regex", None),
             )
 
+        _drop_duplicate_tied_lm_head(state_dict)
         state_dict_split = split_torch_state_dict_into_shards(state_dict)
         self.print_memory_usage(f"before save {save_path}")
         has_safetensor_file = False

@@ -9,6 +9,7 @@
 import os
 import dataclasses
 import gc
+import importlib
 from datetime import datetime, timedelta
 import logging
 import sys
@@ -836,11 +837,31 @@ def get_model(
                 ignore_ckpt_step=True,  # ckpt_step applies only to adapter checkpoints, not pretrained base model
             )
 
+        custom_peft_class = getattr(model_config, "peft_class", None)
         if "VLM" in type(model_config.peft_config).__name__:
             peft_config = check_vlm_peft_config(model_config)
-            peft_class = VLMLoRA(**asdict(peft_config))
+            peft_kwargs = asdict(peft_config)
+            if custom_peft_class:
+                for key in (
+                    "apply_to_foundation",
+                    "apply_to_image_encoder",
+                    "apply_to_image_projector",
+                    "apply_to_video_encoder",
+                    "apply_to_video_projector",
+                ):
+                    peft_kwargs.pop(key, None)
+                module_name, class_name = custom_peft_class.rsplit(".", 1)
+                peft_factory = getattr(importlib.import_module(module_name), class_name)
+                peft_class = peft_factory(**peft_kwargs)
+            else:
+                peft_class = VLMLoRA(**peft_kwargs)
         else:
-            peft_class = LoRA(**asdict(model_config.peft_config))
+            if custom_peft_class:
+                module_name, class_name = custom_peft_class.rsplit(".", 1)
+                peft_factory = getattr(importlib.import_module(module_name), class_name)
+                peft_class = peft_factory(**asdict(model_config.peft_config))
+            else:
+                peft_class = LoRA(**asdict(model_config.peft_config))
         transformed_model = apply_peft_transformation(peft_class, model)
         return transformed_model, peft_class
 
@@ -888,6 +909,9 @@ def get_model(
         config = get_model_config(model[0])
        
         model = [Float16Module(config, model_module) for model_module in model]
+        post_float16_wrap = getattr(peft_class, "post_float16_wrap", None)
+        if callable(post_float16_wrap):
+            post_float16_wrap(model)
         fp32_training_weights = param_pattern
         #covert fp32
         if fp32_training_weights:

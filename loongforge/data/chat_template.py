@@ -20,6 +20,7 @@
 """Chat templates"""
 
 import importlib.resources as resources
+from importlib import import_module
 import json
 import logging
 import re
@@ -52,6 +53,25 @@ if TYPE_CHECKING:
 
 
 SlotsType = Sequence[Union[str, Set[str], Dict[str, str]]]
+
+
+class _LazyMMPlugin:
+    """Load an optional multimodal plugin only when it is first used."""
+
+    def __init__(self, class_path: str, **kwargs: Any) -> None:
+        self.class_path = class_path
+        self.kwargs = kwargs
+        self._plugin: Optional[MMPlugin] = None
+
+    def _resolve(self) -> MMPlugin:
+        if self._plugin is None:
+            module_name, class_name = self.class_path.rsplit(".", 1)
+            plugin_class = getattr(import_module(module_name), class_name)
+            self._plugin = plugin_class(**self.kwargs)
+        return self._plugin
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._resolve(), name)
 
 
 @dataclass
@@ -951,6 +971,16 @@ _register_chat_template(
     name="llava-onevision-hf",
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("qwen_chat_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="minicpm-v-4.6-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("minicpm_v_4_6_hf_training.jinja"),
+    mm_plugin=_LazyMMPlugin(
+        "loongforge.data.minicpm_v_4_6_plugin.MiniCPMV46Plugin",
+        image_token="<|image_pad|>",
+    ),
 )
 
 _register_chat_template(

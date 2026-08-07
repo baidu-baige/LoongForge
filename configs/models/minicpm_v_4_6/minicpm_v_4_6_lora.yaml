@@ -1,0 +1,58 @@
+defaults:
+  - ../../models/image_encoder@model.image_encoder: minicpm_v_4_6_vit
+  - ../../models/image_projector@model.image_projector: minicpm_v_4_6_merger
+  - ../../models/minicpm_v_4_6@model.foundation: minicpm_v_4_6_llm
+  - ../../models/lora@model.peft_config: vlm_lora
+  - _self_
+
+model:
+  model_type: minicpm_v_4_6
+  peft_class: loongforge.models.foundation.minicpm_v_4_6.peft.MiniCPMV46CanonicalLoRA
+  position_idx_func: ${position_func:position_ids}
+  loss_func: ${loss_func:default}
+  mix_used_vision_encoder: true
+  mix_used_vision_projector: true
+  foundation:
+    bias_dropout_fusion: false
+    rotary_emb_func: "RotaryEmbedding"
+    rotary_base: 10000000
+    rotary_percent: 0.25
+    gated_delta_rule_backend: ${oc.env:LF_GATED_DELTA_RULE_BACKEND,auto}
+    gated_norm_backend: ${oc.env:LF_GATED_NORM_BACKEND,auto}
+    causal_conv_backend: ${oc.env:LF_CAUSAL_CONV_BACKEND,torch_module}
+    linear_backend: ${oc.env:LF_LINEAR_BACKEND,transformer_engine}
+    full_attention_linear_backend: ${oc.env:LF_FULL_ATTN_LINEAR_BACKEND,transformer_engine}
+    linear_attention_linear_backend: ${oc.env:LF_LINEAR_ATTN_LINEAR_BACKEND,transformer_engine}
+    mlp_linear_backend: ${oc.env:LF_MLP_LINEAR_BACKEND,transformer_engine}
+    torch_cross_entropy_at_tp1: true
+    model_spec: ["loongforge.models.foundation.minicpm_v_4_6.minicpm_v_4_6_layer_spec", "get_minicpm_v_4_6_transformer_layer_spec"]
+  image_encoder:
+    freeze: true
+    model_spec: null
+  image_projector:
+    freeze: true
+    model_spec: null
+  peft_config:
+    _target_: loongforge.models.foundation.minicpm_v_4_6.peft.MiniCPMV46VLMLoraConfig
+    apply_to_foundation: true
+    dim: 8
+    alpha: 32
+    dropout: 0.0
+    lora_A_init_method: kaiming
+    lora_B_init_method: zero
+    lora_dtype: float32
+    adapter_backend: ${oc.env:LF_ADAPTER_BACKEND,auto}
+    fc1_adapter_order: gate_up
+    target_modules:
+      - linear_q
+      - linear_k
+      - linear_v
+      - linear_proj
+      - linear_fc1_up
+      - linear_fc1_gate
+      - linear_fc2
+      - in_proj_qkv
+      - in_proj_z
+      - in_proj_b
+      - in_proj_a
+      - out_proj

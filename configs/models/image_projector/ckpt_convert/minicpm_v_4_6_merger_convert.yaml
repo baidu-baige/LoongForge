@@ -1,0 +1,14 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_projector@module: ???
+  - _self_
+
+prefix_map:
+  adapter: model.merger
+
+name_map:
+  mcore:
+    layer_prefix: adapter.
