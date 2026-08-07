@@ -8,6 +8,7 @@ data-state implementations that previously lived in BaseTrainer. BaseTrainer now
 only declares these as abstract methods.
 """
 
+import inspect
 import logging
 from contextlib import nullcontext
 from typing import Dict, Tuple
@@ -70,6 +71,10 @@ class FinetuneTrainer(BaseTrainer):
             dtype = resolve_dtype(self.training_args.dtype)
             self._compute_dtype = dtype
 
+        fwd_kwargs = self._select_forward_kwargs(
+            iteration=self.completed_steps,
+        )
+
         autocast_ctx = (
             nullcontext()
             if self._cfg_bool("disable_train_autocast", False)
@@ -77,9 +82,45 @@ class FinetuneTrainer(BaseTrainer):
         )
 
         with autocast_ctx:
-            loss, log_loss_dict = self.model(batch)
+            loss, log_loss_dict = self.model(batch, **fwd_kwargs)
 
         return loss, log_loss_dict
+
+    def _select_forward_kwargs(self, **candidates) -> Dict[str, object]:
+        """Keep the candidate kwargs the model ``forward`` can actually accept.
+
+        The trainer offers optional training-context values (``iteration`` today,
+        more later); a model opts in either by naming the parameter in its
+        ``forward`` signature or by declaring ``**kwargs``. The unwrapped forward
+        signature is introspected once and cached. ``*args`` is ignored -- these are
+        always passed by keyword.
+
+        Silently dropping a value is the dangerous outcome: ``iteration`` seeds the
+        deterministic noise/timestep generators, so losing it downgrades a run to the
+        global-RNG path without any error. Hence a ``**kwargs`` model gets everything.
+        """
+        if getattr(self, "_fwd_param_names", None) is None:
+            core = self.model
+            for attr in ("_orig_mod", "module"):
+                core = getattr(core, attr, core)
+            params = list(inspect.signature(core.forward).parameters.values())
+            self._fwd_param_names = {
+                param.name
+                for param in params
+                if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                                  inspect.Parameter.KEYWORD_ONLY)
+            }
+            self._fwd_accepts_var_kw = any(
+                param.kind is inspect.Parameter.VAR_KEYWORD for param in params
+            )
+        if self._fwd_accepts_var_kw:
+            # **kwargs absorbs whatever is not declared by name.
+            return dict(candidates)
+        return {
+            name: value
+            for name, value in candidates.items()
+            if name in self._fwd_param_names
+        }
 
     def _forward_backward(self) -> dict:
         """Single-stream gradient-accumulation loop (reuses base timed helpers).

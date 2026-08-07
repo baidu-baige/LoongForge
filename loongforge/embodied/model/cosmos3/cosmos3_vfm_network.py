@@ -178,26 +178,7 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             self.vae2llm = nn.Linear(self.patch_latent_dim, self.hidden_size)
             self.llm2vae = nn.Linear(self.hidden_size, self.patch_latent_dim)
 
-            assert config.position_embedding_type in ["3d_rope", "flattened_sin_cos", "unified_3d_mrope"]
-            if config.position_embedding_type == "3d_rope":
-                self.latent_pos_embed = VideoRopePosition3DEmb(
-                    head_dim=self.hidden_size,
-                    len_h=self.max_latent_h,
-                    len_w=self.max_latent_w,
-                    len_t=self.max_latent_t,
-                    h_extrapolation_ratio=config.rope_h_extrapolation_ratio,
-                    w_extrapolation_ratio=config.rope_w_extrapolation_ratio,
-                    t_extrapolation_ratio=config.rope_t_extrapolation_ratio,
-                    enable_fps_modulation=config.enable_fps_modulation,
-                    base_fps=config.base_fps,
-                    base_temporal_compression_factor=config.temporal_compression_factor_vision,
-                    temporal_compression_factor=config.temporal_compression_factor_vision,
-                )
-            elif config.position_embedding_type == "flattened_sin_cos":
-                self.latent_pos_embed = FlattenedSinCosPositionEmbedding(
-                    max_latent_h=self.max_latent_h, max_latent_w=self.max_latent_w, hidden_size=self.hidden_size
-                )
-            elif config.position_embedding_type == "unified_3d_mrope":
+            if config.position_embedding_type == "unified_3d_mrope":
                 # No additive position embedding - position info is in 3D position IDs for attention
                 self.latent_pos_embed = None
             else:
@@ -209,21 +190,7 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             self.action2llm = DomainAwareLinear(self.action_dim, self.hidden_size, self.num_embodiment_domains)
             self.llm2action = DomainAwareLinear(self.hidden_size, self.action_dim, self.num_embodiment_domains)
 
-            if config.position_embedding_type == "3d_rope":
-                self.action_pos_embed = VideoRopePosition3DEmb(
-                    head_dim=self.hidden_size,
-                    len_h=1,
-                    len_w=1,
-                    len_t=self.max_latent_t * config.temporal_compression_factor_vision,
-                    h_extrapolation_ratio=config.rope_h_extrapolation_ratio,
-                    w_extrapolation_ratio=config.rope_w_extrapolation_ratio,
-                    t_extrapolation_ratio=config.rope_t_extrapolation_ratio,
-                    enable_fps_modulation=config.enable_fps_modulation,
-                    base_fps=config.base_fps,
-                    base_temporal_compression_factor=config.temporal_compression_factor_vision,
-                    temporal_compression_factor=config.temporal_compression_factor_action,
-                )
-            elif config.position_embedding_type == "unified_3d_mrope":
+            if config.position_embedding_type == "unified_3d_mrope":
                 # No additive position embedding - position info is in 3D position IDs for attention
                 self.action_pos_embed = None
             else:
@@ -254,9 +221,6 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             torch.nn.init.trunc_normal_(self.llm2vae.weight, std=std, a=-3 * std, b=3 * std)
             torch.nn.init.zeros_(self.llm2vae.bias)
 
-            if self.latent_pos_embed is not None:
-                self.latent_pos_embed._init_weights()
-
         if self.config.action_gen:
             # action2llm: input_size=action_dim, output_size=hidden_size
             std = 1.0 / math.sqrt(self.action_dim)
@@ -270,9 +234,6 @@ class Cosmos3VFMNetwork(PreTrainedModel):
 
             std = 1.0 / math.sqrt(self.hidden_size)
             torch.nn.init.trunc_normal_(self.action_modality_embed, std=std, a=-3 * std, b=3 * std)
-
-            if self.action_pos_embed is not None:
-                self.action_pos_embed._init_weights()
 
         if self.config.sound_gen:
             # sound2llm: input_size=sound_dim, output_size=hidden_size
@@ -778,17 +739,6 @@ class Cosmos3VFMNetwork(PreTrainedModel):
             action.tokens, action.token_shapes, action.domain_id
         )
         packed_tokens_action = self.action2llm(packed_tokens_action, per_token_domain_id)
-        # Add additive position embedding only if not using unified_3d_mrope
-        if self.action_pos_embed is not None:
-            # VideoRopePosition3DEmb expects shapes as (t, h, w). For actions we use a 1x1 spatial grid.
-            action_shapes_3d = [(ts[0], 1, 1) for ts in action.token_shapes]
-            action_token_pos_emb = self.action_pos_embed(
-                action_shapes_3d,
-                fps=fps_action,
-                start_frame_offset=1,
-            ).to(target_dtype)  # [B_action*T_action,hidden_size]
-            packed_tokens_action = packed_tokens_action + action_token_pos_emb  # [B_action*T_action,hidden_size]
-
         packed_tokens_action = packed_tokens_action + self.action_modality_embed.view(
             1, -1
         )  # [B_action*T_action,hidden_size]

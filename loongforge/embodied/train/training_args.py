@@ -30,10 +30,13 @@ the per-model DataConfig (YAML data:).
 
 import argparse
 import dataclasses
+import logging
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, get_args, get_origin, Union
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 _FSDP_CONCRETE_DTYPE_CHOICES = ("fp32", "bf16", "fp16")
@@ -192,6 +195,12 @@ class _BasicTrainingArgs:
         metadata={
             "help": "Global RNG seed for Python/NumPy/PyTorch and data shuffling "
                     "(reproducibility)."
+        },
+    )
+    set_seed_by_rank: bool = field(
+        default=False,
+        metadata={
+            "help": "If True, seed += torch.distributed.get_rank()"
         },
     )
     deterministic_mode: bool = field(
@@ -475,7 +484,7 @@ class _LearningRateArgs:
         },
     )
     lambda_cycle_length: Optional[int] = field(
-        default=None,
+        default=10000,
         metadata={
             "help": "lambda_linear: number of steps per cycle. Defaults to "
                     "--train-iters when unset. "
@@ -648,6 +657,10 @@ class _DataArgs:
             "choices": ["fork", "spawn", "forkserver"],
             "help": "Multiprocessing start method for DataLoader workers.",
         },
+    )
+    sampler_shuffle: bool = field(
+        default=True,
+        metadata={"help": "whether shiffle in sampler"},
     )
     distributed_sampler_mode: str = field(
         default="cyclic",
@@ -1225,6 +1238,17 @@ class TrainingArgs(
     ``OmegaConf.structured(TrainingArgs)`` see every field at the top level.
     To add or change a generic parameter, edit the matching ``_XxxArgs`` mixin.
     """
+
+    def __post_init__(self):
+        # Deterministic mode needs a seeded dataloader (sampler shuffle +
+        # per-worker RNG); otherwise data ordering and augmentation are not
+        # reproducible run-to-run. Force it on and warn when left off.
+        if self.deterministic_mode and not self.dataloader_seed_workers:
+            object.__setattr__(self, "dataloader_seed_workers", True)
+            logger.warning(
+                "deterministic_mode=True forces dataloader_seed_workers=True "
+                "(seeding the sampler shuffle and per-worker RNG for reproducibility)."
+            )
 
 
 # ---------------------------------------------------------------------------

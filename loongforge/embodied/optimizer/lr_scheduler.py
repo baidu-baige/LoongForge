@@ -301,20 +301,18 @@ def build_scheduler(optimizer, training_args):
     """Build LR scheduler from CLI training_args."""
 
     if training_args.lr_decay_style == "lambda_linear":
-        cycle_len = training_args.lambda_cycle_length or training_args.train_iters
-
         _scheduler = LambdaLinearScheduler(
             warm_up_steps=[training_args.lr_warmup_iters],
             f_min=[training_args.lambda_f_min],
             f_max=[training_args.lambda_f_max],
             f_start=[training_args.lambda_f_start],
-            cycle_lengths=[cycle_len]
+            cycle_lengths=[training_args.lambda_cycle_length]
         )
 
         logger.info(
             f"LambdaLinear scheduler: f_max={training_args.lambda_f_max}, "
             f"f_min={training_args.lambda_f_min}, warmup={training_args.lr_warmup_iters}, "
-            f"cycle_len={cycle_len}"
+            f"cycle_len={training_args.lambda_cycle_length}"
         )
 
         return LambdaLR(optimizer, _scheduler.schedule)

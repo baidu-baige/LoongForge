@@ -38,9 +38,6 @@ from .qwen3_vl import (
     Qwen3VLTextMLP,
     Qwen3VLTextRMSNorm,
     Qwen3VLTextRotaryEmbedding,
-    Qwen3VLVisionModel,
-)
-from .qwen3_vl import (
     apply_rotary_pos_emb as qwen3_vl_apply_rotary_pos_emb,
 )
 
@@ -155,13 +152,6 @@ class _MoTConfigBase(object):
         with open(json_file, encoding="utf-8") as reader:
             config_dict = json.load(reader)
         return cls(config_dict=config_dict)
-
-
-class Qwen3MoTConfig(_MoTConfigBase):
-    """MoT wrapper config for the Qwen3 family."""
-
-    _full_config_cls = Qwen3VLTextConfig
-    _text_config_cls = Qwen3VLTextConfig
 
 
 class Qwen3VLMoTConfig(_MoTConfigBase):
@@ -529,10 +519,6 @@ class Qwen3VLTextForCausalLM(Qwen3VLPreTrainedModel):
         )
         self.vocab_size = text_config.vocab_size
         self.lm_head = nn.Linear(text_config.hidden_size, text_config.vocab_size, bias=False)
-
-        vision_config = config.vision_config
-        if vision_config is not None:
-            self.visual = Qwen3VLVisionModel._from_config(vision_config)
 
         self.post_init()
 

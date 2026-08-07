@@ -39,12 +39,13 @@ from loongforge.embodied.model.cosmos3.flow_matching import compute_flow_matchin
 from loongforge.embodied.model.cosmos3.modeling_utils import has_noisy_tokens
 from loongforge.embodied.model.cosmos3.rectified_flow import RectifiedFlow
 from loongforge.embodied.model.cosmos3.sequence_packing import (
-    PackedSequence, SequencePlan, pack_input_sequence, add_special_tokens,
+    pack_input_sequence, add_special_tokens,
 )
 from loongforge.embodied.model.cosmos3.data_and_condition import GenerationDataClean
 from loongforge.embodied.model.cosmos3.unified_mot import Qwen3VLMoTConfig, Qwen3VLTextForCausalLM
 from loongforge.embodied.model.cosmos3.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
 from loongforge.embodied.data.datasets.cosmos3.transforms.cosmos3_preprocessor import Cosmos3Batch
+from loongforge.embodied.train.utils.utils import resolve_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,9 @@ class Cosmos3(nn.Module):
 
     @classmethod
     def from_pretrained(cls, cfg) -> "Cosmos3":
-        """from_pretrained."""
+        """Build the model from ``cfg`` alone.
+
+        """
         return cls(cfg)
 
     def __init__(self, config: Cosmos3ModelConfig):
@@ -92,7 +95,6 @@ class Cosmos3(nn.Module):
         self.base_fps = config.base_fps
         self.unified_3d_mrope_reset_spatial_ids = config.unified_3d_mrope_reset_spatial_ids
         self.unified_3d_mrope_temporal_modality_margin = config.unified_3d_mrope_temporal_modality_margin
-        self.encode_exact_durations = config.encode_exact_durations
 
         vfm_config = Cosmos3VFMNetworkConfig(
             vision_gen=config.vision_gen,
@@ -116,6 +118,13 @@ class Cosmos3(nn.Module):
         with init_on_device("meta", include_buffers=False):
             self.net = Cosmos3VFMNetwork(language_model, vfm_config)
 
+        if config.compile_model:
+            _layers = self.net.language_model.model.layers
+            for _layer in _layers:
+                _layer.compile(fullgraph=True, dynamic=config.compile_dynamic)
+            logger.info("[compile] in-place torch.compile on %d MoTDecoderLayer blocks (fullgraph=True, dynamic=%s)",
+                        len(_layers), config.compile_dynamic)
+
         # Rectified flow scheduler
         self.rectified_flow = RectifiedFlow(
             velocity_field=None,
@@ -127,10 +136,14 @@ class Cosmos3(nn.Module):
         self.shift = float(config.shift)
 
         self.action_loss_weight = config.action_loss_weight
+        self.loss_scale = config.loss_scale
 
         # VAE encoder (loaded lazily on first forward to avoid init-time weight loading)
         self._vae_encoder = None
         self._vae_path = config.vae_path
+        self.encode_exact_durations = config.encode_exact_durations
+        self._compile_vae_encode = bool(config.compile_model)
+        self._compile_dynamic = config.compile_dynamic
 
         # Special tokens (initialized lazily)
         self._special_tokens = None
@@ -138,13 +151,11 @@ class Cosmos3(nn.Module):
 
         ## Training config
         self.train_modules = config.train_modules
-        self.keys_to_skip_loading = config.keys_to_skip_loading
-
-    def freeze_modules(self):
-        """Freeze understanding pathway parameters (text/non-gen weights)."""
-        for name, param in self.net.named_parameters():
-            if not any(k in name for k in self.train_modules):
-                param.requires_grad = False
+        if torch.are_deterministic_algorithms_enabled():
+            self.keys_to_skip_loading = []
+            logger.info(f"clean config `keys_to_skip_loading` on deterministic mode")
+        else:
+            self.keys_to_skip_loading = config.keys_to_skip_loading
 
     def _get_vae_encoder(self):
         """Lazy-load VAE encoder on first use. Loads on the model's CUDA device
@@ -157,7 +168,17 @@ class Cosmos3(nn.Module):
                 vae_path=self._vae_path,
                 encode_exact_durations=self.encode_exact_durations
             )
+            if self._compile_vae_encode:
+                self._vae_encoder.encode = torch.compile(
+                    self._vae_encoder.encode, dynamic=self._compile_dynamic
+                )
         return self._vae_encoder
+
+    def freeze_modules(self):
+        """Freeze understanding pathway parameters (text/non-gen weights)."""
+        for name, param in self.net.named_parameters():
+            if not any(k in name for k in self.train_modules):
+                param.requires_grad = False
 
     def _get_special_tokens(self):
         """Lazy-init special tokens dict."""
@@ -173,11 +194,12 @@ class Cosmos3(nn.Module):
         """Return the underlying language-model backbone."""
         return self.net.language_model
 
-    def materialize(self, device):
+    def materialize(self, device, dtype):
         """Allocate empty CUDA tensors for meta params (post-FSDP shard) then run
         each submodule's init_weights to populate them. Mirrors cosmos's
         ``hf_model._apply(empty_like, ...) + tie_embeddings``.
         """
+        self.net.to(resolve_dtype(dtype))
         self.net.to_empty(device=device)
         self.net.init_weights(buffer_device=device)
         logger.info("Cosmos3 materialized on %s", device)
@@ -272,17 +294,21 @@ class Cosmos3(nn.Module):
         """
         device = next(self.net.parameters()).device
         dtype = next(self.net.parameters()).dtype
-        vae = self._get_vae_encoder()
         special_tokens = self._get_special_tokens()
         cpu_kwargs = {"device": "cpu", "dtype": torch.float32}
 
         B = len(batch.videos)
         action_loss_weight = float(self.action_loss_weight)
+        loss_scale = float(self.loss_scale)
 
         # 1. VAE encode each video on the model device (GPU).
-        latents = [vae.encode(
-                video.to(device=device, dtype=torch.bfloat16).div(127.5).sub(1.0).unsqueeze(0)
-            ).contiguous().float() for video in batch.videos]
+        vae = self._get_vae_encoder()
+
+        def _vae(video):
+            v = video.to(device, dtype).div_(127.5).sub_(1.0).unsqueeze(0)
+            v = vae.encode(v)
+            return v.contiguous().float()
+        latents = [_vae(video) for video in batch.videos]
         if hasattr(batch, 'image_sizes'):
             latents = self._remove_padding_from_latent(latents, batch.image_sizes)
         latents = [latent[0] for latent in latents]
@@ -332,7 +358,7 @@ class Cosmos3(nn.Module):
         #    sigma along their condition_mask entries (matches cosmos's
         #    sigmas_action = sigma * (1 - condition_mask)). The padded channels
         #    beyond raw_action_dim are zeroed out to keep loss masking correct.
-        actions_clean: list[torch.Tensor] = [a.to(device=device, dtype=torch.float32) for a in batch.actions]
+        actions_clean: list[torch.Tensor] = [a.to(device, dtype) for a in batch.actions]
         raw_action_dims: list[torch.Tensor] = [d.to(device) for d in batch.raw_action_dims]
         action_domain_ids: list[torch.Tensor] = [d.to(device) for d in batch.action_domain_ids]
 
@@ -413,7 +439,9 @@ class Cosmos3(nn.Module):
                 rectified_flow=self.rectified_flow,
                 tensor_kwargs_fp32={"device": device, "dtype": torch.float32},
             )
-            loss = loss + loss_vision
+            loss = loss + loss_scale * loss_vision
+        else:
+            loss_vision = None
 
         if action is not None and has_noisy_tokens(action):
             loss_action, _ = compute_flow_matching_loss(
@@ -431,8 +459,9 @@ class Cosmos3(nn.Module):
             # Keep action heads in the backward graph so FSDP/DDP sync stays consistent.
             dummy = 0.0 * sum(p.sum() for p in output_dict.get("preds_action", []))
             loss = loss + dummy
+            loss_action = None
 
-        return loss, {"vision_loss": loss_vision, "action_loss": loss_action}
+        return loss, {"vision_loss": loss_vision, "action_loss": loss_action, "total_loss": loss}
 
 
     def predict_action(self, **kwargs) -> Dict[str, np.ndarray]:

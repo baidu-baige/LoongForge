@@ -8,6 +8,8 @@
 
 model:
   model_type: "cosmos3"
+  compile_model: false
+  compile_dynamic: true
   qwen3_vl_path: "/mnt/cluster/models/Qwen/Qwen3-VL-8B-Instruct"
   qk_norm_for_text: true
   qk_norm_for_diffusion: true
@@ -51,11 +53,9 @@ model:
     - "action_modality_embed"
     - "time_embedder_action"
   keys_to_skip_loading:
-    - "net_ema."
     - "action2llm"
     - "llm2action"
     - "action_modality_embed"
-    - "action_pos_embed"
 
 # Data config.
 data:
@@ -66,3 +66,5 @@ data:
   action_chunk_length: 32
   action_fps: 15.0
   video_backend: "torchcodec"
+  use_image_augmentation: true
+  colorjitter_on_gpu: false

@@ -33,12 +33,15 @@ def resolve_dtype(dtype_str: str) -> torch.dtype:
 logger = logging.getLogger(__name__)
 
 
-def set_seed(seed: int):
+def set_seed(seed: int, by_rank: bool = False):
     """Set random seed across all sources."""
+    if by_rank and torch.distributed.is_initialized():
+        seed += torch.distributed.get_rank()
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    logger.info(f"Using random seed {seed}.")
 
 
 def set_precision(allow_tf32):

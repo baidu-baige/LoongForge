@@ -127,7 +127,7 @@ class BaseTrainer(ABC):
 
         # 2. Seed — use the same seed on all ranks (align with lerobot/accelerate baseline).
         # DistributedSampler handles per-rank data partitioning internally via its own seed+rank offset.
-        set_seed(training_args.seed)
+        set_seed(training_args.seed, training_args.set_seed_by_rank)
         if training_args.deterministic_mode:
             set_deterministic()
         if training_args.disable_tf32:
@@ -218,7 +218,7 @@ class BaseTrainer(ABC):
                 start_msg=f"materializing meta tensors on {self.ctx.device}",
                 end_msg="materialized in {elapsed}",
             ):
-                self.model.materialize(self.ctx.device)
+                self.model.materialize(self.ctx.device, training_args.dtype)
             if training_args.pretrained_checkpoint:
                 with log_stage(
                     "ckpt",

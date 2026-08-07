@@ -101,6 +101,24 @@ def _find_closest_target_size(h: int, w: int, resolution: str) -> Tuple[int, int
     return target_w, target_h
 
 
+def _resized_hw(
+    orig_h: int,
+    orig_w: int,
+    target_w: int,
+    target_h: int,
+    keep_aspect_ratio: bool = True,
+) -> Tuple[int, int]:
+    """Return ``(orig_h_resized, orig_w_resized)`` for :func:`_reflection_pad_to_target`.
+
+    Split out so the deferred-video path can compute ``image_size`` from shapes
+    alone, without running the pixel ops.
+    """
+    if not keep_aspect_ratio:
+        return target_h, target_w
+    scaling_ratio = min(target_w / orig_w, target_h / orig_h, 1.0)
+    return int(scaling_ratio * orig_h + 0.5), int(scaling_ratio * orig_w + 0.5)
+
+
 def _reflection_pad_to_target(
     video: torch.Tensor,
     target_w: int,
@@ -117,13 +135,9 @@ def _reflection_pad_to_target(
     * Use edge-pad when padding exceeds spatial dim, else reflection-pad.
     """
     orig_h, orig_w = video.shape[-2:]
-    if keep_aspect_ratio:
-        scaling_ratio = min(target_w / orig_w, target_h / orig_h, 1.0)
-        orig_h_resized = int(scaling_ratio * orig_h + 0.5)
-        orig_w_resized = int(scaling_ratio * orig_w + 0.5)
-    else:
-        orig_h_resized = target_h
-        orig_w_resized = target_w
+    orig_h_resized, orig_w_resized = _resized_hw(
+        orig_h, orig_w, target_w, target_h, keep_aspect_ratio
+    )
 
     if orig_h_resized != orig_h or orig_w_resized != orig_w:
         video = transforms_F.resize(
@@ -211,13 +225,17 @@ def build_cosmos3_transforms(ctx: TransformBuilderContext):
     model_cfg = ctx.model_cfg
     data_cfg = ctx.data_cfg
     training_args = ctx.training_args
+    # Deterministic mode disables CFG caption dropout (decided here in the main
+    # process; torch.are_deterministic_algorithms_enabled() is unreliable inside
+    # spawned DataLoader workers).
+    cfg_dropout_rate = 0.0 if training_args.deterministic_mode else data_cfg.cfg_dropout_rate
     return [Cosmos3ActionTransform(
         tokenizer_path=training_args.tokenizer_path,
         max_text_tokens=data_cfg.max_text_tokens,
         max_action_dim=model_cfg.max_action_dim,
         action_chunk_length=data_cfg.action_chunk_length,
         temporal_compression=model_cfg.vae_temporal_compression,
-        cfg_dropout_rate=data_cfg.cfg_dropout_rate,
+        cfg_dropout_rate=cfg_dropout_rate,
         target_h=data_cfg.target_h,
         target_w=data_cfg.target_w,
     )]
@@ -272,7 +290,11 @@ class Cosmos3ActionTransform(BaseTransform):
 
     def apply(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply the cosmos3 action transform to a single sample."""
-        video: torch.Tensor = data["video"]               # [3, T, H, W] uint8
+        # Deferred-tail mode: the dataset hands over the pre-ColorJitter 3-view
+        # stack plus the analytic concat_view shape, so every decision below is
+        # made from shapes and the pixel ops move into the deferred pipeline.
+        video_stack = data.get("video_stack")
+        video = data.get("video")                         # [3, T, H, W] uint8 or None
         action: torch.Tensor = data["action"]             # [chunk+1, 8] float
         caption: str = data.get("ai_caption", "")
         viewpoint = data.get("viewpoint", "concat_view")
@@ -283,21 +305,28 @@ class Cosmos3ActionTransform(BaseTransform):
         description = data.get("additional_view_description")
 
         # 1. Frame alignment: (T - 1) % temporal_compression == 0
-        c, t, h, w = video.shape
+        c, t, h, w = tuple(data["video_shape"]) if video_stack is not None else tuple(video.shape)
         target_t = max(1, (t - 1) // self.temporal_compression * self.temporal_compression + 1)
         target_t = min(target_t, t)
-        video = video[:, :target_t]
+        if video is not None:
+            video = video[:, :target_t]
 
         # 2. Spatial resize + reflection-pad to closest VIDEO_RES_SIZE_INFO bucket.
-        target_w, target_h = _find_closest_target_size(video.shape[-2], video.shape[-1], self.resolution)
-        video, orig_h_resized, orig_w_resized = _reflection_pad_to_target(
-            video, target_w=target_w, target_h=target_h, keep_aspect_ratio=True
-        )
+        target_w, target_h = _find_closest_target_size(h, w, self.resolution)
+        if video is not None:
+            video, orig_h_resized, orig_w_resized = _reflection_pad_to_target(
+                video, target_w=target_w, target_h=target_h, keep_aspect_ratio=True
+            )
+        else:
+            # Deferred: same geometry, decided from shapes; pixels are resized and
+            # padded by DeferredVideoTail on the model device.
+            orig_h_resized, orig_w_resized = _resized_hw(h, w, target_w, target_h)
         image_size = torch.tensor(
             [target_h, target_w, orig_h_resized, orig_w_resized], dtype=torch.float
         )
 
         # 3. Caption augmentor chain (cosmos ". " separator semantics).
+        # cfg_dropout_rate is forced to 0.0 under deterministic mode at build time.
         if self.training and self.cfg_dropout_rate > 0.0 and torch.rand(1).item() < self.cfg_dropout_rate:
             full_caption = ""
         else:
@@ -311,7 +340,7 @@ class Cosmos3ActionTransform(BaseTransform):
                     full_caption = _append_with_period_separator(full_caption, tmpl)
             # 3b. Duration / FPS — duration uses int(num_frames / fps).
             fps_val = float(fps.item() if torch.is_tensor(fps) else fps)
-            num_frames = video.shape[1]
+            num_frames = target_t
             if isinstance(full_caption, str) and full_caption != "" and fps_val > 0:
                 duration = int(num_frames / fps_val)
                 full_caption = _append_with_period_separator(
@@ -338,7 +367,8 @@ class Cosmos3ActionTransform(BaseTransform):
         text_ids = text_ids[: self.max_text_tokens]
 
         # 5. SequencePlan (cosmos build_sequence_plan_from_mode for "policy").
-        video_length = video.shape[1]
+        # target_t is the post-truncation frame count in both modes.
+        video_length = target_t
         action_length = action.shape[0]
         plan = _build_sequence_plan_policy(
             video_length=video_length,
@@ -349,8 +379,19 @@ class Cosmos3ActionTransform(BaseTransform):
         raw_action_dim = torch.tensor(action.shape[-1], dtype=torch.long)
         action_padded = _pad_action_to_max_dim(action, self.max_action_dim)
 
+        video_fields = (
+            {"video": video}
+            if video is not None
+            else {
+                "video_stack": video_stack,
+                "view_split": data["view_split"],
+                "video_rng_state": data["video_rng_state"],
+                "video_ops": (int(target_t), int(target_w), int(target_h)),
+            }
+        )
+
         return {
-            "video": video,
+            **video_fields,
             "action": action_padded,
             "raw_action_dim": raw_action_dim,
             "domain_id": domain_id.long() if torch.is_tensor(domain_id) else torch.tensor(int(domain_id)),

@@ -84,10 +84,15 @@ class Cosmos3ModelConfig:
     max_action_dim: int = 64
     num_embodiment_domains: int = 32
     action_loss_weight: float = 10.0
+    loss_scale: float = 1.0
     encode_exact_durations: list = field(default_factory=lambda: [33])
 
     train_modules: list[str] = field(default_factory=lambda: [])
     keys_to_skip_loading: list[str] = field(default_factory=lambda: [])
+
+    compile_model: bool = False
+    compile_dynamic: bool = True
+    disable_train_autocast: bool = True
 
     def __post_init__(self) -> None:
         pass

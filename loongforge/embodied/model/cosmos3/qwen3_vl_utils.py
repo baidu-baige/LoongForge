@@ -113,13 +113,6 @@ def and_masks(*mask_functions: list[Callable]) -> Callable:
     return and_mask
 
 
-def sliding_window_causal_mask_function(sliding_window: int) -> Callable:
-    """
-    This return the mask_function function to create a sliding window mask.
-    """
-    return and_masks(sliding_window_overlay(sliding_window), causal_mask_function)
-
-
 def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
     """
     This return the mask_function function corresponding to a 2D padding mask.
@@ -419,41 +412,3 @@ def get_image_features(
     return image_embeds, deepstack_image_embeds
 
 
-def get_placeholder_mask(
-    model: Any,
-    input_ids: Optional[torch.Tensor],  # [B,N]
-    inputs_embeds: torch.Tensor,  # [B,N,hidden_size]
-    image_features: Optional[torch.Tensor] = None,  # [N_image_tokens,hidden_size]
-    video_features: Optional[torch.Tensor] = None,  # [N_video_tokens,hidden_size]
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return expanded image/video placeholder masks and validate feature lengths."""
-    if input_ids is None:
-        special_image_mask = inputs_embeds == model.get_input_embeddings()(
-            torch.tensor(model.config.image_token_id, dtype=torch.long, device=inputs_embeds.device)
-        )
-        special_image_mask = special_image_mask.all(-1)  # [B,N]
-        special_video_mask = inputs_embeds == model.get_input_embeddings()(
-            torch.tensor(model.config.video_token_id, dtype=torch.long, device=inputs_embeds.device)
-        )
-        special_video_mask = special_video_mask.all(-1)  # [B,N]
-    else:
-        special_image_mask = input_ids == model.config.image_token_id  # [B,N]
-        special_video_mask = input_ids == model.config.video_token_id  # [B,N]
-
-    n_image_tokens = special_image_mask.sum()
-    special_image_mask = special_image_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
-    if image_features is not None and inputs_embeds[special_image_mask].numel() != image_features.numel():
-        raise ValueError(
-            f"Image features and image tokens do not match: "
-            f"tokens: {n_image_tokens}, features {image_features.shape[0]}"
-        )
-
-    n_video_tokens = special_video_mask.sum()
-    special_video_mask = special_video_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
-    if video_features is not None and inputs_embeds[special_video_mask].numel() != video_features.numel():
-        raise ValueError(
-            f"Videos features and video tokens do not match: "
-            f"tokens: {n_video_tokens}, features {video_features.shape[0]}"
-        )
-
-    return special_image_mask, special_video_mask

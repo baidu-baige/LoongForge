@@ -41,6 +41,7 @@ tokenizing the caption.
 from __future__ import annotations
 
 import json
+import os
 import random
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -49,7 +50,21 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
-import torchvision.transforms.v2 as T
+
+# Transforms backend. v1 is the default because v2 samples its parameters
+# differently, so switching backends changes the augmentation draw (not just the
+# implementation) and makes runs non-comparable. Set COSMOS3_TV_TRANSFORMS=v2 to
+# opt in. build_image_augmentor() is the single consumer, so the in-worker path and
+# the deferred tail always agree on the backend.
+TV_TRANSFORMS_VERSION = os.environ.get("COSMOS3_TV_TRANSFORMS", "v1").strip().lower()
+if TV_TRANSFORMS_VERSION == "v2":
+    import torchvision.transforms.v2 as T
+elif TV_TRANSFORMS_VERSION == "v1":
+    import torchvision.transforms as T
+else:
+    raise ValueError(
+        f"COSMOS3_TV_TRANSFORMS must be 'v1' or 'v2', got {TV_TRANSFORMS_VERSION!r}"
+    )
 from lerobot.datasets.video_utils import decode_video_frames
 from torch.utils.data import Dataset
 
@@ -184,6 +199,53 @@ def _compute_idle_frames(
     return int(idle.sum())
 
 
+def build_image_augmentor(height: int, width: int) -> "T.Compose":
+    """crop -> resize -> ColorJitter, the augmentation applied to the 3-view stack.
+
+    Shared with ``DeferredVideoTail`` so the in-worker path and the device-side path
+    run literally the same transform in the same order.
+    """
+    return T.Compose(
+        [
+            T.RandomCrop((int(height * 0.95), int(width * 0.95))),
+            T.Resize((height, width), antialias=True),
+            T.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5, hue=0.08),
+        ]
+    )
+
+
+def compose_concat_view(stack: torch.Tensor, n: int, m: int) -> torch.Tensor:
+    """Lay out a 3-view stack as concat_view: wrist on top, half-res L|R below.
+
+    ``stack`` is the crop/resized ``[3T,C,H,W]`` stack, ``n``/``m`` the wrist and
+    wrist+left split points. Module-level so the deferred pipeline in
+    ``cosmos3_preprocessor`` runs the exact same tail as the in-worker path.
+    """
+    wrist, left, right = stack[:n], stack[n:m], stack[m:]
+    _, _, h_w, w_w = wrist.shape
+    half_h, half_w = h_w // 2, w_w // 2
+    left = F.interpolate(left, size=(half_h, half_w), mode="bilinear", align_corners=False)
+    right = F.interpolate(right, size=(half_h, half_w), mode="bilinear", align_corners=False)
+    bottom = torch.cat([left, right], dim=-1)
+    return torch.cat([wrist, bottom], dim=-2)
+
+
+def format_video_uint8(video: torch.Tensor) -> torch.Tensor:
+    """``[T,C,H,W]`` float in [0,1] -> ``[C,T,H,W]`` uint8, matching cosmos."""
+    return (video * 255.0).clamp(0.0, 255.0).to(torch.uint8).permute(1, 0, 2, 3)
+
+
+def concat_view_shape(num_frames: int, channels: int, height: int, width: int):
+    """Analytic ``[C,T,H,W]`` shape of :func:`compose_concat_view` output.
+
+    Lets the transform make every metadata decision from shapes alone when the
+    pixel ops are deferred.
+    """
+    if width % 2:
+        raise ValueError(f"concat_view needs an even width to stack L|R, got {width}")
+    return channels, num_frames, height + height // 2, width
+
+
 class DROIDLeRobotDataset(Dataset):
     """DROID v3.0 LeRobot action dataset (joint_pos 8D + use_state).
 
@@ -218,6 +280,8 @@ class DROIDLeRobotDataset(Dataset):
         domain_name: str = "droid_lerobot",
         video_backend: str = "torchcodec",
         use_image_augmentation: bool = False,
+        colorjitter_on_gpu: bool = False,
+        deterministic: bool = False,
     ) -> None:
         super().__init__()
         if viewpoint != "concat_view":
@@ -240,6 +304,16 @@ class DROIDLeRobotDataset(Dataset):
         self._domain_id = _domain_id_from_name(domain_name)
         self._video_backend = video_backend
         self._use_image_augmentation = use_image_augmentation
+        self._colorjitter_on_gpu = bool(colorjitter_on_gpu)
+        # When ColorJitter runs on the model device, the dataset stops right after
+        # crop/resize and ships the 3-view stack; ColorJitter and everything after it
+        # run in the deferred pipeline, so the augmentation keeps its pipeline slot.
+        self._defer_video_tail = bool(use_image_augmentation and colorjitter_on_gpu)
+        # Set from training_args.deterministic_mode in the main process and pickled
+        # into workers; torch.are_deterministic_algorithms_enabled() is False inside
+        # spawned DataLoader workers, so we cannot rely on it here.
+        self._deterministic = bool(deterministic)
+        self._image_augmentor = None
 
         self._info = json.loads((self._root / "meta" / "info.json").read_text())
 
@@ -331,20 +405,41 @@ class DROIDLeRobotDataset(Dataset):
 
         observation_rows = self._window_rows(start, start + self._chunk_length + 1, episode_index)
 
-        video = self._load_concat_video(episode, observation_rows)
+        video = self._load_concat_video(episode, observation_rows, cj_id=int(idx))
         action = self._build_joint_action(observation_rows)
         idle_frames = _compute_idle_frames(action, fps=self._fps)
 
         task = self._tasks.get(int(observation_rows[0]["task_index"]), "")
-        ai_caption = random.choice(task.split(" | ")) if task else ""
+        if task:
+            _caption_options = task.split(" | ")
+            if self._deterministic:
+                # Deterministic mode: choose a stable caption per sample (seeded by
+                # the dataset index) instead of consuming global RNG, so data is
+                # identical run-to-run and across configs.
+                ai_caption = _caption_options[random.Random(idx).randrange(len(_caption_options))]
+            else:
+                ai_caption = random.choice(_caption_options)
+        else:
+            ai_caption = ""
 
 
-        # cosmos returns video as [T, 3, H, W] uint8 then permutes to [3, T, H, W].
-        # Our VAE encoder expects [3, T, H, W], so do the permute here.
-        formatted_video = (video * 255.0).clamp(0.0, 255.0).to(torch.uint8).permute(1, 0, 2, 3)
+        if self._defer_video_tail:
+            # ``video`` is (3-view stack, n, m); the concat_view shape is derived
+            # analytically so the transform needs no pixels.
+            stack, n, m, rng_state = video
+            video_fields = {
+                "video_stack": stack,
+                "view_split": (int(n), int(m)),
+                "video_rng_state": rng_state,
+                "video_shape": concat_view_shape(int(n), int(stack.shape[1]), int(stack.shape[2]), int(stack.shape[3])),
+            }
+        else:
+            # cosmos returns video as [T, 3, H, W] uint8 then permutes to [3, T, H, W].
+            # Our VAE encoder expects [3, T, H, W], so do the permute here.
+            video_fields = {"video": format_video_uint8(video)}
 
         return {
-            "video": formatted_video,
+            **video_fields,
             "action": action,
             "ai_caption": ai_caption,
             "additional_view_description": _CONCAT_VIEW_DESCRIPTION,
@@ -398,6 +493,7 @@ class DROIDLeRobotDataset(Dataset):
         self,
         episode: Dict[str, Any],
         observation_rows: List[Dict[str, Any]],
+        cj_id: int = 0,
     ) -> torch.Tensor:
         """Decode the three DROID camera streams and lay them out as concat_view.
 
@@ -419,26 +515,34 @@ class DROIDLeRobotDataset(Dataset):
         left = frames_by_view["left"]
         right = frames_by_view["right"]
 
+        n, m = wrist.shape[0], wrist.shape[0] + left.shape[0]
+        stacked = torch.cat([wrist, left, right], dim=0)
+
+        if self._defer_video_tail:
+            # Hand over the *raw decoded* frames: an 8-bit video decodes onto the
+            # k/255 grid exactly, so the uint8 conversion here is lossless. Every
+            # pixel op (crop, resize, ColorJitter, tail) then runs device-side from
+            # the RNG position below, which is the same stream the in-worker Compose
+            # would have drawn from.
+            if self._deterministic:
+                rng_state = torch.Generator().manual_seed(int(cj_id)).get_state()
+            else:
+                rng_state = torch.get_rng_state()
+            return stacked.mul(255.0).round_().to(torch.uint8), n, m, rng_state
+
         if self._use_image_augmentation:
             if self._image_augmentor is None:
                 _, _, h, w = wrist.shape
-                self._image_augmentor = T.Compose(
-                    [
-                        T.RandomCrop((int(h * 0.95), int(w * 0.95))),
-                        T.Resize((h, w), antialias=True),
-                        T.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5, hue=0.08),
-                    ]
-                )
-            n, m = wrist.shape[0], wrist.shape[0] + left.shape[0]
-            combined = self._image_augmentor(torch.cat([wrist, left, right], dim=0))
-            wrist, left, right = combined[:n], combined[n:m], combined[m:]
+                self._image_augmentor = build_image_augmentor(h, w)
+            if self._deterministic:
+                with torch.random.fork_rng(devices=[]):
+                    torch.manual_seed(int(cj_id))
+                    combined = self._image_augmentor(stacked)
+            else:
+                combined = self._image_augmentor(stacked)
+            return compose_concat_view(combined, n, m)
 
-        _, _, h_w, w_w = wrist.shape
-        half_h, half_w = h_w // 2, w_w // 2
-        left = F.interpolate(left, size=(half_h, half_w), mode="bilinear", align_corners=False)
-        right = F.interpolate(right, size=(half_h, half_w), mode="bilinear", align_corners=False)
-        bottom = torch.cat([left, right], dim=-1)
-        return torch.cat([wrist, bottom], dim=-2)
+        return compose_concat_view(stacked, n, m)
 
     def _video_path(self, episode: Dict[str, Any], video_key: str) -> Path:
         chunk_idx = int(
@@ -475,5 +579,7 @@ def build_droid_dataset(model_cfg, data_cfg, training_args) -> DROIDLeRobotDatas
         fps=data_cfg.action_fps,
         chunk_length=data_cfg.action_chunk_length,
         video_backend=data_cfg.video_backend,
-        use_image_augmentation=data_cfg.use_image_augmentation
+        use_image_augmentation=data_cfg.use_image_augmentation,
+        colorjitter_on_gpu=data_cfg.colorjitter_on_gpu,
+        deterministic=training_args.deterministic_mode,
     )

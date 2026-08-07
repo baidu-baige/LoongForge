@@ -47,6 +47,7 @@ class Cosmos3DroidConfig:
     target_w: int = 480
     video_backend: str = "torchcodec"
     use_image_augmentation: bool = False
+    colorjitter_on_gpu: bool = False
 
     def __post_init__(self) -> None:
         pass

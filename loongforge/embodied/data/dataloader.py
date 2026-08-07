@@ -158,7 +158,7 @@ def _build_stateful_dataloader(
         ctx=ctx,
         batch_size=batch_size,
         seed=seed,
-        shuffle=True,
+        shuffle=training_args.sampler_shuffle,
     )
     shuffle = sampler is None
     dl = StatefulDataLoader(

@@ -237,6 +237,7 @@ class CausalConv3d(nn.Conv3d):
         )
         self.padding = (0, 0, 0)
 
+    @torch.compiler.disable
     def forward(self, x, cache_x=None):  # x: [B,C,T,H,W]
         """forward."""
         padding = list(self._padding)
