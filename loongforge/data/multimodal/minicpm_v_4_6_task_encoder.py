@@ -5,6 +5,7 @@
 
 import torch
 
+from loongforge.data.minicpm_v_4_6_plugin import MiniCPMV46Plugin
 from loongforge.data.multimodal.vlm_task_encoder import (
     IMAGE_TOKEN,
     IMAGE_TOKEN_WITH_TAGS,
@@ -12,8 +13,6 @@ from loongforge.data.multimodal.vlm_task_encoder import (
     VLMTaskEncoder,
 )
 from loongforge.utils.constants import Placeholder
-
-from .mm_plugin import MiniCPMV46Plugin
 
 
 class MiniCPMV46TaskEncoder(VLMTaskEncoder):

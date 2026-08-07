@@ -5,10 +5,11 @@
 
 from dataclasses import dataclass
 
+from megatron.core.transformer import TransformerConfig
+from transformers import PretrainedConfig
+
 from loongforge.models.foundation.qwen3_5.qwen3_5_config import Qwen35Config
 from loongforge.utils.constants import VisionLanguageModelFamilies
-
-from .configuration_utils import initialize_transformer_config
 
 
 @dataclass
@@ -31,4 +32,9 @@ class MiniCPMV46Config(Qwen35Config):
     model_type = VisionLanguageModelFamilies.MINICPM_V_4_6
 
     def __post_init__(self) -> None:
-        initialize_transformer_config(self)
+        pretrained_post_init = getattr(PretrainedConfig, "__post_init__", None)
+        if pretrained_post_init is not None:
+            pretrained_post_init(self)
+        else:
+            PretrainedConfig.__init__(self)
+        TransformerConfig.__post_init__(self)

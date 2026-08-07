@@ -18,7 +18,7 @@ model:
     rotary_base: 10000000
     rotary_percent: 0.25
     gated_delta_rule_backend: ${oc.env:LF_GATED_DELTA_RULE_BACKEND,auto}
-    gated_norm_backend: ${oc.env:LF_GATED_NORM_BACKEND,fla_deterministic}
+    gated_norm_backend: ${oc.env:LF_GATED_NORM_BACKEND,auto}
     causal_conv_backend: ${oc.env:LF_CAUSAL_CONV_BACKEND,torch_module}
     linear_backend: ${oc.env:LF_LINEAR_BACKEND,transformer_engine}
     full_attention_linear_backend: ${oc.env:LF_FULL_ATTN_LINEAR_BACKEND,transformer_engine}

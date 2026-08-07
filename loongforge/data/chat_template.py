@@ -56,7 +56,7 @@ SlotsType = Sequence[Union[str, Set[str], Dict[str, str]]]
 
 
 class _LazyMMPlugin:
-    """Load an out-of-package multimodal plugin only when it is first used."""
+    """Load an optional multimodal plugin only when it is first used."""
 
     def __init__(self, class_path: str, **kwargs: Any) -> None:
         self.class_path = class_path
@@ -978,7 +978,7 @@ _register_chat_template(
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("minicpm_v_4_6_hf_training.jinja"),
     mm_plugin=_LazyMMPlugin(
-        "loongforge.models.foundation.minicpm_v_4_6.mm_plugin.MiniCPMV46Plugin",
+        "loongforge.data.minicpm_v_4_6_plugin.MiniCPMV46Plugin",
         image_token="<|image_pad|>",
     ),
 )

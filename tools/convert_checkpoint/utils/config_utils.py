@@ -23,8 +23,6 @@ from convert_checkpoint.common.common_checkpoint import (
     LAYER_PREFIX,
     LAYERNORM_BIAS,
     LAYERNORM_WEIGHT,
-    MTP_LAYER_PREFIX,
-    MTP_WORD_EMBEDDING,
     VISION_MAP,
     VISION_WORD_EMBEDDINGS,
     WEIGHT,
@@ -216,11 +214,7 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
     if adapter is not None:
         c_config = replace_vlm_config(c_config, adapter, vision_patch)
     if for_vlm:
-        for name in (
-            [LAYER_PREFIX, MTP_LAYER_PREFIX, MTP_WORD_EMBEDDING]
-            + FIRST_LAYER_NAMES
-            + LAST_LAYER_NAMES
-        ):
+        for name in [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES:
             if name not in c_config.get("name_map")["mcore"]:
                 continue
             old_key = c_config.get("name_map")["mcore"].get(name, None)

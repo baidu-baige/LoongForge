@@ -11,7 +11,7 @@ from typing_extensions import override
 from loongforge.data.mm_plugin import MMPlugin
 from loongforge.utils.constants import Placeholder
 
-from .image_processor import MiniCPMV46ImageProcessor
+from .minicpm_v_4_6_image_processor import MiniCPMV46ImageProcessor
 
 if TYPE_CHECKING:
     import torch

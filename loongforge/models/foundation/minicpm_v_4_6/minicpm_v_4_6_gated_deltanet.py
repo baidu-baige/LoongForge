@@ -48,7 +48,7 @@ from .context_parallel import (
     gather_from_context_parallel_region,
     scatter_to_context_parallel_region,
 )
-from .linear_utils import torch_linear_forward
+from .peft import torch_linear_forward
 
 try:
     from fla.modules import FusedRMSNormGated
