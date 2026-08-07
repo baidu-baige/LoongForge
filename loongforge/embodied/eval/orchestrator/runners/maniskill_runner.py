@@ -185,6 +185,18 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     np.random.seed(args.seed)
     env, adapter = _build_env(args)
     payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
+    # ManiSkill ships only the delta controller (pd_ee_delta_pose). A model
+    # whose action encoding needs a decoder (e.g. xvla absolute EE) cannot be
+    # executed as-is — abs->delta subtraction is wrong (rotvec not linearly
+    # subtractable + scale mismatch, see model_integration.md §4.2). Fail fast
+    # instead of silently scoring 0.
+    if action_decoder_key and not args.random_init:
+        raise NotImplementedError(
+            f"ManiSkill+{action_decoder_key} requires an absolute-EE control "
+            f"mode (not implemented; ManiSkill only ships pd_ee_delta_pose). "
+            f"See loongforge/embodied/eval/docs/model_integration.md §4.2. "
+            f"For link smoke, set server.random_init: true."
+        )
     client = PolicyClient(host=args.host, port=args.port)
 
     episode_id = f"maniskill/{args.task_name}/episode={args.episode_idx}"
@@ -337,6 +349,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
         (benchmark, "success_reward_threshold", "success_reward_threshold"),
         (server, "host", "host"),
         (server, "port", "port"),
+        (server, "random_init", "random_init"),
         (run, "seed", "seed"),
         (run, "episode_idx", "episode_idx"),
         (run, "output_dir", "output_dir"),

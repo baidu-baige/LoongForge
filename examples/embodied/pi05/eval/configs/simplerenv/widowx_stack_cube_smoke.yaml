@@ -18,7 +18,7 @@ benchmark:
   control_freq: 5
   control_mode: arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos
   action_scale: 1.0
-  rotation_mode: euler
+  rotation_mode: euler   # UNVERIFIED for task-success: pi05 emits axis-angle deltas (GR00T delta path uses axis_angle); re-check with real Bridge weights
   max_steps: 20  # short smoke; raise when using real domain weights
   success_settle_steps: 0
   robot_init_x: 0.147

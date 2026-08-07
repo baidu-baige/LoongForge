@@ -4,8 +4,10 @@
 # Open weight: https://huggingface.co/2toINF/X-VLA-WidowX
 # Protocol: domain_id=0, max_steps=1200, decoder auto-composed ee6d_to_simpler_abs_euler,
 #   control_mode=arm_pd_ee_target_base_pose_gripper_pd_joint_pos
-# REQUIRED: SimplerEnv absolute EE controller (255isWhite fork or patch).
-#   See examples/embodied/xvla/eval/SIMPLERENV_PATCH_en.md
+# REQUIRED: this config needs the SimplerEnv absolute EE controller, which upstream
+#   does not ship — use the 255isWhite fork or apply the two manual patches
+#   (see loongforge/embodied/eval/docs/benchmarks/simplerenv.md Step 1 and
+#   loongforge/embodied/eval/docs/patches/simplerenv/xvla.md).
 #
 # Optional overrides (edit this file):
 #   task_name / robot_setup / scene_name — other Bridge tasks:

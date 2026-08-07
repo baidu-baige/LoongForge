@@ -1,4 +1,14 @@
-# X-VLA SimplerEnv (WidowX) Eval: SimplerEnv Version Requirements and Patches
+# X-VLA SimplerEnv Guide
+
+> **Before running xvla + SimplerEnv evaluation**, execute the check in
+> [Patch requirement check](#patch-requirement-check)
+> and confirm the absolute EE controller is present. Skipping this usually surfaces as a 0% success run after hundreds of steps.
+
+## Impact boundary
+
+- The patches only (a) register one new controller entry and (b) change the **dead** non-delta branch of `PDEEPoseController.compute_target_pose` (`use_delta=False`, unreachable on stock upstream).
+- Delta control modes (`arm_pd_ee_target_delta_pose_align2_*`, used by pi05 and GR00T) are **unaffected**; models on the delta path can share the same environment.
+- Written against `ManiSkill2_real2sim@54ae2e0e` (the official 255isWhite fork pin). Option 2 strictly follows that fork; apply on the same base version or verify the surrounding code first.
 
 ## Background
 
@@ -20,7 +30,7 @@ SimplerEnv WidowX only provides **delta** control modes. Mismatch leads to two f
 
 Measured on 2026-07-21: before the patch, stack_cube failed for all steps through 120/300; after the patch and switching to absolute control, episode 0 succeeded in 55 steps.
 
-## How to check whether your SimplerEnv needs the patch
+## Patch requirement check
 
 Run (replace python and paths):
 
@@ -37,7 +47,9 @@ print('arm_pd_ee_target_base_pose_gripper_pd_joint_pos' in WidowXDefaultConfig()
 - Prints `True`: nothing to do (official fork or already patched).
 - Prints `False`: apply one of the two options below.
 
-## Option 1 (recommended): use the official fork
+## Option 1: use the official fork
+
+This is the recommended path.
 
 ```bash
 git clone https://github.com/255isWhite/SimplerEnv.git --recurse-submodules
@@ -47,9 +59,9 @@ cd .. && pip install -e .
 
 Point `env.simplerenv_root` in the eval YAML at that directory.
 
-## Option 2: patch upstream (two edits, both under the `ManiSkill2_real2sim` submodule)
+## Option 2: apply manual patches
 
-These changes strictly follow the official fork (`simpler-env/ManiSkill2_real2sim@54ae2e0e`).
+These changes strictly follow the official fork ([simpler-env/ManiSkill2_real2sim@54ae2e0e](https://github.com/simpler-env/ManiSkill2_real2sim/tree/54ae2e0e9422807d060aa15ff7c04970d38d3cf8)).
 Delta control modes are unchanged (pi0.5 and other models on the delta path are unaffected).
 
 ### Patch 1: register absolute EE pose controller
@@ -91,7 +103,7 @@ Why this is required: the X-VLA client protocol outputs Euler xyz (rot6d → eul
 
 > Note: on stock upstream, no control mode reaches this non-delta branch (dead code), so the edit does not change any existing upstream behavior.
 
-## Matching eval YAML fields
+## Eval config
 
 See `configs/simplerenv/widowx_stack_cube_smoke.yaml`:
 

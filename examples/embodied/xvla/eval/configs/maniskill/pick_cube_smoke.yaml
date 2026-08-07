@@ -15,7 +15,7 @@ benchmark:
   robot_uid: panda
   instruction: pick up the cube
   obs_mode: rgbd  # optional: state (+ allow_dummy_image: true)
-  control_mode: pd_ee_delta_pose
+  control_mode: pd_ee_delta_pose   # UNVERIFIED for task-success: xvla emits absolute EE poses (delta-controller semantics mismatch); re-check with real ManiSkill weights
   control_freq: 5
   render_mode: rgb_array
   sim_backend: auto

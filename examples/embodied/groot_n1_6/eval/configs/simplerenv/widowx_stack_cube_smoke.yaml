@@ -1,24 +1,33 @@
-# GR00T-N1.6 × SimplerEnv WidowX (Bridge) smoke — public template.
+# GR00T-N1.6 × SimplerEnv WidowX (Bridge) task-success template (public).
 #
-# Fill in the /path/to/... placeholders. Uses the official
-# nvidia/GR00T-N1.6-bridge weights (embodiment oxe_widowx). Bounded smoke.
-# For a credible score, switch to a delta EE control_mode and verify gripper sign.
+# Uses the official nvidia/GR00T-N1.6-bridge weights (embodiment oxe_widowx).
+# GR00T bridge emits DELTA EE actions, so it runs on the stock upstream delta
+# controller — no SimplerEnv env change required (unlike xvla's absolute EE).
+#
+# Verified: widowx_put_eggplant_in_basket 20/20 (100%) with prepackaged_config
+# (official N1.6 = 89%). With prepackaged_config: true the env applies its
+# official visual-matching config and randomizes scene/overlay/init per episode
+# — do NOT hand-set scene_name / rgb_overlay_path / robot_init_x/y.
+#
+# Optional overrides (edit this file or copy it):
+#   task_name: widowx_put_eggplant_in_basket | widowx_carrot_on_plate |
+#              widowx_spoon_on_towel | widowx_stack_cube
+#   seeds/episodes: raise for a rate over >=20 episodes (flow-matching
+#     sampling is stochastic)
+#   server.random_init: true + max_steps: 20 — link smoke without weights
 
 benchmark:
   name: simplerenv
   task_name: widowx_stack_cube
   robot_setup: widowx
-  scene_name: bridge_table_1_v1
-  rgb_overlay_path: /path/to/SimplerEnv/ManiSkill2_real2sim/data/real_inpainting/bridge_real_eval_1.png
+  prepackaged_config: true   # official visual-matching config + per-episode randomization
   sim_freq: 500
   control_freq: 5
-  control_mode: arm_pd_ee_target_base_pose_gripper_pd_joint_pos
+  control_mode: arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos  # stock upstream, no patch
   action_scale: 1.0
-  rotation_mode: euler
-  max_steps: 120
+  rotation_mode: axis_angle   # GR00T rpy deltas passed straight to the OSC delta controller
+  max_steps: 300              # official widowx max_episode_steps
   success_settle_steps: 0
-  robot_init_x: 0.147
-  robot_init_y: 0.028
 
 model:
   backend: loongforge
@@ -26,9 +35,10 @@ model:
   base_model_path: /path/to/eagle3-processor-groot-n1d6
   model_name: /path/to/eagle3-processor-groot-n1d6
   vlm_tokenizer_path: /path/to/eagle3-processor-groot-n1d6
+  # PayloadBuilder capability declarations (client-side).
   state_encoding: simpler_widowx
-  action_encoding: simpler_abs_euler
-  use_flash_attention: true
+  action_encoding: simpler_abs_euler   # == adapter action_space -> IdentityDecoder
+  use_flash_attention: true            # set false if flash_attn is not installed (uses sdpa)
 
 server:
   host: 127.0.0.1
@@ -43,6 +53,7 @@ server:
   embodiment_tag: oxe_widowx
   use_bf16: true
   loongforge_root: /path/to/LoongForge-VLA
+  chunk_execute_steps: 4     # official --n-action-steps 4; 8 dropped eggplant 100% -> 20%
 
 env:
   eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
@@ -56,8 +67,8 @@ run:
   seed: 7
   episode_idx: 0
   obj_episode_id: 0
-  save_trace: false
-  save_replay: false
+  save_trace: true
+  save_replay: true
   disable_action_cache: false
   timestamped_output: false
 

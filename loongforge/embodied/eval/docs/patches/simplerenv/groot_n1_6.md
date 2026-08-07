@@ -1,15 +1,15 @@
-# GR00T-N1.6 SimplerEnv (WidowX / Bridge) Eval: Reproduction Guide
+# GR00T-N1.6 SimplerEnv Guide
 
 How to reproduce GR00T-N1.6 on SimplerEnv WidowX (Bridge) in the LoongForge eval
 harness, including the fork reference and the two model-side fixes that actually
-decide success. Companion to X-VLA's `../../xvla/eval/SIMPLERENV_PATCH_en.md`.
+decide success. Companion to X-VLA's [xvla.md](xvla.md).
 
-## Background: which SimplerEnv / fork
+## Background
 
 The official GR00T-N1.6 SimplerEnv eval uses NVIDIA's pinned fork
 [`squarefk/SimplerEnv`](https://github.com/NVIDIA/Isaac-GR00T/blob/main/examples/SimplerEnv/README.md),
 whose `ManiSkill2_real2sim` submodule points at
-`youliangtan/ManiSkill2_real2sim@c2a9e87c186300b694da6f2497dd68d2c347a4b7`.
+[youliangtan/ManiSkill2_real2sim@c2a9e87](https://github.com/youliangtan/ManiSkill2_real2sim/tree/c2a9e87c186300b694da6f2497dd68d2c347a4b7).
 
 Unlike X-VLA (which needs an *absolute* EE controller patch), **GR00T bridge
 emits delta EE actions**, so it runs on the stock upstream delta controller
@@ -20,9 +20,13 @@ ported below.
 
 The 4 standard WidowX tasks (`widowx_spoon_on_towel`, `widowx_carrot_on_plate`,
 `widowx_stack_cube`, `widowx_put_eggplant_in_basket`) already exist in upstream
-`simpler-env/SimplerEnv`, so they need no env changes.
+[simpler-env/SimplerEnv](https://github.com/simpler-env/SimplerEnv), so they need no env changes.
 
-## Model-side adaptation (the parts that decide success)
+## Patch requirement check
+
+The 4 standard WidowX tasks need no env changes — GR00T-N1.6 emits delta EE actions and runs on the stock upstream delta controller. Only the drawer tasks (`widowx_open_drawer` / `widowx_close_drawer`) need the env port in [Env-side drawer task port](#env-side-drawer-task-port).
+
+## Model-side adaptation
 
 GR00T-N1.6 reuses the shared `predict_action` path (no bespoke policy). Eval
 files: `loongforge/embodied/eval/factories/groot_n1_6_factory.py`,
@@ -51,7 +55,7 @@ NOT hand-derive from `statistics.json` ranges):
    model's rpy delta passed **directly** to the delta controller (no
    euler→axis-angle), i.e. eval `rotation_mode: axis_angle`.
 
-Other required runtime bits (see `run_simplerenv_eval_internal.sh`):
+Other required runtime bits (see `run_simplerenv_eval.sh`):
 - `CUDA_GRAPH_IMPL=local` so the Eagle backbone loads via the repo-local builder
   (offline, from the processor dir's `config.json`) instead of HF remote code.
 - `flash_attn` installed in the loongforge env (or set
@@ -59,7 +63,7 @@ Other required runtime bits (see `run_simplerenv_eval_internal.sh`):
 - `server.chunk_execute_steps: 4` → open-loop n_action_steps=4 (official WidowX
   value; stabilizes the gripper vs replanning every step).
 
-## Env-side: port the WidowX drawer tasks (only needed for open/close drawer)
+## Env-side drawer task port
 
 Our base env already supports the `dummy_drawer` scene and the `widowx` robot,
 and the drawer URDF is primitive geometry (no meshes), so the port is 3 files +
@@ -111,12 +115,12 @@ default), success = drawer joint qpos ≥0.10 (open) / ≤0.04 (close).
 
 ## Assets
 
-- Weights: `nvidia/GR00T-N1.6-bridge` (2-shard safetensors + `statistics.json`
+- Weights: [nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge) (2-shard safetensors + `statistics.json`
   carrying the `oxe_widowx` state/action stats).
 - Eagle processor dir (`config.json` = Eagle3VL + tokenizer), e.g.
-  `nvidia/Eagle-Block2A-2B-v2` / `aravindhs-NV/eagle3-processor-groot-n1d6`.
+  [nvidia/Eagle-Block2A-2B-v2](https://huggingface.co/nvidia/Eagle-Block2A-2B-v2) / [aravindhs-NV/eagle3-processor-groot-n1d6](https://huggingface.co/aravindhs-NV/eagle3-processor-groot-n1d6).
 
-## Eval protocol: use the official prepackaged config (decides the success rate)
+## Eval config
 
 Set `benchmark.prepackaged_config: true`. This makes the runner build the env
 via `build_maniskill2_env(env_name, prepackaged_config=True, ...)` and reset
@@ -138,13 +142,12 @@ always report the rate over ≥20 episodes, not a single run.
 
 ```bash
 # eggplant (standard bridge task)
-CONFIG=configs/simplerenv/widowx_stack_cube_smoke_internal.yaml \
-  bash examples/embodied/groot_n1_6/eval/run_simplerenv_eval_internal.sh
+bash examples/embodied/groot_n1_6/eval/run_simplerenv_eval.sh
 
 # drawer tasks: set benchmark.task_name: widowx_open_drawer | widowx_close_drawer,
 # benchmark.scene_name: dummy_drawer,
 # rgb_overlay_path: .../real_inpainting/bridge_small_drawer.png,
-# max_steps: 120
+# max_steps: 300
 ```
 
 Matching eval YAML fields:
@@ -163,7 +166,7 @@ server:
   chunk_execute_steps: 4             # official n_action_steps=4
 ```
 
-## Results (this repo, GR00T-N1.6-bridge)
+## Results
 
 Official `prepackaged_config: true` + all model-side fixes, 20 episodes each:
 - `widowx_put_eggplant_in_basket`: **20/20 (100%)** (official N1.6 = 89%)
@@ -193,8 +196,8 @@ Pitfalls that cost time here (don't repeat):
 ## References
 
 - NVIDIA GR00T SimplerEnv README + benchmark table:
-  https://github.com/NVIDIA/Isaac-GR00T/blob/main/examples/SimplerEnv/README.md
+  [https://github.com/NVIDIA/Isaac-GR00T/blob/main/examples/SimplerEnv/README.md](https://github.com/NVIDIA/Isaac-GR00T/blob/main/examples/SimplerEnv/README.md)
 - Official WidowX obs/action wrapper: `gr00t/eval/sim/SimplerEnv/simpler_env.py`
-- Pinned fork: `squarefk/SimplerEnv` → `youliangtan/ManiSkill2_real2sim@c2a9e87`
+- Pinned fork: [squarefk/SimplerEnv](https://github.com/squarefk/SimplerEnv) → [youliangtan/ManiSkill2_real2sim@c2a9e87](https://github.com/youliangtan/ManiSkill2_real2sim/tree/c2a9e87c186300b694da6f2497dd68d2c347a4b7)
 - Bridge action normalization: the checkpoint's `processor_config.json`
   (`oxe_widowx` → `mean_std_embedding_keys`).

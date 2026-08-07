@@ -27,8 +27,9 @@ model:
   backend: loongforge
   model_type: pi05
   name: loongforge-pi05-maniskill-smoke
+  state_encoding: passthrough   # ManiSkill 8D Panda qpos from state_raw.joint (needs dataset_statistics_path with observation.state for real weights)
   action_dim: 7
-  state_dim: 7
+  state_dim: 8   # ManiSkill 8D Panda qpos (7 arm joints + 1 finger mean), matches state_encoding: passthrough
   action_horizon: 50
   max_action_dim: 32
   max_state_dim: 32
