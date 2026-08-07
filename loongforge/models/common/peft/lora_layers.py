@@ -1,7 +1,3 @@
-# Copyright 2026 The LoongForge Authors.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Modified from NVIDIA NeMo Megatron-Bridge under the Apache-2.0 License.
 # Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,65 +32,6 @@ if torch.cuda.is_available():
 else:
     bitsandbytes = None
     HAVE_BNB = False
-
-
-def lora_linear_forward(
-    linear_in: nn.Linear,
-    linear_out: nn.Linear,
-    x: torch.Tensor,
-    scale: float,
-    output_dtype: torch.dtype,
-) -> torch.Tensor:
-    """Run FP32 LoRA parameters with the base model's autocast dtype."""
-    x = x.to(dtype=linear_in.weight.dtype)
-    if x.is_cuda and output_dtype in (torch.float16, torch.bfloat16):
-        with torch.autocast(device_type="cuda", dtype=output_dtype):
-            return linear_out(linear_in(x)) * scale
-    return linear_out(linear_in(x)) * scale
-
-
-def torch_linear_forward(
-    module: nn.Module,
-    x: torch.Tensor,
-) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-    """Run a linear projection with PyTorch while preserving an attached adapter."""
-    wrapper = module if isinstance(module, AdapterWrapper) else None
-    base = wrapper.to_wrap if wrapper is not None else module
-    bias = getattr(base, "bias", None)
-    if bias is not None and bias.numel() == 0:
-        bias = None
-    skip_bias_add = getattr(base, "skip_bias_add", False)
-    projection_input = x.to(dtype=base.weight.dtype)
-    output = torch.nn.functional.linear(
-        projection_input,
-        base.weight,
-        None if skip_bias_add else bias,
-    )
-
-    if wrapper is not None and wrapper._adapter_enabled:
-        adapter_output = wrapper.adapter(projection_input.contiguous()).reshape(output.shape)
-        output = output + adapter_output.to(dtype=output.dtype)
-    elif (
-        wrapper is None
-        and getattr(module, "_adapter_enabled", False)
-        and hasattr(module, "linear_in")
-        and hasattr(module, "linear_out")
-    ):
-        adapter_input = projection_input.to(dtype=module.linear_in.weight.dtype)
-        if module.dropout_position == "pre":
-            adapter_input = module.dropout(adapter_input)
-        adapter_output = lora_linear_forward(
-            module.linear_in,
-            module.linear_out,
-            adapter_input,
-            module.scale,
-            output.dtype,
-        )
-        if module.dropout_position == "post":
-            adapter_output = module.dropout(adapter_output)
-        output = output + adapter_output.to(dtype=output.dtype)
-
-    return output, bias if skip_bias_add else None
 
 
 class LoRALinear(AdapterWrapper):
@@ -279,14 +216,7 @@ class TELinearAdapter(te.Linear):
             Combined output from original linear layer and LoRA adaptation.
         """
         # pylint: disable=C0115,C0116
-        if self.linear_in.weight.dtype != self.weight.dtype:
-            # TE recursively inspects child parameters outside autocast. Its base
-            # projection still runs in model precision; the adapter branch below
-            # owns the explicitly configured LoRA dtype.
-            with torch.autocast(device_type="cuda", dtype=x.dtype):
-                res = super(TELinearAdapter, self).forward(x)
-        else:
-            res = super(TELinearAdapter, self).forward(x)
+        res = super(TELinearAdapter, self).forward(x)
 
         if not self._adapter_enabled:
             return res
@@ -294,12 +224,11 @@ class TELinearAdapter(te.Linear):
         if self.dropout_position == "pre":
             x = self.dropout(x)
         # LoRA fwd is performed in original precision regardless of FP8 enabled
-        lora_res = lora_linear_forward(
-            self.linear_in, self.linear_out, x, self.scale, res.dtype
-        )
+        lora_res = self.linear_out(self.linear_in(x))
+        lora_res = lora_res * self.scale
         if self.dropout_position == "post":
             lora_res = self.dropout(lora_res)
-        return res + lora_res.to(dtype=res.dtype)
+        return res + lora_res
 
 
 class TEFusedLoRALinear(LoRALinear):
@@ -705,12 +634,11 @@ class LinearAdapter(nn.Linear):
 
         if self.dropout_position == "pre":
             x = self.dropout(x)
-        lora_res = lora_linear_forward(
-            self.linear_in, self.linear_out, x, self.scale, res.dtype
-        )
+        lora_res = self.linear_out(self.linear_in(x))
+        lora_res = lora_res * self.scale
         if self.dropout_position == "post":
             lora_res = self.dropout(lora_res)
-        return res + lora_res.to(dtype=res.dtype)
+        return res + lora_res
 
 
 def patch_linear_module(

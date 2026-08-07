@@ -8,9 +8,10 @@ from typing import List
 
 import torch
 
-from loongforge.models.common.base_model_config import (
-    BaseModelConfig,
-    _initialize_pretrained_config,
+from loongforge.models.common.base_model_config import BaseModelConfig
+from loongforge.models.foundation.minicpm_v_4_6.configuration_utils import (
+    initialize_pretrained_config,
+    initialize_transformer_config,
 )
 
 
@@ -40,12 +41,14 @@ class MiniCPMV46VisionConfig(BaseModelConfig):
     insert_layer_id: int = 6
     window_kernel_size: List[int] = field(default_factory=lambda: [2, 2])
     image_token_id: int = 248056
-    video_token_id: int = 248057
     downsample_mode: str = "16x"
     mix_used_vision_encoder: bool = True
     mix_used_vision_projector: bool = True
 
     model_type: str = "minicpm_v_4_6_vit"
+
+    def __post_init__(self) -> None:
+        initialize_transformer_config(self)
 
     @property
     def num_position_embeddings(self) -> int:
@@ -77,10 +80,8 @@ class MiniCPMV46MergerConfig(BaseModelConfig):
     layernorm_epsilon: float = 1e-6
     merge_kernel_size: List[int] = field(default_factory=lambda: [2, 2])
     merger_times: int = 1
-    requires_target_sizes: bool = True
-
     model_type: str = "minicpm_v_4_6_merger"
 
     def __post_init__(self) -> None:
         """Initialize HF metadata without transformer-only TP validation."""
-        _initialize_pretrained_config(self)
+        initialize_pretrained_config(self)

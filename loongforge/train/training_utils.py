@@ -9,7 +9,7 @@
 import os
 import dataclasses
 import gc
-from contextlib import contextmanager
+import importlib
 from datetime import datetime, timedelta
 import logging
 import sys
@@ -124,10 +124,9 @@ from megatron.training.training import (
     enable_forward_pre_hook,
     dummy_train_step,
     post_training_step_callbacks,
-    checkpoint_and_decide_exit as megatron_checkpoint_and_decide_exit,
+    checkpoint_and_decide_exit,
 )
 from loongforge.models.common.peft.lora import LoRA, VLMLoRA
-from loongforge.models.common.peft.canonical_lora import CanonicalLoRA
 from loongforge.models.common.peft.utils import apply_peft_transformation
 from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelper
 from dataclasses import asdict
@@ -162,50 +161,6 @@ except ImportError:
     HAS_INSPECTOR = False
 
 stimer = StragglerDetector()
-
-
-@contextmanager
-def _temporary_optimizer_backend(config, backend):
-    """Select an optimizer backend only while Megatron builds the optimizer."""
-    if backend == "default":
-        yield
-        return
-    if backend != "torch-fused":
-        raise ValueError(f"Unsupported optimizer backend: {backend}")
-    if config.optimizer != "adam":
-        raise ValueError("--optimizer-backend torch-fused requires --optimizer adam")
-    if config.use_precision_aware_optimizer:
-        raise ValueError(
-            "--optimizer-backend torch-fused does not support "
-            "--use-precision-aware-optimizer"
-        )
-
-    import megatron.core.optimizer as mcore_optimizer
-
-    original_adam = torch.optim.Adam
-    original_adamw = torch.optim.AdamW
-    original_backend_flag = mcore_optimizer.USING_PYTORCH_OPTIMIZER
-
-    class TorchFusedAdam(original_adam):
-        def __init__(self, *optimizer_args, **optimizer_kwargs):
-            optimizer_kwargs["fused"] = True
-            super().__init__(*optimizer_args, **optimizer_kwargs)
-
-    class TorchFusedAdamW(original_adamw):
-        def __init__(self, *optimizer_args, **optimizer_kwargs):
-            optimizer_kwargs["fused"] = True
-            super().__init__(*optimizer_args, **optimizer_kwargs)
-
-    mcore_optimizer.torch.optim.Adam = TorchFusedAdam
-    mcore_optimizer.torch.optim.AdamW = TorchFusedAdamW
-    mcore_optimizer.USING_PYTORCH_OPTIMIZER = True
-    print_rank_0("Using torch-fused optimizer backend.")
-    try:
-        yield
-    finally:
-        mcore_optimizer.torch.optim.Adam = original_adam
-        mcore_optimizer.torch.optim.AdamW = original_adamw
-        mcore_optimizer.USING_PYTORCH_OPTIMIZER = original_backend_flag
 
 
 # ---------------------------------------------------------------------------
@@ -602,7 +557,6 @@ def pretrain(
                 config=config,
                 checkpointing_context=checkpointing_context,
                 non_loss_data_func=non_loss_data_func,
-                peft_class=peft_class,
             )
 
         print_datetime("after training is done")
@@ -665,7 +619,7 @@ def pretrain(
             write_to_tensorboard=not args.skip_train,
             non_loss_data_func=non_loss_data_func,
         )
-
+    
     # Save HF checkpoint at the end of training if --save-hf is enabled
     save_hf_enabled = getattr(args, 'save_hf', 'false').lower() == 'true'
     if save_hf_enabled and iteration == args.train_iters:
@@ -869,7 +823,7 @@ def get_model(
 
             # Directly call load_checkpoint_from path in order to avoid
             # the load directory overriding the pretrained checkpoint path
-            # This is needed to initialize the base model weights first,
+            # This is needed to initialize the base model weights first, 
             # and then conditionally load adapter states after
             _load_checkpoint_from_path(
                 load_dir=args.pretrained_checkpoint,
@@ -883,12 +837,11 @@ def get_model(
                 ignore_ckpt_step=True,  # ckpt_step applies only to adapter checkpoints, not pretrained base model
             )
 
+        custom_peft_class = getattr(model_config, "peft_class", None)
         if "VLM" in type(model_config.peft_config).__name__:
             peft_config = check_vlm_peft_config(model_config)
             peft_kwargs = asdict(peft_config)
-            canonical = peft_kwargs.pop("canonical", False)
-            if canonical:
-                peft_kwargs.pop("a2a_experimental", None)
+            if custom_peft_class:
                 for key in (
                     "apply_to_foundation",
                     "apply_to_image_encoder",
@@ -897,20 +850,18 @@ def get_model(
                     "apply_to_video_projector",
                 ):
                     peft_kwargs.pop(key, None)
-                peft_class = CanonicalLoRA(**peft_kwargs)
+                module_name, class_name = custom_peft_class.rsplit(".", 1)
+                peft_factory = getattr(importlib.import_module(module_name), class_name)
+                peft_class = peft_factory(**peft_kwargs)
             else:
-                peft_kwargs.pop("adapter_backend", None)
-                peft_kwargs.pop("fc1_adapter_order", None)
                 peft_class = VLMLoRA(**peft_kwargs)
         else:
-            peft_kwargs = asdict(model_config.peft_config)
-            canonical = peft_kwargs.pop("canonical", False)
-            if canonical:
-                peft_kwargs.pop("a2a_experimental", None)
+            if custom_peft_class:
+                module_name, class_name = custom_peft_class.rsplit(".", 1)
+                peft_factory = getattr(importlib.import_module(module_name), class_name)
+                peft_class = peft_factory(**asdict(model_config.peft_config))
             else:
-                peft_kwargs.pop("adapter_backend", None)
-                peft_kwargs.pop("fc1_adapter_order", None)
-            peft_class = (CanonicalLoRA if canonical else LoRA)(**peft_kwargs)
+                peft_class = LoRA(**asdict(model_config.peft_config))
         transformed_model = apply_peft_transformation(peft_class, model)
         return transformed_model, peft_class
 
@@ -956,14 +907,11 @@ def get_model(
             param_pattern = [param_pattern]
 
         config = get_model_config(model[0])
-
+       
         model = [Float16Module(config, model_module) for model_module in model]
-        adapter_dtype = getattr(peft_class, "lora_dtype", None)
-        if adapter_dtype is not None:
-            for model_module in model:
-                for parameter in model_module.parameters():
-                    if parameter.requires_grad:
-                        parameter.data = parameter.data.to(dtype=adapter_dtype)
+        post_float16_wrap = getattr(peft_class, "post_float16_wrap", None)
+        if callable(post_float16_wrap):
+            post_float16_wrap(model)
         fp32_training_weights = param_pattern
         #covert fp32
         if fp32_training_weights:
@@ -1146,20 +1094,17 @@ def setup_model_and_optimizer(
     if getattr(args, "force_all_weight_decay", None):
         no_wd_decay_cond = (False,)
 
-    with _temporary_optimizer_backend(
-        config, getattr(args, "optimizer_backend", "default")
-    ):
-        optimizer = get_megatron_optimizer(
-            config,
-            model,
-            no_wd_decay_cond,
-            scale_lr_cond,
-            lr_mult,
-            use_gloo_process_groups=args.enable_gloo_process_groups,
-            # If the user is asking for a non-zero embedding init std, skip weight decay for embeddings
-            #  to avoid embeddings from shrinking to zero as recommended in https://arxiv.org/abs/2312.16903
-            default_skip_embedding_weight_decay=args.embedding_init_method_std is not None,
-        )
+    optimizer = get_megatron_optimizer(
+        config,
+        model,
+        no_wd_decay_cond,
+        scale_lr_cond,
+        lr_mult,
+        use_gloo_process_groups=args.enable_gloo_process_groups,
+        # If the user is asking for a non-zero embedding init std, skip weight decay for embeddings
+        #  to avoid embeddings from shrinking to zero as recommended in https://arxiv.org/abs/2312.16903
+        default_skip_embedding_weight_decay=args.embedding_init_method_std is not None,
+    )
     opt_param_scheduler = get_optimizer_param_scheduler(optimizer)
 
     # moe upcycling
@@ -1253,9 +1198,9 @@ def setup_model_and_optimizer(
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
 
-        #For models such as GLM-5, the model structure is similar to DeepSeek,
-        #but the weights are different from DeepSeek.
-        #MTP does not have separate embedding weights, and in pipeline scenarios,
+        #For models such as GLM-5, the model structure is similar to DeepSeek, 
+        #but the weights are different from DeepSeek. 
+        #MTP does not have separate embedding weights, and in pipeline scenarios, 
         #weights need to be copied from the first PP stage.
         if args.should_get_embedding_weights_for_mtp:
             _p2p_embedding_weights_for_mtp(unwrapped_model, args)
@@ -1380,7 +1325,6 @@ def save_checkpoint_and_time(
     checkpointing_context,
     non_persistent_ckpt=False,
     train_data_iterator=None,
-    peft_class=None,
 ):
     """Save checkpoint and time."""
     args = get_args()
@@ -1409,7 +1353,6 @@ def save_checkpoint_and_time(
         non_persistent_ckpt=non_persistent_ckpt,
         train_data_iterator=train_data_iterator,
         preprocess_common_state_dict_fn=preprocess_common_state_dict,
-        peft_class=peft_class,
     )
     if args.fp8:
         # Run garbage collection after checkpoint saving to free memory from
@@ -1427,7 +1370,6 @@ def save_checkpoint_and_time(
             opt_param_scheduler=None,
             num_floating_point_operations_so_far=num_floating_point_operations_so_far,
             save_arg="save_ema",
-            peft_class=peft_class,
         )
 
     timers(timer_key).stop(barrier=True)
@@ -1441,123 +1383,6 @@ def save_checkpoint_and_time(
     # Recover timing
     energy_monitor.resume()
     timers("interval-time", log_level=0).start(barrier=True)
-
-
-def checkpoint_and_decide_exit(
-    model,
-    ema,
-    optimizer,
-    opt_param_scheduler,
-    iteration,
-    num_floating_point_operations_so_far,
-    checkpointing_context,
-    train_data_iterator,
-    peft_class=None,
-):
-    """Route PEFT saves through LoongForge so adapter filtering is preserved."""
-    if peft_class is None:
-        return megatron_checkpoint_and_decide_exit(
-            model,
-            optimizer,
-            opt_param_scheduler,
-            iteration,
-            num_floating_point_operations_so_far,
-            checkpointing_context,
-            train_data_iterator,
-        )
-
-    args = get_args()
-    saved_checkpoint = False
-
-    if args.exit_signal_handler:
-        signal_handler = get_signal_handler()
-        if any(signal_handler.signals_received()):
-            if args.save:
-                save_checkpoint_and_time(
-                    iteration,
-                    model,
-                    ema,
-                    optimizer,
-                    opt_param_scheduler,
-                    num_floating_point_operations_so_far,
-                    checkpointing_context,
-                    train_data_iterator=train_data_iterator,
-                    peft_class=peft_class,
-                )
-            print_datetime("exiting program after receiving SIGTERM.")
-            return True
-
-    if args.save and args.save_interval and iteration % args.save_interval == 0:
-        save_checkpoint_and_time(
-            iteration,
-            model,
-            ema,
-            optimizer,
-            opt_param_scheduler,
-            num_floating_point_operations_so_far,
-            checkpointing_context,
-            train_data_iterator=train_data_iterator,
-            peft_class=peft_class,
-        )
-        saved_checkpoint = True
-    elif (
-        args.save
-        and args.non_persistent_save_interval
-        and iteration % args.non_persistent_save_interval == 0
-    ):
-        save_checkpoint_and_time(
-            iteration,
-            model,
-            ema,
-            optimizer,
-            opt_param_scheduler,
-            num_floating_point_operations_so_far,
-            checkpointing_context,
-            non_persistent_ckpt=True,
-            train_data_iterator=train_data_iterator,
-            peft_class=peft_class,
-        )
-        saved_checkpoint = True
-
-    if args.exit_duration_in_mins:
-        train_time = (time.time() - _TRAIN_START_TIME) / 60.0
-        done_cuda = torch.tensor(
-            [train_time > args.exit_duration_in_mins], dtype=torch.int, device="cuda"
-        )
-        torch.distributed.all_reduce(done_cuda, op=torch.distributed.ReduceOp.MAX)
-        if done_cuda.item():
-            if args.save and not saved_checkpoint:
-                save_checkpoint_and_time(
-                    iteration,
-                    model,
-                    ema,
-                    optimizer,
-                    opt_param_scheduler,
-                    num_floating_point_operations_so_far,
-                    checkpointing_context,
-                    train_data_iterator=train_data_iterator,
-                    peft_class=peft_class,
-                )
-            print_datetime(f"exiting program after {train_time} minutes")
-            return True
-
-    if args.exit_interval and iteration % args.exit_interval == 0:
-        if args.save and not saved_checkpoint:
-            save_checkpoint_and_time(
-                iteration,
-                model,
-                ema,
-                optimizer,
-                opt_param_scheduler,
-                num_floating_point_operations_so_far,
-                checkpointing_context,
-                train_data_iterator=train_data_iterator,
-                peft_class=peft_class,
-            )
-        print_datetime(f"exiting program at iteration {iteration}")
-        return True
-
-    return False
 
 def gather_variable_shape_embeddings(
     local_embedding: torch.Tensor,
@@ -1810,7 +1635,7 @@ def train_step(
 
             embedding_list.append(
                 gather_variable_shape_embeddings(
-                    combined_embeddings,
+                    combined_embeddings, 
                     group=mpu.get_model_parallel_group()
                 )
             )
@@ -1818,7 +1643,7 @@ def train_step(
             if visual_pos_masks is not None:
                 visual_pos_masks_list.append(
                     gather_variable_shape_embeddings(
-                        visual_pos_masks,
+                        visual_pos_masks, 
                         group=mpu.get_model_parallel_group()
                     )
                 )
@@ -2036,7 +1861,7 @@ def train_step(
 
         for _round_key in list(local_model.vit_contexts.keys()):
             del local_model.vit_contexts[_round_key]
-
+        
         clear_full_hetero_info()
 
     should_checkpoint, should_exit, exit_code = (
@@ -2639,7 +2464,6 @@ def train(
     config,
     checkpointing_context,
     non_loss_data_func,
-    peft_class=None,
 ):
     """Train the model function."""
     args = get_args()
@@ -2904,7 +2728,6 @@ def train(
                     num_floating_point_operations_so_far,
                     checkpointing_context,
                     train_data_iterator=train_data_iterator,
-                    peft_class=peft_class,
                 )
         num_microbatches = get_num_microbatches()
         update_num_microbatches(
@@ -2977,7 +2800,6 @@ def train(
                 num_floating_point_operations_so_far,
                 checkpointing_context,
                 train_data_iterator=train_data_iterator,
-                peft_class=peft_class,
             )
         if should_exit:
             break
@@ -3127,14 +2949,12 @@ def train(
         # Checkpoint and decide whether to exit.
         should_exit = checkpoint_and_decide_exit(
             model,
-            ema,
             optimizer,
             opt_param_scheduler,
             iteration,
             num_floating_point_operations_so_far,
             checkpointing_context,
             train_data_iterator,
-            peft_class=peft_class,
         )
         if should_exit:
             break
@@ -3290,7 +3110,7 @@ def dump_model_input_example_once(
     ) if lab_list else 0
 
     def role_at(i):
-        if 0 < i <= len(lab_list) and lab_list[i - 1] != IGNORE_INDEX:
+        if i > 0 and lab_list[i - 1] != IGNORE_INDEX:
             return "T"
         if am_list is not None and i < len(am_list) and am_list[i]:
             return "P"

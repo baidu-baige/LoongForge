@@ -1,7 +1,3 @@
-# Copyright 2026 The LoongForge Authors.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Modified from NVIDIA NeMo Megatron-Bridge under the Apache-2.0 License.
 # Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,95 +16,22 @@
 """"canonical lora layer"""
 
 import logging
-import math
 from dataclasses import dataclass, field
 from typing import Any, List, Literal, Optional, Tuple
 
 import torch
-import torch.nn.functional as F
-import transformer_engine.pytorch as te
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
-from megatron.core.tensor_parallel.mappings import gather_from_sequence_parallel_region
 from megatron.core.transformer.moe.router import TopKRouter
-from megatron.core.transformer.utils import make_sharded_tensors_for_checkpoint
 from torch import nn
 
 from loongforge.models.common.peft.adapter_wrapper import AdapterWrapper
 from loongforge.models.common.peft.base import PEFT
-from loongforge.models.common.peft.lora_layers import (
-    LinearAdapter,
-    LoRALinear,
-    LoRATopKRouter,
-    TELinearAdapter,
-    lora_linear_forward,
-)
+from loongforge.models.common.peft.lora_layers import LinearAdapter, LoRALinear, LoRATopKRouter
 from loongforge.models.common.peft.module_matcher import ModuleMatcher
 from loongforge.models.common.peft.utils import ParallelLinearAdapter, get_adapter_attributes_from_linear, is_expert_linear
 
 
 logger = logging.getLogger(__name__)
-
-
-class DenseLinearAdapter(nn.Module):
-    """LoRA branch for a replicated dense linear projection."""
-
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        *,
-        dim: int,
-        alpha: int,
-        dtype: torch.dtype,
-        device: torch.device,
-        a_init: str,
-        b_init: str,
-        dropout: float = 0.0,
-        dropout_position: Literal["pre", "post"] = "pre",
-    ) -> None:
-        super().__init__()
-        self.linear_in = nn.Linear(in_features, dim, bias=False, dtype=dtype, device=device)
-        self.linear_out = nn.Linear(dim, out_features, bias=False, dtype=dtype, device=device)
-        if a_init == "kaiming":
-            nn.init.kaiming_uniform_(self.linear_in.weight, a=math.sqrt(5))
-        elif a_init == "xavier":
-            nn.init.xavier_normal_(self.linear_in.weight)
-        else:
-            raise ValueError(f"Unsupported canonical LoRA A initializer: {a_init}")
-        if b_init != "zero":
-            raise ValueError(f"Unsupported canonical LoRA B initializer: {b_init}")
-        nn.init.zeros_(self.linear_out.weight)
-        self.scale = alpha / dim
-        self.dropout = nn.Dropout(dropout) if dropout > 0.0 else nn.Identity()
-        if dropout_position not in ("pre", "post"):
-            raise ValueError(f"Unsupported LoRA dropout position: {dropout_position}")
-        self.dropout_position = dropout_position
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        output_dtype = x.dtype
-        x = x.to(dtype=self.linear_in.weight.dtype)
-        if self.dropout_position == "pre":
-            x = self.dropout(x)
-        x = lora_linear_forward(
-            self.linear_in, self.linear_out, x, self.scale, output_dtype
-        )
-        if self.dropout_position == "post":
-            x = self.dropout(x)
-        return x.to(dtype=output_dtype)
-
-    def sharded_state_dict(
-        self,
-        prefix: str = "",
-        sharded_offsets: Tuple[Tuple[int, int, int]] = (),
-        metadata: Optional[dict] = None,
-    ) -> ShardedStateDict:
-        """Treat replicated dense adapter weights as data-parallel shards."""
-        del metadata
-        return make_sharded_tensors_for_checkpoint(
-            self.state_dict(keep_vars=True),
-            prefix,
-            sharded_offsets=sharded_offsets,
-        )
 
 
 class ModuleDict(nn.ModuleDict):
@@ -207,10 +130,6 @@ class LoRALinearSplitQKV(AdapterWrapper):
         qkv = torch.cat(qkv_chunks, dim=1)
         return qkv.reshape(*leading_shape, -1)
 
-    def adapter_output(self, component: str, x: torch.Tensor) -> torch.Tensor:
-        """Return one logical adapter projection."""
-        return getattr(self.adapter, f"adapter_{component}")(x)
-
     def forward(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         # pylint: disable=C0115,C0116
         linear_output, bias, layernorm_output = self.base_linear_forward(x, *args, **kwargs)
@@ -244,68 +163,6 @@ class LoRALinearSplitFC1UpGate(AdapterWrapper):
         adapter_output = torch.cat([adapter_output_gate, adapter_output_up], dim=-1)
         return linear_output + adapter_output, bias
 
-    def forward_split(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Return separate gate and up projections without a fused base GEMM."""
-        projection_input = x
-        if self.to_wrap.config.sequence_parallel:
-            projection_input = gather_from_sequence_parallel_region(x)
-
-        weight_gate, weight_up = torch.chunk(self.to_wrap.weight, 2, dim=0)
-        bias = getattr(self.to_wrap, "bias", None)
-        if bias is not None and bias.numel() > 0:
-            bias_gate, bias_up = torch.chunk(bias, 2, dim=0)
-        else:
-            bias_gate = bias_up = None
-
-        gate = F.linear(projection_input, weight_gate, bias_gate)
-        if self._adapter_enabled:
-            gate_input = (
-                projection_input
-                if getattr(self.adapter.adapter_gate, "disable_sequence_parallel_comm", True)
-                else x
-            )
-            adapter_gate = self.adapter.adapter_gate(gate_input)
-            gate = gate + adapter_gate.reshape(gate.shape)
-
-        up = F.linear(projection_input, weight_up, bias_up)
-        if self._adapter_enabled:
-            up_input = (
-                projection_input
-                if getattr(self.adapter.adapter_up, "disable_sequence_parallel_comm", True)
-                else x
-            )
-            adapter_up = self.adapter.adapter_up(up_input)
-            up = up + adapter_up.reshape(up.shape)
-        return gate, up
-
-
-class LoRALinearSplitQKVZ(AdapterWrapper):
-    """Canonical adapters for fused QKV and Z projections."""
-
-    def forward(self, x: torch.Tensor, *args: Any, **kwargs: Any):
-        raise RuntimeError("LoRALinearSplitQKVZ requires a split-aware model forward")
-
-    def adapter_output(self, component: str, x: torch.Tensor) -> torch.Tensor:
-        """Return one logical adapter projection."""
-        return getattr(self.adapter, f"adapter_{component}")(x)
-
-    def backward_dw(self):
-        return self.to_wrap.backward_dw()
-
-
-class LoRALinearSplitBA(AdapterWrapper):
-    """Canonical adapters for fused B and A projections."""
-
-    def forward(self, x: torch.Tensor, *args: Any, **kwargs: Any):
-        raise RuntimeError("LoRALinearSplitBA requires a split-aware model forward")
-
-    def adapter_output(self, component: str, x: torch.Tensor) -> torch.Tensor:
-        """Return one logical adapter projection."""
-        return getattr(self.adapter, f"adapter_{component}")(x)
-
-    def backward_dw(self):
-        return self.to_wrap.backward_dw()
-
 
 @dataclass
 class CanonicalLoRA(PEFT, ModuleMatcher):
@@ -338,12 +195,6 @@ class CanonicalLoRA(PEFT, ModuleMatcher):
             Can be 'pre' (before the low-rank projection) or 'post' (after). Defaults to 'pre'.
         lora_A_init_method (str): Initialization method for LoRA A matrix. Defaults to "xavier".
         lora_B_init_method (str): Initialization method for LoRA B matrix. Defaults to "zero".
-        lora_dtype (torch.dtype, optional): Parameter dtype for LoRA weights. Defaults to
-            the wrapped projection's dtype.
-        adapter_backend (str): Use tensor-parallel adapters, or select replicated
-            dense adapters automatically when tensor parallelism is disabled.
-        fc1_adapter_order (str): Registration and initialization order for the
-            two logical FC1 adapters. Defaults to the legacy ``up_gate`` order.
     """
 
     target_modules: List[str] = field(
@@ -363,9 +214,6 @@ class CanonicalLoRA(PEFT, ModuleMatcher):
     dropout_position: Literal["pre", "post"] = "pre"
     lora_A_init_method: str = "xavier"
     lora_B_init_method: str = "zero"
-    lora_dtype: Optional[torch.dtype] = None
-    adapter_backend: Literal["parallel", "auto"] = "parallel"
-    fc1_adapter_order: Literal["up_gate", "gate_up"] = "up_gate"
 
     def __post_init__(self) -> None:
         """
@@ -388,11 +236,6 @@ class CanonicalLoRA(PEFT, ModuleMatcher):
         }
 
         """
-        if self.adapter_backend not in ("parallel", "auto"):
-            raise ValueError("adapter_backend must be one of: parallel, auto")
-        if self.fc1_adapter_order not in ("up_gate", "gate_up"):
-            raise ValueError("fc1_adapter_order must be one of: up_gate, gate_up")
-
         for target in self.target_modules:
             assert not target.endswith("linear_qkv"), (
                 "Canonical LoRA does not support target 'linear_qkv'. Either use 'linear_qkv' with LoRA() or "
@@ -413,14 +256,6 @@ class CanonicalLoRA(PEFT, ModuleMatcher):
                 self.canonical_mapping[target.replace("linear_fc1_up", "linear_fc1")].add("linear_fc1_up")
             elif target.endswith("linear_fc1_gate"):
                 self.canonical_mapping[target.replace("linear_fc1_gate", "linear_fc1")].add("linear_fc1_gate")
-            elif target.endswith("in_proj_qkv"):
-                self.canonical_mapping[target.replace("in_proj_qkv", "in_proj_qkvz")].add("in_proj_qkv")
-            elif target.endswith("in_proj_z"):
-                self.canonical_mapping[target.replace("in_proj_z", "in_proj_qkvz")].add("in_proj_z")
-            elif target.endswith("in_proj_b"):
-                self.canonical_mapping[target.replace("in_proj_b", "in_proj_ba")].add("in_proj_b")
-            elif target.endswith("in_proj_a"):
-                self.canonical_mapping[target.replace("in_proj_a", "in_proj_ba")].add("in_proj_a")
             else:
                 self.canonical_mapping[target].add(target)
 
@@ -438,80 +273,14 @@ class CanonicalLoRA(PEFT, ModuleMatcher):
         """
 
         # Skip already transformed modules
-        if isinstance(
-            m,
-            (
-                LinearAdapter,
-                TELinearAdapter,
-                LoRALinear,
-                LoRALinearSplitQKV,
-                LoRALinearSplitFC1UpGate,
-                LoRALinearSplitQKVZ,
-                LoRALinearSplitBA,
-                LoRATopKRouter,
-            ),
-        ):
+        if isinstance(m, (LinearAdapter, LoRALinear, LoRALinearSplitQKV, LoRALinearSplitFC1UpGate, LoRATopKRouter)):
             return m
 
         if (ans := self.match(m, name, prefix)) is not None:
             (match, full_name) = ans
-            canonical_submodules = self.canonical_mapping[match]
-            split_sizes = getattr(m, "canonical_split_sizes", {})
-
-            if name in ("in_proj_qkvz", "in_proj_ba"):
-                if m.__class__ != te.Linear:
-                    raise TypeError(f"Canonical split projection requires te.Linear, got {type(m)}")
-
-                def dense_adapter(component: str) -> DenseLinearAdapter:
-                    if component not in split_sizes:
-                        raise ValueError(f"{full_name} does not declare a size for {component}")
-                    return DenseLinearAdapter(
-                        m.in_features,
-                        split_sizes[component],
-                        dim=self.dim,
-                        alpha=self.alpha,
-                        dtype=self.lora_dtype or m.weight.dtype,
-                        device=m.weight.device,
-                        a_init=self.lora_A_init_method,
-                        b_init=self.lora_B_init_method,
-                        dropout=self.dropout,
-                        dropout_position=self.dropout_position,
-                    )
-
-                if name == "in_proj_qkvz":
-                    adapters = ModuleDict(
-                        {
-                            "adapter_qkv": dense_adapter("in_proj_qkv"),
-                            "adapter_z": dense_adapter("in_proj_z"),
-                        }
-                    )
-                    return LoRALinearSplitQKVZ(m, adapters)
-                adapters = ModuleDict(
-                    {
-                        "adapter_b": dense_adapter("in_proj_b"),
-                        "adapter_a": dense_adapter("in_proj_a"),
-                    }
-                )
-                return LoRALinearSplitBA(m, adapters)
-
             if isinstance(m, nn.Linear):
                 return LinearAdapter(
-                    m,
-                    dim=self.dim,
-                    alpha=self.alpha,
-                    dropout=self.dropout,
-                    lora_A_init_method=self.lora_A_init_method,
-                    lora_dtype=self.lora_dtype,
-                )
-            if m.__class__ == te.Linear:
-                return TELinearAdapter(
-                    m,
-                    dim=self.dim,
-                    alpha=self.alpha,
-                    dropout=self.dropout,
-                    dropout_position=self.dropout_position,
-                    lora_A_init_method=self.lora_A_init_method,
-                    lora_dtype=self.lora_dtype,
+                    m, dim=self.dim, alpha=self.alpha, dropout=self.dropout, lora_A_init_method=self.lora_A_init_method
                 )
 
             is_expert = is_expert_linear(full_name)
@@ -534,61 +303,33 @@ class CanonicalLoRA(PEFT, ModuleMatcher):
                 disable_tensor_parallel_comm=attrs.disable_tensor_parallel_comm,
                 disable_sequence_parallel_comm=attrs.disable_sequence_parallel_comm,
                 base_linear_is_parallel=attrs.base_linear_is_parallel,
-                lora_dtype=self.lora_dtype,
             )
 
-            use_dense_adapter = (
-                self.adapter_backend == "auto"
-                and not is_expert
-                and getattr(getattr(m, "config", None), "tensor_model_parallel_size", 1) == 1
-            )
-
-            def make_adapter(in_features: int, out_features: int) -> nn.Module:
-                if use_dense_adapter:
-                    return DenseLinearAdapter(
-                        in_features,
-                        out_features,
-                        dim=self.dim,
-                        alpha=self.alpha,
-                        dtype=self.lora_dtype or m.weight.dtype,
-                        device=m.weight.device,
-                        a_init=self.lora_A_init_method,
-                        b_init=self.lora_B_init_method,
-                        dropout=self.dropout,
-                        dropout_position=self.dropout_position,
-                    )
-                return ParallelLinearAdapter(in_features, out_features, **adapter_kwargs)
-
+            canonical_submodules = self.canonical_mapping[match]
             logger.info(f"Adding lora to: {full_name} ({canonical_submodules})")
             if name == "linear_qkv":
                 adapter_q, adapter_k, adapter_v = None, None, None
                 kv_out_features = m.config.kv_channels * m.config.num_query_groups
-                q_out_features = split_sizes.get(
-                    "linear_q", m.config.kv_channels * m.config.num_attention_heads
-                )
+                q_out_features = m.config.kv_channels * m.config.num_attention_heads
                 if "linear_q" in canonical_submodules:
-                    adapter_q = make_adapter(attrs.in_features, q_out_features)
+                    adapter_q = ParallelLinearAdapter(attrs.in_features, q_out_features, **adapter_kwargs)
                 if "linear_k" in canonical_submodules:
-                    adapter_k = make_adapter(attrs.in_features, kv_out_features)
+                    adapter_k = ParallelLinearAdapter(attrs.in_features, kv_out_features, **adapter_kwargs)
                 if "linear_v" in canonical_submodules:
-                    adapter_v = make_adapter(attrs.in_features, kv_out_features)
+                    adapter_v = ParallelLinearAdapter(attrs.in_features, kv_out_features, **adapter_kwargs)
                 adapters = ModuleDict({"adapter_q": adapter_q, "adapter_k": adapter_k, "adapter_v": adapter_v})
                 return LoRALinearSplitQKV(m, adapters)
 
             if name == "linear_fc1":
-                adapters = {}
-                for component in self.fc1_adapter_order.split("_"):
-                    canonical_name = f"linear_fc1_{component}"
-                    adapter = None
-                    if canonical_name in canonical_submodules:
-                        adapter = make_adapter(
-                            attrs.in_features, attrs.out_features // 2
-                        )
-                    adapters[f"adapter_{component}"] = adapter
-                adapters = ModuleDict(adapters)
+                adapter_up, adapter_gate = None, None
+                if "linear_fc1_up" in canonical_submodules:
+                    adapter_up = ParallelLinearAdapter(attrs.in_features, attrs.out_features // 2, **adapter_kwargs)
+                if "linear_fc1_gate" in canonical_submodules:
+                    adapter_gate = ParallelLinearAdapter(attrs.in_features, attrs.out_features // 2, **adapter_kwargs)
+                adapters = ModuleDict({"adapter_up": adapter_up, "adapter_gate": adapter_gate})
                 return LoRALinearSplitFC1UpGate(m, adapters)
 
-            adapter = make_adapter(attrs.in_features, attrs.out_features)
+            adapter = ParallelLinearAdapter(attrs.in_features, attrs.out_features, **adapter_kwargs)
             logger.info(f"Adding lora to: {full_name}")
             if isinstance(m, TopKRouter):
                 return LoRATopKRouter(m, adapter)

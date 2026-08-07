@@ -25,7 +25,7 @@ from megatron.core.utils import (
     nvtx_range_pop,
     nvtx_range_push,
 )
-from loongforge.models.common.peft.lora_layers import torch_linear_forward
+from .linear_utils import torch_linear_forward
 
 try:
     from einops import rearrange
@@ -597,21 +597,21 @@ class MiniCPMV46SelfAttention(SelfAttention):
             qg_weight, key_weight, value_weight = self._split_qwen35_qgkv_weights()
             mixed_qg = F.linear(projection_input, qg_weight)
             if hasattr(self.linear_qkv, "adapter_output"):
-                mixed_qg = mixed_qg + self.linear_qkv.adapter_output(
-                    "q", hidden_states
-                ).reshape(mixed_qg.shape)
+                adapter_output = self.linear_qkv.adapter_output("q", hidden_states)
+                if adapter_output is not None:
+                    mixed_qg = mixed_qg + adapter_output.reshape(mixed_qg.shape)
 
             key = F.linear(projection_input, key_weight)
             if hasattr(self.linear_qkv, "adapter_output"):
-                key = key + self.linear_qkv.adapter_output(
-                    "k", hidden_states
-                ).reshape(key.shape)
+                adapter_output = self.linear_qkv.adapter_output("k", hidden_states)
+                if adapter_output is not None:
+                    key = key + adapter_output.reshape(key.shape)
 
             value = F.linear(projection_input, value_weight)
             if hasattr(self.linear_qkv, "adapter_output"):
-                value = value + self.linear_qkv.adapter_output(
-                    "v", hidden_states
-                ).reshape(value.shape)
+                adapter_output = self.linear_qkv.adapter_output("v", hidden_states)
+                if adapter_output is not None:
+                    value = value + adapter_output.reshape(value.shape)
             query, gate = torch.chunk(
                 mixed_qg.view(
                     *mixed_qg.size()[:-1],

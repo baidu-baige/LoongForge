@@ -21,7 +21,6 @@ layernorm_epsilon: 1.0e-6
 insert_layer_id: 6
 window_kernel_size: [2, 2]
 image_token_id: 248056
-video_token_id: 248057
 downsample_mode: ${oc.env:DOWNSAMPLE_MODE,16x}
 model_type: "minicpm_v_4_6_vit"
 

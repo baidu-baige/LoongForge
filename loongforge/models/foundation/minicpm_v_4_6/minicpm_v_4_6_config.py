@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from loongforge.models.foundation.qwen3_5.qwen3_5_config import Qwen35Config
 from loongforge.utils.constants import VisionLanguageModelFamilies
 
+from .configuration_utils import initialize_transformer_config
+
 
 @dataclass
 class MiniCPMV46Config(Qwen35Config):
@@ -27,3 +29,6 @@ class MiniCPMV46Config(Qwen35Config):
     torch_cross_entropy_at_tp1: bool = False
 
     model_type = VisionLanguageModelFamilies.MINICPM_V_4_6
+
+    def __post_init__(self) -> None:
+        initialize_transformer_config(self)

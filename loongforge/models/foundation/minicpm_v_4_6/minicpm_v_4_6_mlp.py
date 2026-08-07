@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from megatron.core.transformer.mlp import MLP
 from megatron.core.utils import nvtx_range_pop, nvtx_range_push
-from loongforge.models.common.peft.lora_layers import torch_linear_forward
+from .linear_utils import torch_linear_forward
 
 
 class MiniCPMV46DenseMLP(MLP):

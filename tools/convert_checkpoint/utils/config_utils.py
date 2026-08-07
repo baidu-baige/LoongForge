@@ -46,7 +46,7 @@ def load_config(config_path, config_name=None, hydra_overrides=None):
     """
     # Convert to absolute path
     config_path = os.path.abspath(config_path)
-
+    
     # Handle full file path case
     if config_path.endswith('.yaml'):
         config_dir = os.path.dirname(config_path)
@@ -88,6 +88,7 @@ def remap_state_dict_prefixes(source, prefix_map, *, mcore_to_hf):
                 raise ValueError(f"Prefix mappings produced duplicate key: {target_key}")
             target[target_key] = value
     return target
+
 
 def parse_at_configs(yaml_lines):
     """
@@ -245,8 +246,6 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
     return c_config
 
 def replace_vlm_config(c_config, adapter, vision_patch):
-    if c_config.get("name_map") is None:
-        c_config.data["name_map"] = {"huggingface": {}, "mcore": {}}
     name_map = {}
     if "__prefix_map__" in adapter:
         expanded_adapter = _expand_prefix_map(
@@ -260,11 +259,13 @@ def replace_vlm_config(c_config, adapter, vision_patch):
         for k1, k2 in adapter.items():
             if k1 in name_map:
                 continue
-            extra_data = not (
-                k1.startswith("adapter.linear_fc1")
-                or k1.startswith("adapter.linear_fc2")
-            )
-            name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: extra_data}
+            extra_data = True
+            if k1.startswith("adapter.linear_fc1") or k1.startswith("adapter.linear_fc2"):
+                extra_data = False
+            name_map[k1] = {
+                LAYER_NAME: k2,
+                LAYER_EXTRA_DATA: extra_data
+            }
     if "__prefix_map__" in vision_patch:
         expanded_vision = _expand_prefix_map(
             vision_patch["__module_config__"],
@@ -276,8 +277,12 @@ def replace_vlm_config(c_config, adapter, vision_patch):
                 name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: False}
     else:
         for k1, k2 in vision_patch.items():
-            if k1 not in name_map:
-                name_map[k1] = {LAYER_NAME: k2, LAYER_EXTRA_DATA: False}
+            if k1 in name_map:
+                continue
+            name_map[k1] = {
+                LAYER_NAME: k2,
+                LAYER_EXTRA_DATA: False
+            }
     c_config.get("name_map")["vision_patch"] = None
 
     hf_dict = {}
@@ -296,10 +301,10 @@ def replace_vlm_config(c_config, adapter, vision_patch):
         if new_prefix:
             mcore_name = f"{new_prefix}.{rest}"
         for suffix in key_suffixes:
-            if hf_name.endswith(suffix):
-                hf_name = hf_name[:-len(suffix)]
+            if value[LAYER_NAME].endswith(suffix):
+                hf_name = value[LAYER_NAME][:-len(suffix)]
                 hf_is_direct = False
-            if mcore_name.endswith(suffix):
+            if key.endswith(suffix):
                 mcore_name = mcore_name[:-len(suffix)]
                 mcore_is_direct = False
                 if suffix in [f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]:

@@ -8,9 +8,8 @@ import os
 import sys
 from copy import deepcopy
 
-import functools
-import torch
 import torch.nn.functional as F
+import functools
 
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
@@ -24,9 +23,9 @@ from loongforge.models.utils import build_model_config
 from loongforge.train.arguments import loongforge_extra_train_args_provider
 from loongforge.train.get_loss_func import (default_loss_func,
                                                     loss_func_internvl)
-from loongforge.train.get_position_idx_func import (get_mrope_index,
-                                                            get_position_ids,
-                                                            get_rope_index_internvl,
+from loongforge.train.get_position_idx_func import (get_mrope_index, 
+                                                            get_position_ids, 
+                                                            get_rope_index_internvl, 
                                                             get_rope_index_qwen3vl)
 from loongforge.train.validators import (validate_loongforge_extra_args,
                                                 validate_custom_model_args,
@@ -53,20 +52,12 @@ def register_custom_resolvers():
     POSITION_IDX_FUNC_MAP = {
         "position_ids": get_position_ids,
         "mrope_ids": get_mrope_index,
-        "rope_ids_internvl": get_rope_index_internvl,
+        "rope_ids_internvl": get_rope_index_internvl, 
         "rope_ids_qwen3vl": get_rope_index_qwen3vl
     }
     LOSS_FUNC_MAP = {
         "default": default_loss_func,
         "loss_func_internvl": loss_func_internvl
-    }
-    DTYPE_MAP = {
-        "float32": torch.float32,
-        "float": torch.float32,
-        "bfloat16": torch.bfloat16,
-        "bf16": torch.bfloat16,
-        "float16": torch.float16,
-        "fp16": torch.float16,
     }
     OmegaConf.register_new_resolver(
         "act", lambda name: ACTIVATION_MAP[name.lower()], replace=True
@@ -76,9 +67,6 @@ def register_custom_resolvers():
     )
     OmegaConf.register_new_resolver(
         "loss_func", lambda name: LOSS_FUNC_MAP[name.lower()], replace=True
-    )
-    OmegaConf.register_new_resolver(
-        "dtype", lambda name: DTYPE_MAP[name.lower()], replace=True
     )
 
     # moe layer freq resolver
@@ -210,7 +198,7 @@ def parse_arguments(
 
     # TODO: remove this in the future
     args.model_family = model_type
-
+    
     if model_type in constants.VisionLanguageModelFamilies.names():
         args_dict = {}
         for name, config_values in model_config.items():
@@ -236,11 +224,11 @@ def parse_arguments(
                 validate_custom_model_args(name, args_deepcopy)
 
             args_dict[name] = args_deepcopy
-
+        
         if "foundation" not in args_dict:
             raise ValueError("args_dict does not contain 'foundation'")
         args = args_dict["foundation"]
-
+        
         # set global args dict
         set_args_dict(args_dict)
 

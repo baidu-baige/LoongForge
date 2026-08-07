@@ -60,8 +60,6 @@ class MiniCPMV46Merger(BaseMegatronModule):
     """MiniCPM visual merger from vision hidden size to LLM hidden size."""
 
     config_class = MiniCPMV46MergerConfig
-    requires_target_sizes = True
-
     def __init__(
         self,
         config: MiniCPMV46MergerConfig,
@@ -82,11 +80,9 @@ class MiniCPMV46Merger(BaseMegatronModule):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        window_index: Optional[torch.LongTensor] = None,
-        image_grid_thw: Optional[torch.Tensor] = None,
         target_sizes: Optional[torch.Tensor] = None,
+        image_grid_thw: Optional[torch.Tensor] = None,
     ) -> list[torch.Tensor]:
-        del window_index
         if target_sizes is None:
             if image_grid_thw is None:
                 raise ValueError("MiniCPM merger requires image_grid_thw or target_sizes.")

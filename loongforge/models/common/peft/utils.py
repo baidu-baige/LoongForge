@@ -1,7 +1,3 @@
-# Copyright 2026 The LoongForge Authors.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Modified from NVIDIA NeMo Megatron-Bridge under the Apache-2.0 License.
 # Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -773,7 +769,6 @@ class ParallelLinearAdapter(nn.Module):
         disable_tensor_parallel_comm: bool = False,
         disable_sequence_parallel_comm: bool = True,
         base_linear_is_parallel: bool = True,
-        lora_dtype: Optional[torch.dtype] = None,
         **kwargs,
     ) -> None:
         """Initialize the ParallelLinearAdapter.
@@ -795,7 +790,6 @@ class ParallelLinearAdapter(nn.Module):
             is_expert: Whether for expert layers in MoE.
             disable_tensor_parallel_comm: Disable tensor parallel communication.
             disable_sequence_parallel_comm: Disable sequence parallel communication.
-            lora_dtype: Parameter dtype for the adapter. Defaults to the model dtype.
             dropout_recompute: Use recomputation for dropout.
             **kwargs: Additional keyword arguments.
         """
@@ -881,8 +875,6 @@ class ParallelLinearAdapter(nn.Module):
             self.bfloat16()
         elif model_parallel_config.fp16:
             self.half()
-        if lora_dtype is not None:
-            self.to(dtype=lora_dtype)
 
         # revert config change in case it is read elsewhere
         model_parallel_config.sequence_parallel = _sequence_parallel
@@ -952,8 +944,6 @@ class ParallelLinearAdapter(nn.Module):
         Returns:
             Adapted output tensor with scaling applied.
         """
-        output_dtype = x.dtype
-        x = x.to(dtype=self.linear_in.weight.dtype)
         if self.dropout_position == "pre":
             x = self.dropout(x)
 
@@ -999,7 +989,7 @@ class ParallelLinearAdapter(nn.Module):
             # Remove MoE padding.
             x = unpad_seq_to_mult(x, pad_len)
 
-        return x.to(dtype=output_dtype)
+        return x
 
     def sharded_state_dict(
         self,

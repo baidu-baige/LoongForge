@@ -35,9 +35,11 @@ DISTRIBUTED_ARGS=(
     --master_port "${MASTER_PORT}"
 )
 
-TRAINING_ARGS=(
+MODEL_CONFIG_ARGS=(
     --config-file "${LOONGFORGE_PATH}/configs/models/minicpm_v_4_6/minicpm_v_4_6.yaml"
-    --training-phase pretrain
+)
+
+DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path "${TOKENIZER_PATH}"
     --data-path "${DATA_PATH}"
@@ -46,6 +48,10 @@ TRAINING_ARGS=(
     --split 100,0,0
     --add-question-in-pretrain
     --num-workers "${NUM_WORKERS}"
+)
+
+TRAINING_ARGS=(
+    --training-phase pretrain
     --seq-length 4096
     --max-position-embeddings 262144
     --micro-batch-size "${MICRO_BATCH_SIZE}"
@@ -65,11 +71,17 @@ TRAINING_ARGS=(
     --lr-warmup-fraction 0.02
     --bf16
     --mtp-num-layers "${MTP_NUM_LAYERS}"
+)
+
+MODEL_PARALLEL_ARGS=(
     --attention-backend flash
     --tensor-model-parallel-size 1
     --pipeline-model-parallel-size 1
     --distributed-backend nccl
     --use-distributed-optimizer
+)
+
+LOGGING_ARGS=(
     --save "${SAVE_PATH}"
     --save-interval "${SAVE_INTERVAL}"
     --log-interval 1
@@ -84,4 +96,8 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 PYTHONPATH="${MEGATRON_PATH}:${LOONGFORGE_PATH}:${PYTHONPATH:-}" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
     "${LOONGFORGE_PATH}/loongforge/train.py" \
-    "${TRAINING_ARGS[@]}"
+    "${MODEL_CONFIG_ARGS[@]}" \
+    "${DATA_ARGS[@]}" \
+    "${TRAINING_ARGS[@]}" \
+    "${MODEL_PARALLEL_ARGS[@]}" \
+    "${LOGGING_ARGS[@]}"

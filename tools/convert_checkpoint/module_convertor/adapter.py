@@ -56,9 +56,7 @@ if (args.load_platform, args.save_platform) == ('mcore', 'huggingface'):
             assert 'model0' in state_dict[0][0].keys()  # vpp
             source = state_dict[0][0]['model0']
     if prefix_map is not None:
-        target.update(
-            remap_state_dict_prefixes(source, prefix_map, mcore_to_hf=True)
-        )
+        target.update(remap_state_dict_prefixes(source, prefix_map, mcore_to_hf=True))
     else:
         for k1, k2 in name_map.items():
             if k1 != 'name_map' and k1 != 'module':
@@ -73,9 +71,7 @@ elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
     source = load_huggingface_checkpoint(args.load_ckpt_path)
     target = {}
     if prefix_map is not None:
-        target.update(
-            remap_state_dict_prefixes(source, prefix_map, mcore_to_hf=False)
-        )
+        target.update(remap_state_dict_prefixes(source, prefix_map, mcore_to_hf=False))
         for key in target:
             print(f" > {key}")
     else:
@@ -83,12 +79,8 @@ elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
             if k1 != 'name_map' and k1 != 'module':
                 target[k1] = source[k2]
                 print(f" > {k1}")
-        for key in (
-            'adapter.layernorm._extra_state',
-            'adapter.linear_fc1._extra_state',
-            'adapter.linear_fc2._extra_state',
-        ):
-            target[key] = None
+        for k in ['adapter.layernorm._extra_state', 'adapter.linear_fc1._extra_state', 'adapter.linear_fc2._extra_state']:
+            target[k] = None
     state_dict = [{'model': deepcopy(target)} for i in range(tp)]
     save_megatron_checkpoint(state_dict, os.path.join(args.save_ckpt_path, 'release'))
 

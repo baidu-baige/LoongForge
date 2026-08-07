@@ -7,6 +7,7 @@ defaults:
 
 model:
   model_type: minicpm_v_4_6
+  peft_class: loongforge.models.foundation.minicpm_v_4_6.peft.MiniCPMV46CanonicalLoRA
   position_idx_func: ${position_func:position_ids}
   loss_func: ${loss_func:default}
   mix_used_vision_encoder: true
@@ -32,14 +33,14 @@ model:
     freeze: true
     model_spec: null
   peft_config:
+    _target_: loongforge.models.foundation.minicpm_v_4_6.peft.MiniCPMV46VLMLoraConfig
     apply_to_foundation: true
-    canonical: true
     dim: 8
     alpha: 32
     dropout: 0.0
     lora_A_init_method: kaiming
     lora_B_init_method: zero
-    lora_dtype: ${dtype:float32}
+    lora_dtype: float32
     adapter_backend: ${oc.env:LF_ADAPTER_BACKEND,auto}
     fc1_adapter_order: gate_up
     target_modules:

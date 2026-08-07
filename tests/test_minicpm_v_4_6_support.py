@@ -15,17 +15,17 @@ from transformers import PretrainedConfig
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-import loongforge.train.training_utils as training_utils
-from loongforge.data.mm_plugin import MiniCPMV46Plugin
-from loongforge.data.minicpm_v_4_6_image_processor import MiniCPMV46ImageProcessor
-from loongforge.models.common.peft.canonical_lora import CanonicalLoRA, DenseLinearAdapter
-from loongforge.models.common.peft.lora_layers import LinearAdapter
-from loongforge.models.common.base_model_config import _initialize_pretrained_config
+# Initialize the repository's train/model registries before importing model modules.
+import loongforge.train  # noqa: F401
+
 from loongforge.models.encoder.minicpm_v_4_6_vision_models import (
     MiniCPMV46MergerConfig,
 )
 from loongforge.models.encoder.minicpm_v_4_6_vision_models.vision_model import (
     MiniCPMV46VisionEmbeddings,
+)
+from loongforge.models.foundation.minicpm_v_4_6 import (
+    minicpm_v_4_6_gated_deltanet as minicpm_gdn,
 )
 from loongforge.models.foundation.minicpm_v_4_6.minicpm_v_4_6_gated_deltanet import (
     MiniCPMV46GatedDeltaNet,
@@ -34,7 +34,20 @@ from loongforge.models.foundation.minicpm_v_4_6.minicpm_v_4_6_gated_deltanet imp
     _torch_l2norm,
     _torch_module_causal_conv1d,
 )
-from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
+from loongforge.models.foundation.minicpm_v_4_6.configuration_utils import (
+    initialize_pretrained_config,
+)
+from loongforge.models.foundation.minicpm_v_4_6.image_processor import (
+    MiniCPMV46ImageProcessor,
+)
+from loongforge.models.foundation.minicpm_v_4_6.mm_plugin import MiniCPMV46Plugin
+from loongforge.models.foundation.minicpm_v_4_6 import peft as minicpm_peft
+from loongforge.models.foundation.minicpm_v_4_6.peft import (
+    DenseLinearAdapter,
+    MiniCPMLinearAdapter,
+    MiniCPMV46CanonicalLoRA,
+    MiniCPMLoRALinearSplitProjection,
+)
 from loongforge.data.multimodal import resolve_task_encoder
 from convert_checkpoint.huggingface.huggingface_checkpoint import (
     _drop_duplicate_tied_lm_head,
@@ -58,6 +71,16 @@ def test_minicpm_examples_only_contain_supported_user_workflows():
         "finetuning/sft_minicpm_v_4_6.sh",
         "pretrain/pretrain_minicpm_v_4_6.sh",
     ]
+
+
+def test_minicpm_chat_template_rejects_video_instead_of_rendering_placeholders():
+    template = (
+        REPO_ROOT
+        / "loongforge/data/chat_templates/minicpm_v_4_6_hf_training.jinja"
+    ).read_text(encoding="utf-8")
+
+    assert "MiniCPM-V-4.6 video input is not supported." in template
+    assert "<|video_pad|>" not in template
 
 
 def test_minicpm_vlm_checkpoint_mapping_scopes_mtp_under_foundation_model(monkeypatch):
@@ -100,7 +123,7 @@ def test_minicpm_task_encoder_preserves_image_and_rejects_video():
     image = object()
 
     assert encoder._resize_image(image) is image
-    with pytest.raises(ValueError, match="video preprocessing requires"):
+    with pytest.raises(ValueError, match="video input is not supported"):
         encoder._resize_video(object())
 
 
@@ -232,45 +255,28 @@ def test_minicpm_plugin_loads_local_processor_for_real_image(tmp_path):
     assert messages[0]["content"].startswith("<image_id>0</image_id><image>")
 
 
-def test_minicpm_local_processor_rejects_video_without_supported_backend(tmp_path):
+def test_minicpm_local_processor_rejects_video(tmp_path):
     (tmp_path / "preprocessor_config.json").write_text("{}", encoding="utf-8")
     processor = SimpleNamespace(name_or_path=str(tmp_path))
     plugin = MiniCPMV46Plugin()
 
-    with pytest.raises(ValueError, match="video preprocessing requires"):
+    with pytest.raises(ValueError, match="video input is not supported"):
         plugin.get_mm_inputs([], [object()], [], [1], [1], processor)
 
 
-def test_model_input_dump_handles_context_parallel_label_length(monkeypatch, capsys):
-    import loongforge.utils.global_vars as global_vars
+def test_minicpm_plugin_accepts_text_only_messages_without_image_processor():
+    plugin = MiniCPMV46Plugin()
+    processor = SimpleNamespace()
 
-    tokenizer = SimpleNamespace(detokenize=lambda ids, **kwargs: " ".join(map(str, ids)))
-    monkeypatch.setattr(global_vars, "get_tokenizer", lambda: tokenizer)
-    monkeypatch.setattr(training_utils, "_PRINTED_MODEL_INPUT_EXAMPLE", False)
-    monkeypatch.setattr(training_utils.mpu, "get_tensor_model_parallel_rank", lambda: 0)
-    monkeypatch.setattr(training_utils.mpu, "get_context_parallel_rank", lambda: 0)
-    monkeypatch.setattr(training_utils.mpu, "get_context_parallel_world_size", lambda: 2)
-    monkeypatch.setattr(training_utils.mpu, "get_pipeline_model_parallel_rank", lambda: 0)
-
-    training_utils.dump_model_input_example_once(
-        tokens=torch.arange(8).unsqueeze(0),
-        labels=torch.tensor([[1, 2, -100, -100]]),
-        attn_mask=torch.zeros(1, 4, dtype=torch.bool),
+    messages, mm_inputs = plugin.process_messages(
+        [{"role": "user", "content": "describe the model"}],
+        [],
+        [],
+        processor,
     )
 
-    output = capsys.readouterr().out
-    assert "tokens.shape=(1, 8) labels.shape=(1, 4)" in output
-    assert "===== end model-input example =====" in output
-
-
-def test_projector_output_flattening_is_shared_by_image_and_video_paths():
-    embeddings = [torch.ones(1, 2, 3), torch.zeros(2, 3)]
-
-    flattened = OmniEncoderModel._flatten_projected_embeddings(embeddings)
-
-    assert flattened.shape == (4, 3)
-    assert torch.equal(flattened[0], torch.ones(3))
-    assert torch.equal(flattened[-1], torch.zeros(3))
+    assert messages == [{"role": "user", "content": "describe the model"}]
+    assert mm_inputs == {}
 
 
 def test_minicpm_merger_config_accepts_decoder_tensor_parallelism():
@@ -327,8 +333,19 @@ def test_minicpm_gated_delta_rule_normalizes_before_fp32_recurrence():
     module.use_qk_l2norm = True
     captured_dtypes = {}
 
-    def capture_recurrence(query, key, value, *, g, beta, **kwargs):
-        del kwargs
+    def capture_recurrence(
+        query,
+        key,
+        value,
+        *,
+        g,
+        beta,
+        initial_state,
+        output_final_state,
+        cu_seqlens,
+        use_qk_l2norm_in_kernel,
+    ):
+        del initial_state, output_final_state, cu_seqlens, use_qk_l2norm_in_kernel
         captured_dtypes.update(
             query=query.dtype,
             key=key.dtype,
@@ -370,6 +387,48 @@ def test_minicpm_gated_delta_l2norm_uses_fp32_reduction():
 
     assert normalized.dtype == torch.float32
     assert torch.equal(normalized, expected)
+
+
+def test_minicpm_deterministic_fla_config_pins_pipeline_stages(monkeypatch):
+    class FakeConfig:
+        def __init__(self, kwargs, num_warps, num_stages):
+            self.kwargs = kwargs
+            self.num_warps = num_warps
+            self.num_stages = num_stages
+
+    class FakeAutotuner:
+        def __init__(self, kwargs):
+            self.configs = [
+                FakeConfig(kwargs, num_warps=8, num_stages=num_stages)
+                for num_stages in (2, 3, 4)
+            ]
+            self.cache = {"autotuned": object()}
+
+    kernels = {}
+    for kernel_name, kwargs in {
+        "layer_norm_gated_fwd_kernel": {"BT": 16},
+        "layer_norm_gated_bwd_kernel": {"BT": 16},
+        "layer_norm_gated_fwd_kernel1": {},
+        "layer_norm_gated_bwd_kernel1": {},
+    }.items():
+        autotuner = FakeAutotuner(kwargs)
+        kernels[kernel_name] = autotuner
+
+    fused_norm_gate = SimpleNamespace(
+        **{
+            kernel_name: SimpleNamespace(fn=autotuner)
+            for kernel_name, autotuner in kernels.items()
+        }
+    )
+    monkeypatch.setattr(minicpm_gdn, "fla_fused_norm_gate", fused_norm_gate)
+
+    minicpm_gdn._pin_fla_gated_norm_autotune()
+
+    for autotuner in kernels.values():
+        assert len(autotuner.configs) == 1
+        assert autotuner.configs[0].num_warps == 8
+        assert autotuner.configs[0].num_stages == 3
+        assert autotuner.cache == {}
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
@@ -463,7 +522,7 @@ def test_pretrained_config_initialization_prefers_post_init(monkeypatch):
         lambda instance: calls.append(("init", instance)),
     )
 
-    _initialize_pretrained_config(config)
+    initialize_pretrained_config(config)
 
     assert calls == [("post_init", config)]
 
@@ -478,14 +537,14 @@ def test_pretrained_config_initialization_falls_back_to_init(monkeypatch):
         lambda instance: calls.append(instance),
     )
 
-    _initialize_pretrained_config(config)
+    initialize_pretrained_config(config)
 
     assert calls == [config]
 
 
 def test_canonical_lora_preserves_model_output_dtype():
     base = torch.nn.Linear(3, 4, bias=False, dtype=torch.bfloat16)
-    lora = CanonicalLoRA(
+    lora = MiniCPMV46CanonicalLoRA(
         target_modules=["proj"],
         dim=2,
         alpha=4,
@@ -496,10 +555,75 @@ def test_canonical_lora_preserves_model_output_dtype():
     adapted = lora.transform(base, name="proj")
     output = adapted(torch.ones(2, 3, dtype=torch.bfloat16))
 
-    assert isinstance(adapted, LinearAdapter)
+    assert isinstance(adapted, MiniCPMLinearAdapter)
     assert adapted.linear_in.weight.dtype == torch.float32
     assert adapted.linear_out.weight.dtype == torch.float32
     assert output.dtype == torch.bfloat16
+
+
+@pytest.mark.parametrize(
+    ("target", "module_name", "split_sizes", "enabled", "disabled"),
+    [
+        (
+            "in_proj_qkv",
+            "in_proj_qkvz",
+            {"in_proj_qkv": 6, "in_proj_z": 2},
+            "adapter_qkv",
+            "adapter_z",
+        ),
+        (
+            "in_proj_z",
+            "in_proj_qkvz",
+            {"in_proj_qkv": 6, "in_proj_z": 2},
+            "adapter_z",
+            "adapter_qkv",
+        ),
+        (
+            "in_proj_b",
+            "in_proj_ba",
+            {"in_proj_b": 2, "in_proj_a": 2},
+            "adapter_b",
+            "adapter_a",
+        ),
+        (
+            "in_proj_a",
+            "in_proj_ba",
+            {"in_proj_b": 2, "in_proj_a": 2},
+            "adapter_a",
+            "adapter_b",
+        ),
+    ],
+)
+def test_minicpm_split_projection_only_builds_selected_adapter(
+    monkeypatch,
+    target,
+    module_name,
+    split_sizes,
+    enabled,
+    disabled,
+):
+    class FakeTELinear(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.in_features = 4
+            self.weight = torch.nn.Parameter(torch.zeros(sum(split_sizes.values()), 4))
+            self.canonical_split_sizes = split_sizes
+
+    monkeypatch.setattr(minicpm_peft.te, "Linear", FakeTELinear)
+    module = FakeTELinear()
+    lora = MiniCPMV46CanonicalLoRA(
+        target_modules=[target],
+        dim=2,
+        alpha=4,
+        lora_A_init_method="kaiming",
+        lora_dtype=torch.float32,
+    )
+
+    adapted = lora.transform(module, name=module_name)
+
+    assert isinstance(adapted, MiniCPMLoRALinearSplitProjection)
+    assert getattr(adapted.adapter, enabled) is not None
+    assert getattr(adapted.adapter, disabled) is None
 
 
 def test_dense_canonical_lora_exports_distributed_checkpoint_state(monkeypatch):
@@ -535,67 +659,6 @@ def test_dense_canonical_lora_exports_distributed_checkpoint_state(monkeypatch):
     }
     assert state["adapter.linear_in.weight"].data.shape == (2, 3)
     assert state["adapter.linear_out.weight"].data.shape == (4, 2)
-
-
-def test_temporary_optimizer_backend_restores_global_state():
-    import megatron.core.optimizer as mcore_optimizer
-
-    config = SimpleNamespace(optimizer="adam", use_precision_aware_optimizer=False)
-    original_adam = torch.optim.Adam
-    original_adamw = torch.optim.AdamW
-    original_backend_flag = mcore_optimizer.USING_PYTORCH_OPTIMIZER
-
-    with training_utils._temporary_optimizer_backend(config, "torch-fused"):
-        assert torch.optim.Adam is not original_adam
-        assert torch.optim.AdamW is not original_adamw
-        assert mcore_optimizer.USING_PYTORCH_OPTIMIZER is True
-
-    assert torch.optim.Adam is original_adam
-    assert torch.optim.AdamW is original_adamw
-    assert mcore_optimizer.USING_PYTORCH_OPTIMIZER is original_backend_flag
-
-
-def test_temporary_optimizer_backend_rejects_unsupported_optimizer():
-    config = SimpleNamespace(optimizer="sgd", use_precision_aware_optimizer=False)
-
-    with pytest.raises(ValueError, match="requires --optimizer adam"):
-        with training_utils._temporary_optimizer_backend(config, "torch-fused"):
-            pass
-
-
-def test_peft_periodic_checkpoint_uses_loongforge_save(monkeypatch):
-    args = SimpleNamespace(
-        exit_signal_handler=False,
-        save="checkpoint-dir",
-        save_interval=2,
-        non_persistent_save_interval=None,
-        exit_duration_in_mins=None,
-        exit_interval=None,
-    )
-    calls = []
-    peft = object()
-    monkeypatch.setattr(training_utils, "get_args", lambda: args)
-    monkeypatch.setattr(
-        training_utils,
-        "save_checkpoint_and_time",
-        lambda *call_args, **call_kwargs: calls.append((call_args, call_kwargs)),
-    )
-
-    should_exit = training_utils.checkpoint_and_decide_exit(
-        model="model",
-        ema="ema",
-        optimizer="optimizer",
-        opt_param_scheduler="scheduler",
-        iteration=2,
-        num_floating_point_operations_so_far=3,
-        checkpointing_context={},
-        train_data_iterator="iterator",
-        peft_class=peft,
-    )
-
-    assert should_exit is False
-    assert len(calls) == 1
-    assert calls[0][1]["peft_class"] is peft
 
 
 def test_prefix_remap_and_tied_weight_filter_are_directional():

@@ -17,10 +17,7 @@
                 {%- endif -%}
                 {%- set ns.parts = ns.parts + ['<|image_pad|>'] -%}
             {%- elif 'video' in item or item.type == 'video' -%}
-                {%- if is_system_content -%}
-                    {{- raise_exception('System message cannot contain videos.') -}}
-                {%- endif -%}
-                {%- set ns.parts = ns.parts + ['<|video_pad|>'] -%}
+                {{- raise_exception('MiniCPM-V-4.6 video input is not supported.') -}}
             {%- elif 'text' in item -%}
                 {%- set ns.parts = ns.parts + [item.text] -%}
             {%- else -%}

@@ -44,11 +44,11 @@ from megatron.core.utils import (
     nvtx_range_pop,
     nvtx_range_push,
 )
-from loongforge.models.common.peft.lora_layers import torch_linear_forward
-from loongforge.models.omni_models.utils import (
+from .context_parallel import (
     gather_from_context_parallel_region,
     scatter_to_context_parallel_region,
 )
+from .linear_utils import torch_linear_forward
 
 try:
     from fla.modules import FusedRMSNormGated
@@ -83,7 +83,9 @@ def _pin_fla_gated_norm_autotune():
         matching_configs = [
             config
             for config in autotuner.configs
-            if config.kwargs == expected_kwargs and config.num_warps == 8
+            if config.kwargs == expected_kwargs
+            and config.num_warps == 8
+            and config.num_stages == 3
         ]
         if len(matching_configs) != 1:
             raise RuntimeError(
@@ -781,27 +783,27 @@ class MiniCPMV46GatedDeltaNet(HuggingFaceModule):
             b_weight, a_weight = self._split_qwen35_ba_weights()
             qkv = F.linear(hidden_states, qkv_weight)
             if hasattr(self.in_proj_qkvz, "adapter_output"):
-                qkv = qkv + self.in_proj_qkvz.adapter_output(
-                    "qkv", hidden_states
-                ).reshape(qkv.shape)
+                adapter_output = self.in_proj_qkvz.adapter_output("qkv", hidden_states)
+                if adapter_output is not None:
+                    qkv = qkv + adapter_output.reshape(qkv.shape)
 
             z = F.linear(hidden_states, z_weight)
             if hasattr(self.in_proj_qkvz, "adapter_output"):
-                z = z + self.in_proj_qkvz.adapter_output(
-                    "z", hidden_states
-                ).reshape(z.shape)
+                adapter_output = self.in_proj_qkvz.adapter_output("z", hidden_states)
+                if adapter_output is not None:
+                    z = z + adapter_output.reshape(z.shape)
 
             beta = F.linear(hidden_states, b_weight)
             if hasattr(self.in_proj_ba, "adapter_output"):
-                beta = beta + self.in_proj_ba.adapter_output(
-                    "b", hidden_states
-                ).reshape(beta.shape)
+                adapter_output = self.in_proj_ba.adapter_output("b", hidden_states)
+                if adapter_output is not None:
+                    beta = beta + adapter_output.reshape(beta.shape)
 
             alpha = F.linear(hidden_states, a_weight)
             if hasattr(self.in_proj_ba, "adapter_output"):
-                alpha = alpha + self.in_proj_ba.adapter_output(
-                    "a", hidden_states
-                ).reshape(alpha.shape)
+                adapter_output = self.in_proj_ba.adapter_output("a", hidden_states)
+                if adapter_output is not None:
+                    alpha = alpha + adapter_output.reshape(alpha.shape)
             z = z.reshape(hidden_states.shape[0], hidden_states.shape[1], -1, self.value_head_dim)
         else:
             projected_states_qkvz = self.in_proj_qkvz(hidden_states)
@@ -860,7 +862,6 @@ class MiniCPMV46GatedDeltaNet(HuggingFaceModule):
             output_final_state=False,
             use_qk_l2norm_in_kernel=self.use_qk_l2norm,
             cu_seqlens=cu_seqlens,
-            cu_seqlens_cpu=cu_seqlens_cpu,
         )
         nvtx_range_pop(suffix="gated_delta_rule")
 
