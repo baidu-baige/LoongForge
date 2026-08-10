@@ -218,8 +218,9 @@ jobs:
             verdict_comment structured-output field; the workflow will post it.
             Do not modify files, commits, branches, labels, or PR state.
           claude_args: |
+            # The 30-minute job timeout is the hard limit. In this provider,
+            # --max-turns can reject an otherwise successful result post hoc.
             --model "${{ vars.CLAUDE_REVIEW_MODEL || 'Claude Sonnet 4.6' }}"
-            --max-turns 20
             --permission-mode dontAsk
             --setting-sources project
             --strict-mcp-config
