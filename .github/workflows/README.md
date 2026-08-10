@@ -6,15 +6,17 @@ This directory contains the CI/CD workflows for LoongForge.
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `pr-title.yml` | PR open/edit | Validate PR title format: `[<modules>] <type>: <description>` |
-| `license.yml` | PR | Check SPDX Apache-2.0 header on newly added source files |
-| `secrets.yml` | PR + push to master | Scan for leaked secrets via gitleaks |
-| `build.yml` | PR + push to master | Build sdist + wheel on Python 3.10 / 3.12 |
+| `ci-gate.yml` | PR + workflow dispatch | Run and summarize all blocking CPU checks |
+| `pr-title.yml` | Reusable workflow | Validate PR title format: `[<modules>] <type>: <description>` |
+| `license.yml` | Reusable workflow | Check SPDX Apache-2.0 header on newly added source files |
+| `secrets.yml` | Reusable workflow | Scan PR commits for leaked secrets via gitleaks |
+| `lint.yml` | Reusable workflow | Run Ruff on changed Python files |
+| `build.yml` | Reusable workflow | Build sdist + wheel and run Python 3.12 import smoke |
 | `submodule-sync.yml` | repository dispatch / workflow dispatch + manual | Sync `third_party/Loong-Megatron` to its tracked branch and push the submodule pointer update |
 | `auto-label.yml` | Issue/PR open/edit | Auto-label issues and PRs by keyword matching |
 | `issue-notify.yml` | Issue opened | Notify Ruliu group when a new issue is opened |
 
-All workflows support `workflow_dispatch` for manual re-runs from the Actions UI (except `auto-label.yml`).
+The CPU checks are run manually through `ci-gate.yml` when needed. Operational workflows such as `submodule-sync.yml` may retain their own dispatch inputs.
 
 ## PR Title Convention
 
@@ -46,7 +48,7 @@ Required secrets:
 - `SUBMODULE_SYNC_APP_ID`
 - `SUBMODULE_SYNC_APP_PRIVATE_KEY`
 
-The GitHub App behind those secrets must be able to push to the configured target branch.
+The GitHub App behind those secrets must be able to push to the configured target branch. This workflow is separate from the PR `CI Gate` and is not a required merge check.
 
 ## Ruliu Issue Notifications
 

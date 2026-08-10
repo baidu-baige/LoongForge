@@ -1,0 +1,60 @@
+name: Ruff
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Ruff
+        run: python -m pip install 'ruff==0.9.10'
+
+      - name: Find changed Python files
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            git diff --name-only --diff-filter=ACMR "$BASE...$HEAD" -- '*.py' \
+              | grep -vE '^(third_party|patches)/' \
+              | sort -u > changed-python.txt || true
+          else
+            git ls-files '*.py' \
+              | grep -vE '^(third_party|patches)/' \
+              | sort -u > changed-python.txt || true
+          fi
+
+          if [ -s changed-python.txt ]; then
+            echo "has_files=true" >> "$GITHUB_OUTPUT"
+            echo "--- Python files to check ---"
+            cat changed-python.txt
+          else
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+            echo "No Python files require Ruff checks."
+          fi
+
+      - name: Run Ruff
+        if: steps.changed.outputs.has_files == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < changed-python.txt
+          ruff check "${files[@]}"

@@ -27,7 +27,7 @@ The more context you provide, the easier it will be for maintainers to diagnose 
 ## Pull Requests
 We strongly welcome pull requests to help improve LoongForge.
 
-All pull requests will be reviewed by the maintainers. Automated checks and tests will be run as part of the review process. Once all checks pass and the review is approved, the pull request will be accepted. Please note that merging into the `main` branch may not happen immediately and could be subject to scheduling.
+All pull requests will be reviewed by the maintainers. The `CI Gate` workflow runs the blocking CPU checks for each PR. Once it passes and the review is approved, the pull request can be merged into the `master` branch.
 
 ### Repository Structure
 
@@ -76,8 +76,8 @@ cd ../..
 
 ```bash
 # LoongForge
-git checkout main
-git pull upstream main
+git checkout master
+git pull upstream master
 git checkout -b feature/your-feature-name
 
 # Loong-Megatron (only if modifying Megatron)
@@ -100,8 +100,8 @@ git commit -m "feat: add your commit message"
 ### Step 5 — Sync with upstream and push to your fork
 
 ```bash
-# (Optional but recommended) Rebase on the latest upstream main before pushing
-git pull --rebase upstream main
+# (Optional but recommended) Rebase on the latest upstream master before pushing
+git pull --rebase upstream master
 git push -u origin feature/your-feature-name
 ```
 
@@ -117,7 +117,7 @@ git push -u my-fork feature/your-feature-name
 
 Open a PR on GitHub from your feature branch to the target upstream branch:
 
-- **LoongForge changes**: `your-name/LoongForge:feature/xxx` → `baidu-baige/LoongForge:main`
+- **LoongForge changes**: `your-name/LoongForge:feature/xxx` → `baidu-baige/LoongForge:master`
 - **Megatron changes**: `your-name/Loong-Megatron:feature/xxx` → `baidu-baige/Loong-Megatron:loong-main/core_v0.15.0`
 - **TE changes**: commit the patch file to LoongForge, then open a PR as in the LoongForge flow above
 
@@ -127,7 +127,7 @@ Open a PR on GitHub from your feature branch to the target upstream branch:
 
 Before submitting a pull request, please make sure that:
 
-1. You create your branch from the correct base branch (`main` for LoongForge, `loong-main/core_v0.15.0` for Loong-Megatron).
+1. You create your branch from the correct base branch (`master` for LoongForge, `loong-main/core_v0.15.0` for Loong-Megatron).
 2. You update relevant code comments or documentation if APIs are changed.
 3. You add the appropriate copyright and license notice to the top of any new source files when applicable, and preserve upstream notices for third-party derived files.
 4. For original source files, prefer using the SPDX-based Apache-2.0 header described in the project guidelines.
@@ -137,14 +137,16 @@ Before submitting a pull request, please make sure that:
 
 ## Continuous Integration
 
-Every PR runs the following GitHub Actions workflows on CPU runners (no GPU/XPU).
+Every PR runs the following checks through the `CI Gate` GitHub Actions workflow on CPU runners (no GPU/XPU). The individual workflows are reusable checks called by `ci-gate.yml` and are not triggered directly.
 
 | Workflow | What it checks | Reproduce locally |
 |---|---|---|
+| CI Gate | All blocking CPU checks below | Open or update a PR |
 | PR Title Check | Title matches `[<modules>] <type>: <description>` | n/a — edit the PR title |
 | License Header | Newly added `.py/.sh/.cu/.cpp/.h` files have the SPDX Apache-2.0 header | `pre-commit run spdx-check --files <path>` |
 | Secret Scan | gitleaks finds no leaked secrets in new commits | `gitleaks detect --config .gitleaks.toml` |
-| Build | `python -m build` succeeds on Python 3.10 and 3.12 | `python -m build --sdist --wheel --outdir dist/` |
+| Ruff | New or modified Python files pass Ruff (`E4,E7,E9,F`) | `ruff check <changed-python-files>` |
+| Build | `python -m build` and wheel import smoke succeed on Python 3.12 | `python -m build --sdist --wheel --outdir dist/` |
 
 ### Valid PR title modules
 

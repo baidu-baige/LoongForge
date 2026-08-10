@@ -1,10 +1,7 @@
 name: Build
 
 on:
-  pull_request:
-  push:
-    branches: [master]
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -29,6 +26,20 @@ jobs:
       - run: python -m build --sdist --wheel --outdir dist/
 
       - run: twine check dist/*
+
+      - name: Install wheel without optional dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --no-deps dist/*.whl
+
+      - name: Import smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          python -c "import loongforge; print(loongforge.__file__)"
 
       - uses: actions/upload-artifact@v4
         with:
