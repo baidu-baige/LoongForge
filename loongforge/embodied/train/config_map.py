@@ -30,6 +30,10 @@ from loongforge.embodied.model.dreamzero.model_configuration_dreamzero import Dr
 from loongforge.embodied.data.datasets.dreamzero.transforms.data_configuration_dreamzero import DreamZeroDataConfig
 from loongforge.embodied.model.lingbot_va.model_configuration_lingbot_va import LingBotVAModelConfig
 from loongforge.embodied.data.datasets.lingbot_va.transforms.data_configuration_lingbot_va import LingBotVADataConfig
+from loongforge.embodied.model.motus.model_configuration_motus import MotusModelConfig
+from loongforge.embodied.data.datasets.motus.transforms.data_configuration_motus import (
+    MotusDataConfig,
+)
 
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -80,6 +84,7 @@ MODEL_SCHEMA = {
     "dreamzero_yam_wan21_14b": ModelSchema(
         "dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
     ),
+    "motus": ModelSchema("motus.yaml", MotusModelConfig, MotusDataConfig),
 }
 
 

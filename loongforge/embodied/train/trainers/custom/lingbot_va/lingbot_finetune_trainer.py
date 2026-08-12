@@ -41,6 +41,16 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
         self._lingbot_post_step_reshard_hook = None
         super().__init__(training_args, model_cfg, data_cfg)
 
+    @property
+    def _ds_eager_enabled(self) -> bool:
+        """Hard-isolate LingBot from the generic eager DeepSpeed ZeRO path.
+
+        LingBot uses nested FSDP2 wrapping + DTensor optimizer gradients, so the
+        generic ``FinetuneTrainer`` eager-ZeRO branches must NEVER engage —
+        regardless of launch flags such as ``--deepspeed-config``. Force off.
+        """
+        return False
+
     def _wrap_model_for_training(self):
         if self.training_args.distributed_strategy != "fsdp":
             raise RuntimeError(

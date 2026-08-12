@@ -21,6 +21,24 @@ from loongforge.embodied.optimizer import get_grad_norm
 logger = logging.getLogger(__name__)
 
 
+def _default_pg_supports_cpu() -> bool:
+    """Whether the default process group can run collectives on CPU tensors.
+
+    The default trans PG is created with backend ``"cpu:gloo,cuda:nccl"`` so CPU
+    tensors route via gloo. If some other init created an nccl-only group (no CPU
+    backend), a CPU collective raises ``RuntimeError: No backend type associated
+    with device type cpu``. Probe the PG's CPU backend so callers can fall back to
+    a CUDA gather only when needed; on the default path this returns True and
+    behavior is unchanged.
+    """
+    try:
+        pg = torch.distributed.distributed_c10d._get_default_group()
+        pg._get_backend(torch.device("cpu"))
+        return True
+    except Exception:
+        return False
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Config formatting utilities
 # ═══════════════════════════════════════════════════════════════════
@@ -168,10 +186,17 @@ class StageTimers:
         # Timing data is tiny; gather on CPU (gloo) to avoid occupying the GPU
         # stream and a GPU->host sync. The default process group is created with
         # backend "cpu:gloo,cuda:nccl", so CPU tensors are routed via gloo.
+        # If the PG happens to be nccl-only (no CPU backend), a CPU all_gather
+        # raises "No backend type associated with device type cpu", so fall back
+        # to a CUDA gather. Every rank shares the same PG backend, so this branch
+        # is collective-consistent (all ranks pick the same device).
+        gather_device = torch.device("cpu")
+        if ctx.is_distributed and ctx.world_size > 1 and not _default_pg_supports_cpu():
+            gather_device = ctx.device
         local = torch.tensor(
             [self._elapsed[n] for n in names],
             dtype=torch.float,
-            device="cpu",
+            device=gather_device,
         )
 
         if ctx.is_distributed and ctx.world_size > 1:

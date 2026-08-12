@@ -1,0 +1,71 @@
+# Motus VLA (WAN video + Qwen3-VL + Action Expert three-modal MoT) embodied config.
+# Values mirror the source repo configs/lerobot.yaml (model + dataset sections).
+model:
+  model_type: motus
+
+  # WAN video backbone
+  wan_config_path: "/workspace/motus/models/hf/Wan2.2-TI2V-5B"
+  wan_checkpoint_path: "/workspace/motus/models/hf/Wan2.2-TI2V-5B"
+  vae_path: "/workspace/motus/models/hf/Wan2.2-TI2V-5B/Wan2.2_VAE.pth"
+  video_precision: bfloat16
+
+  # VLM (frozen)
+  vlm_checkpoint_path: "/workspace/motus/models/hf/Qwen3-VL-2B-Instruct"
+  vlm_precision: bfloat16
+
+  # Task dimensions (shared with data side)
+  action_dim: 14
+  state_dim: 14
+
+  # Action expert
+  action_expert_hidden_size: 1024
+  action_expert_ffn_dim_multiplier: 4
+  action_expert_norm_eps: 1.0e-5
+
+  # Understanding expert
+  und_expert_hidden_size: 512
+  und_expert_ffn_dim_multiplier: 4
+  und_expert_norm_eps: 1.0e-5
+  vlm_adapter_input_dim: 2048
+  vlm_adapter_projector_type: mlp3x_silu
+
+  # MoT backbone depth
+  num_layers: 30
+
+  # Video / sampling geometry (shared with data side)
+  num_video_frames: 8
+  video_action_freq_ratio: 6
+  global_downsample_rate: 1
+  video_height: 384
+  video_width: 320
+
+  # Loss weights
+  video_loss_weight: 1.0
+  action_loss_weight: 1.0
+
+  # Training mode / switches
+  training_mode: finetune
+  load_pretrained_backbones: null
+
+data:
+  # LeRobot dataset location
+  repo_id: "/workspace/motus/data/aloha_mobile_cabinet"
+  root: "/workspace/motus/data/aloha_mobile_cabinet"
+
+  # Task selection
+  task_mode: single
+  task_name: null
+  max_episodes: null
+  image_aug: false
+
+  # Normalization / embodiment
+  embodiment_type: aloha_agilex_2
+
+  # Video decoding
+  video_backend: torchcodec
+
+  # T5 language embedding (on-the-fly encode + cache fallback)
+  enable_t5_fallback: true
+  t5_wan_path: "/workspace/motus/models/hf/Wan2.2-TI2V-5B/"
+  t5_folder_name: t5_embedding
+  t5_text_len: 512
