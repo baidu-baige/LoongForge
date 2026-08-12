@@ -145,7 +145,7 @@ Every PR runs the following checks through the `CI Gate` GitHub Actions workflow
 | PR Title Check | Title matches `[<modules>] <type>: <description>` | n/a — edit the PR title |
 | License Header | Newly added `.py/.sh/.cu/.cpp/.h` files have the SPDX Apache-2.0 header | `pre-commit run spdx-check --files <path>` |
 | Secret Scan | gitleaks finds no leaked secrets in new commits | `gitleaks detect --config .gitleaks.toml` |
-| Ruff | New or modified Python files pass Ruff (`E4,E7,E9,F`) | `ruff check <changed-python-files>` |
+| Ruff | New or modified Python files pass Ruff (`E4,E7,E9,E501,F,S506`) | `ruff check <changed-python-files>` |
 | Build | `python -m build` and wheel import smoke succeed on Python 3.12 | `python -m build --sdist --wheel --outdir dist/` |
 
 ### Valid PR title modules
