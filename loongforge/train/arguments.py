@@ -385,6 +385,14 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
+        "--hf-processor-path",
+        type=str,
+        default=None,
+        help="Optional HuggingFace processor path when it differs from the tokenizer path. "
+             "Defaults to --hf-tokenizer-path."
+    )
+
+    group.add_argument(
         "--use-fast-tokenizer",
         action="store_true",
         dest="use_fast_tokenizer",

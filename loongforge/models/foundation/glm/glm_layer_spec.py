@@ -6,6 +6,9 @@
 from typing import Tuple, Optional
 from omegaconf import ListConfig
 
+from megatron.core.models.gpt.experimental_attention_variant_module_specs import (
+    validate_dsa_index_share_pipeline_split,
+)
 from megatron.core.models.gpt.gpt_layer_specs import get_gpt_mtp_block_spec
 from megatron.core.transformer.enums import AttnMaskType, LayerType
 from megatron.core.transformer.identity_op import IdentityOp
@@ -288,15 +291,17 @@ def get_glm_decoder_block_and_mtp_spec(
     num_layers_to_build = get_num_layers_to_build(config, vp_stage=vp_stage)
 
     if config.pipeline_model_parallel_layout is not None:
-        local_layer_specs = [
-            layer_specs[layer_id]
-            for layer_id in config.pipeline_model_parallel_layout.get_layer_id_list(
-                layer_type=LayerType.decoder, vp_stage=vp_stage
-            )
-        ]
+        local_layer_ids = config.pipeline_model_parallel_layout.get_layer_id_list(
+            layer_type=LayerType.decoder, vp_stage=vp_stage
+        )
     else:
         offset = get_transformer_layer_offset(config, vp_stage=vp_stage)
-        local_layer_specs = layer_specs[offset : offset + num_layers_to_build]
+        local_layer_ids = range(offset, offset + num_layers_to_build)
+
+    # DSA cross-layer top-k sharing (GLM-5.2 IndexShare) propagates indices inside one
+    # transformer block, so every stage must start on a layer that owns an indexer.
+    validate_dsa_index_share_pipeline_split(config, local_layer_ids)
+    local_layer_specs = [layer_specs[layer_id] for layer_id in local_layer_ids]
 
     # Block spec.
     block_spec = TransformerBlockSubmodules(

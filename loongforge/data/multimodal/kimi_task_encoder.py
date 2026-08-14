@@ -418,6 +418,29 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         Returns:
             input_ids, target, attn_mask, imgs, image_grid_thw
         """
+        if isinstance(self.chat_template, HFChatTemplate):
+            if image is not None and constants.Placeholder.IMAGE not in context:
+                context = constants.Placeholder.IMAGE + context
+            messages = [
+                {"role": constants.DataRoles.USER, "content": context},
+                {"role": constants.DataRoles.ASSISTANT, "content": answer},
+            ]
+            (
+                input_ids,
+                target,
+                attn_mask,
+                imgs,
+                image_grid_thw,
+                _,
+                _,
+            ) = self.process_sft_qa(
+                messages,
+                "",
+                None,
+                [image] if image is not None else None,
+            )
+            return input_ids, target, attn_mask, imgs, image_grid_thw
+
         text = self._build_kimi_chat_text(
             context, answer, has_image=(image is not None)
         )
@@ -556,40 +579,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
             image_grid_thw = mm_inputs["image_grid_thw"]
             pixel_values_images = [mm_inputs["pixel_values"]]
 
-        if isinstance(self.chat_template, HFChatTemplate):
-            hf_messages = list(messages)
-            has_system_message = (
-                hf_messages
-                and hf_messages[0].get("role") == constants.DataRoles.SYSTEM
-            )
-            if system and not has_system_message:
-                hf_messages = [
-                    {"role": constants.DataRoles.SYSTEM, "content": system},
-                    *hf_messages,
-                ]
-            input_ids, target, _, _ = self.chat_template.encode_openai(
-                tokenizer=self.tokenizer,
-                messages=hf_messages,
-                tools=tools,
-                train_on_prompt=getattr(self.args, "train_on_prompt", False),
-                history_mask_loss=getattr(self.args, "history_mask_loss", False),
-                ignore_index=IGNORE_INDEX,
-            )
-        else:
-            # Encode multi-turn conversation
-            encode_pairs = self.chat_template.encode_multiturn(
-                tokenizer=self.tokenizer,
-                messages=messages,
-                system=system,
-            )
-
-            input_ids, target = [], []
-            for source_ids, target_ids in encode_pairs:
-                input_ids += source_ids + target_ids
-                target += [IGNORE_INDEX] * len(source_ids) + target_ids
-
-        input_ids = torch.tensor(input_ids)
-        target = torch.tensor(target)
+        input_ids, target = self._encode_sft_messages(messages, system, tools)
         attn_mask = torch.zeros_like(input_ids).bool()
 
         # Expand <|media_content|> tokens to match actual image/video feature length.

@@ -1,0 +1,62 @@
+# glm-5.2 model config
+# Architecturally identical to GLM-5 except for IndexShare: the DSA indexer lives on only 21 of
+# the 78 layers and the other 57 reuse the nearest preceding indexer layer's top-k indices.
+_target_: loongforge.models.foundation.GlmConfig
+
+num_layers: 78
+hidden_size: 6144
+ffn_hidden_size: 12288
+num_attention_heads: 64
+num_query_groups: 64
+num_experts: 256
+mtp_num_layers: 1
+moe_ffn_hidden_size: 2048
+moe_shared_expert_intermediate_size: 2048
+q_lora_rank: 2048
+kv_lora_rank: 512
+qk_head_dim: 192
+qk_pos_emb_head_dim: 64
+v_head_dim: 256
+moe_layer_freq: ${moe_freq:"[0]*3+[1]*75"}
+qk_layernorm: true
+vocab_size_in_config_file: 154880
+
+# Deepseek Sparse Attention
+experimental_attention_variant: "dsa"
+dsa_indexer_n_heads: 32
+dsa_indexer_head_dim: 128
+dsa_indexer_topk: 2048
+# Follows Megatron-Bridge's GLM-5.x bridge (glm5_bridge.py:120-121), which is the only
+# GLM-5-specific published value. Other references for contrast: upstream mcore's DSA
+# functional test uses 0.01, Bridge's DeepSeek-V4 GB300 perf recipe uses 0.01 while its
+# convergence recipes set 0.0, and slime's GLM-5.2 RL recipe freezes the indexer outright.
+# mcore itself has no default (the field is Optional[float] = None).
+dsa_indexer_loss_coeff: 0.001
+dsa_indexer_use_sparse_loss: true
+# IndexShare (HF index_topk_freq / index_skip_topk_offset): computing layers are
+# [0, 1, 2, 6, 10, ..., 74] 0-indexed, i.e. 21 of 78 own an indexer.
+dsa_indexer_topk_freq: 4
+dsa_indexer_skip_topk_offset: 3
+# HF indexer_rope_interleave: true -- the indexer uses interleaved RoPE, unlike DeepSeek-V3.2.
+dsa_indexer_rope_interleaved: true
+# GLM-5.x does not Hadamard-rotate the indexer q/k (DeepSeek-V3.2 does).
+dsa_indexer_rotate_activation: false
+# HF nn.LayerNorm(index_head_dim, eps=1e-6); differs from the model-level norm epsilon.
+dsa_indexer_k_norm_epsilon: 1e-6
+
+# common default
+position_embedding_type: "rope"
+add_position_embedding: false
+rotary_interleaved: false
+normalization: "RMSNorm"
+swiglu: true
+attention_dropout: 0
+hidden_dropout: 0
+add_bias_linear: false
+add_qkv_bias: false
+untie_embeddings_and_output_weights: true
+apply_rope_fusion: false  # no support rope fusion yet
+multi_latent_attention: true
+model_type: "glm"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/glm5/ckpt_convert/glm5_2_convert.yaml

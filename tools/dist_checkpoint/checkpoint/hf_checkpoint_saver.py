@@ -404,7 +404,7 @@ def save_hf_checkpoint_online(
         _consolidate_pp_checkpoints(
             save_hf_path,
             pp_size,
-            original_hf_path=args.load  # Use the original HF checkpoint path for config files
+            original_hf_path=getattr(args, "pretrained_checkpoint", None) or args.load,
         )
 
     print_rank_0("="*80)

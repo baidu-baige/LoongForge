@@ -11,9 +11,7 @@ from .moon_vision_config import PatchMergerMLPAdapterConfig
 
 
 class PatchMergerMLP(BaseMegatronModule):
-    """
-    PatchMergerMLP is a MLP layer that merges patches of the same spatial location.
-    """
+    """Merge 2x2 MoonViT patches and project them to the language hidden size."""
     config_class = PatchMergerMLPAdapterConfig
 
     def __init__(
@@ -25,6 +23,7 @@ class PatchMergerMLP(BaseMegatronModule):
         use_postshuffle_norm: bool = False,
         **kwargs,
     ) -> None:
+        """Initialize the PatchMerger layers."""
         super().__init__(config=config)
         # Support both single int and tuple (kh, kw) for merge kernel size
         if isinstance(spatial_merge_size, (list, tuple)):

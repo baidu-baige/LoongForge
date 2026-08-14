@@ -1274,3 +1274,22 @@ _register_chat_template(
     stop_words=["<|user|>", "<|observation|>"],
     efficient_eos=True,
 )
+
+# GLM-5.2 changes the prompt format relative to GLM-5: a `Reasoning Effort` system line
+# (default Max, `high` selectable via --chat-template-kwargs), an empty `<think></think>`
+# pair on non-thinking turns where 5.1 emitted a bare `</think>`, and a multi-modal
+# refusal reminder. Registered as an HFChatTemplate so OpenAI-style SFT gets assistant-only
+# loss masks from the template's generation blocks.
+_register_chat_template(
+    name="glm5.2-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("glm5_2_hf_training.jinja"),
+    stop_words=["<|user|>", "<|observation|>"],
+    mm_plugin=KimiK25Plugin(
+        image_token="<|image|>",
+        video_token=None,
+        merge_kernel_size=(2, 2),
+        image_prefix="<|begin_of_image|>",
+        image_suffix="<|end_of_image|>",
+    ),
+)

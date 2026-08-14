@@ -65,6 +65,12 @@ def _log_loaded_param_stats(unwrapped_model):
     total_nonzero = 0
     samples = []
     sample_targets = (
+        "encoder_model.image_projector.layernorm.weight",
+        "encoder_model.image_projector.layernorm.bias",
+        "encoder_model.image_projector.linear_fc1.weight",
+        "encoder_model.image_projector.linear_fc1.bias",
+        "encoder_model.image_projector.linear_fc2.weight",
+        "encoder_model.image_projector.linear_fc2.bias",
         "embedding.word_embeddings.weight",
         "decoder.layers.0.self_attention.linear_q_down_proj.weight",
         "decoder.layers.0.mlp.router.weight",
@@ -79,7 +85,7 @@ def _log_loaded_param_stats(unwrapped_model):
                 total_nonzero += int((p != 0).sum().item())
             for tgt in sample_targets:
                 if name.endswith(tgt) and len(samples) < 16:
-                    pf = p.float()
+                    pf = p.detach().float()
                     samples.append((name, n, pf.norm().item(), pf.abs().mean().item()))
                     break
     print_rank_0(f"[CKPT_LOAD] total params={total:,}, nonzero floats={total_nonzero:,}")

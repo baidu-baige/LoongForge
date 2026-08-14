@@ -159,6 +159,7 @@ class TransformerBlock(MegatronTransformerBlock):
             [s, b, h], and optionally the updated context tensor if cross-attention is used.
         """
 
+        kwargs = self._prepare_index_share_kwargs(kwargs)
         inference_context = deprecate_inference_params(inference_context, inference_params)
         # Remove 'dynamic_inference_decode_only' from kwargs if present
         # this is only used to uniquely identify decode and non-decode cuda graph

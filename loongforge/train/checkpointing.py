@@ -72,6 +72,18 @@ logger = getLogger(__name__)
 _NON_PERSISTENT_CKPT_SUBDIR = 'non_persistent'
 
 
+def _load_model_state_dict(module, state_dict, strict: bool):
+    """Load state while retaining the TransformerEngine compatibility fallback."""
+    try:
+        module.load_state_dict(state_dict, strict=strict)
+    except Exception as e:
+        print(f"[load_state_dict strict={strict}] exception:\n{e}")
+        if not strict:
+            raise
+        load_return = module.load_state_dict(state_dict, strict=False)
+        print(f"[load_state_dict strict=False] return: {load_return}")
+
+
 def set_checkpoint_version(value):
     global _CHECKPOINT_VERSION
     if _CHECKPOINT_VERSION is not None:
@@ -2029,41 +2041,20 @@ def _load_checkpoint_from_path(
         else:
             print_rank_0('could not find arguments in the checkpoint ...')
 
-    def load_model_state_dict(module, state_dict, strict: bool):
-        """Helper function to load state dict with fallback for missing extra states."""
-        try:
-            module.load_state_dict(state_dict, strict=strict)
-        except Exception as e:
-            # This is where PyTorch prints the missing/unexpected keys when strict=True
-            print(f"[load_state_dict strict={strict}] exception:\n{e}")
-
-            if strict:
-                # Fallback support for backward compatibility breaking changes in TransformerEngine
-                load_return = module.load_state_dict(state_dict, strict=False)
-                print(f"[load_state_dict strict=False] return: {load_return}")
-
     # Model.
     strict = False if args.retro_add_retriever else strict
     if not skip_load_to_model_and_opt:
-        # TODO: Handle PEFT resume for strict loading
-        is_peft_resume = (
-            peft_class is not None
-            and args.load is not None
-            and load_dir == args.load
-            and load_dir != args.pretrained_checkpoint
-            and not args.finetune
-        )
         load_strict = False if is_peft_resume else strict
 
         if len(ddp_model) == 1:
-            load_model_state_dict(ddp_model[0], state_dict['model'], load_strict)
+            _load_model_state_dict(ddp_model[0], state_dict['model'], load_strict)
         else:
             for i in range(len(ddp_model)):
-                # If there is no corresponding model in the state_dict, it will be ignored.
-                # It means that this is an empty stage.
-                if 'model%d' % i not in state_dict:
+                # If there is no corresponding model, this is an empty pipeline stage.
+                model_key = 'model%d' % i
+                if model_key not in state_dict:
                     continue
-                load_model_state_dict(ddp_model[i], state_dict['model%d' % i], load_strict)
+                _load_model_state_dict(ddp_model[i], state_dict[model_key], load_strict)
     # Fix up query/key/value matrix ordering if needed.
     checkpoint_version = get_checkpoint_version()
     print_rank_0(f' checkpoint version {checkpoint_version}')

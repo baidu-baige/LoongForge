@@ -684,8 +684,24 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         def save_hf_shard(tensors, shard_file):
             shard = {}
+            seen_storage = {}
             for tensor in tensors:
-                shard[tensor] = state_dict[tensor].contiguous()
+                t = state_dict[tensor].contiguous()
+                # Some names legitimately map onto one mcore tensor -- e.g. an MTP block whose
+                # shared_head.head aliases the trunk output_layer (mcore_base.py redirects
+                # mtp_shared_head_head to word_embeddings_for_head). safetensors refuses aliased
+                # storages, so materialize a copy for every name after the first.
+                key = (t.untyped_storage().data_ptr(), t.storage_offset(), tuple(t.shape),
+                       tuple(t.stride()), t.dtype)
+                if key in seen_storage:
+                    logging.info(
+                        f"Tensor {tensor} shares storage with {seen_storage[key]}; "
+                        f"cloning it so safetensors can save both."
+                    )
+                    t = t.clone()
+                else:
+                    seen_storage[key] = tensor
+                shard[tensor] = t
                 del state_dict[tensor]
             shard_path = os.path.join(save_path, shard_file)
             save_file(shard, shard_path, metadata={"format": "pt"})
