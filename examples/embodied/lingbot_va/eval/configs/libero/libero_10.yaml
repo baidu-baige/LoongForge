@@ -1,0 +1,102 @@
+# LingBot-VA LIBERO task-success template (open-source).
+# Verified suite: libero_10 (LIBERO-Long) with a LingBot-VA libero-long posttrain.
+#
+# ckpt_path is a single checkpoint root holding transformer/ plus the frozen
+# vae/ text_encoder/ tokenizer/ subfolders; there is no separate dataset stats
+# file (the action quantiles live in model.norm_q01 / model.norm_q99 below).
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+#
+# The model.* values here are the official inference defaults
+# (wan_va/configs/va_libero_cfg.py) and the benchmark.* values match the
+# official LIBERO eval client. Changing them changes the eval, not just its cost.
+#
+# Optional overrides (edit this file or copy it):
+#   max_tasks / episodes_per_task: raise for multi-task / multi-episode eval
+#   suite: only libero_10 matches a libero-long posttrain checkpoint
+
+benchmark:
+  name: libero
+  suite: libero_10
+  max_tasks: 1          # optional: null or larger for the full suite
+  episodes_per_task: 1  # optional: e.g. 5 / 50 for regression
+  max_steps: 800        # official client loops while timestep < 800
+  num_steps_wait: 5     # official client steps 5 dummy actions before acting
+  render_resolution: 128  # official renders natively at 128, not 256-then-resize
+  continuous_gripper: true
+  # control_mode: auto  # -> delta OSC (identity decoder key), same as official
+
+model:
+  backend: loongforge
+  model_type: lingbot_va
+  name: loongforge-lingbot-va-libero-long
+  # Transformer geometry: must match transformer/config.json in the checkpoint.
+  num_layers: 30
+  hidden_size: 3072
+  ffn_hidden_size: 14336
+  num_attention_heads: 24
+  latent_in_channels: 48
+  latent_out_channels: 48
+  latent_patch_size: [1, 2, 2]
+  action_dim: 30
+  text_dim: 4096
+  freq_dim: 256
+  rope_max_seq_len: 1024
+  cross_attn_norm: true
+  # Flow matching: video and action have independent schedules.
+  snr_shift: 5.0
+  action_snr_shift: 0.05
+  num_inference_steps: 20
+  action_num_inference_steps: 50
+  guidance_scale: 5.0
+  action_guidance_scale: 1.0
+  video_exec_step: -1
+  # Autoregression.
+  frame_chunk_size: 4
+  action_per_frame: 4
+  attn_window: 30
+  # Observation encoding.
+  height: 128
+  width: 128
+  camera_layout: width_concat
+  obs_cam_keys: [primary, wrist]
+  # The shared LIBERO adapter emits raw[::-1, ::-1] (180 deg) while the official
+  # client emits raw[::-1] (vertical only); this undoes the extra horizontal
+  # flip. See loongforge/embodied/eval/adapters/libero.py:80.
+  image_hflip: true
+  # Action space + dataset quantiles (official norm_stat; unused channels are 0).
+  used_action_channel_ids: [0, 1, 2, 3, 4, 5, 6]
+  norm_q01: [-0.6589285731315613,-0.84375,-0.9375,-0.12107142806053162,-0.15964286029338837,-0.26571428775787354,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  norm_q99: [0.8999999761581421,0.8544642925262451,0.9375,0.17142857611179352,0.1842857152223587,0.34392857551574707,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+
+server:
+  host: 127.0.0.1
+  port: 12099
+  health_port: 12100
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/libero/libero_10/policy_server.log
+  start_timeout_sec: 1800
+  ckpt_path: /path/to/lingbot-va-posttrain-libero-long
+  loongforge_root: /path/to/LoongForge-VLA
+  use_bf16: true
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/libero/libero_10
+  seed: 7
+  save_trace: true
+  save_replay: true
+  # save_trace: false   # optional: save disk on large sweeps
+  # save_replay: false
+
+timeouts:
+  # One full diffusion rollout per env step (20 video + 50 action steps), so
+  # budgets are much larger than for a single-forward policy.
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 7200

@@ -10,7 +10,12 @@ import torch
 
 
 class LingBotVAFlowMatchScheduler:
-    """Flow-matching schedule used by LingBot-VA training."""
+    """Flow-matching schedule shared by LingBot-VA training and inference.
+
+    ``set_timesteps`` / ``add_noise`` / ``training_target`` / ``training_weight``
+    serve the training path; ``step`` serves the inference denoising loop. Both
+    read the same ``sigmas`` / ``timesteps`` built by ``set_timesteps``.
+    """
 
     def __init__(
         self,
@@ -20,6 +25,7 @@ class LingBotVAFlowMatchScheduler:
         sigma_min: float = 0.003 / 1.002,
         extra_one_step: bool = False,
     ) -> None:
+        """Store the schedule shape and build a default 100-step timestep table."""
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
         self.sigma_max = sigma_max
@@ -60,6 +66,27 @@ class LingBotVAFlowMatchScheduler:
         shape[t_dim] = ids.numel()
         sigma = self.sigmas[ids].to(sample).view(shape)
         return (1 - sigma) * sample + sigma * noise
+
+    def step(
+        self,
+        model_output: torch.Tensor,
+        timestep: torch.Tensor,
+        sample: torch.Tensor,
+    ) -> torch.Tensor:
+        """Take one inference denoising step (Euler step on the flow-matching ODE).
+
+        Inference-only; the training path uses ``add_noise`` / ``training_target``.
+        """
+        if not torch.is_tensor(timestep):
+            timestep = torch.tensor(timestep)
+        timesteps = self.timesteps.to(timestep.device)
+        index = int(torch.argmin((timesteps - timestep.reshape(-1)[0]).abs()))
+        sigma = self.sigmas[index].to(sample)
+        if index + 1 < len(self.sigmas):
+            sigma_next = self.sigmas[index + 1].to(sample)
+        else:
+            sigma_next = torch.zeros_like(sigma)
+        return sample + model_output * (sigma_next - sigma)
 
     @staticmethod
     def training_target(

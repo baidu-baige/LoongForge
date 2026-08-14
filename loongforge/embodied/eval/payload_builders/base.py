@@ -37,6 +37,12 @@ class PayloadBuilder:
     action_encoding: str = ""
     action_dim: int = 0
     action_horizon: int = 1
+    # Set True by models whose inference is closed-loop *within* a chunk, i.e.
+    # they must observe every env step rather than being called once per chunk.
+    # Runners forward this to the RPC so ``GenericPredictActionPolicy`` skips its
+    # chunk cache; the model then owns the action queue. Default False keeps the
+    # existing chunk-cached behaviour for every other model.
+    disable_action_cache: bool = False
 
     def __init__(
         self,

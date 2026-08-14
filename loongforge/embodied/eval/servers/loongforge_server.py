@@ -50,10 +50,14 @@ def _warmup_model(model_spec: Any) -> None:
     import numpy as np
 
     logging.info("Warming up model to resolve lazy imports...")
+    # Models that need more than one camera view reject the single-view dummy;
+    # the factory reports how many views the model consumes so the warmup can
+    # be shaped correctly instead of failing into the ignored-exception path.
+    n_views = max(1, int(getattr(model_spec, "metadata", {}).get("num_camera_views", 1) or 1))
     try:
         dummy_image = np.zeros((224, 224, 3), dtype=np.uint8)
         model_spec.model.predict_action(
-            images=[[dummy_image]],
+            images=[[dummy_image] * n_views],
             instructions=["warmup"],
             state=None,
             dataset_stats=None,

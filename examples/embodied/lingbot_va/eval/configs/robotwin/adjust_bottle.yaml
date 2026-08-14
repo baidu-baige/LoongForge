@@ -1,0 +1,102 @@
+# LingBot-VA RoboTwin-2.0 task-success template (open-source).
+# Verified task: adjust_bottle / demo_clean with a LingBot-VA robotwin posttrain.
+#
+# ckpt_path is a single checkpoint root holding transformer/ plus the frozen
+# vae/ text_encoder/ tokenizer/ subfolders; the action quantiles live in
+# model.norm_q01 / model.norm_q99 below, not in a dataset stats file.
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+#
+# bridge=lingbot_va_ee_quat_16d: no proprio in, 16D dual-arm ee pose out
+# (relative to the episode's initial endpose, composed back by the decoder and
+# executed via take_action(action, action_type="ee")).
+#
+# The model.* values are the official RoboTwin inference defaults
+# (wan_va/configs/va_robotwin_cfg.py) and differ from the LIBERO config in
+# almost every field -- do not copy from the LIBERO YAML.
+
+benchmark:
+  name: robotwin
+  task_name: adjust_bottle  # optional: other RoboTwin tasks
+  task_config: demo_clean
+  start_seed: 100001
+  episodes_per_task: 1
+  max_steps: 300
+  disable_expert_check: false
+  action_bridge: lingbot_va_ee_quat_16d
+
+model:
+  backend: loongforge
+  model_type: lingbot_va
+  name: loongforge-lingbot-va-robotwin2
+  # Transformer geometry: must match transformer/config.json in the checkpoint.
+  num_layers: 30
+  hidden_size: 3072
+  ffn_hidden_size: 14336
+  num_attention_heads: 24
+  latent_in_channels: 48
+  latent_out_channels: 48
+  latent_patch_size: [1, 2, 2]
+  action_dim: 30
+  text_dim: 4096
+  freq_dim: 256
+  rope_max_seq_len: 1024
+  cross_attn_norm: true
+  # Flow matching. action_snr_shift is 1.0 here, not LIBERO's 0.05.
+  snr_shift: 5.0
+  action_snr_shift: 1.0
+  num_inference_steps: 25
+  action_num_inference_steps: 50
+  guidance_scale: 5.0
+  action_guidance_scale: 1.0
+  video_exec_step: -1
+  # Autoregression: shorter chunks, far longer attention window than LIBERO.
+  frame_chunk_size: 2
+  action_per_frame: 16
+  attn_window: 72
+  # Observation encoding: three cameras stitched in the T layout at 256x320.
+  height: 256
+  width: 320
+  camera_layout: robotwin_tshape
+  obs_cam_keys: [primary, left, right]
+  # RoboTwin's adapter passes camera RGB through untouched, so no compensating
+  # flip here (unlike LIBERO, whose adapter rotates by 180 degrees).
+  image_hflip: false
+  # Action space: [left arm 0..6, left gripper 28, right arm 7..13, right gripper 29].
+  # The order is deliberately not ascending -- it is the official channel order
+  # and the quantiles are indexed by it, so do not sort this list.
+  used_action_channel_ids: [0, 1, 2, 3, 4, 5, 6, 28, 7, 8, 9, 10, 11, 12, 13, 29]
+  norm_q01: [-0.06172713458538055,-3.6716461181640625e-05,-0.08783501386642456,-1.0,-1.0,-1.0,-1.0,-0.3547105032205582,-1.3113021850585938e-06,-0.11975435614585876,-1.0,-1.0,-1.0,-1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
+  norm_q99: [0.3462600058317184,0.39966784834861746,0.14745532035827624,1.0,1.0,1.0,1.0,0.034201726913452024,0.39142737388610793,0.1792279863357542,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0]
+
+server:
+  host: 127.0.0.1
+  port: 12299
+  health_port: 12300
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/robotwin/adjust_bottle/policy_server.log
+  start_timeout_sec: 1800
+  random_init: false
+  ckpt_path: /path/to/lingbot-va-posttrain-robotwin
+  loongforge_root: /path/to/LoongForge-VLA
+  use_bf16: true
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  robotwin_root: /path/to/RoboTwin
+  robotwin_python: /path/to/robotwin/bin/python
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/robotwin/adjust_bottle
+  seed: 0
+  ckpt_setting: loongforge_lingbot_va_robotwin
+  worker_local_files: true
+  disable_eval_video_log: true
+  keep_config: true
+  timestamped_output: false
+
+timeouts:
+  # One diffusion rollout per env step (25 video + 50 action steps) at 256x320
+  # over three cameras, so budgets are larger than LIBERO's.
+  policy_call_ms: 900000
+  per_step_sec: 900
+  per_episode_sec: 7200

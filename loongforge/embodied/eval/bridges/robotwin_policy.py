@@ -33,6 +33,9 @@ from loongforge.embodied.eval.payload_builders import build_payload_builder
 _BRIDGE_WIRING = {
     "ee6d_dual": ("xvla", "ee6d_dual", "ee6d_robotwin_ee_dual"),
     "pi05_aloha_14d": ("pi05", "aloha_pi", "pi05_aloha_robotwin"),
+    # LingBot-VA consumes no proprio (images + instruction only) and emits a
+    # dual-arm ee pose relative to the episode's initial endpose.
+    "lingbot_va_ee_quat_16d": ("lingbot_va", "", "lingbot_va_robotwin_ee_dual"),
 }
 
 
@@ -85,6 +88,11 @@ class ModelClient:
         if domain_id is not None:
             yaml_model["domain_id"] = int(domain_id)
         self.payload_builder = build_payload_builder(model_type, yaml_model=yaml_model)
+        # Closed-loop-within-chunk models (PayloadBuilder capability) must be
+        # called every env step or their KV cache never sees the intermediate
+        # frames. The YAML flag can only turn the cache off, never back on.
+        if getattr(self.payload_builder, "disable_action_cache", False):
+            self.disable_action_cache = True
         self.decoder = build_action_decoder(decoder_key)
 
         self.task_description: Optional[str] = None
@@ -141,6 +149,9 @@ class ModelClient:
             # Pi05PayloadBuilder produced (== adapt_to_pi_decode_state(joint)).
             # For ee6d_dual the decoder ignores ctx, so this is harmless.
             "pi_state": model_kwargs.get("state"),
+            # lingbot_va anchors its relative dual-arm ee pose on the endpose of
+            # the episode's first step; the other decoders ignore this key.
+            "endpose": canonical_obs["state_raw"].get("endpose"),
             "is_fresh_chunk": data.get("inference_latency_ms") is not None,
         }
         env_action = np.asarray(self.decoder(raw_chunk, decode_ctx), dtype=np.float32)[0]
@@ -225,6 +236,13 @@ def eval(TASK_ENV: Any, model: ModelClient, observation: Dict[str, Any]) -> None
         # with underscores replaced (e.g. "adjust bottle"), NOT the
         # env-generated natural-language instruction.
         instruction = model.adapter.task_name.replace("_", " ")
+        action = model.step(observation, instruction=instruction, step=TASK_ENV.take_action_cnt)
+        TASK_ENV.take_action(action, action_type="ee")
+    elif model.action_bridge == "lingbot_va_ee_quat_16d":
+        # Official LingBot-VA robotwin client uses the env instruction and
+        # commands absolute ee poses (its 16D output is composed onto the
+        # episode's initial endpose by the decoder).
+        instruction = str(TASK_ENV.get_instruction())
         action = model.step(observation, instruction=instruction, step=TASK_ENV.take_action_cnt)
         TASK_ENV.take_action(action, action_type="ee")
     else:

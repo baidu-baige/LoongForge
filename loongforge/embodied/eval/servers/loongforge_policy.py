@@ -41,6 +41,7 @@ class GenericPredictActionPolicy:
         self._dataset_stats = self._load_dataset_stats(dataset_statistics_path)
         self._chunk_cache: Dict[str, tuple[int, np.ndarray]] = {}
         self._request_id_prefix = request_id_prefix
+        self._episode_kwargs = self._supported_episode_kwargs(model)
         self._metadata = {
             "protocol_version": PROTOCOL_VERSION,
             "action_dim": int(action_dim),
@@ -48,6 +49,25 @@ class GenericPredictActionPolicy:
             "supports_preempt": False,
             **metadata,
         }
+
+    @staticmethod
+    def _supported_episode_kwargs(model: PredictActionModel) -> tuple[str, ...]:
+        """Which episode-tracking kwargs this model's ``predict_action`` accepts.
+
+        Streaming models (per-episode KV cache / observation buffer) need to know
+        which episode a call belongs to and whether it is the episode's first step.
+        Models that do not declare these parameters are called exactly as before,
+        so nothing is forwarded to them.
+        """
+        import inspect
+
+        try:
+            params = inspect.signature(model.predict_action).parameters
+        except (TypeError, ValueError):
+            return ()
+        if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            return ("episode_id", "episode_step")
+        return tuple(name for name in ("episode_id", "episode_step") if name in params)
 
     @property
     def metadata(self) -> Dict[str, Any]:
@@ -92,6 +112,10 @@ class GenericPredictActionPolicy:
                 }
 
         start_time = time.perf_counter()
+        episode_kwargs = {
+            "episode_id": episode_id,
+            "episode_step": episode_step,
+        }
         chunk = call_predict_action(
             self._model,
             images=[images],
@@ -99,6 +123,7 @@ class GenericPredictActionPolicy:
             state=state,
             dataset_stats=self._dataset_stats,
             action_dim=int(self._metadata["action_dim"]),
+            **{k: episode_kwargs[k] for k in self._episode_kwargs},
             **kwargs,
         )
         inference_latency_ms = (time.perf_counter() - start_time) * 1000.0
