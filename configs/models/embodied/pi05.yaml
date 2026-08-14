@@ -13,7 +13,7 @@ model:
   # Training
   gradient_checkpointing: false
   compile_model: true
-  compile_mode: max-autotune
+  compile_mode: max-autotune-no-cudagraphs
   # torch.compile granularity 
   # Ignored when compile_model=false.
   #   backbone     (default) single compile over PaliGemmaWithExpertModel.forward — legacy behavior.
