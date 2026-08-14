@@ -140,6 +140,7 @@ def _auto_import_decoder_modules() -> None:
     """Import decoder modules so their decorators populate the registry."""
     for mod in (
         "loongforge.embodied.eval.action_decoders.ee6d",
+        "loongforge.embodied.eval.action_decoders.ee_quat",
         "loongforge.embodied.eval.action_decoders.joint",
     ):
         try:

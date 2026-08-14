@@ -169,6 +169,10 @@ CONFIG_MAPPING = {
     "benchmark.num_steps_wait": "num_steps_wait",
     "benchmark.max_steps": "max_steps",
     "benchmark.continuous_gripper": "continuous_gripper",
+    # Camera render resolution passed to robosuite. Omit to keep the shared
+    # default (LIBERO_ENV_RESOLUTION); set it when the official eval client of
+    # a model renders natively at another size (e.g. LingBot-VA renders 128).
+    "benchmark.render_resolution": "render_resolution",
     # LIBERO OSC: auto | absolute | delta (auto ≈ absolute when the composed
     # action decoder key is non-identity — capability matching drives this).
     "benchmark.control_mode": "control_mode",
