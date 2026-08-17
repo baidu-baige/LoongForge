@@ -7,7 +7,7 @@ import pytest
 
 SCRIPT = (
     Path(__file__).parents[1]
-    / "examples/glm5.2_kimi_k2.6/checkpoint_convert/compose_glm5_2_kimi_k2_6_hf.py"
+    / "examples/glm5.2_vit/checkpoint_convert/compose_glm5_2_kimi_k2_6_hf.py"
 )
 SPEC = importlib.util.spec_from_file_location("compose_weights", SCRIPT)
 compose_weights = importlib.util.module_from_spec(SPEC)

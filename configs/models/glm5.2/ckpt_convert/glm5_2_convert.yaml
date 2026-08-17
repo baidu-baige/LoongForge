@@ -3,10 +3,10 @@ hydra:
     - file://${oc.env:LOONGFORGE_PATH}/configs/models/
 
 # The group key must match the directory name two levels up (see
-# tools/convert_checkpoint/utils/config_utils.py), so glm-5.2 reuses the `glm5` group and is
+# tools/convert_checkpoint/utils/config_utils.py), so GLM-5.2 uses the `glm5.2` group and is
 # selected by the model yaml basename (glm5_2).
 defaults:
-  - glm5@module: ???
+  - glm5.2@module: ???
   - _self_
 
 

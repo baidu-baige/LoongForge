@@ -7,8 +7,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 LOAD=/mnt/cluster/huggingface.co/GLM/GLM-5.2-FP8  # the original GLM-5.2 checkpoint is FP8 format
 SAVE=/mnt/cluster/loongforge-omni-ckpt/GLM/GLM-5.2-FP8-tp8pp8ep8etp1/  # the converted checkpoint will be in MCore FP8 format
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/glm5/glm5_2.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/glm5/ckpt_convert/glm5_2_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/glm5.2/glm5_2.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/glm5.2/ckpt_convert/glm5_2_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
