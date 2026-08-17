@@ -41,7 +41,7 @@ jobs:
         contains(github.event.review.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)
       )
-    runs-on: [self-hosted, Linux, X64, a800]
+    runs-on: ${{ fromJSON(vars.CI_REVIEW_RUNNER) }}
     timeout-minutes: 30
     steps:
       - name: Trust workspace (self-hosted runner)

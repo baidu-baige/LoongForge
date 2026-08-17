@@ -1,0 +1,73 @@
+name: Internal Image Update
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Merged pull request number
+        required: true
+        type: string
+      target:
+        description: Logical image target
+        required: true
+        default: all
+        type: choice
+        options: [a, h, p, all]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: internal-image-update
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      merge_sha: ${{ steps.pr.outputs.merge_sha }}
+      target: ${{ steps.pr.outputs.target }}
+    steps:
+      - id: pr
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_PR: ${{ inputs.pr_number || github.event.pull_request.number }}
+          REQUESTED_TARGET: ${{ inputs.target || 'all' }}
+        with:
+          script: |
+            const { data: pull } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(process.env.REQUESTED_PR),
+            });
+            if (!pull.merged || !pull.merge_commit_sha) {
+              core.setFailed('image promotion requires a merged pull request');
+              return;
+            }
+            core.setOutput('pr_number', String(pull.number));
+            core.setOutput('head_sha', pull.head.sha);
+            core.setOutput('merge_sha', pull.merge_commit_sha);
+            core.setOutput('target', process.env.REQUESTED_TARGET);
+
+  promote:
+    needs: resolve
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_IMAGE) }}
+    environment: internal-registry
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.merge_sha }}
+          persist-credentials: false
+      - name: Validate and promote candidate image
+        env:
+          CI_CONFIG_PATH: ${{ vars.CI_CONFIG_PATH_IMAGE }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          MERGE_SHA: ${{ needs.resolve.outputs.merge_sha }}
+        run: .github/scripts/promote_candidate_image.sh "${{ needs.resolve.outputs.target }}"

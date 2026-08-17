@@ -13,7 +13,7 @@
 ## CI, GPU, and Image Impact
 
 - [ ] This change affects dependencies, Dockerfiles, patches, or runtime environments.
-- [ ] GPU validation is required. Suggested environment: `ampere` / `p6k` / `all`.
+- [ ] GPU validation is required. Suggested environment: `a` / `p` / `all`.
 - [ ] An internal CI image needs to be rebuilt.
 - [ ] No GPU or image validation is required.
 

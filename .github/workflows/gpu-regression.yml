@@ -1,0 +1,217 @@
+name: GPU Regression
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        required: true
+        type: string
+      head_repo:
+        required: true
+        type: string
+      head_sha:
+        required: true
+        type: string
+      environments:
+        required: true
+        type: string
+      models:
+        required: false
+        type: string
+      build_image:
+        required: false
+        type: string
+      gate_check_id:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: gpu-regression-${{ inputs.pr_number }}-${{ inputs.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.validate.outputs.envs }}
+    steps:
+      - id: validate
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          ENVIRONMENTS: ${{ inputs.environments }}
+        with:
+          script: |
+            const { data: pull } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(process.env.PR_NUMBER),
+            });
+            if (pull.head.sha !== process.env.HEAD_SHA) {
+              core.setFailed('the requested revision is no longer the PR head');
+              return;
+            }
+            const envs = JSON.parse(process.env.ENVIRONMENTS);
+            if (!Array.isArray(envs) || envs.some((env) => !['a', 'p'].includes(env))) {
+              core.setFailed('invalid logical environment list');
+              return;
+            }
+            core.setOutput('envs', JSON.stringify([...new Set(envs)]));
+
+  image:
+    needs: validate
+    if: ${{ inputs.build_image != '' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_IMAGE) }}
+    environment: internal-registry
+    outputs:
+      revision: ${{ steps.candidate.outputs.revision }}
+    steps:
+      - name: Checkout trusted CI scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          path: trusted-ci
+          persist-credentials: false
+          submodules: false
+      - name: Checkout immutable PR source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.head_repo }}
+          ref: ${{ inputs.head_sha }}
+          path: source
+          persist-credentials: false
+          submodules: false
+      - id: candidate
+        name: Build candidate image
+        env:
+          BUILD_TARGET: ${{ inputs.build_image }}
+          CI_CONFIG_PATH: ${{ vars.CI_CONFIG_PATH_IMAGE }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          SOURCE_DIR: ${{ github.workspace }}/source
+        run: trusted-ci/.github/scripts/build_candidate_image.sh "$BUILD_TARGET"
+
+  a:
+    needs: [validate, image]
+    if: ${{ always() && needs.validate.result == 'success' && contains(fromJSON(needs.validate.outputs.envs), 'a') && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_A) }}
+    steps:
+      - name: Checkout trusted CI scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          path: trusted-ci
+          persist-credentials: false
+          submodules: false
+      - name: Checkout immutable PR source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.head_repo }}
+          ref: ${{ inputs.head_sha }}
+          path: source
+          persist-credentials: false
+          submodules: false
+      - name: Run baseline regression
+        env:
+          CI_CONFIG_PATH: ${{ vars.CI_CONFIG_PATH_A }}
+          MODELS: ${{ inputs.models }}
+          CANDIDATE_REVISION: ${{ needs.image.outputs.revision }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          SOURCE_DIR: ${{ github.workspace }}/source
+        run: trusted-ci/.github/scripts/run_regression.sh a
+
+  p:
+    needs: [validate, image]
+    if: ${{ always() && needs.validate.result == 'success' && contains(fromJSON(needs.validate.outputs.envs), 'p') && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_P) }}
+    steps:
+      - name: Checkout trusted CI scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          path: trusted-ci
+          persist-credentials: false
+          submodules: false
+      - name: Checkout immutable PR source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.head_repo }}
+          ref: ${{ inputs.head_sha }}
+          path: source
+          persist-credentials: false
+          submodules: false
+      - name: Run baseline regression
+        env:
+          CI_CONFIG_PATH: ${{ vars.CI_CONFIG_PATH_P }}
+          MODELS: ${{ inputs.models }}
+          CANDIDATE_REVISION: ${{ needs.image.outputs.revision }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          SOURCE_DIR: ${{ github.workspace }}/source
+        run: trusted-ci/.github/scripts/run_regression.sh p
+
+  finalize:
+    needs: [validate, image, a, p]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          CHECK_ID: ${{ inputs.gate_check_id }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          IMAGE_RESULT: ${{ needs.image.result }}
+          A_RESULT: ${{ needs.a.result }}
+          P_RESULT: ${{ needs.p.result }}
+          ENVIRONMENTS: ${{ inputs.environments }}
+          BUILD_IMAGE: ${{ inputs.build_image }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+        with:
+          script: |
+            const results = Object.fromEntries([
+              ['validate', process.env.VALIDATE_RESULT],
+              ['image', process.env.IMAGE_RESULT],
+              ['a', process.env.A_RESULT],
+              ['p', process.env.P_RESULT],
+            ]);
+            const requested = JSON.parse(process.env.ENVIRONMENTS);
+            const requiredJobs = ['validate', ...requested];
+            if (process.env.BUILD_IMAGE) requiredJobs.push('image');
+            const failed = requiredJobs.filter((name) => results[name] !== 'success');
+
+            const cpuNames = ['check', 'spdx', 'gitleaks', 'ruff', 'build', 'actionlint'];
+            let checkRuns = [];
+            for (let attempt = 0; attempt < 120; attempt += 1) {
+              checkRuns = await github.paginate(github.rest.checks.listForRef, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: process.env.HEAD_SHA,
+                per_page: 100,
+              });
+              const terminal = cpuNames.every((name) => checkRuns.some((check) =>
+                check.name === name && check.status === 'completed'
+              ));
+              if (terminal) break;
+              await new Promise((resolve) => setTimeout(resolve, 30000));
+            }
+            const missingCpu = cpuNames.filter((name) =>
+              !checkRuns.some((check) => check.name === name && check.conclusion === 'success')
+            );
+            failed.push(...missingCpu.map((name) => `cpu:${name}`));
+            const conclusion = failed.length ? 'failure' : 'success';
+            await github.rest.checks.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: Number(process.env.CHECK_ID),
+              status: 'completed',
+              conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: conclusion === 'success' ? 'GPU validation passed' : 'GPU validation failed',
+                summary: `Results: ${JSON.stringify(results)}`,
+              },
+            });
+            if (failed.length) core.setFailed(`failed checks: ${failed.join(', ')}`);

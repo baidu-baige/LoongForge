@@ -7,6 +7,7 @@ This directory contains the CI/CD workflows for LoongForge.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `ci-gate.yml` | PR + workflow dispatch | Run and summarize all blocking CPU checks |
+| `workflow-lint.yml` | Reusable workflow | Validate GitHub Actions expressions and YAML |
 | `pr-title.yml` | Reusable workflow | Validate PR title format: `[<modules>] <type>: <description>` |
 | `license.yml` | Reusable workflow | Check SPDX Apache-2.0 header on newly added source files |
 | `secrets.yml` | Reusable workflow | Scan PR commits for leaked secrets via gitleaks |
@@ -15,8 +16,36 @@ This directory contains the CI/CD workflows for LoongForge.
 | `submodule-sync.yml` | repository dispatch / workflow dispatch + manual | Sync `third_party/Loong-Megatron` to its tracked branch and push the submodule pointer update |
 | `auto-label.yml` | Issue/PR open/edit | Auto-label issues and PRs by keyword matching |
 | `issue-notify.yml` | Issue opened | Notify Ruliu group when a new issue is opened |
+| `ok-to-test.yml` | Maintainer issue comment | Validate and dispatch `/ok-to-test` GPU regression |
+| `gpu-regression.yml` | Workflow dispatch | Run exact-SHA baseline regression on logical environments |
+| `internal-image-update.yml` | Merged PR + manual | Validate and promote candidate internal images |
+| `release.yml` | Version tag `vX.Y.Z` | Publish PyPI package and Docker Hub release image |
 
 The CPU checks are run manually through `ci-gate.yml` when needed. Operational workflows such as `submodule-sync.yml` may retain their own dispatch inputs.
+
+## GPU Regression
+
+Maintainers can request a baseline regression by commenting on a pull request:
+
+```
+/ok-to-test --env a|p|all [--model model1,model2] [--build-image a|h|p]
+```
+
+The public environment names are logical aliases. Runner mappings, local test
+configuration paths, and image hooks are supplied through protected variables.
+The default model set is derived from baseline files for the selected environment;
+explicit models must also have a baseline. New commits invalidate previous results.
+The self-hosted runner must provide `LOONGFORGE_REGRESSION_RUNNER`; direct execution
+of PR-provided test scripts is rejected when running inside GitHub Actions.
+
+Operator hook contracts:
+
+- `LOONGFORGE_REGRESSION_RUNNER --source DIR --env a|p --sha SHA [--model LIST] [--candidate-revision REV]`
+- `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|h|p --sha SHA`; stdout must contain only the opaque candidate revision
+- `LOONGFORGE_IMAGE_PROMOTER --target a|h|p|all --pr NUMBER --head-sha SHA --merge-sha SHA`
+
+Hooks must return nonzero on failure and must not print internal addresses, paths,
+credentials, or physical accelerator details to the GitHub Actions log.
 
 ## PR Title Convention
 

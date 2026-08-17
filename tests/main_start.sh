@@ -2,11 +2,61 @@
 
 set -eo pipefail
 
-# Automatically execute the dataset download script
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+# Public CI inputs use logical names. Machine-specific values belong in the
+# operator-controlled config file and are never accepted from PR comments.
+ci_models=""
+ci_env_file="${LOONGFORGE_CI_CONFIG:-}"
+dry_run=false
+test_env="${LOONGFORGE_TEST_ENV:-a}"
+download_args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --config)
+            [[ -n "${2:-}" && "$2" != --* ]] || { echo "--config requires a file" >&2; exit 2; }
+            ci_env_file="$2"
+            shift 2
+            ;;
+        --env)
+            [[ -n "${2:-}" && "$2" != --* ]] || { echo "--env requires a|p" >&2; exit 2; }
+            test_env="$2"
+            shift 2
+            ;;
+        --model|--models)
+            [[ -n "${2:-}" && "$2" != --* ]] || { echo "$1 requires a model list" >&2; exit 2; }
+            ci_models="${2//,/ }"
+            shift 2
+            ;;
+        --dry-run)
+            dry_run=true
+            shift
+            ;;
+        *)
+            download_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ -n "${ci_env_file:-}" ]]; then
+    [[ -f "$ci_env_file" ]] || { echo "CI config not found: $ci_env_file" >&2; exit 2; }
+    set -a
+    # shellcheck disable=SC1090
+    source "$ci_env_file"
+    set +a
+fi
+
+case "$test_env" in
+    a|p) ;;
+    *) echo "unsupported environment: $test_env (expected a or p)" >&2; exit 2 ;;
+esac
+
+# Automatically execute the dataset download script
 if [ -f "${SCRIPT_DIR}/download_datasets.sh" ]; then
     echo "Running data preparation script: ${SCRIPT_DIR}/download_datasets.sh"
-    bash "${SCRIPT_DIR}/download_datasets.sh" "$@"
+    bash "${SCRIPT_DIR}/download_datasets.sh" "${download_args[@]}"
 fi
 
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
@@ -38,7 +88,15 @@ gpu_nums=8
 # Mode 1: Run one/multiple/all models under tests/configs (space-separated; all models: model_names="")
 # model_names="qwen3_14b" 
 # model_names="deepseek_v2_lite llama3_8b qwen3_14b"  
-model_names=""                                                   
+if [[ -n "$ci_models" ]]; then
+    model_names="$("$PYTHON_BIN" "${SCRIPT_DIR}/tools/ci_config.py" --env "$test_env" --baseline-root "${SCRIPT_DIR}/baseline" --models $ci_models)"
+    if [[ -z "$model_names" ]]; then
+        echo "not configured: none of the requested models has a baseline for env $test_env"
+        exit 0
+    fi
+else
+    model_names="$("$PYTHON_BIN" "${SCRIPT_DIR}/tools/ci_config.py" --env "$test_env" --baseline-root "${SCRIPT_DIR}/baseline")"
+fi
 optional_subdir=""
 include_optional=false
 
@@ -72,7 +130,11 @@ TIMEOUT=3600
 accuracy_relative_tolerance=0.02
 performance_relative_tolerance=0.05
 check_loss_only=true
-chip="A800"
+if [[ "$test_env" == "a" ]]; then
+    chip="${LOONGFORGE_CHIP_A:-A800}"
+else
+    chip="${LOONGFORGE_CHIP_P:-BZZ}"
+fi
 # auto_collect_baseline=true
 
 # Test tasks
@@ -125,6 +187,10 @@ if [ "${auto_collect_baseline}" = true ]; then
     extra_param="${extra_param} --auto_collect_baseline"
 fi
 
+if [ "$dry_run" = true ]; then
+    extra_param="${extra_param} --dry_run"
+fi
+
 # extra_param=" $extra_param --dry_run"
 extra_param=" $extra_param --training_type ${training_type}"
 
@@ -146,8 +212,13 @@ LOG_DIR="${TRAINING_LOG_PATH}"
 # whether the run completed normally and therefore the logs directory can be
 # archived.  if the process fails or is killed, we leave the directory alone
 # to allow resume on the next invocation.
-python3 main.py ${extra_param}
+set +e
+(
+    cd "$SCRIPT_DIR"
+    "$PYTHON_BIN" main.py ${extra_param}
+)
 ret=$?
+set -e
 
 # if everything finished successfully, rename the logs folder to include a
 # timestamp.  this both preserves the results and clears the canonical

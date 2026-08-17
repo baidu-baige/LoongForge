@@ -147,6 +147,7 @@ Every PR runs the following checks through the `CI Gate` GitHub Actions workflow
 | Secret Scan | gitleaks finds no leaked secrets in new commits | `gitleaks detect --config .gitleaks.toml` |
 | Ruff | New or modified Python files pass Ruff (`E4,E7,E9,E501,F,S506`) | `ruff check <changed-python-files>` |
 | Build | `python -m build` and wheel import smoke succeed on Python 3.12 | `python -m build --sdist --wheel --outdir dist/` |
+| Workflow Lint | GitHub Actions files pass `actionlint` and YAML parsing | `actionlint` |
 
 ### Valid PR title modules
 
@@ -169,6 +170,14 @@ pre-commit run --all-files   # optional
 ```
 
 Once installed, the SPDX header check and other hygiene hooks run automatically on `git commit`.
+
+### GPU validation
+
+Maintainers may request GPU validation with `/ok-to-test --env a|p|all`. The
+default run uses models with an existing baseline for the selected environment;
+`--model` requests a baseline-backed subset. Runner and machine configuration is
+provided through protected Environment variables, and new commits invalidate
+previous GPU results.
 
 ## License
 By contributing to LoongForge, you agree that your original contributions will be licensed under the [Apache License 2.0](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE).
