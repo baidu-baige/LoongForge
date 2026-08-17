@@ -181,7 +181,15 @@ def _convert_sharegpt(
 
         for turn_idx, message in enumerate(messages):
             if message[sharegpt_tags.role_tag] not in accept_tags[turn_idx % 2]:
-                logger.warning(f"Invalid role tag in: {messages}, skipping.")
+                # Don't dump `messages`: one line per invalid sample made >100MB logs.
+                logger.warning(
+                    "Invalid role tag at turn %d (role=%r); roles=%s, "
+                    "total_chars=%d, skipping.",
+                    turn_idx,
+                    message[sharegpt_tags.role_tag],
+                    [m.get(sharegpt_tags.role_tag) for m in messages],
+                    sum(len(m.get(sharegpt_tags.content_tag) or "") for m in messages),
+                )
                 invalid_data = True
                 break
 
@@ -193,7 +201,14 @@ def _convert_sharegpt(
             )
 
         if len(aligned_messages) % 2 != 0:
-            logger.warning(f"Invalid number of turns in: {messages}, skipping.")
+            # Compact form — see the "Invalid role tag" warning above.
+            logger.warning(
+                "Invalid number of turns (%d); roles=%s, total_chars=%d, "
+                "skipping.",
+                len(aligned_messages),
+                [m["role"] for m in aligned_messages],
+                sum(len(m["content"]) for m in aligned_messages),
+            )
             invalid_data = True
 
         if invalid_data:

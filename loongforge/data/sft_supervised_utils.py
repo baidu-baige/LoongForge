@@ -368,9 +368,11 @@ def _preprocess_supervised_dataset(
                 len(samples["prompt"][i]) % 2 != 1
                 or len(samples["response"][i]) != 1
             ):
+                # Compact form: dumping full payloads made >100MB log files.
                 logger.warning(
-                    f"Ignore invalid sample, prompt: {samples['prompt'][i]}, "
-                    f"response: {samples['response'][i]}"
+                    "Ignore invalid sample: %d prompt msgs, %d response msgs.",
+                    len(samples["prompt"][i]),
+                    len(samples["response"][i]),
                 )
                 continue
 
