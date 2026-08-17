@@ -20,7 +20,7 @@
 #   TOKENIZER_MODEL_ID   HuggingFace model ID for the tokenizer
 #                        (default: Wan-AI/Wan2.1-T2V-1.3B)
 #   OUTPUT               Path where the processed .pt backbone file is saved
-#                        (default: $LOONGFORGE_PATH/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt)
+#                        (default: $LOCAL_VLA_ARTIFACTS_ROOT/fastwam/models/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt)
 #   DEVICE               Compute device (cpu / cuda)   (default: cpu)
 #   DTYPE                Model dtype (float32 / bfloat16 / float16)
 #                        (default: float32)
@@ -39,10 +39,11 @@
 set -euo pipefail
 
 export LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
+export LOCAL_VLA_ARTIFACTS_ROOT="${LOCAL_VLA_ARTIFACTS_ROOT:-/ssd2/loongforge_embodied_ci/vla_artifacts}"
 
 MODEL_ID="${MODEL_ID:-Wan-AI/Wan2.2-TI2V-5B}"
 TOKENIZER_MODEL_ID="${TOKENIZER_MODEL_ID:-Wan-AI/Wan2.1-T2V-1.3B}"
-OUTPUT="${OUTPUT:-$LOONGFORGE_PATH/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt}"
+OUTPUT="${OUTPUT:-$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/models/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt}"
 DEVICE="${DEVICE:-cpu}"
 DTYPE="${DTYPE:-float32}"
 # Local root directory for model artifacts; files are looked up at <LOCAL_MODEL_PATH>/<model-id>/.
