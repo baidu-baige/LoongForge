@@ -59,4 +59,4 @@ apply_rope_fusion: false  # no support rope fusion yet
 multi_latent_attention: true
 model_type: "glm"
 
-convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/glm5/ckpt_convert/glm5_2_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/glm5.2/ckpt_convert/glm5_2_convert.yaml

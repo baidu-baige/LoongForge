@@ -2,7 +2,7 @@
 defaults:
   - ../../models/image_encoder@model.image_encoder: moon_vit_3d
   - ../../models/image_projector@model.image_projector: patch_merger_adapter
-  - ../../models/glm5@model.foundation: glm5_2
+  - ../../models/glm5.2@model.foundation: glm5_2
   - ../../models/lora@model.peft_config: vlm_lora
   - _self_
 

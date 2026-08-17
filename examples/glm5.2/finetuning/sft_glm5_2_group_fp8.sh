@@ -51,7 +51,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-  --config-file ${LOONGFORGE_PATH}/configs/models/glm5/glm5_2.yaml
+  --config-file ${LOONGFORGE_PATH}/configs/models/glm5.2/glm5_2.yaml
   --multi-latent-attention
   --rotary-base 8000000
   --norm-epsilon 1e-5

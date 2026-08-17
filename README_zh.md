@@ -152,6 +152,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等多模态的[广泛�
 | | Qwen3.5 | qwen3.5-0.8b → qwen3.5-397b-a17b |
 | | Qwen3.6 | qwen3.6-27b, qwen3.6-35b-a3b |
 | | Kimi-K2.5 | kimi-k2.5, kimi-k2.6 |
+| | GLM-5.2 + Kimi-K2.6 ViT | glm5_2_kimi_k2_6_vit |
 | | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
 | | LLaVA-OneVision-1.5 | llava-onevision-1.5-4b |
 | | InternVL2.5 | internvl2.5-8b → internvl2.5-78b |

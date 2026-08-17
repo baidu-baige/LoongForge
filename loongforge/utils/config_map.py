@@ -418,7 +418,7 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "glm5",
     },
     "glm5.2": {
-        "config_path": "configs/models/glm5",
+        "config_path": "configs/models/glm5.2",
         "config_name": "glm5_2",
     },
 }

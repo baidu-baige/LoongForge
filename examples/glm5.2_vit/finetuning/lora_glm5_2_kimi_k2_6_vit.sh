@@ -14,10 +14,10 @@ TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/GLM/GLM-5.2-FP8"}
 PROCESSOR_PATH=${PROCESSOR_PATH:-"/mnt/cluster/huggingface.co/kimi_2_6"}
 
 # The base checkpoint contains GLM-5.2 plus Kimi-K2.6 MoonViT.
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/GLM/GLM-5.2-Kimi-K2.6-ViT-base-hf"}
-CHECKPOINT_PATH_SAVE=${CHECKPOINT_PATH_SAVE:-"/mnt/cluster/LoongForge/GLM/GLM-5.2-Kimi-K2.6-ViT-sft"}
-HF_CHECKPOINT_PATH=${HF_CHECKPOINT_PATH:-"${CHECKPOINT_PATH_SAVE}-hf"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/glm5.2-kimi-k2.6-vit-sft"}
+PRETRAINED_CHECKPOINT_PATH=${PRETRAINED_CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/GLM/GLM-5.2-Kimi-K2.6-ViT-base-hf"}
+LORA_CHECKPOINT_PATH=${LORA_CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/GLM/GLM-5.2-Kimi-K2.6-ViT-lora"}
+HF_CHECKPOINT_PATH=${HF_CHECKPOINT_PATH:-"${LORA_CHECKPOINT_PATH}-merged-hf"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/glm5.2-kimi-k2.6-vit-lora"}
 
 export FP8_QUANT_FWD_INP_AMAX_EPS=1e-12
 export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
@@ -55,7 +55,7 @@ DISTRIBUTED_ARGS=(
   --master_port "$MASTER_PORT"
 )
 
-MODEL_CONFIG_PATH=${MODEL_CONFIG_PATH:-"${LOONGFORGE_PATH}/configs/models/glm5.2_kimi_k2.6/glm5_2_kimi_k2_6_vit.yaml"}
+MODEL_CONFIG_PATH=${MODEL_CONFIG_PATH:-"${LOONGFORGE_PATH}/configs/models/glm5.2_vit/glm5_2_kimi_k2_6_vit_lora.yaml"}
 MODEL_ARGS=(
   --config-file "$MODEL_CONFIG_PATH"
   --rotary-base 8000000
@@ -93,13 +93,16 @@ TRAINING_ARGS=(
   --lr-warmup-fraction 0.01
   --clip-grad 1.0
   --bf16
-  --load "$CHECKPOINT_PATH"
-  --save "$CHECKPOINT_PATH_SAVE"
+  --pretrained-checkpoint "$PRETRAINED_CHECKPOINT_PATH"
+  --load "$LORA_CHECKPOINT_PATH"
+  --save "$LORA_CHECKPOINT_PATH"
   --save-hf true
   --save-hf-path "$HF_CHECKPOINT_PATH"
+  --lora-alpha 32
+  --lora-dim 16
   --save-interval 1000
   --ckpt-format torch
-  --dataloader-save "${CHECKPOINT_PATH_SAVE}/dataloader"
+  --dataloader-save "${LORA_CHECKPOINT_PATH}/dataloader"
   --allow-missing-adapter-checkpoint
   --no-load-optim
   --no-load-rng
