@@ -74,9 +74,9 @@ RUN set -exuo pipefail && \
             "${BOS_BASE}/flash_attn-2.8.1-cp312-cp312-linux_x86_64.whl" \
             "${BOS_BASE}/flash_attn_3-3.0.0b1-cp39-abi3-linux_x86_64.whl" \
             "${BOS_BASE}/fast_hadamard_transform-1.0.4.post1-cp312-cp312-linux_x86_64.whl" \
-            "${BOS_BASE}/flash_mla_fwd-1.0.0+2026.3.11.15.31.38-cp312-cp312-linux_x86_64.whl" \
+            "${BOS_BASE}/flash_mla_fwd-1.0.0+2026.8.18.1.49.1-cp312-cp312-linux_x86_64.whl" \
             "${BOS_BASE}/flash_mla_bwd-1.0.0+2026.4.7.16.52.19-cp312-cp312-linux_x86_64.whl" \
-            "${BOS_BASE}/lightning_indexer_bwd-1.0.0-cp312-cp312-linux_x86_64.whl"; \
+            "${BOS_BASE}/lightning_indexer_bwd-1.0.0+2026.8.17.16.21.37-cp312-cp312-linux_x86_64.whl"; \
     }; \
     install_requirements && \
     install_internal_wheels && \

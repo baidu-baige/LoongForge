@@ -58,6 +58,62 @@ import transformer_engine_torch as tex
 
 from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer
 
+
+def _quantize_rowwise_chunked(quantizer, tensor):
+    """Rowwise-blockwise FP8 quantize, split over several kernel launches
+    when the row count overflows one CUDA grid.
+
+    TE launches one CTA per 128 rows and a grid dim caps at 65535; long
+    packed sequences exceed that in a single launch. The last dim must be
+    exactly 128 (= one 1x128 scaling block per row), so every row quantizes
+    independently and slicing between any two rows is bit-exact. We flatten
+    to (rows, 128) and give each launch an even share of whole 128-row
+    tiles; leading dims (tokens/heads) never enter the math. Returns
+    ``(fp8_data, scale_inv)`` shaped ``tensor.shape`` / ``tensor.shape[:-1]``.
+    """
+    rows_per_cta = 128
+    max_grid_ctas = int(os.environ.get("CSA_INDEXER_QUANTIZE_MAX_BLOCKS", 65535))
+
+    assert tensor.shape[-1] == 128, (
+        "chunked rowwise quantize assumes a 128-element last dim "
+        f"(one scaling block per row), got {tensor.shape[-1]}"
+    )
+
+    def _one(chunk):
+        q = quantizer.quantize(chunk)
+        data = q.get_data_tensors(rowwise_data=True, columnwise_data=False).view(
+            torch.float8_e4m3fn
+        )
+        # TE pads the scale's inner dim to %4; slice the flattened scale.
+        n_rows = chunk.numel() // chunk.shape[-1]
+        scale = q._rowwise_scale_inv.flatten()[:n_rows].view(chunk.shape[:-1])
+        return data, scale
+
+    rows = tensor.numel() // tensor.shape[-1]
+    n_ctas = (rows + rows_per_cta - 1) // rows_per_cta
+    if n_ctas <= max_grid_ctas:
+        return _one(tensor)
+
+    # Spread the CTAs evenly over the fewest launches that fit the grid,
+    # then convert back to rows: every launch covers whole 128-row tiles
+    # (the last one may be ragged, which the kernel handles anyway).
+    n_launches = (n_ctas + max_grid_ctas - 1) // max_grid_ctas
+    rows_per_launch = (n_ctas + n_launches - 1) // n_launches * rows_per_cta
+
+    # Free view: both call sites pass contiguous tensors (reshape would
+    # copy otherwise, which is still correct).
+    flat = tensor.reshape(-1, tensor.shape[-1])
+    datas, scales = [], []
+    for start in range(0, rows, rows_per_launch):
+        data, scale = _one(flat[start : start + rows_per_launch])
+        datas.append(data)
+        scales.append(scale)
+    return (
+        torch.cat(datas).view(tensor.shape),
+        torch.cat(scales).view(tensor.shape[:-1]),
+    )
+
+
 def _all_to_all_hp2sp(input_: torch.Tensor, tp_group) -> torch.Tensor:
     """All-to-All: head-parallel to seq-parallel.
 
@@ -1316,19 +1372,19 @@ class CSAIndexerKernelFunction(torch.autograd.Function):
         k = index_k.squeeze(1).contiguous()  # [sk, d]
         w = weights.squeeze(1).contiguous()  # [sq, h]
 
-        # Pad k rows to multiple of 4 so FP8 quantizer scale aligns with data
+        # Pad k rows to %128: lightning_indexer_bwd (SM100) hard-requires
+        # seq_len_kv % 128 (attention_bwd.hpp:83) and packed compressed-kv
+        # length is arbitrary. Forward accepts %4 and never reads pad rows.
         sk_orig = k.shape[0]
-        sk_aligned = (sk_orig + 3) // 4 * 4
+        sk_aligned = (sk_orig + 127) // 128 * 128
         if sk_aligned != sk_orig:
             k = torch.nn.functional.pad(k, (0, 0, 0, sk_aligned - sk_orig))
 
         quantizer = CSAIndexerKernelFunction._get_quantizer()
-        quantized_q = quantizer.quantize(q)
-        quantized_k = quantizer.quantize(k)
-        q_fp8 = quantized_q.get_data_tensors(rowwise_data=True, columnwise_data=False).view(torch.float8_e4m3fn)
-        k_fp8 = quantized_k.get_data_tensors(rowwise_data=True, columnwise_data=False).view(torch.float8_e4m3fn)
-        q_scale = quantized_q._rowwise_scale_inv.reshape(q.shape[:-1])  # [sq, h]
-        k_scale = quantized_k._rowwise_scale_inv.reshape(k.shape[0])  # [sk_aligned]
+        # Bit-identical to a single quantize(); chunked only if the row count
+        # would overflow the CUDA grid (see _quantize_rowwise_chunked).
+        q_fp8, q_scale = _quantize_rowwise_chunked(quantizer, q)
+        k_fp8, k_scale = _quantize_rowwise_chunked(quantizer, k)
 
         weight_scaled = w * q_scale * softmax_scale
 
@@ -1434,6 +1490,18 @@ class CSAIndexerKernelFunction(torch.autograd.Function):
         """FP8 fused indexer backward using lightning_indexer_bwd."""
         q_fp8, k_fp8, q_scale, k_scale, weight_scaled, topk_indices, ks, ke = ctx.saved_tensors
 
+        # Padding slots are forward constants: zero their upstream grad (often NaN).
+        valid_slots = (topk_indices >= 0) & (topk_indices < (ke - ks).unsqueeze(1))
+        grad_score = grad_score.masked_fill(~valid_slots, 0.0)
+
+        # Saved indices are segment-local; the kernel wants global k rows.
+        # Shift valid slots by k_start; -1 stays -1 (else it aliases a real row).
+        topk_indices = torch.where(
+            topk_indices >= 0,
+            topk_indices + ks.unsqueeze(1).to(topk_indices.dtype),
+            topk_indices,
+        )
+
         d_q, d_k, d_weights = lightning_indexer_bwd.fp8_mqa_logits_bwd(
             grad_score.contiguous(),
             q_fp8,
@@ -1446,12 +1514,32 @@ class CSAIndexerKernelFunction(torch.autograd.Function):
         )
 
         d_weights = d_weights * q_scale * ctx.softmax_scale
-        d_q = d_q / q_scale.unsqueeze(-1)
-        d_k = d_k[:ctx.sk_orig] / k_scale[:ctx.sk_orig].unsqueeze(-1)
+        d_q = _unscale_indexer_grad(d_q, q_scale)
+        d_k = _unscale_indexer_grad(d_k[:ctx.sk_orig], k_scale[:ctx.sk_orig])
 
         # Unsqueeze batch dim back: [sq, 1, h, d], [sk, 1, d], [sq, 1, h]
         # Last 4 None: index_topk, compress_ratio, sq_offset, packed_seq_params (no grad)
         return d_q.unsqueeze(1), d_k.unsqueeze(1), d_weights.unsqueeze(1), None, None, None, None
+
+
+def _unscale_indexer_grad(grad, scale_inv):
+    """Dequantize an indexer grad by its per-row FP8 scale (grad / scale_inv).
+
+    Rows with amax 0 sit on the quantizer's epsilon floor (scale_inv = 2^-48
+    vs ~1.56e-2 for real rows); dividing amplifies kernel residue by ~2.8e14
+    into finite-but-huge values that overflow the fp32 grad-norm sum of
+    squares. Zero rows are routine (k %128 padding, empty packed segments,
+    padded q positions) and their true gradient is 0 — emit that.
+    """
+    epsilon_scale_floor = 2.0 ** -48 * 1.5  # 1.5x margin over the 2^-48 floor
+    scale_inv = scale_inv.unsqueeze(-1)
+    usable = (
+        torch.isfinite(scale_inv)
+        & (scale_inv > epsilon_scale_floor)
+    )
+    safe_scale_inv = torch.where(usable, scale_inv, torch.ones_like(scale_inv))
+    return (grad / safe_scale_inv).masked_fill(~usable.expand_as(grad), 0.0)
+
 
 class CSAIndexerKernel(torch.nn.Module):
     """Wrapper for fused FP8 indexer kernel for CSA."""
@@ -2879,15 +2967,24 @@ class CompressedSparseAttention(MegatronModule):
                 cu_seqlens_q=cu_seqlens_q,
                 cu_seqlens_kv=cu_seqlens_kv_full,
             )
-            output = self._forward_fused_attention_thd(
+            _window_size = window_idxs.shape[-1]
+            # flash_mla_sparse_fwd rejects window_size > 0 without write_p_out;
+            # request p_out exactly when a window exists (same pattern as the
+            # training and CP paths). p_out itself is unused in inference.
+            _need_p_out = _window_size > 0
+            result = self._forward_fused_attention_thd(
                 query,
                 kv_full_thd,
                 flat_idxs,
                 packed_seq_params,
-                return_p_out=False,
+                return_p_out=_need_p_out,
                 attn_sink=self.attn_sink.float(),
-                window_size=window_idxs.shape[-1],
+                window_size=_window_size,
             )
+            if _need_p_out:
+                output, _p_out, _, _, _ = result
+            else:
+                output = result
         return output.unsqueeze(1)
 
     def _forward_fused_indexer_training_thd(
