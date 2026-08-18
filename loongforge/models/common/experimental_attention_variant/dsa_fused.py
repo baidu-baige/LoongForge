@@ -132,6 +132,11 @@ class DSAIndexerFused(MegatronModule):
             submodules (DSAIndexerFusedSubmodules): Indexer submodules specification.
             pg_collection (ProcessGroupCollection, optional): Process groups for the indexer.
         """
+        if not getattr(config, "dsa_indexer_use_sparse_loss", True):
+            raise ValueError(
+                "fused DSA only supports dsa_indexer_use_sparse_loss=True; "
+                "use portable DSA for dense indexer loss"
+            )
         super().__init__(config=config)
         self.hidden_size = self.config.hidden_size
         self.qk_pos_emb_head_dim = self.config.qk_pos_emb_head_dim
@@ -203,11 +208,14 @@ class DSAIndexerFused(MegatronModule):
 
         k_norm_config = copy.copy(self.config)
         k_norm_config.normalization = "LayerNorm"
+        k_norm_eps = getattr(self.config, "dsa_indexer_k_norm_epsilon", None)
+        if k_norm_eps is None:
+            k_norm_eps = self.config.layernorm_epsilon
         self.k_norm = build_module(
             submodules.k_norm,
             config=k_norm_config,
             hidden_size=self.index_head_dim,
-            eps=self.config.layernorm_epsilon,
+            eps=k_norm_eps,
         )
 
         self.linear_weights_proj = build_module(

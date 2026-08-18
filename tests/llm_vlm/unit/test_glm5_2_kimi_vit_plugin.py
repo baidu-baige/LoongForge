@@ -3,13 +3,18 @@
 
 """Checks for the GLM-5.2 MoonViT placeholder format."""
 
-import unittest
+import os
 import tempfile
+import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import loongforge.train  # noqa: F401 - initialize package imports in training order
 import torch
+from PIL import Image
+from transformers import AutoImageProcessor, AutoTokenizer
+from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
 from loongforge.data.chat_template import MAPPING_NAME_TO_TEMPLATE
@@ -94,6 +99,57 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
 
         messages = encoder.process_sft_qa.call_args.args[0]
         self.assertEqual(messages[0]["content"], "<image>look")
+
+    @unittest.skipUnless(
+        os.environ.get("KIMI_K26_PROCESSOR"),
+        "set KIMI_K26_PROCESSOR to run the real Kimi K2.6 VQA regression",
+    )
+    def test_kimi_k26_hf_vqa_keeps_media_tokens_equal_to_features(self):
+        """The real HF plugin path emits exactly one token per image feature."""
+        processor_path = os.environ["KIMI_K26_PROCESSOR"]
+        tokenizer = AutoTokenizer.from_pretrained(
+            processor_path, trust_remote_code=True
+        )
+        encoder = object.__new__(KimiVLMTaskEncoder)
+        encoder.args = SimpleNamespace(
+            train_on_prompt=False, history_mask_loss=False
+        )
+        encoder.chat_template = MAPPING_NAME_TO_TEMPLATE["kimi-k2.6-hf"]
+        encoder.tokenizer = SimpleNamespace(
+            hf_tokenizer=lambda: tokenizer,
+            convert_tokens_to_ids=tokenizer.convert_tokens_to_ids,
+        )
+        encoder.merge_kernel_size = (2, 2)
+        encoder.min_pixels = 28 * 28
+        encoder.max_pixels = 2048 * 2048
+        encoder._resize_image = lambda image: image
+        image_processor = AutoImageProcessor.from_pretrained(
+            processor_path, trust_remote_code=True
+        )
+        processor_cls = get_class_from_dynamic_module(
+            "kimi_k25_processor.KimiK25Processor", processor_path
+        )
+        encoder.processor = processor_cls(
+            image_processor=image_processor, tokenizer=tokenizer
+        )
+
+        image = Image.open(
+            Path(__file__).parent / "datasets/vlm/mllm_demo_data/1.jpg"
+        ).convert("RGB")
+        input_ids, _, _, pixel_values, image_grid_thw = encoder.process_sft_vqa(
+            "Describe the image.", "A test answer.", image
+        )
+
+        media_content_id = tokenizer.convert_tokens_to_ids("<|media_content|>")
+        feature_count = sum(
+            int(h // encoder.merge_kernel_size[0])
+            * int(w // encoder.merge_kernel_size[1])
+            for _, h, w in image_grid_thw.tolist()
+        )
+        self.assertEqual(
+            int((input_ids == media_content_id).sum()), feature_count
+        )
+        self.assertTrue(pixel_values and pixel_values[0].numel())
 
 
 class VLMTaskEncoderCompatibilityTest(unittest.TestCase):

@@ -229,13 +229,13 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         attn_mask: torch.Tensor,
         grid_thws: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Expand single <|media_content|> tokens to multiple tokens based on image feature length.
+        """Match <|media_content|> token count to the image feature count.
 
         This implements the core logic of _merge_input_ids_with_image_features from
         modeling_kimi_k25.py, but operates on token IDs instead of embeddings.
 
         Args:
-            input_ids: Token IDs with single <|media_content|> placeholders
+            input_ids: Token IDs with single placeholders or plugin-expanded tokens
             target: Labels tensor
             attn_mask: Attention mask tensor
             grid_thws: Grid dimensions for each image, shape (num_images, 3)
@@ -257,6 +257,11 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         ]
 
         input_ids_list = input_ids.tolist()
+        # HF multimodal plugins may already emit one token per visual feature.
+        # In that case expanding again would turn N media tokens into 2N-1.
+        if input_ids_list.count(media_content_id) == sum(feature_lengths):
+            return input_ids, target, attn_mask
+
         target_list = target.tolist()
         attn_mask_list = attn_mask.tolist()
 

@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 
 from loongforge.train.checkpointing import _load_model_state_dict

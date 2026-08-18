@@ -2,13 +2,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Compose GLM-5.2 and Kimi-K2.6 HF shards without rewriting their tensors."""
+"""Compose GLM-5.2 and filtered Kimi-K2.6 HF shards."""
 
 import argparse
 import json
 import shutil
 import tempfile
 from pathlib import Path
+
+from safetensors import safe_open
+from safetensors.torch import save_file
 
 
 KIMI_PREFIX = "vision_tower."
@@ -27,14 +30,28 @@ def _link_weight_map(
     output: Path,
     label: str,
     materialize: bool = False,
+    filter_prefix: str | None = None,
 ) -> dict[str, str]:
-    """Link or copy source shards into the output directory."""
+    """Link/copy shards, or rewrite them with only a selected key prefix."""
     shard_names = sorted(set(weight_map.values()))
     output_names = {name: f"{label}-{name}" for name in shard_names}
     for shard_name, output_name in output_names.items():
         source_shard = (source / shard_name).resolve(strict=True)
         destination = output / output_name
-        if materialize:
+        if filter_prefix is not None:
+            keys = [key for key in weight_map if weight_map[key] == shard_name]
+            with safe_open(str(source_shard), framework="pt", device="cpu") as shard:
+                tensors = {
+                    key: shard.get_tensor(key)
+                    for key in keys
+                    if key.startswith(filter_prefix)
+                }
+            if not tensors:
+                raise ValueError(
+                    f"No {filter_prefix!r} tensors found in Kimi shard {source_shard}"
+                )
+            save_file(tensors, str(destination))
+        elif materialize:
             shutil.copyfile(source_shard, destination)
         else:
             destination.symlink_to(source_shard)
@@ -70,7 +87,13 @@ def compose(
             glm_map, glm_hf, temp_path, "glm", materialize=materialize
         )
         composed_map.update(
-            _link_weight_map(kimi_map, kimi_hf, temp_path, "kimi", materialize=materialize)
+            _link_weight_map(
+                kimi_map,
+                kimi_hf,
+                temp_path,
+                "kimi",
+                filter_prefix=KIMI_PREFIX,
+            )
         )
         total_size = sum(
             (temp_path / shard_name).stat().st_size
@@ -90,7 +113,7 @@ def compose(
             "glm_tensor_count": len(glm_map),
             "kimi_hf": str(kimi_hf.resolve()),
             "kimi_vision_tensor_count": len(kimi_map),
-            "tensor_files_rewritten": 0,
+            "tensor_files_rewritten": len(set(kimi_map.values())),
         }
         (temp_path / "composition.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"

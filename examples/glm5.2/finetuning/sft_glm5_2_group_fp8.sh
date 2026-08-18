@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 # This script is used for SFT training GLM-5.2 in FP8 mixed precision.
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
