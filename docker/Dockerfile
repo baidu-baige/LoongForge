@@ -1,10 +1,13 @@
-ARG BASE_IMAGE="nvcr.io/nvidia/pytorch:25.06-py3"
+ARG BASE_IMAGE="nvcr.io/nvidia/pytorch:26.06-py3"
 FROM ${BASE_IMAGE}
 
 # =========================================================
 # Build Arguments
 # =========================================================
 ARG COMPILE_ENV="hopper"
+ARG FLASH_ATTN_VERSION="v2.8.3.post1"
+ARG DEEPGEMM_VERSION="v2.1.1.post3"
+ARG LEROBOT_VERSION="v0.5.0"
 
 # =========================================================
 # Environment Variables
@@ -28,8 +31,8 @@ RUN set -exuo pipefail && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     apt-get install -y bc tree pwgen nodejs iproute2 && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get install -y ffmpeg=7:6.1.1-3ubuntu5
+    apt-get install -y ffmpeg=7:6.1.1-3ubuntu5 && \
+    rm -rf /var/lib/apt/lists/*
 
 # ======================== Install Base Requirements ========================
 RUN set -exuo pipefail && \
@@ -43,13 +46,19 @@ RUN set -exuo pipefail && \
 # =========================================================
 RUN set -exuo pipefail && \
     install_flash_attn() { \
-        echo "Installing Flash Attention 2 & 3..." && \
-        wget -q -O flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        pip install flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        rm flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        wget -q -O flash_attn_3-3.0.0b1+20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl https://github.com/windreamer/flash-attention3-wheels/releases/download/2026.01.26-f6c4937/flash_attn_3-3.0.0b1%2B20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl && \
-        pip install flash_attn_3-3.0.0b1+20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl && \
-        rm flash_attn_3-3.0.0b1+20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl; \
+        local torch_cuda_arch_list="$1" && \
+        local flash_attn_dir=/workspace/flash-attention && \
+        echo "Building Flash Attention 2 & 3 ${FLASH_ATTN_VERSION} from source for CUDA arch ${torch_cuda_arch_list}..." && \
+        cd /workspace && \
+        git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FLASH_ATTN_VERSION}" \
+            https://github.com/Dao-AILab/flash-attention.git "${flash_attn_dir}" && \
+        cd "${flash_attn_dir}" && \
+        MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
+            pip install --no-build-isolation --no-cache-dir . && \
+        cd "${flash_attn_dir}/hopper" && \
+        MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
+            pip install --no-build-isolation --no-cache-dir . && \
+        cd /workspace && rm -rf "${flash_attn_dir}"; \
     }; \
     update_flash_attn3_path_for_te() { \
         echo "Updating Flash Attention 3 import path for TE..." && \
@@ -79,23 +88,16 @@ RUN set -exuo pipefail && \
         cd /workspace && rm -rf DeepEP && \
         rm -rf /var/lib/apt/lists/*; \
     }; \
-    upgrade_cudnn_9_16_0() { \
-        echo "Upgrading cuDNN to 9.16.0..." && \
-        UBUNTU_VERSION=$(cat /etc/os-release | grep VERSION_ID | cut -d '"' -f 2 | tr -d '.') && \
-        wget -q https://developer.download.nvidia.com/compute/cudnn/9.16.0/local_installers/cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
-        dpkg -i cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
-        cp /var/cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0/cudnn-*-keyring.gpg /usr/share/keyrings/ && \
-        apt-get update && \
-        apt-get -y install cudnn9-cuda-12 && \
-        dpkg -l | grep cudnn && \
-        rm -f cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
-        rm -rf /var/lib/apt/lists/*; \
-    }; \
     install_deepgemm() { \
-        echo "Installing DeepGEMM..." && \
-        wget -q https://github.com/deepseek-ai/DeepGEMM/releases/download/v2.1.1.post3/deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        pip install -v deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        rm deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl; \
+        local deepgemm_dir=/workspace/DeepGEMM && \
+        # Published wheels are tied to torch 2.8; build against the NGC image's PyTorch ABI. \
+        echo "Building DeepGEMM ${DEEPGEMM_VERSION} from source..." && \
+        cd /workspace && \
+        git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${DEEPGEMM_VERSION}" \
+            https://github.com/deepseek-ai/DeepGEMM.git "${deepgemm_dir}" && \
+        cd "${deepgemm_dir}" && \
+        DG_FORCE_BUILD=1 DG_USE_LOCAL_VERSION=0 pip install -v --no-build-isolation --no-cache-dir . && \
+        cd /workspace && rm -rf "${deepgemm_dir}"; \
     }; \
     install_flashmla() { \
         echo "Installing FlashMLA..." && \
@@ -105,21 +107,21 @@ RUN set -exuo pipefail && \
         pip install -v . && \
         cd /workspace && rm -rf flash-mla; \
     }; \
-    install_flash_attn && \
-    update_flash_attn3_path_for_te && \
-    upgrade_cudnn_9_16_0 && \
-    install_deepgemm && \
-    install_flashmla && \
     if [ "${COMPILE_ENV}" = "ampere" ]; then \
-        install_deepep "8.0" "1"; \
+        torch_cuda_arch_list="8.0" && disable_sm90="1"; \
     elif [ "${COMPILE_ENV}" = "hopper" ]; then \
-        install_deepep "9.0" "0"; \
+        torch_cuda_arch_list="9.0" && disable_sm90="0"; \
     elif [ "${COMPILE_ENV}" = "blackwell" ]; then \
-        install_deepep "10.0" "0"; \
+        torch_cuda_arch_list="10.0" && disable_sm90="0"; \
     else \
         echo "[ERROR] Unsupported COMPILE_ENV value: ${COMPILE_ENV}" && \
         exit 1; \
-    fi
+    fi && \
+    install_flash_attn "${torch_cuda_arch_list}" && \
+    update_flash_attn3_path_for_te && \
+    install_deepgemm && \
+    install_flashmla && \
+    install_deepep "${torch_cuda_arch_list}" "${disable_sm90}"
 
 # =========================================================
 # TransformerEngine / Lerobot
@@ -154,23 +156,34 @@ RUN set -exuo pipefail && \
         cd /workspace && rm -rf ${transformerEngine_dir}; \
     }; \
     install_lerobot() { \
-        echo "Installing Lerobot..." && \
-        pip install "dmuon @ git+https://github.com/X-Square-Robot/dmuon.git" && \
+        echo "Installing Lerobot ${LEROBOT_VERSION}..." && \
+        torch_ver_before=$(python -c "import torch; print(torch.__version__)") && \
+        pip install "dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@32e97c9096571e82f4ce733f4ac726899e42b368" && \
         cd /workspace/LoongForge/ && \
         uv pip install --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
         cd /workspace && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        git clone https://github.com/huggingface/lerobot.git && \
+        git clone --depth 1 --branch "${LEROBOT_VERSION}" https://github.com/huggingface/lerobot.git && \
         cd lerobot && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
-        pip install --no-build-isolation ".[pi]" && \
+        # Keep the NGC PyTorch build instead of replacing it with a PyPI wheel. \
+        sed -i -E 's/"torch>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torch>=\1"/; s/"torchvision>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torchvision>=\1"/' pyproject.toml && \
+        grep -E '"torch(vision)?>=' pyproject.toml && \
+        pip install "transformers==5.3.0" && \
+        pip install --no-build-isolation . && \
         pip install "numpy==1.26.4" && \
         pip install "scipy==1.15.3" && \
-        echo "Lerobot installation completed"; \
+        pip install --no-deps -U "torchcodec==0.11.1" && \
+        torch_ver_after=$(python -c "import torch; print(torch.__version__)") && \
+        if [ "${torch_ver_before}" != "${torch_ver_after}" ]; then \
+            echo "[ERROR] torch was replaced during Lerobot install: ${torch_ver_before} -> ${torch_ver_after}" && \
+            exit 1; \
+        fi && \
+        echo "Lerobot installation completed (torch kept at ${torch_ver_after})"; \
     }; \
     install_transformer_engine && \
     install_lerobot
