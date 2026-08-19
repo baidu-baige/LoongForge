@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>TAOT: How We Used Topology-Aware Optimal Transport to Make Large-Scale MoE Training 1.43x Faster | LoongForge
+    Blog</title>
+  <meta name="description"
+    content="Our team's TAOT (Topology-Aware Optimal Transport) is the first method to put both peak-shaving benefit and cross-node weight-movement cost into a single objective for MoE expert replica placement — 1.43x end-to-end speedup with online planning under 1% of forward time." />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline">← Back to Blog</a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">MoE</span><span
+          class="chip">Load Balancing</span><span class="chip">Paper</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">TAOT: How We Used Topology-Aware Optimal
+        Transport to Make Large-Scale MoE Training 1.43× Faster</h1>
+      <div class="text-sm text-gray-500">2026-08-19 · The LoongForge Team</div>
+    </div>
+
+    <div class="prose-lf">
+      <p>MoE is now the default architecture for frontier models, and the direction of the next generation is clear:
+        more experts, sparser activation. DeepSeek-V4-Pro raised the number of routed experts per layer from 256 in V3
+        to 384, while the number of experts activated per token actually dropped from 8 to 6.</p>
+      <p>Those architectural gains come at a price: the complexity moves into the training system. How many tokens each
+        GPU has to process depends entirely on routing results, and the more numerous and fine-grained the experts, the
+        harder the routing tail is to predict. As soon as a few experts become hotspots, tokens pile up on the ranks
+        hosting them, stretching out the step time while every other rank sits idle waiting even after finishing early.
+      </p>
+      <p>So in our experience, when MoE training is slow, the root cause is usually not "the GPUs aren't fast enough" or
+        "the network isn't wide enough" — it's whether load can be rebalanced in time.</p>
+      <p>The field arrived at an obvious remedy early on: temporarily replicate a hot expert's weights onto some idle
+        rank and let that idle GPU take over part of the token computation. FasterMoE, Echo in Megatron, DeepSeek's
+        LPLB, and the recent ICML 2026 work LLEP are all representatives of this idea.</p>
+      <p>Within a single node this is natural: GPUs talk over NVLink, so it hardly matters which idle GPU you move the
+        weights to. But the scale of the new generation of models already forces the EP domain across nodes: hundreds of
+        experts' weights have to be spread out by expert parallelism, and NVIDIA's reference training configuration for
+        V4-Pro calls for EP64 across 64 nodes — 512 H100s in total. Once the EP domain leaves a single node, "which idle
+        GPU" is no longer an equivalent choice: intra-node is NVLink, cross-node goes over InfiniBand, and the cost of
+        shipping one hot expert's weights can differ by an order of magnitude.</p>
+      <p><strong>The problem we see</strong> is that most of these approaches optimize for exactly one thing — flatten
+        the load as much as possible — and implicitly treat idle capacity as a homogeneous resource, as if one idle GPU
+        were interchangeable with another. The result is that whether expert weights end up moved to a different node
+        becomes the dominant factor in communication cost: two plans with nearly identical load-balance quality can have
+        wildly different real overhead.</p>
+      <p>In other words, replica placement cannot only ask "where is there room?" — it also has to ask "how expensive is
+        it to move there?"</p>
+      <p>Based on that observation, we wrote this work up as a paper, now on arXiv: <em>TAOT: Topology-Aware Optimal
+          Transport for Dynamic Expert Replica Placement in MoE Training</em> (arXiv:2608.03676). The method we propose,
+        <strong>TAOT (Topology-Aware Optimal Transport)</strong>, <strong>is the first to bring both the peak-shaving
+          benefit and the cost of moving weights across nodes into a single optimization objective, using optimal
+          transport to decide which GPU each hot expert's replica should land on. The trade-off — prefer intra-node, go
+          cross-node when necessary — is expressed directly inside the optimization, which fits multi-node EP settings
+          with micro-batch-level dynamic hotspots.</strong></p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/01.png" alt="TAOT paper front page"
+          loading="lazy" />
+        <figcaption>TAOT: Topology-Aware Optimal Transport for Dynamic Expert Replica Placement in MoE Training
+        </figcaption>
+      </figure>
+      <ul>
+        <li>Technical report: <a href="https://arxiv.org/abs/2608.03676" target="_blank"
+            rel="noopener">https://arxiv.org/abs/2608.03676</a></li>
+        <li>Project: <a href="https://github.com/baidu-baige/LoongForge" target="_blank"
+            rel="noopener">https://github.com/baidu-baige/LoongForge</a></li>
+      </ul>
+      <h2>1. Why We Think Load Balancing Alone Isn't Enough</h2>
+      <p>Consider a typical replica mechanism: reserve a few empty slots on lightly loaded ranks (we call them
+        <em>guest slots</em> in the paper), copy a hot expert's weights into one of them, and let that light rank take
+        over part of the token computation. The routing target doesn't change; the computation simply happens somewhere
+        else.</p>
+      <p>What matters is <strong>which GPU you copy to</strong>. Existing strategies typically optimize only for "best
+        load balance," treating every free slot as an identical resource. But intra-node NVLink and cross-node IB/RDMA
+        are not in the same league in effective bandwidth or cost. So two plans with nearly identical peak-shaving
+        quality can differ substantially in end-to-end communication cost, purely because one kept the weights inside
+        the node and the other shipped them next door.</p>
+      <p>The closest work to TAOT is DeepSeek's LPLB. It models the assignment of tokens to free slots as a linear
+        program, but constrains replica communication paths using <strong>predefined graph structures</strong> such as
+        Cube, Hypercube, and Torus. That works well at small scale when hotspots happen to fall on adjacent edges of the
+        graph. But once EP scale grows, or hotspots don't line up with the fixed topology, nearby capacity is exhausted
+        quickly while distant idle ranks are shut out of the feasible region by the graph — and the overall scheduling
+        space shrinks noticeably.</p>
+      <p>Our approach inverts this: instead of relying on a fixed topology graph, we use a <strong>continuous
+          communication cost matrix</strong> plus a <strong>soft topology preference</strong>. Placing nearby is
+        preferred, but when there truly isn't room inside the node, cross-node remains a "legal but more expensive
+        option" rather than being cut off outright. This is much closer to the micro-batch-level fluctuating hotspot
+        distribution we observe in real multi-node EP.</p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/02.png" alt="TAOT system architecture"
+          loading="lazy" />
+        <figcaption>The TAOT pipeline: after the router produces its result, per-rank load is collected and fed into the
+          three-phase planner (Sinkhorn flow planning → column-first matching → auction assignment) to produce a replica
+          plan; at execution time guest expert weights are transferred and overlapped with home expert computation.
+        </figcaption>
+      </figure>
+      <h2>2. Three-Phase Planning: From "Where Should It Flow" to "Who Sends How Much"</h2>
+      <p>Solving for balance and communication cost jointly in one shot makes the problem size blow up with EP degree.
+        So we decompose it into the three interlocking, progressively refined phases shown below.</p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/03.png" alt="Three-phase planner detail"
+          loading="lazy" />
+        <figcaption>The three-phase planner: Phase 1 uses optimal transport at rank level to produce a soft hint of
+          "where load should globally flow"; Phase 2 turns the continuous flow into 0/1 decisions at expert level —
+          which expert goes into which slot; Phase 3 pins down exactly how many tokens each source rank sends.
+        </figcaption>
+      </figure>
+      <p><strong>Phase 1: Sinkhorn-Knopp topology-aware flow planning (rank level).</strong> We treat each rank's
+        overload as "supply" and its free capacity as "demand," then solve an optimal transport problem under the
+        topology cost matrix <code>W</code>. In essence it answers: globally, which hot ranks' overload should be moved
+        to which cold ranks to be worthwhile. Vanilla OT requires a linear program, which is awkward on GPU; after
+        relaxing with a negative-entropy regularizer, the optimum takes a Gibbs kernel form:</p>
+      <pre><code class="language-text">T = diag(u) · M · diag(v)</code></pre>
+      <p>which can be computed with just a few alternating rounds of Sinkhorn-Knopp GEMV iterations — far friendlier to
+        a GPU implementation. When we set the regularization coefficient to the cross-node cost <code>λ</code>, the
+        ratio of intra-node to cross-node kernel values is exactly greater than 1. That is where the "soft topology
+        preference" comes from mathematically: cross-node is not forbidden, it just has to carry a higher cost.</p>
+      <p><strong>Phase 2: Column-first iterative matching (expert level).</strong> Phase 1 gives a continuous flow
+        reference, but replica placement is ultimately an integer decision: each cold rank holds at most K complete
+        replicas, and several cold ranks may pick the same hot expert. In this phase we score every (cold rank, hot
+        expert) pair with a three-tier score — the primary term is how many tokens this match can offload (balance
+        benefit), the second is topology preference, and only the third is Phase 1's OT flow hint (used as a global
+        reference only to break ties). The key trade-off here: if the outer loop iterates over experts (row-first),
+        heavily loaded experts tend to fill up slots first, light ranks don't get enough scheduling opportunity, and we
+        measured residual imbalance as high as 7–10%. Switching to <strong>column-first matching from the cold rank's
+          perspective</strong> — each round, every cold rank independently picks its best-fitting expert, conflicts are
+        arbitrated, and ranks that miss out go to the next round — pushed residual imbalance down to 1–2%.</p>
+      <p><strong>Phase 3: Lagrangian auction token assignment (token level).</strong> Phase 2 fixes "how many tokens
+        expert e plans to give slot s," but e's tokens are actually scattered across several ranks, so we still need to
+        compute how many each source rank sends. Splitting proportionally introduces floating-point truncation error
+        and ignores topology information. We introduce a Lagrange multiplier (a price) on each rank's capacity
+        constraint: each round, every slot bids on net benefit — topology benefit minus current price — and the winning
+        rank's price rises, naturally decaying its competitiveness in the next round. This folds topology preference
+        into the assignment, spreads load more evenly, and — because the iteration count is fixed — is inherently
+        compatible with CUDA Graph.</p>
+      <h2>3. Online Planning Must Not Become the New Bottleneck: Fusing Hundreds of Kernels into a Few</h2>
+      <p>Three-phase planning is not lightweight — it involves optimal transport, column-first matching, and auction
+        bidding. But TAOT has to <strong>run in real time, every micro-batch</strong>: if planning itself is too
+        expensive, the savings on the communication side are easily cancelled out. Keeping planning under 1% of a single
+        forward-backward (F+B) pass takes more than algorithm design; it takes a layer of easily overlooked
+        <strong>kernel-level engineering</strong>.</p>
+      <p>The problem shows up mainly at small scale. At EP8 or EP16, the planner's actual GPU work is tiny, yet a naive
+        PyTorch implementation triggers a swarm of small kernels on every call: rebuilding tensors, running 50 Sinkhorn
+        rounds, looping K rounds of Phase 2 — hundreds of launches in total. Host-side launch overhead ends up far
+        exceeding the GPU's real compute time, and the planner itself risks becoming the new bottleneck.</p>
+      <p>We rewrote the whole thing in Triton, cutting those hundreds of launches down along three directions:</p>
+      <ul>
+        <li><strong>Static tensor caching.</strong> The topology cost matrix <code>M</code>, each expert's home rank,
+          and topology preferences depend only on the topology configuration (R, E, GPUs per node, cross-node cost) —
+          not on how tokens are distributed — and stay constant throughout training. The original implementation rebuilt
+          them every time, adding roughly 15 extra kernel launches. We cache them in a process-level dictionary; after
+          the first call it's a straight hit, and those 15 launches disappear.</li>
+        <li><strong>Single-CTA Sinkhorn kernel for Phase 1.</strong> 50 rounds of Sinkhorn-Knopp were originally 50
+          <code>torch.mv</code> + clamp calls, about 150 launches. Since R ≤ 64, all of <code>M</code>, <code>u</code>,
+          and <code>v</code> fit in registers, so we packed all 50 iterations into a single CTA, fully unrolled at
+          compile time — 150 launches become 1, with no CPU-GPU synchronization in between.</li>
+        <li><strong>Fusing Phase 2's K rounds.</strong> We fuse K rounds of assignment into one launch, keeping the
+          <code>used[E,R]</code> mask entirely in registers across rounds without writing back to global memory until
+          the very end. There's a counter-intuitive trade-off here: we <strong>deliberately do not unroll</strong> the
+          inner R iterations at compile time — unrolling replicates the <code>[E,R]</code> temporary tensor R times,
+          blowing out registers and collapsing SM occupancy at EP16. Using a dynamic loop instead lets the compiler
+          reuse registers across rounds, and occupancy recovers markedly.</li>
+      </ul>
+      <p>The algorithm determines planning quality; kernel optimization determines whether it can run in real time in a
+        per-micro-batch setting. Together, they let TAOT achieve better balance while keeping online planning overhead
+        under 1% of forward time.</p>
+      <h2>4. Planning Isn't Enough — the Communication Has to Be Hidden Too</h2>
+      <p>Having brought cross-node communication down, we went one step further: the remaining cost of distributing
+        optimized guest expert weights is <strong>hidden inside the home expert computation on the same GPU</strong>, as
+        shown below.</p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/04.png"
+          alt="Communication-computation overlap" loading="lazy" />
+        <figcaption>Across the FC1/FC2 stages, home experts' GEMMs run on the compute stream while guest experts'
+          expert_dispatch transfers in parallel on the communication stream, aligned by a single synchronization —
+          achieving compute-communication overlap between hot and cold experts.</figcaption>
+      </figure>
+      <p>The backward pass works the same way: weight gradients computed by guest experts are sent back to the home rank
+        for accumulation through one reverse All-to-All. The extra communication introduced by the guest expert
+        mechanism is thus largely masked by computation.</p>
+      <h2>5. Measured Results: Faster Training, Cheaper Communication</h2>
+      <p><strong>① End-to-end: 1.43× speedup with no accuracy impact</strong></p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/05.png"
+          alt="End-to-end speedup and loss consistency" loading="lazy" />
+        <figcaption>Left: per-iteration F+B time drops from 155.4 ms to 108.8 ms (1.43×). Right: over 100 steps, lm loss
+          error relative to standard EP stays within ±3‰, with a mean absolute relative error of only 0.297‰.
+        </figcaption>
+      </figure>
+      <p>The speedup comes from better load balance plus effectively hidden expert communication — <strong>not from
+          trading away numerical accuracy</strong>. The guest expert path neither changes the target-expert semantics of
+        any token, nor drops gradients: in the backward pass guest gradients are faithfully sent back and accumulated
+        onto the home expert.</p>
+      <p><strong>② Balance quality and communication cost, viewed separately</strong></p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/06.png"
+          alt="Balance quality and weighted communication cost across methods" loading="lazy" />
+        <figcaption>Balance quality and weighted communication cost for each method across EP scales and initial
+          imbalance levels.</figcaption>
+      </figure>
+      <p>We deliberately did not collapse the two metrics into a single score. End-to-end, expert communication and
+        computation stand at roughly a 1:7 ratio, so even if two plans differ by just 1pp in imbalance, about a 7% drop
+        in communication offsets the cost of the compute tail. And the larger EP gets, the shorter each GPU's compute
+        window and the higher the communication share — pushing that break-even point down further. Presenting balance
+        quality and communication cost separately makes the real trade-offs easier to judge.</p>
+      <ul>
+        <li><strong>Balance quality</strong>: at EP=16 TAOT is a solid second, trailing LPLB by about 1pp — but that 1pp
+          buys a communication reduction that matters more end-to-end. At EP=32 it takes the lead, best or tied-best in
+          every scenario. LPLB degrades noticeably from EP=16 to EP=32: Torus 4×8 restricts migration paths to adjacent
+          edges, so as scale grows and hotspots scatter, nearby capacity runs out first while distant idle GPUs can't
+          participate in scheduling. Our soft preference behaves in exactly the opposite way — the larger EP is, the
+          more low-load ranks there are, and the larger the offload candidate space becomes.</li>
+        <li><strong>Communication cost</strong>: TAOT is the lowest across all ten configurations. At EP=16 it lands at
+          15–27, up to 53% below LPLB's fixed 32; at EP=32 it lands at 33–44, up to 55% below ECHO and up to 74% below
+          LPLB. The comparison against LLEP makes another point: the same target imbalance does not imply the same
+          communication efficiency. At 70% imbalance with EP=32, TAOT's cost is 33 versus LLEP's 40 — the difference
+          being that we write intra-node/cross-node cost directly into the placement decision, preferring capacity that
+          is cheaper to communicate with.</li>
+      </ul>
+      <p><strong>③ Scalability and overhead: the larger the scale and the higher the initial imbalance, the bigger the
+          gain</strong></p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/07.png"
+          alt="Scalability and parameter sensitivity" loading="lazy" />
+        <figcaption>(a) From EP4 to EP16, speedup reaches up to 1.79×. (b) As initial imbalance goes from 30% to 90%,
+          speedup rises from 1.21× to 1.75×. (c) Gains saturate at 4 guest slots per rank; accounting for memory, 2 is
+          the best configuration. (d) Online planning overhead stays &lt;1% of forward time throughout.</figcaption>
+      </figure>
+      <p>Three trends are clear: <strong>the larger the EP scale, the larger the speedup</strong> (a bigger parallel
+        domain offers richer global idle capacity); <strong>the more imbalanced the start, the larger the
+          speedup</strong> (a longer hotspot tail means more load the guest mechanism can offload); and
+        <strong>online overhead stays under 1% of forward time</strong>, without growing linearly with imbalance — low
+        enough to use every micro-batch, and unlikely to turn into a new bottleneck.</p>
+      <p><strong>④ Ablation: both components do distinct work, and neither is dispensable</strong></p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/08.png"
+          alt="Ablation of Phase 1 and Phase 2 contributions" loading="lazy" />
+        <figcaption>Ablation of Phase 1's flow hint and Phase 2's communication cost modeling at EP=32 with 70% initial
+          imbalance.</figcaption>
+      </figure>
+      <p>At EP=32 with 70% initial imbalance, we treat Phase 1's flow hint and Phase 2's communication cost modeling as
+        two switches:</p>
+      <ul>
+        <li>With only Phase 2, cross-node transfers drop from 18.33 to 10.00 and weighted cost from 59.67 to 44.67,
+          while imbalance holds steady at about 2% — showing that it prefers placing replicas inside the node while
+          preserving peak-shaving capability.</li>
+        <li>Adding Phase 1 on top, imbalance falls further from 2.00% to 1.48%, and communication cost drops along with
+          it — the rank-level flow hint acts as a global reference, avoiding the unreasonable paths that column-first
+          matching's local greediness would otherwise produce.</li>
+      </ul>
+      <p>Together they form a better balance-versus-communication trade-off.</p>
+      <h2>6. What We Set Out to Fill In: An Underrated Link in MoE Balancing</h2>
+      <p>Placing TAOT back on the map of MoE load balancing makes its position fairly clear.</p>
+      <p>Over the years, MoE balancing research has covered strategy switching (SmartMoE), capacity prediction
+        (EfficientMoE, DynamicMoE), expert replication (FasterMoE, Echo, LLEP), expert relayout, and more — but
+        <strong>few approaches write both the peak-shaving benefit and the cost of moving weights into the objective
+          function</strong>. Some depend on a fixed, complex communication paradigm (LAER-MoE); some confine balancing
+        to a single node (FEPLB, which relies on Hopper's NVLink Copy Engine); some constrain paths with a hard topology
+        graph (LPLB).</p>
+      <p>We target the more general standard EP setting: no special hardware, no lock-in to a single node, no predefined
+        graph. Instead, a continuous cost matrix and a soft topology preference express the trade-off — prefer
+        intra-node placement, go cross-node when necessary — directly in the optimization objective. What it fills in is
+        precisely the piece that has stayed underrated while mattering a great deal to end-to-end cost:
+        <strong>where a replica goes was never only a question of where there's room</strong>.</p>
+      <p>For MoE training, where expert counts and EP scale keep growing, we believe this kind of topology-aware
+        real-time replica planning is likely to move from a point optimization to a more fundamental system capability.
+        Which turns the question into: can it land stably inside a training framework, so users can simply enable it in
+        real training jobs?</p>
+      <h2>7. From Paper Method to a Usable Framework Capability</h2>
+      <p>On paper, TAOT is a planning method for "where should an expert replica go." Inside a real training system it
+        also needs topology information, online solving, weight distribution, compute-communication overlap, and a
+        training entry point to work together. That is exactly why we did not ship TAOT as a standalone algorithm, but
+        folded it into our open-source <strong>omni-modal training framework LoongForge</strong> as an extension of the
+        MoE expert mechanism.</p>
+      <figure>
+        <img src="../assets/blog/2026-08-taot-topology-aware-expert-placement/09.png"
+          alt="LoongForge omni-modal training framework" loading="lazy" />
+        <figcaption>LoongForge: Baidu Baige's open-source omni-modal training framework.</figcaption>
+      </figure>
+      <blockquote>
+        <p>🔗 LoongForge on GitHub: <a href="https://github.com/baidu-baige/LoongForge" target="_blank"
+            rel="noopener">https://github.com/baidu-baige/LoongForge</a></p>
+      </blockquote>
+      <p>LoongForge evolved from Baidu Baige's AIAK-Training-LLM acceleration suite. Before open-sourcing, it had
+        already provided production-grade training support to enterprise customers across large language models,
+        computer vision, and embodied intelligence — typically 30%–50% faster than the customer's baseline, with the
+        largest production job exceeding 5,000 XPUs. We target the more general training-engineering problem: one
+        framework covering LLM, VLM, VLA, and Diffusion scenarios, spanning the mainstream pretraining-to-SFT pipeline,
+        validated over a long period across GPU and Kunlun XPU platforms, thousand-GPU clusters, and many kinds of real
+        production workloads.</p>
+      <p>Making all these model classes fast with a single engine isn't realistic. Our approach splits the backend into
+        two stacks by modality: LLM / VLM / Diffusion run on a deeply customized Megatron-LM, taking full advantage of
+        its mature TP/PP/EP/CP parallelism; embodied models such as VLA and world-action models (WAM) are decoupled from
+        Megatron and run on a torch-native DDP / ZeRO-1 / FSDP / HSDP stack — these models aren't large in parameter
+        count, but their action heads and multi-view inputs are structurally complex, and the native stack is simply
+        more flexible for them. Both stacks are deeply optimized, each aiming to beat the mainstream open-source
+        baseline in its own domain. TAOT is one of the optimizations that lands in the former: you don't need to
+        reproduce the paper's three-phase planner yourself — when you hit expert load skew and cross-node communication
+        bottlenecks, just turn it on in the config.</p>
+      <p>Beyond "running fast," a framework also has to make "onboarding fast." LoongForge ships standard components for
+        20+ model families and nearly 40 concrete models: LLMs including DeepSeek-V3/V4, Qwen3/Qwen3-Next, GLM-5,
+        MiniMax, and MIMO; VLMs including Qwen3-VL, InternVL3.5, LLaVA-OneVision-1.5, ERNIE4.5-VL, and Kimi-K2.5;
+        diffusion models including Wan2.1/2.2 and Qwen-Image; and embodied models including Pi0.5, GR00T-N1.6/N1.7,
+        xVLA, FastWAM, and LingBot-VA. The model layer is decomposed into abstractions such as Encoder, Foundation, and
+        composition scheduling, so ViT and LLM components can be swapped freely, and much of the adaptation work can be
+        done through YAML for module composition and strategy configuration — onboarding a new model doesn't mean
+        rebuilding a training stack from scratch.</p>
+      <p>If you're running large-scale MoE training and a handful of hot experts are dragging out your step time, give
+        LoongForge a try — and feel free to reach us through GitHub Issues.</p>
+      <ul>
+        <li><strong>Paper</strong>: <a href="https://arxiv.org/abs/2608.03676" target="_blank"
+            rel="noopener">https://arxiv.org/abs/2608.03676</a></li>
+        <li><strong>GitHub</strong>: <a href="https://github.com/baidu-baige/LoongForge" target="_blank"
+            rel="noopener">https://github.com/baidu-baige/LoongForge</a></li>
+        <li><strong>Docs</strong>: <a href="https://loongforge.readthedocs.io/" target="_blank"
+            rel="noopener">https://loongforge.readthedocs.io/</a></li>
+      </ul>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-07-announcing-loongforge-embodied.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: Announcing LoongForge-Embodied</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-08-taot-topology-aware-expert-placement.html';
+      const POST_ZH = '2026-08-taot-topology-aware-expert-placement.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === 'en')
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js"></script>
+</body>
+
+</html>

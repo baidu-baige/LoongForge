@@ -22,7 +22,13 @@ site/
 │   ├── 2026-05-loongforge-dp-load-balancing.html      # DP Load Balancing（EN）
 │   ├── 2026-05-loongforge-dp-load-balancing.zh.html   # DP Load Balancing（ZH）
 │   ├── 2026-05-loongforge-heterogeneous-parallel-training.html      # Heterogeneous Parallel Training（EN）
-│   └── 2026-05-loongforge-heterogeneous-parallel-training.zh.html   # Heterogeneous Parallel Training（ZH）
+│   ├── 2026-05-loongforge-heterogeneous-parallel-training.zh.html   # Heterogeneous Parallel Training（ZH）
+│   ├── 2026-06-loongforge-groot-n16-acceleration.html               # GR00T N1.6 训练加速（EN）
+│   ├── 2026-06-loongforge-groot-n16-acceleration.zh.html            # GR00T N1.6 训练加速（ZH）
+│   ├── 2026-07-announcing-loongforge-embodied.html                  # Announcing LoongForge-Embodied（EN）
+│   ├── 2026-07-announcing-loongforge-embodied.zh.html               # Announcing LoongForge-Embodied（ZH）
+│   ├── 2026-08-taot-topology-aware-expert-placement.html            # TAOT 拓扑感知专家副本放置（EN）
+│   └── 2026-08-taot-topology-aware-expert-placement.zh.html         # TAOT 拓扑感知专家副本放置（ZH）
 ├── assets/
 │   ├── css/style.css
 │   ├── js/main.js          # 导航/暗黑/复制/Tab/scroll-spy/i18n
