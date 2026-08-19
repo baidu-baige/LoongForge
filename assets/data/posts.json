@@ -16,13 +16,13 @@
             "论文"
         ],
         "en": {
-            "title": "TAOT: How We Used Topology-Aware Optimal Transport to Make Large-Scale MoE Training 1.43x Faster",
+            "title": "1.43x Faster MoE Training: LoongForge Redefines EP Expert Load Balancing with Topology-Aware Optimal Transport",
             "author": "The LoongForge Team",
             "summary": "Our team's TAOT (Topology-Aware Optimal Transport) is the first method to put both peak-shaving benefit and cross-node weight-movement cost into one objective for MoE expert replica placement — 1.43x end-to-end speedup, up to 74% lower communication cost than LPLB, with online planning under 1% of forward time.",
             "url": "blog/2026-08-taot-topology-aware-expert-placement.html"
         },
         "zh": {
-            "title": "TAOT：我们如何用拓扑感知最优传输把大规模 MoE 训练端到端加速 1.43 倍",
+            "title": "MoE 训练端到端加速 1.43 倍：LoongForge 基于拓扑感知最优传输重新定义 EP 专家负载均衡",
             "author": "LoongForge 团队",
             "summary": "我们提出的 TAOT（Topology-Aware Optimal Transport）首次把削峰收益与跨节点搬运权重的代价同时写进优化目标，用最优传输决定 MoE 热点专家副本的落点：端到端加速 1.43 倍，通信代价最多比 LPLB 低 74%，在线规划开销始终低于前向时间的 1%。",
             "url": "blog/2026-08-taot-topology-aware-expert-placement.zh.html"
