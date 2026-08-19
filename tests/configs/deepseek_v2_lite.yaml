@@ -71,7 +71,7 @@ scenarios:
             --global-batch-size ${global_batch_size}
             --lr 1e-4
             --train-iters ${train_iters}
-            --load ${CHECKPOINT_PATH}
+            --load ${HF_CKPT_PATH}
             --lr-decay-iters 320000
             --lr-decay-style cosine
             --min-lr 1.0e-5

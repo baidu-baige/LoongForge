@@ -48,9 +48,9 @@ jobs:
         # The runner process runs as root but _work/ may contain files created
         # by another user. Configure both HOME locations used by this job.
         run: |
-          mkdir -p /ssd1/runner-home/.claude/downloads
+          mkdir -p "$RUNNER_TEMP/runner-home/.claude/downloads"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          HOME=/ssd1/runner-home git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          HOME="$RUNNER_TEMP/runner-home" git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Resolve immutable PR revisions
         id: pr
@@ -190,7 +190,7 @@ jobs:
         uses: anthropics/claude-code-action@6b082c41935b4c8a3b8b0ef85ba4ba4d9eeb8975 # v1.0.189
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
-          HOME: /ssd1/runner-home
+          HOME: ${{ runner.temp }}/runner-home
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ github.token }}

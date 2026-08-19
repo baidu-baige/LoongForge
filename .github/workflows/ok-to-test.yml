@@ -50,11 +50,18 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number,
             });
+            const headRepo = pull.head.repo || { owner: { login: context.repo.owner }, name: context.repo.repo };
+            const { data: headCommit } = await github.rest.repos.getCommit({
+              owner: headRepo.owner.login,
+              repo: headRepo.name,
+              ref: pull.head.sha,
+            });
             const { data: check } = await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               name: 'ci-gate',
               head_sha: pull.head.sha,
+              external_id: `loongforge-gpu:${pull.number}:${pull.head.sha}`,
               status: 'in_progress',
               started_at: new Date().toISOString(),
               output: {
@@ -71,8 +78,9 @@ jobs:
                 ref: pull.base.ref,
                 inputs: {
                   pr_number: String(pull.number),
-                  head_repo: pull.head.repo.full_name,
+                  head_repo: headRepo.full_name || `${headRepo.owner.login}/${headRepo.name}`,
                   head_sha: pull.head.sha,
+                  tree_sha: headCommit.commit.tree.sha,
                   environments: JSON.stringify(request.environments),
                   models: request.models.join(','),
                   build_image: request.build_image,

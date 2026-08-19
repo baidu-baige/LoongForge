@@ -174,8 +174,8 @@ Once installed, the SPDX header check and other hygiene hooks run automatically 
 ### GPU validation
 
 Maintainers may request GPU validation with `/ok-to-test --env a|p|all`. The
-default run uses models with an existing baseline for the selected environment;
-`--model` requests a baseline-backed subset. Runner and machine configuration is
+default run currently validates only the known-good `deepseek_v2_lite` baseline;
+`--model` requests a baseline-backed subset for additional validation. Runner and machine configuration is
 provided through protected Environment variables, and new commits invalidate
 previous GPU results.
 

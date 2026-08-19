@@ -10,6 +10,7 @@ ARG FAST_HADAMARD_VERSION="v1.1.0.post2"
 ARG DEEPGEMM_VERSION="v2.1.1.post3"
 ARG LEROBOT_VERSION="v0.5.0"
 ARG FLASH_MLA_COMMIT="15f13e5030374295491c5ce31b02d7e63a7772c6"
+ARG DMUON_COMMIT="32e97c9096571e82f4ce733f4ac726899e42b368"
 
 # =========================================================
 # Environment Variables
@@ -24,20 +25,27 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
+RUN rm -rf /workspace/LoongForge
 COPY ./LoongForge /workspace/LoongForge
 
 # ======================== Basic Environment Setup ========================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=apt_sources,required=false \
+    set -exuo pipefail && \
+    if [ -s /run/secrets/apt_sources ]; then \
+        cp /run/secrets/apt_sources /etc/apt/sources.list && \
+        rm -f /etc/apt/sources.list.d/ubuntu.sources; \
+    fi && \
     mkdir -p /tmp && chmod -R 777 /tmp && \
     apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        tzdata bc tree pwgen nodejs iproute2 ffmpeg=7:6.1.1-3ubuntu5 && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    apt-get install -y bc tree pwgen nodejs iproute2 && \
-    apt-get install -y ffmpeg=7:6.1.1-3ubuntu5 && \
     rm -rf /var/lib/apt/lists/*
 
 # ======================== Install Base Requirements ========================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=pip_config,required=false \
+    set -exuo pipefail && \
+    . /workspace/LoongForge/docker/configure_python_index.sh && \
     cd /workspace/LoongForge/ && \
     pip install uv && \
     uv pip install --system --break-system-packages --no-cache -e ".[gpu]" && \
@@ -47,28 +55,35 @@ RUN set -exuo pipefail && \
 # =========================================================
 # Specific Environment Setup
 # =========================================================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=source_manifest,required=false \
+    --mount=type=secret,id=pip_config,required=false \
+    set -exuo pipefail && \
+    . /workspace/LoongForge/docker/configure_python_index.sh && \
     install_flash_attn() { \
         local torch_cuda_arch_list="$1" && \
         local flash_attn_dir=/workspace/flash-attention && \
         echo "Building Flash Attention 2 & 3 ${FLASH_ATTN_VERSION} from source for CUDA arch ${torch_cuda_arch_list}..." && \
         cd /workspace && \
-        git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FLASH_ATTN_VERSION}" \
-            https://github.com/Dao-AILab/flash-attention.git "${flash_attn_dir}" && \
+        /workspace/LoongForge/docker/fetch_source.sh FLASH_ATTN_SOURCE "${flash_attn_dir}" flash-attention \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FLASH_ATTN_VERSION}" \
+            https://github.com/Dao-AILab/flash-attention.git "${flash_attn_dir}" >/dev/null && \
         cd "${flash_attn_dir}" && \
         MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
             pip install --no-build-isolation --no-cache-dir . && \
-        cd "${flash_attn_dir}/hopper" && \
-        MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
-            pip install --no-build-isolation --no-cache-dir . && \
+        if [ "${COMPILE_ENV}" != "ampere" ]; then \
+            cd "${flash_attn_dir}/hopper" && \
+            MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
+                pip install --no-build-isolation --no-cache-dir .; \
+        fi && \
         cd /workspace && rm -rf "${flash_attn_dir}"; \
     }; \
     install_fast_hadamard_transform() { \
         local fast_hadamard_dir=/workspace/fast-hadamard-transform && \
         echo "Building fast_hadamard_transform ${FAST_HADAMARD_VERSION} from source..." && \
         cd /workspace && \
-        git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FAST_HADAMARD_VERSION}" \
-            https://github.com/Dao-AILab/fast-hadamard-transform.git "${fast_hadamard_dir}" && \
+        /workspace/LoongForge/docker/fetch_source.sh FAST_HADAMARD_SOURCE "${fast_hadamard_dir}" fast-hadamard-transform \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FAST_HADAMARD_VERSION}" \
+            https://github.com/Dao-AILab/fast-hadamard-transform.git "${fast_hadamard_dir}" >/dev/null && \
         cd "${fast_hadamard_dir}" && \
         FAST_HADAMARD_TRANSFORM_FORCE_BUILD=TRUE FAST_HADAMARD_TRANSFORM_FORCE_CXX11_ABI=TRUE \
             pip install --no-build-isolation --no-cache-dir . && \
@@ -88,18 +103,29 @@ RUN set -exuo pipefail && \
     install_deepep() { \
         local torch_cuda_arch_list="$1" && \
         local disable_sm90="$2" && \
+        local deepep_dir=/workspace/DeepEP && \
         echo "Installing DeepEP..." && \
-        wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb && \
-        dpkg -i cuda-keyring_1.1-1_all.deb && \
-        apt-get update && \
-        apt-get -y install nvshmem && \
-        rm cuda-keyring_1.1-1_all.deb && \
-        git clone https://github.com/deepseek-ai/DeepEP.git && \
-        cd DeepEP && \
-        git fetch --all --tags && \
-        git checkout v1.2.1 && \
+        if [ -d /usr/include/nvshmem_13 ] && [ -d /usr/lib/x86_64-linux-gnu/nvshmem/13 ]; then \
+            mkdir -p "${NVSHMEM_DIR}" && \
+            ln -sfn /usr/include/nvshmem_13 "${NVSHMEM_DIR}/include" && \
+            ln -sfn /usr/lib/x86_64-linux-gnu/nvshmem/13 "${NVSHMEM_DIR}/lib"; \
+        else \
+            [ ! -s /run/secrets/source_manifest ] || { \
+                echo "[ERROR] internal build base image does not provide NVSHMEM"; exit 1; \
+            } && \
+            wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb && \
+            dpkg -i cuda-keyring_1.1-1_all.deb && \
+            apt-get update && apt-get -y install nvshmem && \
+            rm cuda-keyring_1.1-1_all.deb; \
+        fi && \
+        /workspace/LoongForge/docker/fetch_source.sh DEEPEP_SOURCE "${deepep_dir}" DeepEP \
+            git clone --depth 1 --branch v1.2.1 https://github.com/deepseek-ai/DeepEP.git "${deepep_dir}" >/dev/null && \
+        cd "${deepep_dir}" && \
+        if [ "${disable_sm90}" = "1" ]; then \
+            sed -i '/disable_nvshmem = False/s/False/True/' setup.py; \
+        fi && \
         TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" DISABLE_SM90_FEATURES="${disable_sm90}" pip install --no-build-isolation . && \
-        cd /workspace && rm -rf DeepEP && \
+        cd /workspace && rm -rf "${deepep_dir}" && \
         rm -rf /var/lib/apt/lists/*; \
     }; \
     install_deepgemm() { \
@@ -107,8 +133,9 @@ RUN set -exuo pipefail && \
         # Published wheels are tied to torch 2.8; build against the NGC image's PyTorch ABI. \
         echo "Building DeepGEMM ${DEEPGEMM_VERSION} from source..." && \
         cd /workspace && \
-        git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${DEEPGEMM_VERSION}" \
-            https://github.com/deepseek-ai/DeepGEMM.git "${deepgemm_dir}" && \
+        /workspace/LoongForge/docker/fetch_source.sh DEEPGEMM_SOURCE "${deepgemm_dir}" DeepGEMM \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${DEEPGEMM_VERSION}" \
+            https://github.com/deepseek-ai/DeepGEMM.git "${deepgemm_dir}" >/dev/null && \
         cd "${deepgemm_dir}" && \
         DG_FORCE_BUILD=1 DG_USE_LOCAL_VERSION=0 pip install -v --no-build-isolation --no-cache-dir . && \
         cd /workspace && rm -rf "${deepgemm_dir}"; \
@@ -116,12 +143,15 @@ RUN set -exuo pipefail && \
     install_flashmla() { \
         local flash_mla_dir=/workspace/flash-mla && \
         echo "Building FlashMLA commit ${FLASH_MLA_COMMIT} from source (no upstream release tag exists)..." && \
-        git clone --recurse-submodules --shallow-submodules --depth 1 \
-            https://github.com/deepseek-ai/FlashMLA.git "${flash_mla_dir}" && \
+        source_mode=$(/workspace/LoongForge/docker/fetch_source.sh FLASHMLA_SOURCE "${flash_mla_dir}" FlashMLA \
+            git clone --recurse-submodules --shallow-submodules --depth 1 \
+            https://github.com/deepseek-ai/FlashMLA.git "${flash_mla_dir}") && \
         cd "${flash_mla_dir}" && \
-        git fetch --depth 1 origin "${FLASH_MLA_COMMIT}" && \
-        git checkout --detach "${FLASH_MLA_COMMIT}" && \
-        git submodule update --init --recursive && \
+        if [ "${source_mode}" = public ]; then \
+            git fetch --depth 1 origin "${FLASH_MLA_COMMIT}" && \
+            git checkout --detach "${FLASH_MLA_COMMIT}" && \
+            git submodule update --init --recursive; \
+        fi && \
         pip install -v . && \
         cd /workspace && rm -rf "${flash_mla_dir}"; \
     }; \
@@ -139,7 +169,7 @@ RUN set -exuo pipefail && \
     install_fast_hadamard_transform && \
     update_flash_attn3_path_for_te && \
     install_deepgemm && \
-    install_flashmla && \
+    if [ "${COMPILE_ENV}" != "ampere" ]; then install_flashmla; fi && \
     install_deepep "${torch_cuda_arch_list}" "${disable_sm90}"
 
 # =========================================================
@@ -147,23 +177,35 @@ RUN set -exuo pipefail && \
 # NOTE: Megatron is managed as a git submodule (third_party/Loong-Megatron)
 #       and is already included via COPY ./LoongForge. No clone or patch needed.
 # =========================================================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=source_manifest,required=false \
+    --mount=type=secret,id=pip_config,required=false \
+    set -exuo pipefail && \
+    . /workspace/LoongForge/docker/configure_python_index.sh && \
     install_transformer_engine() { \
         local transformerEngine_dir=/workspace/TransformerEngine; \
         local TE_TAGS="v2.9" && \
         echo "Installing TransformerEngine ${TE_TAGS}..." && \
         cd /workspace && \
-        git clone https://github.com/NVIDIA/TransformerEngine.git && \
-        cd ${transformerEngine_dir} && \
-        git fetch --all --tags && \
-        git checkout ${TE_TAGS} -b loongforge_${TE_TAGS} && \
+        source_mode=$(/workspace/LoongForge/docker/fetch_source.sh TRANSFORMER_ENGINE_SOURCE \
+            "${transformerEngine_dir}" TransformerEngine \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${TE_TAGS}" \
+            https://github.com/NVIDIA/TransformerEngine.git "${transformerEngine_dir}") && \
+        cd "${transformerEngine_dir}" && \
+        if [ "${source_mode}" = internal ]; then \
+            git init && \
+            git config user.name loongforge-ci && \
+            git config user.email loongforge-ci@localhost && \
+            git add . && git commit -m "Internal source baseline"; \
+        else \
+            git checkout -b "loongforge_${TE_TAGS}"; \
+        fi && \
         git restore . && \
         if [ -f "/workspace/LoongForge/patches/apply_patches.sh" ]; then \
             NON_INTERACTIVE=true bash /workspace/LoongForge/patches/apply_patches.sh \
                 /workspace/LoongForge/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
-        git submodule update --init --recursive && \
+        if [ "${source_mode}" = public ]; then git submodule update --init --recursive; fi && \
         pip install nvidia-mathdx==25.1.1 && \
         ABI=$(python -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))") && \
         export CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=${ABI}" && \
@@ -177,14 +219,21 @@ RUN set -exuo pipefail && \
     install_lerobot() { \
         echo "Installing Lerobot ${LEROBOT_VERSION}..." && \
         torch_ver_before=$(python -c "import torch; print(torch.__version__)") && \
-        pip install "dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@32e97c9096571e82f4ce733f4ac726899e42b368" && \
+        dmuon_mode=$(/workspace/LoongForge/docker/fetch_source.sh DMUON_SOURCE /workspace/dmuon dmuon \
+            git clone https://github.com/X-Square-Robot/dmuon.git /workspace/dmuon) && \
+        if [ "${dmuon_mode}" = public ]; then \
+            git -C /workspace/dmuon checkout --detach "${DMUON_COMMIT}"; \
+        fi && \
+        pip install /workspace/dmuon && rm -rf /workspace/dmuon && \
         cd /workspace/LoongForge/ && \
         uv pip install --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
         cd /workspace && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        git clone --depth 1 --branch "${LEROBOT_VERSION}" https://github.com/huggingface/lerobot.git && \
+        /workspace/LoongForge/docker/fetch_source.sh LEROBOT_SOURCE /workspace/lerobot lerobot \
+            git clone --depth 1 --branch "${LEROBOT_VERSION}" \
+            https://github.com/huggingface/lerobot.git /workspace/lerobot >/dev/null && \
         cd lerobot && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \

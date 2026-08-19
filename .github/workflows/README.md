@@ -31,18 +31,65 @@ Maintainers can request a baseline regression by commenting on a pull request:
 /ok-to-test --env a|p|all [--model model1,model2] [--build-image a|h|p]
 ```
 
-The public environment names are logical aliases. Runner mappings, local test
-configuration paths, and image hooks are supplied through protected variables.
-The default model set is derived from baseline files for the selected environment;
+The public environment names are logical aliases. Protected variables provide
+runner mappings and opaque configuration profile names; machine-specific values
+are resolved by operator-managed hooks on each runner.
+The default CI run currently uses the known-good `deepseek_v2_lite` baseline;
 explicit models must also have a baseline. New commits invalidate previous results.
 The self-hosted runner must provide `LOONGFORGE_REGRESSION_RUNNER`; direct execution
 of PR-provided test scripts is rejected when running inside GitHub Actions.
 
 Operator hook contracts:
 
-- `LOONGFORGE_REGRESSION_RUNNER --source DIR --env a|p --sha SHA [--model LIST] [--candidate-revision REV]`
-- `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|h|p --sha SHA`; stdout must contain only the opaque candidate revision
-- `LOONGFORGE_IMAGE_PROMOTER --target a|h|p|all --pr NUMBER --head-sha SHA --merge-sha SHA`
+- `LOONGFORGE_REGRESSION_RUNNER --source DIR --env a|p --sha SHA [--config-profile PROFILE] [--model LIST] [--candidate-revision REV]`
+- `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|h|p --sha SHA --pr NUMBER --tree-sha SHA`; stdout must contain only the candidate image reference
+- `LOONGFORGE_IMAGE_PROMOTER --target a|h|p --pr NUMBER --head-sha SHA --merge-sha SHA --tree-sha SHA`
+
+Image hooks read `CI_CONFIG_PATH_IMAGE` (or the wrapper's `CI_CONFIG_PATH`) from
+the image runner. The config defines `IMAGE_REGISTRY`, `IMAGE_REPOSITORY_A/H/P`
+and `IMAGE_DEFAULT_TAG_A/H/P`; registry credentials are supplied only through
+the protected `internal-registry` environment. The builder labels each image
+with the PR number, head SHA, tree SHA, target, and candidate revision before
+push. The promoter validates those labels before updating the default tag.
+
+Repository Variables are listed in `.github/ci-variables.example.json`, and the
+image-to-runner contract is defined in `.github/image-mapping.yml`. Each image
+runner provides its own `CI_CONFIG_PATH_IMAGE` environment variable; this is not
+a Repository Variable because runner filesystem roots may differ. Create a
+protected `internal-registry` Environment with required reviewer approval and
+the `INTERNAL_REGISTRY_USERNAME` and `INTERNAL_REGISTRY_PASSWORD` secrets. The
+operator-managed image config must follow the same schema on every image runner.
+
+The complete image lifecycle can be exercised without GitHub Actions:
+
+```bash
+.github/scripts/self_runner/run_image_lifecycle.sh \
+  --source "$PWD" \
+  --config /path/to/image.env \
+  --pr 151 \
+  --target a \
+  --promote
+```
+
+For a lightweight plumbing test, set `IMAGE_DOCKERFILE` to
+`.github/scripts/self_runner/fixtures/Dockerfile`, `IMAGE_PUSH=false`, and
+`IMAGE_LOCAL_ONLY=true`. Remove those three overrides to build and push the
+production Dockerfile.
+
+On the current A800 runner, the production preparation command is:
+
+```bash
+<runner-ci-root>/trigger_gpu_ci_local \
+  --env a \
+  --build-image a \
+  --image-config <runner-ci-root>/image.env \
+  --build-only \
+  --pr 151
+```
+
+Omit `--build-only` only after the candidate push succeeds; that runs the DS
+baseline against the returned candidate reference. Promotion is performed only
+after merge by `internal-image-update.yml`.
 
 Hooks must return nonzero on failure and must not print internal addresses, paths,
 credentials, or physical accelerator details to the GitHub Actions log.

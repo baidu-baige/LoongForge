@@ -1,0 +1,29 @@
+schema_version: 1
+
+targets:
+  a:
+    architecture: ampere
+    build_runner_variable: CI_RUNNER_IMAGE
+    repository_variable: IMAGE_REPOSITORY_A
+    default_tag_variable: IMAGE_DEFAULT_TAG_A
+    validation_environments: [a]
+  h:
+    architecture: hopper
+    build_runner_variable: CI_RUNNER_IMAGE
+    repository_variable: IMAGE_REPOSITORY_H
+    default_tag_variable: IMAGE_DEFAULT_TAG_H
+    validation_environments: [p]
+  p:
+    architecture: blackwell
+    build_runner_variable: CI_RUNNER_IMAGE
+    repository_variable: IMAGE_REPOSITORY_P
+    default_tag_variable: IMAGE_DEFAULT_TAG_P
+    validation_environments: [p]
+
+environments:
+  a:
+    runner_variable: CI_RUNNER_A
+    config_profile_variable: CI_CONFIG_PROFILE_A
+  p:
+    runner_variable: CI_RUNNER_P
+    config_profile_variable: CI_CONFIG_PROFILE_P
