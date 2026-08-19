@@ -6,8 +6,10 @@ FROM ${BASE_IMAGE}
 # =========================================================
 ARG COMPILE_ENV="hopper"
 ARG FLASH_ATTN_VERSION="v2.8.3.post1"
+ARG FAST_HADAMARD_VERSION="v1.1.0.post2"
 ARG DEEPGEMM_VERSION="v2.1.1.post3"
 ARG LEROBOT_VERSION="v0.5.0"
+ARG FLASH_MLA_COMMIT="15f13e5030374295491c5ce31b02d7e63a7772c6"
 
 # =========================================================
 # Environment Variables
@@ -39,6 +41,7 @@ RUN set -exuo pipefail && \
     cd /workspace/LoongForge/ && \
     pip install uv && \
     uv pip install --system --break-system-packages --no-cache -e ".[gpu]" && \
+    pip install --no-cache-dir "nvidia-cudnn-cu13==9.24.0.43" && \
     echo "y" | pip uninstall nvidia-modelopt || true
 
 # =========================================================
@@ -59,6 +62,17 @@ RUN set -exuo pipefail && \
         MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
             pip install --no-build-isolation --no-cache-dir . && \
         cd /workspace && rm -rf "${flash_attn_dir}"; \
+    }; \
+    install_fast_hadamard_transform() { \
+        local fast_hadamard_dir=/workspace/fast-hadamard-transform && \
+        echo "Building fast_hadamard_transform ${FAST_HADAMARD_VERSION} from source..." && \
+        cd /workspace && \
+        git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FAST_HADAMARD_VERSION}" \
+            https://github.com/Dao-AILab/fast-hadamard-transform.git "${fast_hadamard_dir}" && \
+        cd "${fast_hadamard_dir}" && \
+        FAST_HADAMARD_TRANSFORM_FORCE_BUILD=TRUE FAST_HADAMARD_TRANSFORM_FORCE_CXX11_ABI=TRUE \
+            pip install --no-build-isolation --no-cache-dir . && \
+        cd /workspace && rm -rf "${fast_hadamard_dir}"; \
     }; \
     update_flash_attn3_path_for_te() { \
         echo "Updating Flash Attention 3 import path for TE..." && \
@@ -100,12 +114,16 @@ RUN set -exuo pipefail && \
         cd /workspace && rm -rf "${deepgemm_dir}"; \
     }; \
     install_flashmla() { \
-        echo "Installing FlashMLA..." && \
-        git clone https://github.com/deepseek-ai/FlashMLA.git flash-mla && \
-        cd flash-mla && \
+        local flash_mla_dir=/workspace/flash-mla && \
+        echo "Building FlashMLA commit ${FLASH_MLA_COMMIT} from source (no upstream release tag exists)..." && \
+        git clone --recurse-submodules --shallow-submodules --depth 1 \
+            https://github.com/deepseek-ai/FlashMLA.git "${flash_mla_dir}" && \
+        cd "${flash_mla_dir}" && \
+        git fetch --depth 1 origin "${FLASH_MLA_COMMIT}" && \
+        git checkout --detach "${FLASH_MLA_COMMIT}" && \
         git submodule update --init --recursive && \
         pip install -v . && \
-        cd /workspace && rm -rf flash-mla; \
+        cd /workspace && rm -rf "${flash_mla_dir}"; \
     }; \
     if [ "${COMPILE_ENV}" = "ampere" ]; then \
         torch_cuda_arch_list="8.0" && disable_sm90="1"; \
@@ -118,6 +136,7 @@ RUN set -exuo pipefail && \
         exit 1; \
     fi && \
     install_flash_attn "${torch_cuda_arch_list}" && \
+    install_fast_hadamard_transform && \
     update_flash_attn3_path_for_te && \
     install_deepgemm && \
     install_flashmla && \
