@@ -265,6 +265,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         target = torch.ones_like(input_ids) * IGNORE_INDEX
         answer_ids = self.tokenizer.tokenize(answer)
         target[-len(answer_ids) - 1 : -1] = torch.tensor(answer_ids)
+        target[-1] = input_ids[-1]
 
         return input_ids, target, attn_mask, imgs, image_grid_thw
 
@@ -637,6 +638,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         """Generates an encoded multimodal packed vqa sample from a raw sample."""
         n_orig_sample = len(sample.images)
         l_VLMTaskSample = []
+        self.is_packing_enabled = True
         for idx in range(n_orig_sample):
             if _ENERGON_NEEDS_SUBFLAVOR:
                 cur_capsample = VQASample(
@@ -657,9 +659,15 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     answers=sample.answers[idx],
                     context=sample.contexts[idx],
                 )
-            l_VLMTaskSample.append(self.encode_vqa4packing(cur_capsample))
+            encoded = self.encode_vqa(cur_capsample)
+            if encoded is None:
+                raise ValueError(
+                    f"encode_packed_vqa: member {cur_capsample.__key__} was "
+                    "dropped during encode_vqa. Offline-packed artifacts "
+                    "cannot drop individual members."
+                )
+            l_VLMTaskSample.append(encoded)
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
-        self.is_packing_enabled = True
         return l_sample_packed
 
     def encode_packed_multi_mix_qa(
@@ -686,6 +694,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 f"encode_packed_multi_mix_qa: media count ({len(media_list)}) "
                 f"!= context count ({n_orig_sample}) for key={sample.__key__}"
             )
+        self.is_packing_enabled = True
         for idx in range(n_orig_sample):
             contexts = sample.contexts[idx]
             media_group = None if has_text_only else media_list[idx]  # List[Tensor] or List[AVData]
@@ -755,9 +764,15 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 if _ENERGON_NEEDS_SUBFLAVOR:
                     init_kwargs["__subflavor__"] = None
                 cur_sample = MultiMixQASample(**init_kwargs)
-            l_VLMTaskSample.append(self.encode_multi_mix_qa4packing(cur_sample))
+            encoded = self.encode_multi_mix_qa(cur_sample)
+            if encoded is None:
+                raise ValueError(
+                    f"encode_packed_multi_mix_qa: member {cur_sample.__key__} was "
+                    "dropped during encode_multi_mix_qa. Offline-packed artifacts "
+                    "cannot drop individual members."
+                )
+            l_VLMTaskSample.append(encoded)
         l_sample_packed = self.pack_selected_samples(l_VLMTaskSample)
-        self.is_packing_enabled = True
         return l_sample_packed
 
     def encode_packed_chat_mix(
@@ -834,107 +849,6 @@ class VLMTaskEncoder(BaseTaskEncoder):
         l_sample_packed = self.pack_selected_samples(encoded_members)
         self.is_packing_enabled = True
         return l_sample_packed
-
-    def encode_multi_mix_qa4packing(self, sample: MultiMixQASample) -> BaseTaskSample:
-        """Encode MultiMixQASample in Qwen2VL style."""
-
-        if self.args.training_phase == constants.TrainingPhase.SFT:
-            (
-                input_ids,
-                target,
-                attn_mask,
-                imgs,
-                image_grid_thw,
-                pixel_values_videos,
-                video_grid_thw,
-            ) = self.process_sft_qa(
-                sample.messages,
-                sample.system,
-                sample.video,
-                sample.image,
-                tools=getattr(sample, "tools", None),
-            )
-
-            num_tiles = []
-            if sample.video is not None:
-                num_tiles = [len(video_grid_thw)]
-            elif sample.image is not None:
-                num_tiles = [len(image_grid_thw)]
-        else:
-            raise NotImplementedError(
-                f"Unknown training phase {self.args.training_phase}"
-            )
-
-        if self.args.enable_discard_sample:
-            assert (
-                len(input_ids) <= self.args.seq_length
-            ), f"{sample.__key__} input length {len(input_ids)}"
-        elif sample.video is not None:
-            assert (
-                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {video_grid_thw}"
-        elif sample.image is not None:
-            assert (
-                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
-
-        return self._make_sample_from(
-            sample,
-            imgs=imgs,
-            image_grid_thw=image_grid_thw,
-            pixel_values_videos=pixel_values_videos,
-            video_grid_thw=video_grid_thw,
-            num_tiles=num_tiles,
-            tokens=input_ids,
-            labels=target,
-            attn_mask=attn_mask,
-            total_len=len(input_ids),
-        )
-    
-
-    def encode_vqa4packing(self, sample: VQASample) -> BaseTaskSample:
-        """Encode VQASample in Qwen2VL style."""
-
-        text = self.processor.apply_chat_template(
-            [
-                {"role": "user", "content": sample.context},
-                {"role": "assistant", "content": sample.answers},
-            ],
-            tokenize=False,
-        ).replace("<image>", IMAGE_TOKEN_WITH_TAGS)
-
-        if text[-1] == "\n":
-            text = text[:-1]
-            pass
-
-        input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
-            sample.image, text
-        )
-        target = torch.ones_like(input_ids) * IGNORE_INDEX
-        answers = self.tokenizer.tokenize(sample.answers)
-        target[-len(answers) - 1 : -1] = torch.tensor(answers)
-        target[-1] = input_ids[-1]
-
-        num_tiles = [len(image_grid_thw)]
-        if self.args.enable_discard_sample:
-            assert (
-                len(input_ids) <= self.args.seq_length
-            ), f"{sample.__key__} input length {len(input_ids)}"
-        else:
-            assert (
-                image_grid_thw.prod() / 4 <= self.args.seq_length
-            ), f"{sample.__key__} grid_thw: {image_grid_thw}"
-
-        return self._make_sample_from(
-            sample,
-            imgs=imgs,
-            image_grid_thw=image_grid_thw,
-            num_tiles=num_tiles,
-            tokens=input_ids,
-            labels=target,
-            attn_mask=attn_mask,
-            total_len=len(input_ids),
-        )
 
     def process_samples_grid(self, samples):
         """concat grid_thw for image and video"""
