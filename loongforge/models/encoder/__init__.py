@@ -36,6 +36,12 @@ from .moon_vision_models.moon_vision_model import MoonVisionModel
 from .moon_vision_models.moon_vision_config import MoonVisionModelConfig
 from .moon_vision_models.patch_merger_adapter import PatchMergerMLPAdapterConfig
 from .moon_vision_models.patch_merger_adapter import PatchMergerMLP
+from .minicpm_v_4_6_vision_models import (
+    MiniCPMV46Merger,
+    MiniCPMV46MergerConfig,
+    MiniCPMV46VisionConfig,
+    MiniCPMV46VisionModel,
+)
 
 
 AutoModel.register(Qwen2VisionModelConfig, BaseVisionModel)
@@ -50,3 +56,5 @@ AutoModel.register(ErnieVisionConfig, ErnieVisionModel)
 AutoModel.register(ErnieAdapterConfig, ErnieAdapter)
 AutoModel.register(MoonVisionModelConfig, MoonVisionModel)
 AutoModel.register(PatchMergerMLPAdapterConfig, PatchMergerMLP)
+AutoModel.register(MiniCPMV46VisionConfig, MiniCPMV46VisionModel)
+AutoModel.register(MiniCPMV46MergerConfig, MiniCPMV46Merger)

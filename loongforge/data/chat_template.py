@@ -42,6 +42,7 @@ from typing import (
 from loongforge.utils.constants import DataRoles
 from .mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
 from .kimi_k25_plugin import KimiK25Plugin
+from .minicpm_v_4_6_plugin import MiniCPMV46Plugin
 
 
 logger = logging.getLogger(__name__)
@@ -951,6 +952,13 @@ _register_chat_template(
     name="llava-onevision-hf",
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("qwen_chat_hf_training.jinja"),
+)
+
+_register_chat_template(
+    name="minicpm-v-4.6-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("minicpm_v_4_6_hf_training.jinja"),
+    mm_plugin=MiniCPMV46Plugin(image_token="<|image_pad|>"),
 )
 
 _register_chat_template(
