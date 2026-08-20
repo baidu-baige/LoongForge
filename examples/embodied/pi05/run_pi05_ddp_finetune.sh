@@ -96,6 +96,7 @@ DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy ddp
     --ddp-find-unused-parameters
     --ddp-static-graph
+    --ddp-skip-all-reduce-unused-params
     --ddp-gradient-as-bucket-view
     --no-dynamo-optimize-ddp
     --dtype bfloat16
