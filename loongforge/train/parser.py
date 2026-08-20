@@ -23,10 +23,10 @@ from loongforge.models.utils import build_model_config
 from loongforge.train.arguments import loongforge_extra_train_args_provider
 from loongforge.train.get_loss_func import (default_loss_func,
                                                     loss_func_internvl)
-from loongforge.train.get_position_idx_func import (get_mrope_index, 
-                                                            get_position_ids, 
-                                                            get_rope_index_internvl, 
-                                                            get_rope_index_qwen3vl)
+from loongforge.train.get_position_idx_func import (get_mrope_index,
+                                                    get_position_ids,
+                                                    get_rope_index_internvl,
+                                                    get_rope_index_qwen3vl)
 from loongforge.train.validators import (validate_loongforge_extra_args,
                                                 validate_custom_model_args,
                                                 validate_megatron_args)
@@ -52,7 +52,7 @@ def register_custom_resolvers():
     POSITION_IDX_FUNC_MAP = {
         "position_ids": get_position_ids,
         "mrope_ids": get_mrope_index,
-        "rope_ids_internvl": get_rope_index_internvl, 
+        "rope_ids_internvl": get_rope_index_internvl,
         "rope_ids_qwen3vl": get_rope_index_qwen3vl
     }
     LOSS_FUNC_MAP = {

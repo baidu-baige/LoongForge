@@ -1,0 +1,17 @@
+_target_: loongforge.models.encoder.MiniCPMV46MergerConfig
+
+num_layers: 1
+hidden_size: 1152
+ffn_hidden_size: 4608
+num_attention_heads: 1
+kv_channels: 1152
+normalization: "LayerNorm"
+activation_func: ${act:gelu}
+bias_activation_fusion: false
+add_bias_linear: true
+layernorm_epsilon: 1.0e-6
+merge_kernel_size: [2, 2]
+merger_times: 1
+model_type: "minicpm_v_4_6_merger"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/minicpm_v_4_6_merger_convert.yaml

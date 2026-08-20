@@ -1,0 +1,27 @@
+_target_: loongforge.models.encoder.MiniCPMV46VisionConfig
+
+num_layers: 27
+hidden_size: 1152
+ffn_hidden_size: 4304
+num_attention_heads: 16
+num_query_groups: 16
+kv_channels: 72
+patch_size: 14
+image_size: 980
+in_channels: 3
+activation_func: ${act:gelu_tanh}
+bias_activation_fusion: false
+normalization: "LayerNorm"
+add_bias_linear: true
+add_qkv_bias: true
+position_embedding_type: "none"
+attention_dropout: 0.0
+hidden_dropout: 0.0
+layernorm_epsilon: 1.0e-6
+insert_layer_id: 6
+window_kernel_size: [2, 2]
+image_token_id: 248056
+downsample_mode: ${oc.env:DOWNSAMPLE_MODE,16x}
+model_type: "minicpm_v_4_6_vit"
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/minicpm_v_4_6_vit_convert.yaml

@@ -1,0 +1,39 @@
+_target_: loongforge.models.foundation.qwen3_5.qwen3_5_config.Qwen35Config
+
+model_type: minicpm_v_4_6
+
+num_layers: 24
+hidden_size: 1024
+ffn_hidden_size: 3584
+num_attention_heads: 8
+group_query_attention: True
+num_query_groups: 2
+position_embedding_type: "rope"
+add_position_embedding: False
+rotary_interleaved: False
+rotary_percent: 0.25
+apply_rope_fusion: false
+normalization: "RMSNorm"
+layernorm_epsilon: 1.0e-6
+swiglu: True
+attention_dropout: 0.0
+hidden_dropout: 0.0
+add_bias_linear: False
+add_qkv_bias: False
+qk_layernorm: True
+untie_embeddings_and_output_weights: False
+vocab_size_in_config_file: 248094
+make_vocab_size_divisible_by: 1
+kv_channels: 256
+num_experts: null
+moe_ffn_hidden_size: null
+linear_key_head_dim: 128
+linear_value_head_dim: 128
+linear_num_key_heads: 16
+linear_num_value_heads: 16
+linear_conv_kernel_dim: 4
+full_attention_interval: 4
+rotary_base: 10000000
+rotary_emb_func: Qwen35RotaryEmbedding
+mrope_section: [11, 11, 10]
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/minicpm_v_4_6/ckpt_convert/minicpm_v_4_6_llm_convert.yaml

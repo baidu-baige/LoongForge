@@ -1,0 +1,18 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_projector@module: ???
+  - _self_
+
+adapter.mlp.0.linear_1.bias: model.merger.mlp.0.linear_1.bias
+adapter.mlp.0.linear_1.weight: model.merger.mlp.0.linear_1.weight
+adapter.mlp.0.linear_2.bias: model.merger.mlp.0.linear_2.bias
+adapter.mlp.0.linear_2.weight: model.merger.mlp.0.linear_2.weight
+adapter.mlp.0.pre_norm.bias: model.merger.mlp.0.pre_norm.bias
+adapter.mlp.0.pre_norm.weight: model.merger.mlp.0.pre_norm.weight
+
+name_map:
+  mcore:
+    layer_prefix: adapter.

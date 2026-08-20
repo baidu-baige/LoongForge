@@ -132,39 +132,76 @@ Projects trained with LoongForge or its predecessor AIAK-Training-LLM:
 
 LoongForge supports a broad range of [state-of-the-art models](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html) across LLM, VLM, diffusion, and embodied.
 
-| **Modality** | **Architectures** | **Models** |
-|---------------|------------------|------------|
-| **LLM** | DeepSeek-V2 | deepseek-v2-lite, deepseek-v2 |
-| | DeepSeek-V3 | deepseek-v3, deepseek-v32 |
-| | DeepSeek-V4 | deepseek-v4-flash, deepseek-v4-pro |
-| | LLaMA2 | llama2-7b, llama2-13b, llama2-70b |
-| | LLaMA3 | llama3-8b, llama3-70b |
-| | LLaMA3.1 | llama3.1-8b, llama3.1-70b, llama3.1-405b |
-| | Qwen | qwen-1.8b → qwen-72b |
-| | Qwen1.5 | qwen1.5-0.5b → qwen1.5-72b |
-| | Qwen2 | qwen2-0.5b → qwen2-72b |
-| | Qwen2.5 | qwen2.5-0.5b → qwen2.5-72b |
-| | Qwen3 | qwen3-0.6b → qwen3-480b-a35b, qwen3-coder-30b-a3b |
-| | Qwen3-Next | qwen3-next-80b-a3b |
-| | MiniMax | minimax-m2.1, minimax-m2.5, minimax-m2.7 |
-| | MIMO | mimo-7b |
-| | GLM | glm5, glm5.2 |
-| **VLM** | Qwen2.5-VL | qwen2.5-vl-3b → qwen2.5-vl-72b |
-| | Qwen3-VL | qwen3-vl-30b-a3b, qwen3-vl-235b-a22b |
-| | Qwen3.5 | qwen3.5-0.8b → qwen3.5-397b-a17b |
-| | Qwen3.6 | qwen3.6-27b, qwen3.6-35b-a3b |
-| | Kimi-K2.5 | kimi-k2.5, kimi-k2.6 |
-| | GLM-5.2 + Kimi-K2.6 ViT | glm5_2_kimi_k2_6_vit |
-| | ERNIE4.5-VL | ernie4.5vl-28b-a3b |
-| | LLaVA-OneVision-1.5 | llava-onevision-1.5-4b |
-| | InternVL2.5 | internvl2.5-8b → internvl2.5-78b |
-| | InternVL3.5 | internvl3.5-8b → internvl3.5-241b-a28b |
-| | CustomCombinedModel | Flexible ViT + LLM backbone configuration ([example](https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml)) |
-| **Diffusion** | WAN2.2 | wan2.2_i2v_a14b |
-| **Embodied** | Pi | pi0.5 |
-| | GR00T N1.6 | groot_n1_6 |
-| | XVLA | xvla |
-| | FastWAM | fastwam |
+<table width="100%" style="table-layout: fixed; border-collapse: collapse;">
+<colgroup>
+<col width="25%">
+<col width="25%">
+<col width="25%">
+<col width="25%">
+</colgroup>
+<thead align="center" valign="bottom">
+<tr><th width="25%">LLM</th><th width="25%">VLM</th><th width="25%">Diffusion</th><th width="25%">Embodied</th></tr>
+</thead>
+<tbody valign="top">
+<tr>
+<td valign="top">
+<ul>
+<li><a href="examples/deepseek_v2/">DeepSeek-V2</a> ✅</li>
+<li><a href="examples/deepseek_v3/">DeepSeek-V3/V3.2</a> ✅</li>
+<li><a href="examples/deepseek_v4/">DeepSeek-V4</a> ✅</li>
+<li><a href="examples/llama2/">LLaMA2</a> ✅</li>
+<li><a href="examples/llama3/">LLaMA3</a> ✅</li>
+<li><a href="examples/llama3.1/">LLaMA3.1</a> ✅</li>
+<li><a href="examples/qwen/">Qwen</a> ✅</li>
+<li><a href="examples/qwen1.5/">Qwen1.5</a> ✅</li>
+<li><a href="examples/qwen2/">Qwen2</a> ✅</li>
+<li><a href="examples/qwen2.5/">Qwen2.5</a> ✅</li>
+<li><a href="examples/qwen3/">Qwen3</a> ✅</li>
+<li><a href="examples/qwen3_next/">Qwen3-Next</a> ✅</li>
+<li><a href="examples/minimax/">MiniMax-M2.1/2.5/2.7</a> ✅</li>
+<li><a href="examples/mimo/">MIMO</a> ✅</li>
+<li><a href="examples/glm5/">GLM-5</a> ✅</li>
+<li><a href="examples/glm5.2/">GLM-5.2</a> ✅</li>
+</ul>
+</td>
+<td valign="top">
+<ul>
+<li><a href="examples/qwen2.5_vl/">Qwen2.5-VL</a> ✅</li>
+<li><a href="examples/qwen3_vl/">Qwen3-VL</a> ✅</li>
+<li><a href="examples/qwen3.5/">Qwen3.5</a> ✅</li>
+<li><a href="examples/qwen3.6/">Qwen3.6</a> ✅</li>
+<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
+<li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
+<li><a href="examples/glm5.2_vit/">GLM-5.2 + Kimi-K2.6 ViT</a> ✅</li>
+<li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>
+<li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a> ✅</li>
+<li><a href="examples/internvl2.5/">InternVL2.5</a> ✅</li>
+<li><a href="examples/internvl3.5/">InternVL3.5</a> ✅</li>
+<li><a href="examples/custom/">CustomCombinedModel Example</a> ✅</li>
+</ul>
+</td>
+<td valign="top">
+<ul>
+<li><a href="examples/wan/">Wan2.1</a> ✅</li>
+<li><a href="examples/wan/">Wan2.2</a> ✅</li>
+<li><a href="examples/qwen_image/">Qwen-Image</a> ✅</li>
+</ul>
+</td>
+<td valign="top">
+<ul>
+<li><a href="examples/embodied/pi05/">Pi0.5</a> ✅</li>
+<li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a> ✅</li>
+<li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a> ✅</li>
+<li><a href="examples/embodied/xvla/">xVLA</a> ✅</li>
+<li><a href="examples/embodied/fastwam/">FastWAM</a> ✅</li>
+<li><a href="examples/embodied/lingbot_va/">LingBot-VA</a> ✅</li>
+<li><a href="examples/embodied/cosmos3/">Cosmos3</a> ✅</li>
+<li><a href="examples/embodied/dreamzero/">DreamZero</a> ✅</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
 
 ## 🏗️ Repository Layout
 
@@ -233,6 +270,5 @@ Open a GitHub issue for questions, feedback, or feature requests. You can also j
 
 - **WeChat** — [Scan QR code to join](https://github.com/baidu-baige/LoongForge/issues/80#issue-4594463290)
 - **Slack** — [Join here](https://join.slack.com/t/baiduloongforge/shared_invite/zt-3ys3kaq2p-cmdw0nDoaHGOcKibgys5Yw)
-
 
 
