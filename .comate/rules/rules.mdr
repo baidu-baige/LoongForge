@@ -1,4 +1,4 @@
----
+ls---
  alwaysApply: true 
 ---
 # LoongForge 项目开发规则
@@ -25,6 +25,7 @@
   - `encoder/`: 视觉编码器（ViT、InternVL、ERNIE-VL 等）
   - `omni_models/`: 多模态组合（视觉 + LLM 流水线）
   - `peft/`: 参数高效微调（LoRA）
+- **`loongforge/embodied/`**: 具身智能训练子框架，覆盖 VLA 模型、机器人数据集、训练入口及 DDP/FSDP/ZeRO 等并行策略
 - **`configs/models/`**: Hydra YAML 配置，定义模型架构参数
 - **`tools/`**: 检查点转换、数据预处理、FP8 量化等工具
 - **`ops/`**: 自定义 CUDA 内核（如稀疏 MLA 注意力优化）
@@ -138,21 +139,75 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 - `--training-phase`: `pretrain` 或 `sft`
 
 ### 测试执行
+
+项目测试分为两套独立回归体系，修改模型、数据、训练脚本或配置后，应根据影响范围执行对应测试。
+
+#### LLM/VLM E2E 与单元测试
+
+`tests/llm_vlm/` 面向 LLM/VLM 的数据处理、权重转换和短步训练回归：
+
 ```bash
 # 下载测试数据集
-bash tests/download_datasets.sh
+bash tests/llm_vlm/download_datasets.sh
 
-# 运行默认 CI 测试套件
-bash tests/main_start.sh
+# 运行默认 E2E 测试套件
+bash tests/llm_vlm/main_start.sh
 
-# 运行可选回归测试
-bash tests/main_start.sh --optional
+# 运行可选模型回归
+bash tests/llm_vlm/main_start.sh --optional
 
-# 单元测试
-pytest tests/
+# 运行 LLM/VLM 单元测试
+pytest tests/llm_vlm/unit/
 ```
 
-测试配置通过 `tests/main_start.sh` 中的变量管理：`model_names`、`optional_subdir`、`include_optional`、`tasks`、`training_type`、`chip`。
+测试配置通过 `tests/llm_vlm/main_start.sh` 及其配置目录管理，主要参数包括：
+`model_names`、`optional_subdir`、`extra_models`、`include_optional`、`tasks`、
+`training_type`、`chip` 和 baseline 收集开关。新增模型测试时，需要同步准备数据/权重、
+测试 YAML、必要的 Step1 转换配置及 baseline。
+
+#### Embodied/VLA 回归测试
+
+`tests/embodied/` 面向 `loongforge/embodied/` 和 `examples/embodied/` 下训练脚本的端到端回归。
+入口是 `tests/embodied/run.sh`，执行层是 `tests/embodied/cli.py`，测试目标由
+`tests/embodied/config/scripts.yaml` 注册。测试脚本按 manifest 顺序串行执行，并将训练指标
+解析为 `metrics.jsonl` 或从 stdout 回退解析，最后与
+`tests/embodied/baseline/<chip>/<name>.json` 比较。
+
+```bash
+# 列出可用具身回归模型
+bash tests/embodied/run.sh --list_models
+
+# 运行指定芯片上的完整具身回归
+bash tests/embodied/run.sh --chip A800
+
+# 只运行指定模型
+bash tests/embodied/run.sh --chip A800 --models fastwam_ddp fastwam_ddp_zero1
+
+# 首次采集当前芯片 baseline
+bash tests/embodied/run.sh --chip A800 --auto_collect_baseline
+
+# 执行数据准备（默认不触发 BOS 同步）
+bash tests/embodied/run.sh --chip A800 --prepare
+
+# 只检查命令和配置，不实际训练
+bash tests/embodied/run.sh --chip A800 --dry_run
+```
+
+具身回归的关键约定：
+
+- `tests/embodied/config/env.sh` 集中管理 `EMBODIED_CI_ROOT`、
+  `LOCAL_VLA_ARTIFACTS_ROOT`、日志目录、baseline 目录和 BOS 工具路径；切换机器优先修改该文件或使用环境变量覆盖。
+- 训练脚本通过 `tests/embodied/config/scripts.yaml` 注册，路径相对于 `examples/embodied/`；新增模型必须同时添加可执行脚本、manifest 条目和对应 chip baseline。
+- 回归执行器只注入 `OUTPUT_DIR`、`TENSORBOARD_DIR` 及模型专属环境变量，不应依赖测试执行器隐式修改训练参数；训练脚本应支持通过环境变量覆盖数据、权重和输出路径。
+- 默认对 loss 和 `grad_norm` 做硬校验；缺少 baseline、训练脚本非零退出、指标不足、NaN/Inf 或 skipped iteration 均判定失败。性能退化默认只告警，性能明显改善时才自动回写 baseline。
+- `--auto_collect_baseline` 用于采集当前结果，不进行回归比较；baseline 必须按实际芯片分别维护，禁止跨芯片直接复用。
+- 具身模型涉及视频、动作、文本 embedding 和机器人数据时，修改数据预处理、缓存路径或并行策略后，至少运行对应模型的 dry-run，并在具备权重和数据的环境执行实际回归。
+
+测试公共约束：
+
+- 测试配置优先复用现有 YAML、manifest 和环境变量，不在测试代码中硬编码机器专属路径。
+- 新增或修改训练参数时，应检查 GPU/XPU、单卡/多卡及 DDP/FSDP/ZeRO 等受影响组合。
+- 测试失败时先区分数据/权重准备失败、脚本启动失败、指标解析失败和数值回归失败，再决定修复范围。
 
 ## 编码指导原则
 
