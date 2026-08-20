@@ -66,7 +66,7 @@ jobs:
               started_at: new Date().toISOString(),
               output: {
                 title: 'GPU validation requested',
-                summary: `Waiting for environments: ${request.environments.join(', ')}`,
+                summary: `Waiting for suite: ${request.suite}`,
               },
             });
 
@@ -81,9 +81,9 @@ jobs:
                   head_repo: headRepo.full_name || `${headRepo.owner.login}/${headRepo.name}`,
                   head_sha: pull.head.sha,
                   tree_sha: headCommit.commit.tree.sha,
-                  environments: JSON.stringify(request.environments),
+                  suite: request.suite,
                   models: request.models.join(','),
-                  build_image: request.build_image,
+                  build_image: String(request.build_image),
                   gate_check_id: String(check.id),
                 },
               });

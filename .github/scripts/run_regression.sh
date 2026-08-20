@@ -4,23 +4,34 @@
 
 set -euo pipefail
 
-env_code="${1:-}"
-case "$env_code" in
-  a|p) ;;
-  *) echo "unsupported environment" >&2; exit 2 ;;
+suite="${1:-}"
+case "$suite" in
+  llm_vlm|embodied) ;;
+  *) echo "unsupported test suite" >&2; exit 2 ;;
 esac
 
 [[ -d "${SOURCE_DIR:-}" ]] || { echo "SOURCE_DIR is required" >&2; exit 2; }
+
+config="${CI_CONFIG_PATH_IMAGE:-${CI_CONFIG_PATH:-}}"
+if [[ -n "$config" ]]; then
+  [[ -f "$config" ]] || { echo "CI image config not found" >&2; exit 2; }
+  set -a
+  # shellcheck disable=SC1090
+  source "$config"
+  set +a
+fi
+
 launcher="${LOONGFORGE_REGRESSION_RUNNER:-}"
 if [[ -z "$launcher" ]]; then
   launcher="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/self_runner/run_regression.sh"
 fi
 [[ -x "$launcher" ]] || { echo "regression runner is not executable: $launcher" >&2; exit 2; }
-args=(--source "$SOURCE_DIR" --env "$env_code" --sha "${HEAD_SHA:?HEAD_SHA is required}")
-[[ -n "${CI_CONFIG_PROFILE:-}" ]] && args+=(--config-profile "$CI_CONFIG_PROFILE")
-# Keep initial CI coverage bounded to the known-good baseline. Maintainers can
-# explicitly expand a run with MODELS when another baseline is ready.
-models="${MODELS:-deepseek_v2_lite}"
+args=(--source "$SOURCE_DIR" --suite "$suite" --sha "${HEAD_SHA:?HEAD_SHA is required}")
+if [[ "$suite" == embodied ]]; then
+  models="${MODELS:-pi05_ddp}"
+else
+  models="${MODELS:-deepseek_v2_lite}"
+fi
 args+=(--model "$models")
 [[ -n "${CANDIDATE_REVISION:-}" ]] && args+=(--candidate-revision "$CANDIDATE_REVISION")
 exec "$launcher" "${args[@]}"

@@ -8,50 +8,37 @@ created by an organization or repository administrator.
 Create every variable from `.github/ci-variables.example.json`. Replace the
 `P6K` label only if the registered P6K runner uses a different custom label.
 The values of `CI_RUNNER_A`, `CI_RUNNER_P`, and `CI_RUNNER_IMAGE` are JSON
-arrays, not comma-separated strings.
+arrays, not comma-separated strings. `llm_vlm` resolves to `CI_RUNNER_A` and
+`embodied` resolves to `CI_RUNNER_P`; each suite runner builds its own local
+candidate image when `--build-image` is requested.
 
-## Protected environments
+## Protected environment
 
-Create these protected environments:
+The manual `internal-image-update.yml` workflow uses the `internal-registry`
+environment. Require maintainer approval there and store its registry
+credentials as environment secrets. These credentials are not used by the
+per-PR local candidate build.
 
-- `internal-registry`: required maintainer approval; secrets
-  `INTERNAL_REGISTRY_USERNAME` and `INTERNAL_REGISTRY_PASSWORD`.
-- `dockerhub-release`: required maintainer approval; secrets consumed by the
-  release workflow.
-- `pypi-release`: required maintainer approval and trusted publishing configuration.
+Each self-hosted runner must provide `CI_CONFIG_PATH_IMAGE` in its service
+environment, pointing at that machine's private `image.env`. The service
+environment and that file together must provide the values shown in
+`.github/ci-config.example.env`, including the default image, isolated mounts,
+and BuildKit mirror paths. Do not put registry credentials or signed source
+URLs in the repository.
 
-Each image runner must provide `CI_CONFIG_PATH_IMAGE` in its local runner
-environment, pointing at that machine's private `image.env`. Do not put
-registry credentials in that file.
+Each suite runner must also provide a working Docker Buildx plugin because the
+PR Dockerfile uses BuildKit secrets for runner-local APT, PyPI, and source
+mirrors. Verify it with `docker buildx version`; installing the CLI plugin does
+not require restarting the Docker daemon.
 
 ## Runner labels
 
 - A800 regression runner: `self-hosted`, `A800`.
 - P6K regression runner: `self-hosted`, `P6K`.
-- Image build runner: the labels stored in `CI_RUNNER_IMAGE`; it may reuse the
-  A800 runner because DeepEP compilation does not require a GPU.
-
-## Rulesets
-
-Configure `master-protection` for the default branch with:
-
-- pull requests required;
-- one approval from someone other than the PR author;
-- stale approvals dismissed after a push;
-- approval required for the latest push;
-- CODEOWNERS review required;
-- all review threads resolved;
-- `ci-gate` as the only required status check;
-- branch deletion and force pushes disabled;
-- squash merge as the only enabled merge method.
-
-Configure `release-tag-protection` for `refs/tags/v*` so only maintainers can
-create release tags and tags cannot be updated or deleted.
+- Candidate images are built on the same suite runner that performs regression.
+- `CI_RUNNER_IMAGE` is used only for explicit, operator-dispatched promotion.
 
 ## First activation
 
-The dispatcher and scheduled workflows must exist on the default branch before
-GitHub will accept `workflow_dispatch` or `issue_comment` events. Validate this
-PR locally, merge it without enabling the required check, configure the
-settings above, then enable `ci-gate` as required after its first successful
-run on a follow-up PR.
+Enable the `ok-to-test` and `gpu-regression` workflows on the default branch,
+then verify a maintainer-dispatched run on each labeled suite runner.

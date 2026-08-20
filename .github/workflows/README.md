@@ -17,8 +17,8 @@ This directory contains the CI/CD workflows for LoongForge.
 | `auto-label.yml` | Issue/PR open/edit | Auto-label issues and PRs by keyword matching |
 | `issue-notify.yml` | Issue opened | Notify Ruliu group when a new issue is opened |
 | `ok-to-test.yml` | Maintainer issue comment | Validate and dispatch `/ok-to-test` GPU regression |
-| `gpu-regression.yml` | Workflow dispatch | Run exact-SHA baseline regression on logical environments |
-| `internal-image-update.yml` | Merged PR + manual | Validate and promote candidate internal images |
+| `gpu-regression.yml` | Workflow dispatch | Run exact-SHA baseline regression for one model suite |
+| `internal-image-update.yml` | Manual dispatch | Run operator-managed image promotion after merge |
 | `release.yml` | Version tag `vX.Y.Z` | Publish PyPI package and Docker Hub release image |
 
 The CPU checks are run manually through `ci-gate.yml` when needed. Operational workflows such as `submodule-sync.yml` may retain their own dispatch inputs.
@@ -28,71 +28,38 @@ The CPU checks are run manually through `ci-gate.yml` when needed. Operational w
 Maintainers can request a baseline regression by commenting on a pull request:
 
 ```
-/ok-to-test --env a|p|all [--model model1,model2] [--build-image a|h|p]
+/ok-to-test --suite llm_vlm|embodied [--model model1,model2] [--build-image]
 ```
 
-The public environment names are logical aliases. Protected variables provide
-runner mappings and opaque configuration profile names; machine-specific values
-are resolved by operator-managed hooks on each runner.
-The default CI run currently uses the known-good `deepseek_v2_lite` baseline;
-explicit models must also have a baseline. New commits invalidate previous results.
-The self-hosted runner must provide `LOONGFORGE_REGRESSION_RUNNER`; direct execution
-of PR-provided test scripts is rejected when running inside GitHub Actions.
+The suite selects both the test collection and its self-hosted runner:
+`llm_vlm` runs on A800 and `embodied` runs on P6K. With `--build-image`, that
+same runner builds the PR's Dockerfile and immediately runs regression against
+the local candidate image. Without it, regression uses the runner's configured
+default image. Explicit models must belong to the selected suite and have a
+baseline. New commits invalidate previous results.
+The workflow points `LOONGFORGE_REGRESSION_RUNNER` at the trusted base-branch
+checkout; direct execution of a PR-provided runner hook is rejected inside
+GitHub Actions.
 
 Operator hook contracts:
 
-- `LOONGFORGE_REGRESSION_RUNNER --source DIR --env a|p --sha SHA [--config-profile PROFILE] [--model LIST] [--candidate-revision REV]`
-- `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|h|p --sha SHA --pr NUMBER --tree-sha SHA`; stdout must contain only the candidate image reference
-- `LOONGFORGE_IMAGE_PROMOTER --target a|h|p --pr NUMBER --head-sha SHA --merge-sha SHA --tree-sha SHA`
+- `LOONGFORGE_REGRESSION_RUNNER --source DIR --suite llm_vlm|embodied --sha SHA [--model LIST] [--candidate-revision REV]`
+- `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|p --sha SHA --pr NUMBER --tree-sha SHA`; stdout must contain only the local candidate image reference
+- `LOONGFORGE_IMAGE_PROMOTER --target a|h|p|all --pr NUMBER --head-sha SHA --merge-sha SHA`; promotion is manual and operator-managed
 
-Image hooks read `CI_CONFIG_PATH_IMAGE` (or the wrapper's `CI_CONFIG_PATH`) from
-the image runner. The config defines `IMAGE_REGISTRY`, `IMAGE_REPOSITORY_A/H/P`
-and `IMAGE_DEFAULT_TAG_A/H/P`; registry credentials are supplied only through
-the protected `internal-registry` environment. The builder labels each image
-with the PR number, head SHA, tree SHA, target, and candidate revision before
-push. The promoter validates those labels before updating the default tag.
+The builder reads `CI_CONFIG_PATH_IMAGE` (or the wrapper's `CI_CONFIG_PATH`) from
+the selected suite runner. It uses the Dockerfile's `BASE_IMAGE` build argument
+and runner-local BuildKit secrets for APT, PyPI, and source mirrors. Candidate
+images are tagged locally with the PR number, head SHA, tree SHA, target, and
+candidate revision; this workflow never pushes or promotes them.
 
-Repository Variables are listed in `.github/ci-variables.example.json`, and the
-image-to-runner contract is defined in `.github/image-mapping.yml`. Each image
-runner provides its own `CI_CONFIG_PATH_IMAGE` environment variable; this is not
-a Repository Variable because runner filesystem roots may differ. Create a
-protected `internal-registry` Environment with required reviewer approval and
-the `INTERNAL_REGISTRY_USERNAME` and `INTERNAL_REGISTRY_PASSWORD` secrets. The
-operator-managed image config must follow the same schema on every image runner.
+Repository Variables are listed in `.github/ci-variables.example.json`. Every
+self-hosted runner provides its own `CI_CONFIG_PATH_IMAGE` environment variable;
+this is not a Repository Variable because runner filesystem roots may differ.
 
-The complete image lifecycle can be exercised without GitHub Actions:
-
-```bash
-.github/scripts/self_runner/run_image_lifecycle.sh \
-  --source "$PWD" \
-  --config /path/to/image.env \
-  --pr 151 \
-  --target a \
-  --promote
-```
-
-For a lightweight plumbing test, set `IMAGE_DOCKERFILE` to
-`.github/scripts/self_runner/fixtures/Dockerfile`, `IMAGE_PUSH=false`, and
-`IMAGE_LOCAL_ONLY=true`. Remove those three overrides to build and push the
-production Dockerfile.
-
-On the current A800 runner, the production preparation command is:
-
-```bash
-<runner-ci-root>/trigger_gpu_ci_local \
-  --env a \
-  --build-image a \
-  --image-config <runner-ci-root>/image.env \
-  --build-only \
-  --pr 151
-```
-
-Omit `--build-only` only after the candidate push succeeds; that runs the DS
-baseline against the returned candidate reference. Promotion is performed only
-after merge by `internal-image-update.yml`.
-
-Hooks must return nonzero on failure and must not print internal addresses, paths,
-credentials, or physical accelerator details to the GitHub Actions log.
+Hooks must return nonzero on failure and must not print credentials, signed
+source URLs, runner-local filesystem paths, or physical accelerator details to
+the GitHub Actions log.
 
 ## PR Title Convention
 

@@ -173,11 +173,14 @@ Once installed, the SPDX header check and other hygiene hooks run automatically 
 
 ### GPU validation
 
-Maintainers may request GPU validation with `/ok-to-test --env a|p|all`. The
-default run currently validates only the known-good `deepseek_v2_lite` baseline;
-`--model` requests a baseline-backed subset for additional validation. Runner and machine configuration is
-provided through protected Environment variables, and new commits invalidate
-previous GPU results.
+Maintainers may request GPU validation with `/ok-to-test --suite llm_vlm|embodied`.
+The suite selects the corresponding self-hosted runner (`llm_vlm` on A800 and
+`embodied` on P6K). The default run uses the suite's known-good baseline;
+`--model` requests a baseline-backed subset for additional validation. Add
+`--build-image` to build the PR Dockerfile on that same runner and run the
+regression against the local candidate image. Runner and machine configuration
+is provided through protected Environment variables, and new commits
+invalidate previous GPU results.
 
 ## License
 By contributing to LoongForge, you agree that your original contributions will be licensed under the [Apache License 2.0](https://github.com/baidu-baige/LoongForge/blob/master/LICENSE).

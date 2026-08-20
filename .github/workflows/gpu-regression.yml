@@ -16,7 +16,7 @@ on:
         required: false
         default: ''
         type: string
-      environments:
+      suite:
         required: true
         type: string
       models:
@@ -24,7 +24,8 @@ on:
         type: string
       build_image:
         required: false
-        type: string
+        default: false
+        type: boolean
       gate_check_id:
         required: false
         default: ''
@@ -36,14 +37,13 @@ permissions:
   checks: write
 
 concurrency:
-  group: gpu-regression-${{ inputs.pr_number }}-${{ inputs.head_sha }}
+  group: gpu-regression-${{ inputs.pr_number }}-${{ inputs.head_sha }}-${{ inputs.suite }}
   cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     outputs:
-      envs: ${{ steps.validate.outputs.envs }}
       tree_sha: ${{ steps.validate.outputs.tree_sha }}
     steps:
       - id: validate
@@ -53,9 +53,8 @@ jobs:
           HEAD_REPO: ${{ inputs.head_repo }}
           HEAD_SHA: ${{ inputs.head_sha }}
           INPUT_TREE_SHA: ${{ inputs.tree_sha }}
-          ENVIRONMENTS: ${{ inputs.environments }}
+          SUITE: ${{ inputs.suite }}
           MODELS: ${{ inputs.models }}
-          BUILD_IMAGE: ${{ inputs.build_image }}
         with:
           script: |
             const { data: pull } = await github.rest.pulls.get({
@@ -71,24 +70,13 @@ jobs:
               core.setFailed('head repository does not match the pull request');
               return;
             }
-            let envs;
-            try {
-              envs = JSON.parse(process.env.ENVIRONMENTS);
-            } catch (error) {
-              core.setFailed(`invalid logical environment list: ${error.message}`);
-              return;
-            }
-            if (!Array.isArray(envs) || envs.some((env) => !['a', 'p'].includes(env))) {
-              core.setFailed('invalid logical environment list');
+            if (!['llm_vlm', 'embodied'].includes(process.env.SUITE)) {
+              core.setFailed('invalid test suite');
               return;
             }
             const models = process.env.MODELS.split(',').map((model) => model.trim()).filter(Boolean);
-            if (models.some((model) => !/^[A-Za-z0-9._-]+$/.test(model))) {
+            if (models.some((model) => !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(model))) {
               core.setFailed('invalid model list');
-              return;
-            }
-            if (process.env.BUILD_IMAGE && !['a', 'h', 'p'].includes(process.env.BUILD_IMAGE)) {
-              core.setFailed('invalid image build target');
               return;
             }
             const [headOwner, headRepo] = process.env.HEAD_REPO.split('/');
@@ -102,16 +90,12 @@ jobs:
               core.setFailed('tree SHA does not match the immutable head commit');
               return;
             }
-            core.setOutput('envs', JSON.stringify([...new Set(envs)]));
             core.setOutput('tree_sha', treeSha);
 
-  image:
+  llm_vlm:
     needs: validate
-    if: ${{ inputs.build_image != '' }}
-    runs-on: ${{ fromJSON(vars.CI_RUNNER_IMAGE) }}
-    environment: internal-registry
-    outputs:
-      revision: ${{ steps.candidate.outputs.revision }}
+    if: ${{ needs.validate.result == 'success' && inputs.suite == 'llm_vlm' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_A) }}
     steps:
       - name: Checkout trusted CI scripts
         uses: actions/checkout@v4
@@ -138,59 +122,36 @@ jobs:
           test -z "$(git -C source submodule status --recursive | grep -E '^[+-]' || true)"
       - id: candidate
         name: Build candidate image
+        if: ${{ inputs.build_image }}
         env:
-          BUILD_TARGET: ${{ inputs.build_image }}
           PR_NUMBER: ${{ inputs.pr_number }}
           HEAD_SHA: ${{ inputs.head_sha }}
           TREE_SHA: ${{ needs.validate.outputs.tree_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
-          INTERNAL_REGISTRY_USERNAME: ${{ secrets.INTERNAL_REGISTRY_USERNAME }}
-          INTERNAL_REGISTRY_PASSWORD: ${{ secrets.INTERNAL_REGISTRY_PASSWORD }}
-        run: trusted-ci/.github/scripts/build_candidate_image.sh "$BUILD_TARGET"
-
-  a:
-    needs: [validate, image]
-    if: ${{ always() && needs.validate.result == 'success' && contains(fromJSON(needs.validate.outputs.envs), 'a') && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
-    runs-on: ${{ fromJSON(vars.CI_RUNNER_A) }}
-    steps:
-      - name: Checkout trusted CI scripts
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          path: trusted-ci
-          persist-credentials: false
-          submodules: false
-      - name: Checkout immutable PR source
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.head_repo }}
-          ref: ${{ inputs.head_sha }}
-          path: source
-          persist-credentials: false
-          submodules: recursive
+        run: trusted-ci/.github/scripts/build_candidate_image.sh a
       - id: regression
-        name: Run baseline regression
+        name: Run LLM/VLM regression
         env:
-          CI_CONFIG_PROFILE: ${{ vars.CI_CONFIG_PROFILE_A }}
           MODELS: ${{ inputs.models }}
-          CANDIDATE_REVISION: ${{ needs.image.outputs.revision }}
+          CANDIDATE_REVISION: ${{ steps.candidate.outputs.revision }}
           HEAD_SHA: ${{ inputs.head_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
-        run: trusted-ci/.github/scripts/run_regression.sh a
+          LOONGFORGE_REGRESSION_RUNNER: ${{ github.workspace }}/trusted-ci/.github/scripts/self_runner/run_regression.sh
+        run: trusted-ci/.github/scripts/run_regression.sh llm_vlm
       - name: Upload regression logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gpu-a-${{ inputs.pr_number }}-${{ inputs.head_sha }}
+          name: gpu-llm-vlm-${{ inputs.pr_number }}-${{ inputs.head_sha }}
           path: |
             ${{ steps.regression.outputs.result_json }}
             ${{ steps.regression.outputs.log_file }}
           if-no-files-found: error
           retention-days: 7
 
-  p:
-    needs: [validate, image]
-    if: ${{ always() && needs.validate.result == 'success' && contains(fromJSON(needs.validate.outputs.envs), 'p') && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+  embodied:
+    needs: validate
+    if: ${{ needs.validate.result == 'success' && inputs.suite == 'embodied' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER_P) }}
     steps:
       - name: Checkout trusted CI scripts
@@ -208,20 +169,37 @@ jobs:
           path: source
           persist-credentials: false
           submodules: recursive
-      - id: regression
-        name: Run baseline regression
+      - name: Verify immutable source tree
         env:
-          CI_CONFIG_PROFILE: ${{ vars.CI_CONFIG_PROFILE_P }}
+          EXPECTED_HEAD_SHA: ${{ inputs.head_sha }}
+          EXPECTED_TREE_SHA: ${{ needs.validate.outputs.tree_sha }}
+        run: |
+          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git -C source rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE_SHA"
+          test -z "$(git -C source submodule status --recursive | grep -E '^[+-]' || true)"
+      - id: candidate
+        name: Build candidate image
+        if: ${{ inputs.build_image }}
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          TREE_SHA: ${{ needs.validate.outputs.tree_sha }}
+          SOURCE_DIR: ${{ github.workspace }}/source
+        run: trusted-ci/.github/scripts/build_candidate_image.sh p
+      - id: regression
+        name: Run embodied regression
+        env:
           MODELS: ${{ inputs.models }}
-          CANDIDATE_REVISION: ${{ needs.image.outputs.revision }}
+          CANDIDATE_REVISION: ${{ steps.candidate.outputs.revision }}
           HEAD_SHA: ${{ inputs.head_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
-        run: trusted-ci/.github/scripts/run_regression.sh p
+          LOONGFORGE_REGRESSION_RUNNER: ${{ github.workspace }}/trusted-ci/.github/scripts/self_runner/run_regression.sh
+        run: trusted-ci/.github/scripts/run_regression.sh embodied
       - name: Upload regression logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gpu-p-${{ inputs.pr_number }}-${{ inputs.head_sha }}
+          name: gpu-embodied-${{ inputs.pr_number }}-${{ inputs.head_sha }}
           path: |
             ${{ steps.regression.outputs.result_json }}
             ${{ steps.regression.outputs.log_file }}
@@ -229,7 +207,7 @@ jobs:
           retention-days: 7
 
   finalize:
-    needs: [validate, image, a, p]
+    needs: [validate, llm_vlm, embodied]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -237,24 +215,19 @@ jobs:
         env:
           CHECK_ID: ${{ inputs.gate_check_id }}
           VALIDATE_RESULT: ${{ needs.validate.result }}
-          IMAGE_RESULT: ${{ needs.image.result }}
-          A_RESULT: ${{ needs.a.result }}
-          P_RESULT: ${{ needs.p.result }}
-          ENVIRONMENTS: ${{ inputs.environments }}
-          BUILD_IMAGE: ${{ inputs.build_image }}
+          LLM_VLM_RESULT: ${{ needs.llm_vlm.result }}
+          EMBODIED_RESULT: ${{ needs.embodied.result }}
+          SUITE: ${{ inputs.suite }}
           HEAD_SHA: ${{ inputs.head_sha }}
           PR_NUMBER: ${{ inputs.pr_number }}
         with:
           script: |
-            const results = Object.fromEntries([
-              ['validate', process.env.VALIDATE_RESULT],
-              ['image', process.env.IMAGE_RESULT],
-              ['a', process.env.A_RESULT],
-              ['p', process.env.P_RESULT],
-            ]);
-            const requested = JSON.parse(process.env.ENVIRONMENTS);
-            const requiredJobs = ['validate', ...requested];
-            if (process.env.BUILD_IMAGE) requiredJobs.push('image');
+            const results = {
+              validate: process.env.VALIDATE_RESULT,
+              llm_vlm: process.env.LLM_VLM_RESULT,
+              embodied: process.env.EMBODIED_RESULT,
+            };
+            const requiredJobs = ['validate', process.env.SUITE];
             const failed = requiredJobs.filter((name) => results[name] !== 'success');
 
             const cpuNames = ['check', 'spdx', 'gitleaks', 'ruff', 'build', 'actionlint'];
@@ -301,7 +274,7 @@ jobs:
               completed_at: new Date().toISOString(),
               output: {
                 title: conclusion === 'success' ? 'GPU validation passed' : 'GPU validation failed',
-                summary: `Results: ${JSON.stringify(results)}`,
+                summary: `Suite: ${process.env.SUITE}; results: ${JSON.stringify(results)}`,
               },
             });
             if (failed.length) core.setFailed(`failed checks: ${failed.join(', ')}`);

@@ -1,7 +1,5 @@
 {
   "CI_RUNNER_A": "[\"self-hosted\",\"A800\"]",
   "CI_RUNNER_P": "[\"self-hosted\",\"P6K\"]",
-  "CI_RUNNER_IMAGE": "[\"self-hosted\",\"A800\"]",
-  "CI_CONFIG_PROFILE_A": "a",
-  "CI_CONFIG_PROFILE_P": "p"
+  "CI_RUNNER_IMAGE": "[\"self-hosted\",\"A800\"]"
 }

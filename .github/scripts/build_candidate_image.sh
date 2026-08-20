@@ -6,7 +6,7 @@ set -euo pipefail
 
 target="${1:-}"
 case "$target" in
-  a|h|p) ;;
+  a|p) ;;
   *) echo "unsupported image target" >&2; exit 2 ;;
 esac
 

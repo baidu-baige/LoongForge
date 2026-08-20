@@ -13,8 +13,8 @@
 ## CI, GPU, and Image Impact
 
 - [ ] This change affects dependencies, Dockerfiles, patches, or runtime environments.
-- [ ] GPU validation is required. Suggested environment: `a` / `p` / `all`.
-- [ ] An internal CI image needs to be rebuilt.
+- [ ] GPU validation is required. Suggested suite: `llm_vlm` / `embodied`.
+- [ ] A local candidate image should be built during GPU validation.
 - [ ] No GPU or image validation is required.
 
 ## Reviewer Notes

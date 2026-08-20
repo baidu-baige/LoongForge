@@ -31,14 +31,23 @@ COPY ./LoongForge /workspace/LoongForge
 # ======================== Basic Environment Setup ========================
 RUN --mount=type=secret,id=apt_sources,required=false \
     set -exuo pipefail && \
+    apt_options=() && \
     if [ -s /run/secrets/apt_sources ]; then \
-        cp /run/secrets/apt_sources /etc/apt/sources.list && \
-        rm -f /etc/apt/sources.list.d/ubuntu.sources; \
+        apt_options=(-o Dir::Etc::sourcelist=/run/secrets/apt_sources -o Dir::Etc::sourceparts=-); \
     fi && \
-    mkdir -p /tmp && chmod -R 777 /tmp && \
-    apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    apt_log=$(mktemp) && \
+    apt_run() { \
+        if ! apt-get -qq "${apt_options[@]}" "$@" >"${apt_log}" 2>&1; then \
+            echo "apt-get command failed: $1" >&2; \
+            rm -f "${apt_log}"; \
+            return 1; \
+        fi; \
+    } && \
+    apt_run update && \
+    DEBIAN_FRONTEND=noninteractive apt_run install -y \
         tzdata bc tree pwgen nodejs iproute2 ffmpeg=7:6.1.1-3ubuntu5 && \
+    rm -f "${apt_log}" && \
+    mkdir -p /tmp && chmod -R 777 /tmp && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     rm -rf /var/lib/apt/lists/*
 
@@ -47,10 +56,10 @@ RUN --mount=type=secret,id=pip_config,required=false \
     set -exuo pipefail && \
     . /workspace/LoongForge/docker/configure_python_index.sh && \
     cd /workspace/LoongForge/ && \
-    pip install uv && \
-    uv pip install --system --break-system-packages --no-cache -e ".[gpu]" && \
-    pip install --no-cache-dir "nvidia-cudnn-cu13==9.24.0.43" && \
-    echo "y" | pip uninstall nvidia-modelopt || true
+    pip --disable-pip-version-check --quiet install uv && \
+    uv pip install --quiet --system --break-system-packages --no-cache -e ".[gpu]" && \
+    pip --disable-pip-version-check --quiet install --no-cache-dir "nvidia-cudnn-cu13==9.24.0.43" && \
+    pip --disable-pip-version-check --quiet uninstall -y nvidia-modelopt || true
 
 # =========================================================
 # Specific Environment Setup
@@ -69,11 +78,11 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             https://github.com/Dao-AILab/flash-attention.git "${flash_attn_dir}" >/dev/null && \
         cd "${flash_attn_dir}" && \
         MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
-            pip install --no-build-isolation --no-cache-dir . && \
+            pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir . && \
         if [ "${COMPILE_ENV}" != "ampere" ]; then \
             cd "${flash_attn_dir}/hopper" && \
             MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
-                pip install --no-build-isolation --no-cache-dir .; \
+                pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir .; \
         fi && \
         cd /workspace && rm -rf "${flash_attn_dir}"; \
     }; \
@@ -86,7 +95,7 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             https://github.com/Dao-AILab/fast-hadamard-transform.git "${fast_hadamard_dir}" >/dev/null && \
         cd "${fast_hadamard_dir}" && \
         FAST_HADAMARD_TRANSFORM_FORCE_BUILD=TRUE FAST_HADAMARD_TRANSFORM_FORCE_CXX11_ABI=TRUE \
-            pip install --no-build-isolation --no-cache-dir . && \
+            pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir . && \
         cd /workspace && rm -rf "${fast_hadamard_dir}"; \
     }; \
     update_flash_attn3_path_for_te() { \
@@ -115,7 +124,7 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             } && \
             wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb && \
             dpkg -i cuda-keyring_1.1-1_all.deb && \
-            apt-get update && apt-get -y install nvshmem && \
+            apt-get -qq update && apt-get -qq -y install nvshmem && \
             rm cuda-keyring_1.1-1_all.deb; \
         fi && \
         /workspace/LoongForge/docker/fetch_source.sh DEEPEP_SOURCE "${deepep_dir}" DeepEP \
@@ -124,7 +133,8 @@ RUN --mount=type=secret,id=source_manifest,required=false \
         if [ "${disable_sm90}" = "1" ]; then \
             sed -i '/disable_nvshmem = False/s/False/True/' setup.py; \
         fi && \
-        TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" DISABLE_SM90_FEATURES="${disable_sm90}" pip install --no-build-isolation . && \
+        TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" DISABLE_SM90_FEATURES="${disable_sm90}" \
+            pip --disable-pip-version-check --quiet install --no-build-isolation . && \
         cd /workspace && rm -rf "${deepep_dir}" && \
         rm -rf /var/lib/apt/lists/*; \
     }; \
@@ -137,7 +147,8 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${DEEPGEMM_VERSION}" \
             https://github.com/deepseek-ai/DeepGEMM.git "${deepgemm_dir}" >/dev/null && \
         cd "${deepgemm_dir}" && \
-        DG_FORCE_BUILD=1 DG_USE_LOCAL_VERSION=0 pip install -v --no-build-isolation --no-cache-dir . && \
+        DG_FORCE_BUILD=1 DG_USE_LOCAL_VERSION=0 \
+            pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir . && \
         cd /workspace && rm -rf "${deepgemm_dir}"; \
     }; \
     install_flashmla() { \
@@ -152,7 +163,7 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             git checkout --detach "${FLASH_MLA_COMMIT}" && \
             git submodule update --init --recursive; \
         fi && \
-        pip install -v . && \
+        pip --disable-pip-version-check --quiet install . && \
         cd /workspace && rm -rf "${flash_mla_dir}"; \
     }; \
     if [ "${COMPILE_ENV}" = "ampere" ]; then \
@@ -206,13 +217,13 @@ RUN --mount=type=secret,id=source_manifest,required=false \
                 ${transformerEngine_dir}; \
         fi && \
         if [ "${source_mode}" = public ]; then git submodule update --init --recursive; fi && \
-        pip install nvidia-mathdx==25.1.1 && \
+        pip --disable-pip-version-check --quiet install nvidia-mathdx==25.1.1 && \
         ABI=$(python -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))") && \
         export CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=${ABI}" && \
         export NVTE_WITH_USERBUFFERS=1 && \
         export MPI_HOME=/usr/local/mpi && \
         export NVTE_FRAMEWORK=pytorch && \
-        pip3 install --no-build-isolation . && \
+        pip3 --disable-pip-version-check --quiet install --no-build-isolation . && \
         echo "TransformerEngine install completed" && \
         cd /workspace && rm -rf ${transformerEngine_dir}; \
     }; \
@@ -224,9 +235,9 @@ RUN --mount=type=secret,id=source_manifest,required=false \
         if [ "${dmuon_mode}" = public ]; then \
             git -C /workspace/dmuon checkout --detach "${DMUON_COMMIT}"; \
         fi && \
-        pip install /workspace/dmuon && rm -rf /workspace/dmuon && \
+        pip --disable-pip-version-check --quiet install /workspace/dmuon && rm -rf /workspace/dmuon && \
         cd /workspace/LoongForge/ && \
-        uv pip install --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
+        uv pip install --quiet --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
         cd /workspace && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
@@ -241,11 +252,11 @@ RUN --mount=type=secret,id=source_manifest,required=false \
         # Keep the NGC PyTorch build instead of replacing it with a PyPI wheel. \
         sed -i -E 's/"torch>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torch>=\1"/; s/"torchvision>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torchvision>=\1"/' pyproject.toml && \
         grep -E '"torch(vision)?>=' pyproject.toml && \
-        pip install "transformers==5.3.0" && \
-        pip install --no-build-isolation . && \
-        pip install "numpy==1.26.4" && \
-        pip install "scipy==1.15.3" && \
-        pip install --no-deps -U "torchcodec==0.11.1" && \
+        pip --disable-pip-version-check --quiet install "transformers==5.3.0" && \
+        pip --disable-pip-version-check --quiet install --no-build-isolation . && \
+        pip --disable-pip-version-check --quiet install "numpy==1.26.4" && \
+        pip --disable-pip-version-check --quiet install "scipy==1.15.3" && \
+        pip --disable-pip-version-check --quiet install --no-deps -U "torchcodec==0.11.1" && \
         torch_ver_after=$(python -c "import torch; print(torch.__version__)") && \
         if [ "${torch_ver_before}" != "${torch_ver_after}" ]; then \
             echo "[ERROR] torch was replaced during Lerobot install: ${torch_ver_before} -> ${torch_ver_after}" && \

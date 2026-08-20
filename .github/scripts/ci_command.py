@@ -18,9 +18,9 @@ MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 @dataclass(frozen=True)
 class TestRequest:
-    environments: list[str]
+    suite: str
     models: list[str]
-    build_image: str
+    build_image: bool
 
 
 class CommandError(ValueError):
@@ -42,17 +42,16 @@ def parse_command(comment: str) -> TestRequest:
         raise CommandError("comment must start with /ok-to-test")
 
     parser = _Parser(add_help=False, allow_abbrev=False)
-    parser.add_argument("--env", required=True, choices=("a", "p", "all"))
+    parser.add_argument("--suite", required=True, choices=("llm_vlm", "embodied"))
     parser.add_argument("--model", default="")
-    parser.add_argument("--build-image", default="", choices=("", "a", "h", "p"))
+    parser.add_argument("--build-image", action="store_true")
     args = parser.parse_args(tokens[1:])
 
     models = [item.strip() for item in args.model.split(",") if item.strip()]
     invalid = [model for model in models if not MODEL_RE.fullmatch(model)]
     if invalid:
         raise CommandError(f"invalid model name: {invalid[0]}")
-    environments = ["a", "p"] if args.env == "all" else [args.env]
-    return TestRequest(environments=environments, models=models, build_image=args.build_image)
+    return TestRequest(suite=args.suite, models=models, build_image=args.build_image)
 
 
 def main() -> int:

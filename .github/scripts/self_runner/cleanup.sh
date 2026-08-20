@@ -7,7 +7,7 @@ set -euo pipefail
 retention_days="${LOONGFORGE_LOG_RETENTION_DAYS:-7}"
 container_retention_hours="${LOONGFORGE_CONTAINER_RETENTION_HOURS:-24}"
 runner_log_root="${LOONGFORGE_RUNNER_LOG_ROOT:?LOONGFORGE_RUNNER_LOG_ROOT is required}"
-pfs_root="${LOONGFORGE_PFS_ROOT:?LOONGFORGE_PFS_ROOT is required}"
+output_root="${LOONGFORGE_HOST_OUTPUT_ROOT:?LOONGFORGE_HOST_OUTPUT_ROOT is required}"
 docker_bin="${DOCKER_BIN:-docker}"
 
 [[ "$retention_days" =~ ^[0-9]+$ ]] || {
@@ -19,7 +19,8 @@ docker_bin="${DOCKER_BIN:-docker}"
   exit 2
 }
 
-find "$pfs_root" -maxdepth 1 -type d -name 'logs_*' \
+find "$output_root" -mindepth 1 -maxdepth 1 -type d \
+  \( -name 'logs_*' -o -name 'run_*' \) \
   -mtime "+$retention_days" -exec rm -rf -- {} +
 find "$runner_log_root" -type f -mtime "+$retention_days" -delete
 
