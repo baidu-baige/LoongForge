@@ -1,0 +1,101 @@
+name: GPU CI Dispatch
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+  actions: write
+
+concurrency:
+  group: gpu-dispatch-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/ok-to-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: request
+        name: Parse command
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          payload="$(printf '%s' "$COMMENT" | python .github/scripts/ci_command.py)"
+          echo "payload=$payload" >> "$GITHUB_OUTPUT"
+      - name: Validate request and dispatch immutable revision
+        uses: actions/github-script@v7
+        env:
+          REQUEST: ${{ steps.request.outputs.payload }}
+        with:
+          script: |
+            const request = JSON.parse(process.env.REQUEST);
+            const association = context.payload.comment.author_association;
+            if (!['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association)) {
+              core.setFailed('only repository collaborators may trigger GPU CI');
+              return;
+            }
+
+            const { data: pull } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const headRepo = pull.head.repo || { owner: { login: context.repo.owner }, name: context.repo.repo };
+            const { data: headCommit } = await github.rest.repos.getCommit({
+              owner: headRepo.owner.login,
+              repo: headRepo.name,
+              ref: pull.head.sha,
+            });
+            const { data: check } = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'ci-gate',
+              head_sha: pull.head.sha,
+              external_id: `loongforge-gpu:${pull.number}:${pull.head.sha}`,
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+              output: {
+                title: 'GPU validation requested',
+                summary: `Waiting for suite: ${request.suite}`,
+              },
+            });
+
+            try {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'gpu-regression.yml',
+                ref: pull.base.ref,
+                inputs: {
+                  pr_number: String(pull.number),
+                  head_repo: headRepo.full_name || `${headRepo.owner.login}/${headRepo.name}`,
+                  head_sha: pull.head.sha,
+                  tree_sha: headCommit.commit.tree.sha,
+                  suite: request.suite,
+                  models: request.models.join(','),
+                  build_image: String(request.build_image),
+                  gate_check_id: String(check.id),
+                },
+              });
+            } catch (error) {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: check.id,
+                status: 'completed',
+                conclusion: 'failure',
+                completed_at: new Date().toISOString(),
+                output: { title: 'GPU dispatch failed', summary: 'The regression workflow could not be dispatched.' },
+              });
+              throw error;
+            }

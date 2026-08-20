@@ -1,10 +1,16 @@
-ARG BASE_IMAGE="nvcr.io/nvidia/pytorch:25.06-py3"
+ARG BASE_IMAGE="nvcr.io/nvidia/pytorch:26.06-py3"
 FROM ${BASE_IMAGE}
 
 # =========================================================
 # Build Arguments
 # =========================================================
 ARG COMPILE_ENV="hopper"
+ARG FLASH_ATTN_VERSION="v2.8.3.post1"
+ARG FAST_HADAMARD_VERSION="v1.1.0.post2"
+ARG DEEPGEMM_VERSION="v2.1.1.post3"
+ARG LEROBOT_VERSION="v0.5.0"
+ARG FLASH_MLA_COMMIT="15f13e5030374295491c5ce31b02d7e63a7772c6"
+ARG DMUON_COMMIT="32e97c9096571e82f4ce733f4ac726899e42b368"
 
 # =========================================================
 # Environment Variables
@@ -19,37 +25,78 @@ WORKDIR /workspace
 # =========================================================
 # Base System Configuration + APT Source Replacement
 # =========================================================
+RUN rm -rf /workspace/LoongForge
 COPY ./LoongForge /workspace/LoongForge
 
 # ======================== Basic Environment Setup ========================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=apt_sources,required=false \
+    set -exuo pipefail && \
+    apt_options=() && \
+    if [ -s /run/secrets/apt_sources ]; then \
+        apt_options=(-o Dir::Etc::sourcelist=/run/secrets/apt_sources -o Dir::Etc::sourceparts=-); \
+    fi && \
+    apt_log=$(mktemp) && \
+    apt_run() { \
+        if ! apt-get -qq "${apt_options[@]}" "$@" >"${apt_log}" 2>&1; then \
+            echo "apt-get command failed: $1" >&2; \
+            rm -f "${apt_log}"; \
+            return 1; \
+        fi; \
+    } && \
+    apt_run update && \
+    DEBIAN_FRONTEND=noninteractive apt_run install -y \
+        tzdata bc tree pwgen nodejs iproute2 ffmpeg=7:6.1.1-3ubuntu5 && \
+    rm -f "${apt_log}" && \
     mkdir -p /tmp && chmod -R 777 /tmp && \
-    apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    apt-get install -y bc tree pwgen nodejs iproute2 && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get install -y ffmpeg=7:6.1.1-3ubuntu5
+    rm -rf /var/lib/apt/lists/*
 
 # ======================== Install Base Requirements ========================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=pip_config,required=false \
+    set -exuo pipefail && \
+    . /workspace/LoongForge/docker/configure_python_index.sh && \
     cd /workspace/LoongForge/ && \
-    pip install uv && \
-    uv pip install --system --break-system-packages --no-cache -e ".[gpu]" && \
-    echo "y" | pip uninstall nvidia-modelopt || true
+    pip --disable-pip-version-check --quiet install uv && \
+    uv pip install --quiet --system --break-system-packages --no-cache -e ".[gpu]" && \
+    pip --disable-pip-version-check --quiet install --no-cache-dir "nvidia-cudnn-cu13==9.24.0.43" && \
+    pip --disable-pip-version-check --quiet uninstall -y nvidia-modelopt || true
 
 # =========================================================
 # Specific Environment Setup
 # =========================================================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=source_manifest,required=false \
+    --mount=type=secret,id=pip_config,required=false \
+    set -exuo pipefail && \
+    . /workspace/LoongForge/docker/configure_python_index.sh && \
     install_flash_attn() { \
-        echo "Installing Flash Attention 2 & 3..." && \
-        wget -q -O flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        pip install flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        rm flash_attn-2.8.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        wget -q -O flash_attn_3-3.0.0b1+20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl https://github.com/windreamer/flash-attention3-wheels/releases/download/2026.01.26-f6c4937/flash_attn_3-3.0.0b1%2B20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl && \
-        pip install flash_attn_3-3.0.0b1+20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl && \
-        rm flash_attn_3-3.0.0b1+20260126.cu129torch280cxx11abitrue.438325-cp39-abi3-linux_x86_64.whl; \
+        local torch_cuda_arch_list="$1" && \
+        local flash_attn_dir=/workspace/flash-attention && \
+        echo "Building Flash Attention 2 & 3 ${FLASH_ATTN_VERSION} from source for CUDA arch ${torch_cuda_arch_list}..." && \
+        cd /workspace && \
+        /workspace/LoongForge/docker/fetch_source.sh FLASH_ATTN_SOURCE "${flash_attn_dir}" flash-attention \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FLASH_ATTN_VERSION}" \
+            https://github.com/Dao-AILab/flash-attention.git "${flash_attn_dir}" >/dev/null && \
+        cd "${flash_attn_dir}" && \
+        MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
+            pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir . && \
+        if [ "${COMPILE_ENV}" != "ampere" ]; then \
+            cd "${flash_attn_dir}/hopper" && \
+            MAX_JOBS=$(nproc) FLASH_ATTENTION_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" \
+                pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir .; \
+        fi && \
+        cd /workspace && rm -rf "${flash_attn_dir}"; \
+    }; \
+    install_fast_hadamard_transform() { \
+        local fast_hadamard_dir=/workspace/fast-hadamard-transform && \
+        echo "Building fast_hadamard_transform ${FAST_HADAMARD_VERSION} from source..." && \
+        cd /workspace && \
+        /workspace/LoongForge/docker/fetch_source.sh FAST_HADAMARD_SOURCE "${fast_hadamard_dir}" fast-hadamard-transform \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${FAST_HADAMARD_VERSION}" \
+            https://github.com/Dao-AILab/fast-hadamard-transform.git "${fast_hadamard_dir}" >/dev/null && \
+        cd "${fast_hadamard_dir}" && \
+        FAST_HADAMARD_TRANSFORM_FORCE_BUILD=TRUE FAST_HADAMARD_TRANSFORM_FORCE_CXX11_ABI=TRUE \
+            pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir . && \
+        cd /workspace && rm -rf "${fast_hadamard_dir}"; \
     }; \
     update_flash_attn3_path_for_te() { \
         echo "Updating Flash Attention 3 import path for TE..." && \
@@ -65,112 +112,157 @@ RUN set -exuo pipefail && \
     install_deepep() { \
         local torch_cuda_arch_list="$1" && \
         local disable_sm90="$2" && \
+        local deepep_dir=/workspace/DeepEP && \
         echo "Installing DeepEP..." && \
-        wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb && \
-        dpkg -i cuda-keyring_1.1-1_all.deb && \
-        apt-get update && \
-        apt-get -y install nvshmem && \
-        rm cuda-keyring_1.1-1_all.deb && \
-        git clone https://github.com/deepseek-ai/DeepEP.git && \
-        cd DeepEP && \
-        git fetch --all --tags && \
-        git checkout v1.2.1 && \
-        TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" DISABLE_SM90_FEATURES="${disable_sm90}" pip install --no-build-isolation . && \
-        cd /workspace && rm -rf DeepEP && \
-        rm -rf /var/lib/apt/lists/*; \
-    }; \
-    upgrade_cudnn_9_16_0() { \
-        echo "Upgrading cuDNN to 9.16.0..." && \
-        UBUNTU_VERSION=$(cat /etc/os-release | grep VERSION_ID | cut -d '"' -f 2 | tr -d '.') && \
-        wget -q https://developer.download.nvidia.com/compute/cudnn/9.16.0/local_installers/cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
-        dpkg -i cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
-        cp /var/cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0/cudnn-*-keyring.gpg /usr/share/keyrings/ && \
-        apt-get update && \
-        apt-get -y install cudnn9-cuda-12 && \
-        dpkg -l | grep cudnn && \
-        rm -f cudnn-local-repo-ubuntu${UBUNTU_VERSION}-9.16.0_1.0-1_amd64.deb && \
+        if [ -d /usr/include/nvshmem_13 ] && [ -d /usr/lib/x86_64-linux-gnu/nvshmem/13 ]; then \
+            mkdir -p "${NVSHMEM_DIR}" && \
+            ln -sfn /usr/include/nvshmem_13 "${NVSHMEM_DIR}/include" && \
+            ln -sfn /usr/lib/x86_64-linux-gnu/nvshmem/13 "${NVSHMEM_DIR}/lib"; \
+        else \
+            [ ! -s /run/secrets/source_manifest ] || { \
+                echo "[ERROR] internal build base image does not provide NVSHMEM"; exit 1; \
+            } && \
+            wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb && \
+            dpkg -i cuda-keyring_1.1-1_all.deb && \
+            apt-get -qq update && apt-get -qq -y install nvshmem && \
+            rm cuda-keyring_1.1-1_all.deb; \
+        fi && \
+        /workspace/LoongForge/docker/fetch_source.sh DEEPEP_SOURCE "${deepep_dir}" DeepEP \
+            git clone --depth 1 --branch v1.2.1 https://github.com/deepseek-ai/DeepEP.git "${deepep_dir}" >/dev/null && \
+        cd "${deepep_dir}" && \
+        if [ "${disable_sm90}" = "1" ]; then \
+            sed -i '/disable_nvshmem = False/s/False/True/' setup.py; \
+        fi && \
+        TORCH_CUDA_ARCH_LIST="${torch_cuda_arch_list}" DISABLE_SM90_FEATURES="${disable_sm90}" \
+            pip --disable-pip-version-check --quiet install --no-build-isolation . && \
+        cd /workspace && rm -rf "${deepep_dir}" && \
         rm -rf /var/lib/apt/lists/*; \
     }; \
     install_deepgemm() { \
-        echo "Installing DeepGEMM..." && \
-        wget -q https://github.com/deepseek-ai/DeepGEMM/releases/download/v2.1.1.post3/deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        pip install -v deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl && \
-        rm deep_gemm-2.1.1+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl; \
+        local deepgemm_dir=/workspace/DeepGEMM && \
+        # Published wheels are tied to torch 2.8; build against the NGC image's PyTorch ABI. \
+        echo "Building DeepGEMM ${DEEPGEMM_VERSION} from source..." && \
+        cd /workspace && \
+        /workspace/LoongForge/docker/fetch_source.sh DEEPGEMM_SOURCE "${deepgemm_dir}" DeepGEMM \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${DEEPGEMM_VERSION}" \
+            https://github.com/deepseek-ai/DeepGEMM.git "${deepgemm_dir}" >/dev/null && \
+        cd "${deepgemm_dir}" && \
+        DG_FORCE_BUILD=1 DG_USE_LOCAL_VERSION=0 \
+            pip --disable-pip-version-check --quiet install --no-build-isolation --no-cache-dir . && \
+        cd /workspace && rm -rf "${deepgemm_dir}"; \
     }; \
     install_flashmla() { \
-        echo "Installing FlashMLA..." && \
-        git clone https://github.com/deepseek-ai/FlashMLA.git flash-mla && \
-        cd flash-mla && \
-        git submodule update --init --recursive && \
-        pip install -v . && \
-        cd /workspace && rm -rf flash-mla; \
+        local flash_mla_dir=/workspace/flash-mla && \
+        echo "Building FlashMLA commit ${FLASH_MLA_COMMIT} from source (no upstream release tag exists)..." && \
+        source_mode=$(/workspace/LoongForge/docker/fetch_source.sh FLASHMLA_SOURCE "${flash_mla_dir}" FlashMLA \
+            git clone --recurse-submodules --shallow-submodules --depth 1 \
+            https://github.com/deepseek-ai/FlashMLA.git "${flash_mla_dir}") && \
+        cd "${flash_mla_dir}" && \
+        if [ "${source_mode}" = public ]; then \
+            git fetch --depth 1 origin "${FLASH_MLA_COMMIT}" && \
+            git checkout --detach "${FLASH_MLA_COMMIT}" && \
+            git submodule update --init --recursive; \
+        fi && \
+        pip --disable-pip-version-check --quiet install . && \
+        cd /workspace && rm -rf "${flash_mla_dir}"; \
     }; \
-    install_flash_attn && \
-    update_flash_attn3_path_for_te && \
-    upgrade_cudnn_9_16_0 && \
-    install_deepgemm && \
-    install_flashmla && \
     if [ "${COMPILE_ENV}" = "ampere" ]; then \
-        install_deepep "8.0" "1"; \
+        torch_cuda_arch_list="8.0" && disable_sm90="1"; \
     elif [ "${COMPILE_ENV}" = "hopper" ]; then \
-        install_deepep "9.0" "0"; \
+        torch_cuda_arch_list="9.0" && disable_sm90="0"; \
     elif [ "${COMPILE_ENV}" = "blackwell" ]; then \
-        install_deepep "10.0" "0"; \
+        torch_cuda_arch_list="10.0" && disable_sm90="0"; \
     else \
         echo "[ERROR] Unsupported COMPILE_ENV value: ${COMPILE_ENV}" && \
         exit 1; \
-    fi
+    fi && \
+    install_flash_attn "${torch_cuda_arch_list}" && \
+    install_fast_hadamard_transform && \
+    update_flash_attn3_path_for_te && \
+    install_deepgemm && \
+    if [ "${COMPILE_ENV}" != "ampere" ]; then install_flashmla; fi && \
+    install_deepep "${torch_cuda_arch_list}" "${disable_sm90}"
 
 # =========================================================
 # TransformerEngine / Lerobot
 # NOTE: Megatron is managed as a git submodule (third_party/Loong-Megatron)
 #       and is already included via COPY ./LoongForge. No clone or patch needed.
 # =========================================================
-RUN set -exuo pipefail && \
+RUN --mount=type=secret,id=source_manifest,required=false \
+    --mount=type=secret,id=pip_config,required=false \
+    set -exuo pipefail && \
+    . /workspace/LoongForge/docker/configure_python_index.sh && \
     install_transformer_engine() { \
         local transformerEngine_dir=/workspace/TransformerEngine; \
         local TE_TAGS="v2.9" && \
         echo "Installing TransformerEngine ${TE_TAGS}..." && \
         cd /workspace && \
-        git clone https://github.com/NVIDIA/TransformerEngine.git && \
-        cd ${transformerEngine_dir} && \
-        git fetch --all --tags && \
-        git checkout ${TE_TAGS} -b loongforge_${TE_TAGS} && \
+        source_mode=$(/workspace/LoongForge/docker/fetch_source.sh TRANSFORMER_ENGINE_SOURCE \
+            "${transformerEngine_dir}" TransformerEngine \
+            git clone --recurse-submodules --shallow-submodules --depth 1 --branch "${TE_TAGS}" \
+            https://github.com/NVIDIA/TransformerEngine.git "${transformerEngine_dir}") && \
+        cd "${transformerEngine_dir}" && \
+        if [ "${source_mode}" = internal ]; then \
+            git init && \
+            git config user.name loongforge-ci && \
+            git config user.email loongforge-ci@localhost && \
+            git add . && git commit -m "Internal source baseline"; \
+        else \
+            git checkout -b "loongforge_${TE_TAGS}"; \
+        fi && \
         git restore . && \
         if [ -f "/workspace/LoongForge/patches/apply_patches.sh" ]; then \
             NON_INTERACTIVE=true bash /workspace/LoongForge/patches/apply_patches.sh \
                 /workspace/LoongForge/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
-        git submodule update --init --recursive && \
-        pip install nvidia-mathdx==25.1.1 && \
+        if [ "${source_mode}" = public ]; then git submodule update --init --recursive; fi && \
+        pip --disable-pip-version-check --quiet install nvidia-mathdx==25.1.1 && \
         ABI=$(python -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))") && \
         export CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=${ABI}" && \
         export NVTE_WITH_USERBUFFERS=1 && \
         export MPI_HOME=/usr/local/mpi && \
         export NVTE_FRAMEWORK=pytorch && \
-        pip3 install --no-build-isolation . && \
+        pip3 --disable-pip-version-check --quiet install --no-build-isolation . && \
         echo "TransformerEngine install completed" && \
         cd /workspace && rm -rf ${transformerEngine_dir}; \
     }; \
     install_lerobot() { \
-        echo "Installing Lerobot..." && \
-        pip install "dmuon @ git+https://github.com/X-Square-Robot/dmuon.git" && \
+        echo "Installing Lerobot ${LEROBOT_VERSION}..." && \
+        torch_ver_before=$(python -c "import torch; print(torch.__version__)") && \
+        dmuon_mode=$(/workspace/LoongForge/docker/fetch_source.sh DMUON_SOURCE /workspace/dmuon dmuon \
+            git clone https://github.com/X-Square-Robot/dmuon.git /workspace/dmuon) && \
+        if [ "${dmuon_mode}" = public ]; then \
+            git -C /workspace/dmuon checkout --detach "${DMUON_COMMIT}"; \
+        fi && \
+        pip --disable-pip-version-check --quiet install /workspace/dmuon && rm -rf /workspace/dmuon && \
         cd /workspace/LoongForge/ && \
-        uv pip install --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
+        uv pip install --quiet --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
         cd /workspace && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
         fi && \
-        git clone https://github.com/huggingface/lerobot.git && \
+        /workspace/LoongForge/docker/fetch_source.sh LEROBOT_SOURCE /workspace/lerobot lerobot \
+            git clone --depth 1 --branch "${LEROBOT_VERSION}" \
+            https://github.com/huggingface/lerobot.git /workspace/lerobot >/dev/null && \
         cd lerobot && \
         if [ -f "requirements-ubuntu.txt" ]; then \
             sed -i '/evdev/d' requirements-ubuntu.txt; \
         fi && \
-        pip install --no-build-isolation ".[pi]" && \
-        pip install "numpy==1.26.4" && \
-        pip install "scipy==1.15.3" && \
-        echo "Lerobot installation completed"; \
+        # Keep the NGC PyTorch build instead of replacing it with a PyPI wheel. \
+        sed -i -E 's/"torch>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torch>=\1"/; s/"torchvision>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torchvision>=\1"/' pyproject.toml && \
+        grep -E '"torch(vision)?>=' pyproject.toml && \
+        pip --disable-pip-version-check --quiet install "transformers==5.3.0" && \
+        pip --disable-pip-version-check --quiet install --no-build-isolation . && \
+        pip --disable-pip-version-check --quiet install "numpy==1.26.4" && \
+        pip --disable-pip-version-check --quiet install "scipy==1.15.3" && \
+        pip --disable-pip-version-check --quiet install --no-deps -U "torchcodec==0.11.1" && \
+        torch_ver_after=$(python -c "import torch; print(torch.__version__)") && \
+        if [ "${torch_ver_before}" != "${torch_ver_after}" ]; then \
+            echo "[ERROR] torch was replaced during Lerobot install: ${torch_ver_before} -> ${torch_ver_after}" && \
+            exit 1; \
+        fi && \
+        echo "Lerobot installation completed (torch kept at ${torch_ver_after})"; \
     }; \
     install_transformer_engine && \
     install_lerobot

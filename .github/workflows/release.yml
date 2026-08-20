@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          tag_version="${GITHUB_REF_NAME#v}"
+          [[ "$tag_version" == "$package_version" ]] || {
+            echo "tag and package versions do not match" >&2
+            exit 1
+          }
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: pypi-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade build twine
+      - run: python -m build --sdist --wheel --outdir dist/
+      - run: twine check dist/*
+      - run: python -m pip install --no-deps dist/*.whl
+      - run: python -c "import loongforge"
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  docker:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: dockerhub-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ${{ vars.DOCKERHUB_IMAGE }}:${{ needs.validate.outputs.version }}
+            ${{ vars.DOCKERHUB_IMAGE }}:latest

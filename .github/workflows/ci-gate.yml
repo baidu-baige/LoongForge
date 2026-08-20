@@ -1,0 +1,74 @@
+name: CI Gate
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    uses: ./.github/workflows/pr-title.yml
+
+  license:
+    uses: ./.github/workflows/license.yml
+
+  secrets:
+    uses: ./.github/workflows/secrets.yml
+
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  build:
+    uses: ./.github/workflows/build.yml
+
+  workflow-lint:
+    uses: ./.github/workflows/workflow-lint.yml
+
+  gate:
+    name: ci-gate
+    if: ${{ always() }}
+    needs: [pr-title, license, secrets, lint, build, workflow-lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required checks
+        env:
+          PR_TITLE_RESULT: ${{ needs.pr-title.result }}
+          LICENSE_RESULT: ${{ needs.license.result }}
+          SECRETS_RESULT: ${{ needs.secrets.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          WORKFLOW_LINT_RESULT: ${{ needs.workflow-lint.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failed=0
+          for check in \
+            "pr-title:$PR_TITLE_RESULT" \
+            "license:$LICENSE_RESULT" \
+            "secrets:$SECRETS_RESULT" \
+            "lint:$LINT_RESULT" \
+            "build:$BUILD_RESULT" \
+            "workflow-lint:$WORKFLOW_LINT_RESULT"; do
+            name="${check%%:*}"
+            result="${check#*:}"
+            echo "$name: $result"
+            if [ "$result" != "success" ]; then
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more required CI checks did not succeed."
+            exit 1
+          fi
+
+          echo "All required CI checks passed."

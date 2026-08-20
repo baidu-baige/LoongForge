@@ -108,6 +108,7 @@ vla = [
     "distlib==0.4.0",
     "docstring_parser==0.18.0",
     "draccus==0.10.0",
+    "dm-tree==0.1.10",
     "easydict==1.13",
     "Farama-Notifications==0.0.6",
     "filetype==1.2.0",
@@ -124,6 +125,7 @@ vla = [
     "modelscope==1.38.1",
     "modelscope-hub==0.1.7",
     "multi-storage-client==0.51.0",
+    "nvidia-cudnn-cu13==9.24.0.43",
     "nodeenv==1.10.0",
     "opentelemetry-api==1.43.0",
     "orderly-set==5.5.0",
@@ -143,7 +145,8 @@ vla = [
     "stringzilla==4.6.2",
     "termcolor==3.3.0",
     "toml==0.10.2",
-    "torchcodec==0.7.0",
+    "torchao==0.16.0",
+    "torchcodec==0.11.1",
     "torchdata==0.11.0",
     "torchdiffeq==0.2.5",
     "trove-classifiers==2026.1.14.14",
@@ -198,6 +201,17 @@ internal = [
 no-build-isolation-package = [
     "transformer-engine",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["third_party", "patches"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "E501", "F", "S506"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401", "F403"]
 
 [tool.hatch.build]
 packages = ["loongforge"]

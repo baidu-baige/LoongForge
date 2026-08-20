@@ -34,7 +34,7 @@ Note: `setup_env.py` only handles TransformerEngine. Megatron-LM (Loong-Megatron
 
 ### Build Package
 ```bash
-sh build.sh    # Creates output tarball
+python -m build --sdist --wheel --outdir dist/
 ```
 
 ## Running Tests
