@@ -511,37 +511,52 @@ def cooker_packed_multi_mix_qa(sample: dict):
     images = None
     videos = None
 
-
     if media_type == "image":
         images = []
-        for group in media_files:
+        for idx, group in enumerate(media_files):
             image_group = []
             if isinstance(group, (list, tuple)):
                 for name in group:
                     img = sample.get(name)
-                    if img is not None:
-                        image_group.append(img)
+                    if img is None:
+                        raise ValueError(
+                            f"[cooker_packed_multi_mix_qa] missing image media '{name}' "
+                            f"for key={sample['__key__']}.q{idx:03d}"
+                        )
+                    image_group.append(img)
             elif isinstance(group, str):
                 img = sample.get(group)
-                if img is not None:
-                    image_group.append(img)
+                if img is None:
+                    raise ValueError(
+                        f"[cooker_packed_multi_mix_qa] missing image media '{group}' "
+                        f"for key={sample['__key__']}.q{idx:03d}"
+                    )
+                image_group.append(img)
             images.append(image_group)
         if all(len(g) == 0 for g in images):
             images = None
         videos = None
     elif media_type == "video":
         videos = []
-        for group in media_files:
+        for idx, group in enumerate(media_files):
             video_group = []
             if isinstance(group, (list, tuple)):
                 for name in group:
                     vid = sample.get(name)
-                    if vid is not None:
-                        video_group.append(vid)
+                    if vid is None:
+                        raise ValueError(
+                            f"[cooker_packed_multi_mix_qa] missing video media '{name}' "
+                            f"for key={sample['__key__']}.q{idx:03d}"
+                        )
+                    video_group.append(vid)
             elif isinstance(group, str):
                 vid = sample.get(group)
-                if vid is not None:
-                    video_group.append(vid)
+                if vid is None:
+                    raise ValueError(
+                        f"[cooker_packed_multi_mix_qa] missing video media '{group}' "
+                        f"for key={sample['__key__']}.q{idx:03d}"
+                    )
+                video_group.append(vid)
             videos.append(video_group)
 
         if all(len(g) == 0 for g in videos):
