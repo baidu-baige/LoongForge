@@ -20,7 +20,8 @@ jobs:
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - name: Validate workflows
-        run: "$(go env GOPATH)/bin/actionlint"
+        run: |
+          "$(go env GOPATH)/bin/actionlint"
       - name: Validate YAML documents
         run: |
           python -m pip install 'PyYAML==6.0.2'
