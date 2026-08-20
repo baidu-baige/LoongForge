@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 set -eo pipefail
 
 root_path=$(dirname "$(readlink -f "$0")")

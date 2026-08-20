@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Embodied regression entry point (runs inside the container).
 #
 # This wrapper only sources config/env.sh — all parameter parsing, validation,

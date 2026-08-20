@@ -4,17 +4,26 @@
 """
 HiRobotApi
 """
+import os
 import urllib2
 
 
+def _resolve_access_token(access_token):
+    if access_token is None:
+        access_token = os.environ.get('HI_ROBOT_ACCESS_TOKEN')
+    if not access_token:
+        raise RuntimeError('HI_ROBOT_ACCESS_TOKEN is not set')
+    return access_token
+
+
 def pushInfo(info, toid='4249864', base_url='http://apiin.im.baidu.com/api/msg/groupmsgsend', 
-        Hi_Robot_Access_Token='d0f21c5bc973f3e8f14ebb268ab5cd223'):
+        Hi_Robot_Access_Token=None):
     """
     pushInfo
     """
+    Hi_Robot_Access_Token = _resolve_access_token(Hi_Robot_Access_Token)
     data_url = 'access_token=%s' % (Hi_Robot_Access_Token)
     url = base_url + '?' + data_url
-    print url
     info = '{"message": {"header": {"toid": [%s]}, "body": [{"type": "MD", "content": \"%s\"}]}}' % (toid, info) 
     if isinstance(info, bytes) or isinstance(info, bytearray):
         info = unicode(info, "utf-8").encode('utf8')
@@ -27,13 +36,13 @@ def pushInfo(info, toid='4249864', base_url='http://apiin.im.baidu.com/api/msg/g
     print urllib2.urlopen(req).read()
 
 def pushATInfo(info, toid='4249864', base_url='http://apiin.im.baidu.com/api/msg/groupmsgsend', 
-        Hi_Robot_Access_Token='d0f21c5bc973f3e8f14ebb268ab5cd223', atuserid='', faq_url=''):
+        Hi_Robot_Access_Token=None, atuserid='', faq_url=''):
     """
     pushInfo
     """
+    Hi_Robot_Access_Token = _resolve_access_token(Hi_Robot_Access_Token)
     data_url = 'access_token=%s' % (Hi_Robot_Access_Token)
     url = base_url + '?' + data_url
-    print url
     info = '''
         {
             "message": {
@@ -63,4 +72,3 @@ def pushATInfo(info, toid='4249864', base_url='http://apiin.im.baidu.com/api/msg
 
 if __name__ == '__main__':
     pushInfo('test', toid='4249864')
-
