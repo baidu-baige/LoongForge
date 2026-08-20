@@ -228,13 +228,14 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
         return image
 
-    def _process(self, image, text):
+    def _process(self, image, text, add_special_tokens=True):
         """ " Process the data to get the model's input"""
         inputs = self.processor(
             text=text,
             images=image,
             padding=True,
             return_tensors="pt",
+            add_special_tokens=add_special_tokens,
         )
         input_ids = inputs["input_ids"][0]
         attn_mask = inputs["attention_mask"][0].logical_not()
@@ -267,9 +268,11 @@ class VLMTaskEncoder(BaseTaskEncoder):
         ).replace("<image>", IMAGE_TOKEN_WITH_TAGS)
         if text[-1] == "\n":
             text = text[:-1]
-        input_ids, _, imgs, image_grid_thw, attn_mask = self._process(image, text)
+        input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
+            image, text, add_special_tokens=False
+        )
         target = torch.ones_like(input_ids) * IGNORE_INDEX
-        answer_ids = self.tokenizer.tokenize(answer)
+        answer_ids = self.tokenizer.tokenize(answer, add_special_tokens=False)
         target[-len(answer_ids) - 1 : -1] = torch.tensor(answer_ids)
 
         return input_ids, target, attn_mask, imgs, image_grid_thw
@@ -936,10 +939,10 @@ class VLMTaskEncoder(BaseTaskEncoder):
             pass
 
         input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
-            sample.image, text
+            sample.image, text, add_special_tokens=False
         )
         target = torch.ones_like(input_ids) * IGNORE_INDEX
-        answers = self.tokenizer.tokenize(sample.answers)
+        answers = self.tokenizer.tokenize(sample.answers, add_special_tokens=False)
         target[-len(answers) - 1 : -1] = torch.tensor(answers)
         target[-1] = input_ids[-1]
 
