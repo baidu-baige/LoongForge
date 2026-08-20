@@ -22,12 +22,51 @@
 # The memory saved by ZeRO-1 is what makes the larger --per-device-batch-size
 # below affordable relative to the plain DDP script.
 #
-# Two optional ZeRO knobs are left off by default:
-#   --zero-parameters-as-bucket-view    further cuts peak memory, but can clash
-#                                       with torch.compile + the DDP reducer.
+# One optional ZeRO knob is left off by default:
 #   --zero-master-param-dtype fp32      rank-local fp32 master params, broadcast
 #                                       after each step. Better numerics under
 #                                       bf16 training at some bandwidth cost.
+#
+# ── Throughput recipe ─────────────────────────────────────────
+# The flags below the ZeRO block were each measured on 8xA800 (LIBERO-10, 224x448
+# two-camera, 9 frames), 110 iterations with 10 warmed up and 100 timed, comparing
+# paired runs inside one sweep (across sweeps the same config drifts by up to 3.4%,
+# so only paired numbers are meaningful):
+#
+#   --optimizer TorchFusedAdamW           +3.9%  the default AdamW is unfused here
+#   --cudnn-benchmark                     +1.4%  autotunes the VAE convolutions
+#   --zero-parameters-as-bucket-view      +2.0%  1651 per-tensor broadcasts -> 8
+#   model.disable_train_autocast          +3.2%  params are already bf16, so the
+#                                                autocast wrapper only adds casts
+#   model.drop_all_true_cross_attn_mask   +0.8%  an all-True mask forces SDPA off
+#                                                its flash kernel onto cutlass
+#   model.compile_vae_encode              +1.6%
+#   model.mot_compile_blocks=both         +5.7%  at --per-device-batch-size 24
+#   + model.rmsnorm_impl=wan                     (see below)
+#
+# Cumulative: 82.9 -> 102.3 samples/s (8 GPUs) at batch 24.
+#
+# `mot_compile_blocks=both` and `rmsnorm_impl=wan` must be set together, and the
+# pairing is conditional:
+#   * Compiling the MoT blocks only pays if the graph has no breaks. The TE
+#     RMSNorm and the Triton RoPE are opaque to Dynamo, so with `rmsnorm_impl=te`
+#     the compiled region fragments and throughput *drops* 7.2%.
+#   * `rmsnorm_impl=wan` (`F.rms_norm`) is the slow path in eager on torch < 2.9,
+#     where it decomposes into seven fp32 kernels - but inside a compiled region
+#     Inductor fuses it into one Triton kernel, so the penalty is never paid and
+#     peak memory even drops slightly (74.90 vs 75.06 GiB).
+#   * So: compiling -> `wan`; not compiling -> `te`. On torch >= 2.9 `F.rms_norm`
+#     has a native fused kernel and this should be re-measured.
+#   * The gain is batch-dependent: at batch 16 the step is kernel-launch bound and
+#     the same config is a wash. Measure on the batch size you will train at.
+#
+# Two more knobs are deliberately left off:
+#   --no-check-for-nan-in-loss-and-grad  worth ~1.4% (a nan_to_num sweep over
+#                                        6.02 B gradients each step), but it
+#                                        removes the divergence guard.
+#   PER_DEVICE_BATCH_SIZE=24             worth +7.9% over 16 and fits in 75.06 of
+#                                        79.33 GiB, but it changes the effective
+#                                        batch size, which is a training decision.
 #
 # Usage:
 #   bash run_fastwam_sft_ddp_zero1_finetune.sh
@@ -134,6 +173,14 @@ DISTRIBUTED_TRAINING_ARGS=(
     --no-ddp-broadcast-buffers
     --ddp-bucket-cap-mb 200
     --dtype bfloat16
+    --zero-parameters-as-bucket-view
+)
+
+# ── Throughput params ─────────────────────────────────────────
+# See the recipe block at the top of this file for the measured gain of each.
+PERF_ARGS=(
+    --optimizer TorchFusedAdamW
+    --cudnn-benchmark
 )
 
 # ── Logging params ────────────────────────────────────────────
@@ -144,7 +191,15 @@ LOGGING_ARGS=(
 )
 
 # ── Model/data dotlist overrides ──────────────────────────────
-MODEL_DATA_OVERRIDES=()
+# The four performance overrides pair with PERF_ARGS above; `mot_compile_blocks`
+# and `rmsnorm_impl` must move together (see the recipe block at the top).
+MODEL_DATA_OVERRIDES=(
+    model.disable_train_autocast=true
+    model.drop_all_true_cross_attn_mask=true
+    model.compile_vae_encode=true
+    model.mot_compile_blocks=both
+    model.rmsnorm_impl=wan
+)
 if [[ -n "$ACTION_DIT_PRETRAINED_PATH" ]]; then
     MODEL_DATA_OVERRIDES+=("model.action_dit_pretrained_path=$ACTION_DIT_PRETRAINED_PATH")
 fi
@@ -168,6 +223,7 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
+    "${PERF_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
     "${MODEL_DATA_OVERRIDES[@]+"${MODEL_DATA_OVERRIDES[@]}"}" \
     "$@"

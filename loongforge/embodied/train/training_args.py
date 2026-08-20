@@ -219,6 +219,16 @@ class _BasicTrainingArgs:
                     "torch.backends.cuda.matmul.allow_tf32"
         },
     )
+    cudnn_benchmark: bool = field(
+        default=False,
+        metadata={
+            "help": "Let cuDNN autotune convolution algorithms for the shapes it "
+                    "sees (torch.backends.cudnn.benchmark). Worth it for models "
+                    "with a fixed conv shape per step, e.g. the FastWAM VAE "
+                    "encoder; costs a slower first step per new shape. Mutually "
+                    "exclusive with --deterministic-mode."
+        },
+    )
     output_dir: str = field(
         default="outputs/default",
         metadata={
