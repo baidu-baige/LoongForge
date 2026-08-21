@@ -7,38 +7,21 @@ This document explains how to use the automated E2E test scripts and configurati
 - `tests/llm_vlm/configs/`: Model configs run by default in CI.
 - `tests/llm_vlm/optional_configs/`: Optional test configs.
 - `tests/llm_vlm/main_start.sh`: Main test entry script.
-- `tests/llm_vlm/download_datasets.sh`: Dataset download script.
 - `tests/llm_vlm/baseline/{default,optional}/<chip>/`: Per-model baseline JSON.
 - `tests/llm_vlm/unit/`: Standalone pytest unit tests.
-- Other: `ipipe_start.sh`, `main.py`, `tasks/`, `tools/`, `utils/`, `metric/`, `common/`, `executor/`, `datasets/`, `docker/`, `yaml_template/`.
+- Other: `main.py`, `tasks/`, `tools/`, `utils/`, `metric/`, `common/`, `executor/`, and `datasets/`.
 
 
 ## Test Workflow
 
-The workflow has three phases: **Data Preparation**, **Configuration**, and **Execution**.
+The workflow has three phases: **Environment Preparation**, **Configuration**, and **Execution**.
 
-### 1. Data Preparation
+### 1. Environment Preparation
 
-Datasets, HuggingFace base models, and pre-converted Megatron checkpoints (via Step1) are stored on BOS. Download them before each run.
-
-**Download data**:
+Provision the datasets, HuggingFace base models, and pre-converted checkpoints required by the selected model configs before starting the test. The test entry script does not download these artifacts.
 
 ```bash
-# Default mode: download 8 base cases (DeepSeek, LLaMA, Qwen, LLaVA, etc.)
-bash tests/llm_vlm/download_datasets.sh
-
-# Optional mode: download optional regression cases (e.g., Qwen3_vl)
-bash tests/llm_vlm/download_datasets.sh --optional
-```
-
-**Run directly (if data already synced)**:
-
-```bash
-# Default mode
 bash tests/llm_vlm/main_start.sh
-
-# Optional mode
-bash tests/llm_vlm/main_start.sh --optional
 ```
 
 ### 2. Configuration
@@ -129,12 +112,7 @@ After completion, check regression results under `/workspace/E2E/diff`.
 
 ### 4.1 Prepare Data and HF Weights
 
-Upload HF weights and test datasets to BOS. Add `bcecmd sync` in `download_datasets.sh` based on case type (Default/Optional). Example for `qwen3_vl_30b_a3b`:
-
-```bash
-bcecmd bos sync bos:/ai-data/Qwen3-VL-30B-A3B-Instruct ${huggingface_dir}/Qwen/Qwen3-VL-30B-A3B-Instruct/
-bcecmd bos sync bos:/aihc-ai-datasets-bj/cce-ai-datasets.bj.bcebos.com/qwen_vl/qwen3vl_30b_a3b_data/ ${datasets_dir}/qwen3_vl/qwen3vl_30b_a3b_data
-```
+Provision the HF weights and test datasets in the paths referenced by the test configuration. Artifact distribution and storage are managed outside this test suite.
 
 ### 4.2 Write Test YAML
 
@@ -183,7 +161,7 @@ Step2:
 
 1. Under `scenarios`, `function` means functional tests: Step1 is conversion, Step2 is training launch config.
 2. Copy configs from `examples/$model_name/checkpoint_convert` into Step1.
-3. Converted checkpoints are saved in `CHECKPOINT_PATH`, and `download_datasets.sh` should be updated accordingly.
+3. Converted checkpoints are saved in `CHECKPOINT_PATH`; ensure that path is available in the test environment.
 4. If conversion is not needed, set `RUNNABLE_FLAG: False` in Step1.
 
 #### 4.2.4 Training Script (Step2)

@@ -79,7 +79,7 @@ model:
   # Kimi production packing uses the released HF chat template directly.
   # No handwritten Kimi fallback template is used.
   use_hf_chat_template: true
-  chat_template_path: "/mnt/cfs_bj_mt/mokai/checkpoints/Kimi-k25/chat_template.jinja"
+  chat_template_path: "/workspace/checkpoints/Kimi-k25/chat_template.jinja"
   chat_template_kwargs:
     thinking: false
   processor_kwargs:

@@ -80,7 +80,7 @@ _ensure_env_loaded()
 
 # Root directory for regression logs (override per run with --log_dir)
 DEFAULT_LOG_ROOT = os.environ.get(
-    "EMBODIED_LOG_ROOT", "/ssd2/loongforge_embodied_ci/logs")
+    "EMBODIED_LOG_ROOT", "/workspace/loongforge_embodied_ci/logs")
 
 
 def parse_args(available_models):
@@ -107,8 +107,7 @@ def parse_args(available_models):
                              f"options: {', '.join(available_models)}; default is all. "
                              "Env var: model_names (space-separated string).")
     parser.add_argument("--chip", default=env_chip,
-                        choices=["A800", "P6K"],
-                        help="Chip model; determines the baseline subdirectory "
+                        help="Chip/baseline name; determines the baseline subdirectory "
                              "metrics_baseline/<chip>/. Env var: chip. Required.")
     parser.add_argument("--timeout", type=int, default=env_timeout,
                         help="Per-script timeout (seconds). Env var: TIMEOUT.")
@@ -129,8 +128,7 @@ def parse_args(available_models):
                         help="Abort the run as soon as any model fails (skip the remaining models). "
                              "Env var: fail_fast.")
     parser.add_argument("--prepare", action="store_true", default=env_prepare,
-                        help="Run config/prepare.sh (bcecmd bos sync vla_artifacts) before regressing. "
-                             "Env var: prepare.")
+                        help="Run config/prepare.sh before regressing. Env var: prepare.")
     parser.add_argument("--log_dir", default=env_log_dir,
                         help=f"Log/result output directory, default {DEFAULT_LOG_ROOT}/run_<ts>. "
                              "Env var: LOG_DIR.")
@@ -148,8 +146,6 @@ def parse_args(available_models):
     if args.models is not None and len(args.models) == 0:
         parser.error("--models requires at least one name (or omit it to regress all)")
 
-    # argparse's choices only validates values coming from the command line; env-derived
-    # defaults skip that check, so re-verify them here.
     if args.models:
         invalid = [m for m in args.models if m not in available_models]
         if invalid:
@@ -158,10 +154,7 @@ def parse_args(available_models):
                 f"available: {', '.join(available_models)}")
 
     if args.chip is None:
-        parser.error("--chip is required (or set the 'chip' environment variable to A800/P6K)")
-    if args.chip not in ("A800", "P6K"):
-        parser.error(
-            f"invalid chip {args.chip!r} from env var; allowed: A800, P6K")
+        parser.error("--chip is required (or set the 'chip' environment variable)")
 
     return args
 

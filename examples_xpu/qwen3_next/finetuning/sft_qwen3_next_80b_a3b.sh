@@ -4,26 +4,26 @@
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/users/dataset/qwen3-next/sft_aplaca_zh_new_data.json"}
+DATA_PATH=${DATA_PATH:-"/workspace/datasets/qwen3-next/sft_aplaca_zh_new_data.json"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/users/dataset/qwen3-next/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/workspace/datasets/qwen3-next/sft_aplaca_zh_data_cache"}
 
 DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
 # Common paths and configurations
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/users/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-Instruct/"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-Instruct/"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/users/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp/"}
-CHECKPOINT_SAVE_PATH=${CHECKPOINT_SAVE_PATH:-"/mnt/cluster/users/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp-save/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp/"}
+CHECKPOINT_SAVE_PATH=${CHECKPOINT_SAVE_PATH:-"/workspace/checkpoints/qwen3-next/Qwen3-Next-80B-A3B-tp2pp4ep8etp1-mtp-save/"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/users/out/tensorboard/qwen3-next"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/output/tensorboard/qwen3-next"}
 
 export XMLIR_MOCK_ASYNC_LINEAR=0 
 
 GPUS_PER_NODE=8
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 ######################kunlun##########################
-# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bf16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 export XDNN_USE_FAST_GELU=false
 export XMLIR_ENABLE_FAST_FC=true                    # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 # export XMLIR_ENABLE_FAST_FC_FWD_OUT=true

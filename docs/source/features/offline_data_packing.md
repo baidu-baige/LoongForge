@@ -99,10 +99,10 @@ Example (excerpt, full fields see `config.yaml`):
 ```yaml
 data:
   input_format: "wds"
-  wds_dir: "/mnt/cluster/.../wds/"
+  wds_dir: "/workspace/.../wds/"
   template_text_key: "texts"
-  work_dir: "/mnt/cluster/.../packing_work/"
-  packed_wds_dir: "/mnt/cluster/.../packed_wds/"
+  work_dir: "/workspace/.../packing_work/"
+  packed_wds_dir: "/workspace/.../packed_wds/"
 
 sample:
   max_token_len: 8192
@@ -123,10 +123,8 @@ The WDS-native offline packing workflow in LoongForge is based on the multimodal
 offline packing framework originally developed for LLaVA-OneVision-1.5 and later
 migrated and upgraded for LLaVA-OneVision-2.
 
-LoongForge previously collaborated with the LLaVA-OneVision work. Some historical
-repository or package names may still use the older `aiak-*` naming, while the
-current LoongForge repository has migrated and adapted part of the
-LLaVA-OneVision offline packing capabilities.
+LoongForge previously collaborated with the LLaVA-OneVision work and has migrated
+and adapted part of the LLaVA-OneVision offline packing capabilities.
 
 Upstream references:
 

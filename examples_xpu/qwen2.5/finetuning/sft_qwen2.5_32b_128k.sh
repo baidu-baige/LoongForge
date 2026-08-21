@@ -6,11 +6,11 @@ set -x
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/qianfan/datasets/128k_tokenized_qianfan_code_data"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen2.5-32B-Instruct"}
-CHECKPOINT_LOAD_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/LoongForge/qwen2.5/Qwen2.5_32B_mcore_tp8pp1"}
-CHECKPOINT_SAVE_PATH=${CHECKPOINT_LOAD_PATH:-"/mnt/cluster/LoongForge/qwen2.5/Qwen2.5_32B_mcore_tp8pp1_saved"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen2.5-32b"}
+DATA_PATH=${DATA_PATH:-"/workspace/datasets/128k_tokenized_code_data"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/Qwen2.5-32B-Instruct"}
+CHECKPOINT_LOAD_PATH=${CHECKPOINT_LOAD_PATH:-"/workspace/loongforge_ci/qwen2.5/Qwen2.5_32B_mcore_tp8pp1"}
+CHECKPOINT_SAVE_PATH=${CHECKPOINT_LOAD_PATH:-"/workspace/loongforge_ci/qwen2.5/Qwen2.5_32B_mcore_tp8pp1_saved"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge_ci/tensorboard-log/qwen2.5-32b"}
 
 
 mkdir -p ${TENSORBOARD_PATH}
@@ -23,7 +23,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 export FAST_SWIGLU_ENABLE=1
 export USE_FAST_RMS_LAYER_NORM=true
 ##################
-# bp16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bp16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 ##################
 export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # Used for forward output

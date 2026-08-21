@@ -4,8 +4,8 @@ export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
 
-LOAD=/mnt/rapidfs/LoongForge/mini_max/MiniMax_m2_1_mcore_tp8pp16ep8etp1/release
-SAVE=/mnt/rapidfs/LoongForge/mini_max/MiniMax-M2.1-hf/
+LOAD=/workspace/LoongForge/mini_max/MiniMax_m2_1_mcore_tp8pp16ep8etp1/release
+SAVE=/workspace/LoongForge/mini_max/MiniMax-M2.1-hf/
 
 MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/minimax/minimax_m2_1.yaml
 CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/minimax/ckpt_convert/minimax_convert.yaml

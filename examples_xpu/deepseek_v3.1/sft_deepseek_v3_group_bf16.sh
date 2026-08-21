@@ -20,10 +20,10 @@
     #################################### Path Configuration ####################################
     MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}      # Megatron-LM code path
     LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}       # LoongForge training framework code path
-    DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/datasets/64k_tokenized_byrepo-11000-13000"}  # Training data path
-    TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/models/DeepSeek-V3.1-Terminus-bf16"}  # Tokenizer path
-    TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/tensorboard-log/deepseek-v31-term-sft"}  # TensorBoard log path
-    CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/models/DeepSeek-V3.1-Terminus-tp8pp8ep16etp1"}  # Model checkpoint path
+    DATA_PATH=${DATA_PATH:-"/workspace/datasets/64k_tokenized_byrepo-11000-13000"}  # Training data path
+    TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/DeepSeek-V3.1-Terminus-bf16"}  # Tokenizer path
+    TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/tensorboard-log/deepseek-v31-term-sft"}  # TensorBoard log path
+    CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/models/DeepSeek-V3.1-Terminus-tp8pp8ep16etp1"}  # Model checkpoint path
 
     echo "Using DATA_PATH: ${DATA_PATH}"
     echo "Using TOKENIZER_PATH: ${TOKENIZER_PATH}"
@@ -31,7 +31,7 @@
     echo "Using CHECKPOINT_PATH_SAVE: ${CHECKPOINT_PATH_SAVE}"
 
     ######################kunlun##########################
-    # bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+    # bf16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
     export XMLIR_PARALLEL_SAVE_MEMORY=true         # true: lower memory usage but reduced performance; false: higher memory usage but better performance
     export XMLIR_ENABLE_FAST_FC_FWD_OUT=true       # Used for forward output
     export XMLIR_ENABLE_FAST_FC_BWD_DW=true        # Used for backward dw

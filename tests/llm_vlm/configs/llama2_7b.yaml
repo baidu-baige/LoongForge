@@ -1,7 +1,6 @@
 model_name: llama2_7b
 description: $model_name
 huggingface_path: https://huggingface.co/meta-llama/Llama-2-7b-hf
-bos_path: bos:/ai-data/Llama-2-7b-hf-test
 TOTAL_K8S_NODES: 1
 
 # Model Parameters

@@ -161,8 +161,12 @@ def parse_lmdb_image_data(image_data):
     """Parse image data from LMDB format."""
     lmdb_file = image_data["lmdb_file"]
     if not os.path.exists(lmdb_file):
-        if "/home/zhidingy/workspace/libs/eagle/Eagle2/" in lmdb_file:
-            lmdb_file = lmdb_file.replace("/home/zhidingy/workspace/libs/eagle/Eagle2/", "")
+        # Some annotation files record lmdb paths with a stale absolute prefix from the
+        # machine that produced them. Set LMDB_PATH_STRIP_PREFIX to that prefix to make
+        # such paths resolvable again.
+        strip_prefix = os.environ.get("LMDB_PATH_STRIP_PREFIX", "")
+        if strip_prefix and strip_prefix in lmdb_file:
+            lmdb_file = lmdb_file.replace(strip_prefix, "")
         else:
             raise ValueError(f"LMDB file {lmdb_file} does not exist")
     # special case for AgiBotWorld, will remove it later

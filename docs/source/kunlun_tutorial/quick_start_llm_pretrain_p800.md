@@ -68,14 +68,15 @@ source /root/.bashrc
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+P800_DEMO_ROOT=${P800_DEMO_ROOT:-"/workspace/loongforge_p800_demo"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/LoongForge/qwen3/pile_test/pile-qwen_text_document"}
+DATA_PATH=${DATA_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/pile_test/pile-qwen_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/models/Qwen3-30B-A3B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"${P800_DEMO_ROOT}/models/Qwen3-30B-A3B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/LoongForge/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"${P800_DEMO_ROOT}/checkpoints/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/LoongForge/tensorboard-log/qwen3-30b-a3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"${P800_DEMO_ROOT}/tensorboard/qwen3-30b-a3b"}
 
 mkdir -p ${TENSORBOARD_PATH}
 
@@ -105,7 +106,7 @@ export BKCL_RING_HOSTID_USE_RANK=1              # Supported since version 1.2.11
 export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: more memory usage but better performance; true: less memory but degraded performance
 export XMLIR_BATCH_PARALLEL=false               # Enable communication fusion operators, USE_CAST_FC_FUSION automatically disabled in bf16
 export SAVE_LOG_FILE_WITH_RANK_ID=false         # If true, training logs will be stored separately by rank_id
-export XMLIR_LOG_PATH="log-path"                # Specify training log storage directory
+export XMLIR_LOG_PATH="${P800_DEMO_ROOT}/logs"  # Specify training log storage directory
 export XMLIR_LOG_PREFIX="log-file-prefix"       # Specify training log file name prefix
 export P800_DEBUG=false                         # If true, training will save checkpoint and exit when grad norm becomes nan
 export P800_DUMP_DIR="ckpt-dump-dir-path"       # Specify dump directory for checkpoint and info when grad norm becomes nan

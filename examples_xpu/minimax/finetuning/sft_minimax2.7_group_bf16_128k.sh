@@ -7,11 +7,11 @@ pkill -9 python || true
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/rapidfs/datasets/tigerbot-alpaca-zh-0.5m.json"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/rapidfs/models/MiniMax-M2.7-BF16/"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/rapidfs/LoongForge/mini_max/MiniMax_m2_7_mcore_tp8pp8ep8etp1/"}
-CHECKPOINT_SAVE_PATH="/mnt/rapidfs/LoongForge/ckpt/minimax_m2_7/allmodel"
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/LoongForge/tensorboard-log/minimax_m2_7/allmodel"}
+DATA_PATH=${DATA_PATH:-"/workspace/datasets/tigerbot-alpaca-zh-0.5m.json"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/MiniMax-M2.7-BF16/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/LoongForge/mini_max/MiniMax_m2_7_mcore_tp8pp8ep8etp1/"}
+CHECKPOINT_SAVE_PATH="/workspace/LoongForge/ckpt/minimax_m2_7/allmodel"
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/LoongForge/tensorboard-log/minimax_m2_7/allmodel"}
 
 GPUS_PER_NODE=8
 

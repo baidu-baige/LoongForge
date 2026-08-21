@@ -79,7 +79,7 @@ class StageTimers:
     """Lightweight per-stage timer for training loop profiling.
 
     Records wall-clock elapsed time for named stages (forward, backward, etc.)
-    and renders a report aligned with the AIAK-Training-Omni / Megatron
+    and renders a report aligned with the LoongForge / Megatron
     `max time across ranks (ms):` format.
 
     Unlike Megatron timers, there is no log_level. Timing is toggled globally via

@@ -1,7 +1,6 @@
 model_name: qwen3_8b
 description: $model_name
 huggingface_path: https://huggingface.co/Qwen/Qwen3-8B
-bos_path: bos:/ai-data/Qwen/Qwen3-8B
 TOTAL_K8S_NODES: 1
 
 MODEL_RUNNABLE: True

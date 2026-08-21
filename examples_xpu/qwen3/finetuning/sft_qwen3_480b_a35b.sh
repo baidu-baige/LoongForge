@@ -5,10 +5,10 @@
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-480B-A35B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/Qwen3_480B_A35B_mcore_tp4pp8ep8etp1"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-480b-a35b-sft"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge_ci/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/Qwen3-480B-A35B"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge_ci/Qwen3_480B_A35B_mcore_tp4pp8ep8etp1"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge_ci/tensorboard-log/qwen3-480b-a35b-sft"}
 
 GPUS_PER_NODE=8
 
@@ -20,7 +20,7 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 ######################kunlun##########################
-# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bf16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 
 export FORCE_DISABLE_INPLACE_BF16_CAST=false    # Default is false; needs to be enabled in special cases (async checkpoint)
 

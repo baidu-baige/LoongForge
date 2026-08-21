@@ -1,5 +1,5 @@
 # DeepSeek-V4 Flash-Base lite (4 layers + 1 MTP) — matches
-# /ssd3/weizhihao/ckpt/DeepSeek-V4-Flash-Base-lite-lay4L-mtp1/config.json
+# DeepSeek-V4-Flash-Base-lite-lay4L-mtp1/config.json
 _target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
 
 num_layers: 4

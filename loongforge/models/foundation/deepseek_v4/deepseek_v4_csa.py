@@ -463,7 +463,7 @@ def _apply_explicit_rope(
     ``x`` is ``[seq, *, head_dim]`` (3-D) or ``[seq, *, heads, head_dim]``
     (4-D); the rotary rotation is applied to the trailing ``pos_dim`` dims.
 
-    NOTE: the AIAK ``fused_mla_rope_inplace`` kernel has no ``position_ids``
+    NOTE: the local ``fused_mla_rope_inplace`` kernel has no ``position_ids``
     argument and ``csa_cp_utils.apply_thd_cp_local_rope_unfused`` passes a
     kwarg the local ``_apply_rotary_pos_emb_bshd`` does not accept, so this
     routes through MCore's ``apply_rotary_pos_emb`` (unfused bshd path) which
@@ -1295,7 +1295,7 @@ class Compressor(MegatronModule):
         kv = (kv * torch.softmax(score, dim=1, dtype=torch.float32).to(kv.dtype)).sum(dim=1)
         kv = self.norm(kv.to(x.dtype))  # [total_comp, b, head_dim]
 
-        # RoPE with explicit per-group positions and no CP striping. The AIAK
+        # RoPE with explicit per-group positions and no CP striping. The local
         # fused MLA RoPE kernel does not accept ``position_ids``, so use the
         # unfused table + index_select path (numerically identical rotation).
         position_ids = compressed_group_ids[:total_comp].clamp_min(0) * ratio
@@ -1319,7 +1319,7 @@ class Compressor(MegatronModule):
 class CSAIndexerKernelFunction(torch.autograd.Function):
     """Fused FP8 indexer kernel for CSA, avoiding full [sq, sk] materialization.
 
-    Adapted from DSAIndexerKernel in AIAK-Training-Omni. Uses deep_gemm.fp8_mqa_logits
+    Adapted from DSAIndexerKernel in LoongForge. Uses deep_gemm.fp8_mqa_logits
     to compute scores in a memory-efficient manner with FP8 quantization.
     """
 
@@ -1996,8 +1996,8 @@ class CompressedSparseAttention(MegatronModule):
         self.apply_dsa_kernel_fusion = getattr(config, "apply_dsa_kernel_fusion", False)
 
         # Choose between loongforge fused kernel (default) and mcore fused kernel.
-        # Set env var USE_AIAK_MEGATRON_FUSED=1 or config.use_mcore_fused=True
-        # to use AIAK-Megatron's dsa_sparse_attn (requires flash_mla with sparse_fwd).
+        # Set env var USE_MCORE_FUSED=1 or config.use_mcore_fused=True
+        # to use Loong-Megatron's dsa_sparse_attn (requires flash_mla with sparse_fwd).
         self.use_mcore_fused = (
             os.environ.get("USE_MCORE_FUSED", "0") == "1"
             or getattr(config, "use_mcore_fused", False)
@@ -2864,7 +2864,7 @@ class CompressedSparseAttention(MegatronModule):
             )
 
         if self.use_mcore_fused:
-            # AIAK-Megatron fused path: requires flash_mla with flash_mla_sparse_fwd
+            # Loong-Megatron fused path: requires flash_mla with flash_mla_sparse_fwd
             output = dsa_sparse_attn(
                 query, kv_full_thd, self.attn_sink.float(), flat_idxs, self.softmax_scale, is_thd=True
             )
@@ -2905,7 +2905,7 @@ class CompressedSparseAttention(MegatronModule):
         qr_det = qr.detach()
 
         # Use loongforge CSAIndexer.forward() which uses CSAIndexerKernel internally
-        # (avoids AIAK-Megatron indexer_topk that requires cudnn DSA)
+        # (avoids Loong-Megatron indexer_topk that requires cudnn DSA)
         _, topk_indices_cmp = self.indexer(
             x_det, qr_det, mask=None, packed_seq_params=packed_seq_params
         )
@@ -2939,7 +2939,7 @@ class CompressedSparseAttention(MegatronModule):
             compress_topk_idxs = topk_indices_cmp
 
         if self.use_mcore_fused:
-            # AIAK-Megatron fused path: uses compact=True (requires cudnn DSA)
+            # Loong-Megatron fused path: uses compact=True (requires cudnn DSA)
             flat_idxs, flat_tlen = build_flat_topk_idxs(
                 window_idxs,
                 compress_topk_idxs,
@@ -3040,7 +3040,7 @@ class CompressedSparseAttention(MegatronModule):
             cu_seqlens_q_unpadded = packed_seq_params.cu_seqlens_q
 
         if self.use_mcore_fused:
-            # AIAK-Megatron fused path: fused indexer + sparse attn
+            # Loong-Megatron fused path: fused indexer + sparse attn
             output, indexer_loss = fused_indexer_sparse_attn(
                 query,
                 kv_full_thd,

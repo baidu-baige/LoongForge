@@ -62,20 +62,21 @@ LoongForge currently provides SFT training example scripts for various models. A
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+P800_DEMO_ROOT=${P800_DEMO_ROOT:-"/workspace/loongforge_p800_demo"}
 
-# DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json"}
+# DATA_PATH=${DATA_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/sft_aplaca_zh_data.json"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_tokenized"}
+DATA_PATH=${DATA_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/sft_aplaca_zh_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/sft_aplaca_zh_data_cache"}
 
 DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen3-8B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"${P800_DEMO_ROOT}/models/Qwen3-8B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3/Qwen3_8B_mcore_tp1pp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"${P800_DEMO_ROOT}/checkpoints/qwen3/Qwen3_8B_mcore_tp1pp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-8b-sft"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"${P800_DEMO_ROOT}/tensorboard/qwen3-8b-sft"}
 
 GPUS_PER_NODE=8
 
@@ -99,7 +100,7 @@ export XMLIR_PARALLEL_SAVE_MEMORY=false         # false: more memory usage but b
 export XMLIR_BATCH_PARALLEL=false               # Enable communication fusion operators, USE_CAST_FC_FUSION automatically disabled in bf16
 export XMLIR_ENABLE_FAST_FC=true
 export SAVE_LOG_FILE_WITH_RANK_ID=false         # If true, training logs will be stored separately by rank_id
-export XMLIR_LOG_PATH="log-path"                # Specify training log storage directory
+export XMLIR_LOG_PATH="${P800_DEMO_ROOT}/logs" # Specify training log storage directory
 export XMLIR_LOG_PREFIX="log-file-prefix"       # Specify training log file name prefix
 export P800_DEBUG=false                         # If true, training will save checkpoint and exit when grad norm becomes nan
 export P800_DUMP_DIR="ckpt-dump-dir-path"       # Specify dump directory for checkpoint and info when grad norm becomes nan

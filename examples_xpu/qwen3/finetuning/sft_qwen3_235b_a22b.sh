@@ -5,11 +5,11 @@ set -x
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge_ci/datasets/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
 DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-235B-A22B/"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/Qwen3_235B_A22B_mcore_tp4pp4ep8etp1"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-235b-a22b"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/Qwen3-235B-A22B/"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge_ci/Qwen3_235B_A22B_mcore_tp4pp4ep8etp1"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge_ci/tensorboard-log/qwen3-235b-a22b"}
 
 GPUS_PER_NODE=8
 
@@ -22,7 +22,7 @@ export XMLIR_ENABLE_FAST_FC=true        # Used in torch.nn.linear.py (LinearWith
 #export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # Used for backward dw
 #export XMLIR_ENABLE_FAST_FC_BWD_DX=true  # Used for backward dx
 #### P800 environment start ####
-# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bf16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 export FORCE_DISABLE_INPLACE_BF16_CAST=false    # Default is false; needs to be enabled in special cases (async checkpoint)
 export BKCL_RDMA_NICS="eth1,eth1,eth2,eth2,eth3,eth3,eth4,eth4" # Used in multi-node setup, adjust based on actual NIC connectivity
 export BKCL_SOCKET_IFNAME=eth0                  # Adjust based on actual environment; disabled by default, specify when NIC is not found

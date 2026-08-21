@@ -2,12 +2,7 @@
 
 set -eo pipefail
 
-# Automatically execute the dataset download script
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-if [ -f "${SCRIPT_DIR}/download_datasets.sh" ]; then
-    echo "Running data preparation script: ${SCRIPT_DIR}/download_datasets.sh"
-    bash "${SCRIPT_DIR}/download_datasets.sh" "$@"
-fi
 
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 export MASTER_PORT=${MASTER_PORT:-9999}

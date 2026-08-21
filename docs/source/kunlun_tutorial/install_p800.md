@@ -7,7 +7,7 @@ This document describes how to build the LoongForge image that can run on Kunlun
 We provide a clean base image with required underlying dependencies installed.
 
 * UV environment (community Docker Hub): `loongforge/loongforge_kunlun:py310_torch25`
-* Conda environment (internal iregistry): `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`
+* Conda environment (your registry mirror): `your-registry.example.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`
 
 Environment versions:
 * **OS**: Ubuntu 20.04
@@ -29,13 +29,18 @@ Then build the image:
 ```bash
 BASE_IMAGE=loongforge/loongforge_kunlun:py310_torch25
 DEFAULT_XPYTORCH_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260409/torch25/xpytorch-cp310-torch251-ubuntu2004-x64.run
+DEFAULT_KUNLUN_OPS_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260428/torch25/kunlun_ops-0.1.122%2Bb4984657-cp310-cp310-linux_x86_64.whl
+
+: "${COCOPOD_URL_ARG:?Set COCOPOD_URL_ARG to a reachable cocopod wheel URL}"
+: "${XSPEEDGATE_URL_ARG:?Set XSPEEDGATE_URL_ARG to a reachable xspeedgate wheel URL}"
 
 docker build  \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     --build-arg XPYTORCH_URL_ARG="${DEFAULT_XPYTORCH_URL_ARG}" \
+    --build-arg COCOPOD_URL_ARG="${COCOPOD_URL_ARG}" \
+    --build-arg XSPEEDGATE_URL_ARG="${XSPEEDGATE_URL_ARG}" \
+    --build-arg KUNLUN_OPS_URL_ARG="${DEFAULT_KUNLUN_OPS_URL_ARG}" \
     -t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu .
-    # For internal conda image:
-    #-t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu.internal .
 ```
 
 > **Note:** All model families (LLM / VLM / VLA / Diffusion) now share a single
@@ -44,8 +49,10 @@ docker build  \
 
 - `BASE_IMAGE` is the base image used for building. Options include:
   * `loongforge/loongforge_kunlun:py310_torch25` (default) [available at Docker Hub]
-  * `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33` [internal use only]
+  * `your-registry.example.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33` (example XMLIR image)
 - `XPYTORCH_URL_ARG` is the xpytorch installer url argument.
+- `COCOPOD_URL_ARG` and `XSPEEDGATE_URL_ARG` are required when building from a public checkout.
+- `KUNLUN_OPS_URL_ARG` can override the default public package URL.
 After building, you can verify the image:
 
 ```bash
@@ -82,7 +89,7 @@ case $ACTION in
         --privileged \
         --net=host \
         --name=${CONTAINER_NAME} \
-        -v /path/to/data:/mnt/cluster/LoongForge/ \
+        -v /path/to/data:/workspace/data \
         -w /workspace/ \
         ${image_addr} bash
 

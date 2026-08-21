@@ -157,7 +157,7 @@ class DSv4HybridAttention(Attention):
             self.config.apply_rope_fusion and not self._dsv4_disable_yarn_rope_for_ratio0
         )
         # Community keeps the full qk_pos_emb_head_dim rotary dimension for ratio-0 W layers.
-        # AIAK config still carries rotary_percent=0.125 for Yarn, which would rotate only 8/64 dims.
+        # Some configs still carry rotary_percent=0.125 for Yarn, which would rotate only 8/64 dims.
         self._dsv4_effective_rotary_percent = (
             1.0 if self._dsv4_disable_yarn_rope_for_ratio0 else self.config.rotary_percent
         )

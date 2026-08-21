@@ -41,15 +41,12 @@ sh build.sh    # Creates output tarball
 
 E2E tests use a custom YAML-driven framework (`tests/llm_vlm/main.py`), not pytest.
 
+The entry script does NOT download artifacts. Provision the datasets, HuggingFace base
+models, and pre-converted checkpoints referenced by the selected configs first, then run:
+
 ```bash
-# Download test datasets first
-bash tests/llm_vlm/download_datasets.sh
-
-# Run default CI test suite (all models in tests/llm_vlm/configs/)
+# Run the default CI suite (all models in tests/llm_vlm/configs/)
 bash tests/llm_vlm/main_start.sh
-
-# Run optional regression tests (tests/llm_vlm/optional_configs/)
-bash tests/llm_vlm/main_start.sh --optional
 ```
 
 ### Running a Single Model Test
@@ -92,8 +89,7 @@ bash tests/embodied/run.sh --chip A800 --models fastwam_ddp fastwam_ddp_zero1
 # Collect baselines for the current chip
 bash tests/embodied/run.sh --chip A800 --auto_collect_baseline
 
-# Prepare artifacts through BOS synchronization
-bash tests/embodied/run.sh --chip A800 --prepare
+# Artifacts are provisioned by the CI workflow/self-hosted runner before this step.
 
 # Validate commands/configuration without training
 bash tests/embodied/run.sh --chip A800 --dry_run
@@ -102,7 +98,7 @@ bash tests/embodied/run.sh --chip A800 --dry_run
 Embodied test conventions:
 
 - `tests/embodied/config/env.sh` centralizes `EMBODIED_CI_ROOT`,
-  `LOCAL_VLA_ARTIFACTS_ROOT`, log, baseline, and BOS tool paths. Prefer environment
+  `LOCAL_VLA_ARTIFACTS_ROOT`, log, and baseline paths. Prefer environment
   overrides or this file when moving the suite to another machine.
 - Add every new training script to `tests/embodied/config/scripts.yaml`; the manifest
   path is relative to `examples/embodied/`. Add a baseline under

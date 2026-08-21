@@ -5,19 +5,19 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/qwen3/pile_test/pile-qwen_text_document"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge_ci/qwen3/pile_test/pile-qwen_text_document"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-30B-A3B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/Qwen3-30B-A3B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge_ci/qwen3/Qwen3_30B_A3B_mcore_tp2pp2ep4"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-30b-a3b"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge_ci/tensorboard-log/qwen3-30b-a3b"}
 
 GPUS_PER_NODE=8
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 ######################kunlun##########################
-# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bf16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # Used for forward output
 export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # Used for backward dw

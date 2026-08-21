@@ -1,7 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 # Purpose: Verify VLM checkpoint path scoping.
-# Maintainer: dongximiao <dongximiao@baidu.com>
 
 """Checks for VLM checkpoint conversion configuration."""
 

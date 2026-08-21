@@ -6,7 +6,7 @@
 # Self-contained: no dataset / checkpoint / external files required (a CUDA GPU is).
 set -euo pipefail
 
-LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/AIAK-Training-Omni}"
+LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
 TEST_FILE="$LOONGFORGE_PATH/loongforge/embodied/model/xvla/tests/test_attention_forward.py"
 
 PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \

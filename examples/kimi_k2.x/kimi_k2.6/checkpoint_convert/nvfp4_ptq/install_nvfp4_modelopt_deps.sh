@@ -20,9 +20,11 @@ BLOBFILE_PIP_SPEC=${BLOBFILE_PIP_SPEC:-"blobfile"}
 MODELOPT_EXTRA_PIP_PACKAGES=${MODELOPT_EXTRA_PIP_PACKAGES:-}
 INSTALL_MODELOPT=${INSTALL_MODELOPT:-1}
 
-# blobfile is installed from the internal mirror because it is required by Kimi remote code.
-BLOBFILE_PIP_INDEX=${BLOBFILE_PIP_INDEX:-"http://mirrors.baidubce.com/pypi/simple/"}
-BLOBFILE_PIP_TRUSTED_HOST=${BLOBFILE_PIP_TRUSTED_HOST:-"mirrors.baidubce.com"}
+# blobfile is required by Kimi remote code. It is installed from the default pip index;
+# set BLOBFILE_PIP_INDEX (and BLOBFILE_PIP_TRUSTED_HOST for plain-HTTP mirrors) to
+# install it from a local PyPI mirror instead.
+BLOBFILE_PIP_INDEX=${BLOBFILE_PIP_INDEX:-}
+BLOBFILE_PIP_TRUSTED_HOST=${BLOBFILE_PIP_TRUSTED_HOST:-}
 
 # Patch noisy/unpicklable Transformers processor logging if needed by the runtime.
 PATCH_TRANSFORMERS_PROCESSING_UTILS=${PATCH_TRANSFORMERS_PROCESSING_UTILS:-1}
@@ -58,7 +60,7 @@ fi
 
 # GitHub access may need proxy in the cluster pods.
 ENABLE_GIT_PROXY=${ENABLE_GIT_PROXY:-1}
-GIT_PROXY_URL=${GIT_PROXY_URL:-"http://agent.baidu.com:8891"}
+GIT_PROXY_URL=${GIT_PROXY_URL:-"http://your-proxy-host:port"}
 
 # Checkout validation knobs.
 CHECK_MODELOPT_REPO_REF=${CHECK_MODELOPT_REPO_REF:-0}
@@ -364,10 +366,15 @@ else
         "$ACCELERATE_PIP_SPEC"
 fi
 
-"$PYTHON_BIN" -m pip install "$BLOBFILE_PIP_SPEC" \
-    -i "$BLOBFILE_PIP_INDEX" \
-    --trusted-host "$BLOBFILE_PIP_TRUSTED_HOST" \
-    -q
+BLOBFILE_PIP_ARGS=(-q)
+if [ -n "$BLOBFILE_PIP_INDEX" ]; then
+    BLOBFILE_PIP_ARGS+=(-i "$BLOBFILE_PIP_INDEX")
+fi
+if [ -n "$BLOBFILE_PIP_TRUSTED_HOST" ]; then
+    BLOBFILE_PIP_ARGS+=(--trusted-host "$BLOBFILE_PIP_TRUSTED_HOST")
+fi
+
+"$PYTHON_BIN" -m pip install "$BLOBFILE_PIP_SPEC" "${BLOBFILE_PIP_ARGS[@]}"
 
 modelopt_version_report
 hf_dependencies_match

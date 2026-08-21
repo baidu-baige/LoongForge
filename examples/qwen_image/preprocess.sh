@@ -55,7 +55,7 @@ Metadata file format (json/jsonl/csv), one row per sample:
 
 Arguments:
   qwen-image-edit-2511  Preprocess Qwen-Image-Edit-2511 data with the
-                        text encoder + VAE. Produces the AIAK flat-dict cache
+                        text encoder + VAE. Produces the LoongForge flat-dict cache
                         consumed by loongforge/train/diffusion/pretrain_qwen_image.py.
   output_path           Optional output directory.
                         Default: <dataset_base_parent>/qwen_image_edit_2511_preprocessed

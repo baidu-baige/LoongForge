@@ -144,7 +144,7 @@ def main() -> None:
 
         logger.info(f"Finish {model_name} test, {index + 1} / {total_scenarios_num}.\n")
 
-    logger.info(f"Finish all jobs run ipipe from main.py.")
+    logger.info("Finish all jobs from main.py.")
 
     rank = os.getenv("RANK")
     is_final_pod = False

@@ -7,7 +7,7 @@
 我们提供了预装所需底层依赖的纯净基础镜像。
 
 * UV 环境（社区 Docker Hub）：`loongforge/loongforge_kunlun:py310_torch25`
-* Conda 环境（内部 iregistry）：`iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`
+* Conda 环境（您的镜像仓库）：`your-registry.example.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`
 
 环境版本：
 * **操作系统**：Ubuntu 20.04
@@ -29,21 +29,28 @@ git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
 ```bash
 BASE_IMAGE=loongforge/loongforge_kunlun:py310_torch25
 DEFAULT_XPYTORCH_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260409/torch25/xpytorch-cp310-torch251-ubuntu2004-x64.run
+DEFAULT_KUNLUN_OPS_URL_ARG=https://baidu-kunlun-public.su.bcebos.com/baidu-kunlun-share/20260428/torch25/kunlun_ops-0.1.122%2Bb4984657-cp310-cp310-linux_x86_64.whl
+
+: "${COCOPOD_URL_ARG:?请将 COCOPOD_URL_ARG 设置为可访问的 cocopod wheel URL}"
+: "${XSPEEDGATE_URL_ARG:?请将 XSPEEDGATE_URL_ARG 设置为可访问的 xspeedgate wheel URL}"
 
 docker build  \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     --build-arg XPYTORCH_URL_ARG="${DEFAULT_XPYTORCH_URL_ARG}" \
+    --build-arg COCOPOD_URL_ARG="${COCOPOD_URL_ARG}" \
+    --build-arg XSPEEDGATE_URL_ARG="${XSPEEDGATE_URL_ARG}" \
+    --build-arg KUNLUN_OPS_URL_ARG="${DEFAULT_KUNLUN_OPS_URL_ARG}" \
     -t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu .
-    # 内部 conda 镜像：
-    #-t LoongForge-kunlun:latest -f LoongForge/docker/Dockerfile.xpu.internal .
 ```
 
 > **说明**：所有模型系列（LLM / VLM / VLA / Diffusion）现在共用同一个 Docker 镜像。`ENABLE_LEROBOT` 构建参数已被移除 —— 构建镜像时不再区分 lerobot 与非 lerobot。
 
 - `BASE_IMAGE` 是用于构建的基础镜像。可选值包括：
   * `loongforge/loongforge_kunlun:py310_torch25`（默认）[Docker Hub 提供]
-  * `iregistry.baidu-int.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`[仅限内部使用]
+  * `your-registry.example.com/xmlir/xmlir_ubuntu_2004_x86_64:v0.33`（示例 XMLIR 镜像）
 - `XPYTORCH_URL_ARG` 是 xpytorch 安装程序的 URL 参数。
+- `COCOPOD_URL_ARG` 和 `XSPEEDGATE_URL_ARG` 在公开检出版本中需要手动填写。
+- `KUNLUN_OPS_URL_ARG` 可覆盖默认的公开包地址。
 
 构建完成后，可验证镜像：
 
@@ -81,7 +88,7 @@ case $ACTION in
         --privileged \
         --net=host \
         --name=${CONTAINER_NAME} \
-        -v /path/to/data:/mnt/cluster/LoongForge/ \
+        -v /path/to/data:/workspace/data \
         -w /workspace/ \
         ${image_addr} bash
 

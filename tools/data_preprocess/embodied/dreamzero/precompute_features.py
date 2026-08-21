@@ -32,7 +32,7 @@ if str(_TOOL_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOL_DIR))
 os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
 os.environ.setdefault("ALBUMENTATIONS_DISABLE_VERSION_CHECK", "1")
-_DEFAULT_MEGATRON_ROOT = _REPO_ROOT.parent / "AIAK-Megatron"
+_DEFAULT_MEGATRON_ROOT = _REPO_ROOT.parent / "Loong-Megatron"
 _MEGATRON_ROOT = Path(os.getenv("MEGATRON_PATH", str(_DEFAULT_MEGATRON_ROOT)))
 if _MEGATRON_ROOT.exists() and str(_MEGATRON_ROOT) not in sys.path:
     sys.path.insert(0, str(_MEGATRON_ROOT))

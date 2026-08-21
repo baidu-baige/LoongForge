@@ -53,7 +53,7 @@ Environment variables:
 | Variable | Meaning | Default |
 |---|---|---|
 | `CONFIG` | eval YAML config path | `<model>/eval/configs/libero/object_smoke.yaml` (xvla: `libero_weight_object_smoke.yaml`) |
-| `REPO_ROOT` | LoongForge repo root | `/path/to/LoongForge-VLA` |
+| `REPO_ROOT` | LoongForge-VLA repo root | `/path/to/LoongForge-VLA` |
 | `BENCHMARK_PYTHON` | LIBERO env interpreter | `/path/to/libero/bin/python` |
 | `CUDA_VISIBLE_DEVICES` | GPU id for the policy server | `0` |
 | `MUJOCO_GL` / `PYOPENGL_PLATFORM` | MuJoCo offscreen GL backend | `osmesa` |

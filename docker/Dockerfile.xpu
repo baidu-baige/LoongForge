@@ -6,6 +6,8 @@ FROM ${BASE_IMAGE}
 # =========================================================
 ARG XPYTORCH_URL_ARG=""
 ARG KUNLUN_OPS_URL_ARG=""
+ARG COCOPOD_URL_ARG=""
+ARG XSPEEDGATE_URL_ARG=""
 
 # =========================================================
 # Base System Configuration + APT Source Replacement
@@ -46,12 +48,24 @@ RUN source /opt/loongforge_kunlun/bin/activate && bash /workspace/LoongForge/doc
 
 # ======================== Install XPU Packages ========================
 RUN source /opt/loongforge_kunlun/bin/activate && \
-    COCOPOD_URL=$(python3 -c "import json; print(json.load(open('/workspace/LoongForge/docker/xpu_packages.json'))['torch25']['cocopod']['url'])") && \
-    XSPEEDGATE_URL=$(python3 -c "import json; print(json.load(open('/workspace/LoongForge/docker/xpu_packages.json'))['torch25']['xspeedgate']['url'])") && \
+    if [ -n "${COCOPOD_URL_ARG}" ]; then \
+        COCOPOD_URL="${COCOPOD_URL_ARG}"; \
+    else \
+        COCOPOD_URL=$(python3 -c "import json; print(json.load(open('/workspace/LoongForge/docker/xpu_packages.json'))['torch25']['cocopod']['url'])"); \
+    fi && \
+    if [ -n "${XSPEEDGATE_URL_ARG}" ]; then \
+        XSPEEDGATE_URL="${XSPEEDGATE_URL_ARG}"; \
+    else \
+        XSPEEDGATE_URL=$(python3 -c "import json; print(json.load(open('/workspace/LoongForge/docker/xpu_packages.json'))['torch25']['xspeedgate']['url'])"); \
+    fi && \
     if [ -n "${KUNLUN_OPS_URL_ARG}" ]; then \
         KUNLUN_OPS_URL="${KUNLUN_OPS_URL_ARG}"; \
     else \
         KUNLUN_OPS_URL=$(python3 -c "import json; print(json.load(open('/workspace/LoongForge/docker/xpu_packages.json'))['torch25']['kunlun_ops']['url'])"); \
+    fi && \
+    if [ "${COCOPOD_URL}" = "__SET_WITH_COCOPOD_URL_ARG__" ] || [ "${XSPEEDGATE_URL}" = "__SET_WITH_XSPEEDGATE_URL_ARG__" ]; then \
+        echo "Set COCOPOD_URL_ARG and XSPEEDGATE_URL_ARG when building the XPU image." >&2; \
+        exit 1; \
     fi && \
     pip install "${COCOPOD_URL}" "${XSPEEDGATE_URL}" "${KUNLUN_OPS_URL}"
 
@@ -119,7 +133,7 @@ RUN set -exuo pipefail && \
         echo "Lerobot installation completed"; \
     }; \
     source /opt/loongforge_kunlun/bin/activate && \
-    install_lerobot; 
+    install_lerobot;
 
 
 # =========================================================

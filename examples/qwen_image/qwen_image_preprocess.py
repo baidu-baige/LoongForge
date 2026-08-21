@@ -5,7 +5,7 @@
 Qwen-Image-Edit-2511 offline preprocessing script.
 
 Encodes each (image, edit_image, prompt) sample into training tensors and
-saves them as .pth files in the AIAK flat-dict format consumed by
+saves them as .pth files in the LoongForge flat-dict format consumed by
 ``loongforge/train/diffusion/pretrain_qwen_image.py``.
 
 Only the DiffSynth text encoder (Qwen2.5-VL) + VAE + tokenizer/processor are
@@ -108,7 +108,7 @@ def load_edit_images(entry, base: str) -> Union[Image.Image, List[Image.Image]]:
 
 
 def normalize_latent(x):
-    """Squeeze leading batch dim off VAE latents (matches AIAK flat layout)."""
+    """Squeeze leading batch dim off VAE latents (matches the flat cache layout)."""
     if isinstance(x, list):
         return [normalize_latent(t) for t in x]
     if torch.is_tensor(x) and x.dim() == 5 and x.shape[0] == 1:
@@ -137,7 +137,7 @@ def encode_sample(
     image_op: ImageCropAndResize,
     tiled: bool,
 ) -> dict:
-    """Run DiffSynth's per-sample pipeline units to produce AIAK-format tensors.
+    """Run DiffSynth's per-sample pipeline units to produce LoongForge-format tensors.
 
     Image geometry mirrors ``UnifiedDataset.default_image_operator`` so the
     output is bit-identical to the DiffSynth ``sft:data_process`` cache:
@@ -164,7 +164,7 @@ def encode_sample(
     width, height = image.size
 
     # VAE encode target image -> input_latents. ``latents`` from the training
-    # branch is unused in the AIAK cache (we compute a deterministic noisy
+    # branch is unused in the LoongForge cache (we compute a deterministic noisy
     # latent below).
     noise_placeholder = torch.zeros(1)  # ignored in training mode
     pipe.scheduler.set_timesteps(1000, training=True)

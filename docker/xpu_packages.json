@@ -12,12 +12,12 @@
         },
         "cocopod": {
             "version": "0.0.0",
-            "url": "https://vllm-ai-models.bj.bcebos.com/aiak_share/latest/torch25/cocopod-0.0.0+torch25-cp310-cp310-linux_x86_64.whl",
+            "url": "__SET_WITH_COCOPOD_URL_ARG__",
             "type": "wheel"
         },
         "xspeedgate": {
             "version": "0.0.0",
-            "url": "https://aihc-private-hcd.bj.bcebos.com/xspeedgate_release/latest/torch25/xspeedgate_ops-0.0.0+torch25-cp310-cp310-linux_x86_64.whl",
+            "url": "__SET_WITH_XSPEEDGATE_URL_ARG__",
             "type": "wheel"
         }
     }

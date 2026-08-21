@@ -8,13 +8,13 @@ ipcrm -m $shmid
 echo "Deleted shared memory segment with ID: $shmid"
 done
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/sft_internvl3.5_8b_temp/data-path/webdataset_image"}
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/LoongForge/sft_internvl3.5_38b_temp/hf-tokenizer-path/InternVL3_5-38B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/sft_internvl3.5_38b_temp/load/Internvl3_5-38B-tp4-pp2-4-60"}
-CHECKPOINT_SAVE_PATH=/mnt/cluster/LoongForge/sft_internvl3.5_38b_temp/save/Internvl3_5-38B-tp4-pp2-4-60-save
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge_ci/sft_internvl3.5_8b_temp/data-path/webdataset_image"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/loongforge_ci/sft_internvl3.5_38b_temp/hf-tokenizer-path/InternVL3_5-38B"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge_ci/sft_internvl3.5_38b_temp/load/Internvl3_5-38B-tp4-pp2-4-60"}
+CHECKPOINT_SAVE_PATH=/workspace/loongforge_ci/sft_internvl3.5_38b_temp/save/Internvl3_5-38B-tp4-pp2-4-60-save
 EXP_NAME=${FULL_JOB_NAME:-"${MODEL_NAME}-$(date +%Y%m%d-%H%M%S)"}
 LOGS_PATH="${CHECKPOINT_SAVE_PATH}/logs-${EXP_NAME}"
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/rapidfs/users/loongforge/out/tensorboard/internvl3.5/internvl3.5-38b/stage2-16k-gbs32-1node-data3-v11/"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge_ci/out/tensorboard/internvl3.5/internvl3.5-38b/stage2-16k-gbs32-1node-data3-v11/"}
 mkdir -p ${CHECKPOINT_SAVE_PATH}
 mkdir -p ${LOGS_PATH}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}

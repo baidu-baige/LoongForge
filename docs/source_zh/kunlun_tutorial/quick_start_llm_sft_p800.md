@@ -62,20 +62,21 @@ LoongForge 目前提供了多种模型的 SFT（监督微调）训练示例脚�
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
+P800_DEMO_ROOT=${P800_DEMO_ROOT:-"/workspace/loongforge_p800_demo"}
 
-# DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json"}
+# DATA_PATH=${DATA_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/sft_aplaca_zh_data.json"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_tokenized"}
+DATA_PATH=${DATA_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/sft_aplaca_zh_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"${P800_DEMO_ROOT}/datasets/qwen3/sft_aplaca_zh_data_cache"}
 
 DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/huggingface.co/Qwen/Qwen3-8B"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"${P800_DEMO_ROOT}/models/Qwen3-8B"}
 
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3/Qwen3_8B_mcore_tp1pp1"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"${P800_DEMO_ROOT}/checkpoints/qwen3/Qwen3_8B_mcore_tp1pp1"}
 
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-8b-sft"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"${P800_DEMO_ROOT}/tensorboard/qwen3-8b-sft"}
 
 GPUS_PER_NODE=8
 
@@ -99,7 +100,7 @@ export XMLIR_PARALLEL_SAVE_MEMORY=false         # false：内存占用更多但�
 export XMLIR_BATCH_PARALLEL=false               # 启用通信融合算子，bf16 下 USE_CAST_FC_FUSION 自动禁用
 export XMLIR_ENABLE_FAST_FC=true
 export SAVE_LOG_FILE_WITH_RANK_ID=false         # 设为 true 时，训练日志将按 rank_id 分别存储
-export XMLIR_LOG_PATH="log-path"                # 指定训练日志存储目录
+export XMLIR_LOG_PATH="${P800_DEMO_ROOT}/logs"  # 指定训练日志存储目录
 export XMLIR_LOG_PREFIX="log-file-prefix"       # 指定训练日志文件名前缀
 export P800_DEBUG=false                         # 设为 true 时，梯度范数变为 nan 将保存权重并退出
 export P800_DUMP_DIR="ckpt-dump-dir-path"       # 指定梯度范数变为 nan 时权重和信息的转储目录

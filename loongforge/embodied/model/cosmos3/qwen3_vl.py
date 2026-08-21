@@ -195,7 +195,7 @@ class Qwen3VLTextRotaryEmbedding(nn.Module):
         # which silently downcasts the .float() @ .float() matmul to bf16.
         # On axis-T (position_ids range 15010..15023) bf16 has only 8-bit
         # mantissa, leading to ~45-unit absolute error and divergence between
-        # cosmos (fp32) and AIAK (bf16) pods. Disable autocast for this matmul.
+        # fp32 and bf16 runs. Disable autocast for this matmul.
         with __import__("torch").amp.autocast(device_type="cuda", enabled=False):
             freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(2, 3)  # [3,B,N,head_dim//2]
         freqs = self.apply_interleaved_mrope(freqs, self.mrope_section)  # [B,N,head_dim//2]

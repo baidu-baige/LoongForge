@@ -105,8 +105,8 @@ docker pull loongforge/loongforge:${LOONGFORGE_VERSION}
 LOONGFORGE_VERSION=<version>
 
 docker run --runtime=nvidia --gpus all -itd --rm \
-  -v /path/to/your/hf/models:/mnt/cluster/huggingface.co/ \
-  -v /path/to/data:/mnt/cluster/LoongForge/ \
+  -v /path/to/your/hf/models:/workspace/hf/models \
+  -v /path/to/data:/workspace/data \
   loongforge/loongforge:${LOONGFORGE_VERSION} /bin/bash
 ```
 

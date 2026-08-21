@@ -143,8 +143,8 @@ bash convert_qwen_image.sh hg2mcore
 Edit the key paths in `examples/qwen_image/pretrain_qwen_image_edit_2511.sh`:
 
 ```bash
-MEGATRON_PATH=/path/to/AIAK-Megatron
-LOONGFORGE_PATH=/path/to/AIAK-Training-Omni
+MEGATRON_PATH=/path/to/Loong-Megatron
+LOONGFORGE_PATH=/path/to/LoongForge
 DATASET_PATH=data/preprocessed                      # Output from Section 2
 MCORE_LOAD_CKPT=/path/to/qwen_image_edit_2511_mcore # Output from Section 3
 ```

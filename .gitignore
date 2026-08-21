@@ -96,3 +96,6 @@ nsight_*/
 
 # Launch / marketing kit (local only, not for publishing)
 /launch-kit/
+
+# Local AI coding assistant rules
+/.comate/

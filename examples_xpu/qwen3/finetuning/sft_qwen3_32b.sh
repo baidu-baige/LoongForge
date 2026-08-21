@@ -4,24 +4,24 @@
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 
-DATA_PATH=${DATA_PATH:-"/mnt/cluster/LoongForge/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
+DATA_PATH=${DATA_PATH:-"/workspace/loongforge_ci/qwen3/tigerbot-alpaca-zh-0.5m_tokenized"}
 
-DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/mnt/cluster/LoongForge/qwen3/sft_aplaca_zh_data_cache"}
+DATA_CACHE_PATH=${DATA_CACHE_PATH:-"/workspace/loongforge_ci/qwen3/sft_aplaca_zh_data_cache"}
 
 DATASET_CONFIG_PATH=${DATASET_CONFIG_PATH:-"/workspace/LoongForge/configs/data/sft_dataset_config.yaml"}
 
-TOKENIZER_PATH=${TOKENIZER_PATH:-"/mnt/cluster/models/Qwen3-32B"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/qwen3/Qwen3_32B_mcore_tp4pp2"}
-TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/mnt/cluster/LoongForge/tensorboard-log/qwen3-32b-sft"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"/workspace/models/Qwen3-32B"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/loongforge_ci/qwen3/Qwen3_32B_mcore_tp4pp2"}
+TENSORBOARD_PATH=${TENSORBOARD_PATH:-"/workspace/loongforge_ci/tensorboard-log/qwen3-32b-sft"}
 GPUS_PER_NODE=8
 export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 #export DIST_MULTI_STREAM=true # Enable multi-stream
 export CUDA_DEVICE_MAX_CONNECTIONS=1 # Enable multi-stream
 
 ##################
-# bp16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bp16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 ##################
-# bf16-specific settings (for Megatron-related variables, refer to <Baige Megatron specifics>)
+# bf16-specific settings (for Megatron-related variables, refer to Loong-Megatron settings)
 export XMLIR_ENABLE_FAST_FC=true         # Used in torch.nn.linear.py (LinearWithActFunction, etc.)
 #export XMLIR_ENABLE_FAST_FC_FWD_OUT=true # Used for forward output
 #export XMLIR_ENABLE_FAST_FC_BWD_DW=true  # Used for backward dw
