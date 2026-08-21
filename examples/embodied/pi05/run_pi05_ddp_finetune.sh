@@ -90,6 +90,7 @@ TRAINING_ARGS=(
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
     --pretrained-checkpoint "$CHECKPOINT_PATH"
+    --activation-checkpoint-module-patterns "model.paligemma_with_expert.paligemma.model.vision_tower.vision_model.encoder.layers.*"
 )
 
 DISTRIBUTED_TRAINING_ARGS=(
