@@ -122,6 +122,9 @@ class FastWAM(torch.nn.Module):
         action_dit_pretrained_path: str | None = None,
         skip_dit_load_from_pretrain: bool = False,
         mot_checkpoint_mixed_attn: bool = True,
+        drop_all_true_cross_attn_mask: bool = False,
+        compile_mot_blocks: str = "none",
+        compile_dynamic: bool = False,
         video_train_shift: float = 5.0,
         video_infer_shift: float = 5.0,
         video_num_train_timesteps: int = 1000,
@@ -167,6 +170,9 @@ class FastWAM(torch.nn.Module):
         mot = MoT(
             mixtures={"video": video_expert, "action": action_expert},
             mot_checkpoint_mixed_attn=mot_checkpoint_mixed_attn,
+            drop_all_true_cross_attn_mask=drop_all_true_cross_attn_mask,
+            compile_mot_blocks=compile_mot_blocks,
+            compile_dynamic=compile_dynamic,
         )
 
         model = cls(
