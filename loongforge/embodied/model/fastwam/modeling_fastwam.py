@@ -82,6 +82,9 @@ class FastWAMPolicy(nn.Module):
             action_dit_pretrained_path=config.action_dit_pretrained_path,
             skip_dit_load_from_pretrain=config.skip_dit_load_from_pretrain,
             mot_checkpoint_mixed_attn=config.mot_checkpoint_mixed_attn,
+            drop_all_true_cross_attn_mask=config.drop_all_true_cross_attn_mask,
+            compile_mot_blocks=config.mot_compile_blocks,
+            compile_dynamic=config.compile_dynamic,
             video_train_shift=float(config.video_scheduler["train_shift"]),
             video_infer_shift=float(config.video_scheduler["infer_shift"]),
             video_num_train_timesteps=int(config.video_scheduler["num_train_timesteps"]),
@@ -91,6 +94,9 @@ class FastWAMPolicy(nn.Module):
             loss_lambda_video=float(config.loss["lambda_video"]),
             loss_lambda_action=float(config.loss["lambda_action"]),
         )
+        if config.compile_vae_encode:
+            core.vae.encode = torch.compile(core.vae.encode, dynamic=config.compile_dynamic)
+            logger.info("[compile] torch.compile on VAE encode (dynamic=%s)", config.compile_dynamic)
         return cls(core)
 
     def forward(self, batch: Any) -> Dict[str, torch.Tensor]:

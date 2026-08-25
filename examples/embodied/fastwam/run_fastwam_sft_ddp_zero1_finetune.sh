@@ -4,39 +4,6 @@
 
 # ═══════════════════════════════════════════════════════════════
 # run_fastwam_sft_ddp_zero1_finetune.sh - FastWAM SFT Launch Script (DDP + ZeRO-1)
-#
-# Delta versus run_fastwam_sft_ddp_finetune.sh:
-#   --zero-optimizer                    wrap the optimizer in
-#                                       ZeroRedundancyOptimizer, sharding
-#                                       optimizer states across ranks. Only
-#                                       effective with --distributed-strategy ddp.
-#   --no-ddp-find-unused-parameters     skip the unused-parameter scan; FastWAM's
-#                                       forward graph has no conditional branches.
-#   --ddp-static-graph                  graph is identical every iteration, lets
-#                                       DDP reuse its bucket/reduction plan.
-#   --ddp-gradient-as-bucket-view       expose grads as views into the comm
-#                                       buckets instead of separate allocations.
-#   --no-ddp-broadcast-buffers          no BN-style buffers to sync each forward.
-#   --ddp-bucket-cap-mb                 larger buckets: fewer, bigger all-reduces.
-#
-# The memory saved by ZeRO-1 is what makes the larger --per-device-batch-size
-# below affordable relative to the plain DDP script.
-#
-# Two optional ZeRO knobs are left off by default:
-#   --zero-parameters-as-bucket-view    further cuts peak memory, but can clash
-#                                       with torch.compile + the DDP reducer.
-#   --zero-master-param-dtype fp32      rank-local fp32 master params, broadcast
-#                                       after each step. Better numerics under
-#                                       bf16 training at some bandwidth cost.
-#
-# Usage:
-#   bash run_fastwam_sft_ddp_zero1_finetune.sh
-#   DATASET_PATH=/path/to/libero TOKENIZER_PATH=/path/to/tokenizer \
-#     bash run_fastwam_sft_ddp_zero1_finetune.sh
-#   GPUS_PER_NODE=4 bash run_fastwam_sft_ddp_zero1_finetune.sh                   # override via env
-#   bash run_fastwam_sft_ddp_zero1_finetune.sh --train-iters 50                  # override a flag
-#   bash run_fastwam_sft_ddp_zero1_finetune.sh model.action_dit_pretrained_path=/path  # dotlist form
-# ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -113,6 +80,8 @@ TRAINING_ARGS=(
     --lr-warmup-iters 0
     --min-lr 1.0e-9
     # Optimizer
+    --optimizer TorchFusedAdamW
+    --cudnn-benchmark
     --clip-grad 1.0
     --weight-decay 0.01
     --adam-beta1 0.9
@@ -134,6 +103,8 @@ DISTRIBUTED_TRAINING_ARGS=(
     --no-ddp-broadcast-buffers
     --ddp-bucket-cap-mb 200
     --dtype bfloat16
+    --no-check-for-nan-in-loss-and-grad
+    --zero-parameters-as-bucket-view
 )
 
 # ── Logging params ────────────────────────────────────────────

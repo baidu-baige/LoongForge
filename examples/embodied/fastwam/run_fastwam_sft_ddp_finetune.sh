@@ -87,6 +87,8 @@ TRAINING_ARGS=(
     --lr-warmup-iters 0
     --min-lr 1.0e-9
     # Optimizer
+    --optimizer TorchFusedAdamW
+    --cudnn-benchmark
     --clip-grad 1.0
     --weight-decay 0.01
     --adam-beta1 0.9
@@ -101,7 +103,13 @@ fi
 
 DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy ddp
+    --no-ddp-find-unused-parameters
+    --ddp-static-graph
+    --ddp-gradient-as-bucket-view
+    --no-ddp-broadcast-buffers
+    --ddp-bucket-cap-mb 200
     --dtype bfloat16
+    --no-check-for-nan-in-loss-and-grad
 )
 
 # ── Logging params ────────────────────────────────────────────
