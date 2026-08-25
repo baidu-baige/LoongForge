@@ -59,12 +59,39 @@ class FastWAMModelConfig:
     action_horizon: int = 16
     proprio_dim: int | None = 8
     max_action_dim: int | None = None
-    # q/k RMSNorm for both DiT experts.
+
+    # ── Training knobs ────────────────────────────────────────────────────────
+    tokenizer_max_len: int = 128
+    load_text_encoder: bool = False
+    mot_checkpoint_mixed_attn: bool = True
     skip_dit_load_from_pretrain: bool = False
-    # Drop all-True cross-attn masks so SDPA can use flash instead of its masked kernel.
+    action_dit_pretrained_path: str | None = (
+        "checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt"
+    )
+    redirect_common_files: bool = True
+    dtype: str = "bfloat16"
+
     rmsnorm_impl: str = "wan"  # {"wan", "te"}
+    # Replace all-True cross-attention masks with None so SDPA can use its flash kernel.
+    drop_all_true_cross_attn_mask: bool = False
+    # Drop the trainer-level bf16 autocast, redundant since params/activations are bf16.
+    disable_train_autocast: bool = False
+    # torch.compile scopes, off by default; shapes are static so keep compile_dynamic=False.
     compile_vae_encode: bool = False
-    # torch.compile scopes
+    mot_compile_blocks: str = "none"  # {"none", "pre", "post", "both"}
+    compile_dynamic: bool = False
+
+    # ── Nested architecture configs (fixed for Wan2.2-5B, not in YAML) ────────
+    video_dit_config: dict[str, Any] = field(default_factory=lambda: {
+        "has_image_input": False,
+        "patch_size": [1, 2, 2],
+        "in_dim": 48, "out_dim": 48,
+        "hidden_dim": 3072, "ffn_dim": 14336,
+        "freq_dim": 256, "text_dim": 4096,
+        "num_heads": 24, "attn_head_dim": 128, "num_layers": 30,
+        "eps": 1.0e-6, "seperated_timestep": True,
+        "require_clip_embedding": False, "require_vae_embedding": False,
+        "fuse_vae_embedding_in_latents": True,
         "use_gradient_checkpointing": True,
         "video_attention_mask_mode": "first_frame_causal",
         "action_conditioned": False,
@@ -97,6 +124,7 @@ class FastWAMModelConfig:
                 f"got {self.variant!r}"
             )
 
+        # ── Validate mot_compile_blocks ───────────────────────────────────────
         valid_compile_scopes = {"none", "pre", "post", "both"}
         if self.mot_compile_blocks not in valid_compile_scopes:
             raise ValueError(
@@ -104,14 +132,16 @@ class FastWAMModelConfig:
                 f"{sorted(valid_compile_scopes)}, got {self.mot_compile_blocks!r}"
             )
 
-        # Mirrors `wan.dit.make_rmsnorm`; kept literal so importing this config does
-        # not pull in torch / TransformerEngine.
+        # ── Validate rmsnorm_impl ─────────────────────────────────────────────
+        # Mirrors the names accepted by `wan.dit.make_rmsnorm`; kept as a literal
+        # here so importing this config does not pull in torch / TransformerEngine.
         valid_rmsnorm_impls = {"wan", "te"}
         if self.rmsnorm_impl not in valid_rmsnorm_impls:
             raise ValueError(
                 f"FastWAMModelConfig.rmsnorm_impl must be one of {sorted(valid_rmsnorm_impls)}, "
                 f"got {self.rmsnorm_impl!r}"
             )
+
         # ── Validate num_video_frames constraint via data config ───────────────
         # (num_video_frames lives in DataConfig; validation happens there)
 
@@ -119,18 +149,20 @@ class FastWAMModelConfig:
         required = {"train_shift", "infer_shift", "num_train_timesteps"}
         missing = required - set(self.action_scheduler.keys())
         if missing:
-        # Mirrors `wan.dit.make_rmsnorm`; kept literal so importing this config does
-        # not pull in torch / TransformerEngine.
+            raise ValueError(
+                f"action_scheduler missing required keys: {sorted(missing)}"
+            )
 
-        # Propagate shared fields into the nested dicts. frozen=True blocks attribute
-        # assignment, but the dict objects themselves are mutable.
-        for cfg in (self.video_dit_config, self.action_dit_config):
-            cfg["use_gradient_checkpointing"] = self.mot_checkpoint_mixed_attn
-            cfg["action_dim"] = self.action_dim
-            cfg["rmsnorm_impl"] = self.rmsnorm_impl
-        # Propagate shared fields into the nested dicts. frozen=True blocks attribute
-        # assignment, but the dict objects themselves are mutable.
-        for cfg in (self.video_dit_config, self.action_dit_config):
-            cfg["use_gradient_checkpointing"] = self.mot_checkpoint_mixed_attn
-            cfg["action_dim"] = self.action_dim
-            cfg["rmsnorm_impl"] = self.rmsnorm_impl
+        # ── Sync mot_checkpoint_mixed_attn → nested dit configs ───────────────
+        # frozen=True prevents direct assignment; use object.__setattr__ on the
+        # mutable dicts themselves (the dict objects are not frozen).
+        self.video_dit_config["use_gradient_checkpointing"] = self.mot_checkpoint_mixed_attn
+        self.action_dit_config["use_gradient_checkpointing"] = self.mot_checkpoint_mixed_attn
+
+        # ── Sync action_dim → nested dit configs ──────────────────────────────
+        self.video_dit_config["action_dim"] = self.action_dim
+        self.action_dit_config["action_dim"] = self.action_dim
+
+        # ── Sync rmsnorm_impl → nested dit configs ────────────────────────────
+        self.video_dit_config["rmsnorm_impl"] = self.rmsnorm_impl
+        self.action_dit_config["rmsnorm_impl"] = self.rmsnorm_impl
