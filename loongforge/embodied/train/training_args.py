@@ -977,8 +977,10 @@ class _ActivationCheckpointArgs:
     activation_checkpoint_skip_modules: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Optional comma-separated qualified module keys to exclude "
-                    "from --activation-checkpoint-module-patterns."
+            "help": "Optional comma-separated qualified module-key patterns to "
+                    "exclude from --activation-checkpoint-module-patterns. Same "
+                    "syntax: '*' matches one module-key segment. Every pattern "
+                    "must match at least one selected module."
         },
     )
 

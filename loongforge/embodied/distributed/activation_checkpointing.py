@@ -17,20 +17,18 @@ def apply_activation_checkpointing(
     raw_module_patterns: str | None,
     raw_skip_modules: str | None,
 ) -> None:
-    """Checkpoint selected modules except explicitly skipped module keys."""
+    """Checkpoint the modules selected by the patterns, minus those the skip patterns match."""
     from loongforge.embodied.train.training_args import parse_module_key_patterns
 
     module_patterns = parse_module_key_patterns(
         raw_module_patterns,
         option_name="activation checkpoint module patterns",
     )
-    skip_module_keys = set(
-        parse_module_key_patterns(
-            raw_skip_modules,
-            option_name="activation checkpoint skip modules",
-        )
+    skip_patterns = parse_module_key_patterns(
+        raw_skip_modules,
+        option_name="activation checkpoint skip modules",
     )
-    if not module_patterns and skip_module_keys:
+    if not module_patterns and skip_patterns:
         raise ValueError(
             "activation checkpoint skip modules require checkpoint module patterns"
         )
@@ -38,11 +36,20 @@ def apply_activation_checkpointing(
         return
 
     selected_modules = _resolve_module_key_patterns(model, module_patterns)
-    unknown_skip_modules = skip_module_keys.difference(selected_modules)
-    if unknown_skip_modules:
+    # Same segment-wise glob as the patterns, so a literal key still means exactly itself.
+    matched_skip_patterns = set()
+    skip_module_keys = set()
+    for module_key in selected_modules:
+        for pattern in skip_patterns:
+            if _module_key_matches(pattern, module_key):
+                matched_skip_patterns.add(pattern)
+                skip_module_keys.add(module_key)
+                break
+    unmatched_skip_patterns = set(skip_patterns).difference(matched_skip_patterns)
+    if unmatched_skip_patterns:
         raise ValueError(
             "activation checkpoint skip modules were not selected: "
-            + ", ".join(sorted(unknown_skip_modules))
+            + ", ".join(sorted(unmatched_skip_patterns))
         )
     selected_modules = {
         module_key: module
