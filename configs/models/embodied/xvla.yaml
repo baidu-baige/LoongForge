@@ -28,6 +28,7 @@ model:
 
   enable_torch_compile: true
   torch_compile_mode: default
+  action_head_attn_use_fa2: true
 
   # florence_config — passed as one block to Florence2Config(**florence_config).
   # Mirrors configs/models/embodied/config.json exactly so the composed HF config
@@ -57,6 +58,8 @@ model:
       dropout: 0.1
       max_position_embeddings: 4096
       num_hidden_layers: 12
+      # Florence2SdpaAttention: FlashAttention-2 (no-mask) then SDPA. false keeps SDPA.
+      sdpa_use_fa2: true
       # NOTE: config.json lists `num_beams: 3`, but transformers v5.3.0 removed
       # generation params (num_beams, ...) from PretrainedConfig — they now live
       # in GenerationConfig. Florence2LanguageConfig(**text_config) drops it via
@@ -71,6 +74,7 @@ model:
       patch_padding: [3, 1, 1, 1]
       patch_prenorm: [false, true, true, true]
       enable_checkpoint: false
+      window_use_fa2: true
       dim_embed: [256, 512, 1024, 2048]
       num_heads: [8, 16, 32, 64]
       num_groups: [8, 16, 32, 64]

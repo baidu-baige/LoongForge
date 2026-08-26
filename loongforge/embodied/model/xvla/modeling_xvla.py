@@ -102,6 +102,7 @@ class XVLA(PreTrainedModel):
             use_hetero_proj=config.use_hetero_proj,
             attn_dropout=config.attn_dropout,
             mlp_dropout=config.mlp_dropout,
+            use_fa2=config.action_head_attn_use_fa2,
         )
 
     # ============================= Florence2 encoder =============================

@@ -131,6 +131,7 @@ class Florence2VisionConfig(PretrainedConfig):
         patch_padding: list[int] | None = None,
         patch_prenorm: list[bool] | None = None,
         enable_checkpoint: bool = False,
+        window_use_fa2: bool = False,
         dim_embed: list[int] | None = None,
         num_heads: list[int] | None = None,
         num_groups: list[int] | None = None,
@@ -150,6 +151,9 @@ class Florence2VisionConfig(PretrainedConfig):
             patch_prenorm if patch_prenorm is not None else [False, True, True, True]
         )
         self.enable_checkpoint = enable_checkpoint
+        # When True, WindowAttention uses FlashAttention-2 (fused, faster) instead of the
+        # explicit q·kᵀ→softmax→·v path. Mathematically equivalent (loss curve unchanged).
+        self.window_use_fa2 = window_use_fa2
         self.dim_embed = dim_embed if dim_embed is not None else [256, 512, 1024, 2048]
         self.num_heads = num_heads if num_heads is not None else [8, 16, 32, 64]
         self.num_groups = num_groups if num_groups is not None else [8, 16, 32, 64]
@@ -202,6 +206,7 @@ class Florence2LanguageConfig(PretrainedConfig):
         decoder_start_token_id: int = 2,
         forced_eos_token_id: int = 2,
         num_hidden_layers: int | None = None,
+        sdpa_use_fa2: bool = False,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -226,6 +231,9 @@ class Florence2LanguageConfig(PretrainedConfig):
         self.num_hidden_layers = (
             num_hidden_layers if num_hidden_layers is not None else encoder_layers
         )
+        # When True, Florence2SdpaAttention prefers flash_attn_func (no-mask CUDA
+        # fp16/bf16) and falls back to SDPA. Default off keeps the original SDPA path.
+        self.sdpa_use_fa2 = sdpa_use_fa2
         super().__init__(
             num_labels=num_labels,
             pad_token_id=pad_token_id,
@@ -329,6 +337,7 @@ class XVLAConfig(PretrainedConfig):
         enable_torch_compile: bool = False,
         torch_compile_mode: str = "default",
         robot_type: str = "",
+        action_head_attn_use_fa2: bool = False,
         **kwargs,
     ):
         if florence_config is None:
@@ -364,6 +373,9 @@ class XVLAConfig(PretrainedConfig):
         # at inference time (see ``XVLAPolicy.predict_action``), mirroring the
         # training path where the dataset maps ``robot_type`` -> domain id.
         self.robot_type = robot_type
+        # When True, action-head Attention prefers FlashAttention-2 then SDPA.
+        # Default off keeps the original fused-SDPA / manual path.
+        self.action_head_attn_use_fa2 = action_head_attn_use_fa2
         super().__init__(**kwargs)
 
 
@@ -385,6 +397,7 @@ class Florence2VisionConfigSchema:
     patch_padding: list[int] = field(default_factory=lambda: [3, 1, 1, 1])
     patch_prenorm: list[bool] = field(default_factory=lambda: [False, True, True, True])
     enable_checkpoint: bool = False
+    window_use_fa2: bool = False
     dim_embed: list[int] = field(default_factory=lambda: [256, 512, 1024, 2048])
     num_heads: list[int] = field(default_factory=lambda: [8, 16, 32, 64])
     num_groups: list[int] = field(default_factory=lambda: [8, 16, 32, 64])
@@ -418,6 +431,7 @@ class Florence2LanguageConfigSchema:
     dropout: float = 0.1
     max_position_embeddings: int = 4096
     num_hidden_layers: int = 12
+    sdpa_use_fa2: bool = False
 
 
 @dataclass
@@ -471,6 +485,7 @@ class XvlaModelConfig:
 
     enable_torch_compile: bool = False
     torch_compile_mode: str = "default"
+    action_head_attn_use_fa2: bool = False
 
     # Embodiment/domain key, resolved to a domain id via ``DOMAIN_ID_MAP`` at
     # inference time (see XVLAConfig.robot_type). Set per benchmark/embodiment.
