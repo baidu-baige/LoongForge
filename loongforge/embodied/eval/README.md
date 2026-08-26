@@ -55,12 +55,14 @@ The LIBERO simulator runs in the benchmark environment; the policy server is lau
 |---|---|---|---|---|---|
 | **pi05** | ✅ task success ([lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044)) | connectivity only | connectivity only | ✅ task success ([motus-robotics/pi0.5_robotwin2](https://huggingface.co/motus-robotics/pi0.5_robotwin2)) | connectivity only |
 | **xvla** | ✅ task success ([2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO)) | connectivity only | ✅ task success ([2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX)) | ✅ task success ([2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2)) | connectivity only |
-| **GR00T-N1.6** | — | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | — |
+| **GR00T-N1.6** | ✅ task success ([0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | — |
+| **GR00T-N1.7** | ✅ task success ([nvidia/GR00T-N1.7-LIBERO](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.7-SimplerEnv-Bridge](https://huggingface.co/nvidia/GR00T-N1.7-SimplerEnv-Bridge)) | — | — |
 
 - **Task success**: at least one episode passed the benchmark's official success criterion.
 - **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run.
 - **Connectivity only**: the pipeline runs with `random_init: true` and no score — either no domain weights are released, or the benchmark assets block a full run (e.g. xvla CALVIN: the weights are public, but the official online rollout needs the original-format validation dataset).
 - **—**: not supported yet — coming soon.
+- **GR00T-N1.7** additionally needs `transformers 4.57.3` in the policy env, the version Isaac-GR00T declares. The 5.3.0 our own `pyproject.toml` installs silently degrades every benchmark (`libero_10` 46/50 → 11/50, WidowX 85/120 → 35/120). See the [LIBERO](docs/patches/libero/groot_n1_7.md) / [SimplerEnv](docs/patches/simplerenv/groot_n1_7.md) guides.
 - **Detailed results**: see the per-benchmark [benchmark pages](docs/benchmarks/libero.md).
 
 ## Model Interface

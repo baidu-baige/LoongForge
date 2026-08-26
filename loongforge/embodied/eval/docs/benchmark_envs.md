@@ -106,9 +106,18 @@ Current SimplerEnv status:
 X-VLA WidowX status:   task success after absolute EE controller patch
                        (see patches/simplerenv/xvla.md)
                        configs: examples/embodied/xvla/eval/configs/simplerenv/*
-GR00T-N1.6 status:     task success (eggplant 20/20, official prepackaged_config)
-                       uses the stock upstream delta controller, no env change
+GR00T-N1.6 status:     task success, 42/60 over six WidowX tasks (10 eps each;
+                       open_drawer 10/10, close_drawer 10/10, spoon 7/10,
+                       eggplant_basket 9/10, carrot 5/10, stack_cube 1/10;
+                       official prepackaged_config)
+                       stock delta controller, no env change; the checkout is
+                       NVIDIA's pinned SimplerEnv fork
+                       (see patches/simplerenv/groot_n1_6.md)
                        configs: examples/embodied/groot_n1_6/eval/configs/simplerenv/*
+GR00T-N1.7 status:     task success, 85/120 over six WidowX tasks (20 eps each)
+                       same checkout as N1.6; requires transformers 4.57.3 on the
+                       policy side (see patches/simplerenv/groot_n1_7.md)
+                       configs: examples/embodied/groot_n1_7/eval/configs/simplerenv/*
 pi05 configs:          only widowx_stack_cube_smoke.yaml
                        server.random_init: true (connectivity only, not task success)
                        other Bridge tasks: edit task_name in-file comments
@@ -121,7 +130,13 @@ Used by:
 ```text
 examples/embodied/pi05/eval/configs/simplerenv/*.yaml
 examples/embodied/xvla/eval/configs/simplerenv/*.yaml
+examples/embodied/groot_n1_6/eval/configs/simplerenv/*.yaml
+examples/embodied/groot_n1_7/eval/configs/simplerenv/*.yaml
 ```
+
+Note the two GR00T models and X-VLA need **different** SimplerEnv checkouts: GR00T
+runs against NVIDIA's pinned fork, X-VLA against a checkout carrying the absolute
+EE controller registration. Point `env.simplerenv_root` deliberately per model.
 
 ## RoboTwin
 

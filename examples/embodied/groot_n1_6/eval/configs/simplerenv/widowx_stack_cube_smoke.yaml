@@ -57,6 +57,11 @@ server:
 
 env:
   eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  # SimplerEnv checkout: use the fork that NVIDIA/Isaac-GR00T pins as its
+  # `external_dependencies/SimplerEnv` submodule (github.com/squarefk/SimplerEnv,
+  # see that repo's .gitmodules). Upstream simpler-env/SimplerEnv registers
+  # neither widowx drawer task and does not expose `agent.eef_pos`. Details:
+  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_6.md.
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib

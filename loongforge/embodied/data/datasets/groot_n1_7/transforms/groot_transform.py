@@ -71,7 +71,10 @@ LIBERO_SIM_MODALITY_META = {
         "roll": {"start": 3, "end": 4},
         "pitch": {"start": 4, "end": 5},
         "yaw": {"start": 5, "end": 6},
-        "gripper": {"start": 7, "end": 8},
+        # robot0_gripper_qpos is 2D (both finger joints); the official
+        # LiberoEnv declares state.gripper with shape (2,) and the released
+        # checkpoint statistics carry 2 values per stat for this group.
+        "gripper": {"start": 6, "end": 8},
     },
     "action": {
         "x": {"start": 0, "end": 1},
@@ -93,6 +96,63 @@ LIBERO_SIM_MODALITY_CONFIG = {
     ),
     "action": ModalityConfig(
         delta_indices=list(range(16)),
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.ABSOLUTE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            )
+        ]
+        * 7,
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.human.action.task_description"],
+    ),
+}
+
+
+SIMPLER_ENV_WIDOWX_MODALITY_META = {
+    "state": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        # Dead channel: the Bridge statistics carry q01 == q99 == 0.0 for
+        # ``pad`` and the official ``WidowXBridgeEnv`` always feeds 0. It still
+        # has to occupy index 6 so ``gripper`` lands on index 7.
+        "pad": {"start": 6, "end": 7},
+        # 1D normalized openness in [0, 1] (1.0 = fully open), unlike
+        # ``libero_sim`` whose gripper slot is the 2D finger qpos.
+        "gripper": {"start": 7, "end": 8},
+    },
+    "action": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        "gripper": {"start": 6, "end": 7},
+    },
+}
+
+
+# Transcribed from ``processor_config.json`` of
+# ``nvidia/GR00T-N1.7-SimplerEnv-Bridge`` (``processor_kwargs.modality_configs
+# ["simpler_env_widowx"]``): a single exterior view, an 8D state whose 7th slot
+# is a dead pad channel, and an 8-step absolute action chunk.
+SIMPLER_ENV_WIDOWX_MODALITY_CONFIG = {
+    "video": ModalityConfig(delta_indices=[0], modality_keys=["image_0"]),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "pad", "gripper"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(8)),
         modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
         action_configs=[
             ActionConfig(
@@ -156,6 +216,7 @@ NEW_EMBODIMENT_MODALITY_CONFIG = {
 
 MODALITY_CONFIGS = {
     "libero_sim": LIBERO_SIM_MODALITY_CONFIG,
+    "simpler_env_widowx": SIMPLER_ENV_WIDOWX_MODALITY_CONFIG,
     "new_embodiment": NEW_EMBODIMENT_MODALITY_CONFIG,
 }
 
@@ -164,6 +225,10 @@ EMBODIMENT_STAT_CONFIGS = {
     "libero_sim": {
         "modality_meta": LIBERO_SIM_MODALITY_META,
         "modality_config": LIBERO_SIM_MODALITY_CONFIG,
+    },
+    "simpler_env_widowx": {
+        "modality_meta": SIMPLER_ENV_WIDOWX_MODALITY_META,
+        "modality_config": SIMPLER_ENV_WIDOWX_MODALITY_CONFIG,
     },
     "new_embodiment": {
         "modality_meta": NEW_EMBODIMENT_MODALITY_META,
