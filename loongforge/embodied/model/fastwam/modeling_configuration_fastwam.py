@@ -70,38 +70,13 @@ class FastWAMModelConfig:
     )
     redirect_common_files: bool = True
     dtype: str = "bfloat16"
-    # q/k RMSNorm implementation for both DiT experts: "wan" (upstream module built
-    # on F.rms_norm) or "te" (TransformerEngine).
-    # torch < 2.9.0 has no fused rms_norm CUDA kernel, so "te" is far faster there;
-    # from torch 2.9.0 on the native kernel wins at the DiT's hidden size (3072),
-    # which TE 2.9 has no tuned kernel for. See `wan.dit.make_rmsnorm`.
+
     rmsnorm_impl: str = "wan"  # {"wan", "te"}
-    # Cross-attention masks produced by this pipeline are all-True: text padding is
-    # expressed by zeroing the embeddings (see `fastwam_collator._build_context` and
-    # `FastWAM._encode_prompt`), not by masking. Passing such a mask to SDPA still
-    # forces the masked attention kernel. When True, an all-True mask is replaced by
-    # None so SDPA can dispatch to its flash kernel. The all-True check runs once per
-    # (expert, shape) and a non-trivial mask is always kept.
+    # Replace all-True cross-attention masks with None so SDPA can use its flash kernel.
     drop_all_true_cross_attn_mask: bool = False
-    # All FastWAM parameters and activations are already bf16 (`dtype` above), so the
-    # trainer-level `torch.autocast("cuda", bf16)` around the model call only adds
-    # per-op dtype checks and cast bookkeeping. Set True to drop it, as DreamZero and
-    # Cosmos3 already do.
+    # Drop the trainer-level bf16 autocast, redundant since params/activations are bf16.
     disable_train_autocast: bool = False
-    # torch.compile scopes, off by default and independently switchable.
-    #   compile_vae_encode  — the online VAE encode of the input frames, a conv3d
-    #                         stack with a fixed shape every step.
-    #   mot_compile_blocks  — which of the two per-layer MoT units around mixed
-    #                         attention to compile: none | pre | post | both.
-    #                         `pre` (`_build_expert_attention_io`) holds two TE
-    #                         RMSNorms and two Triton RoPE calls, none of which
-    #                         Dynamo can trace, so it fragments badly; `post`
-    #                         (`_apply_expert_post_block`) holds the FFN and the
-    #                         gate/modulate chain, where Inductor has something to
-    #                         fuse. Measure before trusting either.
-    # Keep `compile_dynamic=False`: every dimension in these regions is fixed by the
-    # config (batch, 294/32 tokens, 129 context), and a dynamic dim here would let a
-    # data-dependent shape into the graph and trigger recompiles mid-training.
+    # torch.compile scopes, off by default; shapes are static so keep compile_dynamic=False.
     compile_vae_encode: bool = False
     mot_compile_blocks: str = "none"  # {"none", "pre", "post", "both"}
     compile_dynamic: bool = False
