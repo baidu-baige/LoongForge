@@ -34,6 +34,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
+from torch.nn.attention.flex_attention import create_block_mask, flex_attention
 from transformers import AutoTokenizer
 
 try:
@@ -283,6 +284,32 @@ def _get_gemma_config(variant: str) -> _GemmaConfig:
 # compute_layer_complete (gradient checkpointing helper)
 # ═══════════════════════════════════════════════════════════════
 
+def _joint_attention_flex(query_states, key_states, value_states, block_mask, scaling):
+    """FlexAttention joint attention.  enable_gqa broadcasts the single kv head to the
+    8 query heads inside the kernel, so repeat_kv never materializes."""
+    att_output = flex_attention(
+        query_states, key_states, value_states,
+        block_mask=block_mask, scale=scaling, enable_gqa=True,
+    )
+    return att_output.transpose(1, 2).contiguous()
+
+
+_FLEX_BLOCK_MASK_FN = None
+
+
+def _flex_block_mask(att_2d_masks):
+    """BlockMask built once per step, shared by all layers; saves the additive fp32 mask."""
+    global _FLEX_BLOCK_MASK_FN
+    if _FLEX_BLOCK_MASK_FN is None:
+        _FLEX_BLOCK_MASK_FN = torch.compile(create_block_mask, dynamic=False)
+
+    def mask_mod(b, h, q_idx, kv_idx):
+        return att_2d_masks[b, q_idx, kv_idx]
+
+    bsize, q_len, kv_len = att_2d_masks.shape
+    return _FLEX_BLOCK_MASK_FN(mask_mod, bsize, 1, q_len, kv_len, device=att_2d_masks.device)
+
+
 def _compute_layer_complete(
     layer_idx, inputs_embeds, attention_mask, position_ids,
     adarms_cond, paligemma, gemma_expert
@@ -308,8 +335,8 @@ def _compute_layer_complete(
     cos, sin = paligemma.model.language_model.rotary_emb(dummy_tensor, position_ids)
     query_states, key_states = modeling_gemma.apply_rotary_pos_emb(query_states, key_states, cos, sin, unsqueeze_dim=1)
     scaling = paligemma.model.language_model.layers[layer_idx].self_attn.scaling
-    att_output, _ = modeling_gemma.eager_attention_forward(
-        paligemma.model.language_model.layers[layer_idx].self_attn,
+    # attention_mask is a BlockMask here, not an additive tensor.
+    att_output = _joint_attention_flex(
         query_states, key_states, value_states, attention_mask, scaling,
     )
     head_dim = paligemma.model.language_model.layers[layer_idx].self_attn.head_dim
@@ -788,17 +815,19 @@ class PI05Pytorch(nn.Module):
         att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
         att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
         position_ids = torch.cumsum(pad_masks, dim=1) - 1
-        att_2d_masks_4d = self._prepare_attention_masks_4d(att_2d_masks)
+        # Only the joint path takes a BlockMask.  sample_actions/_denoise_step go through
+        # HF and keep the additive tensor from _prepare_attention_masks_4d.
+        joint_mask = _flex_block_mask(att_2d_masks)
 
-        def _fwd(prefix_embs, suffix_embs, att_2d_masks_4d, position_ids, adarms_cond):
+        def _fwd(prefix_embs, suffix_embs, joint_mask, position_ids, adarms_cond):
             (_, suffix_out), _ = self.paligemma_with_expert.forward(
-                attention_mask=att_2d_masks_4d, position_ids=position_ids,
+                attention_mask=joint_mask, position_ids=position_ids,
                 inputs_embeds=[prefix_embs, suffix_embs], use_cache=False,
                 adarms_cond=[None, adarms_cond],
             )
             return suffix_out
 
-        suffix_out = self._apply_checkpoint(_fwd, prefix_embs, suffix_embs, att_2d_masks_4d, position_ids, adarms_cond)
+        suffix_out = self._apply_checkpoint(_fwd, prefix_embs, suffix_embs, joint_mask, position_ids, adarms_cond)
         suffix_out = suffix_out[:, -self.config.chunk_size:]
         if hasattr(self, "_action_out_bundle_fn"):
             v_t = self._action_out_bundle_fn(suffix_out)
