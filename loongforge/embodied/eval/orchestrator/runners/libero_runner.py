@@ -239,6 +239,12 @@ def run_episode(
             action_decoder.reset()
             env.reset()
             obs = env.set_init_state(initial_state)
+            # set_init_state teleports the sim but robosuite OSC controllers only
+            # refresh ee_pos/ee_ori_mat inside step(); force a sync so the first
+            # observation does not mix the pre-reset controller pose with the
+            # init-state quaternion.
+            for robot in env.env.robots:
+                robot.controller.update(force=True)
             reset_time_sec = time.time() - reset_start
 
             # Explicit benchmark.max_steps takes priority over the suite

@@ -10,12 +10,14 @@ LoongForge-VLA offline evaluation runs a policy against a simulation benchmark f
 |---|---|---|---|---|---|
 | **pi05** | ✅ task success ([lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044)) | connectivity only | connectivity only | ✅ task success ([motus-robotics/pi0.5_robotwin2](https://huggingface.co/motus-robotics/pi0.5_robotwin2)) | connectivity only |
 | **xvla** | ✅ task success ([2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO)) | connectivity only | ✅ task success ([2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX)) | ✅ task success ([2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2)) | connectivity only |
-| **GR00T-N1.6** | — | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | — |
+| **GR00T-N1.6** | ✅ task success ([0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | — |
+| **GR00T-N1.7** | ✅ task success ([nvidia/GR00T-N1.7-LIBERO](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.7-SimplerEnv-Bridge](https://huggingface.co/nvidia/GR00T-N1.7-SimplerEnv-Bridge)) | — | — |
 
 - **Task success**: at least one episode passed the benchmark's official success criterion.
 - **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run.
 - **Connectivity only**: the pipeline runs with `random_init: true` and no score yet — the domain weights are missing or the benchmark assets block a full run (e.g. CALVIN needs the original-format validation dataset even where weights are public).
 - **—**: not supported yet — coming soon.
+- **GR00T-N1.7** additionally needs `transformers 4.57.3` in the policy env, the version Isaac-GR00T declares. The 5.3.0 our own `pyproject.toml` installs silently degrades every benchmark (`libero_10` 46/50 → 11/50, WidowX 85/120 → 35/120). See the [LIBERO](patches/libero/groot_n1_7.md) / [SimplerEnv](patches/simplerenv/groot_n1_7.md) guides.
 - **Detailed results**: see the per-benchmark [benchmark pages](benchmarks/libero.md).
 
 Any model that implements the shared `predict_action(images, instructions, state=None, dataset_stats=None)` interface can be added — see [§6](#6-adding-a-new-model).
@@ -90,7 +92,7 @@ benchmark:
 
 model:
   backend: loongforge        # loongforge | mock
-  model_type: pi05           # REQUIRED (no default) — pi05 | xvla | Gr00tN1d6
+  model_type: pi05           # REQUIRED (no default) — pi05 | xvla | Gr00tN1d6 | Gr00tN1d7
   action_dim: 7
   action_horizon: 50
   # Optional model capability fields (have defaults; usually omitted):
@@ -127,9 +129,9 @@ timeouts:
 Key fields:
 
 - `benchmark.name` — selects the benchmark runner.
-- `model.model_type` — **required**; selects the model factory / PayloadBuilder (`pi05` | `xvla` | `Gr00tN1d6`). There is no default — the eval server fails fast if it is missing.
+- `model.model_type` — **required**; selects the model factory / PayloadBuilder (`pi05` | `xvla` | `Gr00tN1d6` | `Gr00tN1d7`). There is no default — the eval server fails fast if it is missing.
 - `model.backend` — `loongforge` for a real model, `mock` for a pipeline-only check (no model weights; the server returns mock actions to validate the eval chain).
-- `model:` — model-structure fields (`action_dim`, `action_horizon`, …) plus optional capability fields (`state_encoding` / `action_encoding` / `domain_id`). The fields are **model-specific** — pi05, xvla, and GR00T-N1.6 declare different structural fields (see the per-model configs under `examples/embodied/<model>/eval/configs/` and the [model integration guide](model_integration.md)). Defaults are sensible per model, so you rarely set the capability fields by hand.
+- `model:` — model-structure fields (`action_dim`, `action_horizon`, …) plus optional capability fields (`state_encoding` / `action_encoding` / `domain_id`). The fields are **model-specific** — pi05, xvla, GR00T-N1.6 and GR00T-N1.7 declare different structural fields (see the per-model configs under `examples/embodied/<model>/eval/configs/` and the [model integration guide](model_integration.md)). Defaults are sensible per model, so you rarely set the capability fields by hand.
 - `server.ckpt_path` — a directory with `model.safetensors` (or the weight file). Set `server.random_init: true` to run without weights.
 - `server.dataset_statistics_path` — action-normalization stats the model uses internally (e.g. pi05).
 - `server.python` — the model server interpreter.

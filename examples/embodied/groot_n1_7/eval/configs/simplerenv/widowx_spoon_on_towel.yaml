@@ -1,0 +1,89 @@
+# Public template: replace every /path/to/... placeholder before use.
+# The internal counterpart (same name + _internal) holds the machine-specific paths.
+#
+# GR00T-N1.7 x SimplerEnv WidowX (Bridge) -- widowx_spoon_on_towel, official parity.
+#   --max_episode_steps 300 -> benchmark.max_steps (counts INNER env steps)
+#   --n_action_steps 4      -> server.chunk_execute_steps
+#   simpler_env.make() forces prepackaged_config=True
+#
+
+benchmark:
+  name: simplerenv
+  task_name: widowx_spoon_on_towel
+  robot_setup: widowx
+  prepackaged_config: true
+  sim_freq: 500
+  control_freq: 5
+  control_mode: arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos
+  action_scale: 1.0
+  rotation_mode: axis_angle    # pass roll/pitch/yaw through unchanged
+  max_steps: 300
+  success_settle_steps: 0
+
+model:
+  backend: loongforge
+  model_type: Gr00tN1d7
+  base_model_path: /path/to/Cosmos-Reason2-2B
+  model_name: /path/to/Cosmos-Reason2-2B
+  state_encoding: simpler_widowx
+  action_encoding: simpler_abs_euler
+  # Do NOT set model.action_horizon: it is the DiT flow-matching sequence length
+  # fixed by the weights (40). The decoded 8-step chunk comes from the
+  # simpler_env_widowx embodiment's action delta_indices.
+  use_flash_attention: true
+
+server:
+  host: 127.0.0.1
+  port: 13773
+  health_port: 13774
+  # To reproduce the reported success rates this env must have transformers
+  # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 -- the
+  # version our own pyproject.toml installs -- the six-task WidowX total
+  # drops from 85/120 to 35/120, and nothing in the run warns about it. See
+  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_7.md.
+  python: /path/to/conda/envs/loongforge/bin/python
+  log: /path/to/reports/groot_n1_7/simplerenv/widowx_spoon_on_towel/policy_server.log
+  start_timeout_sec: 2400
+  random_init: false
+  ckpt_path: /path/to/GR00T-N1.7-SimplerEnv-Bridge
+  dataset_statistics_path: /path/to/GR00T-N1.7-SimplerEnv-Bridge/statistics.json
+  embodiment_tag: simpler_env_widowx
+  chunk_execute_steps: 4       # official --n_action_steps
+  use_bf16: true
+  loongforge_root: /path/to/LoongForge-VLA
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  # SimplerEnv checkout: use the fork that NVIDIA/Isaac-GR00T pins as its
+  # `external_dependencies/SimplerEnv` submodule (github.com/squarefk/SimplerEnv,
+  # see that repo's .gitmodules). Upstream simpler-env/SimplerEnv registers
+  # neither widowx drawer task and does not expose `agent.eef_pos`. Details:
+  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_6.md.
+  simplerenv_root: /path/to/SimplerEnv
+  ld_library_path: /path/to/nvidia_lib
+  nvidia_lib_dir: /path/to/nvidia_lib
+  nvidia_icd_json: /path/to/nvidia_lib/10_nvidia.json
+
+run:
+  output_dir: /path/to/reports/groot_n1_7/simplerenv/widowx_spoon_on_towel
+  seed: 0
+  episode_idx: 0
+  obj_episode_id: 0
+  save_trace: false
+  save_replay: false
+  disable_action_cache: false
+  timestamped_output: false
+
+# The SimplerEnv runner evaluates ONE episode per invocation. Under
+# prepackaged_config the env randomizes the layout from its own episode_rng,
+# seeded by `run.seed + run.episode_idx`, so `run.episode_idx` above is the
+# episode variable (not run.obj_episode_id).
+#
+# For a success rate, invoke this config once per episode (episode_idx 0, 1, 2,
+# ... 9 for the reported 10-episode numbers), giving each run its own
+# run.output_dir, then pool the per-run summaries.
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600

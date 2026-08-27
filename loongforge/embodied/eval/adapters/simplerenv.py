@@ -39,7 +39,13 @@ TASK_TO_ENV_NAME = {
     "widowx_carrot_on_plate": "PutCarrotOnPlateInScene-v0",
     "widowx_stack_cube": "StackGreenCubeOnYellowCubeBakedTexInScene-v0",
     "widowx_put_eggplant_in_basket": "PutEggplantInBasketScene-v0",
-    # WidowX small-drawer tasks (ported from NVIDIA's pinned SimplerEnv fork).
+    # Registered by the official GR00T env list too, but upstream marks it
+    # incomplete (TODO in both simpler_env/__init__.py and put_on_in_scene.py):
+    # the target is an invisible dummy plane and xy_configs has a single grid
+    # point, so object init is effectively fixed across episodes.
+    "widowx_put_eggplant_in_sink": "PutEggplantInSinkScene-v0",
+    # WidowX small-drawer tasks: registered only by NVIDIA's pinned SimplerEnv
+    # fork, not by upstream simpler-env/SimplerEnv.
     "widowx_open_drawer": "OpenSmallDrawerCustomInScene-v0",
     "widowx_close_drawer": "CloseSmallDrawerCustomInScene-v0",
 }

@@ -14,9 +14,11 @@ import logging
 import os
 from pathlib import Path
 import random
-from typing import Dict, Tuple
+import re
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 import numpy as np
+from PIL import Image
 import torch
 from safetensors.torch import load_file
 from torch import nn
@@ -24,6 +26,21 @@ import torch.nn.functional as F
 from torch.distributions import Beta
 from transformers.feature_extraction_utils import BatchFeature
 
+from loongforge.embodied.data.datasets.groot_n1_6.transforms.processor_groot_n1_6 import (
+    StateActionProcessor,
+)
+from loongforge.embodied.data.datasets.groot_n1_7.transforms.groot_collator import (
+    Gr00tN1d7DataCollator,
+)
+from loongforge.embodied.data.datasets.groot_n1_7.transforms.groot_transform import (
+    EMBODIMENT_STAT_CONFIGS,
+    EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
+    MODALITY_CONFIGS,
+    convert_lerobot_stats_to_groot_n1d7_format,
+)
+from loongforge.embodied.data.datasets.groot_n1_7.transforms.image_augmentations import (
+    build_image_transformations_albumentations,
+)
 from loongforge.embodied.model.registry import register_model
 
 from .model_configuration_groot_n1_7 import GrootN1d7Config
@@ -32,6 +49,8 @@ from .modules.embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEn
 from .modules.qwen3_backbone import Qwen3Backbone
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_PREDICT_ACTION_EMBODIMENT_TAG = "libero_sim"
 
 
 def _module_parameter_dtype(module: nn.Module) -> torch.dtype | None:
@@ -396,6 +415,28 @@ class GrootN1d7Policy(nn.Module):
                 "local_files_only": True,
             },
         )
+        self.collator: Gr00tN1d7DataCollator | None = None
+        self.embodiment_tag = _DEFAULT_PREDICT_ACTION_EMBODIMENT_TAG
+        self.modality_config = MODALITY_CONFIGS[self.embodiment_tag]
+        self.modality_meta = EMBODIMENT_STAT_CONFIGS[self.embodiment_tag]["modality_meta"]
+        self.state_keys = list(self.modality_config["state"].modality_keys)
+        self.action_keys = list(self.modality_config["action"].modality_keys)
+        self.embodiment_id = int(EMBODIMENT_TAG_TO_PROJECTOR_INDEX[self.embodiment_tag])
+        self.raw_state_dim = max(meta["end"] for meta in self.modality_meta["state"].values())
+        self.model_action_horizon = int(config.action_horizon)
+        self.action_horizon = len(self.modality_config["action"].delta_indices)
+        self.action_dim = int(
+            max(meta["end"] for meta in self.modality_meta["action"].values())
+        )
+        self._predict_action_initialized = False
+        self._predict_action_validation_zero_state = False
+        self._predict_action_use_bf16 = bool(config.use_bf16)
+        self._predict_action_statistics: Dict[str, Any] | None = None
+        self._predict_action_use_percentiles = False
+        self._predict_action_clip_outliers = True
+        self._predict_action_default_processor: StateActionProcessor | None = None
+        self._predict_action_processor_cache: dict[str, StateActionProcessor] = {}
+        self._predict_action_eval_image_transform = None
 
     def reset_data_iterator_rng(self, seed: int) -> None:
         """Align DataLoader worker base seeds with Isaac's finetune path."""
@@ -493,6 +534,573 @@ class GrootN1d7Policy(nn.Module):
             parameter.requires_grad and parameter.dtype != torch.float32
             for module in modules
             for parameter in module.parameters()
+        )
+
+    def configure_predict_action(
+        self,
+        *,
+        checkpoint_statistics: Dict[str, Any],
+        embodiment_tag: str = _DEFAULT_PREDICT_ACTION_EMBODIMENT_TAG,
+        use_bf16: bool | None = None,
+        validation_zero_state: bool = False,
+        processor_kwargs: Dict[str, Any] | None = None,
+    ) -> None:
+        """Configure eval-side resources used by ``predict_action``.
+
+        Args:
+            checkpoint_statistics: Per-embodiment or raw-LeRobot state/action stats.
+            embodiment_tag: Which embodiment's modality config / projector to activate.
+            use_bf16: Override the config's bf16 autocast setting.
+            validation_zero_state: Allow ``state=None`` to fall back to a zero
+                proprio. Only for interface validation / server warmup.
+            processor_kwargs: The checkpoint's ``processor_config.json``
+                ``processor_kwargs``. The image pipeline params are read from it
+                verbatim because the released values are not all derivable from
+                the model config: ``crop_fraction`` is 0.95, not the
+                ``image_crop_size / image_target_size`` ratio (0.898), and
+                ``letter_box_transform`` is False even though the training launch
+                config says otherwise. Falls back to the released GR00T-N1.7
+                values when omitted.
+        """
+        if embodiment_tag not in MODALITY_CONFIGS:
+            raise ValueError(f"Unsupported GR00T-N1.7 embodiment_tag={embodiment_tag!r}")
+        if embodiment_tag not in EMBODIMENT_TAG_TO_PROJECTOR_INDEX:
+            raise ValueError(f"No projector id registered for embodiment_tag={embodiment_tag!r}")
+
+        self.embodiment_tag = embodiment_tag
+        self.modality_config = MODALITY_CONFIGS[embodiment_tag]
+        self.modality_meta = EMBODIMENT_STAT_CONFIGS[embodiment_tag]["modality_meta"]
+        self.state_keys = list(self.modality_config["state"].modality_keys)
+        self.action_keys = list(self.modality_config["action"].modality_keys)
+        self.embodiment_id = int(EMBODIMENT_TAG_TO_PROJECTOR_INDEX[embodiment_tag])
+        self.raw_state_dim = max(meta["end"] for meta in self.modality_meta["state"].values())
+        self.action_horizon = len(self.modality_config["action"].delta_indices)
+        self.model_action_horizon = int(self.config.action_horizon)
+        self.action_dim = int(
+            max(meta["end"] for meta in self.modality_meta["action"].values())
+        )
+        self._predict_action_validation_zero_state = bool(validation_zero_state)
+        self._predict_action_use_bf16 = bool(self.config.use_bf16 if use_bf16 is None else use_bf16)
+        self._predict_action_statistics = self._coerce_statistics(checkpoint_statistics)
+        self._predict_action_processor_cache = {}
+        pk = processor_kwargs or {}
+        # State/action normalization mode comes from the checkpoint, not from the
+        # StateActionProcessor defaults: the released LIBERO checkpoints set
+        # use_percentiles=true (q01/q99), while the class defaults to min/max.
+        # Getting this wrong silently rescales both the proprio fed to
+        # state_encoder and the actions returned by unapply_action.
+        self._predict_action_use_percentiles = bool(pk.get("use_percentiles", False))
+        self._predict_action_clip_outliers = bool(pk.get("clip_outliers", True))
+        self._predict_action_default_processor = self._build_state_action_processor(
+            self._predict_action_statistics
+        )
+        self.collator = Gr00tN1d7DataCollator(
+            model_name=self.config.model_name,
+            model_type=self.config.backbone_model_type,
+            transformers_loading_kwargs={"trust_remote_code": True, "local_files_only": True},
+        )
+        # Official GrootN1d7FeatureTransform eval pipeline: letterbox ->
+        # SmallestMaxSize(shortest_image_edge) -> crop_fraction center crop ->
+        # SmallestMaxSize. predict_action() applies this before building
+        # vlm_content so callers only need to supply the env's native camera image.
+        image_target_size = list(pk.get("image_target_size") or [256, 256])
+        image_crop_size = list(pk.get("image_crop_size") or [230, 230])
+        crop_fraction = pk.get("crop_fraction", 0.95)
+        shortest_image_edge = pk.get("shortest_image_edge", 256)
+        _, self._predict_action_eval_image_transform = build_image_transformations_albumentations(
+            image_target_size,
+            image_crop_size,
+            int(pk.get("random_rotation_angle") or 0),
+            None,  # color_jitter_params: train-only augmentation
+            shortest_image_edge,
+            crop_fraction,
+            # Not read from processor_config.json: the checkpoint stores
+            # letter_box_transform=false, but official Gr00tN1d7Processor marks
+            # that field "stored but not actively used" and builds LetterBoxPad
+            # unconditionally. Padding is a no-op on already-square frames.
+            letter_box_transform=True,
+        )
+        logger.info(
+            "GR00T-N1.7 eval image pipeline: target=%s crop=%s crop_fraction=%s "
+            "shortest_edge=%s letterbox=True; state/action norm: percentiles=%s clip=%s",
+            image_target_size,
+            image_crop_size,
+            crop_fraction,
+            shortest_image_edge,
+            self._predict_action_use_percentiles,
+            self._predict_action_clip_outliers,
+        )
+        self._predict_action_initialized = True
+        self.eval()
+
+    @torch.no_grad()
+    def predict_action(
+        self,
+        images,
+        instructions,
+        state=None,
+        dataset_stats=None,
+    ) -> np.ndarray:
+        """Infer an action chunk for the shared eval ``predict_action`` interface."""
+        image_batch = self._normalize_image_batch(images, instructions)
+        image_batch = self._apply_eval_image_transform(image_batch)
+        batch_size = len(image_batch)
+        instruction_batch = self._normalize_instruction_batch(instructions, batch_size)
+        processor = self._get_predict_action_processor(dataset_stats)
+        raw_state_batch = self._coerce_state_batch(state, batch_size)
+        normalized_state_batch = self._normalize_state_batch(processor, raw_state_batch)
+
+        vlm_content = [
+            self._build_vlm_content(sample_images, instruction)
+            for sample_images, instruction in zip(image_batch, instruction_batch, strict=True)
+        ]
+        inputs = {
+            "vlm_content": vlm_content,
+            "state": torch.as_tensor(
+                normalized_state_batch,
+                dtype=torch.float32,
+                device=self.model.device,
+            ),
+            "embodiment_id": torch.full(
+                (batch_size,),
+                self.embodiment_id,
+                dtype=torch.long,
+                device=self.model.device,
+            ),
+        }
+
+        self.eval()
+        normalized_actions = self._sample_normalized_actions(inputs)
+        action_np = normalized_actions.float().cpu().numpy()
+        decoded = self._decode_action_batch(processor, action_np, raw_state_batch)
+        return decoded.astype(np.float32, copy=False)
+
+    def _sample_normalized_actions(self, inputs: dict[str, Any]) -> torch.Tensor:
+        self._ensure_predict_action_collator()
+        model = self.model
+        collated = self.collator([{"vlm_content": vlm} for vlm in inputs["vlm_content"]]).data["inputs"]
+        collated["state"] = inputs["state"]
+        collated["embodiment_id"] = inputs["embodiment_id"]
+        backbone_inputs, action_inputs = model.prepare_input(collated)
+        action_head = model.action_head
+
+        device = model.device
+        with torch.no_grad():
+            backbone_output = model.backbone(backbone_inputs)
+            # Qwen3Backbone.forward casts hidden_states to fp32 (training-side
+            # precision policy); the official server keeps bf16 for the whole
+            # model, so cast back here on the eval path. The action head is
+            # already bf16 (GROOT_ALLOW_TRAINABLE_PARAM_BF16=1 in the factory),
+            # so running without autocast keeps every intermediate bf16.
+            if self._predict_action_use_bf16 and device.type == "cuda":
+                backbone_output["backbone_features"] = backbone_output["backbone_features"].to(
+                    torch.bfloat16
+                )
+            backbone_output = action_head.process_backbone_output(backbone_output)
+            vl_embeds = backbone_output.backbone_features
+            batch_size = vl_embeds.shape[0]
+
+            embodiment_id = self._to_embodiment_tensor(
+                action_inputs.embodiment_id,
+                batch_size=batch_size,
+                device=vl_embeds.device,
+            )
+            state_tensor = action_inputs.state
+            if state_tensor.ndim == 2:
+                state_tensor = state_tensor.unsqueeze(1)
+            state_features = action_head.state_encoder(state_tensor, embodiment_id)
+
+            # Integrate the flow over the DiT's *trained* horizon
+            # (``config.action_horizon``, 40 for the released N1.7 checkpoints),
+            # not over the per-embodiment decoded horizon. The DiT attends over
+            # all action slots at once, so shortening the sequence changes every
+            # output; official slices the first ``len(delta_indices)`` steps only
+            # after sampling (processing_gr00t_n1d7.py:307/341). ``action_head``'s
+            # own value follows the YAML ``model.action_horizon`` and is the
+            # decoded length, which is why it must not be used here.
+            sample_horizon = int(getattr(self, "model_action_horizon", 0) or action_head.action_horizon)
+            actions = torch.randn(
+                size=(batch_size, sample_horizon, action_head.action_dim),
+                dtype=vl_embeds.dtype,
+                device=vl_embeds.device,
+            )
+            dt = 1.0 / float(action_head.num_inference_timesteps)
+
+            for step in range(action_head.num_inference_timesteps):
+                timestep = int(
+                    (step / float(action_head.num_inference_timesteps))
+                    * action_head.num_timestep_buckets
+                )
+                timesteps = torch.full(
+                    (batch_size,),
+                    timestep,
+                    dtype=torch.long,
+                    device=vl_embeds.device,
+                )
+                action_features = action_head.action_encoder(actions, timesteps, embodiment_id)
+                if action_head.config.add_pos_embed:
+                    pos_ids = torch.arange(
+                        action_features.shape[1],
+                        dtype=torch.long,
+                        device=vl_embeds.device,
+                    )
+                    action_features = action_features + action_head.position_embedding(pos_ids).unsqueeze(0)
+
+                state_action_embeds = torch.cat((state_features, action_features), dim=1)
+                if action_head.config.use_alternate_vl_dit:
+                    model_output, _ = action_head.model(
+                        hidden_states=state_action_embeds,
+                        encoder_hidden_states=vl_embeds,
+                        encoder_attention_mask=backbone_output.backbone_attention_mask,
+                        timestep=timesteps,
+                        return_all_hidden_states=True,
+                        image_mask=backbone_output.image_mask,
+                        backbone_attention_mask=backbone_output.backbone_attention_mask,
+                    )
+                else:
+                    model_output, _ = action_head.model(
+                        hidden_states=state_action_embeds,
+                        encoder_hidden_states=vl_embeds,
+                        encoder_attention_mask=backbone_output.backbone_attention_mask,
+                        timestep=timesteps,
+                        return_all_hidden_states=True,
+                    )
+
+                pred = action_head.action_decoder(model_output, embodiment_id)
+                pred_velocity = pred[:, -actions.shape[1] :]
+                actions = actions + dt * pred_velocity
+
+        # Keep only the per-embodiment decoded horizon (len(action delta_indices)).
+        decoded_horizon = int(getattr(self, "action_horizon", 0) or actions.shape[1])
+        return actions[:, :decoded_horizon]
+
+    def _normalize_state_batch(
+        self,
+        processor: StateActionProcessor,
+        raw_state_batch: np.ndarray,
+    ) -> np.ndarray:
+        state_dict = self._slice_state_batch(raw_state_batch)
+        normalized = processor.apply_state(state_dict, self.embodiment_tag)
+        packed = np.concatenate([np.asarray(normalized[key]) for key in self.state_keys], axis=-1)
+        # The action head's state_encoder is shared across embodiments and always
+        # consumes max_state_dim, so training's GrootN1d7FeatureTransform._pack_state
+        # zero-pads the per-embodiment state to that width. Mirror it here.
+        max_state_dim = int(self.config.max_state_dim)
+        if packed.shape[-1] < max_state_dim:
+            padding = np.zeros(
+                (*packed.shape[:-1], max_state_dim - packed.shape[-1]),
+                dtype=packed.dtype,
+            )
+            packed = np.concatenate([packed, padding], axis=-1)
+        elif packed.shape[-1] > max_state_dim:
+            packed = packed[..., :max_state_dim]
+        return packed
+
+
+    def _decode_action_batch(
+        self,
+        processor: StateActionProcessor,
+        action_batch: np.ndarray,
+        raw_state_batch: np.ndarray,
+    ) -> np.ndarray:
+        decoded_samples = []
+        for action_chunk, state_vec in zip(action_batch, raw_state_batch, strict=True):
+            action_dict = self._split_action_chunk(processor, action_chunk)
+            state_dict = self._slice_state_sample(state_vec)
+            decoded_dict = processor.unapply_action(
+                action_dict,
+                self.embodiment_tag,
+                state=state_dict,
+            )
+            decoded_samples.append(
+                np.concatenate([np.asarray(decoded_dict[key]) for key in self.action_keys], axis=-1)
+            )
+        return np.stack(decoded_samples, axis=0)
+
+    def _split_action_chunk(
+        self,
+        processor: StateActionProcessor,
+        action_chunk: np.ndarray,
+    ) -> dict[str, np.ndarray]:
+        out: dict[str, np.ndarray] = {}
+        start = 0
+        norm_params = processor.norm_params[self.embodiment_tag]["action"]
+        horizon = len(self.modality_config["action"].delta_indices)
+        for key in self.action_keys:
+            joint_dim = int(np.asarray(norm_params[key]["dim"]).item())
+            out[key] = action_chunk[:horizon, start : start + joint_dim]
+            start += joint_dim
+        return out
+
+    def _slice_state_batch(self, state_batch: np.ndarray) -> dict[str, np.ndarray]:
+        return {
+            key: state_batch[:, meta["start"] : meta["end"]]
+            for key, meta in self.modality_meta["state"].items()
+            if key in self.state_keys
+        }
+
+    def _slice_state_sample(self, state_vector: np.ndarray) -> dict[str, np.ndarray]:
+        return {
+            key: state_vector[meta["start"] : meta["end"]]
+            for key, meta in self.modality_meta["state"].items()
+            if key in self.state_keys
+        }
+
+    def _coerce_state_batch(self, state: Any, batch_size: int) -> np.ndarray:
+        if state is None:
+            if not self._predict_action_validation_zero_state:
+                raise ValueError(
+                    "GR00T-N1.7 predict_action requires a raw state matching the "
+                    "configured embodiment_tag. Use validation_zero_state=True "
+                    "only for local interface validation."
+                )
+            return np.zeros((batch_size, self.raw_state_dim), dtype=np.float32)
+
+        if isinstance(state, dict):
+            state_batch = self._flatten_state_dict(state)
+        else:
+            state_batch = _as_numpy(state)
+            if state_batch.ndim == 1:
+                state_batch = state_batch[None, :]
+            elif state_batch.ndim != 2:
+                raise ValueError(f"GR00T-N1.7 state must be [D] or [B, D], got {state_batch.shape}")
+
+        if state_batch.shape[0] == 1 and batch_size > 1:
+            state_batch = np.repeat(state_batch, batch_size, axis=0)
+        if state_batch.shape[0] != batch_size:
+            raise ValueError(
+                f"GR00T-N1.7 state batch size {state_batch.shape[0]} does not match images batch {batch_size}"
+            )
+
+        if state_batch.shape[-1] < self.raw_state_dim:
+            padding = np.zeros(
+                (state_batch.shape[0], self.raw_state_dim - state_batch.shape[-1]),
+                dtype=state_batch.dtype,
+            )
+            state_batch = np.concatenate([state_batch, padding], axis=-1)
+        elif state_batch.shape[-1] > self.raw_state_dim:
+            state_batch = state_batch[:, : self.raw_state_dim]
+        return np.asarray(state_batch, dtype=np.float32)
+
+    def _flatten_state_dict(self, state: dict[str, Any]) -> np.ndarray:
+        values = []
+        batch_size = None
+        for key in self.state_keys:
+            if key not in state:
+                raise KeyError(f"Missing GR00T-N1.7 state group {key!r}")
+            arr = _as_numpy(state[key])
+            if arr.ndim == 1:
+                arr = arr[None, :]
+            elif arr.ndim != 2:
+                raise ValueError(f"State group {key!r} must be [D] or [B, D], got {arr.shape}")
+            batch_size = arr.shape[0] if batch_size is None else batch_size
+            if arr.shape[0] != batch_size:
+                raise ValueError("All GR00T-N1.7 state groups must share the same batch size")
+            values.append(arr)
+        return np.concatenate(values, axis=-1)
+
+    def _normalize_image_batch(self, images: Any, instructions: Any) -> list[list[Image.Image]]:
+        instruction_count = None if isinstance(instructions, str) else _safe_len(instructions)
+
+        if _is_image_like(images):
+            samples = [[images]]
+        elif isinstance(images, dict):
+            samples = [[images[key] for key in sorted(images)]]
+        elif isinstance(images, (list, tuple)):
+            if not images:
+                raise ValueError("GR00T-N1.7 predict_action requires at least one image")
+            if all(_is_image_like(item) for item in images):
+                if instruction_count is not None and instruction_count == len(images) and len(images) > 1:
+                    samples = [[item] for item in images]
+                else:
+                    samples = [list(images)]
+            else:
+                samples = []
+                for sample in images:
+                    if _is_image_like(sample):
+                        samples.append([sample])
+                    elif isinstance(sample, dict):
+                        samples.append([sample[key] for key in sorted(sample)])
+                    elif isinstance(sample, (list, tuple)):
+                        if not sample:
+                            raise ValueError("GR00T-N1.7 image samples must not be empty")
+                        samples.append(list(sample))
+                    else:
+                        raise TypeError(
+                            f"Unsupported GR00T-N1.7 image sample type: {type(sample).__name__}"
+                        )
+        else:
+            raise TypeError(f"Unsupported GR00T-N1.7 images type: {type(images).__name__}")
+
+        return [[_to_pil_image(image) for image in sample] for sample in samples]
+
+    def _apply_eval_image_transform(
+        self, image_batch: list[list[Image.Image]]
+    ) -> list[list[Image.Image]]:
+        """Apply the official crop/resize pipeline so callers only need to
+        supply the env's native camera image (matching training-time
+        ``GrootN1d7FeatureTransform._build_vlm_content``, which applies the
+        same albumentations pipeline before assembling ``vlm_content``)."""
+        transform = getattr(self, "_predict_action_eval_image_transform", None)
+        if transform is None:
+            return image_batch
+        transformed = [
+            [
+                Image.fromarray(transform(image=np.asarray(image.convert("RGB")))["image"])
+                for image in sample
+            ]
+            for sample in image_batch
+        ]
+        self._log_eval_image_transform_once(image_batch, transformed)
+        return transformed
+
+    def _log_eval_image_transform_once(
+        self,
+        before: list[list[Image.Image]],
+        after: list[list[Image.Image]],
+    ) -> None:
+        """Log per-view pixel stats for the first transformed batch.
+
+        The training path builds its images through ``apply_with_replay`` and a
+        CHW tensor stack while eval feeds HWC arrays straight into the same
+        albumentations pipeline. Those two routes should agree, but a silent
+        divergence here is invisible to static review (the transform exists and
+        is called on both sides), so dump the actual values once per process for
+        value-by-value comparison against a training batch.
+        """
+        if getattr(self, "_predict_action_image_debug_logged", False):
+            return
+        # The server warmup feeds an all-zero dummy image; logging that would burn
+        # the one-shot on a frame that proves nothing. Wait for a real observation.
+        if all(
+            not np.asarray(raw.convert("RGB")).any()
+            for sample in before
+            for raw in sample
+        ):
+            return
+        self._predict_action_image_debug_logged = True
+        for sample_idx, (raw_sample, out_sample) in enumerate(zip(before, after, strict=True)):
+            for view_idx, (raw, out) in enumerate(zip(raw_sample, out_sample, strict=True)):
+                raw_arr = np.asarray(raw.convert("RGB"))
+                out_arr = np.asarray(out)
+                logger.info(
+                    "GR00T-N1.7 eval image transform sample=%d view=%d: "
+                    "in shape=%s dtype=%s mean=%.2f std=%.2f min=%d max=%d -> "
+                    "out shape=%s dtype=%s mean=%.2f std=%.2f min=%d max=%d",
+                    sample_idx,
+                    view_idx,
+                    raw_arr.shape,
+                    raw_arr.dtype,
+                    float(raw_arr.mean()),
+                    float(raw_arr.std()),
+                    int(raw_arr.min()),
+                    int(raw_arr.max()),
+                    out_arr.shape,
+                    out_arr.dtype,
+                    float(out_arr.mean()),
+                    float(out_arr.std()),
+                    int(out_arr.min()),
+                    int(out_arr.max()),
+                )
+
+    @staticmethod
+    def _normalize_instruction_batch(instructions: Any, batch_size: int) -> list[str]:
+        if isinstance(instructions, str):
+            return [instructions] * batch_size
+        instruction_list = [str(item) for item in list(instructions)]
+        if len(instruction_list) == 1 and batch_size > 1:
+            instruction_list = instruction_list * batch_size
+        if len(instruction_list) != batch_size:
+            raise ValueError(
+                f"GR00T-N1.7 instruction batch size {len(instruction_list)} does not match images batch {batch_size}"
+            )
+        return instruction_list
+
+    @staticmethod
+    def _build_vlm_content(images: Iterable[Image.Image], instruction: str) -> dict[str, Any]:
+        pil_images = [image.convert("RGB") for image in images]
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    *[{"type": "image", "image": image} for image in pil_images],
+                    {"type": "text", "text": _formalize_language(instruction)},
+                ],
+            }
+        ]
+        return {"text": None, "images": pil_images, "conversation": conversation}
+
+    def _get_predict_action_processor(self, dataset_stats: Dict[str, Any] | None) -> StateActionProcessor:
+        if dataset_stats is None:
+            if self._predict_action_default_processor is None:
+                raise RuntimeError(
+                    "GR00T-N1.7 predict_action has not been configured with checkpoint statistics. "
+                    "Call configure_predict_action(...) before predict_action(..., dataset_stats=None)."
+                )
+            return self._predict_action_default_processor
+        statistics = self._coerce_statistics(dataset_stats)
+        cache_key = json.dumps(statistics, sort_keys=True)
+        if cache_key not in self._predict_action_processor_cache:
+            self._predict_action_processor_cache[cache_key] = self._build_state_action_processor(statistics)
+        return self._predict_action_processor_cache[cache_key]
+
+    def _coerce_statistics(self, statistics: Dict[str, Any]) -> Dict[str, Any]:
+        if self.embodiment_tag in statistics:
+            embodiment_stats = statistics[self.embodiment_tag]
+            if not {"state", "action"}.issubset(embodiment_stats):
+                raise ValueError(
+                    f"Statistics for {self.embodiment_tag!r} must include 'state' and 'action'."
+                )
+            return {self.embodiment_tag: embodiment_stats}
+
+        if "observation.state" in statistics and "action" in statistics:
+            return convert_lerobot_stats_to_groot_n1d7_format(
+                statistics,
+                self.embodiment_tag,
+                modality_meta=self.modality_meta,
+                modality_config=self.modality_config,
+            )
+
+        raise ValueError(
+            "GR00T-N1.7 statistics must be either checkpoint-style "
+            "{embodiment: {state, action, relative_action}} or raw LeRobot "
+            "{'observation.state', 'action', 'relative_action'} stats."
+        )
+
+    def _build_state_action_processor(self, statistics: Dict[str, Any]) -> StateActionProcessor:
+        processor = StateActionProcessor(
+            modality_configs={self.embodiment_tag: self.modality_config},
+            statistics=statistics,
+            use_percentiles=self._predict_action_use_percentiles,
+            clip_outliers=self._predict_action_clip_outliers,
+            apply_sincos_state_encoding=False,
+            use_relative_action=True,
+        )
+        processor.eval()
+        return processor
+
+    @staticmethod
+    def _to_embodiment_tensor(value: Any, *, batch_size: int, device: torch.device) -> torch.Tensor:
+        if not isinstance(value, torch.Tensor):
+            return torch.full((batch_size,), int(value), dtype=torch.long, device=device)
+        value = value.to(device=device, dtype=torch.long)
+        if value.ndim == 0:
+            return value.unsqueeze(0).expand(batch_size)
+        if value.ndim > 1:
+            value = value.flatten()
+        if value.shape[0] == 1 and batch_size > 1:
+            return value.expand(batch_size)
+        if value.shape[0] != batch_size:
+            raise ValueError(f"embodiment_id batch size {value.shape[0]} does not match {batch_size}")
+        return value
+
+    def _ensure_predict_action_collator(self) -> None:
+        if self.collator is not None:
+            return
+        self.collator = Gr00tN1d7DataCollator(
+            model_name=self.config.model_name,
+            model_type=self.config.backbone_model_type,
+            transformers_loading_kwargs={"trust_remote_code": True, "local_files_only": True},
         )
 
     def load_pretrained(
@@ -595,3 +1203,50 @@ def _restore_rotary_buffers_fp32(module: nn.Module) -> None:
         submodule.register_buffer("inv_freq", new_inv_freq, persistent=False)
         submodule.original_inv_freq = new_inv_freq
         submodule.attention_scaling = attention_scaling
+
+
+def _formalize_language(instruction: Any) -> str:
+    """Lowercase and strip punctuation, matching the training-time transform.
+
+    ``GrootN1d7FeatureTransform`` applies ``re.sub(r"[^\\w\\s]", "", text.lower())``
+    when ``formalize_language`` is set (true for every released GR00T-N1.7
+    checkpoint), so the eval path must normalize instructions identically or the
+    prompt tokens drift from what the checkpoint was trained on.
+    """
+    return re.sub(r"[^\w\s]", "", str(instruction).lower())
+
+
+def _is_image_like(value: Any) -> bool:
+    return isinstance(value, (Image.Image, np.ndarray, torch.Tensor))
+
+def _to_pil_image(image: Any) -> Image.Image:
+    if isinstance(image, Image.Image):
+        return image.convert("RGB")
+    arr = _as_numpy(image)
+    if arr.ndim != 3:
+        raise ValueError(f"GR00T-N1.7 images must be rank-3, got {arr.shape}")
+    if arr.shape[0] == 3 and arr.shape[-1] != 3:
+        arr = np.transpose(arr, (1, 2, 0))
+    if arr.shape[-1] != 3:
+        raise ValueError(f"GR00T-N1.7 images must have 3 channels, got {arr.shape}")
+    if arr.dtype != np.uint8:
+        finite = arr[np.isfinite(arr)]
+        if finite.size and finite.max() <= 1.0:
+            arr = arr * 255.0
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+    return Image.fromarray(np.ascontiguousarray(arr)).convert("RGB")
+
+
+def _as_numpy(value: Any) -> np.ndarray:
+    if isinstance(value, np.ndarray):
+        return value
+    if torch.is_tensor(value):
+        return value.detach().cpu().numpy()
+    return np.asarray(value)
+
+
+def _safe_len(value: Any) -> Optional[int]:
+    try:
+        return len(value)
+    except TypeError:
+        return None

@@ -1,0 +1,68 @@
+# Public template: replace every /path/to/... placeholder before use.
+# The internal counterpart (same name + _internal) holds the machine-specific paths.
+#
+# GR00T-N1.7 x LIBERO libero_spatial task-success -- official parity.
+#   --max_episode_steps=720  -> benchmark.max_steps: 720
+#   --n_action_steps 8       -> server.chunk_execute_steps: 8
+#   no settle steps          -> benchmark.num_steps_wait: 0
+# Embodiment: libero_sim. State layout [x, y, z, axis_angle(3), gripper_qpos(2)].
+# ckpt: /path/to/GR00T-N1.7-LIBERO/libero_spatial
+# backbone: /path/to/Cosmos-Reason2-2B
+
+benchmark:
+  name: libero
+  suite: libero_spatial
+  max_tasks: 1              # 0 = all 10 tasks in the suite
+  episodes_per_task: 10
+  max_steps: 720            # official --max_episode_steps
+  num_steps_wait: 0         # official path has no settle steps
+  continuous_gripper: false # official normalize_gripper_action(binarize=True)
+  control_mode: delta       # GR00T outputs delta EE (pos + axis-angle) + gripper
+
+model:
+  backend: loongforge
+  model_type: Gr00tN1d7
+  base_model_path: /path/to/Cosmos-Reason2-2B
+  model_name: /path/to/Cosmos-Reason2-2B
+  state_encoding: libero_ee_axis_angle
+  action_encoding: axis_angle
+  use_flash_attention: true
+
+server:
+  host: 127.0.0.1
+  port: 13741
+  health_port: 13742
+  # To reproduce the reported success rates this env must have transformers
+  # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 --
+  # the version our own pyproject.toml installs -- libero_10 scores 11/50
+  # against 46/50 on 4.57.3, and nothing in the run warns about it. See
+  # loongforge/embodied/eval/docs/patches/libero/groot_n1_7.md.
+  python: /path/to/conda/envs/loongforge/bin/python
+  log: /path/to/reports/groot_n1_7/libero/libero_spatial/policy_server.log
+  start_timeout_sec: 2400
+  random_init: false
+  ckpt_path: /path/to/GR00T-N1.7-LIBERO/libero_spatial
+  dataset_statistics_path: /path/to/GR00T-N1.7-LIBERO/libero_spatial/statistics.json
+  embodiment_tag: libero_sim
+  chunk_execute_steps: 8    # official --n_action_steps (chunk is 16 long)
+  use_bf16: true
+  loongforge_root: /path/to/LoongForge-VLA
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/reports/groot_n1_7/libero/libero_spatial
+  seed: 7
+  save_trace: false
+  save_replay: false
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600

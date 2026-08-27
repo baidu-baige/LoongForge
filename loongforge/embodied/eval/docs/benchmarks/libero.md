@@ -2,7 +2,8 @@
 
 LIBERO is a tabletop robot manipulation benchmark with 4 task suites (Spatial, Object, Goal, Long Horizon), totaling 40 tasks, evaluated on a Franka arm. This page is a step-by-step reproduction guide for running LIBERO evaluation through the LoongForge eval module.
 
-Three models are verified on LIBERO: **pi05**, **xvla**, and **GR00T-N1.6** (pi05/xvla weights are public; GR00T-N1.6 uses a local LIBERO fine-tune).
+Four models are verified on LIBERO: **pi05**, **xvla**, **GR00T-N1.6**, and
+**GR00T-N1.7** (all public weights).
 
 ## Step 0: Download weights
 
@@ -10,7 +11,8 @@ Three models are verified on LIBERO: **pi05**, **xvla**, and **GR00T-N1.6** (pi0
 |---|---|
 | pi05 | [lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044) (`model.safetensors` + `dataset_statistics.json`) |
 | xvla | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) |
-| GR00T-N1.6 | local LIBERO fine-tune (weight dir + Eagle3 processor + `libero_panda` stats) |
+| GR00T-N1.6 | [0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO) (weight dir + Eagle3 processor + `libero_panda` stats) |
+| GR00T-N1.7 | [nvidia/GR00T-N1.7-LIBERO](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO) (one subdir per suite, each with `statistics.json`) plus the gated [nvidia/Cosmos-Reason2-2B](https://huggingface.co/nvidia/Cosmos-Reason2-2B) backbone dir (supplies the Qwen3-VL weights and the `Qwen3VLProcessor`) |
 
 ## Step 1: Environment setup
 
@@ -46,6 +48,9 @@ examples/embodied/xvla/eval/run_libero_eval.sh
 
 # GR00T-N1.6
 examples/embodied/groot_n1_6/eval/run_libero_eval.sh
+
+# GR00T-N1.7 (the policy env named in server.python must have transformers 4.57.3)
+examples/embodied/groot_n1_7/eval/run_libero_eval.sh
 ```
 
 Environment variables:
@@ -68,15 +73,23 @@ Key config fields (see `examples/embodied/<model>/eval/configs/libero/*.yaml`):
 - pi05: `model.action_dim: 7`, `model.action_horizon: 50`, plus a matching `server.dataset_statistics_path`
 - xvla: `model.domain_id: 3` (or omit to auto-resolve), `server.chunk_execute_steps: 10`, recommended `benchmark.max_steps: 800`
 - GR00T-N1.6: `model.model_type: Gr00tN1d6`, `benchmark.control_mode: delta`, `server.embodiment_tag: libero_panda`, plus `model.base_model_path` / `model.model_name` (Eagle3 processor)
+- GR00T-N1.7: `model.model_type: Gr00tN1d7`, `model.state_encoding: libero_ee_axis_angle`, `model.action_encoding: axis_angle`, `benchmark.control_mode: delta`, `benchmark.max_steps: 720`, `benchmark.num_steps_wait: 0`, `server.chunk_execute_steps: 8`, `server.embodiment_tag: libero_sim`, plus `model.base_model_path` / `model.model_name` (both the Cosmos-Reason2-2B dir). Do **not** set `model.action_horizon` — see the [GR00T-N1.7 LIBERO guide](../patches/libero/groot_n1_7.md)
 
 ## Verification
 
-Task-success status (2026-07-21):
+Task-success status (2026-08-26):
 
 | Model | LIBERO status | Notes |
 |---|---|---|
-| pi05 | ✅ task success | pi05 LIBERO fine-tune |
-| xvla | ✅ task success | ~94% on libero_object full suite |
-| GR00T-N1.6 | ✅ task success | libero_object 5/5 |
+| pi05 | ✅ task success | no full-suite regression run; verified via single-episode smoke only |
+| xvla | ✅ task success | libero_object 79/100 (10 tasks × 10 eps); per-task spread 3/10 … 10/10 |
+| GR00T-N1.6 | ✅ task success | 10 tasks × 10 eps per suite: object 100/100, spatial 95/100, goal 95/100, libero_10 89/100 |
+| GR00T-N1.7 | ✅ task success | 10 tasks × 5 eps per suite: goal 49/50, spatial 48/50, object 48/50, libero_10 46/50. Requires **transformers 4.57.3** on the policy side — on 5.x `libero_10` drops to 11/50 with no warning; see the [GR00T-N1.7 LIBERO guide](../patches/libero/groot_n1_7.md) |
 
-Report rates over multiple episodes; for xvla, `examples/embodied/xvla/eval/` historical full runs are under `reports/xvla/libero/libero_weight_object_full/`.
+Report rates as successes/episodes over a full suite; single-episode smoke runs are
+not success rates and are not listed here.
+
+Caveat on the GR00T-N1.6 LIBERO numbers: the shipped configs do not set
+`server.chunk_execute_steps`, so the whole 16-step chunk is executed open-loop,
+whereas the official GR00T LIBERO client uses `--n_action_steps 8`. The numbers
+above are therefore not strictly the official protocol.

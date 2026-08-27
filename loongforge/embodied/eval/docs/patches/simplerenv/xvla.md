@@ -105,7 +105,7 @@ Why this is required: the X-VLA client protocol outputs Euler xyz (rot6d → eul
 
 ## Eval config
 
-See `configs/simplerenv/widowx_stack_cube_smoke.yaml`:
+See `examples/embodied/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`:
 
 ```yaml
 benchmark:
