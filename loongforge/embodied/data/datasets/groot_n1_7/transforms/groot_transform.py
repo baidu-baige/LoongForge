@@ -601,6 +601,7 @@ class GrootN1d7FeatureTransform(BaseTransform):
         self.random_rotation_angle = self.data_cfg.random_rotation_angle
         self.color_jitter_params = self.data_cfg.color_jitter_params
         self.image_augmentation_seed = int(training_args.seed) if training_args is not None else 42
+        self._replay_image_shape = _resolve_replay_image_shape(dataset)
 
         runtime_semantics = _resolve_runtime_semantics(model_cfg, self.data_cfg, dataset_stats, dataset)
         self.modality_configs = {self.embodiment_tag: runtime_semantics.modality_config}
@@ -621,8 +622,82 @@ class GrootN1d7FeatureTransform(BaseTransform):
 
         self.train_image_transform, self.eval_image_transform = self._build_image_transforms()
 
+    def prepare_replay(self, data: Dict[str, Any] | None = None) -> dict[str, Any]:
+        """Bind legacy worker-global random draws to one sample.
+
+        Shard workers call this method in the same serial order used before
+        parallel prefetching. The expensive deterministic part of the transform
+        can then run concurrently without touching worker-global RNG state.
+        """
+        drop_state = bool(self.data_cfg.exclude_state)
+        if not drop_state and self.data_cfg.state_dropout_prob > 0:
+            drop_state = (
+                random.random() < self.data_cfg.state_dropout_prob
+                and self.training
+            )
+
+        image_replay = None
+        if self.training:
+            if not self.use_albumentations:
+                raise RuntimeError(
+                    "Deterministic shard prefetch requires replayable "
+                    "Albumentations transforms"
+                )
+            image_transform = self.train_image_transform
+            sample_replay_for_shape = getattr(
+                image_transform,
+                "sample_replay_for_shape",
+                None,
+            )
+            if sample_replay_for_shape is None:
+                raise RuntimeError(
+                    "The configured image transform cannot sample a deterministic replay"
+                )
+            if getattr(image_transform, "mask_transforms", []):
+                raise RuntimeError(
+                    "Deterministic shard prefetch does not support random mask transforms"
+                )
+
+            image_shape = self._replay_image_shape
+            if data is not None:
+                image_keys = sorted(
+                    key for key in data if key.startswith("observation.images.")
+                )
+                if not image_keys:
+                    raise KeyError("Missing required observation image keys for GR00T-N1.7")
+                first_frames = _extract_frames(_to_numpy(data[image_keys[0]]))
+                if not first_frames:
+                    raise ValueError("GR00T-N1.7 image sequence is empty")
+                image_shape = first_frames[0].shape[:2]
+            if image_shape is None:
+                raise RuntimeError(
+                    "Cannot prepare deterministic image replay without image geometry"
+                )
+            image_replay = sample_replay_for_shape(image_shape)
+
+        return {
+            "drop_state": drop_state,
+            "image_replay": image_replay,
+        }
+
+    def apply_with_replay(
+        self,
+        data: Dict[str, Any],
+        replay: dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Apply a sample transform using pre-bound random parameters."""
+        return self._apply(data, replay=replay)
+
     def apply(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply GR00T-N1.7 sample transform."""
+        return self._apply(data, replay=None)
+
+    def _apply(
+        self,
+        data: Dict[str, Any],
+        *,
+        replay: dict[str, Any] | None,
+    ) -> Dict[str, Any]:
         if "observation.state" not in data:
             raise KeyError("Missing required GR00T-N1.7 state key: observation.state")
         if self.training and "action" not in data:
@@ -661,11 +736,15 @@ class GrootN1d7FeatureTransform(BaseTransform):
             embodiment_tag=self.embodiment_tag,
         )
 
-        if self.data_cfg.exclude_state or (
-            self.data_cfg.state_dropout_prob > 0
-            and random.random() < self.data_cfg.state_dropout_prob
-            and self.training
-        ):
+        if replay is None:
+            drop_state = self.data_cfg.exclude_state or (
+                self.data_cfg.state_dropout_prob > 0
+                and random.random() < self.data_cfg.state_dropout_prob
+                and self.training
+            )
+        else:
+            drop_state = bool(replay["drop_state"])
+        if drop_state:
             normalized_states = {
                 key: np.zeros_like(value)
                 for key, value in normalized_states.items()
@@ -681,7 +760,13 @@ class GrootN1d7FeatureTransform(BaseTransform):
         language = _normalize_text(data.get("task", ""))
         if self.formalize_language:
             language = re.sub(r"[^\w\s]", "", language.lower())
-        result["vlm_content"] = self._build_vlm_content(images, language, masks or None)
+        result["vlm_content"] = self._build_vlm_content(
+            images,
+            language,
+            masks or None,
+            image_replay=None if replay is None else replay["image_replay"],
+            replay_prepared=replay is not None,
+        )
         result["embodiment_id"] = np.array(self.embodiment_id, dtype=np.int64)
         return result
 
@@ -825,13 +910,15 @@ class GrootN1d7FeatureTransform(BaseTransform):
         images: dict[str, list[np.ndarray]],
         language: str,
         masks: dict[str, list[np.ndarray]] | None = None,
+        image_replay: dict[str, Any] | None = None,
+        replay_prepared: bool = False,
     ) -> dict[str, Any]:
         image_keys = list(images.keys())
         image_transform = self.train_image_transform if self.training else self.eval_image_transform
 
         temporal_stacked_images = {}
         if self.use_albumentations:
-            replay = None
+            replay = image_replay if replay_prepared else None
             for view in image_keys:
                 transformed_images, replay = apply_with_replay(
                     image_transform,
@@ -872,6 +959,23 @@ def _as_size_list(value: Any, default: list[int]) -> list[int]:
     if isinstance(value, int):
         return [value, value]
     return list(value)
+
+
+def _resolve_replay_image_shape(dataset: Any) -> tuple[int, int] | None:
+    info = getattr(dataset, "info", None)
+    if not isinstance(info, dict):
+        return None
+    features = info.get("features", {})
+    if not isinstance(features, dict):
+        return None
+    for key in sorted(features):
+        feature = features[key]
+        if not key.startswith("observation.images.") or not isinstance(feature, dict):
+            continue
+        shape = feature.get("shape")
+        if isinstance(shape, (list, tuple)) and len(shape) >= 2:
+            return int(shape[0]), int(shape[1])
+    return None
 
 
 def _to_numpy(value: Any) -> np.ndarray:

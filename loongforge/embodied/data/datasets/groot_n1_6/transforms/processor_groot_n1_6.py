@@ -45,6 +45,7 @@ from .utils import (
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
     ActionRepresentation,
+    ActionType,
     EmbodimentTag,
     ModalityConfig,
     apply_sin_cos_encoding,
@@ -364,7 +365,15 @@ class StateActionProcessor(object):
                         raise KeyError(f"Reference state key '{state_key}' not found in state dict")
 
                     reference_state = state[state_key][-1]
-                    action[key] = action[key] - reference_state
+                    if action_config.type == ActionType.NON_EEF:
+                        # Isaac's JointPose converts both operands to float64
+                        # before computing the relative joint displacement.
+                        action[key] = np.asarray(action[key], dtype=np.float64) - np.asarray(
+                            reference_state,
+                            dtype=np.float64,
+                        )
+                    else:
+                        action[key] = action[key] - reference_state
 
         normalized_values = {}
         for joint_group in modality_keys:

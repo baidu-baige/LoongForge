@@ -703,6 +703,13 @@ class _DataArgs:
     num_workers: int = field(
         default=4,
         metadata={"help": "Number of DataLoader worker processes per rank."})
+    dataloader_prefetch_factor: int = field(
+        default=2,
+        metadata={
+            "cli_type": parse_positive_int,
+            "help": "Number of batches prefetched by each DataLoader worker.",
+        },
+    )
     dataloader_seed_workers: bool = field(
         default=False,
         metadata={"help": "Set DataLoader worker_init_fn and generator from --seed. "

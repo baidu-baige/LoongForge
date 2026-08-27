@@ -137,6 +137,7 @@ def _build_stateful_dataloader(
     seed = training_args.seed
     seed_workers = training_args.dataloader_seed_workers
     drop_last = training_args.batch_drop_last
+    prefetch_factor = training_args.dataloader_prefetch_factor if num_workers > 0 else None
     if isinstance(dataset, IterableDataset):
         return StatefulDataLoader(
             dataset,
@@ -145,7 +146,7 @@ def _build_stateful_dataloader(
             collate_fn=preprocessor,
             pin_memory=True,
             drop_last=drop_last,
-            prefetch_factor=2 if num_workers > 0 else None,
+            prefetch_factor=prefetch_factor,
             multiprocessing_context=mp_context,
             persistent_workers=num_workers > 0 and mp_context == "spawn",
         )
@@ -170,7 +171,7 @@ def _build_stateful_dataloader(
         collate_fn=preprocessor,
         pin_memory=True,
         drop_last=drop_last,
-        prefetch_factor=2 if num_workers > 0 else None,
+        prefetch_factor=prefetch_factor,
         worker_init_fn=_SeedWorkerInit(seed) if seed_workers and num_workers > 0 else None,
         generator=generator,
         multiprocessing_context=mp_context,
