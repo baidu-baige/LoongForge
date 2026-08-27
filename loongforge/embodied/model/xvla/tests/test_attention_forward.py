@@ -39,6 +39,7 @@ from loongforge.embodied.model.xvla.modeling_florence2 import (
     Florence2Attention,
     Florence2SdpaAttention,
 )
+from loongforge.embodied.model.xvla.model_configuration_xvla import Florence2LanguageConfig
 from loongforge.embodied.model.xvla.transformer import Attention as ActionAttention
 
 
@@ -249,7 +250,8 @@ def test_window_attention_flash_matches_eager():
 # --------------------------------------------------------------------------- #
 # 3) Florence2 encoder self-attention (SDPA implementation)
 # --------------------------------------------------------------------------- #
-def _build_florence(cls, init):
+def _build_florence(cls, init, sdpa_use_fa2=False):
+    config = Florence2LanguageConfig(sdpa_use_fa2=sdpa_use_fa2)
     return cls(
         embed_dim=init["embed_dim"],
         num_heads=init["num_heads"],
@@ -257,6 +259,7 @@ def _build_florence(cls, init):
         is_decoder=init["is_decoder"],
         is_causal=init["is_causal"],
         bias=init["bias"],
+        config=config,
     ).to(DEVICE)
 
 
@@ -277,10 +280,10 @@ def test_florence2_sdpa_attention_forward():
 
 
 def test_florence2_sdpa_matches_eager():
-    """SDPA output must match the eager Florence2Attention with identical weights."""
+    """FA/SDPA output must match the eager Florence2Attention with identical weights."""
     spec = CAPTURED["Florence2SdpaAttention"]
     _seed()
-    sdpa = _build_florence(Florence2SdpaAttention, spec["init"]).eval()
+    sdpa = _build_florence(Florence2SdpaAttention, spec["init"], sdpa_use_fa2=True).eval()
     eager = _build_florence(Florence2Attention, spec["init"]).eval()
     eager.load_state_dict(sdpa.state_dict())
 
@@ -291,7 +294,7 @@ def test_florence2_sdpa_matches_eager():
         out_eager = eager(h, attention_mask=None)[0].float()
 
     max_diff = (out_sdpa - out_eager).abs().max().item()
-    assert max_diff < 5e-2, f"sdpa vs eager diverged: max|Δ|={max_diff:.3e}"
+    assert max_diff < 5e-2, f"fa/sdpa vs eager diverged: max|Δ|={max_diff:.3e}"
     _check("florence_sdpa_matches", out_sdpa)
 
 
@@ -318,7 +321,7 @@ def test_transformer_attention_forward():
 
 
 def test_transformer_attention_fused_matches_manual():
-    """SDPA (fused) path must match the manual softmax attention path."""
+    """SDPA (fused, fp32) path must match the manual softmax attention path."""
     spec = CAPTURED["TransformerAttention"]
     _seed()
     m = ActionAttention(
@@ -338,6 +341,29 @@ def test_transformer_attention_fused_matches_manual():
     max_diff = (out_fused - out_manual).abs().max().item()
     assert max_diff < 1e-4, f"fused vs manual diverged: max|Δ|={max_diff:.3e}"
     _check("transformer_fused_matches", out_fused)
+
+
+def test_transformer_attention_flash_matches_manual():
+    """FlashAttention-2 (bf16 autocast) must match the manual softmax path."""
+    spec = CAPTURED["TransformerAttention"]
+    _seed()
+    m = ActionAttention(
+        dim=spec["init"]["dim"],
+        num_heads=spec["init"]["num_heads"],
+        qkv_bias=spec["init"]["qkv_bias"],
+        qk_norm=spec["init"]["qk_norm"],
+        use_fa2=True,
+    ).to(DEVICE).eval()
+    x = _randn(spec["x_shape"], torch.float32)
+
+    with torch.no_grad(), torch.autocast(DEVICE, dtype=AUTOCAST_DTYPE):
+        m.fused_attn = True
+        out_flash = m(x).float()
+        m.fused_attn = False
+        out_manual = m(x).float()
+
+    max_diff = (out_flash - out_manual).abs().max().item()
+    assert max_diff < 5e-2, f"flash vs manual diverged: max|Δ|={max_diff:.3e}"
 
 
 if __name__ == "__main__":

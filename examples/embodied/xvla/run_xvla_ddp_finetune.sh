@@ -62,13 +62,14 @@ MODEL_CONFIG_ARGS=(
 )
 
 # ── Data params ───────────────────────────────────────────────
-NUM_WORKERS=${NUM_WORKERS:-2}
+NUM_WORKERS=${NUM_WORKERS:-4}
 DATA_ARGS=(
     --dataset-format hdf5_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
     --robot-type libero_franka
     --num-workers "$NUM_WORKERS"
+    --batch-drop-last
 )
 
 # ── Training params ───────────────────────────────────────────

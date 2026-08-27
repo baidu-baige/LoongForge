@@ -27,6 +27,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+try:
+    from flash_attn import flash_attn_func as _flash_attn_func
+except ImportError:  # pragma: no cover - optional runtime dependency
+    _flash_attn_func = None
+
 
 # ------------------------------- Small utils ----------------------------------
 
@@ -41,6 +46,44 @@ def _to_2tuple(x) -> Tuple:
 def _has_sdp_attention() -> bool:
     """Check if we can use PyTorch fused scaled_dot_product_attention."""
     return hasattr(F, "scaled_dot_product_attention")
+
+
+_FLASH_ATTN_MAX_HEAD_DIM = 256
+_FLASH_ATTN_DTYPES = (torch.float16, torch.bfloat16)
+
+
+def _try_flash_attn(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, dropout_p: float):
+    """FlashAttention-2 on Q/K/V in ``[B, H, T, Dh]`` layout.
+
+    Returns output in the same layout, or ``None`` when the kernel cannot run
+    (missing package, CPU, fp32 without autocast, head_dim > 256). Casts to
+    the autocast GPU dtype when LayerNorm has upcast activations to fp32,
+    matching Florence2FlashAttention2. Mathematically equivalent to SDPA.
+    """
+    if _flash_attn_func is None or not q.is_cuda:
+        return None
+    head_dim = q.shape[-1]
+    if head_dim > _FLASH_ATTN_MAX_HEAD_DIM or head_dim <= 0:
+        return None
+    dtype = q.dtype
+    if dtype not in _FLASH_ATTN_DTYPES:
+        if torch.is_autocast_enabled():
+            dtype = torch.get_autocast_gpu_dtype()
+        else:
+            return None
+        if dtype not in _FLASH_ATTN_DTYPES:
+            return None
+        q, k, v = q.to(dtype), k.to(dtype), v.to(dtype)
+    # flash_attn_func expects [B, T, H, Dh]
+    out = _flash_attn_func(
+        q.transpose(1, 2).contiguous(),
+        k.transpose(1, 2).contiguous(),
+        v.transpose(1, 2).contiguous(),
+        dropout_p,
+        softmax_scale=None,
+        causal=False,
+    )
+    return out.transpose(1, 2)  # [B, H, T, Dh]
 
 
 # ---------------------------------- MLP --------------------------------------
@@ -102,10 +145,15 @@ class Mlp(nn.Module):
 
 class Attention(nn.Module):
     """
-    Multi-Head Self-Attention with optional fused SDPA fallback.
+    Multi-Head Self-Attention with FlashAttention-2, fused SDPA, then manual.
 
-    If PyTorch provides `scaled_dot_product_attention`, it will be used
-    (usually faster and more stable); otherwise we use a manual implementation.
+    Preference order:
+      1. FlashAttention-2 (`flash_attn_func`) on CUDA fp16/bf16, head_dim <= 256.
+      2. PyTorch `scaled_dot_product_attention` when available.
+      3. Explicit q·kᵀ → softmax → ·v.
+
+    All three implement the same formula, so outputs match within kernel
+    rounding (bf16/FA2 vs fp32 math).
     """
 
     fused_attn: Final[bool]
@@ -119,6 +167,7 @@ class Attention(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         norm_layer: type[nn.Module] = nn.LayerNorm,
+        use_fa2: bool = False,
     ) -> None:
         """
         Initialize multi-head self-attention.
@@ -132,6 +181,9 @@ class Attention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.fused_attn = _has_sdp_attention()
+        # When True, prefer FlashAttention-2 then SDPA. Default off keeps the
+        # original fused-SDPA / manual path.
+        self.use_fa2 = use_fa2
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -160,13 +212,15 @@ class Attention(nn.Module):
         )
         q, k, v = qkv.unbind(0)  # each: [B, H, T, Dh]
         q, k = self.q_norm(q), self.k_norm(k)
+        dropout_p = self.attn_drop.p if self.training else 0.0
 
-        if self.fused_attn:
+        x = _try_flash_attn(q, k, v, dropout_p) if (self.use_fa2 and self.fused_attn) else None
+        if x is None and self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.0,
+                dropout_p=dropout_p,
             )  # [B, H, T, Dh]
-        else:
+        elif x is None:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)        # [B, H, T, T]
             attn = attn.softmax(dim=-1)
@@ -288,6 +342,7 @@ class TransformerBlock(nn.Module):
         mlp_ratio: float = 4.0,
         attn_dropout: float = 0.1,
         mlp_dropout: float = 0.1,
+        use_fa2: bool = False,
     ) -> None:
         """
         Initialize a standard pre-LN Transformer block.
@@ -298,7 +353,9 @@ class TransformerBlock(nn.Module):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size)
         self.norm2 = nn.LayerNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, attn_drop=attn_dropout)
+        self.attn = Attention(
+            hidden_size, num_heads=num_heads, qkv_bias=True, attn_drop=attn_dropout, use_fa2=use_fa2
+        )
         self.mlp = Mlp(
             in_features=hidden_size,
             hidden_features=int(hidden_size * mlp_ratio),
@@ -345,6 +402,7 @@ class SoftPromptedTransformer(nn.Module):
         use_hetero_proj: bool = False,
         attn_dropout: float = 0.1,
         mlp_dropout: float = 0.1,
+        use_fa2: bool = False,
     ) -> None:
         """
         Initialize the SoftPromptedTransformer.
@@ -368,6 +426,7 @@ class SoftPromptedTransformer(nn.Module):
                     mlp_ratio=mlp_ratio,
                     attn_dropout=attn_dropout,
                     mlp_dropout=mlp_dropout,
+                    use_fa2=use_fa2,
                 )
                 for _ in range(depth)
             ]

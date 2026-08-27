@@ -65,9 +65,65 @@ from transformers.modeling_outputs import (
 
 
 if is_flash_attn_2_available():
+    from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
+else:
+    flash_attn_func = None
+    flash_attn_varlen_func = None
 
 logger = logging.get_logger(__name__)
+
+# FlashAttention-2 kernels accept fp16/bf16 CUDA tensors with head_dim <= 256.
+_FLASH_ATTN_MAX_HEAD_DIM = 256
+_FLASH_ATTN_DTYPES = (torch.float16, torch.bfloat16)
+
+
+def _cast_for_flash(*tensors):
+    """Cast CUDA tensors to a FlashAttention-legal dtype when possible.
+
+    Training often enters attention with fp32 activations under bf16 autocast
+    (LayerNorm upcast). FlashAttention-2 does not run in fp32, so we mirror
+    Florence2FlashAttention2 and cast to the autocast GPU dtype. Returns
+    ``(tensors, True)`` if the kernel can run, else ``(original, False)``.
+    """
+    if flash_attn_func is None:
+        return tensors, False
+    t0 = tensors[0]
+    if not t0.is_cuda:
+        return tensors, False
+    dtype = t0.dtype
+    if dtype not in _FLASH_ATTN_DTYPES:
+        if torch.is_autocast_enabled():
+            dtype = torch.get_autocast_gpu_dtype()
+        else:
+            return tensors, False
+        if dtype not in _FLASH_ATTN_DTYPES:
+            return tensors, False
+        tensors = tuple(t.to(dtype) for t in tensors)
+    return tensors, True
+
+
+def _flash_attn_qkv(q, k, v, dropout_p=0.0, softmax_scale=None, causal=False):
+    """Run ``flash_attn_func`` on Q/K/V in flash layout ``[B, S, H, D]``.
+
+    Returns the attention output in the same layout, or ``None`` when the
+    kernel cannot be used (missing package, CPU, illegal dtype/head_dim).
+    Mathematically equivalent to ``softmax(scale · Q Kᵀ) V``.
+    """
+    head_dim = q.shape[-1]
+    if head_dim > _FLASH_ATTN_MAX_HEAD_DIM or head_dim <= 0:
+        return None
+    (q, k, v), ok = _cast_for_flash(q, k, v)
+    if not ok:
+        return None
+    return flash_attn_func(
+        q.contiguous(),
+        k.contiguous(),
+        v.contiguous(),
+        dropout_p,
+        softmax_scale=softmax_scale,
+        causal=causal,
+    )
 
 _CONFIG_FOR_DOC = "Florence2Config"
 
@@ -506,13 +562,16 @@ def window_reverse(windows, batch_size: int, window_size: int, H: int, W: int):
 class WindowAttention(nn.Module):
     """Window-based multi-head self-attention (W-MSA) for DaViT spatial blocks."""
 
-    def __init__(self, dim, num_heads, window_size, qkv_bias=True):
+    def __init__(self, dim, num_heads, window_size, qkv_bias=True, use_fa2=False):
         super().__init__()
         self.dim = dim
         self.window_size = window_size
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = float(head_dim) ** -0.5
+        # When True, use FlashAttention-2 (fused) instead of the explicit
+        # q·kᵀ→softmax→·v path. Mathematically equivalent → loss curve unchanged.
+        self.use_fa2 = use_fa2
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim, dim)
@@ -546,14 +605,22 @@ class WindowAttention(nn.Module):
         # attn_windows = self.attn(x_windows)
 
         B_, N, C = x.shape
-        qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]
+        if self.use_fa2:
+            # FlashAttention-2: fused (scale·q·kᵀ)→softmax→·v, non-causal, no dropout.
+            # Mathematically equivalent to the explicit path below → loss curve unchanged.
+            qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads)
+            q, k, v = qkv.unbind(2)  # each: [B_, N, num_heads, head_dim]
+            x = flash_attn_func(q, k, v, 0.0, softmax_scale=self.scale, causal=False)
+            x = x.reshape(B_, N, C)
+        else:
+            qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            q, k, v = qkv[0], qkv[1], qkv[2]
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        attn = self.softmax(attn)
+            q = q * self.scale
+            attn = (q @ k.transpose(-2, -1))
+            attn = self.softmax(attn)
 
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+            x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
         x = self.proj(x)
 
         # merge windows
@@ -575,7 +642,7 @@ class SpatialBlock(nn.Module):
 
     def __init__(self, dim, num_heads, window_size,
                  mlp_ratio=4., qkv_bias=True, drop_path_rate=0., act_layer=nn.GELU,
-                 norm_layer=nn.LayerNorm, conv_at_attn=True, conv_at_ffn=True):
+                 norm_layer=nn.LayerNorm, conv_at_attn=True, conv_at_ffn=True, use_fa2=False):
         """
         DaViT spatial block combining optional depth-wise conv, window attention, and FFN.
 
@@ -594,7 +661,7 @@ class SpatialBlock(nn.Module):
         self.conv1 = PreNorm(None, DepthWiseConv2d(dim, 3, 1, 1)) if conv_at_attn else None
         self.window_attn = PreNorm(
             norm_layer(dim),
-            WindowAttention(dim, num_heads, window_size, qkv_bias=qkv_bias),
+            WindowAttention(dim, num_heads, window_size, qkv_bias=qkv_bias, use_fa2=use_fa2),
             drop_path
         )
         self.conv2 = PreNorm(None, DepthWiseConv2d(dim, 3, 1, 1)) if conv_at_ffn else None
@@ -660,6 +727,7 @@ class DaViT(nn.Module):
         enable_checkpoint=False,
         conv_at_attn=True,
         conv_at_ffn=True,
+        window_use_fa2=False,
      ):
         """
         Initialize DaViT (Dual-Attention Vision Transformer) backbone.
@@ -709,6 +777,7 @@ class DaViT(nn.Module):
                                 mlp_ratio=mlp_ratio,
                                 conv_at_attn=conv_at_attn,
                                 conv_at_ffn=conv_at_ffn,
+                                use_fa2=window_use_fa2,
                             )
                         ),
                         (
@@ -799,14 +868,11 @@ class DaViT(nn.Module):
             patch_prenorm=config.patch_prenorm,
             drop_path_rate=config.drop_path_rate,
             window_size=config.window_size,
+            window_use_fa2=config.window_use_fa2,
         )
 
 
 
-
-if is_flash_attn_2_available():
-    from flash_attn import flash_attn_func, flash_attn_varlen_func
-    from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
 
 # Copied from transformers.models.llama.modeling_llama._get_unpad_data
 def _get_unpad_data(attention_mask):
@@ -1304,7 +1370,21 @@ class Florence2FlashAttention2(Florence2Attention):
 
 
 class Florence2SdpaAttention(Florence2Attention):
-    """Florence2 attention using scaled_dot_product_attention (SDPA) for efficiency."""
+    """Florence2 attention using SDPA, with optional FlashAttention-2.
+
+    Preference order when ``config.sdpa_use_fa2`` is True:
+      1. ``flash_attn_func`` on CUDA fp16/bf16 with no additive mask.
+      2. ``torch.nn.functional.scaled_dot_product_attention``.
+      3. Eager ``Florence2Attention`` when ``output_attentions`` or a head mask
+         is requested.
+
+    When the flag is False (default), the original SDPA path is used.
+    All three implement ``softmax(QKᵀ/√d) V``.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_fa2 = self.config.sdpa_use_fa2
 
     def forward(
         self,
@@ -1390,27 +1470,46 @@ class Florence2SdpaAttention(Florence2Attention):
         # The tgt_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that
         # does not create a causal mask in case tgt_len == 1.
         is_causal = True if self.is_causal and attention_mask is None and tgt_len > 1 else False
+        dropout_p = self.dropout if self.training else 0.0
 
-        # NOTE: SDPA with memory-efficient backend is currently (torch==2.1.2) bugged when using
-        # non-contiguous inputs and a custom attn_mask,
-        # but we are fine here as `_shape` do call `.contiguous()`.
-        # Reference: https://github.com/pytorch/pytorch/issues/112577
-        attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query_states,
-            key_states,
-            value_states,
-            attn_mask=attention_mask,
-            dropout_p=self.dropout if self.training else 0.0,
-            is_causal=is_causal,
-        )
-
-        if attn_output.size() != (bsz, self.num_heads, tgt_len, self.head_dim):
-            raise ValueError(
-                f"`attn_output` should be of size {(bsz, self.num_heads, tgt_len, self.head_dim)}, but is"
-                f" {attn_output.size()}"
+        # Prefer FlashAttention-2 when enabled (same formula as SDPA:
+        # softmax(QKᵀ/√d) V). FA2 does not take a 4D additive mask; the XVLA
+        # training path passes attention_mask=None, so this is the common case.
+        # Fall back to SDPA when the flag is off, a mask is present, or the
+        # kernel cannot run.
+        attn_output = None
+        if self.use_fa2 and attention_mask is None:
+            # query/key/value_states: [B, H, T, Dh] -> FA layout [B, T, H, Dh]
+            attn_output = _flash_attn_qkv(
+                query_states.transpose(1, 2),
+                key_states.transpose(1, 2),
+                value_states.transpose(1, 2),
+                dropout_p=dropout_p,
+                softmax_scale=None,
+                causal=is_causal,
             )
 
-        attn_output = attn_output.transpose(1, 2)
+        if attn_output is None:
+            # NOTE: SDPA with memory-efficient backend is currently (torch==2.1.2) bugged when using
+            # non-contiguous inputs and a custom attn_mask,
+            # but we are fine here as `_shape` do call `.contiguous()`.
+            # Reference: https://github.com/pytorch/pytorch/issues/112577
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query_states,
+                key_states,
+                value_states,
+                attn_mask=attention_mask,
+                dropout_p=dropout_p,
+                is_causal=is_causal,
+            )
+
+            if attn_output.size() != (bsz, self.num_heads, tgt_len, self.head_dim):
+                raise ValueError(
+                    f"`attn_output` should be of size {(bsz, self.num_heads, tgt_len, self.head_dim)}, but is"
+                    f" {attn_output.size()}"
+                )
+
+            attn_output = attn_output.transpose(1, 2)
 
         # Use the `embed_dim` from the config (stored in the class) rather than `hidden_state`
         # because `attn_output` can be
