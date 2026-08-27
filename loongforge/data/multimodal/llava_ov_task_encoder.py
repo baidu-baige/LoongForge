@@ -183,10 +183,10 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
             if text[-1] == "\n":
                 text = text[:-1]
             input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
-                sample.image, text
+                sample.image, text, add_special_tokens=False
             )
             target = torch.ones_like(input_ids) * IGNORE_INDEX
-            answers = self.tokenizer.tokenize(sample.answers)
+            answers = self.tokenizer.tokenize(sample.answers, add_special_tokens=False)
             target[-len(answers) - 1 : -1] = torch.tensor(answers)
             target[-1] = input_ids[-1]
             # print(target[-1])

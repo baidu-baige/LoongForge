@@ -561,6 +561,7 @@ class Gr00tN1d6DataCollator:
                     padding="max_length" if self.max_length else True,
                     max_length=self.max_length,
                     truncation=self.max_length is not None,
+                    add_special_tokens=False,
                 )
                 # Detect truncation: if any sample has attention_mask all-1 with
                 # max_length set, it was truncated (no pad tokens added).

@@ -105,6 +105,7 @@ class Gr00tN1d7DataCollator:
                     padding="max_length" if self.max_length else True,
                     max_length=self.max_length,
                     truncation=self.max_length is not None,
+                    add_special_tokens=False,
                 )
                 for vlm_key, vlm_value in vlm_inputs.items():
                     batch[vlm_key] = vlm_value
