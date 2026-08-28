@@ -121,7 +121,7 @@ class Cosmos3(nn.Module):
         if config.compile_model:
             _layers = self.net.language_model.model.layers
             for _layer in _layers:
-                _layer.compile(fullgraph=True, dynamic=config.compile_dynamic)
+                _layer.compile(fullgraph=False, dynamic=config.compile_dynamic)
             logger.info("[compile] in-place torch.compile on %d MoTDecoderLayer blocks (fullgraph=True, dynamic=%s)",
                         len(_layers), config.compile_dynamic)
 
