@@ -67,6 +67,9 @@ def build_action_head_config(model_config: DreamZeroConfig) -> WANPolicyHeadConf
         num_frames=model_config.num_frames,
         input_embedding_dim=model_config.input_embedding_dim,
         # Flow-matching noise
+        # The action-head default is 16. Eval configs may opt into an explicit
+        # scheduler length without changing the shared training config field.
+        num_inference_steps=getattr(model_config, "eval_num_inference_timesteps", 16),
         num_dit_steps=model_config.num_dit_steps,
         noise_beta_alpha=model_config.noise_beta_alpha,
         noise_beta_beta=model_config.noise_beta_beta,

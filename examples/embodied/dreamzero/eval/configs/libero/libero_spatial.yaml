@@ -1,0 +1,89 @@
+# DreamZero LIBERO task-success template (open-source).
+# Verified: RLinf-DreamZero-WAN2.2-5B-LIBERO-SFT-Step26000 (Wan2.2-TI2V-5B
+# backbone), libero_spatial 81/100 (10 tasks x 10 eps).
+#
+# Open weights:
+#   checkpoint:  https://huggingface.co/RLinf/RLinf-DreamZero-WAN2.2-5B-LIBERO-SFT-Step26000
+#   Wan2.2-5B:   https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B  (T5/VAE .pth + google/umt5-xxl tokenizer)
+#   Wan2.1-14B:  https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P  (CLIP .pth only)
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+#
+# Protocol notes (do not change without re-validating):
+# - Replan every 16 env steps; the full 16-action chunk executes open-loop.
+# - Each replan sends ONLY the current frame (the model interface applies the
+#   official 95% center-crop eval transform internally and re-initializes its
+#   autoregressive session from that single frame — no cross-chunk KV reuse).
+# - 2-view grid: exterior left | wrist right, 256x256 per view; q99
+#   normalization from the checkpoint's experiment_cfg/metadata.json; the
+#   gripper command is binarized (>0 -> +1) inside the eval wrapper.
+# - bf16, 16 flow-matching steps, max_episode_steps 480.
+#
+# Optional overrides (edit this file or copy it):
+#   suite: libero_spatial | libero_object | libero_goal | libero_10
+#   max_tasks / episodes_per_task: raise for full-suite eval (official: 10x50)
+
+benchmark:
+  name: libero
+  suite: libero_spatial
+  max_tasks: 1          # official full-suite: 10
+  episodes_per_task: 1  # official full-suite: 50
+  max_steps: 480        # official max_episode_steps
+  num_steps_wait: 10
+  continuous_gripper: true
+
+model:
+  backend: loongforge
+  model_type: dreamzero
+  name: dreamzero-libero-spatial
+  backbone_variant: wan22_5b
+  model_dtype: bfloat16
+  # Official LIBERO geometry (RLinf eval yaml).
+  num_frames: 33
+  action_horizon: 16
+  n_action_steps: 16
+  num_frame_per_block: 2
+  num_action_per_block: 16
+  num_state_per_block: 1
+  max_chunk_size: 4
+  max_state_dim: 64
+  max_action_dim: 32
+  dit_action_state_hidden_size: 1024
+  action_loss_embodiment_ids: [21]
+  eval_num_inference_timesteps: 16
+  # Frozen Wan encoders (same paths as the training YAML).
+  text_encoder_pretrained_path: /path/to/Wan2.2-TI2V-5B/models_t5_umt5-xxl-enc-bf16.pth
+  image_encoder_pretrained_path: /path/to/Wan2.1-I2V-14B-480P/models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth
+  vae_pretrained_path: /path/to/Wan2.2-TI2V-5B/Wan2.2_VAE.pth
+
+server:
+  host: 127.0.0.1
+  port: 12150
+  health_port: 12151
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/dreamzero/libero/libero_spatial/policy_server.log
+  start_timeout_sec: 1800   # 5B DiT + UMT5 + VAE + CLIP load
+  ckpt_path: /path/to/RLinf-DreamZero-WAN2.2-5B-LIBERO-SFT-Step26000
+  # q99 statistics; ships with the checkpoint at experiment_cfg/metadata.json
+  # (regenerate with RLinf toolkits/lerobot/generate_dreamzero_metadata.py if absent).
+  dataset_statistics_path: /path/to/RLinf-DreamZero-WAN2.2-5B-LIBERO-SFT-Step26000/experiment_cfg/metadata.json
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/Wan2.2-TI2V-5B/google/umt5-xxl
+  use_bf16: true
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/dreamzero/libero/libero_spatial
+  seed: 7
+  save_trace: true
+  save_replay: true
+
+timeouts:
+  policy_call_ms: 600000   # 16 diffusion steps x 33-frame encode on first call
+  per_step_sec: 600
+  per_episode_sec: 1800

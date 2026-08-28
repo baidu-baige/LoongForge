@@ -25,7 +25,9 @@ Implementation notes:
 - The initial sigma buffer stays on CPU; ``set_timesteps(device=...)`` moves the
   active buffers to the run device. This keeps construction independent of a
   CUDA context.
-- ``multistep_uni_{p,c}_bh_update`` remain ``@torch.compile``-decorated.
+- The update kernels intentionally remain eager. The official DreamZero
+  sampler is eager, and compiling these small reductions changes bfloat16
+  rounding enough to make later denoising steps diverge.
 """
 
 import math
@@ -315,11 +317,6 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
             return epsilon
 
-    @torch.compile(
-        mode="reduce-overhead",
-        fullgraph=True,
-        dynamic=False,
-    )
     def multistep_uni_p_bh_update(
         self,
         model_output: torch.Tensor,
@@ -431,11 +428,6 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         x_t = x_t.to(x.dtype)
         return x_t
 
-    @torch.compile(
-        mode="reduce-overhead",
-        fullgraph=True,
-        dynamic=False,
-    )
     def multistep_uni_c_bh_update(
         self,
         this_model_output: torch.Tensor,

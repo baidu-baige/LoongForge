@@ -704,7 +704,17 @@ def _build_vae(model_config: DreamZeroConfig) -> torch.nn.Module:
     - ``wan22_5b``  → ``WanVideoVAE38`` (z_dim=48, dim=160).
     """
     preset = _BACKBONE_PRESETS[model_config.backbone_variant]
+    # Keep the component path contract consistent with T5/CLIP: callers may
+    # provide either the concrete VAE file or a Wan checkpoint directory.
+    # The directory form is what the official model layout and eval configs
+    # expose, while the VAE constructors/loaders require a file path.
     pretrained_path = model_config.vae_pretrained_path or ""
+    if pretrained_path:
+        pretrained_path = _resolve_weight_path(
+            pretrained_path,
+            preset["vae_filename"],
+            "vae_pretrained_path",
+        )
     skip_default_reset = _should_skip_default_reset(model_config, pretrained_path)
     with _skip_default_reset_parameters(skip_default_reset):
         if preset["vae_class"] == "WanVideoVAE38":

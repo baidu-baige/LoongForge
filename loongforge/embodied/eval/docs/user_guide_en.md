@@ -12,6 +12,7 @@ LoongForge-VLA offline evaluation runs a policy against a simulation benchmark f
 | **xvla** | ✅ task success ([2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO)) | connectivity only | ✅ task success ([2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX)) | ✅ task success ([2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2)) | connectivity only |
 | **GR00T-N1.6** | ✅ task success ([0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | — |
 | **GR00T-N1.7** | ✅ task success ([nvidia/GR00T-N1.7-LIBERO](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.7-SimplerEnv-Bridge](https://huggingface.co/nvidia/GR00T-N1.7-SimplerEnv-Bridge)) | — | — |
+| **DreamZero** | ✅ task success ([RLinf/RLinf-DreamZero-WAN2.2-5B-LIBERO-SFT-Step26000](https://huggingface.co/RLinf/RLinf-DreamZero-WAN2.2-5B-LIBERO-SFT-Step26000), libero_spatial 81/100) | — | — | — | — |
 
 - **Task success**: at least one episode passed the benchmark's official success criterion.
 - **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run.
