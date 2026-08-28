@@ -99,3 +99,7 @@ nsight_*/
 
 # Local AI coding assistant rules
 /.comate/
+
+# ops build
+ops/cuda_source/int4_qat/build/
+ops/cuda_source/int4_qat/*.egg-info
