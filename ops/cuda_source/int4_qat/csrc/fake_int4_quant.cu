@@ -1,5 +1,8 @@
 // Copyright 2026 The LoongForge Authors.
 // SPDX-License-Identifier: Apache-2.0
+//
+// Modified from slime (https://github.com/THUDM/slime) under the Apache-2.0 License.
+// Copyright (c) 2025 Zhipu AI. All rights reserved.
 /*
  * Original INT4 fake-quantization CUDA kernel.
  *
