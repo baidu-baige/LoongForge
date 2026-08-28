@@ -1,3 +1,5 @@
+// Copyright 2026 The LoongForge Authors.
+// SPDX-License-Identifier: Apache-2.0
 /*
  * Original INT4 fake-quantization CUDA kernel.
  *
@@ -55,13 +57,13 @@ void int4_quant_1x32_kernel(
 ) {
     constexpr int WARPS_PER_BLOCK = 8;
     const int needed_warps = ceil_div(N, 32);
-    
+
     const int tid = threadIdx.x;
     const int warp_id = tid >> 5;
     const int lane_id = tid & 0x1F;
     constexpr float SYM_CONS = 1.0f / 7.0f;
     constexpr float ASYM_CONS = 1.0f / 15.0f;
-    
+
     const int row = blockIdx.x;
 
     for (int item = warp_id; item < needed_warps; item += WARPS_PER_BLOCK) {
@@ -71,15 +73,15 @@ void int4_quant_1x32_kernel(
         if (col < N) {
             val = static_cast<float>(x[row * stride_xm + col * stride_xn]);
         }
-        
+
         float scale = 0.0f;
         float zero = 0.0f;
-        
+
         if (sym) {
             float abs_val = fabsf(val);
-            
+
             float block_max = warpReduceMax(abs_val);
-            
+
             scale = fmaxf(block_max * SYM_CONS, 1e-5f);
 
             val = rintf(val / scale);
@@ -89,7 +91,7 @@ void int4_quant_1x32_kernel(
 
             scale = fmaxf((block_max - block_min) * ASYM_CONS, 1e-5f);
             zero = fminf(fmaxf(-rintf(block_min / scale), 0.0f), 15.0f);
-            
+
             val = fminf(fmaxf(rintf(val / scale) + zero, 0.0f), 15.0f);
         }
 
@@ -121,13 +123,13 @@ void int4_quant_32x1_kernel(
     constexpr int WARPS_PER_BLOCK = 8;
     const int start_row = blockIdx.x * 32;
     const int end_row = min((blockIdx.x + 1) * 32, M);
-    
+
     const int tid = threadIdx.x;
     const int warp_id = tid >> 5;
     const int lane_id = tid & 0x1F;
     constexpr float SYM_CONS = 1.0f / 7.0f;
     constexpr float ASYM_CONS = 1.0f / 15.0f;
-    
+
     for (int item = warp_id; item < N; item += WARPS_PER_BLOCK) {
         const int col = item;
         const int row = start_row + lane_id;
@@ -137,15 +139,15 @@ void int4_quant_32x1_kernel(
         if (row < end_row) {
             val = static_cast<float>(x[row * stride_xm + col * stride_xn]);
         }
-    
+
         float scale = 0.0f;
         float zero = 0.0f;
-        
+
         if (sym) {
             float abs_val = fabsf(val);
-            
+
             float block_max = warpReduceMax(abs_val);
-            
+
             scale = fmaxf(block_max * SYM_CONS, 1e-5f);
 
             val = rintf(val / scale);
@@ -155,7 +157,7 @@ void int4_quant_32x1_kernel(
 
             scale = fmaxf((block_max - block_min) * ASYM_CONS, 1e-5f);
             zero = fminf(fmaxf(-rintf(block_min / scale), 0.0f), 15.0f);
-            
+
             val = fminf(fmaxf(rintf(val / scale) + zero, 0.0f), 15.0f);
         }
 
@@ -185,13 +187,13 @@ __global__ void int4_quant_common_kernel(
 ) {
     const int start_row = blockIdx.x * BLOCK_M;
     const int WARPS_PER_BLOCK = blockDim.x >> 5;
-    
+
     const int warp_id = threadIdx.x >> 5;
     const int lane_id = threadIdx.x & 0x1F;
     constexpr float SYM_CONS = 1.0f / 7.0f;
     constexpr float ASYM_CONS = 1.0f / 15.0f;
     constexpr int WARP_SIZE = 32;
-    
+
     const int needed_warps = ceil_div(N, BLOCK_N);
     const int iters = ceil_div(BLOCK_M * BLOCK_N, 32);
     int warp_rows = 1;
@@ -199,7 +201,7 @@ __global__ void int4_quant_common_kernel(
     if (BLOCK_N <= WARP_SIZE) {
         warp_rows = WARP_SIZE / BLOCK_N;
     }
-    
+
     for (int item = warp_id; item < needed_warps; item += WARPS_PER_BLOCK) {
         float local_max = -INFINITY;
         float local_min = INFINITY;
@@ -210,7 +212,7 @@ __global__ void int4_quant_common_kernel(
         const int row_off = lane_id / BLOCK_N;
         const int col_off = lane_id % BLOCK_N;
         int row, col = 0;
-        
+
         for (int i = 0; i < iters; ++i) {
             if (BLOCK_N <= WARP_SIZE) {
                 row = start_row + i * warp_rows + row_off;
@@ -262,7 +264,7 @@ __global__ void int4_quant_common_kernel(
                 } else {
                     val = fminf(fmaxf(rintf(val / scale) + zero, 0.0f), 15.0f);
                 }
-                
+
                 out[row * stride_om + col * stride_on] = static_cast<scalar_t>(val);
                 out_scale[blockIdx.x * stride_osm + item * stride_osn] = static_cast<scalar_t>(scale);
                 if (!sym) {
@@ -295,7 +297,7 @@ void launch_int4_quant_kernel(
     if (block_m == 1 && block_n == 32) {
         dim3 grid(M);
         dim3 block(THREADS_PER_BLOCK);
-        
+
         int4_quant_1x32_kernel<scalar_t><<<grid, block, 0, stream>>>(
             x, out, out_scale, out_zero, M, N,
             stride_xm, stride_xn,
@@ -339,7 +341,7 @@ fake_int4_quant_cuda(
 ) {
     TORCH_CHECK(x.dim() == 2, "Input must be 2D");
     TORCH_CHECK(x.is_cuda(), "Input must be on CUDA");
-    
+
     int M = x.size(0);
     int N = x.size(1);
     int block_m = block_size[0];
@@ -355,7 +357,7 @@ fake_int4_quant_cuda(
     auto out_zero = torch::empty_like(out_scale);
 
     const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-    
+
     AT_DISPATCH_FLOATING_TYPES_AND(
         at::ScalarType::BFloat16,
         x.scalar_type(), "int4_quant_cuda", [&] {
@@ -374,7 +376,7 @@ fake_int4_quant_cuda(
             stream
         );
     });
-    
+
     return std::make_tuple(out, out_scale, out_zero);
 }
 

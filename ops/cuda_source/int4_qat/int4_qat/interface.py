@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """
 Python interface for INT4 fake quantization.
 
@@ -6,10 +8,9 @@ Two levels of API:
   2. fake_int4_quantize_dequantize() — mid-level: quant+dequant → fake-quantized tensor
 """
 import math
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import torch
-import torch.nn.functional as F
 
 # Try to import the CUDA extension; fall back to None if not built.
 try:

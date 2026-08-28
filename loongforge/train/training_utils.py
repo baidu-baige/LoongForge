@@ -3,6 +3,10 @@
 #
 # Modified from Megatron-LM under the BSD 3-Clause License.
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# ruff: noqa: E402
+# Import order is intentional: logging is configured and the start time is
+# captured before heavy imports, and tools/ is added to sys.path before the
+# dist_checkpoint imports below.
 
 """Pretrain utilities."""
 
@@ -49,7 +53,7 @@ from megatron.core.num_microbatches_calculator import (
 from megatron.core.fp8_utils import correct_amax_history_if_needed
 from megatron.core.transformer.module import Float16Module
 from megatron.core.enums import ModelType
-from megatron.core import mpu, tensor_parallel
+from megatron.core import tensor_parallel
 from megatron.training.utils import to_empty_if_meta_device
 from megatron.core.distributed import (
     DistributedDataParallelConfig,
@@ -81,7 +85,6 @@ from megatron.training.global_vars import get_energy_monitor
 from megatron.core.parallel_state import update_pg_timeout
 
 from megatron.training import (
-    get_signal_handler,
     get_timers,
     get_tensorboard_writer,
     get_wandb_writer,
@@ -94,7 +97,6 @@ from megatron.training.initialize import (
     set_jit_fusion_options,
 )
 from .checkpointing import (
-    load_checkpoint,
     save_checkpoint,
     checkpoint_exists,
 )
@@ -138,8 +140,6 @@ from loongforge.data.dp_balance.train_hooks import (
 
 
 # Add project root to Python path
-import sys
-import os
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -328,14 +328,17 @@ def add_hooks(model, args, prefix):
         f"Set up Log Tensor Hook:\n" f"  name pattern: {args.log_tensor_name_pattern}\n"
     )
     rank = torch.distributed.get_rank()
-    log_fn = lambda string: print(f"[Rank {rank}] {string}")
+
+    def log_fn(string):
+        print(f"[Rank {rank}] {string}")
+
     matched_modules = register_hooks(model, args, rank, log_fn, prefix)
     if len(matched_modules) > 0:
         print_rank_0(
             f"For log tensor name pattern: {args.log_tensor_name_pattern}, find the following layers:"
         )
-        for l in matched_modules:
-            print_rank_0(f"  {l}")
+        for module_name in matched_modules:
+            print_rank_0(f"  {module_name}")
     else:
         print_rank_0(
             f"No layers found for the log tensor name pattern: {args.log_tensor_name_pattern}"
@@ -448,10 +451,6 @@ def pretrain(
         try:
             from nvidia_resiliency_ext.checkpointing.local.ckpt_managers.local_manager import (
                 LocalCheckpointManager,
-            )
-            from nvidia_resiliency_ext.checkpointing.local.replication.group_utils import (
-                parse_group_sequence,
-                GroupWrapper,
             )
             from nvidia_resiliency_ext.checkpointing.local.replication.strategies import (
                 CliqueReplicationStrategy,
@@ -651,7 +650,7 @@ def pretrain(
             write_to_tensorboard=not args.skip_train,
             non_loss_data_func=non_loss_data_func,
         )
-    
+
     # Save HF checkpoint at the end of training if --save-hf is enabled
     save_hf_enabled = getattr(args, 'save_hf', 'false').lower() == 'true'
     if save_hf_enabled and iteration == args.train_iters:
@@ -685,31 +684,31 @@ def check_vlm_peft_config(model_config):
         and model_config.image_encoder.freeze
         and peft_config.apply_to_image_encoder
     ):
-        raise ValueError(f"Cannot freeze image encoder when using PEFT.")
+        raise ValueError("Cannot freeze image encoder when using PEFT.")
     if (
         model_config.image_projector is not None
         and model_config.image_projector.freeze
         and peft_config.apply_to_image_projector
     ):
-        raise ValueError(f"Cannot freeze image projector when using PEFT.")
+        raise ValueError("Cannot freeze image projector when using PEFT.")
     if (
         model_config.foundation is not None
         and model_config.foundation.freeze
         and peft_config.apply_to_foundation
     ):
-        raise ValueError(f"Cannot freeze foundation model when using PEFT.")
+        raise ValueError("Cannot freeze foundation model when using PEFT.")
     if (
         model_config.video_encoder is not None
         and model_config.video_encoder.freeze
         and peft_config.apply_to_video_encoder
     ):
-        raise ValueError(f"Cannot freeze video encoder when using PEFT.")
+        raise ValueError("Cannot freeze video encoder when using PEFT.")
     if (
         model_config.video_projector is not None
         and model_config.video_projector.freeze
         and peft_config.apply_to_video_projector
     ):
-        raise ValueError(f"Cannot freeze video projector when using PEFT.")
+        raise ValueError("Cannot freeze video projector when using PEFT.")
     target_prefix = []
     if peft_config.apply_to_foundation:
         target_prefix.append("foundation")
@@ -855,7 +854,7 @@ def get_model(
 
             # Directly call load_checkpoint_from path in order to avoid
             # the load directory overriding the pretrained checkpoint path
-            # This is needed to initialize the base model weights first, 
+            # This is needed to initialize the base model weights first,
             # and then conditionally load adapter states after
             _load_checkpoint_from_path(
                 load_dir=args.pretrained_checkpoint,
@@ -919,7 +918,7 @@ def get_model(
             param_pattern = [param_pattern]
 
         config = get_model_config(model[0])
-       
+
         model = [Float16Module(config, model_module) for model_module in model]
         fp32_training_weights = param_pattern
         #covert fp32
@@ -1207,9 +1206,9 @@ def setup_model_and_optimizer(
         timers("load-checkpoint").stop(barrier=True)
         timers.log(["load-checkpoint"])
 
-        #For models such as GLM-5, the model structure is similar to DeepSeek, 
-        #but the weights are different from DeepSeek. 
-        #MTP does not have separate embedding weights, and in pipeline scenarios, 
+        #For models such as GLM-5, the model structure is similar to DeepSeek,
+        #but the weights are different from DeepSeek.
+        #MTP does not have separate embedding weights, and in pipeline scenarios,
         #weights need to be copied from the first PP stage.
         if args.should_get_embedding_weights_for_mtp:
             _p2p_embedding_weights_for_mtp(unwrapped_model, args)
@@ -1515,11 +1514,11 @@ def train_step(
     timers = get_timers()
 
     if args.enable_full_hetero_dp:
-        import itertools, copy
+        import itertools
+        import copy
         from loongforge.train.initialize import (
             get_num_micro_batches_per_decoder_dp,
             get_num_real_micro_batches_per_decoder_dp,
-            change_parallel_state,
         )
         from loongforge.train.pretrain.pretrain_vlm import (
             get_batch, get_embedding_list,
@@ -1563,7 +1562,6 @@ def train_step(
         for round in range(encoder_rounds):
             batch_list.clear()
             front = pp_layer * tp_size + round * model_size
-            all_mock_in_range = (front >= num_real_microbatch)
             for tp_idx in range(tp_size):
                 global_mb_idx = front + tp_idx
                 if global_mb_idx >= num_real_microbatch:
@@ -1644,7 +1642,7 @@ def train_step(
 
             embedding_list.append(
                 gather_variable_shape_embeddings(
-                    combined_embeddings, 
+                    combined_embeddings,
                     group=mpu.get_model_parallel_group()
                 )
             )
@@ -1652,7 +1650,7 @@ def train_step(
             if visual_pos_masks is not None:
                 visual_pos_masks_list.append(
                     gather_variable_shape_embeddings(
-                        visual_pos_masks, 
+                        visual_pos_masks,
                         group=mpu.get_model_parallel_group()
                     )
                 )
@@ -1870,7 +1868,7 @@ def train_step(
 
         for _round_key in list(local_model.vit_contexts.keys()):
             del local_model.vit_contexts[_round_key]
-        
+
         clear_full_hetero_info()
 
     should_checkpoint, should_exit, exit_code = (

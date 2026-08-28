@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """Tests for int4_qat package."""
 import math
 import pytest
@@ -189,7 +191,6 @@ class TestFusedKernel:
 
     def test_fused_matches_two_pass_small(self, cuda_device):
         """Bit-exact match on a small tensor."""
-        from int4_qat import fake_int4_quantize_dequantize
         from int4_qat.cuda_fused import fused_fake_int4_quantize_dequantize_cuda
 
         torch.manual_seed(42)

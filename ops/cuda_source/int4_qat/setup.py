@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """
 Setup for INT4 fake quantization CUDA kernels.
 
@@ -8,7 +10,7 @@ used for Quantization-Aware Training (QAT) of MoE expert weights.
 import os
 import subprocess
 from setuptools import setup, find_packages
-from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CUDA_HOME
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 
 def get_arch_flags():

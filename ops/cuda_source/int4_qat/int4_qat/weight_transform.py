@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """
 Pluggable weight transforms for Quantization-Aware Training (QAT).
 

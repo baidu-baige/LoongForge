@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """
 INT4 fake quantization for Quantization-Aware Training (QAT).
 

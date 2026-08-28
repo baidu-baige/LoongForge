@@ -23,10 +23,21 @@ repos:
       - id: insert-license
         alias: spdx-check
         name: SPDX header check
-        files: '\.(py|sh|cu|cpp|h)$'
+        files: '\.(py|sh)$'
         exclude: '^(third_party|patches|tests/datasets)/'
         args:
           - --license-filepath=.license-header.txt
           - --use-current-year
           - --detect-license-in-X-top-lines=10
           - --no-extra-eol
+      - id: insert-license
+        alias: spdx-check
+        name: SPDX header check (C/C++/CUDA)
+        files: '\.(cu|cpp|h)$'
+        exclude: '^(third_party|patches|tests/datasets)/'
+        args:
+          - --license-filepath=.license-header.txt
+          - --use-current-year
+          - --detect-license-in-X-top-lines=10
+          - --no-extra-eol
+          - --comment-style=//
