@@ -38,6 +38,7 @@ _BACKBONE_PRESETS: dict[str, dict] = {
         "frame_seqlen": 880,
         "concat_first_frame_latent": True,
         "vae_class": "WanVideoVAE",
+        "vae_filename": "Wan2.1_VAE.pth",
         "vae_z_dim": 16,
         "vae_dim": 96,
         "target_video_height": None,  # Wan2.1 keeps native resolution
@@ -56,6 +57,7 @@ _BACKBONE_PRESETS: dict[str, dict] = {
         "frame_seqlen": 50,
         "concat_first_frame_latent": False,
         "vae_class": "WanVideoVAE38",
+        "vae_filename": "Wan2.2_VAE.pth",
         "vae_z_dim": 48,
         "vae_dim": 160,
         "target_video_height": 160,
@@ -111,6 +113,8 @@ class DreamZeroConfig(PreTrainedConfig):
     # ------------------------------------------------------------------
     # Flow-matching scheduler
     # ------------------------------------------------------------------
+    # Retain the historical training/configuration field. Eval-only scheduler
+    # steps live on DreamZeroEvalConfig and do not alter shared model defaults.
     num_inference_timesteps: int = 4  # not used during training
     # ``1`` selects the fallback all-True inference skip mask, so all diffusion
     # steps run the DiT.
