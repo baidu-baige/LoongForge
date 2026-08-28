@@ -43,10 +43,7 @@
 <a id="architecture"></a>
 ## 🏗️ 架构
 
-由于不同类别、不同规模的模型，最优训练策略不同，LoongForge 采用双后端架构：
-
-- **Megatron 栈** —— 面向 LLM、VLM 与 Diffusion 模型。基于 [patch 过的 Megatron-LM](./third_party/Loong-Megatron/) 构建，并扩展了 MoE 并行、组件级异构并行、长序列优化等能力。
-- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。独立的 [torch-native 子系统](./loongforge/embodied)，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
+由于不同类别、不同规模的模型，最优训练策略不同，LoongForge 采用双后端架构。
 
 <p align="center">
   <picture>
@@ -55,6 +52,9 @@
     <img alt="LoongForge 架构图" src="./docs/assets/images/architecture/loongforge-architecture.svg" width="100%">
   </picture>
 </p>
+
+- **Megatron 栈** —— 面向 LLM、VLM 与 Diffusion 模型。基于 [patch 过的 Megatron-LM](./third_party/Loong-Megatron/) 构建，并扩展了 MoE 并行、组件级异构并行、长序列优化等能力。
+- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。独立的 [torch-native 子系统](./loongforge/embodied)，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
 
 ## 🔥 最新动态
 

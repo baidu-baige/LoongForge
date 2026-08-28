@@ -43,10 +43,7 @@
 <a id="architecture"></a>
 ## 🏗️ Architecture
 
-Since optimal training strategies differ across model families and scales, LoongForge adopts a dual-backend architecture:
-
-- **Megatron Stack** — For LLMs, VLMs, and diffusion models. Powered by a [patched Megatron-LM](./third_party/Loong-Megatron/) and extended with MoE parallelism, per-component heterogeneous parallelism, long-sequence optimizations, etc.
-- **Torch-Native Stack** — For embodied models (VLA and WAM). A standalone [torch-native subsystem](./loongforge/embodied) featuring **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
+Since optimal training strategies differ across model families and scales, LoongForge adopts a dual-backend architecture.
 
 <p align="center">
   <picture>
@@ -55,6 +52,9 @@ Since optimal training strategies differ across model families and scales, Loong
     <img alt="LoongForge Architecture" src="./docs/assets/images/architecture/loongforge-architecture.svg" width="100%">
   </picture>
 </p>
+
+- **Megatron Stack** — For LLMs, VLMs, and diffusion models. Powered by a [patched Megatron-LM](./third_party/Loong-Megatron/) and extended with MoE parallelism, per-component heterogeneous parallelism, long-sequence optimizations, etc.
+- **Torch-Native Stack** — For embodied models (VLA and WAM). A standalone [torch-native subsystem](./loongforge/embodied) featuring **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
 
 ## 🔥 Latest News
 
