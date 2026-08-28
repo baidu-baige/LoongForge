@@ -36,7 +36,7 @@
 
 - **Easy to Use** — [Ready-to-run configs](./configs/models/) and [launch examples](./examples) for supported models, covering pre-training, continued pre-training, SFT, and LoRA.
 - **High Performance** — Built on multiple training backends (Megatron-LM and torch-native), with deep optimizations for each model family across parallelism strategy, memory footprint, communication overlap, and kernel efficiency.
-- **Proven at Scale** — Open-sourced from **AIAK-Training-LLM**, a training acceleration suite serving enterprise customers in Education, Computer Vision, and Embodied AI, **with the largest production runs reaching 5,000+ XPUs**.
+- **Proven at Scale** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training acceleration suite serving enterprise customers in Education, Computer Vision, and Embodied AI, **with the largest production runs reaching 5,000+ XPUs**.
 
 > 🐉 LoongForge is named after the traditional Chinese **loong boat (龙舟)**, a symbol of coordinated power and forward momentum.
 
