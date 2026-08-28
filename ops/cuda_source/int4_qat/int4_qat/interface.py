@@ -34,6 +34,13 @@ def fake_int4_quant(
 
     Returns integer codes stored in the original floating dtype.
 
+    Partial blocks (when M % block_m != 0 or N % block_n != 0, e.g. after
+    TP-slicing a weight so its shard is not a multiple of the group size)
+    are zero-padded to the full block size, and the padding participates in
+    the min/max range estimation (mirrors slime upstream).  Symmetric mode
+    is unaffected: |0| never changes a block's abs-max, so partial blocks
+    there give bit-identical scales to reducing over the true elements only.
+
     Args:
         x: 2D CUDA tensor [M, N].
         block_size: [block_m, block_n]. Must satisfy block_m * block_n % 32 == 0.

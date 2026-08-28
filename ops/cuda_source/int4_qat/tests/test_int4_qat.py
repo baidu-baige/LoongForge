@@ -7,7 +7,14 @@ import torch
 
 
 def _reference_fake_int4_quant(x, block_size, sym):
-    """Pure PyTorch per-block reference (loop-based, for correctness checking)."""
+    """Pure PyTorch per-block reference (loop-based, for correctness checking).
+
+    Matches the CUDA kernels: partial blocks are zero-padded to the full block
+    size, and the padding participates in the min/max range estimation (this
+    mirrors slime upstream).  Symmetric mode is unaffected since |0| never
+    changes a block's abs-max, so partial blocks there are bit-identical to
+    reducing over the true elements only.
+    """
     M, N = x.shape
     block_m, block_n = block_size
     scale_rows = math.ceil(M / block_m)
@@ -22,6 +29,11 @@ def _reference_fake_int4_quant(x, block_size, sym):
         for bj in range(scale_cols):
             c0, c1 = bj * block_n, min((bj + 1) * block_n, N)
             block = x[r0:r1, c0:c1]
+            # Zero-pad partial blocks to the full block size (kernel semantics).
+            if (r1 - r0) < block_m or (c1 - c0) < block_n:
+                padded = torch.zeros(block_m, block_n, device=x.device, dtype=x.dtype)
+                padded[: r1 - r0, : c1 - c0] = block
+                block = padded
 
             if sym:
                 s = torch.clamp(block.abs().max() / 7.0, min=1e-5)
@@ -33,7 +45,7 @@ def _reference_fake_int4_quant(x, block_size, sym):
                 z = torch.clamp(-torch.round(block_min / s), min=0.0, max=15.0)
                 q_block = torch.round(block / s) + z
 
-            q[r0:r1, c0:c1] = q_block.to(x.dtype)
+            q[r0:r1, c0:c1] = q_block[: r1 - r0, : c1 - c0].to(x.dtype)
             scale[bi, bj] = s.to(x.dtype)
             zero[bi, bj] = z.to(x.dtype)
 
