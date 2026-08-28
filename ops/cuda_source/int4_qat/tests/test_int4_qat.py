@@ -400,3 +400,52 @@ class TestWeightTransform:
         assert not hasattr(model.absorb, '_int4_qat_transform')
         # Same instance shared
         assert model.expert_fc1._int4_qat_transform is model.expert_fc2._int4_qat_transform
+
+
+def _make_module(weight):
+    class FakeGroupedLinear(torch.nn.Module):
+        def _get_weight_tensors(self):
+            return [weight]
+
+    return FakeGroupedLinear()
+
+
+def _tp_sharded(weight, partition_dim):
+    weight.tensor_model_parallel = True
+    weight.partition_dim = partition_dim
+    return weight
+
+
+class TestGroupAlignment:
+    """Guards against quantization groups straddling a TP shard boundary."""
+
+    def test_tail_group_allowed_when_unsharded(self):
+        """Unsharded weight with N % group_size != 0: tail padding is fine."""
+        from int4_qat import apply_int4_qat
+
+        _, count = apply_int4_qat(_make_module(torch.zeros(8, 65)), filter_regex=None)
+        assert count == 1
+
+    def test_tp_straddling_group_raises(self):
+        """TP shard along in_features with N % group_size != 0 must raise."""
+        from int4_qat import apply_int4_qat
+
+        w = _tp_sharded(torch.zeros(8, 65), partition_dim=1)
+        with pytest.raises(ValueError, match="straddle the TP boundary"):
+            apply_int4_qat(_make_module(w), filter_regex=None)
+
+    def test_tp_aligned_shard_allowed(self):
+        """TP shard along in_features that stays group-aligned is fine."""
+        from int4_qat import apply_int4_qat
+
+        w = _tp_sharded(torch.zeros(8, 64), partition_dim=1)
+        _, count = apply_int4_qat(_make_module(w), filter_regex=None)
+        assert count == 1
+
+    def test_tp_dim0_shard_does_not_affect_groups(self):
+        """Sharding along dim 0 (column-parallel) leaves groups intact."""
+        from int4_qat import apply_int4_qat
+
+        w = _tp_sharded(torch.zeros(8, 65), partition_dim=0)
+        _, count = apply_int4_qat(_make_module(w), filter_regex=None)
+        assert count == 1

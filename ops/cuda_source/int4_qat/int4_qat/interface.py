@@ -34,12 +34,17 @@ def fake_int4_quant(
 
     Returns integer codes stored in the original floating dtype.
 
-    Partial blocks (when M % block_m != 0 or N % block_n != 0, e.g. after
-    TP-slicing a weight so its shard is not a multiple of the group size)
-    are zero-padded to the full block size, and the padding participates in
-    the min/max range estimation (mirrors slime upstream).  Symmetric mode
-    is unaffected: |0| never changes a block's abs-max, so partial blocks
+    Partial blocks (when M % block_m != 0 or N % block_n != 0) are
+    zero-padded to the full block size, and the padding participates in the
+    min/max range estimation (mirrors slime upstream).  Symmetric mode is
+    unaffected: |0| never changes a block's abs-max, so partial blocks
     there give bit-identical scales to reducing over the true elements only.
+
+    Note: zero-padding is only valid at the true tail of a tensor.  If a
+    weight is TP-sharded along in_features, the shard size must be a
+    multiple of the group size — apply_int4_qat() raises at setup time
+    otherwise, since a group straddling a TP boundary would need a
+    cross-rank amax reduction (not implemented).
 
     Args:
         x: 2D CUDA tensor [M, N].

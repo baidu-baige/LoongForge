@@ -190,15 +190,63 @@ class FakeQuantWeightTransform:
         )
 
 
+def _check_group_alignment(
+    module_name: str,
+    weights: list,
+    group_size: int,
+) -> None:
+    """Reject TP shard layouts that would split a quantization group.
+
+    Zero-padding is only legitimate at the true tail of a tensor.  If a
+    weight is TP-sharded along its in-features dim (dim 1) and the local
+    shard is not a multiple of *group_size*, a quantization group would
+    straddle the TP boundary: each rank would pad the straddling group with
+    zeros that actually hold real values on another rank, producing wrong
+    scales (in both sym and asym modes).  Supporting that case requires a
+    cross-rank amax reduction (like Megatron's master-weight quantization
+    across DP ranks), which is not implemented — so fail loudly at setup.
+
+    TP sharding is detected via the attributes Megatron sets through
+    ``set_tensor_model_parallel_attributes`` (``tensor_model_parallel`` and
+    ``partition_dim``; ``partition_dim == 1`` means the weight is sharded
+    along in_features, e.g. row-parallel style).  Weights without these
+    attributes are treated as unsharded.
+    """
+    for w in weights:
+        if not isinstance(w, torch.Tensor) or w.dim() != 2:
+            continue
+        n = w.shape[1]
+        if n % group_size == 0:
+            continue
+        if getattr(w, 'tensor_model_parallel', False) and getattr(w, 'partition_dim', None) == 1:
+            raise ValueError(
+                f"[INT4 QAT] {module_name}: weight of shape {tuple(w.shape)} is "
+                f"TP-sharded along in_features (partition_dim=1), but the local "
+                f"shard size {n} is not a multiple of group_size={group_size}. "
+                f"A quantization group would straddle the TP boundary, which "
+                f"requires a cross-rank amax reduction (not implemented). "
+                f"Adjust the TP/ETP degree or --int4-qat-group-size so that "
+                f"shard_size % group_size == 0."
+            )
+        logger.info(
+            f"[INT4 QAT] {module_name}: in_features={n} is not a multiple of "
+            f"group_size={group_size}; the tail group will use zero-padded "
+            f"range estimation (tail of an unsharded tensor)."
+        )
+
+
 def _patch_get_weight_tensors(
     module: nn.Module,
     transform: FakeQuantWeightTransform,
+    name: str = '',
 ) -> bool:
     """Monkey-patch ``_get_weight_tensors`` on *module* for INT4 QAT."""
     if not hasattr(module, '_get_weight_tensors'):
         return False
 
     original_fn = module._get_weight_tensors
+
+    _check_group_alignment(name, original_fn(), transform.group_size)
 
     def _patched_get_weights(
         _orig=original_fn, _mod=module, _xform=transform,
@@ -244,7 +292,7 @@ def apply_int4_qat(
 
     count = 0
     for name, module in to_patch:
-        if _patch_get_weight_tensors(module, transform):
+        if _patch_get_weight_tensors(module, transform, name):
             count += 1
 
     logger.info(f"[INT4 QAT] Patched {count} modules (matched {len(to_patch)} candidates)")

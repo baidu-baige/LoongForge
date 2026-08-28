@@ -70,6 +70,15 @@ Quantization modes:
 
 If the CUDA extension is not built, all APIs fall back to a pure PyTorch implementation automatically.
 
+## Tensor-parallel sharding requirement
+
+Zero-padding is only applied at the true tail of a tensor. If a weight is
+TP-sharded along `in_features` (e.g. row-parallel style, `partition_dim=1`),
+the local shard size must be a multiple of `group_size` — `apply_int4_qat()`
+raises at setup time otherwise, because a quantization group straddling a
+TP boundary would require a cross-rank amax reduction (not implemented).
+Sharding along `out_features` (column-parallel) is unaffected.
+
 ## Tests
 
 ```bash
