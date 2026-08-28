@@ -81,9 +81,9 @@
     <text x="875" y="64" text-anchor="middle" font-size="48" font-weight="bold" letter-spacing="0.5" fill="#F2F5FA">LoongForge Architecture</text>
 
     <!-- ===== value pillars (left axis, aligned to each layer) ===== -->
-    <text x="160" y="253" font-size="26" font-weight="bold" fill="#B79BFF" text-anchor="middle">Unified</text>
+    <text x="160" y="253" font-size="26" font-weight="bold" fill="#B79BFF" text-anchor="middle">Broad Coverage</text>
     <text x="160" y="548" font-size="26" font-weight="bold" fill="#8496FF" text-anchor="middle">High-Performance</text>
-    <text x="160" y="788" font-size="26" font-weight="bold" fill="#33D0BE" text-anchor="middle">Multi-Chip</text>
+    <text x="160" y="788" font-size="26" font-weight="bold" fill="#33D0BE" text-anchor="middle">Multi-Hardware</text>
 
     <!-- ===== Foundation & Multimodal Models ===== -->
     <text x="390" y="159" font-size="27" font-weight="bold" fill="#8496FF">Foundation &amp; Multimodal Models</text>

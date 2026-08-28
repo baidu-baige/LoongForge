@@ -1,165 +1,218 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """
 Generate the LoongForge benchmark speedup chart used in README.
 
+Style mirrors the ``#benchmark`` section of the LoongForge GitHub Pages site
+(rounded gradient bars on a light track, model + type pill on the left, speedup
+inside the bar). Baseline frameworks are intentionally *not* named — the chart
+only shows LoongForge's own speedup numbers.
+
 Usage:
-    python docs/assets/images/benchmark_speedup.py
+    python docs/assets/images/benchmark_image.py
 
 Output:
     docs/assets/images/benchmark_speedup.png
 
 To update the chart:
-    1. Edit the ROWS list below (already sorted descending by speedup).
-    2. Update VERSION_TAG and FOOTNOTES if needed.
-    3. Re-run this script.
+    1. Edit the ROWS list below — model name, modality tag, speedup. That's it.
+    2. Re-run this script.
 """
 
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import font_manager as fm
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import FancyBboxPatch
 
 # ──────────────────────────── EDIT ME ────────────────────────────
-# Each row: (model, type, baseline, config, speedup, marker, measured)
-# - Grouped by category (embodied first, then LLM/VLM), sorted by speedup within each group.
-# - marker: "" or one of the footnote symbols ("§", "*", etc.)
-# - measured: the version/branch the row was benchmarked on (shown per bar).
+# Each row: (model, type, speedup). Grouped by category in the order
+# VLA → WAM → VLM → LLM, and sorted by speedup within each group.
+# Bars are normalised against the largest speedup, and the fastest row gets
+# the pink accent gradient.
 ROWS = [
-    ("DreamZero",          "WAM",       "DreamZero",   "DROID · Wan2.2-5B Full",         2.67, "",  "master · 2026-07"),
-    ("GR00T N1.6",         "VLA",       "LeRobot",     "GBS 96 · 224×224",               2.31, "",  "master · 2026-07"),
-    ("Pi 0.5",             "VLA",       "OpenPI",      "GBS 96 · 224×224×2",             2.23, "",  "master · 2026-07"),
-    ("LingBot VA",         "WAM",       "LingBot-VA",  "LIBERO",                         1.80, "",  "master · 2026-07"),
-    ("X-VLA",              "VLA",       "X-VLA",       "GBS 288",                        1.69, "",  "master · 2026-07"),
-    ("DeepSeek-V3.2 Lite", "MoE + DSA", "Megatron-LM", "Reduced layers · GBS 128 · 8K",  5.04, "§", "v0.1.1"),
-    ("Qwen3-VL-30B-A3B",   "VLM",       "VeOmni",      "GBS 128 · 32K",                  1.45, "",  "v0.1.1"),
-    ("Qwen3-30B-A3B",      "MoE",       "Megatron-LM", "GBS 1024 · 32K",                 1.16, "",  "v0.1.1"),
+    # VLA
+    ("GR00T N1.6",         "VLA", 2.31),
+    ("Pi0.5",              "VLA", 2.23),
+    ("X-VLA",              "VLA", 1.69),
+    # WAM
+    ("DreamZero",          "WAM", 2.67),
+    ("LingBot VA",         "WAM", 1.80),
+    # VLM
+    ("Qwen3-VL-30B-A3B",   "VLM", 1.45),
+    # LLM
+    ("DeepSeek-V3.2 Lite", "LLM", 5.04),
 ]
 
-# Per-bar measurement version is rendered under each row (see `measured`),
-# so no single global stamp is used. Set to a string to force a global tag.
-VERSION_TAG = ""
+TITLE = "LoongForge — Training Throughput Speedup vs Open-Source Baselines"
 
-FOOTNOTES = [
-    "§  DeepSeek-V3.2 was validated on a reduced-layer setup; LoongForge's DSA kernels still deliver ~5× speedup and reach 64K sequence (baseline OOMs beyond 8K).",
-    "†  Each row shows the version/branch it was measured on; numbers reflect baseline and LoongForge versions at measurement time and may evolve as implementations change.",
-]
+BASELINE_CAPTION = "1.0× baseline"
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "benchmark_speedup.png")
 
+# Preferred typefaces, first available wins. The site uses Inter; installing it
+# (or Manrope) locally makes this chart match the web look exactly, otherwise it
+# falls back to matplotlib's bundled DejaVu Sans.
+FONT_CANDIDATES = ["Inter", "Manrope", "Plus Jakarta Sans", "Figtree",
+                   "Helvetica Neue", "Arial", "DejaVu Sans"]
+
 # ─────────────────────────── CONSTANTS ───────────────────────────
-COLOR_LOONGFORGE = "#8B5CF6"   # brand purple (matches logo gradient mid-stop)
-COLOR_BASELINE   = "#B0B7C0"
-COLOR_NUM        = "#5B21B6"   # deep purple, for speedup numbers
-COLOR_GREY_DARK  = "#5A6068"
-COLOR_GREY_MID   = "#888888"
-COLOR_FOOTNOTE_1 = "#2E3338"   # darker for primary footnote
-COLOR_FOOTNOTE_2 = "#5A6068"   # mid for secondary footnote
-COLOR_GREY_LITE  = "#CCCCCC"
-COLOR_TEXT       = "#1A1A1A"
-COLOR_TEXT_DIM   = "#A0A6AE"   # lighter — used for older (v0.1.1) model names
+# Layout follows the site stylesheet (assets/css/style.css); the indigo /
+# violet / ink values are taken from the architecture diagram
+# (docs/assets/images/architecture/loongforge-architecture.svg) so the two
+# README images read as one set.
+COLOR_CANVAS     = "#F6F8FF"   # architecture diagram light background
+COLOR_TRACK      = "#F1F2F6"   # .bench-track
+COLOR_BAR_A      = "#3B4FD8"   # architecture indigo (gradient start)
+COLOR_BAR_B      = "#7C3AED"   # architecture violet (gradient end)
+COLOR_BAR_TOP_B  = "#EC4899"   # .bench-bar-top gradient end (brand pink)
+COLOR_LABEL      = "#2A2E37"   # architecture ink
+COLOR_PILL_BG    = "#EAEEFF"   # architecture light indigo fill
+COLOR_PILL_FG    = "#3B4FD8"   # architecture indigo
+COLOR_BASELINE   = "#9CA3AF"   # .bench-baseline
+COLOR_TITLE      = "#2A2E37"
 
-# ────────────────────────────── PLOT ─────────────────────────────
+# The axes uses pixel-sized data units at DPI, so 1 unit == 1 px in the PNG.
+DPI = 150
+PX_PER_PT = DPI / 72.0
+
+W          = 1720          # canvas width  (px)
+PAD_X      = 60            # left / right margin
+LABEL_X    = PAD_X + 20    # model name baseline
+TRACK_X1   = W - PAD_X     # track right edge
+LABEL_GAP  = 44            # gap between the pill column and the track
+PILL_GAP   = 16            # gap between the name column and the pill column
+ROW_PITCH  = 72
+GROUP_GAP  = 0             # extra spacing when the modality changes (0 = even)
+BAR_H      = 40
+BAR_PAD_R  = 24            # gap between bar end and the speedup text
+
+
+def _font():
+    """First available preferred typeface."""
+    available = {f.name for f in fm.fontManager.ttflist}
+    return next((n for n in FONT_CANDIDATES if n in available), "DejaVu Sans")
+
+
+def _fs(px):
+    """Font size in points for a target pixel height."""
+    return px / PX_PER_PT
+
+
+def _rounded(ax, x0, y0, x1, y1, **kw):
+    """Fully rounded ("pill") rectangle in data coordinates."""
+    h = y1 - y0
+    r = h / 2.0
+    patch = FancyBboxPatch(
+        (x0 + r, y0), max(x1 - x0 - 2 * r, 0.0), h,
+        boxstyle=f"round,pad=0,rounding_size={r}",
+        mutation_aspect=1, **kw,
+    )
+    ax.add_patch(patch)
+    return patch
+
+
+def _gradient_bar(ax, x0, y0, x1, y1, c_from, c_to, zorder=3):
+    """Horizontal gradient fill clipped to a pill-shaped bar."""
+    clip = _rounded(ax, x0, y0, x1, y1, fc="none", ec="none", zorder=zorder)
+    cmap = LinearSegmentedColormap.from_list("bar", [c_from, c_to])
+    im = ax.imshow(np.linspace(0, 1, 256).reshape(1, -1), cmap=cmap,
+                   extent=(x0, x1, y1, y0), aspect="auto",
+                   interpolation="bilinear", zorder=zorder)
+    im.set_clip_path(clip)
+    return clip
+
+
+def _text_width(fig, artist):
+    """Rendered width of a text artist, in data units (== px)."""
+    bb = artist.get_window_extent(renderer=fig.canvas.get_renderer())
+    return bb.width
+
+
 def main():
-    n = len(ROWS)
-    y = np.arange(n)
-    height = 0.36
+    plt.rcParams["font.family"] = _font()
 
-    fig, ax = plt.subplots(figsize=(12, 7.4), dpi=150)
-    fig.patch.set_facecolor("white")
+    speedups = [r[2] for r in ROWS]
+    peak = max(speedups)
+    best = speedups.index(peak)                    # gets the pink accent bar
 
-    speedups = [r[4] for r in ROWS]
-    baselines = [1.0] * n
+    # Row centres, with a little extra air whenever the modality changes.
+    y_title = 54 if TITLE else 0
+    y_rows = []
+    y = y_title + (62 if TITLE else 40) + BAR_H / 2
+    for i, (_, mtype, _) in enumerate(ROWS):
+        if i and mtype != ROWS[i - 1][1]:
+            y += GROUP_GAP
+        y_rows.append(y)
+        y += ROW_PITCH
+    y_baseline = y_rows[-1] + BAR_H / 2 + 36       # "1.0× baseline" caption
+    height = y_baseline + 42
 
-    ax.barh(y - height / 2, speedups, height, label="LoongForge",
-            color=COLOR_LOONGFORGE, edgecolor="white", linewidth=0.5, zorder=3)
-    ax.barh(y + height / 2, baselines, height, label="Baseline",
-            color=COLOR_BASELINE, edgecolor="white", linewidth=0.5, zorder=3)
+    fig = plt.figure(figsize=(W / DPI, height / DPI), dpi=DPI)
+    fig.patch.set_facecolor(COLOR_CANVAS)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, W)
+    ax.set_ylim(height, 0)                         # y grows downward
+    ax.set_facecolor(COLOR_CANVAS)
+    ax.set_axis_off()
 
-    # Speedup numbers
-    for i, (_, _, _, _, sp, _, _) in enumerate(ROWS):
-        ax.text(sp + 0.10, y[i] - height / 2, f"{sp:.2f}×",
-                va="center", ha="left", fontsize=12,
-                fontweight="bold", color=COLOR_NUM)
+    # Measure the label column first, so the pills line up in their own column
+    # and the track starts right after them instead of at a hardcoded offset.
+    def measure(s, px, weight="normal"):
+        t = ax.text(0, 0, s, fontsize=_fs(px), fontweight=weight)
+        w = _text_width(fig, t)
+        t.remove()
+        return w
 
-    # Baseline labels (small, grey) — append † superscript referencing the 2nd footnote
-    for i, (_, _, baseline, _, _, _, _) in enumerate(ROWS):
-        ax.text(1.0 + 0.10, y[i] + height / 2,
-                f"1.00×  ({baseline}$^{{\\dagger}}$)",
-                va="center", ha="left", fontsize=9, color=COLOR_GREY_DARK)
+    name_w = [measure(m, 22, "bold") for m, _, _ in ROWS]
+    pill_w = max(measure(t, 13, "bold") for _, t, _ in ROWS) + 24
+    pill_x0 = LABEL_X + max(name_w) + PILL_GAP
+    track_x0 = pill_x0 + pill_w + LABEL_GAP
 
-    # Y-tick labels: model (with optional superscript marker) + type.
-    # Use mathtext ($^{...}$) to render the marker as a true superscript.
-    # `§` in mathtext is `\S`; other markers (e.g. `*`, `†`) pass through.
-    SUP_MAP = {"§": r"\S", "†": r"\dagger", "*": "*"}
-    def _label(r):
-        sup = f"$^{{{SUP_MAP.get(r[5], r[5])}}}$" if r[5] else ""
-        return f"{r[0]}{sup}  ({r[1]})"
-    ax.set_yticks(y)
-    ax.set_yticklabels([_label(r) for r in ROWS],
-                       fontsize=11, fontweight="bold", color=COLOR_TEXT)
+    if TITLE:
+        ax.text(W / 2, y_title, TITLE, ha="center", va="center",
+                fontsize=_fs(29), fontweight="bold", color=COLOR_TITLE)
 
-    # Secondary y-line: config (grey italic) + a colored version badge, both on
-    # one line so they clearly attach to this row. main → brand purple, v0.1.1 → grey.
-    for i, r in enumerate(ROWS):
-        config, measured = r[3], r[6]
-        is_current = "master" in measured
-        # Light tinted chips (not solid purple) so the badge reads as a tag and
-        # doesn't visually compete with the purple bars.
-        badge_fc = "#EDE9FE" if is_current else "#EDEFF2"   # lavender vs grey tint
-        badge_tc = COLOR_TEXT if is_current else COLOR_GREY_DARK
-        # version badge: right-aligned nearest the axis
-        ax.annotate(measured,
-                    xy=(0, y[i]), xycoords=("axes fraction", "data"),
-                    xytext=(-6, -14), textcoords="offset points",
-                    ha="right", va="center",
-                    fontsize=7.8, fontweight="bold", color=badge_tc,
-                    bbox=dict(boxstyle="round,pad=0.25", fc=badge_fc, ec="none"))
-        # config: to the left of the badge
-        ax.annotate(config,
-                    xy=(0, y[i]), xycoords=("axes fraction", "data"),
-                    xytext=(-104, -14), textcoords="offset points",
-                    ha="right", va="center",
-                    fontsize=8.5, color=COLOR_GREY_MID, style="italic")
+    for i, (model, mtype, speedup) in enumerate(ROWS):
+        yc = y_rows[i]
+        y0, y1 = yc - BAR_H / 2, yc + BAR_H / 2
 
-    # X-axis
-    ax.set_xlabel("Training Speedup (× over baseline)",
-                  fontsize=11.5, fontweight="bold", labelpad=12)
-    upper = max(6.4, max(speedups) + 1.4)
-    ax.set_xlim(0, upper)
-    ax.set_xticks([t for t in range(0, int(upper) + 1)])
-    # Shift xlabel slightly left so it visually centers around the bar cluster
-    # (default centers it on the plot area, which here ends at ~6.4 → label looks right-shifted)
-    ax.xaxis.set_label_coords(0.4, -0.09)
-    ax.invert_yaxis()
+        # Track
+        _rounded(ax, track_x0, y0, TRACK_X1, y1,
+                 fc=COLOR_TRACK, ec="none", zorder=2)
 
-    ax.xaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
-    ax.set_axisbelow(True)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color(COLOR_GREY_LITE)
-    ax.spines["bottom"].set_color(COLOR_GREY_LITE)
+        # Bar (the fastest row gets the pink accent gradient)
+        frac = speedup / peak
+        bar_x1 = track_x0 + frac * (TRACK_X1 - track_x0)
+        c_to = COLOR_BAR_TOP_B if i == best else COLOR_BAR_B
+        if i == best:   # soft glow under the highlighted bar
+            _rounded(ax, track_x0 + 6, y0 + 8, bar_x1 - 6, y1 + 8,
+                     fc=COLOR_BAR_TOP_B, ec="none", alpha=0.10, zorder=1)
+        _gradient_bar(ax, track_x0, y0, bar_x1, y1, COLOR_BAR_A, c_to)
 
-    ax.set_title("LoongForge — Training Speedup vs Open-Source Baselines",
-                 fontsize=14, fontweight="bold", pad=20,
-                 loc="left", color=COLOR_TEXT)
-    ax.legend(loc="lower right", frameon=False, fontsize=10.5)
+        # Speedup value, right-aligned inside the bar
+        ax.text(bar_x1 - BAR_PAD_R, yc, f"{speedup:.2f}×",
+                ha="right", va="center", zorder=5,
+                fontsize=_fs(20), fontweight="bold", color="white")
 
-    # Footnotes — slight-negative x forces tight-crop's left edge to align here,
-    # so footnotes sit flush-left in the saved image with only pad_inches of margin.
-    fig.subplots_adjust(bottom=0.20)
-    base_y = 0.075
-    step = 0.035
-    for i, fn in enumerate(FOOTNOTES):
-        color = COLOR_FOOTNOTE_1 if i == 0 else COLOR_FOOTNOTE_2
-        fig.text(-0.02, base_y - i * step, fn,
-                 fontsize=8.6, color=color, ha="left")
+        # Model name (left column) + modality pill (aligned column)
+        ax.text(LABEL_X, yc, model, ha="left", va="center", zorder=4,
+                fontsize=_fs(22), fontweight="bold", color=COLOR_LABEL)
+        ax.text(pill_x0 + pill_w / 2, yc, mtype, ha="center", va="center",
+                zorder=5, fontsize=_fs(13), fontweight="bold",
+                color=COLOR_PILL_FG)
+        _rounded(ax, pill_x0, yc - 13, pill_x0 + pill_w, yc + 13,
+                 fc=COLOR_PILL_BG, ec="none", zorder=4)
 
-    # Version tag (top-right) — only if set
-    if VERSION_TAG:
-        fig.text(0.98, 0.965, VERSION_TAG, fontsize=9,
-                 color=COLOR_GREY_MID, ha="right", va="top", style="italic")
+    # Baseline caption, centred under the track
+    ax.text((track_x0 + TRACK_X1) / 2, y_baseline, BASELINE_CAPTION,
+            ha="center", va="center", fontsize=_fs(18),
+            color=COLOR_BASELINE, style="italic")
 
-    plt.savefig(OUTPUT_PATH, dpi=180, bbox_inches="tight",
-                pad_inches=0.08, facecolor="white")
-    print(f"Saved: {OUTPUT_PATH}")
+    fig.savefig(OUTPUT_PATH, dpi=DPI, facecolor=COLOR_CANVAS)
+    print(f"Saved: {OUTPUT_PATH}  ({plt.rcParams['font.family'][0]})")
 
 
 if __name__ == "__main__":
