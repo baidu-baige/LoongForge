@@ -37,7 +37,7 @@
 **LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver [**faster training**](#performance) for mainstream LLMs, VLMs, diffusion, and embodied models, thereby significantly reducing costs.
 
 - **Easy to Use** — [Ready-to-run configs](./configs/models/) and [launch examples](./examples) for supported models, covering pre-training, continued pre-training, SFT, and LoRA.
-- **High Performance** — Built on [multiple training backends](#architecture) (Megatron-LM and torch-native), with deep optimizations for each model family across parallelism strategy, memory footprint, communication overlap, and kernel efficiency.
+- **High Performance** — Built on multiple training backends (Megatron-LM and torch-native), with deep optimizations for each model family across parallelism strategy, memory footprint, communication overlap, and kernel efficiency.
 - **Proven at Scale** — Open-sourced from AIAK-Training-LLM, a training acceleration suite serving enterprise customers in Education, Computer Vision, and Embodied AI, with the largest production runs reaching 5,000+ XPUs.
 
 <a id="architecture"></a>
@@ -61,7 +61,7 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
-- **[2026/08]** 🧪 Introduced a unified [evaluation module](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
+- **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
 - **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **2.67× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
@@ -111,7 +111,9 @@ Since optimal training strategies differ across model families and scales, Loong
 
 Below are some examples of training speedups over mainstream open-source baselines — for each model, LoongForge and its baseline were benchmarked on the same machine type with the same training hyperparameters:
 
-<img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" />
+<p align="center">
+  <img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" width="860" />
+</p>
 
 > DeepSeek-V3.2 Lite reflects DSA operator-level optimizations and was validated on a reduced-layer configuration due to test-bed scale limits.<br>
 > Numbers were measured at a point in time and may evolve as implementations change on both sides.

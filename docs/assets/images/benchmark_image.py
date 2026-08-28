@@ -63,8 +63,8 @@ FONT_CANDIDATES = ["Inter", "Manrope", "Plus Jakarta Sans", "Figtree",
 # violet / ink values are taken from the architecture diagram
 # (docs/assets/images/architecture/loongforge-architecture.svg) so the two
 # README images read as one set.
-COLOR_CANVAS     = "#F6F8FF"   # architecture diagram light background
-COLOR_TRACK      = "#F1F2F6"   # .bench-track
+COLOR_CANVAS     = "#FFFFFF"   # blends into the GitHub light-theme page
+COLOR_TRACK      = "#E9ECF5"   # .bench-track, darkened to hold up on white
 COLOR_BAR_A      = "#3B4FD8"   # architecture indigo (gradient start)
 COLOR_BAR_B      = "#7C3AED"   # architecture violet (gradient end)
 COLOR_BAR_TOP_B  = "#EC4899"   # .bench-bar-top gradient end (brand pink)
@@ -78,16 +78,26 @@ COLOR_TITLE      = "#2A2E37"
 DPI = 150
 PX_PER_PT = DPI / 72.0
 
+# The PNG is a 2x asset: README pins it to W / 2 CSS px so browsers do an exact
+# 2:1 downscale (and no downscale at all on HiDPI screens). Type is therefore
+# sized for W / 2 — anything below ~20 px here turns to mush on screen.
 W          = 1720          # canvas width  (px)
 PAD_X      = 60            # left / right margin
 LABEL_X    = PAD_X + 20    # model name baseline
 TRACK_X1   = W - PAD_X     # track right edge
 LABEL_GAP  = 44            # gap between the pill column and the track
 PILL_GAP   = 16            # gap between the name column and the pill column
-ROW_PITCH  = 72
+ROW_PITCH  = 84
 GROUP_GAP  = 0             # extra spacing when the modality changes (0 = even)
-BAR_H      = 40
-BAR_PAD_R  = 24            # gap between bar end and the speedup text
+BAR_H      = 48
+BAR_PAD_R  = 26            # gap between bar end and the speedup text
+
+FS_TITLE    = 33
+FS_NAME     = 25
+FS_SPEEDUP  = 22
+FS_PILL     = 15
+FS_BASELINE = 20
+PILL_H      = 32           # modality pill height
 
 
 def _font():
@@ -139,16 +149,16 @@ def main():
     best = speedups.index(peak)                    # gets the pink accent bar
 
     # Row centres, with a little extra air whenever the modality changes.
-    y_title = 54 if TITLE else 0
+    y_title = 64 if TITLE else 0
     y_rows = []
-    y = y_title + (62 if TITLE else 40) + BAR_H / 2
+    y = y_title + (68 if TITLE else 40) + BAR_H / 2
     for i, (_, mtype, _) in enumerate(ROWS):
         if i and mtype != ROWS[i - 1][1]:
             y += GROUP_GAP
         y_rows.append(y)
         y += ROW_PITCH
-    y_baseline = y_rows[-1] + BAR_H / 2 + 36       # "1.0× baseline" caption
-    height = y_baseline + 42
+    y_baseline = y_rows[-1] + BAR_H / 2 + 40       # "1.0× baseline" caption
+    height = y_baseline + 48
 
     fig = plt.figure(figsize=(W / DPI, height / DPI), dpi=DPI)
     fig.patch.set_facecolor(COLOR_CANVAS)
@@ -166,14 +176,14 @@ def main():
         t.remove()
         return w
 
-    name_w = [measure(m, 22, "bold") for m, _, _ in ROWS]
-    pill_w = max(measure(t, 13, "bold") for _, t, _ in ROWS) + 24
+    name_w = [measure(m, FS_NAME, "bold") for m, _, _ in ROWS]
+    pill_w = max(measure(t, FS_PILL, "bold") for _, t, _ in ROWS) + 28
     pill_x0 = LABEL_X + max(name_w) + PILL_GAP
     track_x0 = pill_x0 + pill_w + LABEL_GAP
 
     if TITLE:
         ax.text(W / 2, y_title, TITLE, ha="center", va="center",
-                fontsize=_fs(29), fontweight="bold", color=COLOR_TITLE)
+                fontsize=_fs(FS_TITLE), fontweight="bold", color=COLOR_TITLE)
 
     for i, (model, mtype, speedup) in enumerate(ROWS):
         yc = y_rows[i]
@@ -195,20 +205,20 @@ def main():
         # Speedup value, right-aligned inside the bar
         ax.text(bar_x1 - BAR_PAD_R, yc, f"{speedup:.2f}×",
                 ha="right", va="center", zorder=5,
-                fontsize=_fs(20), fontweight="bold", color="white")
+                fontsize=_fs(FS_SPEEDUP), fontweight="bold", color="white")
 
         # Model name (left column) + modality pill (aligned column)
         ax.text(LABEL_X, yc, model, ha="left", va="center", zorder=4,
-                fontsize=_fs(22), fontweight="bold", color=COLOR_LABEL)
+                fontsize=_fs(FS_NAME), fontweight="bold", color=COLOR_LABEL)
         ax.text(pill_x0 + pill_w / 2, yc, mtype, ha="center", va="center",
-                zorder=5, fontsize=_fs(13), fontweight="bold",
+                zorder=5, fontsize=_fs(FS_PILL), fontweight="bold",
                 color=COLOR_PILL_FG)
-        _rounded(ax, pill_x0, yc - 13, pill_x0 + pill_w, yc + 13,
+        _rounded(ax, pill_x0, yc - PILL_H / 2, pill_x0 + pill_w, yc + PILL_H / 2,
                  fc=COLOR_PILL_BG, ec="none", zorder=4)
 
     # Baseline caption, centred under the track
     ax.text((track_x0 + TRACK_X1) / 2, y_baseline, BASELINE_CAPTION,
-            ha="center", va="center", fontsize=_fs(18),
+            ha="center", va="center", fontsize=_fs(FS_BASELINE),
             color=COLOR_BASELINE, style="italic")
 
     fig.savefig(OUTPUT_PATH, dpi=DPI, facecolor=COLOR_CANVAS)

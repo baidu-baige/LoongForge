@@ -37,7 +37,7 @@
 **LoongForge** 是一款开源训练框架，由百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 开发，旨在为主流 **LLM、VLM、Diffusion 与具身模型** 提供[**更快的训练速度**](#performance)，从而显著降低成本。
 
 - **易用** —— 为支持的每个模型提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，整体覆盖预训练、持续预训练、SFT 与 LoRA 等训练范式。
-- **高性能** —— 采用[多后端架构](#architecture)（Megatron-LM 与 torch-native）构建，并针对不同类别的模型，从并行策略、显存优化、通信隐藏、算子效率等维度做深度优化。
+- **高性能** —— 采用多后端架构（Megatron-LM 与 torch-native）构建，并针对不同类别的模型，从并行策略、显存优化、通信隐藏、算子效率等维度做深度优化。
 - **源自生产** —— 由 AIAK-Training-LLM 开源而来，一套服务于教育、计算机视觉与具身智能等领域企业客户的训练加速套件，最大生产规模达 5,000+ XPU。
 
 <a id="architecture"></a>
@@ -61,7 +61,7 @@
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
-- **[2026/08]** 🧪 Embodied 栈新增统一[评测模块](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
+- **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / VLA / Diffusion 全部模型家族共用同一镜像。
 - **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **2.67× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
@@ -111,7 +111,9 @@
 
 以下是一些模型相对主流开源基线的训练加速示例——每个模型与其基线的对比，均在相同机型与相同训练超参数下测得：
 
-<img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" />
+<p align="center">
+  <img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" width="860" />
+</p>
 
 > DeepSeek-V3.2 Lite 为 DSA 算子级优化的结果，受测试环境规模限制，在减层配置下验证。<br>
 > 数据为特定时间点的测试结果，双方实现持续演进，数值可能随之变化。
