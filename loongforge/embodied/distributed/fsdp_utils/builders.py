@@ -100,12 +100,20 @@ def build_mp_policy(training_args, model: nn.Module | None = None) -> MixedPreci
     return mp_policy
 
 
-def build_ignored_params(model: nn.Module, ctx: DistributedContext) -> set:
+def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContext) -> set:
     """Collect parameters that FSDP must not manage.
 
     FSDP2 shards parameters on dim-0, so 0-dim (scalar) parameters have nothing
     to shard: ``fully_shard`` rejects them outright and they are handed over as
     ``ignored_params`` instead.
+
+    Frozen parameters named by ``--fsdp-ignored-param-names`` are added on top,
+    for a different reason: an ignored parameter is never all-gathered, so
+    keeping a large frozen tensor replicated trades 2 bytes/param of resident
+    memory for 4 bytes/param/step of all-gather traffic (once in forward, once
+    for the backward re-gather). Worth it for weights that dominate a group's
+    all-gather while contributing little compute -- e.g. the vocab tables, which
+    sit in the root unit and are gathered before the forward body runs.
 
     Being ignored means FSDP never touches them, gradients included: nothing
     reduces their gradients across ranks, so a *trainable* scalar parameter would
@@ -113,6 +121,10 @@ def build_ignored_params(model: nn.Module, ctx: DistributedContext) -> set:
     therefore rejected rather than quietly diverging.
 
     Args:
+        training_args: ``fsdp_ignored_param_names`` supplies the name substrings
+            to exclude. Matching is on substrings, not suffixes, so ``q_proj``
+            also selects ``q_proj_moe_gen``; qualify with ``.weight`` to separate
+            the two MoT pathways.
         model: Model to scan, before wrapping. Scanned with
             ``named_parameters()``, so tied parameters are collected once by
             identity.
@@ -139,28 +151,31 @@ def build_ignored_params(model: nn.Module, ctx: DistributedContext) -> set:
         identity filter throughout unit selection, so a rank that skipped it
         would size its units differently.
     """
-    scalar_params = [(n, p) for n, p in model.named_parameters() if p.ndim == 0]
-    trainable = [n for n, p in scalar_params if p.requires_grad]
+    ignored_params = [(n, p)
+                for n, p in model.named_parameters()
+                    if p.ndim == 0
+                        or any(k in n for k in training_args.fsdp_ignored_param_names)]
+    trainable = [n for n, p in ignored_params if p.requires_grad]
     if trainable:
         raise ValueError(
-            f"FSDP cannot train 0-dim (scalar) parameters: "
-            f"{', '.join(trainable[:8])}. They cannot be sharded on dim-0, so "
-            f"FSDP ignores them and their gradients are never reduced across "
-            f"ranks. Give them shape (1,) so FSDP can manage them, or freeze "
-            f"them with requires_grad=False."
+            "FSDP2 cannot ignore trainable parameters: nothing reduces their "
+            "gradients, so every rank would take a different optimizer step. "
+            f"Offenders ({len(trainable)}): {', '.join(trainable[:8])}. Freeze "
+            "them, give 0-dim parameters shape (1,) so FSDP can shard them, or "
+            "narrow --fsdp-ignored-param-names"
         )
-    ignored = {p for _, p in scalar_params}
+    ignored = {p for _, p in ignored_params}
 
     # fully_shard does not move ignored params to the device, so do it here.
     with torch.no_grad():
         for p in ignored:
-            if p.device != ctx.device:
+            if p.device != ctx.device and not p.is_meta:
                 p.data = p.to(device=ctx.device)
 
-    if scalar_params:
+    if ignored_params:
         logger.info(
             "FSDP2 ignores %d frozen scalar params: %s",
-            len(scalar_params), ", ".join(n for n, _ in scalar_params[:8]),
+            len(ignored_params), ", ".join(n for n, _ in ignored_params[:8]),
         )
     return ignored
 

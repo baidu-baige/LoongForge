@@ -484,6 +484,7 @@ def build_packed_sequence(
 
 
 
+@torch.compiler.disable
 def flash2_attention(
     query: Tensor,
     key: Tensor,

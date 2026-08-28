@@ -55,7 +55,7 @@ class FSDPWrapContext:
         fsdp_kwargs = {
             "mesh": build_fsdp_device_mesh(training_args, ctx),
             "mp_policy": build_mp_policy(training_args, model),
-            "ignored_params": build_ignored_params(model, ctx),
+            "ignored_params": build_ignored_params(training_args, model, ctx),
         }
 
         return cls(
