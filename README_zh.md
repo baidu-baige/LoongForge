@@ -131,7 +131,7 @@
 - **NVIDIA GPU**：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/overview.html) · [Diffusion (WAN)](https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html)
 - **昆仑芯 XPU**：[昆仑芯 XPU 教程](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html)
 
-**3. 深入探索** —— 查看[支持的模型列表](#models)，或浏览 [`configs/models/`](./configs/models) 和 [`examples/`](./examples) / [`examples_xpu/`](./examples_xpu) 下的现成启动脚本。
+**3. 深入探索** —— 浏览 [`configs/models/`](./configs/models) 和 [`examples/`](./examples) / [`examples_xpu/`](./examples_xpu) 下的现成启动脚本。
 
 <a id="models"></a>
 ## 🏛️ 支持的模型
