@@ -297,9 +297,9 @@ LoongForge builds on NVIDIA's [Megatron-LM](https://github.com/NVIDIA/Megatron-L
 
 ## 💬 Contact Us
 
-Open a GitHub issue for questions, feedback, or feature requests. You can also join our developer communities (WeChat group, Xiaohongshu, etc.) — [join here](https://github.com/baidu-baige/LoongForge/issues/80).
-
-You are also welcome to email us at [loongforge@baidu.com](mailto:loongforge@baidu.com) — enterprise adoption, large-scale deployment, collaboration, or anything else you would like to discuss.
+- **GitHub Issues** — Bug reports, usage questions, and feature requests. [Open an issue](https://github.com/baidu-baige/LoongForge/issues/new/choose).
+- **Developer Communities** — WeChat group, Xiaohongshu, and more. [Join here](https://github.com/baidu-baige/LoongForge/issues/80).
+- **Email** — Enterprise adoption, large-scale deployment, partnership, or any other topic. [loongforge@baidu.com](mailto:loongforge@baidu.com).
 
 ## 📄 License
 
