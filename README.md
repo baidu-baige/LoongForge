@@ -25,7 +25,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>🏛️ Supported Models</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><b>💬 Contact</b></a>
+  <a href="#contact"><b>💬 Contact</b></a>
 </p>
 
 </div>
@@ -295,6 +295,7 @@ Thanks to all our contributors:
 
 LoongForge builds on NVIDIA's [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) and draws inspiration from many excellent open-source projects, including [HuggingFace Transformers](https://github.com/huggingface/transformers), [LLaMA-Factory](https://github.com/hiyouga/LlamaFactory), [Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge), and [LeRobot](https://github.com/huggingface/lerobot), as well as the official implementations of the models it supports (e.g. [OpenPI](https://github.com/Physical-Intelligence/openpi), [NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)). We sincerely thank these communities for their outstanding contributions, and would also like to extend our gratitude to the [LINUX DO](https://linux.do/) community for its welcoming space for technical discussion and support for open-source sharing.
 
+<a id="contact"></a>
 ## 💬 Contact Us
 
 - **GitHub Issues** — Bug reports, usage questions, and feature requests. [Open an issue](https://github.com/baidu-baige/LoongForge/issues/new/choose).
