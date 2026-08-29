@@ -35,7 +35,7 @@
 **LoongForge** 是一款开源训练框架，由百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 开发，旨在为主流 **LLM、VLM、Diffusion 与具身模型** 提供[更快的训练速度](#performance)，从而显著降低成本。
 
 - **易用** —— 为支持的每个模型提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，整体覆盖预训练、持续预训练、SFT 与 LoRA 等训练范式。
-- **高性能** —— 采用双后端架构（Megatron-LM 与 torch-native）构建，并针对不同类别的模型，从并行策略、显存优化、通信隐藏、算子效率等维度做深度优化。训练 loss 与基线保持一致。
+- **高性能** —— 采用多后端架构（Megatron-LM 与 torch-native）构建，并针对不同类别的模型，从并行策略、显存优化、通信隐藏、算子效率等维度做深度优化，同时保证训练 loss 曲线与基线对齐。
 - **源自生产** —— 由 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr) 开源而来，一套服务于教育、计算机视觉与具身智能等领域企业客户的训练加速套件，**最大生产规模达 5,000+ XPU**。
 
 > 🐉 LoongForge 名字源于中国传统 **龙舟**，象征协同发力与破浪前行。
@@ -43,7 +43,7 @@
 <a id="architecture"></a>
 ## 🏗️ 架构
 
-由于不同类别、不同规模的模型，最优训练策略不同，LoongForge 采用双后端架构。
+由于不同类别、不同规模的模型，最优训练策略不同，LoongForge 采用多后端架构。
 
 <p align="center">
   <picture>
