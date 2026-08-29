@@ -299,7 +299,7 @@ LoongForge 的构建离不开 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA
 ## 💬 联系我们
 
 - **GitHub Issue** —— 问题反馈、使用疑问与功能建议。[提交 Issue](https://github.com/baidu-baige/LoongForge/issues/new/choose)。
-- **开发者社区** —— 微信群、小红书等。[点此加入](https://github.com/baidu-baige/LoongForge/issues/80)。
+- **开发者社区** —— **微信群**、**小红书**等。[点此加入](https://github.com/baidu-baige/LoongForge/issues/80)。
 - **邮件** —— 企业落地、大规模部署、商务合作，以及任何其他话题。[loongforge@baidu.com](mailto:loongforge@baidu.com)。
 
 ## 📄 开源协议
