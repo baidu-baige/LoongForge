@@ -88,7 +88,7 @@
 **🧩 多模态模型**
 
 * **🧱 灵活的多模态组合** —— 通过配置即可将可互换的 ViT 与 LLM 组件自由组装为 VLM（如 **GLM-5.2 + MoonViT**），无需编写模型代码。
-* **⚡ 异构并行** —— 针对模型不同组件（如 ViT vs LLM）独立配置 TP / DP / 重计算策略，获得最优吞吐与显存占用。 [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)]
+* **⚡ 异构并行** —— 针对模型不同组件（如 ViT vs LLM）独立配置 TP / DP / 重计算 / 冻结策略，获得最优吞吐与显存占用。 [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)]
 * **🔀 Encoder-Decoder 解耦训练** —— 将 ViT 与 LLM 拆分为独立任务，消除 Encoder 带来的流水线气泡。
 * **⚖️ DP 负载均衡** —— 基于负载感知的数据重分发，缓解序列打包（sequence packing）不均衡问题，显著提升多节点扩展效率。 [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html)]
 
