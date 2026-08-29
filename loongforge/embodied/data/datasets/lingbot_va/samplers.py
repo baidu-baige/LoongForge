@@ -9,7 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
-from typing import Dict, Iterator, List
+from typing import Iterator, List
 
 import torch
 
@@ -70,10 +70,11 @@ class _LingBotBalancedDistributedSampler(Sampler[int]):
                 (float(self.dataset.estimate_sample_cost(index)), pos, index)
                 for pos, index in enumerate(block)
             ]
-            buckets = self._assign_rank_balanced(items)
+            buckets = self._align_microbatch_costs(self._assign_rank_balanced(items))
             rank_indices.extend(index for _, index, _ in buckets[self.rank])
 
         self._maybe_export_order(rank_indices)
+
         return iter(rank_indices)
 
     def _maybe_export_order(self, rank_indices):
@@ -90,7 +91,7 @@ class _LingBotBalancedDistributedSampler(Sampler[int]):
                 "epoch": self.epoch,
                 "seed": self.seed,
                 "shuffle": self.shuffle,
-                "mode": "rank",
+                "mode": "rank_cost_aligned",
                 "balance_group_size": self.balance_group_size,
                 "dataset_len": len(self.dataset),
                 "total_size": self.total_size,
@@ -104,6 +105,14 @@ class _LingBotBalancedDistributedSampler(Sampler[int]):
             raise RuntimeError(
                 f"Failed to export LingBot sample order to {export_dir}: {exc}"
             ) from exc
+
+    @staticmethod
+    def _align_microbatch_costs(buckets):
+        """Align per-rank microbatches by cost without changing rank ownership."""
+        return [
+            sorted(bucket, key=lambda item: (item[2], item[0]))
+            for bucket in buckets
+        ]
 
     def _assign_rank_balanced(self, items):
         buckets = [[] for _ in range(self.num_replicas)]

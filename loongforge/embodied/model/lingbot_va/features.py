@@ -8,18 +8,22 @@ import os
 
 # Only user-facing functional or compatibility choices remain switches.
 FEATURE_DEFAULTS = {
-    "LINGBOT_SAMPLE_META_EXPORT": False,
-    "LINGBOT_SKIP_FINAL_CHECKPOINT": False,
-    "LINGBOT_BASELINE_LOSS_LOG": True,
+    # Rank balancing implies cost-aligned microbatches; they are one choice.
+    # Off falls back to the public DistributedSampler partitioning.
     "LINGBOT_BALANCED_SAMPLER": True,
-    "LINGBOT_REPO_DISCOVERY_CACHE": True,
-    "LINGBOT_LAYERWISE_COMPILE": True,
+    # Off keeps FSDP parameters unsharded between forward and backward, which is
+    # the accepted configuration; on restores the framework default.
+    "LINGBOT_FSDP_RESHARD": False,
+    # Gradient reduce dtype: on reduces in the parameter dtype (BF16), off uses
+    # FP32. Kept selectable because it is a numerics choice, not only a speed one.
+    "LINGBOT_FSDP_BF16_REDUCE": True,
 }
 
 # Fixed values from the accepted performance baseline.
-SELF_FLEX_FWD_CONFIG = (64, 64, 4, 3)
+SELF_FLEX_OPTIMIZED_FWD_CONFIG = (64, 64, 4, 1)
 SELF_FLEX_BWD_CONFIG = (32, 32, 4, 1)
-FLEX_MASK_CACHE_MAX_SIZE = 64
+# Manual GC keeps young-generation collection and suppresses generation 2.
+GC_GENERATION2_THRESHOLD = 1_000_000_000
 REPO_DISCOVERY_CACHE_WAIT_SECONDS = 1800.0
 REPO_DISCOVERY_CACHE_POLL_SECONDS = 2.0
 
