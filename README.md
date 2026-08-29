@@ -25,7 +25,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>🏛️ Supported Models</b></a>
   &nbsp;·&nbsp;
-  <a href="#contact"><b>💬 Contact</b></a>
+  <a href="#contact"><b>💬 Contact Us</b></a>
 </p>
 
 </div>
