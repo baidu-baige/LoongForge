@@ -16,7 +16,7 @@
         rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>tailwind.config = { darkMode: 'class' };</script>
-    <link rel="stylesheet" href="../assets/css/style.css" />
+    <link rel="stylesheet" href="../assets/css/style.css?v=20260830-r1" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -210,7 +210,8 @@
                 <code>data:</code> section → <code>DataConfig</code>, the command line → <code>TrainingArgs</code>;
                 <code>--model-name</code> is routed via <code>config_map.py</code> to the corresponding YAML and type,
                 and the command line can also override fields via dotlist (e.g. <code>model.action_horizon=64</code>),
-                all finally frozen into a global singleton.</p>
+                all finally frozen into a global singleton.
+            </p>
             <p><strong>④ Distributed trainer (<code>train/trainers/</code>, <code>distributed/</code>) — flexible
                     strategies.</strong> Standard SFT uses <code>FinetuneTrainer</code> directly; special paradigms such
                 as multi-stream and CUDA Graph inherit <code>BaseTrainer</code> and register in
@@ -219,13 +220,15 @@
                 Stage-1), <code>fsdp</code> (full sharding), and <code>hsdp</code> (hybrid sharding), matching the scale
                 and memory characteristics of embodied models. <code>BaseTrainer</code> also consolidates optimizer / LR
                 scheduling, gradient clipping and NaN cleanup, checkpoint resume, and determinism control into the
-                common layer, letting every model reuse the same implementation.</p>
+                common layer, letting every model reuse the same implementation.
+            </p>
             <p><strong>Adding a new model takes just 5 steps</strong>: ① add the network and config under
                 <code>model/&lt;name&gt;/</code> and <code>@register_model</code>; ② add
                 <code>data/datasets/&lt;name&gt;/</code> (DataConfig + transform + collator); ③ add a YAML under
                 <code>configs/models/embodied/</code> and register it in <code>config_map.py</code>; ④ inherit
                 <code>BaseTrainer</code> if the paradigm differs, otherwise reuse <code>FinetuneTrainer</code>; ⑤ add a
-                launch script under <code>examples/</code>.</p>
+                launch script under <code>examples/</code>.
+            </p>
             <h2>5. Quick start</h2>
             <p>Training is launched with <code>torchrun</code> running <code>loongforge/embodied/train.py</code>:</p>
             <pre><code class="language-bash">export LOONGFORGE_PATH=/workspace/LoongForge
@@ -241,7 +244,8 @@ PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
     ...</code></pre>
             <p>Different models differ in data format, processing pipeline, and performance-optimization config, so the
                 ready-to-run command varies by model. Out-of-the-box example scripts live under
-                <code>examples/embodied/</code>:</p>
+                <code>examples/embodied/</code>:
+            </p>
             <pre><code class="language-bash">bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh        # ddp / ddp_zero1 variants also available
 bash examples/embodied/groot_n1_6/run_groot_n1_6_ddp_finetune.sh</code></pre>
             <h2>6. Evaluation: offline benchmarks, process-decoupled</h2>
@@ -313,7 +317,7 @@ examples/embodied/pi05/eval/run_libero_eval.sh</code></pre>
     </script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
-    <script src="../assets/js/main.js"></script>
+    <script src="../assets/js/main.js?v=20260830-r1"></script>
 </body>
 
 </html>

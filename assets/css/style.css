@@ -1104,41 +1104,108 @@ footer a:hover {
   color: var(--lf-primary);
 }
 
-/* Stats strip */
-.stats-strip {
+/* ===== Contributors wall =====
+   Per-row count is fixed by capping the container width to exactly
+   --lf-av-cols avatars; rows are left-aligned so a partial last row lines up
+   with the rows above it. */
+.lf-contrib-grid {
+  --lf-av: 56px;
+  --lf-av-gap: 1rem;
+  --lf-av-cols: 10;
   display: flex;
   flex-wrap: wrap;
-  gap: 0;
-  background: linear-gradient(135deg, rgba(99, 102, 241, .06), rgba(245, 158, 11, .06));
-  border: 1px solid rgba(99, 102, 241, .15);
-  border-radius: 1rem;
+  justify-content: flex-start;
+  gap: var(--lf-av-gap);
+  min-height: var(--lf-av);
+  max-width: calc(var(--lf-av-cols) * var(--lf-av) + (var(--lf-av-cols) - 1) * var(--lf-av-gap));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.lf-avatar {
+  display: block;
+  width: var(--lf-av);
+  height: var(--lf-av);
+  border-radius: 9999px;
   overflow: hidden;
+  background: var(--lf-surface-soft);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, .18);
+  transition: transform .18s ease, box-shadow .18s ease;
 }
 
-.dark .stats-strip {
-  background: linear-gradient(135deg, rgba(99, 102, 241, .12), rgba(245, 158, 11, .08));
-  border-color: rgba(99, 102, 241, .25);
+.lf-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.stats-strip>div {
-  flex: 1 1 200px;
-  padding: 1.75rem;
-  text-align: center;
-  border-right: 1px solid rgba(99, 102, 241, .12);
+.lf-avatar:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, .55), 0 6px 14px rgba(79, 70, 229, .25);
 }
 
-.stats-strip>div:last-child {
-  border-right: 0;
+.dark .lf-avatar {
+  background: rgba(255, 255, 255, .06);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, .28);
 }
 
-.dark .stats-strip>div {
-  border-right-color: rgba(99, 102, 241, .2);
+.dark .lf-avatar:hover {
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, .7), 0 6px 14px rgba(0, 0, 0, .45);
 }
 
-@media (max-width: 768px) {
-  .stats-strip>div {
-    flex: 1 1 45%;
-    border-bottom: 1px solid rgba(99, 102, 241, .12);
+.lf-avatar-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--lf-av);
+  height: var(--lf-av);
+  border-radius: 9999px;
+  font-size: .85rem;
+  font-weight: 700;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, .12);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, .18);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.lf-avatar-more:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, .55);
+}
+
+.dark .lf-avatar-more {
+  color: #c7d2fe;
+  background: rgba(129, 140, 248, .16);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, .28);
+}
+
+@media (max-width: 1023px) {
+  .lf-contrib-grid {
+    --lf-av: 52px;
+    --lf-av-gap: .875rem;
+    --lf-av-cols: 8;
+  }
+}
+
+@media (max-width: 640px) {
+  .lf-contrib-grid {
+    --lf-av: 44px;
+    --lf-av-gap: .75rem;
+    --lf-av-cols: 6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lf-avatar,
+  .lf-avatar-more {
+    transition: none;
+  }
+
+  .lf-avatar:hover,
+  .lf-avatar-more:hover {
+    transform: none;
   }
 }
 

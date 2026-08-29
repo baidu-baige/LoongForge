@@ -5,9 +5,7 @@
   // ===== i18n =====
   const I18N = {
     en: {
-      'nav.home': 'Home', 'nav.features': 'Features', 'nav.models': 'Models',
-      'nav.docs': 'Docs', 'nav.blog': 'Blog', 'nav.about': 'About', 'nav.contact': 'Contact',
-      'nav.github': 'Star',
+      'nav.home': 'Home', 'nav.docs': 'Docs', 'nav.blog': 'Blog', 'nav.about': 'About', 'nav.contact': 'Contact',
       'footer.tagline': 'Modular, scalable training framework for LLM / VLM / VLA / Diffusion.',
       'footer.project': 'Project', 'footer.resources': 'Resources', 'footer.loong': 'Baige Loong Series',
       'footer.copyright': '© 2026 LoongForge Authors · Apache License 2.0 · Built with ♥ by the Baidu Baige Team',
@@ -21,9 +19,6 @@
       'hero.cta.github': '⭐ View on GitHub',
       'hero.cta.docs': '📚 Read the Docs',
       'hero.stat.speedup': 'Max training speedup',
-      'hero.stat.xpu': 'XPU production scale',
-      'hero.stat.modal': 'LLM · VLM · VLA · Diffusion',
-      'hero.stat.fp8': 'Adaptive FP8 precision',
       'hero.slogan': 'Train LLMs, VLMs, Diffusion & Embodied models — faster.',
       'sb.models': 'Model families supported',
       'sb.chips': 'NVIDIA & Kunlun backends',
@@ -48,32 +43,25 @@
       'feat.subtitle_html': 'A quick tour of what sets LoongForge apart',
 
       'feat.cat.1.title': 'MoE',
-      'feat.cat.1.subtitle': 'Communication, compute and offload, all in parallel',
       'feat.cat.1.item.1.t': 'Tri-Stream Overlap',
       'feat.cat.1.item.1.d': 'MoE EP comm × compute × offload in parallel — higher throughput than upstream.',
 
       'feat.cat.2.title': 'Multimodal',
-      'feat.cat.2.subtitle': 'Parallelism built for VLM / VLA',
-      'feat.cat.2.item.1.t': 'Model Composition',
-      'feat.cat.2.item.1.d': 'Swap ViT × LLM for VLMs via YAML.',
       'feat.cat.2.item.2.t': 'Heterogeneous & Disaggregated',
       'feat.cat.2.item.2.d': 'Independent TP / PP / DP per component + decoupled ViT / LLM scheduling that kills pipeline bubbles.',
       'feat.cat.2.item.4.t': 'DP Load Balancing',
       'feat.cat.2.item.4.d': 'Fixes packing-induced imbalance at cluster scale.',
 
       'feat.cat.3.title': 'Performance',
-      'feat.cat.3.subtitle': 'Precision, kernels, long-sequence throughput',
       'feat.cat.3.item.1.t': 'Adaptive FP8',
       'feat.cat.3.item.1.d': 'Per-operator FP8 decisions by GEMM shape.',
       'feat.cat.3.item.2.t': 'Fused Operators',
       'feat.cat.3.item.2.d': 'FusedDSA / Sparse MLA kernels for end-to-end speedup.',
 
-      'feat.cat.4.title': 'Performance',
       'feat.cat.4.item.1.t': 'ChunkPipe',
       'feat.cat.4.item.1.d': 'Chunked long-sequence pipelining toward million-length contexts.',
 
       'feat.cat.5.title': 'Usability',
-      'feat.cat.5.subtitle': 'Plug into the HuggingFace + Megatron world without friction',
       'feat.cat.5.item.1.t': 'HF ↔ Megatron',
       'feat.cat.5.item.1.d': 'Bidirectional checkpoint conversion + online HF load/save.',
 
@@ -85,11 +73,8 @@
       'feat.cat.7.item.1.t': 'Embodied Training',
       'feat.cat.7.item.1.d': 'Dedicated torch-native DDP/FSDP subsystem for VLA & WAM models, with DDP / ZeRO-1 / FSDP / HSDP.',
 
-
       'models.title': '🏛️ Supported Models',
       'models.subtitle': 'From compact SLMs to large-scale MoE giants — all batteries-included',
-      'models.more.t': 'and more…',
-      'models.more.d': 'Adding new architectures is as easy as a YAML + registry entry.',
       'models.custom.t': 'CustomCombinedModel',
       'models.custom.d_html': 'Compose any ViT + any LLM backbone via a YAML file. <a href="https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml" target="_blank" class="text-indigo-500 underline">Example →</a>',
 
@@ -97,7 +82,6 @@
       'qs.subtitle': 'From install to launch — jump straight to the tutorial for your model type',
       'qs2.install.t': 'Install',
       'qs2.install.d': 'Recommended: one Docker image bundles the CUDA/XPU toolchains, patched Megatron, and TransformerEngine — so every node trains from the same environment. Source build is also supported.',
-      'qs2.docs': 'Read the Docs ↗',
       'qs2.docker': 'Show Docker build commands',
       'qs2.guide': 'Installation guide ↗',
       'qs2.path.t': 'Pick your path',
@@ -107,21 +91,8 @@
       'qs2.cat.vlm.d': 'Vision-language models — composable ViT × LLM.',
       'qs2.cat.diff.d': 'Video & image diffusion — WAN & Qwen-Image.',
       'qs2.cat.vla.d': 'VLA & world-action models — DDP / FSDP.',
-      'qs2.cat.xpu.d': 'Run the same codebase on Baidu Kunlun XPU.',
       'qs2.explore.t': 'Explore & launch',
       'qs2.explore.d': 'Browse ready-to-run configs and example scripts, or expand a common launch command.',
-      'qs2.cmd': 'Show a common torchrun launch command',
-      'qs.s1.tab': 'Install', 'qs.s2.tab': 'Compose', 'qs.s2.opt': 'optional', 'qs.s3.tab': 'Weights', 'qs.s4.tab': 'Data', 'qs.s5.tab': 'Configure', 'qs.s6.tab': 'Launch',
-      'qs.s1.desc': 'Docker is the recommended path — a single image bundles CUDA/XPU toolchains, the patched Megatron submodule, and TransformerEngine, so every developer and every node trains from the same environment. Source install is also fully supported for advanced setups.',
-      'qs.s2.desc': 'Optional — only needed for custom combinations. LoongForge uses declarative configs to compose different modality components into a full multimodal model. Take <code class="mono">qwen3_vl_30b_a3b</code> as an example: a single YAML assembles the vision encoder, projector, and language backbone. To swap the language backbone to DeepSeek V3, change one line under <code class="mono">model.foundation</code>.',
-      'qs.s3.desc': 'LoongForge supports offline conversion of HuggingFace weights into the Megatron training format, and also supports loading HuggingFace-format weights directly at startup — skipping the conversion step. On completion, weights can be exported back to HF format with one flag, for seamless hand-off to the downstream community ecosystem.',
-      'qs.s4.desc': 'LoongForge ships a built-in data preprocessing toolchain that converts your raw data into the framework-compatible format. Below is a multimodal data preprocessing example — refer to the per-model-family user guide for details.',
-      'qs.s5.desc.outer': 'The outer layer is fully Megatron-compatible — familiar training arguments can be reused as-is.',
-      'qs.s5.desc.inner': 'The inner layer uses Hydra overrides to assign parallelism (TP / PP / EP / DP) and freeze behavior per model component — ideal for heterogeneous VLM training where ViT and LLM backbones have very different compute profiles.',
-      'qs.s6.desc': 'LoongForge ships example launch scripts for open-source models that you can run as-is. The snippet below shows the common <code class="mono">torchrun</code> launch pattern shared across examples.',
-      'qs.footer.label': '📖 Full runnable tutorials:',
-      'qs.footer.xpu': 'Kunlun XPU ↗',
-      'qs.footer.browse_html': 'Browse <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/configs/models" target="_blank" rel="noopener"><code class="mono">configs/models/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples" target="_blank" rel="noopener"><code class="mono">examples/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples_xpu" target="_blank" rel="noopener"><code class="mono">examples_xpu/</code></a>',
 
       'powered.title': '🌟 Powered by LoongForge',
       'powered.subtitle': 'Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM',
@@ -135,13 +106,6 @@
       'powered.4.t': 'Qianfan-VL',
       'powered.4.d': 'Domain-enhanced universal vision-language models.',
 
-      'cta.title': 'Join the Community',
-      'cta.desc': 'Report bugs, propose features, contribute code, or just say hi. We ❤️ community.',
-      'cta.issue': 'Open an Issue', 'cta.pr': 'Send a PR', 'cta.about': 'About the Project',
-
-      'docs.hero.title': 'Documentation',
-      'docs.hero.desc_html': 'A curated index of installation, tutorials, and reference material. Full API & deep tutorials live on <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" class="underline text-amber-300">ReadTheDocs</a>.',
-
       'blog.hero.title': 'Engineering Blog',
       'blog.hero.desc': 'Releases, performance deep-dives, and stories from the LoongForge team',
 
@@ -149,18 +113,12 @@
       'about.hero.desc': 'A training framework born from real-world, large-scale production workloads — and shared back with the community',
 
       'about.story.title': '🐉 Our Story',
-      'about.story.p1_html': 'LoongForge didn\'t start as an open-source project. It grew out of <b>AIAK-Training</b> — the training acceleration framework delivered alongside Baidu Baige\'s AI compute platform to enterprise customers (previously closed-source) — after years of hardening under real production workloads.',
-      'about.story.p2': 'Before going open source, LoongForge was already powering large-scale models in production:',
-      'about.story.li.1_html': 'Across <b>Education</b>, <b>Computer Vision</b>, and <b>Embodied AI</b>, typically delivering a <b>30%~50% speedup</b> over customer baselines',
-      'about.story.li.2_html': 'Ultra-large cluster training scaling to <b>5,000+ XPUs</b>',
-      'about.story.p3_html': 'It now joins the Baige <b>Loong</b> open-source series — named after the traditional Chinese <b>loong boat (龙舟)</b>, a symbol of coordinated power and forward momentum. Sister project: <a class="text-indigo-600 underline" href="https://github.com/baidu-baige/LoongFlow" target="_blank" rel="noopener">LoongFlow</a> — <i>A Thinking &amp; Learning Framework for Expert-Grade AI Agents</i>.',
-
-      'about.horizon.title': '🧭 On the Horizon',
-      'about.horizon.lead': 'A glimpse of what is next',
-      'about.horizon.1': 'Continuous coverage of frontier foundation models',
-      'about.horizon.2': 'Deeper investment in Embodied AI training capabilities',
-      'about.horizon.3': 'Ongoing training-performance optimization driven by real-world workloads',
-      'about.horizon.4': 'Continued enhancement and optimization of Kunlun XPU support',
+      'about.story.p1_html': '<b>LoongForge</b> is an open-source training framework developed by the <a class="text-indigo-600 underline" href="https://cloud.baidu.com/product/aihc.html" target="_blank" rel="noopener">Baidu AI Cloud Baige team</a>, built to deliver faster training for mainstream <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — and thereby significantly reduce cost.',
+      'about.story.p2_html': 'LoongForge was open-sourced from <a class="text-indigo-600 underline" href="https://cloud.baidu.com/doc/AIHC/s/Alyo476jr" target="_blank" rel="noopener">AIAK-Training-LLM</a>, a training acceleration suite delivered to enterprise customers on Baidu AI Cloud, after years of hardening under real production workloads:',
+      'about.story.li.1_html': 'Serving customers across <b>Education</b>, <b>Computer Vision</b>, and <b>Embodied AI</b>, typically delivering a <b>30%~50% speedup</b> over their baselines',
+      'about.story.li.2_html': 'Largest production runs reaching <b>5,000+ XPUs</b>',
+      'about.story.p3_html': 'It now joins the Baige <b>Loong</b> open-source series — named after the traditional Chinese <b>loong boat (龙舟)</b>, a symbol of coordinated power and forward momentum.',
+      'about.story.p4_html': 'Want to see what else we are building? Explore our other open-source projects on the <a class="text-indigo-600 underline" href="https://github.com/baidu-baige" target="_blank" rel="noopener">baidu-baige GitHub organization</a>.',
 
       'about.license.title': '📄 License & Citation',
       'about.license.heading': 'License',
@@ -168,6 +126,13 @@
       'about.cite.heading': 'Citation',
       'about.ack.title': '🙏 Acknowledgments',
       'about.ack.body': 'LoongForge is built upon NVIDIA\'s Megatron-LM. We also referenced and drew inspiration from excellent open-source projects including Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.',
+
+      'about.contact.title': '✉️ Contact Us',
+      'about.contact.lead': 'We\'d love to hear from you — reach us through any of these channels',
+      'about.contact.wechat.d': 'Join the developer group — scan the QR code posted in our GitHub issue',
+      'about.contact.rednote.d': 'Follow us on RedNote (小红书) for release notes and practice sharing',
+      'about.contact.email.d': 'loongforge@baidu.com — for collaboration, adoption, and any other enquiries',
+      'about.contact.slack.d': 'Chat with the team and other users in our Slack workspace',
 
       'bench.title': '📊 Benchmark',
       'bench.subtitle': 'Measured on latest LoongForge across VLA, WAM, and VLM workloads',
@@ -186,25 +151,13 @@
       'comm.1.t': 'GitHub Issues', 'comm.1.d': 'File bug reports and feature requests.',
       'comm.2.t': 'Discussions', 'comm.2.d': 'Ask questions and share experiences.',
       'comm.3.t': 'Contributing', 'comm.3.d': 'Read the guide and send your first PR.',
-      'comm.4.t': 'Join us on WeChat', 'comm.4.d': 'Scan the QR code in our README to join the developer group.',
+      'comm.contrib.title': 'Contributors',
+      'comm.contrib.sub': 'LoongForge is built in the open by these developers — your name could be next.',
+      'comm.contrib.cta': '🛠️ Become a contributor',
 
-      'stats.stars': 'GitHub Stars',
-      'stats.contrib': 'Contributors',
-      'stats.license': 'License',
-      'stats.series': 'Baige Loong Series',
-
-      'contact.badge': 'WeChat Community',
-      'contact.title': 'Join the WeChat community',
-      'contact.desc': 'Scan the QR code to join our WeChat group — ask questions, share benchmarks, and connect with the LoongForge team and fellow developers.',
-      'contact.cta.view': 'View on GitHub',
-      'contact.cta.discuss': 'Start a discussion',
-      'contact.qr.fallback': 'QR image unavailable — visit GitHub README for the latest QR code.',
-      'contact.qr.hint': 'Scan with WeChat to join',
     },
     zh: {
-      'nav.home': '首页', 'nav.features': '特性', 'nav.models': '模型',
-      'nav.docs': '文档', 'nav.blog': '博客', 'nav.about': '关于', 'nav.contact': '联系',
-      'nav.github': 'Star',
+      'nav.home': '首页', 'nav.docs': '文档', 'nav.blog': '博客', 'nav.about': '关于', 'nav.contact': '联系',
       'footer.tagline': '面向 LLM / VLM / VLA / Diffusion 的模块化、可扩展训练框架。',
       'footer.project': '项目', 'footer.resources': '资源', 'footer.loong': '百舸 Loong 系列',
       'footer.copyright': '© 2026 LoongForge Authors · Apache License 2.0 · 由百度百舸团队用 ♥ 构建',
@@ -218,9 +171,6 @@
       'hero.cta.github': '⭐ 访问 GitHub',
       'hero.cta.docs': '📚 阅读文档',
       'hero.stat.speedup': '最大训练加速',
-      'hero.stat.xpu': 'XPU 集群规模',
-      'hero.stat.modal': '覆盖模态：LLM/VLM/VLA/Diffusion',
-      'hero.stat.fp8': '端到端自适应精度',
       'hero.slogan': '更快地训练 LLM、VLM、Diffusion 与具身智能模型。',
       'sb.models': '支持模型家族',
       'sb.chips': 'NVIDIA 与昆仑芯后端',
@@ -249,8 +199,6 @@
       'feat.cat.1.item.1.d': 'MoE EP 通信 × 计算 × Offload 三流并行，吞吐优于上游。',
 
       'feat.cat.2.title': '多模态',
-      'feat.cat.2.item.1.t': '模型拼接',
-      'feat.cat.2.item.1.d': '通过 YAML 自由拼接 ViT × LLM 构建 VLM。',
       'feat.cat.2.item.2.t': '异构并行 & 分离训练',
       'feat.cat.2.item.2.d': '不同组件独立设置 TP / PP / DP，并通过 ViT / LLM 解耦调度消除流水气泡。',
       'feat.cat.2.item.4.t': 'DP 负载均衡',
@@ -262,7 +210,6 @@
       'feat.cat.3.item.2.t': '融合算子',
       'feat.cat.3.item.2.d': 'FusedDSA / 稀疏 MLA 融合算子，端到端加速。',
 
-      'feat.cat.4.title': '性能',
       'feat.cat.4.item.1.t': 'ChunkPipe',
       'feat.cat.4.item.1.d': '长序列分块流水，面向百万级上下文。',
 
@@ -280,8 +227,6 @@
 
       'models.title': '🏛️ 支持的模型',
       'models.subtitle': '从紧凑的小模型到大规模 MoE 巨兽 —— 开箱即用',
-      'models.more.t': '以及更多…',
-      'models.more.d': '新增架构只需一个 YAML + 注册表条目即可。',
       'models.custom.t': '自定义组合模型',
       'models.custom.d_html': '通过 YAML 自由组合任意 ViT + 任意 LLM 主干。<a href="https://github.com/baidu-baige/LoongForge/blob/master/configs/models/custom/qwen_vit_llama3_8b.yaml" target="_blank" class="text-indigo-500 underline">示例 →</a>',
 
@@ -289,7 +234,6 @@
       'qs.subtitle': '从安装到启动 —— 按你的模型类型直达对应教程',
       'qs2.install.t': '安装',
       'qs2.install.d': '推荐使用 Docker：单一镜像打包了 CUDA/XPU 工具链、打过补丁的 Megatron 与 TransformerEngine，保证每个节点环境一致；同时也完整支持源码安装。',
-      'qs2.docs': '查看文档 ↗',
       'qs2.docker': '展开 Docker 构建命令',
       'qs2.guide': '安装指南 ↗',
       'qs2.path.t': '选择你的路径',
@@ -299,21 +243,8 @@
       'qs2.cat.vlm.d': '视觉-语言模型 —— 可组合 ViT × LLM。',
       'qs2.cat.diff.d': '视频与图像扩散 —— WAN、Qwen-Image。',
       'qs2.cat.vla.d': '具身 VLA 与世界-动作模型 —— DDP / FSDP。',
-      'qs2.cat.xpu.d': '同一套代码运行于百度昆仑芯 XPU。',
       'qs2.explore.t': '探索与启动',
       'qs2.explore.d': '浏览开箱即用的配置与示例脚本，或展开查看通用启动命令。',
-      'qs2.cmd': '展开查看通用 torchrun 启动命令',
-      'qs.s1.tab': '安装', 'qs.s2.tab': '组装模型', 'qs.s2.opt': '可选', 'qs.s3.tab': '准备权重', 'qs.s4.tab': '准备训练数据', 'qs.s5.tab': '配置训练参数', 'qs.s6.tab': '启动训练',
-      'qs.s1.desc': '推荐使用 Docker —— 单一镜像打包 CUDA/XPU 工具链、已打补丁的 Megatron 子模块以及 TransformerEngine，让每位开发者、每个节点都在完全一致的环境中训练。如需更灵活的部署方式，也完整支持源码安装。',
-      'qs.s2.desc': '可选步骤 —— 仅当你需要自定义组合时再来这一步。LoongForge 通过声明式配置，支持将不同模态组件灵活组合为完整的多模态模型。以 <code class="mono">qwen3_vl_30b_a3b</code> 为例，一份 YAML 即可完成视觉编码器、投影层与语言主干的组网。如果需要将语言主干替换为 DeepSeek V3，仅需要修改 <code class="mono">model.foundation</code> 即可。',
-      'qs.s3.desc': 'LoongForge 既支持将 HuggingFace 权重离线转换为 Megatron 训练格式，也支持直接加载 HuggingFace 格式权重启动训练，跳过转换步骤。训练完成后可一键导出回 HF 格式，实现与下游社区生态的无缝衔接。',
-      'qs.s4.desc': 'LoongForge 内置数据预处理工具链，将数据转换成框架兼容的数据格式。如下是多模态数据处理示例，具体请参考相关模型类别的使用手册。',
-      'qs.s5.desc.outer': '外层完全兼容 Megatron，熟悉的训练参数可以直接复用。',
-      'qs.s5.desc.inner': '内层通过 Hydra override 为每个模型组件单独指定并行策略（TP / PP / EP / DP）与 freeze 行为 —— 非常适合 ViT 与 LLM 主干计算特性差异较大的异构 VLM 训练。',
-      'qs.s6.desc': 'LoongForge 内置了针对开源模型的示例启动脚本，用户可以参考执行。下方片段展示了 example 通用的 <code class="mono">torchrun</code> 启动模式。',
-      'qs.footer.label': '📖 完整可运行教程：',
-      'qs.footer.xpu': '昆仑芯 XPU ↗',
-      'qs.footer.browse_html': '浏览 <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/configs/models" target="_blank" rel="noopener"><code class="mono">configs/models/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples" target="_blank" rel="noopener"><code class="mono">examples/</code></a> · <a class="underline hover:text-indigo-600" href="https://github.com/baidu-baige/LoongForge/tree/master/examples_xpu" target="_blank" rel="noopener"><code class="mono">examples_xpu/</code></a>',
 
       'powered.title': '🌟 由 LoongForge 驱动',
       'powered.subtitle': '基于 LoongForge 或其前身 AIAK-Training-LLM 训练的开源模型',
@@ -327,13 +258,6 @@
       'powered.4.t': 'Qianfan-VL',
       'powered.4.d': '领域增强的通用视觉-语言模型。',
 
-      'cta.title': '加入社区',
-      'cta.desc': '报告 Bug、提出建议、贡献代码，或只是打个招呼。我们 ❤️ 社区。',
-      'cta.issue': '提交 Issue', 'cta.pr': '发起 PR', 'cta.about': '项目介绍',
-
-      'docs.hero.title': '文档中心',
-      'docs.hero.desc_html': '一份精选的安装、教程与参考资料索引。完整的 API 与深度教程托管在 <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" class="underline text-amber-300">ReadTheDocs</a> 上。',
-
       'blog.hero.title': '工程博客',
       'blog.hero.desc': '来自 LoongForge 团队的版本发布、性能深挖与案例分享',
 
@@ -341,18 +265,12 @@
       'about.hero.desc': '一个诞生于真实大规模生产负载、回馈开源社区的训练框架',
 
       'about.story.title': '🐉 我们的故事',
-      'about.story.p1_html': 'LoongForge 并非从开源起步。它最初是百舸 AI 异构计算平台内置的训练加速框架 <b>AIAK-Training</b>，随平台一同交付给企业客户（此前未开源）—— 在真实企业级生产负载下沉淀多年，才决定回馈社区开源。',
-      'about.story.p2': '在开源之前，LoongForge 已经驱动了多种大规模闭源模型的生产训练：',
-      'about.story.li.1_html': '覆盖 <b>教育</b>、<b>计算机视觉</b>、<b>具身智能</b> 等行业，相较客户基线通常实现 <b>30%~50% 加速</b>',
-      'about.story.li.2_html': '超大规模集群训练扩展至 <b>5,000+ XPU</b>',
-      'about.story.p3_html': '它如今加入百舸 <b>Loong</b> 开源系列 —— 取名自中国传统 <b>龙舟</b>，象征协同之力与前行之势。姊妹项目：<a class="text-indigo-600 underline" href="https://github.com/baidu-baige/LoongFlow" target="_blank" rel="noopener">LoongFlow</a> —— <i>A Thinking &amp; Learning Framework for Expert-Grade AI Agents</i>。',
-
-      'about.horizon.title': '🧭 近期方向',
-      'about.horizon.lead': '我们下一阶段的重点一瞥',
-      'about.horizon.1': '前沿基础模型持续覆盖扩充',
-      'about.horizon.2': '重点加强具身领域模型训练能力建设',
-      'about.horizon.3': '结合实际场景，持续优化模型训练性能',
-      'about.horizon.4': '持续完善昆仑芯 XPU 的支持与优化',
+      'about.story.p1_html': '<b>LoongForge</b> 是一款开源训练框架，由百度智能云 <a class="text-indigo-600 underline" href="https://cloud.baidu.com/product/aihc.html" target="_blank" rel="noopener">百舸团队</a> 开发，旨在为主流 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与 <b>具身模型</b> 提供更快的训练速度，从而显著降低成本。',
+      'about.story.p2_html': 'LoongForge 由 <a class="text-indigo-600 underline" href="https://cloud.baidu.com/doc/AIHC/s/Alyo476jr" target="_blank" rel="noopener">AIAK-Training-LLM</a> 开源而来 —— 一套在百度智能云上交付给企业客户的训练加速套件，在真实生产负载下沉淀多年：',
+      'about.story.li.1_html': '服务 <b>教育</b>、<b>计算机视觉</b>、<b>具身智能</b> 等领域客户，相较其基线通常实现 <b>30%~50% 加速</b>',
+      'about.story.li.2_html': '最大生产规模达 <b>5,000+ XPU</b>',
+      'about.story.p3_html': '它如今加入百舸 <b>Loong</b> 开源系列 —— 取名自中国传统 <b>龙舟</b>，象征协同之力与前行之势。',
+      'about.story.p4_html': '想了解我们还在做什么？欢迎访问 <a class="text-indigo-600 underline" href="https://github.com/baidu-baige" target="_blank" rel="noopener">baidu-baige GitHub 组织</a>，查看团队的其他开源项目。',
 
       'about.license.title': '📄 开源协议与引用',
       'about.license.heading': '开源协议',
@@ -360,6 +278,13 @@
       'about.cite.heading': '引用',
       'about.ack.title': '🙏 致谢',
       'about.ack.body': 'LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 Transformers、LLaMA-Factory、Megatron-Bridge 等优秀开源项目。真诚感谢这些社区的卓越贡献。',
+
+      'about.contact.title': '✉️ 联系我们',
+      'about.contact.lead': '欢迎随时联系我们 —— 通过以下任一渠道都可以',
+      'about.contact.wechat.d': '加入开发者交流群 —— 扫描 GitHub issue 中的群二维码',
+      'about.contact.rednote.d': '关注我们的小红书账号，获取版本动态与实践分享',
+      'about.contact.email.d': 'loongforge@baidu.com —— 合作、落地及其他任何事宜',
+      'about.contact.slack.d': '在 Slack workspace 中与团队和其他使用者交流',
 
       'bench.title': '📊 性能基准',
       'bench.subtitle': '基于 latest，覆盖 VLA、WAM、VLM 工作负载实测',
@@ -379,20 +304,10 @@
       'comm.1.t': 'GitHub Issues', 'comm.1.d': '提交 Bug 报告与功能请求。',
       'comm.2.t': '讨论区', 'comm.2.d': '提问交流与经验分享。',
       'comm.3.t': '贡献指南', 'comm.3.d': '阅读指南，发起你的第一个 PR。',
-      'comm.4.t': '加入微信群', 'comm.4.d': '扫描 README 中的二维码，加入开发者交流群。',
+      'comm.contrib.title': '贡献者',
+      'comm.contrib.sub': 'LoongForge 由这些开发者共同构建 —— 下一个名字可以是你。',
+      'comm.contrib.cta': '🛠️ 成为贡献者',
 
-      'stats.stars': 'GitHub Stars',
-      'stats.contrib': '贡献者',
-      'stats.license': '开源协议',
-      'stats.series': '百舸 Loong 系列',
-
-      'contact.badge': '微信社区',
-      'contact.title': '加入微信社区',
-      'contact.desc': '扫码加入我们的微信群 —— 提问交流、分享实践、与 LoongForge 团队及开发者直接对话。',
-      'contact.cta.view': '在 GitHub 查看',
-      'contact.cta.discuss': '发起讨论',
-      'contact.qr.fallback': '二维码暂不可用 —— 请前往 GitHub README 获取最新二维码。',
-      'contact.qr.hint': '使用微信扫码加入',
     }
   };
 
@@ -476,7 +391,7 @@
         <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link class="ext ${act('docs')}" data-i18n="nav.docs">Docs</a>
         <a href="${base}blog.html" class="${act('blog')}" data-i18n="nav.blog">Blog</a>
         <a href="${base}about.html" class="${act('about')}" data-i18n="nav.about">About</a>
-        <a href="${base}index.html#community" class="hover:text-indigo-600 dark:hover:text-indigo-300" data-i18n="nav.contact">Contact</a>
+        <a href="${base}about.html#contact" class="${act('contact')}" data-i18n="nav.contact">Contact</a>
       </nav>
       <div class="flex items-center gap-3">
         <div class="lang-switch hidden sm:inline-flex" role="group" aria-label="Language">${langBtns}</div>
@@ -499,7 +414,7 @@
       <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link class="block py-1 ext" data-i18n="nav.docs">Docs</a>
       <a href="${base}blog.html" class="${actMob('blog')}" data-i18n="nav.blog">Blog</a>
       <a href="${base}about.html" class="${actMob('about')}" data-i18n="nav.about">About</a>
-      <a href="${base}index.html#community" class="block py-1" data-i18n="nav.contact">Contact</a>
+      <a href="${base}about.html#contact" class="${actMob('contact')}" data-i18n="nav.contact">Contact</a>
       <div class="lang-switch mt-2">${langBtns}</div>
     </div>`;
     });
@@ -717,62 +632,109 @@
       });
     })();
 
-    // GitHub stars + contributors (public REST API; no auth; client-side cache)
-    // Star tile auto-hides below STARS_MIN (avoids showing a small number that
+    // GitHub stars (public REST API; no auth; client-side cache)
+    // The count stays hidden below STARS_MIN (avoids showing a small number that
     // would read as negative social proof; self-heals once we cross the threshold).
     const STARS_MIN = 500;
     const starEls = document.querySelectorAll('#gh-stars, [data-gh-stars]');
-    const starTiles = document.querySelectorAll('[data-gh-stars-tile]');
-    const contribEl = document.getElementById('gh-contrib');
-    const CONTRIB_FALLBACK = '14+';
     const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
-    const showStarTile = n => {
+    const showStars = n => {
       if (typeof n !== 'number' || n < STARS_MIN) return;
       starEls.forEach(el => el.textContent = fmt(n));
-      starTiles.forEach(el => el.hidden = false);
     };
     const CACHE_KEY = 'lf-gh-stats-v1';
     const CACHE_TTL = 60 * 60 * 1000; // 1 hour
     let cached = null;
     try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { }
-    if (contribEl) contribEl.textContent = CONTRIB_FALLBACK;
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      showStarTile(cached.stars);
-      if (contribEl && cached.contrib) contribEl.textContent = cached.contrib;
+      showStars(cached.stars);
     }
-    const next = { ts: Date.now(), stars: cached?.stars, contrib: cached?.contrib };
+    const next = { ts: Date.now(), stars: cached?.stars };
     if (starEls.length) {
       fetch('https://api.github.com/repos/baidu-baige/LoongForge')
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d && typeof d.stargazers_count === 'number') {
             next.stars = d.stargazers_count;
-            showStarTile(d.stargazers_count);
+            showStars(d.stargazers_count);
             try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch (e) { }
           }
         })
         .catch(() => { });
     }
-    if (contribEl) {
-      fetch('https://api.github.com/repos/baidu-baige/LoongForge/contributors?per_page=1')
-        .then(r => {
-          const link = r.headers.get('Link') || '';
-          const m = link.match(/page=(\d+)>;\s*rel="last"/);
-          if (m) {
-            next.contrib = m[1] + '+';
-            contribEl.textContent = next.contrib;
-            try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch (e) { }
-          } else {
-            return r.json().then(arr => {
-              if (Array.isArray(arr) && arr.length > 0) {
-                next.contrib = String(arr.length);
-                contribEl.textContent = next.contrib;
-                try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch (e) { }
-              }
-            });
-          }
-        })
-        .catch(() => { });
-    }
+
+    // Contributors wall — driven entirely by the GitHub API; no manual list to
+    // maintain. New contributors appear automatically as the repo changes.
+    initContributors();
   });
+
+  function initContributors() {
+    const countEl = document.getElementById('gh-contrib');
+    const grid = document.querySelector('[data-contrib-grid]');
+    if (!countEl && !grid) return;
+    const KEY = 'lf-gh-contribs-v1';
+    const TTL = 6 * 60 * 60 * 1000; // 6 hours
+    const MAX = 30;
+    const API = 'https://api.github.com/repos/baidu-baige/LoongForge/contributors?per_page=100';
+    const GRAPH_URL = 'https://github.com/baidu-baige/LoongForge/graphs/contributors';
+    const isBot = u => u.type === 'Bot' || /\[bot\]$/.test(u.login || '');
+
+    const render = (list, count) => {
+      if (countEl && count) countEl.textContent = count;
+      if (!grid || !Array.isArray(list) || !list.length) return;
+      const frag = document.createDocumentFragment();
+      list.slice(0, MAX).forEach(u => {
+        const a = document.createElement('a');
+        a.className = 'lf-avatar';
+        a.href = u.html_url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.title = u.login;
+        a.setAttribute('aria-label', u.login);
+        const img = document.createElement('img');
+        img.src = u.avatar_url + (u.avatar_url.indexOf('?') > -1 ? '&' : '?') + 's=128';
+        img.alt = '';
+        img.width = 56;
+        img.height = 56;
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => a.remove());
+        a.appendChild(img);
+        frag.appendChild(a);
+      });
+      if (list.length > MAX) {
+        const more = document.createElement('a');
+        more.className = 'lf-avatar-more';
+        more.href = GRAPH_URL;
+        more.target = '_blank';
+        more.rel = 'noopener';
+        more.textContent = '+' + (list.length - MAX);
+        frag.appendChild(more);
+      }
+      grid.innerHTML = '';
+      grid.appendChild(frag);
+      grid.hidden = false;
+    };
+    // Render last known data first (survives an offline / rate-limited load),
+    // then refresh in the background when the cache is stale.
+    let cache = null;
+    try { cache = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { }
+    if (cache && cache.list) render(cache.list, cache.count);
+    if (cache && Date.now() - cache.ts < TTL) return;
+
+    fetch(API)
+      .then(r => r.ok ? r.json() : null)
+      .then(arr => {
+        if (!Array.isArray(arr) || !arr.length) return;
+        const list = arr.filter(u => !isBot(u)).map(u => ({
+          login: u.login, avatar_url: u.avatar_url, html_url: u.html_url
+        }));
+        if (!list.length) return;
+        // per_page=100 returns both the list and an exact count below 100.
+        const count = arr.length >= 100 ? '100+' : String(list.length);
+        render(list, count);
+        try { localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), count, list })); } catch (e) { }
+      })
+      .catch(() => { });
+  }
 })();

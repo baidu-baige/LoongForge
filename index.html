@@ -32,7 +32,7 @@
       theme: { extend: { colors: { brand: { 50: '#EEF2FF', 100: '#E0E7FF', 500: '#6366F1', 600: '#4F46E5', 700: '#4338CA' } } } }
     };
   </script>
-  <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260830-r1" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -855,7 +855,7 @@
         <p class="text-gray-600 dark:text-gray-400" data-i18n="comm.subtitle">Built in the open — join discussions,
           report issues, and contribute</p>
       </div>
-      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="grid md:grid-cols-3 gap-6">
         <a href="https://github.com/baidu-baige/LoongForge/issues" target="_blank"
           class="group rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover block">
           <div class="text-3xl mb-3">🐛</div>
@@ -882,40 +882,27 @@
             PR.
           </p>
         </a>
-        <a href="https://github.com/baidu-baige/LoongForge/issues/80" target="_blank" rel="noopener"
-          class="group rounded-[1.25rem] p-7 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-gray-900 border border-emerald-200 dark:border-emerald-900/50 card-hover block">
-          <div class="text-3xl mb-3">💚</div>
-          <h3 class="font-semibold mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-300"
-            data-i18n="comm.4.t">Join us on WeChat</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="comm.4.d">Scan the QR code in our README to
-            join the developer group.
-          </p>
-        </a>
       </div>
 
-      <!-- Stats strip -->
-      <div class="stats-strip mt-10">
-        <div data-gh-stars-tile hidden>
-          <div class="text-3xl md:text-4xl font-bold text-amber-500">★ <span data-gh-stars>—</span></div>
-          <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.stars">
-            GitHub Stars</div>
-        </div>
-        <div>
-          <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors" target="_blank" rel="noopener"
-            class="text-3xl md:text-4xl font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"><span
-              id="gh-contrib">14+</span></a>
-          <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.contrib">
-            Contributors</div>
-        </div>
-        <div>
-          <div class="text-3xl md:text-4xl font-bold text-emerald-500">Apache 2.0</div>
-          <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.license">
-            License</div>
-        </div>
-        <div>
-          <div class="text-3xl md:text-4xl font-bold text-violet-500">🐉 Loong</div>
-          <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-1" data-i18n="stats.series">
-            Baige Loong Series</div>
+      <!-- Contributors wall (kept last: the avatar list keeps growing, so it
+           must not push the rest of the section further down over time) -->
+      <div class="lf-card mt-10" data-contrib-panel>
+        <div class="grid xl:grid-cols-[minmax(20rem,1fr)_auto] gap-8 xl:gap-12 items-center">
+          <div class="text-center xl:text-left">
+            <h3 class="text-2xl md:text-3xl font-bold mb-2">
+              👥 <span data-i18n="comm.contrib.title">Contributors</span>
+              <span class="text-gray-300 dark:text-gray-700">·</span>
+              <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors" target="_blank" rel="noopener"
+                class="text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300" id="gh-contrib">14+</a>
+            </h3>
+            <p class="text-sm md:text-base text-gray-600 dark:text-gray-400 mb-5 max-w-xl mx-auto xl:mx-0"
+              data-i18n="comm.contrib.sub">
+              LoongForge is built in the open by these developers — your name could be next.
+            </p>
+            <a href="https://github.com/baidu-baige/LoongForge/blob/master/CONTRIBUTING.md" target="_blank"
+              rel="noopener" class="lf-btn" data-i18n="comm.contrib.cta">🛠️ Become a contributor</a>
+          </div>
+          <div class="lf-contrib-grid" data-contrib-grid hidden></div>
         </div>
       </div>
     </div>
@@ -941,6 +928,7 @@
               data-i18n="nav.docs">Documentation</a></li>
           <li><a href="blog.html" data-i18n="nav.blog">Blog</a></li>
           <li><a href="about.html" data-i18n="nav.about">About</a></li>
+          <li><a href="#community" data-i18n="comm.title">🤝 Community</a></li>
         </ul>
       </div>
       <div>
@@ -975,7 +963,7 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js?v=20260728-r18"></script>
+  <script src="assets/js/main.js?v=20260830-r1"></script>
   <script src="assets/js/home-news.js"></script>
 </body>
 
