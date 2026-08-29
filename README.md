@@ -83,7 +83,7 @@ Since optimal training strategies differ across model families and scales, Loong
 * **🚦 MoE Expert Load Balancing** — Dynamically replicates hot experts using a topology-aware algorithm to balance Expert Parallel (EP) workloads, cutting overhead by up to **74%** over industry solutions. [[TAOT Paper](https://arxiv.org/pdf/2608.03676)]
 * **🔬 Adaptive FP8 Training** — End-to-end FP8 for LLMs and VLMs with standard **blockwise FP8**; optional **adaptive** mode picks per-operator precision by GEMM shape and efficiency.
 * **🔧 Custom Fused Operators** — Fused kernels like **FusedDSA** for DSA-style models — TileLang version open-sourced, high-performance CUDA version available on Baidu Baige platform.
-* **📏 Long-Sequence Training** — **Context Parallel (CP)** with chunked-pipeline scheduling extends LLM training to **64K+ sequence lengths**.
+* **📏 Long-Sequence Training** — **Context Parallel (CP)** with **chunked-pipeline scheduling** scales LLM training to long sequence lengths.
 
 **🧩 Multi-Modal Models**
 
