@@ -15,7 +15,7 @@
         rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>tailwind.config = { darkMode: 'class' };</script>
-    <link rel="stylesheet" href="../assets/css/style.css" />
+    <link rel="stylesheet" href="../assets/css/style.css?v=20260830-r1" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -42,14 +42,16 @@
                 <p>今天，我们在 LoongForge 中正式发布 <strong>LoongForge-Embodied</strong>——一个专为 <strong>VLA（视觉-语言-动作）</strong> 与
                     <strong>WAM（世界-动作模型）</strong> 打造的 torch-native 训练子系统。它一次覆盖 Pi0.5、GR00T
                     N1.6、X-VLA、FastWAM、LingBot-VA、Cosmos3、DreamZero 等主流具身模型，并在同等硬件下相对各模型官方实现取得 <strong>1.6× ~
-                        2.67×</strong> 的训练加速。</p>
+                        2.67×</strong> 的训练加速。
+                </p>
             </blockquote>
             <p>📚 GitHub：<a href="https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied"
                     target="_blank"
                     rel="noopener">https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied</a></p>
             <h2>1. 它是什么：一个 torch-native 的具身训练子系统</h2>
             <p>LoongForge 是一套统一的训练框架，覆盖 LLM / VLM / Diffusion / Embodied。其中 LLM / VLM / Diffusion 构建在
-                <strong>Megatron-LM</strong> 之上，面向大规模、模型并行的预训练与 SFT；而具身模型有着截然不同的形态，我们为它单独构建了一套子系统。</p>
+                <strong>Megatron-LM</strong> 之上，面向大规模、模型并行的预训练与 SFT；而具身模型有着截然不同的形态，我们为它单独构建了一套子系统。
+            </p>
             <p>原因在于，具身模型与典型大模型的差别是本质性的：它参数量小得多（通常在 10B 以内），一个典型 VLA 往往就是一个 VLM 叠加一个动作头。这个规模并不需要为超大模型准备的 TP / PP / EP
                 模型并行——硬套只会徒增复杂度与开销。因此 LoongForge-Embodied 直接构建在<strong>原生 PyTorch 的 DDP / FSDP</strong>
                 之上，聚焦于中小规模、数据并行场景下的训练效率与模型接入体验。</p>
@@ -183,21 +185,25 @@
             <p><strong>② 数据流水线（<code>data/</code>）—— 公共后端 + 每模型差异。</strong>
                 数据集读取后端（<code>lerobot / hdf5 / dummy</code>）、有状态的分布式采样器、可组合的 transform 框架统一沉淀为公共能力；模型特有的数据读取（如
                 <code>fastwam</code> 的多帧几何）、动作 / 图像变换、batch 拼装下沉到 <code>datasets/&lt;name&gt;/</code>；每个模型用
-                <code>DataConfig</code> 声明图像尺寸、动作维度、归一化统计等。</p>
+                <code>DataConfig</code> 声明图像尺寸、动作维度、归一化统计等。
+            </p>
             <p><strong>③ 三层配置解析（<code>train/parser.py</code>）—— 冻结为不可变对象。</strong> YAML <code>model:</code> 段 →
                 <code>ModelConfig</code>、YAML <code>data:</code> 段 → <code>DataConfig</code>、命令行 →
                 <code>TrainingArgs</code>；<code>--model-name</code> 经 <code>config_map.py</code> 路由到对应 YAML 与类型，命令行还可用
-                dotlist 覆盖字段（如 <code>model.action_horizon=64</code>），最终统一冻结为全局单例。</p>
+                dotlist 覆盖字段（如 <code>model.action_horizon=64</code>），最终统一冻结为全局单例。
+            </p>
             <p><strong>④ 分布式训练器（<code>train/trainers/</code>、<code>distributed/</code>）—— 策略灵活。</strong> 标准 SFT 直接用
                 <code>FinetuneTrainer</code>，多流、CUDA Graph 等特殊范式继承 <code>BaseTrainer</code> 并在
                 <code>trainer_builder.py</code> 注册，通过 <code>--trainer-type</code> 选择；分布式则可在
                 <code>ddp</code>（数据并行）、<code>ddp</code> + <code>--zero-optimizer</code>（ZeRO
                 Stage-1）、<code>fsdp</code>（全分片）、<code>hsdp</code>（混合分片）之间按需切换，贴合具身模型的规模与显存特征。<code>BaseTrainer</code>
-                还把优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 续训、确定性控制等收敛到公共层，让每个模型复用同一套实现。</p>
+                还把优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 续训、确定性控制等收敛到公共层，让每个模型复用同一套实现。
+            </p>
             <p><strong>新增一个模型只需 5 步</strong>：① 加 <code>model/&lt;name&gt;/</code> 的组网与配置并 <code>@register_model</code>；②
                 加 <code>data/datasets/&lt;name&gt;/</code>（DataConfig + transform + collator）；③ 在
                 <code>configs/models/embodied/</code> 加 YAML 并在 <code>config_map.py</code> 登记；④ 范式不同则继承
-                <code>BaseTrainer</code>，否则复用 <code>FinetuneTrainer</code>；⑤ 在 <code>examples/</code> 加启动脚本。</p>
+                <code>BaseTrainer</code>，否则复用 <code>FinetuneTrainer</code>；⑤ 在 <code>examples/</code> 加启动脚本。
+            </p>
             <h2>5. 快速开始</h2>
             <p>训练通过 <code>torchrun</code> 启动 <code>loongforge/embodied/train.py</code>：</p>
             <pre><code class="language-bash">export LOONGFORGE_PATH=/workspace/LoongForge
@@ -273,7 +279,7 @@ examples/embodied/pi05/eval/run_libero_eval.sh</code></pre>
     </script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
-    <script src="../assets/js/main.js"></script>
+    <script src="../assets/js/main.js?v=20260830-r1"></script>
 </body>
 
 </html>
