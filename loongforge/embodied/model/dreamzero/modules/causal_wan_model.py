@@ -598,9 +598,6 @@ class CausalWanSelfAttention(nn.Module):
         self.attention_backend = attention_backend
         self._dreamzero_performance_options = performance_options
         self._dreamzero_context_parallel_enabled = int(context_parallel_size or 1) > 1
-        self._dreamzero_avoid_rope_reconcat = _dreamzero_perf_bool(
-            performance_options, "avoid_rope_reconcat", False
-        )
         self._dreamzero_manual_self_attn_linear_bwd = _dreamzero_perf_bool(
             performance_options, "manual_self_attn_linear_backward", False
         )
@@ -609,7 +606,6 @@ class CausalWanSelfAttention(nn.Module):
         )
         self._dreamzero_attention_kwargs = _dreamzero_attention_kwargs(performance_options)
         self._dreamzero_rope_kwargs = _dreamzero_rope_kwargs(performance_options)
-        self._dreamzero_block_index = -1
         # layers
         self.q = nn.Linear(dim, dim)
         self.k = nn.Linear(dim, dim)
@@ -1693,27 +1689,13 @@ class CausalWanSelfAttention(nn.Module):
                     **self._dreamzero_rope_kwargs,
                 ).type_as(v)
 
-                avoid_rope_reconcat = (
-                    action_register_length is not None
-                    and self._dreamzero_avoid_rope_reconcat
-                )
-                use_split_roped = avoid_rope_reconcat
-                if use_split_roped:
-                    _dreamzero_log_once(
-                        "avoid_rope_reconcat",
-                        "[dreamzero-rope] avoid_rope_reconcat=true, "
-                        "reuse split clean/noisy RoPE outputs instead of cat+slice",
-                    )
-                    roped_query = None
-                    roped_key = None
-                else:
-                    roped_query.append(rq_context)
-                    roped_key.append(rk_context)
-                    roped_query.append(rq_noisy)
-                    roped_key.append(rk_noisy)
+                roped_query.append(rq_context)
+                roped_key.append(rk_context)
+                roped_query.append(rq_noisy)
+                roped_key.append(rk_noisy)
 
-                    roped_query = torch.cat(roped_query, dim=1)
-                    roped_key = torch.cat(roped_key, dim=1)
+                roped_query = torch.cat(roped_query, dim=1)
+                roped_key = torch.cat(roped_key, dim=1)
                 # Calculate sequence dimensions
                 half_seq_len = (s - (action_register_length if action_register_length is not None else 0)) // 2
 
@@ -1735,10 +1717,7 @@ class CausalWanSelfAttention(nn.Module):
                     state_horizon = num_image_blocks * self.num_state_per_block
 
                     expected_roped_len = half_seq_len + noisy_image_seq_len + action_horizon + state_horizon
-                    if use_split_roped:
-                        actual_roped_len = rq_context.shape[1] + rq_noisy.shape[1]
-                    else:
-                        actual_roped_len = roped_query.shape[1]
+                    actual_roped_len = roped_query.shape[1]
 
                     # Block layout must match actual register length.
                     # For 5B use 320x176 so latent frame_seqlen=55.
@@ -1755,33 +1734,20 @@ class CausalWanSelfAttention(nn.Module):
 
                     # Split clean and noisy parts.
                     # Clean: [image tokens only]
-                    if use_split_roped:
-                        clean_image_q = rq_context
-                        clean_image_k = rk_context
-                    else:
-                        clean_image_q = roped_query[:, :clean_image_seq_len]
-                        clean_image_k = roped_key[:, :clean_image_seq_len]
+                    clean_image_q = roped_query[:, :clean_image_seq_len]
+                    clean_image_k = roped_key[:, :clean_image_seq_len]
                     clean_image_v = v[:, :clean_image_seq_len]
 
                     # Noisy: [image tokens][action tokens][state tokens]
-                    if use_split_roped:
-                        noisy_image_q = rq_noisy[:, :noisy_image_seq_len]
-                        noisy_action_q = rq_noisy[:, noisy_image_seq_len:noisy_image_seq_len + action_horizon]
-                        noisy_state_q = rq_noisy[:, noisy_image_seq_len + action_horizon:]
+                    noisy_image_q = roped_query[:, half_seq_len:half_seq_len + noisy_image_seq_len]
+                    noisy_action_q = roped_query[
+                        :, half_seq_len + noisy_image_seq_len:half_seq_len + noisy_image_seq_len + action_horizon]
+                    noisy_state_q = roped_query[:, half_seq_len + noisy_image_seq_len + action_horizon:]
 
-                        noisy_image_k = rk_noisy[:, :noisy_image_seq_len]
-                        noisy_action_k = rk_noisy[:, noisy_image_seq_len:noisy_image_seq_len + action_horizon]
-                        noisy_state_k = rk_noisy[:, noisy_image_seq_len + action_horizon:]
-                    else:
-                        noisy_image_q = roped_query[:, half_seq_len:half_seq_len + noisy_image_seq_len]
-                        noisy_action_q = roped_query[
-                            :, half_seq_len + noisy_image_seq_len:half_seq_len + noisy_image_seq_len + action_horizon]
-                        noisy_state_q = roped_query[:, half_seq_len + noisy_image_seq_len + action_horizon:]
-
-                        noisy_image_k = roped_key[:, half_seq_len:half_seq_len + noisy_image_seq_len]
-                        noisy_action_k = roped_key[
-                            :, half_seq_len + noisy_image_seq_len:half_seq_len + noisy_image_seq_len + action_horizon]
-                        noisy_state_k = roped_key[:, half_seq_len + noisy_image_seq_len + action_horizon:]
+                    noisy_image_k = roped_key[:, half_seq_len:half_seq_len + noisy_image_seq_len]
+                    noisy_action_k = roped_key[
+                        :, half_seq_len + noisy_image_seq_len:half_seq_len + noisy_image_seq_len + action_horizon]
+                    noisy_state_k = roped_key[:, half_seq_len + noisy_image_seq_len + action_horizon:]
 
                     noisy_image_v = v[:, half_seq_len:half_seq_len + noisy_image_seq_len]
                     noisy_action_v = v[
@@ -1969,6 +1935,21 @@ class CausalWanSelfAttention(nn.Module):
         return x, updated_kv_cache
 
 
+_DREAMZERO_COMPILED_CAUSAL_BLOCK_FORWARD = None
+
+
+def _dreamzero_compiled_causal_block_forward():
+    """Return one compiled block function shared by repeated block instances."""
+    global _DREAMZERO_COMPILED_CAUSAL_BLOCK_FORWARD
+    if _DREAMZERO_COMPILED_CAUSAL_BLOCK_FORWARD is None:
+        _DREAMZERO_COMPILED_CAUSAL_BLOCK_FORWARD = _dreamzero_compile_callable(
+            CausalWanAttentionBlock._forward_block,
+            "CausalWanAttentionBlock._forward_block",
+            mode="default",
+        )
+    return _DREAMZERO_COMPILED_CAUSAL_BLOCK_FORWARD
+
+
 class CausalWanAttentionBlock(nn.Module):
     """Transformer block combining causal self-attention, cross-attention and FFN."""
 
@@ -2048,12 +2029,16 @@ class CausalWanAttentionBlock(nn.Module):
             self._dreamzero_block_norm_modulate_impl = (
                 _dreamzero_get_block_norm_modulate_impl(dim, eps, performance_options)
             )
-        self._dreamzero_block_index = -1
+        self._dreamzero_compile_block = _dreamzero_perf_bool(
+            performance_options,
+            "compile_causal_attention_block",
+            False,
+        )
 
     def _ffn_forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.ffn(x)
 
-    def forward(
+    def _forward_block(
         self,
         x: torch.Tensor,
         e: torch.Tensor,
@@ -2074,8 +2059,6 @@ class CausalWanAttentionBlock(nn.Module):
             e(Tensor): Shape [B, F, 6, C]
             freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
         """
-        block_index = int(self._dreamzero_block_index)
-
         e = (self.modulation.unsqueeze(1) + e).chunk(6, dim=2)
 
         # Align modulation sequence length to x so mul/add broadcast (e.g. when F != L under compile)
@@ -2093,7 +2076,6 @@ class CausalWanAttentionBlock(nn.Module):
         e = tuple(part.squeeze(2) for part in aligned)
 
         # self-attention
-        setattr(self.self_attn, "_dreamzero_block_index", block_index)
         norm_modulate_impl = self._dreamzero_block_norm_modulate_impl
         if norm_modulate_impl is not None:
             self_attn_input = norm_modulate_impl(x, e[1], e[0])
@@ -2132,6 +2114,12 @@ class CausalWanAttentionBlock(nn.Module):
         ffn_residual = x
         x = ffn_residual + ffn_delta
         return x, updated_kv_cache
+
+    def forward(self, *args, **kwargs):
+        """Run the block eagerly or through the shared compiled function."""
+        if self._dreamzero_compile_block:
+            return _dreamzero_compiled_causal_block_forward()(self, *args, **kwargs)
+        return self._forward_block(*args, **kwargs)
 
 
 class CausalHead(nn.Module):
@@ -3043,8 +3031,6 @@ class CausalWanModel(ModelMixin, ConfigMixin):
             for block_index in range(group_start, group_end):
                 block = self.blocks[block_index]
                 block_body = getattr(block, "_checkpoint_wrapped_module", block)
-                block_body._dreamzero_block_index = block_index
-                block_body.self_attn._dreamzero_block_index = block_index
                 block_body.self_attn._dreamzero_compile_attention_warmup(
                     x,
                     block_index=block_index,

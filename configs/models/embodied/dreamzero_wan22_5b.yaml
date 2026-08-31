@@ -17,7 +17,7 @@ model:
 
   # Performance switches
   flash_attention_dense: true
-  avoid_rope_reconcat: true
+  compile_causal_attention_block: true
   batch_vae_encode: true
   prompt_emb_cache: gpu
 
