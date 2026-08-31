@@ -13,6 +13,21 @@ from torch.nn.attention.flex_attention import BlockMask, create_block_mask, flex
 from flash_attn.flash_attn_interface import flash_attn_func, flash_attn_varlen_func
 from enum import Enum
 
+from .sequence_packing import (
+    FactoredSequencePack,
+    JointSequencePack,
+    create_sparse_mask,
+    factored_from_joint_sequence,
+    from_joint,
+    from_mode_splits,
+    generate_natten_metadata,
+    generate_temporal_causal_natten_metadata,
+    get_all_seq,
+    get_causal_seq,
+    get_full_only_seq,
+    joint_from_joint_sequence,
+)
+
 flex_attention = torch.compile(_flex_attention)
 
 
@@ -109,21 +124,6 @@ AttentionMaskType = BlockMask | SplitInfo
 _dotproduct_attention_cache = {}
 
 
-from .sequence_packing import (
-    FactoredSequencePack,
-    JointSequencePack,
-    create_sparse_mask,
-    factored_from_joint_sequence,
-    from_joint,
-    from_mode_splits,
-    generate_natten_metadata,
-    generate_temporal_causal_natten_metadata,
-    get_all_seq,
-    get_causal_seq,
-    get_full_only_seq,
-    joint_from_joint_sequence,
-)
-
 
 def two_way_attention(
     packed_query_states: FactoredSequencePack | JointSequencePack,
@@ -205,8 +205,6 @@ def three_way_attention(
     full_q, full_q_offsets = get_full_only_seq(packed_query_states)
     full_k, full_k_offsets = get_full_only_seq(packed_key_states)
     full_v, _ = get_full_only_seq(packed_value_states)
-
-    sample_offsets = packed_query_states["sample_offsets"]
 
     if attention_meta is not None and attention_meta.null_action_supertokens:
         # Zero V for the first num_action_tokens_per_supertoken tokens of each
@@ -642,7 +640,7 @@ def is_torch_compiling() -> bool:
     """is_torch_compiling."""
     try:
         return torch.compiler.is_compiling()
-    except Exception as e:
+    except Exception:
         return False
 
 
