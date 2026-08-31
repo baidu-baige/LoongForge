@@ -66,6 +66,7 @@ class DreamZeroPrecomputedCacheConfig:
     )
     skip_pixel_preprocess: bool = False
     first_frame_only: bool = False
+    requires_full_video_for_train: bool = False
 
     def feature(self, name: str) -> DreamZeroPrecomputedFeatureConfig:
         """Return the feature config for ``name``, raising if unknown."""
@@ -115,6 +116,7 @@ class DreamZeroPrecomputedCacheConfig:
             "strict": self.strict,
             "skip_pixel_preprocess": self.skip_pixel_preprocess,
             "first_frame_only": self.first_frame_only,
+            "requires_full_video_for_train": self.requires_full_video_for_train,
             "features": features,
             "validation": {
                 "validate_artifact": self.validation.validate_artifact,
@@ -262,6 +264,28 @@ def _default_prompt_cache_enabled(model_cfg: Any) -> bool:
     return "14b" not in backbone_variant
 
 
+def _requires_full_video_for_train(model_cfg: Any) -> bool:
+    """Return whether training needs the full video for first-frame conditioning."""
+    concat_first_frame = _cfg_get(
+        model_cfg, "backbone_concat_first_frame_latent", None
+    )
+    if concat_first_frame is not None:
+        return _as_bool(concat_first_frame, False)
+
+    backbone_model_type = _as_str(
+        _cfg_get(model_cfg, "backbone_model_type", ""), ""
+    ).strip().lower()
+    if backbone_model_type:
+        return backbone_model_type == "i2v"
+
+    # Keep direct config construction safe when derived preset fields have not
+    # been populated yet.
+    backbone_variant = _as_str(
+        _cfg_get(model_cfg, "backbone_variant", ""), ""
+    ).strip().lower()
+    return "wan21" in backbone_variant
+
+
 def build_precomputed_cache_config(model_cfg: Any) -> DreamZeroPrecomputedCacheConfig:
     """Build the effective DreamZero precomputed-cache config from model settings."""
     raw_cache = _mapping(_cfg_get(model_cfg, "precomputed_cache", None))
@@ -367,6 +391,7 @@ def build_precomputed_cache_config(model_cfg: Any) -> DreamZeroPrecomputedCacheC
 
     skip_pixel_preprocess = _as_bool(raw_cache.get("skip_pixel_preprocess"), False)
     first_frame_only = _as_bool(raw_cache.get("first_frame_only"), False)
+    requires_full_video_for_train = _requires_full_video_for_train(model_cfg)
     if "enabled" in raw_cache and not structured_enabled:
         return DreamZeroPrecomputedCacheConfig(
             enabled=False,
@@ -377,6 +402,7 @@ def build_precomputed_cache_config(model_cfg: Any) -> DreamZeroPrecomputedCacheC
             validation=validation,
             skip_pixel_preprocess=skip_pixel_preprocess,
             first_frame_only=first_frame_only,
+            requires_full_video_for_train=requires_full_video_for_train,
         )
 
     features = _mapping(raw_cache.get("features"))
@@ -464,6 +490,7 @@ def build_precomputed_cache_config(model_cfg: Any) -> DreamZeroPrecomputedCacheC
         validation=validation,
         skip_pixel_preprocess=skip_pixel_preprocess,
         first_frame_only=first_frame_only,
+        requires_full_video_for_train=requires_full_video_for_train,
     )
 
 

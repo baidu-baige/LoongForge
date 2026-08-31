@@ -137,7 +137,9 @@ def _build_stateful_dataloader(
     seed = training_args.seed
     seed_workers = training_args.dataloader_seed_workers
     drop_last = training_args.batch_drop_last
-    prefetch_factor = training_args.dataloader_prefetch_factor if num_workers > 0 else None
+    prefetch_factor = (
+        training_args.dataloader_prefetch_factor if num_workers > 0 else None
+    )
     if isinstance(dataset, IterableDataset):
         return StatefulDataLoader(
             dataset,

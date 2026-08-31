@@ -41,6 +41,7 @@ class DreamZeroDataConfig:
     sampler_seed: int | None = None
     mixture_sampling_seed: int | None = None
     sampler_worker_batching: str = "none"
+    sampler_num_workers: int | None = None
     shard_sampling_rate: float = 0.1
     num_steps_per_shard: int = 10_000
     num_shards_to_sample: int = 1024
@@ -61,6 +62,8 @@ class DreamZeroDataConfig:
                 "DreamZero sampler_worker_batching must be one of "
                 "none, upstream_iterable"
             )
+        if self.sampler_num_workers is not None and self.sampler_num_workers <= 0:
+            raise ValueError("sampler_num_workers must be positive when specified")
         if (not self.use_mixture_dataset) and self.mixture_sampling_seed is not None:
             raise ValueError(
                 "mixture_sampling_seed is only valid when use_mixture_dataset=true"

@@ -52,6 +52,35 @@ class _DreamZeroPrecomputedCacheMixin:
             or cfg.prompt_embs.required
         )
 
+    def _decode_first_video_frame_only(self) -> bool:
+        """Return whether only the first video frame has to be decoded for a sample.
+
+        When ``video_latents`` come from the strict cache and the model runs with
+        ``first_frame_only``, the sole consumer of raw pixels is ``videos[:, :, :1]`` fed to the
+        CLIP image encoder, so decoding the remaining frames produces data that is thrown away:
+        ``num_frames`` frames per view through decord and the whole augment pipeline, then a
+        ``(num_frames, H, W, C)`` uint8 array through shared memory and the H2D copy. Deciding this
+        from ``first_frame_only`` keeps the dataset and the action head on one switch instead of two
+        that can disagree.
+        """
+        cfg = self.precomputed_cache_config
+        if not (bool(cfg.enabled) and bool(cfg.first_frame_only)):
+            return False
+        if bool(getattr(cfg, "requires_full_video_for_train", False)):
+            return False
+        if not bool(cfg.video_latents.enabled):
+            return False
+        if not str(cfg.cache_dir or "").strip():
+            return False
+        if not self._precomputed_cache_strict():
+            return False
+        _dreamzero_data_log_once(
+            "decode_first_video_frame_only",
+            "[dreamzero-data] decode_first_video_frame_only=true, decode one video frame per view "
+            "because video_latents come from the strict cache and first_frame_only is set",
+        )
+        return True
+
     def _precomputed_cache_path(self, index: int, trajectory_id: int, base_index: int) -> Path | None:
         """Return the precomputed cache file path for a sample, or None if unset."""
         cfg = self.precomputed_cache_config

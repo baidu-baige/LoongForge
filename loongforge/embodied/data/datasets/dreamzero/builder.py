@@ -265,6 +265,11 @@ def build_dreamzero_sampler(
     sampler_type = str(sampler_type or "distributed").strip().lower()
     require_full_language_chunks = bool(data_cfg.require_full_language_chunks)
     sampler_worker_batching = str(data_cfg.sampler_worker_batching or "none").strip().lower()
+    sampler_num_workers = (
+        num_workers
+        if data_cfg.sampler_num_workers is None
+        else int(data_cfg.sampler_num_workers)
+    )
 
     if sampler_type == "global_batch_shard":
         sampler = GlobalBatchShardSampler(
@@ -299,7 +304,7 @@ def build_dreamzero_sampler(
             allow_padding_at_end=bool(data_cfg.allow_padding_at_end),
             require_full_language_chunks=require_full_language_chunks,
             worker_batching_mode=sampler_worker_batching,
-            dataloader_num_workers=num_workers,
+            dataloader_num_workers=sampler_num_workers,
             micro_batch_size=batch_size,
         )
         return sampler, False

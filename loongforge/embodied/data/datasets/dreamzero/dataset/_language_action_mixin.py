@@ -722,6 +722,15 @@ class _DreamZeroLanguageActionMixin:
                 trajectory_id,
                 step_indices,
             )
+            if len(video_indices) > 1 and self._decode_first_video_frame_only():
+                # The sampled window is what the augment pipeline pays for: with max_chunk_size 4 it
+                # is 8 * 4 + 1 = 33 frames per view, and VideoColorJitter alone costs 703-772 ms of
+                # the 969-1034 ms per sample. When video latents come from the strict cache the model
+                # only reads videos[:, :, :1] (action_head_tf.py:903-908), which is this window's
+                # anchor frame, so every later frame is augmented and then discarded. Truncating here
+                # rather than at the caller's step_indices is required because this method replaces
+                # the incoming indices for the video modality.
+                video_indices = video_indices[:1]
             return self.get_video(trajectory_id, key, video_indices)
         elif modality == "state" or modality == "action":
             return self.get_state_or_action(trajectory_id, modality, key, step_indices)
