@@ -29,7 +29,7 @@ export CHECKPOINT_PATH=/workspace/models/lingbot-va-posttrain-robotwin
 export DATA_PATH=/workspace/datasets/robotwin-clean-and-aug-lerobot
 export OUTPUT_DIR=/workspace/outputs/lingbot_va_robotwin
 
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_finetune.sh
+bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
 ```
 LIBERO-Long:
 
@@ -38,7 +38,7 @@ export CHECKPOINT_PATH=/workspace/models/lingbot-va-posttrain-libero-long
 export DATA_PATH=/workspace/datasets/libero-long-lerobot
 export OUTPUT_DIR=/workspace/outputs/lingbot_va_libero
 
-bash examples/embodied/lingbot_va/run_lingbot_va_libero_finetune.sh
+bash examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh
 ```
 ## 2. Performance Optimization Options
 ### 2.1 Baked-in Optimizations
@@ -62,12 +62,12 @@ The following performance optimizations are user-controllable and are enabled by
 
 For example, to disable the optional optimizations:
 
-The command below uses RoboTwin as an example; for LIBERO, use `run_lingbot_va_libero_finetune.sh`.
+The command below uses RoboTwin as an example; for LIBERO, use `run_lingbot_va_libero_fsdp_finetune.sh`.
 
 ```bash
 LINGBOT_BALANCED_SAMPLER=0 \
 LINGBOT_LAYERWISE_COMPILE=0 \
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_finetune.sh
+bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
 ```
 The following switches control logging, diagnostics, or artifact management and do not change model training semantics:
 

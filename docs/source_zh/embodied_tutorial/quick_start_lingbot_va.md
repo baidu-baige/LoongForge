@@ -29,7 +29,7 @@ export CHECKPOINT_PATH=/workspace/models/lingbot-va-posttrain-robotwin
 export DATA_PATH=/workspace/datasets/robotwin-clean-and-aug-lerobot
 export OUTPUT_DIR=/workspace/outputs/lingbot_va_robotwin
 
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_finetune.sh
+bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
 ```
 LIBERO-Long：
 
@@ -38,7 +38,7 @@ export CHECKPOINT_PATH=/workspace/models/lingbot-va-posttrain-libero-long
 export DATA_PATH=/workspace/datasets/libero-long-lerobot
 export OUTPUT_DIR=/workspace/outputs/lingbot_va_libero
 
-bash examples/embodied/lingbot_va/run_lingbot_va_libero_finetune.sh
+bash examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh
 ```
 ## 2. 性能优化项
 ### 2.1 固化项
@@ -62,12 +62,12 @@ bash examples/embodied/lingbot_va/run_lingbot_va_libero_finetune.sh
 
 例如关闭可选优化：
 
-以下命令以 RoboTwin 为例；LIBERO 使用 `run_lingbot_va_libero_finetune.sh`。
+以下命令以 RoboTwin 为例；LIBERO 使用 `run_lingbot_va_libero_fsdp_finetune.sh`。
 
 ```bash
 LINGBOT_BALANCED_SAMPLER=0 \
 LINGBOT_LAYERWISE_COMPILE=0 \
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_finetune.sh
+bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
 ```
 以下开关用于日志、诊断或产物管理，不改变模型训练语义：
 
