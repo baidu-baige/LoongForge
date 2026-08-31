@@ -16,7 +16,14 @@ from .activation_checkpointing import apply_activation_checkpointing
 from .context import DistributedContext
 
 from .ddp_utils import resolve_comm_hook
-from .fsdp_utils import FSDPWrapContext, configure_prefetch, fully_shard_unit, resolve_wrap_runs
+from .fsdp_utils import (
+    FSDPWrapContext,
+    build_fsdp_device_mesh,
+    build_mp_policy,
+    configure_prefetch,
+    fully_shard_unit,
+    resolve_wrap_runs,
+)
 from .utils import filter_kwargs, is_mixed_param_dtype
 
 
@@ -73,7 +80,14 @@ def _wrap_fsdp(
 
     Each step lives in ``fsdp_utils``: unit selection in ``units``, group
     creation in ``sharding``, prefetch edges in ``prefetch``.
+
+    ``--optimizer=dmuon`` bypasses all of the above: DMuon has to claim its
+    Muon-route parameters before any group exists, so the model owns the wrap
+    (see ``_wrap_dmuon_fsdp``).
     """
+    if training_args.optimizer.lower() == "dmuon":
+        return _wrap_dmuon_fsdp(model, training_args, ctx, dtype)
+
     # Storage dtype is decoupled from ``--dtype``: ``--dtype`` also drives the
     # autocast dtype in the trainer, so keeping fp32 master weights under bf16
     # compute requires a separate knob. ``build_mp_policy`` mirrors this by
@@ -101,6 +115,67 @@ def _wrap_fsdp(
     fully_shard_unit([model], wrap_ctx)
     configure_prefetch(runs, training_args)
     return model
+
+
+def _wrap_dmuon_fsdp(
+    model: nn.Module,
+    training_args,
+    ctx: DistributedContext,
+    dtype: torch.dtype,
+) -> nn.Module:
+    """Apply the model-owned FSDP2 + DMuon wrap path.
+
+    DMuon requires the model to own its FSDP wrapping (``convert_to_fsdp``) so
+    ``dmuon.dedicate_params()`` can claim the Muon-route parameters before any
+    ``fully_shard`` group is created. The generic planner in ``_wrap_fsdp``
+    cannot express that ordering, so this path hands mesh and mixed precision
+    policy to the model and lets it build every group itself — wall-oss-0.5
+    (``modeling_qwen2_5_vl_act.convert_to_fsdp``) is the reference implementation.
+
+    Unlike ``_wrap_fsdp``, storage defaults to fp32 rather than ``--dtype``:
+    DMuon keeps fp32 master weights for its dedicated params, so the whole model
+    is cast to fp32 and bf16 compute comes from the mixed precision policy.
+    """
+    if not hasattr(model, "convert_to_fsdp"):
+        raise NotImplementedError(
+            f"Model {model.__class__.__name__} has no convert_to_fsdp method "
+            f"required by --optimizer=dmuon."
+        )
+
+    # Local import to break the train/__init__ -> trainers -> this module cycle.
+    from loongforge.embodied.train.training_args import parse_dtype_from_str
+
+    storage_dtype = (
+        parse_dtype_from_str(training_args.fsdp_original_param_dtype)
+        if training_args.fsdp_original_param_dtype is not None
+        else torch.float32
+    )
+    model.to(dtype=storage_dtype)
+
+    # model=None: the cast above made the model uniform-dtype, so an unset
+    # --fsdp-unshard-param-dtype must follow --dtype rather than "no cast".
+    mp_policy = build_mp_policy(training_args, model=None)
+    # FSDP2's own default; ``fsdp_reshard_default`` unset means "leave it alone".
+    reshard_after_forward = (
+        True if training_args.fsdp_reshard_default is None
+        else training_args.fsdp_reshard_default
+    )
+    logger.info(
+        "DMuon FSDP2: storage_dtype=%s training_dtype=%s reshard_after_forward=%s",
+        storage_dtype, dtype, reshard_after_forward,
+    )
+
+    wrapped = model.convert_to_fsdp(
+        mesh=build_fsdp_device_mesh(training_args, ctx),
+        mp_policy=mp_policy,
+        offload_policy=None,
+        reshard_after_forward=reshard_after_forward,
+        use_dmuon=True,
+    )
+    # The fp32 cast plus per-group sharding leaves the pre-shard full parameters
+    # behind in the caching allocator; reclaim before the first forward.
+    torch.cuda.empty_cache()
+    return wrapped
 
 
 def _wrap_ddp(model: nn.Module, training_args, ctx: DistributedContext, dtype: torch.dtype) -> nn.Module:

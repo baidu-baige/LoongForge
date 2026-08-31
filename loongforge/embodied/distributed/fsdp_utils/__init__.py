@@ -17,7 +17,13 @@ these modules in order:
 
 from .builders import build_fsdp_device_mesh, build_ignored_params, build_mp_policy
 from .context import FSDPWrapContext
-from .inspection import group_numel_by_dtype, is_valid_fsdp_wrap_target, managed_param_numel
+from .inspection import (
+    find_fsdp_root_module,
+    get_fsdp_root_sharded_params,
+    group_numel_by_dtype,
+    is_valid_fsdp_wrap_target,
+    managed_param_numel,
+)
 from .prefetch import configure_prefetch
 from .sharding import fully_shard_unit, resolve_reshard_policy
 from .units import FSDPWrapRun, resolve_wrap_runs
@@ -29,7 +35,9 @@ __all__ = [
     "build_ignored_params",
     "build_mp_policy",
     "configure_prefetch",
+    "find_fsdp_root_module",
     "fully_shard_unit",
+    "get_fsdp_root_sharded_params",
     "group_numel_by_dtype",
     "is_valid_fsdp_wrap_target",
     "managed_param_numel",

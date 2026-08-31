@@ -4,6 +4,7 @@
 """Per-module LR groups + scheduler factory."""
 
 import logging
+import math
 from collections.abc import Iterable
 from typing import Dict, List
 
@@ -299,8 +300,10 @@ def build_param_groups(model: nn.Module, training_args) -> List[Dict]:
 
 def build_scheduler(optimizer, training_args):
     """Build LR scheduler from CLI training_args."""
+    style = training_args.lr_decay_style
 
-    if training_args.lr_decay_style == "lambda_linear":
+    if style == "lambda_linear":
+
         _scheduler = LambdaLinearScheduler(
             warm_up_steps=[training_args.lr_warmup_iters],
             f_min=[training_args.lambda_f_min],
@@ -316,9 +319,28 @@ def build_scheduler(optimizer, training_args):
         )
 
         return LambdaLR(optimizer, _scheduler.schedule)
+    
+    if style in {"cosine_with_min_lr", "cosine_warmup_with_min_lr"} and training_args.custom_lr_lambda:
+        peak_lr = float(optimizer.defaults["lr"])
+        end_lr = float(training_args.min_lr if training_args.min_lr is not None else peak_lr * 0.1)
+        num_warmup_steps = int(training_args.lr_warmup_iters)
+        num_training_steps = int(training_args.lr_decay_iters or training_args.train_iters)
+
+        def lr_lambda(current_step: int):
+            if current_step < num_warmup_steps:
+                init_lr = peak_lr / (num_warmup_steps + 1)
+                current_lr = init_lr + (peak_lr - init_lr) * current_step / num_warmup_steps
+                return current_lr / peak_lr
+
+            decay_steps = num_training_steps - num_warmup_steps
+            progress = min(1.0, (current_step - num_warmup_steps) / max(1, decay_steps))
+            cos = 0.5 * (1 + math.cos(math.pi * progress))
+            current_lr = end_lr + (peak_lr - end_lr) * cos
+            return current_lr / peak_lr
+
+        return LambdaLR(optimizer, lr_lambda)
     else:
         kwargs = {}
-        style = training_args.lr_decay_style
         if style in {"cosine_with_min_lr", "cosine_warmup_with_min_lr"}:
             kwargs["min_lr"] = training_args.min_lr
         elif style == "polynomial":
