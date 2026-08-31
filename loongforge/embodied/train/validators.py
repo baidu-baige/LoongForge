@@ -83,11 +83,7 @@ def validate(training_args, model_cfg, data_cfg):
 
     # ── FSDP ──
     for option_name, value in (
-        ("--fsdp-min-num-params", training_args.fsdp_min_num_params),
-        (
-            "--fsdp-leftover-min-num-params",
-            training_args.fsdp_leftover_min_num_params,
-        ),
+        ("--fsdp-min-param-num", training_args.fsdp_min_param_num),
         (
             "--fsdp-forward-prefetch-distance",
             training_args.fsdp_forward_prefetch_distance,
@@ -100,23 +96,29 @@ def validate(training_args, model_cfg, data_cfg):
         if value < 0:
             raise ValueError(f"{option_name} must be non-negative, got {value}")
 
+    if (
+        training_args.hsdp_shard_size is not None
+        and training_args.hsdp_shard_size <= 0
+    ):
+        raise ValueError(
+            f"--hsdp-shard-size must be positive, got {training_args.hsdp_shard_size}"
+        )
+
     if training_args.distributed_strategy == "fsdp":
-        if training_args.fsdp_wrap_modules and training_args.fsdp_no_wrap_modules:
-            logger.warning(
-                "--fsdp-no-wrap-modules is ignored when --fsdp-wrap-modules is "
-                "set; selected FSDP units take precedence."
+        wrap_conflict = set(training_args.fsdp_wrap_modules or []) & set(
+            training_args.fsdp_no_wrap_modules or []
+        )
+        if wrap_conflict:
+            raise ValueError(
+                "Module classes appear in both --fsdp-wrap-modules and "
+                f"--fsdp-no-wrap-modules: {', '.join(sorted(wrap_conflict))}."
             )
-        if (
-            not training_args.fsdp_wrap_modules
-            and (
-                training_args.fsdp_forward_prefetch_distance > 0
-                or training_args.fsdp_backward_prefetch_distance > 0
-            )
-        ):
-            logger.warning(
-                "FSDP2 explicit prefetch requires --fsdp-wrap-modules with stable "
-                "execution order; prefetch is skipped by the generic planner."
-            )
+    elif training_args.fsdp_original_param_dtype is not None:
+        logger.warning(
+            "--fsdp-original-param-dtype only applies to --distributed-strategy "
+            "fsdp; parameter storage follows --dtype under %s.",
+            training_args.distributed_strategy,
+        )
 
     # ── ZeRO optimizer options ──
     if training_args.zero_parameters_as_bucket_view and not training_args.zero_optimizer:

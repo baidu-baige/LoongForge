@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 def apply_activation_checkpointing(
     model: nn.Module,
-    raw_module_patterns: str | None,
-    raw_skip_modules: str | None,
+    raw_module_patterns: str | list[str] | None,
+    raw_skip_modules: str | list[str] | None,
 ) -> None:
     """Checkpoint the modules selected by the patterns, minus those the skip patterns match."""
     from loongforge.embodied.train.training_args import parse_module_key_patterns
@@ -134,3 +134,4 @@ def _module_key_matches(pattern: str, module_key: str) -> bool:
             module_key_segments,
         )
     )
+

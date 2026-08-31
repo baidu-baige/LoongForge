@@ -7,13 +7,33 @@
 """LingBot-specific FSDP2 adapter over the public fully_shard runtime."""
 
 import torch
+import torch.nn as nn
 from collections import defaultdict
 from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
 from torch.distributed.tensor import DTensor
 
-from loongforge.embodied.distributed.utils import module_params
 from loongforge.embodied.model.lingbot_va.modules.wan_model import WanTransformerBlock
+
+
+def module_params(
+    module: nn.Module,
+    recurse: bool = True,
+    excluded_param_ids: set[int] | None = None,
+) -> list[nn.Parameter]:
+    """Return unique parameters, optionally excluding ids already managed."""
+    params = []
+    seen = set()
+    excluded_param_ids = excluded_param_ids or set()
+    for param in module.parameters(recurse=recurse):
+        param_id = id(param)
+        if param_id in seen:
+            continue
+        if param_id in excluded_param_ids:
+            continue
+        params.append(param)
+        seen.add(param_id)
+    return params
 
 
 def _resolve_dtype(dtype_str: str) -> torch.dtype:

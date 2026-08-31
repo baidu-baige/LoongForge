@@ -110,10 +110,7 @@ DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy fsdp
     --dtype bfloat16
     --fsdp-wrap-modules WanTransformerBlock
-    --fsdp-min-num-params 1000000000000000
-    --fsdp-leftover-min-num-params 1000000000000000
     --fsdp-reshard-default none
-    --fsdp-reshard-root true
 )
 
 # ── Logging params ────────────────────────────────────────────
