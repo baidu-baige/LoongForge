@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from loongforge.embodied.distributed.utils import is_rank_zero
 from loongforge.embodied.optimizer.lr_scheduler import build_param_groups
+from loongforge.embodied.optimizer.dmuon import build_dmuon_optimizer
 
 try:
     from transformer_engine.pytorch.optimizers import FusedAdam as _TEFusedAdam
@@ -269,8 +270,12 @@ def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
     - Split mixed-dtype parameters into per-dtype ZeRO optimizers to satisfy ZeroRedundancyOptimizer dtype constraints.
     """
 
-    groups = build_param_groups(model, training_args)
     optimizer_name = training_args.optimizer
+    if optimizer_name.lower() == "dmuon":
+        groups = build_param_groups(model, training_args) if training_args.lr_group else None
+        return build_dmuon_optimizer(model, training_args, param_groups=groups)
+
+    groups = build_param_groups(model, training_args)
     if optimizer_name not in OPTIMIZER_REGISTRY:
         supported = ", ".join(OPTIMIZER_REGISTRY)
         raise ValueError(f"Unknown optimizer '{training_args.optimizer}'. Supported optimizers: {supported}.")

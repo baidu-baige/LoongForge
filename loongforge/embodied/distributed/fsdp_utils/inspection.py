@@ -72,6 +72,90 @@ def is_valid_fsdp_wrap_target(module: nn.Module) -> bool:
     return module.__class__.forward is not nn.Module.forward
 
 
+def find_fsdp_root_module(model: nn.Module) -> nn.Module | None:
+    """Return the outermost ``FSDPModule`` in a wrapped model, if there is one.
+
+    The wrap pass shards inner units before the root, and an application may keep
+    its own non-FSDP wrapper above the root, so the root cannot be assumed to be
+    ``model`` itself.
+
+    Args:
+        model: Already-wrapped model. Pass the unwrapped module (see
+            ``distributed.utils.unwrap_model``) so a DDP-style ``.module`` layer
+            does not hide the tree.
+
+    Returns:
+        The ``FSDPModule`` that has no ``FSDPModule`` ancestor, or ``None`` when
+        the model was never wrapped. ``None`` is also returned when several
+        independent roots exist, in the sense that the first one found wins —
+        callers that care must not rely on which.
+
+    Note:
+        Reflects the tree at call time and must therefore be called after the wrap
+        pass has run, not while it is building groups.
+    """
+    fsdp_ids = {
+        id(module)
+        for module in model.modules()
+        if isinstance(module, FSDPModule)
+    }
+    if not fsdp_ids:
+        return None
+
+    parents: dict[int, nn.Module] = {}
+    for parent in model.modules():
+        for child in parent.children():
+            parents[id(child)] = parent
+
+    for module in model.modules():
+        if id(module) not in fsdp_ids:
+            continue
+        parent = parents.get(id(module))
+        while parent is not None:
+            if id(parent) in fsdp_ids:
+                break
+            parent = parents.get(id(parent))
+        else:
+            return module
+    return None
+
+
+def get_fsdp_root_sharded_params(root: nn.Module) -> list[nn.Parameter]:
+    """Return the sharded parameters owned by ``root``'s own FSDP param groups.
+
+    Only the root's groups are read, so parameters belonging to inner units are
+    excluded — this is what lets a caller update exactly the root's slice of the
+    optimizer state before triggering the root's unshard.
+
+    Args:
+        root: An ``FSDPModule``, normally from ``find_fsdp_root_module``.
+
+    Returns:
+        The per-rank sharded ``nn.Parameter`` objects, deduplicated by identity so
+        tied parameters appear once. Empty when the module exposes no FSDP state or
+        owns no parameters directly, which callers should treat as "this
+        optimization does not apply" rather than as an error.
+
+    Note:
+        Reads FSDP2 internals (``_get_fsdp_state``, ``_fsdp_param_groups``,
+        ``sharded_param``) and is therefore version-sensitive; every access is
+        defensive so a torch upgrade degrades to an empty list instead of raising.
+    """
+    try:
+        state = root._get_fsdp_state()
+    except (AttributeError, RuntimeError):
+        return []
+    params = []
+    seen = set()
+    for group in getattr(state, "_fsdp_param_groups", ()):
+        for fsdp_param in getattr(group, "fsdp_params", ()):
+            param = getattr(fsdp_param, "sharded_param", None)
+            if param is not None and id(param) not in seen:
+                params.append(param)
+                seen.add(id(param))
+    return params
+
+
 def group_numel_by_dtype(
     module: nn.Module,
     ignored_params: set,

@@ -1,18 +1,22 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
-#
-# Modified from LingBot-VA under the Apache-2.0 License.
-# Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 
 """LingBot-specific FSDP2 adapter over the public fully_shard runtime."""
+
 
 import torch
 import torch.nn as nn
 from collections import defaultdict
-from torch.distributed.device_mesh import init_device_mesh
-from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
+from dataclasses import replace as dataclass_replace
+from torch.distributed.fsdp import fully_shard
 from torch.distributed.tensor import DTensor
 
+from loongforge.embodied.distributed.fsdp_utils.builders import (
+    build_fsdp_device_mesh,
+    build_ignored_params,
+    build_mp_policy,
+)
+from loongforge.embodied.model.lingbot_va.features import feature_enabled
 from loongforge.embodied.model.lingbot_va.modules.wan_model import WanTransformerBlock
 
 
@@ -34,14 +38,6 @@ def module_params(
         params.append(param)
         seen.add(param_id)
     return params
-
-
-def _resolve_dtype(dtype_str: str) -> torch.dtype:
-    return {
-        "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-        "float32": torch.float32,
-    }[dtype_str]
 
 
 def _rank0():
@@ -74,22 +70,22 @@ def _ensure_fsdp_param_compat():
     FSDPParam._lingbot_accum_grad_compat = True
 
 
-def _build_embodied_device_mesh(training_args, ctx):
-    shard_size = getattr(training_args, "hsdp_shard_size", None)
-    if shard_size is None:
-        return init_device_mesh("cuda", (ctx.world_size,), mesh_dim_names=("dp",))
-    if shard_size <= 0:
-        raise ValueError(f"HSDP shard size must be positive, got {shard_size}.")
-    if ctx.world_size % shard_size != 0:
-        raise ValueError(
-            "HSDP requires world_size to be divisible by hsdp_shard_size, "
-            f"got world_size={ctx.world_size}, hsdp_shard_size={shard_size}."
-        )
-    return init_device_mesh(
-        "cuda",
-        (ctx.world_size // shard_size, shard_size),
-        mesh_dim_names=("replica", "shard"),
-    )
+def _build_lingbot_mp_policy(training_args, model):
+    """Upstream mixed-precision policy, with the LingBot BF16-reduce switch on top.
+
+    ``build_mp_policy`` resolves param/output dtypes and ``cast_forward_inputs``
+    from the public CLI, so those stay a single source of truth.  Only the
+    reduction dtype is LingBot's own decision: reducing gradients in the
+    all-gather dtype removes a full fp32 reduce-scatter per step, which is worth
+    ~1% of the step time here, so the switch overrides whatever
+    ``--fsdp-reduce-dtype`` says instead of relying on the launcher to keep the
+    two in sync.
+    """
+    mp_policy = build_mp_policy(training_args, model)
+    use_bf16_reduce = feature_enabled("LINGBOT_FSDP_BF16_REDUCE")
+    if use_bf16_reduce:
+        mp_policy = dataclass_replace(mp_policy, reduce_dtype=mp_policy.param_dtype)
+    return mp_policy, use_bf16_reduce
 
 
 def _save_custom_attrs(module):
@@ -102,6 +98,7 @@ def _restore_custom_attrs(module, custom_attrs):
             setattr(param, attr_name, attr_value)
 
 
+
 def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
     """Apply the phase4 block+root FSDP2 order and mixed-precision policy."""
     if getattr(training_args, "distributed_strategy", None) != "fsdp":
@@ -109,25 +106,26 @@ def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
             "LingBot native nested FSDP2 requires embodied FSDP strategy"
         )
 
-    dtype = _resolve_dtype(training_args.dtype)
     if not getattr(ctx, "is_distributed", False):
         return model.to(device=ctx.device)
 
     _ensure_fsdp_param_compat()
     model.to(device=ctx.device)
+    mp_policy, use_bf16_reduce = _build_lingbot_mp_policy(training_args, model)
+    reshard = feature_enabled("LINGBOT_FSDP_RESHARD")
+    # 0-dim parameters cannot be sharded on dim-0; upstream collects them and
+    # moves them onto the compute device, and every group must ignore the same
+    # set, so this is built once for the whole pass.
+    scalar_ignored = build_ignored_params(model, ctx)
     fsdp_kwargs = {
-        "mesh": _build_embodied_device_mesh(training_args, ctx),
-        "reshard_after_forward": False,
-        "mp_policy": MixedPrecisionPolicy(
-            param_dtype=dtype,
-            reduce_dtype=dtype,
-            cast_forward_inputs=False,
-        ),
+        "mesh": build_fsdp_device_mesh(training_args, ctx),
+        "reshard_after_forward": reshard,
+        "mp_policy": mp_policy,
     }
 
     attrs = _save_custom_attrs(model)
-    wrapped_params = set()
-    wrapped_param_ids = set()
+    wrapped_params = set(scalar_ignored)
+    wrapped_param_ids = {id(param) for param in scalar_ignored}
 
     def nested_fully_shard(module):
         shard_kwargs = dict(fsdp_kwargs)
@@ -141,20 +139,24 @@ def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
             wrapped_params.add(param)
             wrapped_param_ids.add(id(param))
 
-    wrapped_blocks = 0
+    wrapped_blocks = []
     for sub_module in model.modules():
         if isinstance(sub_module, WanTransformerBlock):
             nested_fully_shard(sub_module)
-            wrapped_blocks += 1
+            wrapped_blocks.append(sub_module)
     nested_fully_shard(model)
     _restore_custom_attrs(model, attrs)
 
     if _rank0():
         print(
             "LingBot native torch nested FSDP2 wrap enabled "
-            f"blocks={wrapped_blocks} child_wrap=none "
-            "reshard_after_forward=False keep_fp32_params=True "
-            f"mp_policy_param_dtype={dtype} mp_policy_reduce_dtype={dtype} ignored_params=True.",
+            f"blocks={len(wrapped_blocks)} child_wrap=none "
+            f"reshard_after_forward={reshard} keep_fp32_params=True "
+            f"mp_policy_param_dtype={mp_policy.param_dtype} "
+            f"mp_policy_reduce_dtype={mp_policy.reduce_dtype} "
+            f"mp_policy_cast_forward_inputs={mp_policy.cast_forward_inputs} "
+            f"bf16_reduce_enabled={use_bf16_reduce} "
+            f"scalar_ignored_params={len(scalar_ignored)} ignored_params=True.",
             flush=True,
         )
     return model
@@ -274,13 +276,11 @@ def clean_lingbot_optimizer_gradients(optimizer):
             torch.nan_to_num(gradient, nan=0.0, posinf=0.0, neginf=0.0, out=gradient)
 
 
-def register_lingbot_post_step_reshard(model, optimizer):
-    """Register LingBot's post-optimizer FSDP2 reshard policy.
-
-    The returned handle must be kept alive by the trainer. The optimizer's
-    standard post-step hook guarantees that reshard runs after AdamW and
-    before the public scheduler advances.
-    """
+def register_lingbot_post_step_reshard(
+    model,
+    optimizer,
+):
+    """Reshard every LingBot FSDP group after AdamW updates its local shard."""
     fsdp_modules = []
     seen = set()
     chunks = model if isinstance(model, (list, tuple)) else [model]
@@ -293,6 +293,11 @@ def register_lingbot_post_step_reshard(model, optimizer):
             seen.add(id(module))
             fsdp_modules.append(module)
 
+    if not hasattr(optimizer, "register_step_post_hook"):
+        raise TypeError(
+            "LingBot optimizer must expose register_step_post_hook for post-step reshard"
+        )
+
     logged = False
 
     def post_step_reshard(_optimizer, _args, _kwargs):
@@ -303,16 +308,14 @@ def register_lingbot_post_step_reshard(model, optimizer):
             not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
         ):
             print(
-                f"[lingbot-post-step-reshard] active modules={len(fsdp_modules)}",
+                "[lingbot-post-step-reshard] "
+                f"active modules={len(fsdp_modules)}",
                 flush=True,
             )
             logged = True
 
-    if not hasattr(optimizer, "register_step_post_hook"):
-        raise TypeError(
-            "LingBot optimizer must expose register_step_post_hook for post-step reshard"
-        )
-    return optimizer.register_step_post_hook(post_step_reshard), len(fsdp_modules)
+    optimizer_hook = optimizer.register_step_post_hook(post_step_reshard)
+    return optimizer_hook, len(fsdp_modules)
 
 
 def apply_lingbot_fsdp2_tuning(model):
@@ -327,13 +330,15 @@ def apply_lingbot_fsdp2_tuning(model):
         return
 
     modules = [module for module in model.modules() if isinstance(module, FSDPModule)]
+    reshard = feature_enabled("LINGBOT_FSDP_RESHARD")
     for module in modules:
         if hasattr(module, "set_reshard_after_backward"):
-            module.set_reshard_after_backward(False, recurse=False)
+            module.set_reshard_after_backward(reshard, recurse=False)
 
     rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
     if modules and rank == 0:
         print(
-            f"[lingbot-fsdp2] reshard_after_backward=False applied to {len(modules)} modules",
+            "[lingbot-fsdp2] "
+            f"reshard_after_backward={reshard} applied to {len(modules)} modules",
             flush=True,
         )

@@ -135,6 +135,13 @@ class BaseTrainer(ABC):
         set_seed(training_args.seed, training_args.set_seed_by_rank)
         if training_args.deterministic_mode:
             set_deterministic()
+        if training_args.cudnn_benchmark:
+            if training_args.deterministic_mode:
+                raise ValueError(
+                    "--cudnn-benchmark and --deterministic-mode conflict: autotuning "
+                    "picks algorithms per shape and is not reproducible."
+                )
+            torch.backends.cudnn.benchmark = True
         if training_args.disable_tf32:
             set_precision(allow_tf32=False)
 

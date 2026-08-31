@@ -1,13 +1,18 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from LingBot-VA under the Apache-2.0 License.
+# Modified from LingBot-VA (``wan_va/modules/model.py``) under the Apache-2.0 License.
 # Copyright 2024-2025 The Robbyant Team Authors. All rights reserved.
+#
+# The upstream module is itself built on the Diffusers Wan transformer, whose class layout
+# and embedding blocks are reused here (Apache-2.0).
+# Copyright 2025 The Wan Team and The HuggingFace Team. All rights reserved.
 
 """Baseline-compatible native PyTorch Wan transformer for LingBot-VA training."""
 
 import math
 import importlib
+import logging
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import partial
@@ -29,12 +34,10 @@ from einops import rearrange
 from torch.utils.checkpoint import checkpoint
 
 from ..features import (
-    FLEX_MASK_CACHE_MAX_SIZE,
     SELF_FLEX_BWD_CONFIG,
-    SELF_FLEX_FWD_CONFIG,
-    feature_enabled,
+    SELF_FLEX_OPTIMIZED_FWD_CONFIG,
 )
-from .rope import apply_triton_rope
+from .rope import apply_triton_rope_pair
 
 try:
     from torch.nn.attention.flex_attention import (
@@ -46,7 +49,79 @@ try:
     )
 except ImportError:
     BlockMask = None
+    create_block_mask = None
     flex_attention = None
+
+
+_COMPILED_CREATE_BLOCK_MASK = None
+_COMPILED_CREATE_BLOCK_MASK_ERROR = None
+# Frozen recipe value for the self-attention BlockMask cache.
+SELF_MASK_CACHE_SIZE = 256
+
+logger = logging.getLogger(__name__)
+
+
+def _report_block_mask_fallback(error):
+    """Record the compile failure and say so once, then fall back eagerly."""
+    global _COMPILED_CREATE_BLOCK_MASK_ERROR
+    _COMPILED_CREATE_BLOCK_MASK_ERROR = repr(error)
+    logger.warning(
+        "Compiled create_block_mask unavailable, using the eager path: %s",
+        _COMPILED_CREATE_BLOCK_MASK_ERROR,
+    )
+
+
+def _create_lingbot_block_mask(mask, total_length, device, block_size):
+    """Build LingBot's BlockMask through an optional compiled fast path."""
+    global _COMPILED_CREATE_BLOCK_MASK, _COMPILED_CREATE_BLOCK_MASK_ERROR
+    if _COMPILED_CREATE_BLOCK_MASK is None and _COMPILED_CREATE_BLOCK_MASK_ERROR is None:
+        try:
+            _COMPILED_CREATE_BLOCK_MASK = torch.compile(
+                create_block_mask,
+                dynamic=True,
+            )
+        except Exception as error:
+            _report_block_mask_fallback(error)
+    if _COMPILED_CREATE_BLOCK_MASK is not None:
+        try:
+            return _COMPILED_CREATE_BLOCK_MASK(
+                mask,
+                1,
+                1,
+                total_length,
+                total_length,
+                device=device,
+                BLOCK_SIZE=block_size,
+            )
+        except Exception as error:
+            _report_block_mask_fallback(error)
+            _COMPILED_CREATE_BLOCK_MASK = None
+    return create_block_mask(
+        mask,
+        1,
+        1,
+        total_length,
+        total_length,
+        device=device,
+        BLOCK_SIZE=block_size,
+    )
+
+
+def _run_compiled_self_flex_attention(query, key, value, block_mask):
+    if _SELF_FLEX_DIVISIBLE_COMPILED_SELF_FLEX is None:
+        raise RuntimeError("compiled FlexAttention is unavailable")
+    with _self_flex_patch_scope():
+        return _SELF_FLEX_DIVISIBLE_COMPILED_SELF_FLEX(
+            query, key, value, block_mask
+        )
+
+
+def _candidate_compile(function):
+    compiler = getattr(torch, "compile", None)
+    if compiler is None:
+        return function
+    # The accepted recipe compiles with dynamic shapes and the default mode.
+    return compiler(function, dynamic=True)
 
 
 class WanTimeTextImageEmbedding(nn.Module):
@@ -65,15 +140,62 @@ class WanTimeTextImageEmbedding(nn.Module):
         self.text_embedder = PixArtAlphaTextProjection(
             text_embed_dim, dim, act_fn="gelu_tanh"
         )
+        self._timestep_frequency_cache = {}
+
+    def _project_timesteps(self, timestep: torch.Tensor):
+        half_dim = self.timesteps_proj.num_channels // 2
+        cache_key = (str(timestep.device), half_dim)
+        frequency = self._timestep_frequency_cache.get(cache_key)
+        if frequency is None:
+            exponent = -math.log(10000) * torch.arange(
+                half_dim, dtype=torch.float32, device=timestep.device
+            )
+            frequency = torch.exp(
+                exponent / (half_dim - self.timesteps_proj.downscale_freq_shift)
+            )
+            self._timestep_frequency_cache[cache_key] = frequency
+        angles = timestep[:, None].float() * frequency[None, :]
+        return torch.cat((torch.cos(angles), torch.sin(angles)), dim=-1)
 
     def forward(self, timestep: torch.Tensor, dtype: torch.dtype):
         """Project timestep values into time embedding and modulation tensors."""
         batch, length = timestep.shape
-        projected = self.timesteps_proj(timestep.reshape(-1))
+        projected = self._project_timesteps(timestep.reshape(-1))
         projected = projected.to(self.time_embedder.linear_1.weight.dtype)
-        temb = self.time_embedder(projected).to(dtype=dtype)
-        modulation = self.time_proj(self.act_fn(temb))
+        temb, modulation = _COMPILED_TIME_EMBED(
+            projected,
+            self.time_embedder.linear_1.weight,
+            self.time_embedder.linear_1.bias,
+            self.time_embedder.linear_2.weight,
+            self.time_embedder.linear_2.bias,
+            self.time_proj.weight,
+            self.time_proj.bias,
+            dtype,
+        )
         return temb.reshape(batch, length, -1), modulation.reshape(batch, length, -1)
+
+
+def _time_embed_from_projected(
+    projected, linear1_weight, linear1_bias, linear2_weight, linear2_bias,
+    projection_weight, projection_bias, dtype
+):
+    temb = F.linear(projected, linear1_weight, linear1_bias)
+    temb = F.silu(temb)
+    temb = F.linear(temb, linear2_weight, linear2_bias).to(dtype=dtype)
+    modulation = F.linear(F.silu(temb), projection_weight, projection_bias)
+    return temb, modulation
+
+
+_COMPILED_TIME_EMBED = _candidate_compile(_time_embed_from_projected)
+
+
+def _text_embed_compiled(values, linear1_weight, linear1_bias, linear2_weight, linear2_bias):
+    hidden_states = F.linear(values, linear1_weight, linear1_bias)
+    hidden_states = F.gelu(hidden_states, approximate="tanh")
+    return F.linear(hidden_states, linear2_weight, linear2_bias)
+
+
+_COMPILED_TEXT_EMBED = _candidate_compile(_text_embed_compiled)
 
 
 class WanRotaryPosEmbed(nn.Module):
@@ -101,6 +223,8 @@ class WanRotaryPosEmbed(nn.Module):
         self.register_buffer(
             "w_freqs_base", self._frequency_base(w_dim, theta), persistent=False
         )
+        self._frequency_cache = {}
+        self._compiled_frequency_forward = None
 
     @staticmethod
     def _frequency_base(dim: int, theta: float):
@@ -108,8 +232,7 @@ class WanRotaryPosEmbed(nn.Module):
             torch.arange(0, dim, 2, dtype=torch.float64)[: dim // 2] / dim
         )
 
-    def forward(self, grid_ids: torch.Tensor):
-        """Build complex rotary frequencies for latent and action grid ids."""
+    def _frequency_forward(self, grid_ids: torch.Tensor):
         with torch.no_grad():
             frequencies = torch.cat(
                 (
@@ -120,6 +243,58 @@ class WanRotaryPosEmbed(nn.Module):
                 dim=-1,
             ).float()
             return torch.polar(torch.ones_like(frequencies), frequencies)
+
+    def _cache_result(self, cache_key, result):
+        if len(self._frequency_cache) >= 16:
+            self._frequency_cache.pop(next(iter(self._frequency_cache)))
+        self._frequency_cache[cache_key] = result
+        return result
+
+    def forward_pair(
+        self,
+        latent_grid: torch.Tensor,
+        action_grid: torch.Tensor,
+        grid_keys=None,
+    ) -> torch.Tensor:
+        """Build or reuse frequencies without repeating the grid concatenation.
+
+        ``grid_keys`` identifies the *content* of the two grids (the arguments
+        ``get_mesh_id`` was called with). Caching on tensor shape alone is not
+        sound: the grids are flattened, so two different (frames, height, width,
+        token_type) layouts of equal length share a shape while holding
+        different ids, and the cache would then hand back the wrong rotary
+        frequencies. Without a key the frequencies are rebuilt every call --
+        content hashing is deliberately not an option here, it would need a
+        device-to-host copy on the critical path.
+        """
+        cache_key = None if grid_keys is None else ("pair", grid_keys)
+        if cache_key is not None:
+            cached = self._frequency_cache.get(cache_key)
+            if cached is not None:
+                return cached
+        grid_ids = torch.cat(
+            (latent_grid, latent_grid, action_grid, action_grid), dim=2
+        )
+        result = self._frequency_forward(grid_ids)
+        if cache_key is None:
+            return result
+        return self._cache_result(cache_key, result)
+
+    def forward(self, grid_ids: torch.Tensor, grid_key=None):
+        """Build complex rotary frequencies for latent and action grid ids.
+
+        Same contract as ``forward_pair``: reuse only happens when the caller
+        supplies a key that determines the grid contents.
+        """
+        cache_key = None if grid_key is None else ("single", grid_key)
+        if cache_key is not None:
+            cached = self._frequency_cache.get(cache_key)
+            if cached is not None:
+                return cached
+        result = self._frequency_forward(grid_ids)
+        if cache_key is None:
+            return result
+        return self._cache_result(cache_key, result)
 
 
 _SELF_FLEX_BLOCK64_PATCH_ACTIVE = 0
@@ -139,19 +314,33 @@ def _self_flex_block64_install_patch():
     try:
         import torch._inductor.lowering  # noqa: F401
 
-        module = importlib.import_module("torch._inductor.kernel.flex_attention")
-        if not getattr(module, "_lingbot_native_self_flex_block64_patched", False):
+        module = None
+        for module_name in (
+            "torch._inductor.kernel.flex_attention",
+            "torch._inductor.kernel.flex.flex_attention",
+        ):
+            try:
+                module = importlib.import_module(module_name)
+                break
+            except ModuleNotFoundError:
+                continue
+        if module is None:
+            raise ModuleNotFoundError("no supported Inductor FlexAttention module")
+        has_legacy_defaults = hasattr(module, "_get_default_config_fwd") and hasattr(
+            module, "_get_default_config_bwd"
+        )
+        if has_legacy_defaults and not getattr(
+            module, "_lingbot_native_self_flex_block64_patched", False
+        ):
             original_fwd = module._get_default_config_fwd
             original_bwd = module._get_default_config_bwd
-            fwd_config = SELF_FLEX_FWD_CONFIG
+            fwd_config = SELF_FLEX_OPTIMIZED_FWD_CONFIG
             bwd_config = SELF_FLEX_BWD_CONFIG
 
             def patched_fwd(query):
-                return (
-                    fwd_config
-                    if _SELF_FLEX_BLOCK64_PATCH_ACTIVE
-                    else original_fwd(query)
-                )
+                if _SELF_FLEX_BLOCK64_PATCH_ACTIVE:
+                    return fwd_config
+                return original_fwd(query)
 
             def patched_bwd(query):
                 return (
@@ -162,7 +351,7 @@ def _self_flex_block64_install_patch():
 
             module._get_default_config_fwd = patched_fwd
             module._get_default_config_bwd = patched_bwd
-            module._lingbot_native_self_flex_block64_patched = True
+        module._lingbot_native_self_flex_block64_patched = True
         _SELF_FLEX_BLOCK64_PATCHED = True
         return True
     except Exception as error:
@@ -173,11 +362,8 @@ def _self_flex_block64_install_patch():
 
 
 @contextmanager
-def _self_flex_block64_patch_scope(active):
+def _self_flex_patch_scope():
     global _SELF_FLEX_BLOCK64_PATCH_ACTIVE
-    if not active:
-        yield
-        return
     _SELF_FLEX_BLOCK64_PATCH_ACTIVE += 1
     try:
         yield
@@ -185,12 +371,37 @@ def _self_flex_block64_patch_scope(active):
         _SELF_FLEX_BLOCK64_PATCH_ACTIVE -= 1
 
 
-def _compiled_self_flex_block64_attention(query, key, value, block_mask):
-    return flex_attention(query, key, value, block_mask=block_mask)
+def _self_flex_kernel_options():
+    fwd = SELF_FLEX_OPTIMIZED_FWD_CONFIG
+    bwd = SELF_FLEX_BWD_CONFIG
+    options = {
+        "fwd_BLOCK_M": fwd[0],
+        "fwd_BLOCK_N": fwd[1],
+        "fwd_num_warps": fwd[2],
+        "fwd_num_stages": fwd[3],
+        "bwd_BLOCK_M1": bwd[0],
+        "bwd_BLOCK_N1": bwd[1],
+        "bwd_BLOCK_M2": bwd[0],
+        "bwd_BLOCK_N2": bwd[1],
+        "bwd_num_warps": bwd[2],
+        "bwd_num_stages": bwd[3],
+    }
+    options["IS_DIVISIBLE"] = True
+    return options
 
 
-_SELF_FLEX_BLOCK64_COMPILED_SELF_FLEX = (
-    torch.compile(_compiled_self_flex_block64_attention, dynamic=True)
+def _compiled_self_flex_divisible_attention(query, key, value, block_mask):
+    return flex_attention(
+        query,
+        key,
+        value,
+        block_mask=block_mask,
+        kernel_options=_self_flex_kernel_options(),
+    )
+
+
+_SELF_FLEX_DIVISIBLE_COMPILED_SELF_FLEX = (
+    torch.compile(_compiled_self_flex_divisible_attention, dynamic=True)
     if flex_attention is not None
     else None
 )
@@ -223,8 +434,12 @@ class FlexAttnFunc(nn.Module):
         k = key.transpose(1, 2)
         v = value.transpose(1, 2)
         _self_flex_block64_install_patch()
-        with _self_flex_block64_patch_scope(True):
-            output = _SELF_FLEX_BLOCK64_COMPILED_SELF_FLEX(q, k, v, mask)
+        if q.shape[-2] % 128 or k.shape[-2] % 128 or v.shape[-2] % 128:
+            raise RuntimeError(
+                "self FlexAttention requires q/k/v sequence lengths divisible by 128"
+            )
+        with _self_flex_patch_scope():
+            output = _SELF_FLEX_DIVISIBLE_COMPILED_SELF_FLEX(q, k, v, mask)
         return output.transpose(1, 2)
 
     @classmethod
@@ -255,18 +470,33 @@ class FlexAttnFunc(nn.Module):
             block_size,
         )
         cached_self_mask = cls.self_mask_cache.get(cache_key)
+        if cached_self_mask is not None:
+            # A cache hit must avoid rebuilding CPU metadata and repeating H2D copies.
+            cls.attention_mask = cached_self_mask
+            return
         latent_tokens = (
             (latent_frames // patch_size[0])
             * (latent_height // patch_size[1])
             * (latent_width // patch_size[2])
         )
         action_tokens = action_frames * action_height * action_width
+        metadata_device = None
         sequence_ids = torch.cat(
-            [torch.arange(batch).repeat_interleave(latent_tokens)] * 2
-            + [torch.arange(batch).repeat_interleave(action_tokens)] * 2
+            [
+                torch.arange(batch, device=metadata_device).repeat_interleave(
+                    latent_tokens
+                )
+            ]
+            * 2
+            + [
+                torch.arange(batch, device=metadata_device).repeat_interleave(
+                    action_tokens
+                )
+            ]
+            * 2
         )
         latent_frame_ids = (
-            torch.arange(latent_frames)
+            torch.arange(latent_frames, device=metadata_device)
             .view(1, -1, 1, 1)
             .expand(
                 batch, -1, latent_height // patch_size[1], latent_width // patch_size[2]
@@ -274,7 +504,7 @@ class FlexAttnFunc(nn.Module):
             .flatten()
         )
         action_frame_ids = (
-            torch.arange(action_frames)
+            torch.arange(action_frames, device=metadata_device)
             .view(1, -1, 1, 1)
             .expand(batch, -1, action_height, action_width)
             .flatten()
@@ -291,9 +521,13 @@ class FlexAttnFunc(nn.Module):
                 torch.ones_like(action_frame_ids),
             ]
         )
-        sequence_ids = F.pad(sequence_ids, (0, padded_length), value=-1).to(device)
-        frame_ids = F.pad(frame_ids, (0, padded_length), value=-1).to(device)
-        noise_ids = F.pad(noise_ids, (0, padded_length), value=-1).to(device)
+        sequence_ids = F.pad(sequence_ids, (0, padded_length), value=-1)
+        frame_ids = F.pad(frame_ids, (0, padded_length), value=-1)
+        noise_ids = F.pad(noise_ids, (0, padded_length), value=-1)
+        if metadata_device is None:
+            sequence_ids = sequence_ids.to(device)
+            frame_ids = frame_ids.to(device)
+            noise_ids = noise_ids.to(device)
 
         def same_sequence(b, h, q_idx, kv_idx):
             del b, h
@@ -335,22 +569,15 @@ class FlexAttnFunc(nn.Module):
             partial(in_window, size=window_size),
         )
         total_length = sequence_ids.numel()
-        if cached_self_mask is None:
-            cls.attention_mask = create_block_mask(
-                mask,
-                1,
-                1,
-                total_length,
-                total_length,
-                device=device,
-                BLOCK_SIZE=block_size,
-            )
-            max_size = FLEX_MASK_CACHE_MAX_SIZE
-            if len(cls.self_mask_cache) >= max_size:
-                cls.self_mask_cache.pop(next(iter(cls.self_mask_cache)))
-            cls.self_mask_cache[cache_key] = cls.attention_mask
-        else:
-            cls.attention_mask = cached_self_mask
+        cls.attention_mask = _create_lingbot_block_mask(
+            mask,
+            total_length,
+            device,
+            block_size,
+        )
+        if len(cls.self_mask_cache) >= SELF_MASK_CACHE_SIZE:
+            cls.self_mask_cache.pop(next(iter(cls.self_mask_cache)))
+        cls.self_mask_cache[cache_key] = cls.attention_mask
 
 
 def _build_qk_norm(hidden_size, eps):
@@ -393,20 +620,16 @@ class WanAttention(nn.Module):
         self.norm_k = _build_qk_norm(kv_inner_dim, eps)
         self.attn_op = FlexAttnFunc(self.is_cross) if attn_mode == "flex" else None
 
-    @staticmethod
-    def _apply_rotary(x: torch.Tensor, frequencies: torch.Tensor):
-        return apply_triton_rope(x, frequencies)
-
     def forward(
         self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, rotary_emb=None
     ):
         """Project inputs, apply optional RoPE, and compute attention output."""
-        query = self.norm_q(self.to_q(q)).unflatten(2, (self.heads, -1))
-        key = self.norm_k(self.to_k(k)).unflatten(2, (self.heads, -1))
-        value = self.to_v(v).unflatten(2, (self.heads, -1))
+        query, key, value = self.to_q(q), self.to_k(k), self.to_v(v)
+        query = self.norm_q(query).unflatten(2, (self.heads, -1))
+        key = self.norm_k(key).unflatten(2, (self.heads, -1))
+        value = value.unflatten(2, (self.heads, -1))
         if rotary_emb is not None:
-            query = self._apply_rotary(query, rotary_emb)
-            key = self._apply_rotary(key, rotary_emb)
+            query, key = apply_triton_rope_pair(query, key, rotary_emb)
         if self.attn_op is not None:
             hidden_states = self.attn_op(query, key, value)
         else:
@@ -416,29 +639,89 @@ class WanAttention(nn.Module):
         return self.to_out[1](self.to_out[0](hidden_states.flatten(2)))
 
 
-def _layerwise_norm_mod_no_affine(x, scale, shift, eps):
-    norm = F.layer_norm(x.float(), (x.shape[-1],), None, None, eps)
-    return (norm * (1.0 + scale) + shift).to(x.dtype)
-
-
-def _layerwise_norm_affine_to_dtype(x, weight, bias, eps):
-    norm = F.layer_norm(x.float(), (x.shape[-1],), weight.float(), bias.float(), eps)
-    return norm.to(x.dtype)
-
-
 def _layerwise_residual_gate_to_dtype(residual, update, gate):
     return (residual.float() + update.float() * gate).to(residual.dtype)
 
 
+def _layerwise_modulation_prologue_bf16(
+    hidden_states, scale_shift_table, temb, eps
+):
+    dtype = hidden_states.dtype
+    modulation = scale_shift_table.to(dtype)[None] + temb.to(dtype)
+    shift, scale, gate, ff_shift, ff_scale, ff_gate = modulation.permute(
+        0, 2, 1, 3
+    ).chunk(6, dim=1)
+    normed = F.layer_norm(
+        hidden_states, (hidden_states.shape[-1],), None, None, eps
+    )
+    normed = normed * (1.0 + scale.squeeze(1)) + shift.squeeze(1)
+    return normed, gate, ff_shift, ff_scale, ff_gate
+
+
+def _layerwise_self_residual_cross_norm_bf16(
+    residual, update, gate, weight, bias, eps
+):
+    dtype = residual.dtype
+    hidden_states = residual + update * gate.to(dtype)
+    cross_input = F.layer_norm(
+        hidden_states,
+        (hidden_states.shape[-1],),
+        weight.to(dtype),
+        bias.to(dtype),
+        eps,
+    )
+    return hidden_states, cross_input
+
+
+def _layerwise_cross_residual_ff_norm_bf16(
+    residual, update, scale, shift, eps
+):
+    dtype = residual.dtype
+    hidden_states = residual + update
+    normed = F.layer_norm(
+        hidden_states, (hidden_states.shape[-1],), None, None, eps
+    )
+    normed = normed * (1.0 + scale.to(dtype)) + shift.to(dtype)
+    return hidden_states, normed
+
+
+def _layerwise_residual_gate_bf16(residual, update, gate):
+    return residual + update * gate.to(residual.dtype)
+
+
+def _layerwise_output_modulation_norm_bf16(
+    hidden_states, scale_shift_table, temb, eps
+):
+    dtype = hidden_states.dtype
+    output_modulation = scale_shift_table.to(dtype)[None] + temb[:, :, None].to(dtype)
+    shift, scale = output_modulation.permute(0, 2, 1, 3).chunk(2, dim=1)
+    normed = F.layer_norm(
+        hidden_states, (hidden_states.shape[-1],), None, None, eps
+    )
+    return normed * (1.0 + scale.squeeze(1)) + shift.squeeze(1)
+
+
 def _layerwise_compile(function):
-    compiler = getattr(torch, "compile", None)
-    return compiler(function, dynamic=True) if compiler is not None else function
+    return _candidate_compile(function)
 
 
-_LAYERWISE_NORM_MOD_NO_AFFINE = _layerwise_compile(_layerwise_norm_mod_no_affine)
-_LAYERWISE_NORM_AFFINE_TO_DTYPE = _layerwise_compile(_layerwise_norm_affine_to_dtype)
 _LAYERWISE_RESIDUAL_GATE_TO_DTYPE = _layerwise_compile(
     _layerwise_residual_gate_to_dtype
+)
+_LAYERWISE_MODULATION_PROLOGUE_BF16 = _layerwise_compile(
+    _layerwise_modulation_prologue_bf16
+)
+_LAYERWISE_SELF_RESIDUAL_CROSS_NORM_BF16 = _layerwise_compile(
+    _layerwise_self_residual_cross_norm_bf16
+)
+_LAYERWISE_CROSS_RESIDUAL_FF_NORM_BF16 = _layerwise_compile(
+    _layerwise_cross_residual_ff_norm_bf16
+)
+_LAYERWISE_RESIDUAL_GATE_BF16 = _layerwise_compile(
+    _layerwise_residual_gate_bf16
+)
+_LAYERWISE_OUTPUT_MODULATION_NORM_BF16 = _layerwise_compile(
+    _layerwise_output_modulation_norm_bf16
 )
 
 
@@ -485,61 +768,50 @@ class WanTransformerBlock(nn.Module):
         self.ffn = _build_ffn(dim, ffn_dim)
         self.norm3 = FP32LayerNorm(dim, eps, elementwise_affine=False)
         self.scale_shift_table = nn.Parameter(torch.randn(1, 6, dim) / dim**0.5)
-
     def forward(self, hidden_states, encoder_hidden_states, temb, rotary_emb):
         """Run one Wan transformer block over hidden and encoder states."""
-        modulation = self.scale_shift_table[None] + temb.float()
-        shift, scale, gate, ff_shift, ff_scale, ff_gate = rearrange(
-            modulation, "b l n c -> b n l c"
-        ).chunk(6, dim=1)
-        layerwise_enabled = feature_enabled("LINGBOT_LAYERWISE_COMPILE")
-        if layerwise_enabled:
-            normed = _LAYERWISE_NORM_MOD_NO_AFFINE(
-                hidden_states, scale.squeeze(1), shift.squeeze(1), self.norm1.eps
+        return self._forward_impl(
+            hidden_states, encoder_hidden_states, temb, rotary_emb
+        )
+
+    def _forward_impl(self, hidden_states, encoder_hidden_states, temb, rotary_emb):
+        # Accepted recipe: layerwise compile, compiled block boundaries, compiled
+        # modulation prologue and BF16 block math are all part of the frozen path.
+        normed, gate, ff_shift, ff_scale, ff_gate = _LAYERWISE_MODULATION_PROLOGUE_BF16(
+            hidden_states,
+            self.scale_shift_table,
+            temb,
+            self.norm1.eps,
+        )
+        self_update = self.attn1(normed, normed, normed, rotary_emb)
+        if isinstance(self.norm2, FP32LayerNorm):
+            hidden_states, cross_input = _LAYERWISE_SELF_RESIDUAL_CROSS_NORM_BF16(
+                hidden_states,
+                self_update,
+                gate.squeeze(1),
+                self.norm2.weight,
+                self.norm2.bias,
+                self.norm2.eps,
             )
         else:
-            normed = self.norm1(hidden_states.float())
-            normed = (normed * (1 + scale.squeeze(1)) + shift.squeeze(1)).to(
-                hidden_states.dtype
-            )
-        self_update = self.attn1(normed, normed, normed, rotary_emb)
-        if layerwise_enabled:
             hidden_states = _LAYERWISE_RESIDUAL_GATE_TO_DTYPE(
                 hidden_states, self_update, gate.squeeze(1)
             )
-        else:
-            hidden_states = (hidden_states.float() + self_update * gate.squeeze(1)).to(
-                hidden_states.dtype
-            )
-        if layerwise_enabled and isinstance(self.norm2, FP32LayerNorm):
-            cross_input = _LAYERWISE_NORM_AFFINE_TO_DTYPE(
-                hidden_states, self.norm2.weight, self.norm2.bias, self.norm2.eps
-            )
-        else:
             cross_input = self.norm2(hidden_states.float()).to(hidden_states.dtype)
         cross_update = self.attn2(
             cross_input, encoder_hidden_states, encoder_hidden_states
         )
-        hidden_states = hidden_states + cross_update
-        if layerwise_enabled:
-            normed = _LAYERWISE_NORM_MOD_NO_AFFINE(
-                hidden_states, ff_scale.squeeze(1), ff_shift.squeeze(1), self.norm3.eps
-            )
-        else:
-            normed = self.norm3(hidden_states.float())
-            normed = (normed * (1 + ff_scale.squeeze(1)) + ff_shift.squeeze(1)).to(
-                hidden_states.dtype
-            )
+        hidden_states, normed = _LAYERWISE_CROSS_RESIDUAL_FF_NORM_BF16(
+            hidden_states,
+            cross_update,
+            ff_scale.squeeze(1),
+            ff_shift.squeeze(1),
+            self.norm3.eps,
+        )
         ffn_update = self.ffn(normed)
-        if layerwise_enabled:
-            output = _LAYERWISE_RESIDUAL_GATE_TO_DTYPE(
-                hidden_states, ffn_update, ff_gate.squeeze(1)
-            )
-        else:
-            output = (
-                hidden_states.float() + ffn_update.float() * ff_gate.squeeze(1)
-            ).to(hidden_states.dtype)
-        return output
+        return _LAYERWISE_RESIDUAL_GATE_BF16(
+            hidden_states, ffn_update, ff_gate.squeeze(1)
+        )
 
 
 class WanTransformer3DModel(ModelMixin, ConfigMixin):
@@ -600,6 +872,18 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
         self.scale_shift_table = nn.Parameter(
             torch.randn(1, 2, inner_dim) / inner_dim**0.5
         )
+        self._padding_cache = {}
+        self._padded_rope_cache = {}
+
+    def _padding_zeros(self, reference: torch.Tensor, shape):
+        cache_key = (tuple(shape), str(reference.device), str(reference.dtype))
+        cached = self._padding_cache.get(cache_key)
+        if cached is None:
+            cached = reference.new_zeros(*shape)
+            if len(self._padding_cache) >= 16:
+                self._padding_cache.pop(next(iter(self._padding_cache)))
+            self._padding_cache[cache_key] = cached
+        return cached
 
     def _input_embed(self, values: torch.Tensor, input_type: str):
         if input_type == "latent":
@@ -614,18 +898,26 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
         if input_type == "action":
             return self.action_embedder(rearrange(values, "b c f h w -> b (f h w) c"))
         if input_type == "text":
-            return self.condition_embedder.text_embedder(values)
+            embedder = self.condition_embedder.text_embedder
+            return _COMPILED_TEXT_EMBED(
+                values,
+                embedder.linear_1.weight,
+                embedder.linear_1.bias,
+                embedder.linear_2.weight,
+                embedder.linear_2.bias,
+            )
         raise ValueError(f"Unsupported input type: {input_type}")
 
     def _time_embed(self, timesteps, height, width, dtype, action_mode=False):
         patch_h, patch_w = (1, 1) if action_mode else self.patch_size[1:]
-        timesteps = torch.repeat_interleave(
-            timesteps, (height // patch_h) * (width // patch_w), dim=1
-        )
+        spatial_repeats = (height // patch_h) * (width // patch_w)
         embedder = (
             self.condition_embedder_action if action_mode else self.condition_embedder
         )
+        # Embedding before the spatial repeat keeps the embedder batch small.
         temb, modulation = embedder(timesteps, dtype)
+        temb = torch.repeat_interleave(temb, spatial_repeats, dim=1)
+        modulation = torch.repeat_interleave(modulation, spatial_repeats, dim=1)
         return temb, modulation.unflatten(2, (6, -1))
 
     def forward(self, input_dict):
@@ -637,30 +929,104 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
         batch_size, _, frames, height, width = noisy_latent.shape
         dtype = self.patch_embedding_mlp.weight.dtype
 
-        latent_hidden = self._input_embed(noisy_latent.to(dtype), "latent").flatten(
-            0, 1
-        )[None]
-        latent_condition = self._input_embed(
-            latent_dict["latent"].to(dtype), "latent"
-        ).flatten(0, 1)[None]
-        action_hidden = self._input_embed(noisy_action.to(dtype), "action").flatten(
-            0, 1
-        )[None]
-        action_condition = self._input_embed(
-            action_dict["latent"].to(dtype), "action"
-        ).flatten(0, 1)[None]
+        latent_pair = self._input_embed(
+            torch.cat(
+                (noisy_latent.to(dtype), latent_dict["latent"].to(dtype)), dim=0
+            ),
+            "latent",
+        )
+        latent_hidden, latent_condition = latent_pair.chunk(2, dim=0)
+        latent_hidden = latent_hidden.flatten(0, 1)[None]
+        latent_condition = latent_condition.flatten(0, 1)[None]
+        action_pair = self._input_embed(
+            torch.cat(
+                (noisy_action.to(dtype), action_dict["latent"].to(dtype)), dim=0
+            ),
+            "action",
+        )
+        action_hidden, action_condition = action_pair.chunk(2, dim=0)
+        action_hidden = action_hidden.flatten(0, 1)[None]
+        action_condition = action_condition.flatten(0, 1)[None]
         text_hidden = self._input_embed(
             latent_dict["text_emb"].to(dtype), "text"
         ).flatten(0, 1)[None]
-        hidden_states = torch.cat(
-            (latent_hidden, latent_condition, action_hidden, action_condition), dim=1
+        hidden_parts = (
+            latent_hidden,
+            latent_condition,
+            action_hidden,
+            action_condition,
         )
+        total_length = sum(part.shape[1] for part in hidden_parts)
+        padded_length = (-total_length) % 128
+        if padded_length:
+            hidden_states = torch.cat(
+                hidden_parts
+                + (
+                    self._padding_zeros(
+                        latent_hidden,
+                        (
+                            latent_hidden.shape[0],
+                            padded_length,
+                            latent_hidden.shape[2],
+                        ),
+                    ),
+                ),
+                dim=1,
+            )
+        else:
+            hidden_states = torch.cat(hidden_parts, dim=1)
 
         latent_grid = latent_dict["grid_id"].permute(1, 0, 2).flatten(1)[None]
         action_grid = action_dict["grid_id"].permute(1, 0, 2).flatten(1)[None]
-        rotary_emb = self.rope(
-            torch.cat((latent_grid, latent_grid, action_grid, action_grid), dim=2)
+        grid_keys = None
+        latent_key = latent_dict.get("grid_key")
+        action_key = action_dict.get("grid_key")
+        if latent_key is not None and action_key is not None:
+            grid_keys = (latent_key, action_key)
+        rotary_emb = self.rope.forward_pair(
+            latent_grid, action_grid, grid_keys=grid_keys
         )[:, :, None]
+        if padded_length:
+            # The padded tensor carries the frequency *content*, so it may only
+            # be reused under a content-determining key, exactly as in the
+            # frequency cache. With no key the concatenation is redone.
+            rope_key = (
+                None
+                if grid_keys is None
+                else (
+                    grid_keys,
+                    tuple(rotary_emb.shape),
+                    int(padded_length),
+                    str(rotary_emb.device),
+                    str(rotary_emb.dtype),
+                )
+            )
+            padded_rotary = (
+                None if rope_key is None else self._padded_rope_cache.get(rope_key)
+            )
+            if padded_rotary is None:
+                padded_rotary = torch.cat(
+                    (
+                        rotary_emb,
+                        self._padding_zeros(
+                            rotary_emb,
+                            (
+                                rotary_emb.shape[0],
+                                padded_length,
+                                rotary_emb.shape[2],
+                                rotary_emb.shape[3],
+                            ),
+                        ),
+                    ),
+                    dim=1,
+                )
+                if rope_key is not None:
+                    if len(self._padded_rope_cache) >= 64:
+                        self._padded_rope_cache.pop(
+                            next(iter(self._padded_rope_cache))
+                        )
+                    self._padded_rope_cache[rope_key] = padded_rotary
+            rotary_emb = padded_rotary
 
         latent_steps = torch.cat(
             (
@@ -675,24 +1041,50 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
             )
         )[None]
         latent_temb, latent_modulation = self._time_embed(
-            latent_steps, height, width, hidden_states.dtype
+            latent_steps, height, width, latent_hidden.dtype
         )
         action_temb, action_modulation = self._time_embed(
             action_steps,
             noisy_action.shape[-2],
             noisy_action.shape[-1],
-            hidden_states.dtype,
+            latent_hidden.dtype,
             action_mode=True,
         )
-        temb = torch.cat((latent_temb, action_temb), dim=1)
-        modulation = torch.cat((latent_modulation, action_modulation), dim=1)
-
-        total_length = hidden_states.shape[1]
-        padded_length = (-total_length) % 128
-        hidden_states = F.pad(hidden_states, (0, 0, 0, padded_length))
-        rotary_emb = F.pad(rotary_emb, (0, 0, 0, 0, 0, padded_length))
-        temb = F.pad(temb, (0, 0, 0, padded_length))
-        modulation = F.pad(modulation, (0, 0, 0, 0, 0, padded_length))
+        if padded_length:
+            temb = torch.cat(
+                (
+                    latent_temb,
+                    action_temb,
+                    self._padding_zeros(
+                        latent_temb,
+                        (
+                            latent_temb.shape[0],
+                            padded_length,
+                            latent_temb.shape[2],
+                        ),
+                    ),
+                ),
+                dim=1,
+            )
+            modulation = torch.cat(
+                (
+                    latent_modulation,
+                    action_modulation,
+                    self._padding_zeros(
+                        latent_modulation,
+                        (
+                            latent_modulation.shape[0],
+                            padded_length,
+                            latent_modulation.shape[2],
+                            latent_modulation.shape[3],
+                        ),
+                    ),
+                ),
+                dim=1,
+            )
+        else:
+            temb = torch.cat((latent_temb, action_temb), dim=1)
+            modulation = torch.cat((latent_modulation, action_modulation), dim=1)
         if self.config.attn_mode == "flex":
             FlexAttnFunc.init_mask(
                 noisy_latent.shape,
@@ -719,14 +1111,12 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
                     hidden_states, text_hidden, modulation, rotary_emb
                 )
 
-        output_modulation = self.scale_shift_table[None] + temb[:, :, None]
-        shift, scale = rearrange(output_modulation, "b l n c -> b n l c").chunk(
-            2, dim=1
+        hidden_states = _LAYERWISE_OUTPUT_MODULATION_NORM_BF16(
+            hidden_states,
+            self.scale_shift_table,
+            temb,
+            self.norm_out.eps,
         )
-        hidden_states = (
-            self.norm_out(hidden_states.float()) * (1 + scale.squeeze(1))
-            + shift.squeeze(1)
-        ).to(hidden_states.dtype)
         split_sizes = [
             latent_hidden.shape[1],
             latent_condition.shape[1],

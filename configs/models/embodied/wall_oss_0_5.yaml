@@ -1,0 +1,45 @@
+model:
+  model_type: wall_oss_0_5
+  backbone: qwen2_5
+  attn_implementation: flash_attention_2
+  attn_deterministic: true
+  use_ema: false
+  disable_train_autocast: true
+  flow_loss_weight: 1.0
+  ar_loss_weight: 0.01
+  dof_config:
+    master_right_ee_cartesian_pos: 3
+    master_right_ee_rotation: 3
+    master_right_gripper: 1
+    action_padding: 19
+  ar_dof_config:
+    master_right_ee_cartesian_pos: 3
+    master_right_ee_rotation: 3
+    master_right_gripper: 1
+    action_padding: 19
+  agent_pos_config:
+    follow_right_ee_cartesian_pos: 3
+    follow_right_ee_rotation: 3
+    follow_right_gripper: 2
+    action_padding: 18
+  action_horizon: 10
+  action_horizon_flow: 10
+  use_state_string_representation: false
+
+data:
+  episodes: null
+  key_mappings:
+    camera:
+      observation.images.image: face_view
+      observation.images.image2: right_wrist_view
+    state: observation.state
+    action: action
+  norm_stats_path: /workspace/libero_norm_stats.json
+  train_test_split: 0.95
+  max_length: 1024
+  resolution:
+    face_view: 256
+    right_wrist_view: 256
+  padding_side: left
+  use_fast_tokenizer: false
+  video_backend: pyav

@@ -32,6 +32,27 @@ def unwrap_model(model: nn.Module) -> nn.Module:
     return model
 
 
+def is_dmuon_model(model: nn.Module) -> bool:
+    """Return True if the model owns a DMuon dedicated-communication context.
+
+    ``convert_to_fsdp(use_dmuon=True)`` copies ``_dedicated_comm_ctx`` onto the
+    model after ``dmuon.dedicate_params`` claims the Muon-route parameters, so
+    its presence is what distinguishes a DMuon-wrapped model from a plain FSDP2
+    one. Checkpoint code keys off this to route state dict access through
+    ``dmuon.*`` instead of ``torch.distributed.checkpoint.state_dict``.
+    """
+    return getattr(model, "_dedicated_comm_ctx", None) is not None
+
+
+def unwrap_dmuon_optimizer(optimizer):
+    """Return the inner optimizer DMuon wraps, or the optimizer itself.
+
+    ``dmuon.get_optimizer_state_dict`` / ``set_optimizer_state_dict`` expect the
+    wrapped optimizer, not the DMuon facade.
+    """
+    return getattr(optimizer, "_optimizer", optimizer)
+
+
 def is_module_path_matching_pattern(pattern: str, module_path: str) -> bool:
     """Return True if ``module_path`` matches ``pattern`` segment-by-segment.
 

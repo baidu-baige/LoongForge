@@ -70,12 +70,16 @@ class FastWAMModelConfig:
     )
     redirect_common_files: bool = True
     dtype: str = "bfloat16"
-    # q/k RMSNorm implementation for both DiT experts: "wan" (upstream module built
-    # on F.rms_norm) or "te" (TransformerEngine).
-    # torch < 2.9.0 has no fused rms_norm CUDA kernel, so "te" is far faster there;
-    # from torch 2.9.0 on the native kernel wins at the DiT's hidden size (3072),
-    # which TE 2.9 has no tuned kernel for. See `wan.dit.make_rmsnorm`.
+
     rmsnorm_impl: str = "wan"  # {"wan", "te"}
+    # Replace all-True cross-attention masks with None so SDPA can use its flash kernel.
+    drop_all_true_cross_attn_mask: bool = False
+    # Drop the trainer-level bf16 autocast, redundant since params/activations are bf16.
+    disable_train_autocast: bool = False
+    # torch.compile scopes, off by default; shapes are static so keep compile_dynamic=False.
+    compile_vae_encode: bool = False
+    mot_compile_blocks: str = "none"  # {"none", "pre", "post", "both"}
+    compile_dynamic: bool = False
 
     # ── Nested architecture configs (fixed for Wan2.2-5B, not in YAML) ────────
     video_dit_config: dict[str, Any] = field(default_factory=lambda: {
@@ -118,6 +122,14 @@ class FastWAMModelConfig:
             raise ValueError(
                 f"FastWAMModelConfig.variant must be one of {sorted(valid_variants)}, "
                 f"got {self.variant!r}"
+            )
+
+        # ── Validate mot_compile_blocks ───────────────────────────────────────
+        valid_compile_scopes = {"none", "pre", "post", "both"}
+        if self.mot_compile_blocks not in valid_compile_scopes:
+            raise ValueError(
+                "FastWAMModelConfig.mot_compile_blocks must be one of "
+                f"{sorted(valid_compile_scopes)}, got {self.mot_compile_blocks!r}"
             )
 
         # ── Validate rmsnorm_impl ─────────────────────────────────────────────

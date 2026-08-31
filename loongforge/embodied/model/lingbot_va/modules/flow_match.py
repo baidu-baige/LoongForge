@@ -1,7 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from LingBot-VA under the Apache-2.0 License.
+# Modified from LingBot-VA (``wan_va/utils/scheduler.py`` and ``wan_va/utils/utils.py``)
+# under the Apache-2.0 License.
 # Copyright 2024-2025 The Robbyant Team Authors. All rights reserved.
 
 """Native scheduler and sampling helpers for LingBot-VA."""
@@ -31,10 +32,12 @@ class LingBotVAFlowMatchScheduler:
         self.sigma_max = sigma_max
         self.sigma_min = sigma_min
         self.extra_one_step = extra_one_step
+        self._device_cache = {}
         self.set_timesteps(100)
 
     def set_timesteps(self, num_inference_steps: int, training: bool = False) -> None:
         """Build sigma and timestep tensors for inference or training."""
+        self._device_cache.clear()
         count = num_inference_steps + 1 if self.extra_one_step else num_inference_steps
         self.sigmas = torch.linspace(self.sigma_max, self.sigma_min, count)
         if self.extra_one_step:
@@ -50,6 +53,14 @@ class LingBotVAFlowMatchScheduler:
             self.linear_timesteps_weights = weights * (
                 num_inference_steps / weights.sum()
             )
+
+    def _cached_tensor(self, name: str, source: torch.Tensor, device, dtype=None):
+        key = (name, str(device), dtype)
+        cached = self._device_cache.get(key)
+        if cached is None:
+            cached = source.to(device=device, dtype=dtype)
+            self._device_cache[key] = cached
+        return cached
 
     def add_noise(
         self,
@@ -88,6 +99,36 @@ class LingBotVAFlowMatchScheduler:
             sigma_next = torch.zeros_like(sigma)
         return sample + model_output * (sigma_next - sigma)
 
+    def sigma_from_ids(
+        self,
+        sample: torch.Tensor,
+        timestep_ids: torch.Tensor,
+        t_dim: int = 2,
+    ):
+        """Return broadcast-ready sigmas for already sampled schedule ids."""
+        shape = [1] * sample.ndim
+        shape[t_dim] = timestep_ids.numel()
+        sigmas = self._cached_tensor("sigmas", self.sigmas, sample.device, sample.dtype)
+        return sigmas[timestep_ids].view(shape)
+
+    def add_noise_from_ids(
+        self,
+        sample: torch.Tensor,
+        noise: torch.Tensor,
+        timestep_ids: torch.Tensor,
+        t_dim: int = 2,
+    ):
+        """Blend a sample when the caller already has the sampled schedule ids."""
+        sigma = self.sigma_from_ids(sample, timestep_ids, t_dim=t_dim)
+        return (1 - sigma) * sample + sigma * noise
+
+    def timesteps_from_ids(self, timestep_ids: torch.Tensor):
+        """Materialize selected schedule values from a device-local cache."""
+        timesteps = self._cached_tensor(
+            "timesteps", self.timesteps, timestep_ids.device, self.timesteps.dtype
+        )
+        return timesteps[timestep_ids]
+
     @staticmethod
     def training_target(
         sample: torch.Tensor, noise: torch.Tensor, timestep: torch.Tensor
@@ -103,15 +144,26 @@ class LingBotVAFlowMatchScheduler:
         )
         return self.linear_timesteps_weights.to(timestep.device)[ids]
 
+    def training_weight_from_ids(self, timestep_ids: torch.Tensor):
+        """Look up weights without reconstructing ids from already-indexed timesteps."""
+        weights = self._cached_tensor(
+            "training_weights",
+            self.linear_timesteps_weights,
+            timestep_ids.device,
+            self.linear_timesteps_weights.dtype,
+        )
+        return weights[timestep_ids]
+
 
 def sample_timestep_id(
     count: int,
     num_train_timesteps: int,
     min_timestep_boundary: float = 0.0,
     max_timestep_boundary: float = 1.0,
+    generator: "torch.Generator | None" = None,
 ) -> torch.Tensor:
     """Sample random timestep ids within the configured fractional bounds."""
-    values = torch.rand(count)
+    values = torch.rand(count, generator=generator)
     values = (
         values * (max_timestep_boundary - min_timestep_boundary) + min_timestep_boundary
     )
