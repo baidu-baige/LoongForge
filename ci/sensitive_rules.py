@@ -256,6 +256,12 @@ RULES = [
 # under `path` is allowed).
 ALLOWLIST = [
     {
+        "rule": "corp-email",
+        "path": "README*.md",
+        "match": r"loongforge@baidu\.com",
+        "reason": "Public project contact address; a role account, not an individual.",
+    },
+    {
         "rule": "legacy-internal-name",
         "path": "README*.md",
         "match": r"AIAK-Training-LLM",
