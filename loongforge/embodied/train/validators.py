@@ -97,6 +97,11 @@ def validate(training_args, model_cfg, data_cfg):
         raise ValueError(
             f"--manual-gc-interval must be >= 0, got {training_args.manual_gc_interval}"
         )
+    if training_args.dataloader_prefetch_factor <= 0:
+        raise ValueError(
+            "--dataloader-prefetch-factor must be positive, got "
+            f"{training_args.dataloader_prefetch_factor}"
+        )
     if training_args.cuda_graph_warmup_steps <= 0:
         raise ValueError(
             f"--cuda-graph-warmup-steps must be positive, got {training_args.cuda_graph_warmup_steps}"
