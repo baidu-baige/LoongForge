@@ -1077,6 +1077,14 @@ class _DistributedArgs:
                     "reshard_after_forward, e.g. GemmaMLP=false,Linear=true.",
         },
     )
+    fsdp_ignored_param_names: List[str] = field(
+        default_factory=list,
+        metadata={
+            "help": "Parameter-name substrings excluded from FSDP sharding; "
+                    "matched params stay replicated on every rank. Frozen params "
+                    "only. Example: q_proj lm_head",
+        },
+    )
     fsdp_wrap_modules: Optional[list[str]] = field(
         default=None,
         metadata={
