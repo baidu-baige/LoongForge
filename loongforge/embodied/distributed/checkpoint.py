@@ -29,6 +29,10 @@ from enum import Enum
 from typing import Dict, Optional, Tuple
 
 import numpy as np
+try:
+    import dmuon
+except ImportError:
+    dmuon = None
 import torch
 import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
@@ -45,7 +49,7 @@ from safetensors.torch import load_file, save_file
 from torch.distributed.tensor import DTensor
 
 from .context import DistributedContext
-from .utils import unwrap_model
+from .utils import is_dmuon_model, unwrap_dmuon_optimizer, unwrap_model
 
 logger = logging.getLogger(__name__)
 
@@ -520,7 +524,16 @@ def _resume_legacy(model, optimizer, scheduler, checkpoint_path, ctx, restore_rn
 
     state = torch.load(state_file, map_location="cpu", weights_only=False)
 
-    if isinstance(model, FSDPModule):
+    if is_dmuon_model(model):
+        resolved = _resolve_file(checkpoint_path)
+        model_sd = _load_sd(resolved)
+        dmuon.set_model_state_dict(model, model_sd)
+        dmuon.set_optimizer_state_dict(
+            model,
+            unwrap_dmuon_optimizer(optimizer),
+            state["optimizer"],
+        )
+    elif isinstance(model, FSDPModule):
         options = StateDictOptions(full_state_dict=True, cpu_offload=True)
         optim_state, missing_state_count = _fill_missing_optimizer_state(
             state["optimizer"]
@@ -842,6 +855,12 @@ def _get_full_state_dict(
     cpu_offload: bool = False,
 ) -> dict:
     """Get full state dict handling FSDP1/FSDP2/DDP."""
+    if is_dmuon_model(model):
+        return dmuon.get_model_state_dict(
+            model,
+            cpu_offload=True,
+            rank0_only=True,
+        )
     if isinstance(model, FSDPModule):
         options = StateDictOptions(
             full_state_dict=True,
@@ -1011,7 +1030,14 @@ def _save_training_state(
     dataloader_state=None,
 ):
     """Legacy path: rank0-aggregated optimizer + scheduler + per-rank RNG."""
-    if isinstance(model, FSDPModule):
+    if is_dmuon_model(model):
+        optim_sd = dmuon.get_optimizer_state_dict(
+            model,
+            unwrap_dmuon_optimizer(optimizer),
+            cpu_offload=True,
+            rank0_only=True,
+        )
+    elif isinstance(model, FSDPModule):
         options = StateDictOptions(full_state_dict=True, cpu_offload=True)
         _, optim_sd = get_state_dict(model, optimizers=[optimizer], options=options)
     elif _is_zero_optimizer(optimizer):

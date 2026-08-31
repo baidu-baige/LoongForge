@@ -63,6 +63,14 @@ def _dreamzero_strategy_builder() -> Callable:
     return build_dreamzero_dataset
 
 
+def _wall_oss_0_5_strategy_builder() -> Callable:
+    from loongforge.embodied.data.datasets.wall_oss_0_5 import (
+        build_wall_oss_0_5_lerobot_dataset,
+    )
+
+    return build_wall_oss_0_5_lerobot_dataset
+
+
 # name -> lazy loader (imports deferred so lerobot / motus deps only load when used)
 _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "default": _default_strategy_builder,
@@ -71,6 +79,7 @@ _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "groot_n1_7": _groot_n1_7_strategy_builder,
     "cosmos3_droid": _cosmos3_droid_strategy_builder,
     "dreamzero": _dreamzero_strategy_builder,
+    "wall_oss_0_5": _wall_oss_0_5_strategy_builder,
 }
 
 

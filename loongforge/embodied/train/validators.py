@@ -137,6 +137,19 @@ def validate(training_args, model_cfg, data_cfg):
             "--zero-master-param-dtype is only effective with --distributed-strategy ddp."
         )
 
+    # ── DMuon optimizer options ──
+    if training_args.optimizer.lower() == "dmuon":
+        if training_args.distributed_strategy != "fsdp":
+            raise ValueError("--optimizer=dmuon requires --distributed-strategy=fsdp.")
+        if training_args.save_format == "dcp":
+            raise ValueError("--optimizer=dmuon currently supports only safetensors/pt checkpoints.")
+        if training_args.zero_optimizer:
+            raise ValueError("--optimizer=dmuon is incompatible with --zero-optimizer.")
+        if training_args.dmuon_ns_coefficients == "wallx_muon" and training_args.dmuon_ns_backend != "direct":
+            raise ValueError(
+                "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
+            )
+
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
         raise ValueError(
