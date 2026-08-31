@@ -268,6 +268,12 @@ ALLOWLIST = [
         "reason": "Same public attribution, mirrored into the docs site.",
     },
     {
+        "rule": "corp-email",
+        "path": "*",
+        "match": r"(?i)\bloongforge@baidu\.com\b",
+        "reason": "Project role address published for external contact; names no individual.",
+    },
+    {
         "rule": "internal-codename",
         "path": "*",
         "match": r"(?i)Qianfan-VL",
