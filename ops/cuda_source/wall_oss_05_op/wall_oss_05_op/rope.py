@@ -10,7 +10,7 @@ from typing import List
 
 import torch
 
-from wall_oss_05_ops.base import OpsProxy
+from wall_oss_05_op.base import OpsProxy
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,8 @@ class RoPEOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return a CUDA RoPE wrapper when the extension is available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import Rope
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import Rope
 
             if not is_available():
                 return None
@@ -110,8 +110,8 @@ class MRoPEOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return a CUDA M-RoPE wrapper when the extension is available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import MRope
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import MRope
 
             if not is_available():
                 return None
@@ -173,8 +173,8 @@ class RotPosEmbOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return a CUDA vision rotary-position wrapper if available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import RotPos
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import RotPos
 
             if not is_available():
                 return None

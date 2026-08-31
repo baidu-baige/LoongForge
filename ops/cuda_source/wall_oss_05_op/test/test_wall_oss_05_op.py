@@ -1,4 +1,4 @@
-"""Correctness and performance tests for the wall_oss_05_ops CUDA extension.
+"""Correctness and performance tests for the wall_oss_05_op CUDA extension.
 
 Install first:
 
@@ -6,7 +6,7 @@ Install first:
 
 Run with:
 
-    pytest -q test/test_wall_oss_05_ops.py
+    pytest -q test/test_wall_oss_05_op.py
 """
 
 import time
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def ext():
     """Load the CUDA extension via the package loader."""
-    from wall_oss_05_ops._cuda_ext import load
+    from wall_oss_05_op._cuda_ext import load
     try:
         return load()
     except ImportError:
@@ -35,7 +35,7 @@ def ext():
 @pytest.fixture(scope="module")
 def ext_exact():
     """Load the bitwise-exact CUDA extension."""
-    from wall_oss_05_ops._cuda_ext import load_exact, is_exact_available
+    from wall_oss_05_op._cuda_ext import load_exact, is_exact_available
     if not is_exact_available():
         pytest.skip("exact extension not available")
     return load_exact()
@@ -183,7 +183,7 @@ def test_permute_unpermute_topk(ext):
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_rope_package_api_matches_cuda(ext, interleave, dtype):
     """Package-level rope() must match raw CUDA kernel for multiple dtypes."""
-    from wall_oss_05_ops import rope as rope_op
+    from wall_oss_05_op import rope as rope_op
     torch.manual_seed(3)
     shape = (2, 8, 4, 32)
     q = torch.randn(shape, device="cuda", dtype=dtype)
@@ -203,7 +203,7 @@ def test_rope_package_api_matches_cuda(ext, interleave, dtype):
 @pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float32])
 def test_rmsnorm_exact_matches_pytorch(ext_exact, dtype):
     """Exact RMSNorm CUDA must match eager PyTorch forward."""
-    from wall_oss_05_ops._cuda_wrappers import rmsnorm_exact_kernel
+    from wall_oss_05_op._cuda_wrappers import rmsnorm_exact_kernel
     torch.manual_seed(7)
     hs = torch.randn(64, 256, device="cuda", dtype=dtype)
     w = torch.randn(256, device="cuda", dtype=dtype)
@@ -220,7 +220,7 @@ def test_rmsnorm_exact_matches_pytorch(ext_exact, dtype):
 @pytest.mark.parametrize("dtype", [torch.bfloat16])
 def test_swiglu_exact_matches_pytorch(ext_exact, dtype):
     """Exact SwiGLU CUDA must match eager PyTorch forward."""
-    from wall_oss_05_ops._cuda_wrappers import swiglu_exact_kernel
+    from wall_oss_05_op._cuda_wrappers import swiglu_exact_kernel
     import torch.nn.functional as F
     torch.manual_seed(9)
     gate = torch.randn(32, 128, device="cuda", dtype=dtype)
@@ -233,7 +233,7 @@ def test_swiglu_exact_matches_pytorch(ext_exact, dtype):
 @pytest.mark.parametrize("interleave", [False, True])
 def test_rope_pytorch_fallback_matches_cuda(ext, interleave):
     """PyTorch fallback (no CUDA) must match CUDA kernel numerically."""
-    from wall_oss_05_ops.rope import RoPEOp
+    from wall_oss_05_op.rope import RoPEOp
     torch.manual_seed(5)
     shape = (2, 6, 4, 32)
     q = torch.randn(shape, device="cuda", dtype=torch.float32)
@@ -257,7 +257,7 @@ def test_rope_pytorch_fallback_matches_cuda(ext, interleave):
 
 def test_permute_package_api_matches_cuda(ext):
     """Package-level permute/unpermute must match raw CUDA kernel."""
-    from wall_oss_05_ops import permute as permute_op, unpermute as unpermute_op
+    from wall_oss_05_op import permute as permute_op, unpermute as unpermute_op
     torch.manual_seed(11)
     tokens = torch.randn(8, 64, device="cuda", dtype=torch.float32)
     indices = torch.randint(0, 4, (8,), device="cuda", dtype=torch.int32)
@@ -315,7 +315,7 @@ def test_bench_rope_cuda_vs_pytorch(ext):
 
 def test_bench_rmsnorm_exact_vs_pytorch(ext_exact):
     """Benchmark: exact RMSNorm CUDA vs PyTorch eager."""
-    from wall_oss_05_ops._cuda_wrappers import rmsnorm_exact_kernel
+    from wall_oss_05_op._cuda_wrappers import rmsnorm_exact_kernel
     torch.manual_seed(42)
     rows, hidden = 1024, 4096
     hs = torch.randn(rows, hidden, device="cuda", dtype=torch.bfloat16)
@@ -338,7 +338,7 @@ def test_bench_rmsnorm_exact_vs_pytorch(ext_exact):
 
 def test_bench_permute_cuda_vs_pytorch(ext):
     """Benchmark: MoE permute CUDA vs PyTorch fallback."""
-    from wall_oss_05_ops.moe import PermuteOp
+    from wall_oss_05_op.moe import PermuteOp
     torch.manual_seed(42)
     N, D, topk = 1024, 256, 2
     tokens = torch.randn(N, D, device="cuda", dtype=torch.bfloat16)
@@ -372,7 +372,7 @@ def test_bench_permute_cuda_vs_pytorch(ext):
 
 def test_public_api_rope():
     """rope() via top-level import with correct float32 cos/sin."""
-    from wall_oss_05_ops import rope
+    from wall_oss_05_op import rope
     B, H, S, D = 2, 8, 16, 32
     q = torch.randn(B, H, S, D, device="cuda", dtype=torch.bfloat16)
     k = torch.randn(B, 4, S, D, device="cuda", dtype=torch.bfloat16)
@@ -386,7 +386,7 @@ def test_public_api_rope():
 
 def test_public_api_m_rope():
     """m_rope() via top-level import."""
-    from wall_oss_05_ops import m_rope
+    from wall_oss_05_op import m_rope
     B, H, S, D = 2, 8, 16, 32
     q = torch.randn(B, H, S, D, device="cuda", dtype=torch.bfloat16)
     k = torch.randn(B, 4, S, D, device="cuda", dtype=torch.bfloat16)
@@ -399,7 +399,7 @@ def test_public_api_m_rope():
 
 def test_public_api_rmsnorm():
     """rmsnorm() via top-level import with matching float32 weight."""
-    from wall_oss_05_ops import rmsnorm
+    from wall_oss_05_op import rmsnorm
     hs = torch.randn(32, 64, device="cuda", dtype=torch.float32)
     w = torch.randn(64, device="cuda", dtype=torch.float32)
     out = rmsnorm(hs, w, 1e-6)
@@ -408,7 +408,7 @@ def test_public_api_rmsnorm():
 
 def test_public_api_swiglu():
     """swiglu() via top-level import."""
-    from wall_oss_05_ops import swiglu
+    from wall_oss_05_op import swiglu
     gate = torch.randn(8, 128, device="cuda", dtype=torch.bfloat16)
     up = torch.randn_like(gate)
     out = swiglu(gate, up)
@@ -418,7 +418,7 @@ def test_public_api_swiglu():
 
 def test_public_api_permute_unpermute():
     """permute() and unpermute() via top-level import, single top-k."""
-    from wall_oss_05_ops import permute, unpermute
+    from wall_oss_05_op import permute, unpermute
     N, D = 16, 32
     tokens = torch.randn(N, D, device="cuda", dtype=torch.bfloat16)
     indices = torch.randint(0, 4, (N,), device="cuda", dtype=torch.int32)
@@ -432,7 +432,7 @@ def test_public_api_permute_unpermute():
 
 def test_public_api_get_rope_index(ext):
     """get_rope_index() via top-level import."""
-    from wall_oss_05_ops import get_rope_index
+    from wall_oss_05_op import get_rope_index
     # Simple spatial grid: batch=1, 1 frame, 4x4 spatial
     grid = torch.tensor([[1, 4, 4]], device="cuda", dtype=torch.int32)
     # get_rope_index requires metadata from get_totals; use ext directly for setup
@@ -449,14 +449,14 @@ def test_public_api_get_rope_index(ext):
 
 def test_public_api_get_window_index(ext):
     """get_window_index() via top-level import (same kernel path as get_rope_index)."""
-    from wall_oss_05_ops import get_window_index
+    from wall_oss_05_op import get_window_index
     # Verify the public API is callable; correctness tested via ext in other tests.
     assert callable(get_window_index)
 
 
 def test_public_api_backend_inventory():
     """backend_inventory() reports a resolved backend for every public operator."""
-    from wall_oss_05_ops import backend_inventory
+    from wall_oss_05_op import backend_inventory
 
     inventory = backend_inventory()
     assert isinstance(inventory, dict)

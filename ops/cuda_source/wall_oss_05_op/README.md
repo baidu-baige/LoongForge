@@ -1,4 +1,4 @@
-# wall_oss_05_ops
+# wall_oss_05_op
 
 Standalone CUDA operator library for Wall-OSS-0.5 (Qwen2.5-VL / GR00T-N1.7),
 extracted from the LoongForge training framework.
@@ -19,7 +19,7 @@ Each operator exposes a **two-level fallback**:
 ## Build
 
 ```bash
-cd cuda_source/wall_oss_05_ops
+cd cuda_source/wall_oss_05_op
 
 # Editable install
 pip install --no-build-isolation -e .
@@ -32,26 +32,26 @@ pip install --no-build-isolation -e .
 ## Usage
 
 ```python
-from wall_oss_05_ops import rope, m_rope, rot_pos_emb
-from wall_oss_05_ops import rmsnorm, swiglu
-from wall_oss_05_ops import permute, unpermute
-from wall_oss_05_ops import get_rope_index, get_window_index
+from wall_oss_05_op import rope, m_rope, rot_pos_emb
+from wall_oss_05_op import rmsnorm, swiglu
+from wall_oss_05_op import permute, unpermute
+from wall_oss_05_op import get_rope_index, get_window_index
 
 # Check which backend is active (cuda_inline or pytorch)
-from wall_oss_05_ops import backend_inventory
+from wall_oss_05_op import backend_inventory
 print(backend_inventory())
 ```
 
 ## Test
 
 ```bash
-pytest -q test/test_wall_oss_05_ops.py
+pytest -q test/test_wall_oss_05_op.py
 ```
 
 ## Layout
 
 ```
-wall_oss_05_ops/
+wall_oss_05_op/
 ├── setup.py                       # build entry point
 ├── csrc/                          # CUDA kernel sources
 │   ├── binding.cu                 # standard extension pybind
@@ -64,7 +64,7 @@ wall_oss_05_ops/
 │   ├── rot_pos/                   # vision rotary position kernels
 │   ├── get_rope_index/            # 3D RoPE index kernels
 │   └── window_index/              # window attention index kernels
-├── wall_oss_05_ops/               # Python package (importable after install)
+├── wall_oss_05_op/               # Python package (importable after install)
 │   ├── __init__.py                # public API re-exports
 │   ├── _cuda_ext.py               # extension loader (standalone + optional loongforge fallback)
 │   ├── _cuda_wrappers.py          # autograd wrappers around raw kernels
@@ -75,7 +75,7 @@ wall_oss_05_ops/
 │   ├── moe.py                     # MoE permute/unpermute operators
 │   └── index.py                   # GetRopeIndex / GetWindowIndex operators
 └── test/
-    └── test_wall_oss_05_ops.py
+    └── test_wall_oss_05_op.py
 ```
 
 ## Notes

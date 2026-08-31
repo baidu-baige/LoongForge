@@ -13,7 +13,7 @@ import logging
 
 import torch
 
-from wall_oss_05_ops.base import OpsProxy
+from wall_oss_05_op.base import OpsProxy
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class PermuteOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return the CUDA-backed MoE permutation function if available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import permute_kernel
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import permute_kernel
 
             if not is_available():
                 return None
@@ -63,8 +63,8 @@ class UnpermuteOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return the CUDA-backed MoE unpermutation function if available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import unpermute_kernel
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import unpermute_kernel
 
             if not is_available():
                 return None

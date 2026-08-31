@@ -6,7 +6,7 @@
 """Install-time compiled CUDA kernels for wall_oss_0_5 ops.
 
 The extension modules are installed via ``pip install --no-build-isolation -e .``
-and accessed as ``wall_oss_05_ops._cuda_ext_bin``.  Falls back to the loongforge
+and accessed as ``wall_oss_05_op._cuda_ext_bin``.  Falls back to the loongforge
 package path when the standalone package is not installed.
 """
 
@@ -19,9 +19,9 @@ def load():
     if _module is not None:
         return _module
 
-    # Primary: installed as part of the wall_oss_05_ops package.
+    # Primary: installed as part of the wall_oss_05_op package.
     try:
-        from wall_oss_05_ops import _cuda_ext_bin  # noqa: PLC0415
+        from wall_oss_05_op import _cuda_ext_bin  # noqa: PLC0415
         _module = _cuda_ext_bin
         return _module
     except ImportError:
@@ -36,7 +36,7 @@ def load():
         raise ImportError(
             "wall_oss_0_5 CUDA operators were not found. Install the package:\n"
             "  pip install --no-build-isolation -e .\n"
-            "from the cuda_source/wall_oss_05_ops directory."
+            "from the cuda_source/wall_oss_05_op directory."
         ) from exc
 
 
@@ -63,9 +63,9 @@ def load_exact():
     if _exact_module is not None:
         return _exact_module
 
-    # Primary: installed as part of the wall_oss_05_ops package.
+    # Primary: installed as part of the wall_oss_05_op package.
     try:
-        from wall_oss_05_ops import _cuda_ext_exact_bin  # noqa: PLC0415
+        from wall_oss_05_op import _cuda_ext_exact_bin  # noqa: PLC0415
         _exact_module = _cuda_ext_exact_bin
         return _exact_module
     except ImportError:
@@ -80,7 +80,7 @@ def load_exact():
         raise ImportError(
             "wall_oss_0_5 bitwise-exact CUDA operators were not found. Install the package:\n"
             "  pip install --no-build-isolation -e .\n"
-            "from the cuda_source/wall_oss_05_ops directory."
+            "from the cuda_source/wall_oss_05_op directory."
         ) from exc
 
 

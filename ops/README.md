@@ -20,11 +20,11 @@ Installable packages that expose their operators as a normal Python import.
 Each one has its own README with the full operator list, tensor layout
 requirements, and build options:
 
-- [`groot_n1_7_op`](groot_n1_7_op/README.md) — GR00T-N1.7 fused operators:
+- [`groot_n1_7_op`](cuda_source/groot_n1_7_op/README.md) — GR00T-N1.7 fused operators:
   Qwen3-VL vision/text RoPE, RMSNorm and SiLU-multiply; precision-compatible
   fused AdamW (eager / capturable / capturable with fused gradient scale);
   `c10d::Reducer` bucket initialization and inspection.
-- [`wall_oss_05_ops`](wall_oss_05_ops/README.md) — WALL-OSS-0.5 operators:
+- [`wall_oss_05_op`](cuda_source/wall_oss_05_op/README.md) — WALL-OSS-0.5 operators:
   RoPE, M-RoPE, RotPosEmb, RMSNorm, SwiGLU, MoE permute/unpermute,
   GetRopeIndex and GetWindowIndex. Every operator falls back to pure PyTorch
   when the CUDA extension is unavailable.
@@ -87,14 +87,14 @@ Both packages are editable installs with no external dependency to clone:
 
 ```bash
 cd cuda_source/groot_n1_7_op   && pip install --no-build-isolation -e . && cd ../..
-cd cuda_source/wall_oss_05_ops && pip install --no-build-isolation -e . && cd ../..
+cd cuda_source/wall_oss_05_op  && pip install --no-build-isolation -e . && cd ../..
 ```
 
 After installation the operators are importable from any working directory:
 
 ```python
 from groot_n1_7_op import qwen3_vl_fused_text_rope_forward, eager_step
-from wall_oss_05_ops import rope, rmsnorm, swiglu
+from wall_oss_05_op import rope, rmsnorm, swiglu
 ```
 
 ## Test & benchmark
@@ -119,5 +119,5 @@ skipped when no device is available.
 
 ```bash
 pytest -q cuda_source/groot_n1_7_op/tests/     # 87 tests
-pytest -q cuda_source/wall_oss_05_ops/test/    # 30 tests
+pytest -q cuda_source/wall_oss_05_op/test/     # 30 tests
 ```

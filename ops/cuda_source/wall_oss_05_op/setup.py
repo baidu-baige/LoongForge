@@ -22,7 +22,7 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 ROOT = Path(__file__).resolve().parent
 CSRC_DIR = Path("csrc")
-PKG_DIR = ROOT / "wall_oss_05_ops"
+PKG_DIR = ROOT / "wall_oss_05_op"
 
 # Restrict to sm_80 and sm_120 only.
 if not os.getenv("TORCH_CUDA_ARCH_LIST"):
@@ -84,7 +84,7 @@ def build_ext_modules():
 
     modules = [
         CUDAExtension(
-            name="wall_oss_05_ops._cuda_ext_bin",
+            name="wall_oss_05_op._cuda_ext_bin",
             sources=[str(path) for path in cuda_sources],
             include_dirs=[str(CSRC_DIR), str(CSRC_DIR / "common")],
             extra_compile_args={
@@ -120,7 +120,7 @@ def build_ext_modules():
         ] + _NVCC_THREADS
         modules.append(
             CUDAExtension(
-                name="wall_oss_05_ops._cuda_ext_exact_bin",
+                name="wall_oss_05_op._cuda_ext_exact_bin",
                 sources=[str(path) for path in exact_sources],
                 include_dirs=[str(CSRC_DIR), str(CSRC_DIR / "common")],
                 extra_compile_args={
@@ -134,15 +134,15 @@ def build_ext_modules():
 
 
 setup(
-    name="wall_oss_05_ops",
+    name="wall_oss_05_op",
     version="1.0.0",
     description=(
         "CUDA operator kernels for wall_oss_0_5 "
         "(rope, m_rope, permute, rot_pos, window_index, get_rope_index, "
         "swiglu_exact, rmsnorm_exact)."
     ),
-    package_dir={"wall_oss_05_ops": "wall_oss_05_ops"},
-    packages=["wall_oss_05_ops"],
+    package_dir={"wall_oss_05_op": "wall_oss_05_op"},
+    packages=["wall_oss_05_op"],
     ext_modules=build_ext_modules(),
     cmdclass={"build_ext": BuildExtension.with_options(use_ninja=True)},
 )

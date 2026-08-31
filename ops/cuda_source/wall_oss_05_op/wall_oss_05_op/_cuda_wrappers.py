@@ -11,7 +11,7 @@ from torch.autograd import Function
 
 def _m():
     """Get the compiled CUDA extension module."""
-    from wall_oss_05_ops._cuda_ext import load
+    from wall_oss_05_op._cuda_ext import load
     return load()
 
 
@@ -796,7 +796,7 @@ RMSNORM_EXACT_SYMBOLS = (
 
 def _m_exact():
     """Get the compiled bitwise-exact CUDA extension module."""
-    from wall_oss_05_ops._cuda_ext import load_exact
+    from wall_oss_05_op._cuda_ext import load_exact
     return load_exact()
 
 

@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn.functional as F
 
-from wall_oss_05_ops.base import OpsProxy
+from wall_oss_05_op.base import OpsProxy
 
 logger = logging.getLogger(__name__)
 
@@ -158,8 +158,8 @@ class GetRopeIndexOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return the CUDA 3D RoPE-index wrapper when available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import GetRopeIndex
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import GetRopeIndex
 
             if not is_available():
                 return None
@@ -263,8 +263,8 @@ class GetWindowIndexOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Return the CUDA window-index function when available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_available
-            from wall_oss_05_ops._cuda_wrappers import get_window_index_cuda
+            from wall_oss_05_op._cuda_ext import is_available
+            from wall_oss_05_op._cuda_wrappers import get_window_index_cuda
 
             if not is_available():
                 return None

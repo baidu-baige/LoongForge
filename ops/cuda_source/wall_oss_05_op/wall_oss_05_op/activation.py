@@ -11,7 +11,7 @@ import logging
 import torch
 import torch.nn.functional as F
 
-from wall_oss_05_ops.base import OpsProxy
+from wall_oss_05_op.base import OpsProxy
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,8 @@ class SwiGLUOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Build and return the CUDA dispatch function when available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_exact_available
-            from wall_oss_05_ops._cuda_wrappers import (
+            from wall_oss_05_op._cuda_ext import is_exact_available
+            from wall_oss_05_op._cuda_wrappers import (
                 SWIGLU_EXACT_SYMBOLS,
                 has_exact_symbols,
                 swiglu_exact_kernel,

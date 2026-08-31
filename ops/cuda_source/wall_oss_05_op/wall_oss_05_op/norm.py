@@ -9,7 +9,7 @@ import logging
 
 import torch
 
-from wall_oss_05_ops.base import OpsProxy
+from wall_oss_05_op.base import OpsProxy
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,8 @@ class RMSNormOp(OpsProxy):
     def _get_cuda_kernel(self):
         """Build and return the RMSNorm CUDA dispatch function when available."""
         try:
-            from wall_oss_05_ops._cuda_ext import is_exact_available
-            from wall_oss_05_ops._cuda_wrappers import (
+            from wall_oss_05_op._cuda_ext import is_exact_available
+            from wall_oss_05_op._cuda_wrappers import (
                 RMSNORM_EXACT_SYMBOLS,
                 has_exact_symbols,
                 rmsnorm_exact_kernel,
