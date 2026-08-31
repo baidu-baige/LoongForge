@@ -1,8 +1,12 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from LingBot-VA under the Apache-2.0 License.
+# Modified from LingBot-VA (``wan_va/modules/model.py``) under the Apache-2.0 License.
 # Copyright 2024-2025 The Robbyant Team Authors. All rights reserved.
+#
+# The upstream module is itself built on the Diffusers Wan transformer, whose class layout
+# and embedding blocks are reused here (Apache-2.0).
+# Copyright 2025 The Wan Team and The HuggingFace Team. All rights reserved.
 
 """Baseline-compatible native PyTorch Wan transformer for LingBot-VA training."""
 

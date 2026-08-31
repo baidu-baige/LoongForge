@@ -1,7 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from LingBot-VA under the Apache-2.0 License.
+# Modified from LingBot-VA (``wan_va/utils/scheduler.py`` and ``wan_va/utils/utils.py``)
+# under the Apache-2.0 License.
 # Copyright 2024-2025 The Robbyant Team Authors. All rights reserved.
 
 """Native scheduler and sampling helpers for LingBot-VA."""

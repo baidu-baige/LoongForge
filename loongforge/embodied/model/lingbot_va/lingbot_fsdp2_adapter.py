@@ -1,8 +1,5 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
-#
-# Modified from LingBot-VA under the Apache-2.0 License.
-# Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 
 """LingBot-specific FSDP2 adapter over the public fully_shard runtime."""
 
