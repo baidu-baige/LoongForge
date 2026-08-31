@@ -4,7 +4,7 @@
 """LingBot-VA collator adapter for embodied training."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import torch
 
@@ -26,7 +26,6 @@ class LingBotVAPreparedBatch(PreparedBatch):
     actions_mask: torch.Tensor
     text_emb: torch.Tensor
     frame_ids: torch.Tensor
-    sample_meta: List[Dict[str, Any]]
 
     def as_dict(self) -> Dict[str, torch.Tensor]:
         """Return the legacy dict shape expected by the existing LingBot logic."""
@@ -36,7 +35,6 @@ class LingBotVAPreparedBatch(PreparedBatch):
             "actions_mask": self.actions_mask,
             "text_emb": self.text_emb,
             "frame_ids": self.frame_ids,
-            "_lingbot_sample_meta": self.sample_meta,
         }
 
 
@@ -108,9 +106,6 @@ class LingBotVAPreprocessor(BasePreprocessor):
                     for item in examples
                 ]
             ).contiguous(),
-            sample_meta=[
-                dict(item.get("_lingbot_sample_meta", {})) for item in examples
-            ],
         )
 
 

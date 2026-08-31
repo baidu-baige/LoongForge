@@ -51,12 +51,11 @@ export WANDB_MODE=${WANDB_MODE:-disabled}
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 # User-selectable LingBot features.
-export LINGBOT_SAMPLE_META_EXPORT=${LINGBOT_SAMPLE_META_EXPORT:-0}       # Export per-sample metadata for diagnosis.
-export LINGBOT_SKIP_FINAL_CHECKPOINT=${LINGBOT_SKIP_FINAL_CHECKPOINT:-0} # Skip only the final checkpoint save.
-export LINGBOT_BASELINE_LOSS_LOG=${LINGBOT_BASELINE_LOSS_LOG:-1}         # Emit baseline-compatible loss lines.
 export LINGBOT_BALANCED_SAMPLER=${LINGBOT_BALANCED_SAMPLER:-1}           # Balance variable-shape samples across ranks.
-export LINGBOT_LAYERWISE_COMPILE=${LINGBOT_LAYERWISE_COMPILE:-1}         # Compile layerwise norm/residual kernels.
-export LINGBOT_SAMPLE_META_EXPORT_DIR=${LINGBOT_SAMPLE_META_EXPORT_DIR:-$OUTPUT_DIR/sample_meta}
+export LINGBOT_FSDP_RESHARD=${LINGBOT_FSDP_RESHARD:-0}                   # 1 restores the framework-default FSDP reshard.
+export LINGBOT_FSDP_BF16_REDUCE=${LINGBOT_FSDP_BF16_REDUCE:-1}           # 0 reduces gradients in FP32 instead of BF16.
+# Export the per-rank sample loading order for reproducibility checks.
+export LINGBOT_SAMPLE_ORDER_EXPORT_DIR=${LINGBOT_SAMPLE_ORDER_EXPORT_DIR:-}
 
 # ── Model config ──────────────────────────────────────────────
 MODEL_NAME=${MODEL_NAME:-"lingbot_va_libero"}
