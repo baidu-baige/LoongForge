@@ -157,6 +157,16 @@ def resolve_wrap_runs(model: nn.Module, training_args, ignored_params: set) -> l
         for path, module in named:
             if id(module) in covered:
                 continue
+            # A module selected for both wrapping and ignoring can have no
+            # managed parameters left. Do not create an empty FSDP boundary;
+            # it would add hooks and state without owning a communication group.
+            if not group_numel_by_dtype(module, ignored_params):
+                logger.debug(
+                    "Skipping empty FSDP unit %s (%s): all parameters are ignored",
+                    path,
+                    unwrap_checkpoint_module(module).__class__.__name__,
+                )
+                continue
             # Degenerate run: one unit, no siblings to infer order against, so
             # configure_prefetch skips it.
             runs.append(FSDPWrapRun(depth=path.count("."), units=[[module]]))

@@ -1200,6 +1200,25 @@ class _DistributedArgs:
                     "closest enclosing FSDP group."
         },
     )
+    fsdp_ignore_frozen_module_classes: Optional[list[str]] = field(
+        default=None,
+        metadata={
+            "cli_type": parse_class_names,
+            "help": "Comma-separated frozen module class names whose parameters "
+                    "FSDP leaves replicated instead of sharding. This can avoid "
+                    "unused parameter all-gathers at the cost of higher per-rank "
+                    "memory. Every matched parameter must have requires_grad=False."
+        },
+    )
+    fsdp_ignored_frozen_param_dtype: Optional[str] = field(
+        default=None,
+        metadata={
+            "choices": ["fp32", "float32", "bf16", "bfloat16", "fp16", "float16"],
+            "help": "Optional storage and compute dtype for parameters selected "
+                    "by --fsdp-ignore-frozen-module-classes. When set, it must "
+                    "match --dtype; unset preserves their original dtype."
+        },
+    )
     fsdp_min_param_num: int = field(
         default=1_000_000,
         metadata={

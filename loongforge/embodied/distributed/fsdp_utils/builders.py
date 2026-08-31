@@ -13,7 +13,7 @@ from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import MixedPrecisionPolicy
 
 from ..context import DistributedContext
-from ..utils import is_mixed_param_dtype, is_rank_zero
+from ..utils import is_mixed_param_dtype, is_rank_zero, unwrap_checkpoint_module
 
 logger = logging.getLogger(__name__)
 
@@ -120,11 +120,20 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
     silently take a different optimizer step on every rank. Training one is
     therefore rejected rather than quietly diverging.
 
+    ``--fsdp-ignore-frozen-module-classes`` selects complete frozen subtrees by
+    exact class name. This is useful for large frozen modules whose execution
+    does not justify a per-step all-gather. Their floating-point parameters may
+    be stored in ``--fsdp-ignored-frozen-param-dtype`` to reduce the replicated
+    footprint; this cast is persistent and is reflected in checkpoints.
+
     Args:
-        training_args: ``fsdp_ignored_param_names`` supplies the name substrings
-            to exclude. Matching is on substrings, not suffixes, so ``q_proj``
-            also selects ``q_proj_moe_gen``; qualify with ``.weight`` to separate
-            the two MoT pathways.
+        training_args: ``fsdp_ignored_param_names`` supplies name substrings;
+            ``fsdp_ignore_frozen_module_classes`` supplies exact class names;
+            ``fsdp_ignored_frozen_param_dtype`` optionally casts parameters from
+            those matched classes (the validator requires it to match ``dtype``).
+            Name matching is on substrings, not suffixes,
+            so ``q_proj`` also selects ``q_proj_moe_gen``; qualify with
+            ``.weight`` to separate the two MoT pathways.
         model: Model to scan, before wrapping. Scanned with
             ``named_parameters()``, so tied parameters are collected once by
             identity.
@@ -137,7 +146,8 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
         (see ``group_numel_by_dtype``).
 
     Raises:
-        ValueError: If any 0-dim parameter has ``requires_grad=True``.
+        ValueError: If a selected class is absent or has no parameters, or any
+            ignored parameter has ``requires_grad=True``.
 
     Note:
         Side effect: moves the ignored parameters onto ``ctx.device`` in place
@@ -151,11 +161,51 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
         identity filter throughout unit selection, so a rank that skipped it
         would size its units differently.
     """
-    ignored_params = [(n, p)
-                for n, p in model.named_parameters()
-                    if p.ndim == 0
-                        or any(k in n for k in training_args.fsdp_ignored_param_names)]
-    trainable = [n for n, p in ignored_params if p.requires_grad]
+    named_parameters = list(model.named_parameters())
+    parameter_names = {id(param): name for name, param in named_parameters}
+    ignored_by_id = {
+        id(param): param
+        for name, param in named_parameters
+        if param.ndim == 0
+        or any(key in name for key in training_args.fsdp_ignored_param_names)
+    }
+
+    frozen_class_names = set(training_args.fsdp_ignore_frozen_module_classes or [])
+    matched_class_names: set[str] = set()
+    frozen_param_ids_by_class = {name: set() for name in frozen_class_names}
+    matched_module_names: list[str] = []
+    frozen_param_ids: set[int] = set()
+    for module_name, module in model.named_modules():
+        class_name = unwrap_checkpoint_module(module).__class__.__name__
+        if class_name not in frozen_class_names:
+            continue
+        matched_class_names.add(class_name)
+        matched_module_names.append(module_name or "<root>")
+        for param in module.parameters():
+            ignored_by_id[id(param)] = param
+            frozen_param_ids.add(id(param))
+            frozen_param_ids_by_class[class_name].add(id(param))
+
+    unmatched_class_names = frozen_class_names - matched_class_names
+    if unmatched_class_names:
+        raise ValueError(
+            "FSDP ignored frozen module classes matched no modules: "
+            + ", ".join(sorted(unmatched_class_names))
+        )
+    empty_class_names = {
+        name for name, param_ids in frozen_param_ids_by_class.items() if not param_ids
+    }
+    if empty_class_names:
+        raise ValueError(
+            "FSDP ignored frozen module classes matched no parameters: "
+            + ", ".join(sorted(empty_class_names))
+        )
+
+    ignored_params = [
+        (parameter_names.get(param_id, f"<parameter:{param_id}>"), param)
+        for param_id, param in ignored_by_id.items()
+    ]
+    trainable = [name for name, param in ignored_params if param.requires_grad]
     if trainable:
         raise ValueError(
             "FSDP2 cannot ignore trainable parameters: nothing reduces their "
@@ -164,18 +214,58 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
             "them, give 0-dim parameters shape (1,) so FSDP can shard them, or "
             "narrow --fsdp-ignored-param-names"
         )
-    ignored = {p for _, p in ignored_params}
+    ignored = {param for _, param in ignored_params}
+
+    ignored_frozen_dtype = None
+    if training_args.fsdp_ignored_frozen_param_dtype is not None:
+        if not frozen_class_names:
+            raise ValueError(
+                "--fsdp-ignored-frozen-param-dtype requires "
+                "--fsdp-ignore-frozen-module-classes"
+            )
+        from loongforge.embodied.train.training_args import parse_dtype_from_str
+
+        ignored_frozen_dtype = parse_dtype_from_str(
+            training_args.fsdp_ignored_frozen_param_dtype
+        )
 
     # fully_shard does not move ignored params to the device, so do it here.
+    # Meta tensors cannot be materialized generically: argument validation
+    # rejects that combination before reaching the wrap pass.
     with torch.no_grad():
-        for p in ignored:
-            if p.device != ctx.device and not p.is_meta:
-                p.data = p.to(device=ctx.device)
+        for param in ignored:
+            target_dtype = (
+                ignored_frozen_dtype
+                if id(param) in frozen_param_ids
+                and torch.is_floating_point(param)
+                and ignored_frozen_dtype is not None
+                else param.dtype
+            )
+            if not param.is_meta and (
+                param.device != ctx.device or param.dtype != target_dtype
+            ):
+                param.data = param.to(device=ctx.device, dtype=target_dtype)
 
     if ignored_params:
         logger.info(
-            "FSDP2 ignores %d frozen scalar params: %s",
+            "FSDP2 ignores %d frozen parameters: %s",
             len(ignored_params), ", ".join(n for n, _ in ignored_params[:8]),
+        )
+    if frozen_param_ids:
+        frozen_params = [
+            param for param in ignored if id(param) in frozen_param_ids
+        ]
+        ignored_bytes = sum(
+            param.numel() * param.element_size() for param in frozen_params
+        )
+        logger.info(
+            "FSDP2 leaves %d frozen module parameters replicated "
+            "(%d elements, %.2f GiB, dtype=%s) from modules: %s",
+            len(frozen_params),
+            sum(param.numel() for param in frozen_params),
+            ignored_bytes / (1024 ** 3),
+            ignored_frozen_dtype or "original",
+            ", ".join(matched_module_names),
         )
     return ignored
 

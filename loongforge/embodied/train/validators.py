@@ -15,6 +15,54 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def _validate_fsdp_ignored_frozen_args(training_args):
+    """Reject unsupported frozen-parameter replication combinations."""
+    if (
+        training_args.fsdp_ignored_frozen_param_dtype is not None
+        and not training_args.fsdp_ignore_frozen_module_classes
+    ):
+        raise ValueError(
+            "--fsdp-ignored-frozen-param-dtype requires "
+            "--fsdp-ignore-frozen-module-classes"
+        )
+    if not training_args.fsdp_ignore_frozen_module_classes:
+        return
+    if training_args.distributed_strategy != "fsdp":
+        raise ValueError(
+            "--fsdp-ignore-frozen-module-classes requires "
+            "--distributed-strategy fsdp"
+        )
+    if training_args.init_on_meta:
+        raise ValueError(
+            "--fsdp-ignore-frozen-module-classes is incompatible with "
+            "--init-on-meta because ignored meta parameters cannot be "
+            "materialized generically"
+        )
+    if training_args.fsdp_ignored_frozen_param_dtype is not None:
+        dtype_aliases = {
+            "fp32": "float32",
+            "float32": "float32",
+            "bf16": "bfloat16",
+            "bfloat16": "bfloat16",
+            "fp16": "float16",
+            "float16": "float16",
+        }
+        ignored_dtype = dtype_aliases.get(
+            training_args.fsdp_ignored_frozen_param_dtype
+        )
+        compute_dtype = dtype_aliases.get(training_args.dtype)
+        if (
+            ignored_dtype is None
+            or compute_dtype is None
+            or ignored_dtype != compute_dtype
+        ):
+            raise ValueError(
+                "--fsdp-ignored-frozen-param-dtype must match the training "
+                f"compute dtype --dtype ({training_args.dtype}); got "
+                f"{training_args.fsdp_ignored_frozen_param_dtype}"
+            )
+
+
 def validate(training_args, model_cfg, data_cfg):
     """Validate the combination of TrainingArgs + ModelConfig + DataConfig.
 
@@ -119,6 +167,7 @@ def validate(training_args, model_cfg, data_cfg):
             "fsdp; parameter storage follows --dtype under %s.",
             training_args.distributed_strategy,
         )
+    _validate_fsdp_ignored_frozen_args(training_args)
 
     # ── ZeRO optimizer options ──
     if training_args.zero_parameters_as_bucket_view and not training_args.zero_optimizer:
