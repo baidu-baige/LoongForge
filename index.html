@@ -32,7 +32,7 @@
       theme: { extend: { colors: { brand: { 50: '#EEF2FF', 100: '#E0E7FF', 500: '#6366F1', 600: '#4F46E5', 700: '#4338CA' } } } }
     };
   </script>
-  <link rel="stylesheet" href="assets/css/style.css?v=20260830-r1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260831-r4" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -92,6 +92,11 @@
             class="px-3 py-1 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 dark:bg-white/10 dark:text-cyan-200 dark:border-white/10"
             data-i18n="hero.vp.3.k">Multi-chip</span>
         </div>
+        <div class="mt-6">
+          <a href="#benchmark"
+            class="lf-inline-link inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200"
+            data-i18n="hero.bench.link">📊 See the training speedup benchmark</a>
+        </div>
       </div>
     </div>
     <!-- Wave divider -->
@@ -112,10 +117,10 @@
   <!-- ===== Stat band ===== -->
   <section class="lf-statband reveal">
     <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 lf-stat-grid">
-      <div class="lf-stat">
+      <a href="#benchmark" class="lf-stat lf-stat-link">
         <div class="lf-stat-num" data-count-to="5" data-prefix="~" data-suffix="×">~5×</div>
         <div class="lf-stat-label" data-i18n="hero.stat.speedup">Max training speedup</div>
-      </div>
+      </a>
       <div class="lf-stat">
         <div class="lf-stat-num" data-count-to="35" data-suffix="+">35+</div>
         <div class="lf-stat-label" data-i18n="sb.models">Model families supported</div>
@@ -175,7 +180,7 @@
       <a href="blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline" data-i18n="news.all">All
         posts →</a>
     </div>
-    <div id="home-news-list" class="grid md:grid-cols-3 gap-6">
+    <div id="home-news-list" class="grid md:grid-cols-3 gap-6 min-h-[13rem] md:min-h-[11rem]">
       <!-- Auto-rendered from assets/data/posts.json by assets/js/home-news.js -->
     </div>
   </section>
@@ -310,10 +315,10 @@
     </div>
 
     <div class="lf-card max-w-6xl mx-auto">
-      <img src="assets/img/loongforge-architecture.svg" alt="LoongForge architecture" loading="lazy"
-        class="w-full h-auto block dark:hidden" />
-      <img src="assets/img/loongforge-architecture-dark.svg" alt="LoongForge architecture" loading="lazy"
-        class="w-full h-auto hidden dark:block" />
+      <img src="assets/img/loongforge-architecture.svg" alt="LoongForge architecture" loading="lazy" width="1778"
+        height="822" class="w-full h-auto block dark:hidden" />
+      <img src="assets/img/loongforge-architecture-dark.svg" alt="LoongForge architecture" loading="lazy" width="1778"
+        height="822" class="w-full h-auto hidden dark:block" />
     </div>
   </section>
 
@@ -323,52 +328,73 @@
     <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
-        <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Measured on
-          latest LoongForge across VLA, WAM, and VLM workloads</p>
+        <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Training throughput
+          speedup over mainstream open-source baselines — each model benchmarked on the same machine type with the same
+          training hyperparameters</p>
       </div>
-      <div class="max-w-3xl mx-auto">
+      <div class="max-w-6xl mx-auto">
         <div class="space-y-4">
           <div class="bench-row">
-            <div class="bench-label">DreamZero <span class="bench-type">WAM</span></div>
+            <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">2.67×</span></div>
+              <div class="bench-bar" style="width: 55.6%"><span class="bench-val">2.80×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 86.5%"><span class="bench-val">2.31×</span></div>
+              <div class="bench-bar" style="width: 45.8%"><span class="bench-val">2.31×</span></div>
             </div>
           </div>
           <div class="bench-row">
-            <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
+            <div class="bench-label">GR00T N1.7 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 83.5%"><span class="bench-val">2.23×</span></div>
+              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">X-VLA <span class="bench-type">VLA</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">DreamZero <span class="bench-type">WAM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 86.9%"><span class="bench-val">4.38×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">FastWAM <span class="bench-type">WAM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 44.6%"><span class="bench-val">2.25×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">LingBot VA <span class="bench-type">WAM</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 67.4%"><span class="bench-val">1.80×</span></div>
+              <div class="bench-bar" style="width: 43.7%"><span class="bench-val">2.20×</span></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="bench-label">Qwen3-VL-30B-A3B <span class="bench-type">VLM</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 54.3%"><span class="bench-val">1.45×</span></div>
+              <div class="bench-bar" style="width: 28.8%"><span class="bench-val">1.45×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">DeepSeek-V3.2 Lite <span class="bench-type">LLM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">5.04×</span></div>
             </div>
           </div>
         </div>
         <div class="bench-baseline" data-i18n="bench.baseline">1.0× baseline</div>
-
-        <div class="bench-callout mt-8">
-          <div class="bench-callout-num">5.04×</div>
-          <div class="bench-callout-body">
-            <div class="bench-callout-title" data-i18n-html="bench.ds.title"><strong>DeepSeek-V3.2 Lite</strong> · DSA
-              operator-level optimizations</div>
-            <div class="bench-callout-desc" data-i18n="bench.ds.desc">Validated on a reduced-layer configuration due to
-              test-bed scale limits.</div>
-          </div>
+        <div class="mt-4 space-y-1 text-xs text-gray-500 dark:text-gray-500">
+          <p data-i18n="bench.ds.desc">DeepSeek-V3.2 Lite reflects DSA operator-level optimizations and was validated on
+            a reduced-layer configuration due to test-bed scale limits.</p>
+          <p data-i18n="bench.note">Numbers were measured at a point in time and may evolve as implementations change on
+            both sides.</p>
         </div>
       </div>
     </div>
@@ -963,7 +989,7 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js?v=20260830-r1"></script>
+  <script src="assets/js/main.js?v=20260831-r4"></script>
   <script src="assets/js/home-news.js"></script>
 </body>
 

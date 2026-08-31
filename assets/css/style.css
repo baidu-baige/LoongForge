@@ -150,6 +150,62 @@ header[data-site-header]:empty {
   color: rgba(255, 255, 255, .82);
 }
 
+/* The speedup tile links to the benchmark section — the claim points at its
+   evidence. Arrow lives in ::after so applyI18n() (textContent) can't drop it. */
+.lf-statband .lf-stat-link {
+  color: inherit;
+  text-decoration: none;
+  transition: background .18s ease;
+}
+
+.lf-statband .lf-stat-link:hover {
+  background: rgba(255, 255, 255, .1);
+}
+
+.lf-statband .lf-stat-link .lf-stat-label::after {
+  content: " →";
+  display: inline-block;
+  transition: transform .18s ease;
+}
+
+.lf-statband .lf-stat-link:hover .lf-stat-label {
+  color: #fff;
+}
+
+.lf-statband .lf-stat-link:hover .lf-stat-label::after {
+  transform: translateX(3px);
+}
+
+/* Hero text link: underline appears on hover, arrow nudges forward */
+.lf-inline-link::after {
+  content: " →";
+  display: inline-block;
+  transition: transform .18s ease;
+}
+
+.lf-inline-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.lf-inline-link:hover::after {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lf-statband .lf-stat-link,
+  .lf-statband .lf-stat-link .lf-stat-label::after,
+  .lf-inline-link::after {
+    transition: none;
+  }
+
+  .lf-statband .lf-stat-link:hover .lf-stat-label::after,
+  .lf-inline-link:hover::after {
+    transform: none;
+  }
+}
+
 .dark .lf-statband {
   background: linear-gradient(120deg, #3730A3 0%, #5B21B6 50%, #9D174D 100%);
 }
@@ -261,6 +317,12 @@ header[data-site-header]:empty {
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Anchor targets must clear the sticky navbar (73px) when jumped to */
+section[id],
+[id][data-anchor-target] {
+  scroll-margin-top: 88px;
 }
 
 body {
@@ -1298,61 +1360,6 @@ footer a:hover {
   color: #6b7280;
 }
 
-.bench-callout {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 1.25rem 1.5rem;
-  border-radius: 1rem;
-  background: linear-gradient(135deg, rgba(99, 102, 241, .08), rgba(236, 72, 153, .08));
-  border: 1px solid rgba(99, 102, 241, .2);
-}
-
-.dark .bench-callout {
-  background: linear-gradient(135deg, rgba(99, 102, 241, .15), rgba(236, 72, 153, .12));
-  border-color: rgba(99, 102, 241, .3);
-}
-
-.bench-callout-num {
-  font-size: 2.5rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, #6366f1, #ec4899);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.bench-callout-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #111827;
-  margin-bottom: 0.25rem;
-}
-
-.bench-callout-title strong {
-  font-weight: 800;
-  color: var(--lf-primary, #6366F1);
-}
-
-.dark .bench-callout-title strong {
-  color: #a5b4fc;
-}
-
-.dark .bench-callout-title {
-  color: #f3f4f6;
-}
-
-.bench-callout-desc {
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.dark .bench-callout-desc {
-  color: #9ca3af;
-}
-
 @media (max-width: 640px) {
   .bench-row {
     flex-direction: column;
@@ -1367,11 +1374,5 @@ footer a:hover {
   .bench-track {
     width: 100%;
     height: 24px;
-  }
-
-  .bench-callout {
-    flex-direction: column;
-    text-align: center;
-    gap: 0.5rem;
   }
 }
