@@ -21,17 +21,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
 export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_embodied_ci/vla_artifacts"}
 
-WALL_OSS_OPS_SRC=${WALL_OSS_OPS_SRC:-"${LOONGFORGE_PATH}/ops/cuda_source/wall_oss_05_ops"}
+WALL_OSS_OPS_SRC=${WALL_OSS_OPS_SRC:-"${LOONGFORGE_PATH}/ops/cuda_source/wall_oss_05_op"}
 
 build_wall_oss_ops() {
-    if python -c "import wall_oss_05_ops" > /dev/null 2>&1; then
-        echo "Wall-OSS CUDA operators already installed: wall_oss_05_ops"
+    if python -c "import wall_oss_05_op" > /dev/null 2>&1; then
+        echo "Wall-OSS CUDA operators already installed: wall_oss_05_op"
         return
     fi
 
     if [[ ! -f "${WALL_OSS_OPS_SRC}/setup.py" ]]; then
-        echo "wall_oss_05_ops is not installed and its sources were not found at ${WALL_OSS_OPS_SRC}." >&2
-        echo "Set WALL_OSS_OPS_SRC to the wall_oss_05_ops directory and rerun." >&2
+        echo "wall_oss_05_op is not installed and its sources were not found at ${WALL_OSS_OPS_SRC}." >&2
+        echo "Set WALL_OSS_OPS_SRC to the wall_oss_05_op directory and rerun." >&2
         exit 1
     fi
 
