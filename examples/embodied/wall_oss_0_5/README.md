@@ -19,19 +19,19 @@ export CKPT_ROOT=/path/to/wall-oss-05          # holds Qwen2.5-VL-3B-Instruct an
 export DATA_PATH=/path/to/libero               # source LeRobot dataset
 export OUTPUT_ROOT=/path/to/outputs
 export NORM_STATS_PATH=/path/to/libero_norm_stats.json
-export WALL_OSS_OPS_SRC=/path/to/ops/cuda_source/wall_oss_05_ops   # CUDA operator sources
+export WALL_OSS_OPS_SRC=/path/to/ops/cuda_source/wall_oss_05_op   # CUDA operator sources
 ```
 
 ## CUDA Operators
 
 The fused operators (RoPE / M-RoPE / RMSNorm / SwiGLU / MoE permute / index
-kernels) ship as the standalone `wall_oss_05_ops` package, whose sources live in
-`ops/cuda_source/wall_oss_05_ops`. `run_wall_oss_dmuon_fsdp8.sh` imports the
+kernels) ship as the standalone `wall_oss_05_op` package, whose sources live in
+`ops/cuda_source/wall_oss_05_op`. `run_wall_oss_dmuon_fsdp8.sh` imports the
 package first and, when it is missing, installs it from `WALL_OSS_OPS_SRC`
-(default `$LOONGFORGE_PATH/ops/cuda_source/wall_oss_05_ops`):
+(default `$LOONGFORGE_PATH/ops/cuda_source/wall_oss_05_op`):
 
 ```bash
-pip install --no-build-isolation -e ops/cuda_source/wall_oss_05_ops
+pip install --no-build-isolation -e ops/cuda_source/wall_oss_05_op
 ```
 
 Each operator falls back to pure PyTorch when the compiled extension is absent,
