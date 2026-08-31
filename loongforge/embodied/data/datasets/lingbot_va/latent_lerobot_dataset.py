@@ -1,7 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from LingBot-VA under the Apache-2.0 License.
+# Modified from LingBot-VA (``wan_va/dataset/lerobot_latent_dataset.py``) under the
+# Apache-2.0 License.
 # Copyright 2024-2025 The Robbyant Team Authors. All rights reserved.
 
 """Latent LeRobot dataset implementation for LingBot-VA."""
