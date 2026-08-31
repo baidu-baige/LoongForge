@@ -3,7 +3,7 @@
 `loongforge/embodied/` is a **torch-native training subsystem for embodied models** — Vision-Language-Action (VLA) policies and world-action models (WAM) — combining broad open-source model support with production-grade training performance.
 
 - **Torch-native architecture** — built on vanilla PyTorch around unified `data`, `model`, and `trainer` abstractions that can be flexibly reused or extended.
-- **Extensive open-source model support** — π0.5, GR00T-N1.6 / N1.7, xVLA, Lingbot-VA, FastWAM, DreamZero, Cosmos3, and more — each supports fine-tuning, with accuracy aligned to the official baselines.
+- **Extensive open-source model support** — Pi0.5, GR00T-N1.6 / N1.7, xVLA, Wall-OSS-0.5, LingBot-VA, FastWAM, DreamZero, Cosmos3, and more — each supports fine-tuning, with accuracy aligned to the official baselines.
 - **High training throughput** — up to 2x+ throughput on representative models through `torch.compile`, CUDA Graph, custom kernels, and I/O optimization, plus a full range of distributed strategies: DDP, ZeRO-1, FSDP, and HSDP.
 
 ---
@@ -20,14 +20,14 @@ The subsystem is therefore built on a **torch-native DDP/FSDP** engine with its 
 
 For the full framework user guide, see [User Manual](../../docs/source/embodied_tutorial/overview.md). Model-specific quick starts:
 
-- [π0.5 (pi05)](../../docs/source/embodied_tutorial/quick_start_pi05.md)
+- [Pi0.5 (pi05)](../../docs/source/embodied_tutorial/quick_start_pi05.md)
 - [GR00T-N1.6](../../docs/source/embodied_tutorial/quick_start_groot_n1_6.md)
 - [GR00T-N1.7](../../docs/source/embodied_tutorial/quick_start_groot_n1_7.md)
 - [FastWAM](../../docs/source/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../docs/source/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../docs/source/embodied_tutorial/quick_start_cosmos3.md)
 - [xVLA](../../docs/source/embodied_tutorial/quick_start_xvla.md)
-- [Lingbot-VA](../../docs/source/embodied_tutorial/quick_start_lingbot_va.md)
+- [LingBot-VA](../../docs/source/embodied_tutorial/quick_start_lingbot_va.md)
 
 ---
 
@@ -35,13 +35,15 @@ For the full framework user guide, see [User Manual](../../docs/source/embodied_
 
 Training speedups over mainstream open-source baselines. Performance is still under active optimization, and these numbers will keep improving over time:
 
-| Model | Type | Baseline | Speedup |
-|---|---|---|---|
-| DreamZero (DROID Wan2.2-5B Full) | WAM | DreamZero | **2.67×** |
-| GR00T-N1.6 | VLA | LeRobot | **2.31×** |
-| π0.5 | VLA | OpenPI | **2.23×** |
-| Lingbot-VA | WAM | LingBot-VA | **1.80×** |
-| xVLA | VLA | X-VLA | **1.69×** |
+| Model | Type | Speedup |
+|---|---|---|
+| DreamZero (DROID Wan2.2-5B Full) | WAM | **4.38×** |
+| Pi0.5 | VLA | **2.80×** |
+| GR00T-N1.6 | VLA | **2.31×** |
+| FastWAM | WAM | **2.25×** |
+| LingBot-VA | WAM | **2.20×** |
+| GR00T-N1.7 | VLA | **1.79×** |
+| xVLA | VLA | **1.79×** |
 
 Numbers reflect the baseline and LoongForge versions at measurement time and may evolve as implementations change. See the [root README](../../README.md#-performance) for the full benchmark chart across all model families.
 

@@ -58,12 +58,13 @@
 
 ## 🔥 最新动态
 
+- **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
 - **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / VLA / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **2.67× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 - **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
@@ -200,6 +201,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 <li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a> ✅</li>
 <li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a> ✅</li>
 <li><a href="examples/embodied/xvla/">xVLA</a> ✅</li>
+<li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a> ✅</li>
 <li><a href="examples/embodied/fastwam/">FastWAM</a> ✅</li>
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a> ✅</li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a> ✅</li>
@@ -288,7 +290,7 @@ LoongForge/
 非常感谢 LoongForge 的所有贡献者：
 
 <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=baidu-baige/LoongForge" alt="LoongForge contributors" />
+  <img src="https://contrib.rocks/image?repo=baidu-baige/LoongForge&v=2026-08-31" alt="LoongForge contributors" />
 </a>
 
 ## 🙏 致谢
