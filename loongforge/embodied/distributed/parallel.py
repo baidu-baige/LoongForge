@@ -86,7 +86,9 @@ def _wrap_fsdp(
     (see ``_wrap_dmuon_fsdp``).
     """
     if training_args.optimizer.lower() == "dmuon":
-        return _wrap_dmuon_fsdp(model, training_args, ctx, dtype)
+        model = _wrap_dmuon_fsdp(model, training_args, ctx, dtype)
+        _register_delta_fp8_allgather(model, training_args)
+        return model
 
     # Storage dtype is decoupled from ``--dtype``: ``--dtype`` also drives the
     # autocast dtype in the trainer, so keeping fp32 master weights under bf16
@@ -114,7 +116,23 @@ def _wrap_fsdp(
     # group resolves to.
     fully_shard_unit([model], wrap_ctx)
     configure_prefetch(runs, training_args)
+    _register_delta_fp8_allgather(model, training_args)
     return model
+
+
+def _register_delta_fp8_allgather(model: nn.Module, training_args) -> None:
+    """Register Delta-FP8 communication for this model's FSDP groups."""
+    if not training_args.fsdp_delta_fp8_allgather:
+        return
+
+    from .delta_fp8_allgather import register_delta_fp8_allgather
+
+    register_delta_fp8_allgather(
+        model,
+        block=training_args.fsdp_delta_fp8_block,
+        prime_steps=training_args.fsdp_delta_fp8_prime_steps,
+        reprime_interval=training_args.fsdp_delta_fp8_reprime_interval,
+    )
 
 
 def _wrap_dmuon_fsdp(

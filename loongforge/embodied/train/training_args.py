@@ -1287,6 +1287,37 @@ class _DistributedArgs:
                     "child once in registration order."
         },
     )
+    fsdp_delta_fp8_allgather: bool = field(
+        default=False,
+        metadata={
+            "help": "Replace FSDP2 foreach_all_gather with a delta-FP8 path: "
+                    "communicate per-block FP8 deltas against a persistent "
+                    "unsharded BF16 reference instead of the full weight. "
+                    "Default off; FSDP launchers may opt in."
+        },
+    )
+    fsdp_delta_fp8_block: int = field(
+        default=256,
+        metadata={
+            "help": "Elements per FP8 scale block for --fsdp-delta-fp8-allgather."
+        },
+    )
+    fsdp_delta_fp8_prime_steps: int = field(
+        default=1,
+        metadata={
+            "help": "Full BF16 all-gathers used to prime each FSDP unit's "
+                    "delta-FP8 reference before switching to quantized deltas."
+        },
+    )
+    fsdp_delta_fp8_reprime_interval: int = field(
+        default=0,
+        metadata={
+            "help": "Force a full BF16 all-gather every N unshards to re-anchor "
+                    "the delta-FP8 reference after a discontinuous parameter "
+                    "jump such as checkpoint resume. 0 disables re-priming; "
+                    "error feedback already prevents in-run drift."
+        },
+    )
     fsdp_root_optimizer_prefetch: bool = field(
         default=False,
         metadata={

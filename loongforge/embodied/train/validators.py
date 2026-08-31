@@ -140,9 +140,35 @@ def validate(training_args, model_cfg, data_cfg):
             "--fsdp-backward-prefetch-distance",
             training_args.fsdp_backward_prefetch_distance,
         ),
+        (
+            "--fsdp-delta-fp8-prime-steps",
+            training_args.fsdp_delta_fp8_prime_steps,
+        ),
+        (
+            "--fsdp-delta-fp8-reprime-interval",
+            training_args.fsdp_delta_fp8_reprime_interval,
+        ),
     ):
         if value < 0:
             raise ValueError(f"{option_name} must be non-negative, got {value}")
+    delta_fp8_block = training_args.fsdp_delta_fp8_block
+    if delta_fp8_block <= 0 or delta_fp8_block & (delta_fp8_block - 1):
+        raise ValueError(
+            "--fsdp-delta-fp8-block must be a positive power of two, got "
+            f"{delta_fp8_block}"
+        )
+    if delta_fp8_block > 1 << 20:
+        raise ValueError(
+            "--fsdp-delta-fp8-block must be <= 1048576 for Triton "
+            f"tl.arange, got {delta_fp8_block}"
+        )
+    if (
+        training_args.fsdp_delta_fp8_allgather
+        and training_args.distributed_strategy != "fsdp"
+    ):
+        raise ValueError(
+            "--fsdp-delta-fp8-allgather requires --distributed-strategy fsdp"
+        )
 
     if (
         training_args.hsdp_shard_size is not None
