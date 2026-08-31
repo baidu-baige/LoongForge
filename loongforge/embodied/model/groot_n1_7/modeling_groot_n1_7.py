@@ -42,7 +42,6 @@ from loongforge.embodied.data.datasets.groot_n1_7.transforms.image_augmentations
     build_image_transformations_albumentations,
 )
 from loongforge.embodied.model.registry import register_model
-
 from .model_configuration_groot_n1_7 import GrootN1d7Config
 from .modules.dit import AlternateVLDiT, DiT, SelfAttentionTransformer
 from .modules.embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder
@@ -237,12 +236,16 @@ class Gr00tN1d7ActionHead(nn.Module):
                 self._split_actions_device = actions.device
                 self._split_actions_dtype = actions.dtype
             noise = torch.randn(actions.shape, device=actions.device, dtype=actions.dtype)
-            t = self.sample_time(actions.shape[0], device=actions.device, dtype=actions.dtype)
-            t = t[:, None, None]
         else:
             _ = torch.randn(actions.shape, device=actions.device, dtype=actions.dtype)
             noise = split_noise
-            t = self._split_time_buf[:, None, None]
+
+        split_time = self._split_time_buf
+        if split_time is None:
+            t = self.sample_time(actions.shape[0], device=actions.device, dtype=actions.dtype)
+            t = t[:, None, None]
+        else:
+            t = split_time[:, None, None]
         noisy_trajectory = (1 - t) * noise + t * actions
         velocity = actions - noise
 
@@ -255,22 +258,25 @@ class Gr00tN1d7ActionHead(nn.Module):
         sa_embs = torch.cat((state_features, action_features), dim=1)
         vl_attn_mask = backbone_output.backbone_attention_mask
         if self.config.use_alternate_vl_dit:
-            model_output, _ = self.model(
+            model_output = self.model(
                 hidden_states=sa_embs,
                 encoder_hidden_states=vl_embeds,
                 encoder_attention_mask=vl_attn_mask,
                 timestep=t_discretized,
-                return_all_hidden_states=True,
+                # The action head consumes only the final projection; retaining
+                # every intermediate state adds graph bookkeeping without
+                # changing the training result.
+                return_all_hidden_states=False,
                 image_mask=backbone_output.image_mask,
                 backbone_attention_mask=backbone_output.backbone_attention_mask,
             )
         else:
-            model_output, _ = self.model(
+            model_output = self.model(
                 hidden_states=sa_embs,
                 encoder_hidden_states=vl_embeds,
                 encoder_attention_mask=vl_attn_mask,
                 timestep=t_discretized,
-                return_all_hidden_states=True,
+                return_all_hidden_states=False,
             )
 
         pred = self.action_decoder(model_output, embodiment_id)
@@ -454,14 +460,19 @@ class GrootN1d7Policy(nn.Module):
 
     def forward(self, batch) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Return LoongForge trainer contract: loss plus log-loss dict."""
-        try:
-            batch_inputs = batch.to_model_inputs()
-        except AttributeError as exc:
-            raise TypeError(
-                "GrootN1d7Policy.forward expects a batch with to_model_inputs(), "
-                f"got {type(batch).__name__}"
-            ) from exc
-        outputs = self.model(batch_inputs)
+        action_head_inputs = getattr(batch, "to_action_head_inputs", None)
+        if callable(action_head_inputs):
+            backbone_output, action_input = action_head_inputs()
+            outputs = self.model.action_head(backbone_output, action_input)
+        else:
+            try:
+                batch_inputs = batch.to_model_inputs()
+            except AttributeError as exc:
+                raise TypeError(
+                    "GrootN1d7Policy.forward expects a batch with to_model_inputs(), "
+                    f"got {type(batch).__name__}"
+                ) from exc
+            outputs = self.model(batch_inputs)
         loss = outputs.get("loss", None)
         if loss is None:
             action_loss = outputs["action_loss"]
@@ -492,15 +503,15 @@ class GrootN1d7Policy(nn.Module):
 
     def _restore_trainable_params_fp32_impl(self) -> None:
         if self.config.backbone_trainable_params_fp32:
-            _restore_trainable_params_fp32(self.model.backbone)
+            # HF Trainer keeps the frozen Qwen backbone parameters in FP32 and
+            # relies on autocast only for eligible kernels.  Keeping the
+            # parameters permanently in bf16 changes the FP32 residual stream
+            # through every vision and language block.
+            _restore_module_params_fp32(self.model.backbone)
         _restore_trainable_params_fp32(self.model.action_head)
         _restore_rotary_buffers_fp32(self.model)
 
     def _restore_precision_after_apply(self) -> None:
-        if os.environ.get("GROOT_ALLOW_TRAINABLE_PARAM_BF16", "0") == "1":
-            with self._precision_restore_guard():
-                _restore_rotary_buffers_fp32(self.model)
-            return
         needs_checkpoint_reload = self._has_trainable_param_below_fp32()
         with self._precision_restore_guard():
             self._restore_trainable_params_fp32_impl()
@@ -1183,6 +1194,11 @@ def _restore_trainable_params_fp32(module: nn.Module) -> None:
     for parameter in module.parameters():
         if parameter.requires_grad:
             parameter.data = parameter.data.to(torch.float32)
+
+
+def _restore_module_params_fp32(module: nn.Module) -> None:
+    for parameter in module.parameters():
+        parameter.data = parameter.data.to(torch.float32)
 
 
 def _restore_rotary_buffers_fp32(module: nn.Module) -> None:

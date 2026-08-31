@@ -110,7 +110,6 @@ FSDP_NO_WRAP_MODULES=(
 DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy fsdp
     --dtype bfloat16
-    --fsdp-reshard-root false
     --fsdp-no-wrap-modules "$(
         IFS=,
         echo "${FSDP_NO_WRAP_MODULES[*]}"

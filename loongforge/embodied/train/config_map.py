@@ -82,14 +82,9 @@ MODEL_SCHEMA = {
     ),
 }
 
-
-def _normalize(model_name: str) -> str:
-    return model_name.lower().replace("-", "_")
-
-
 def get_model_schema(model_name: str) -> ModelSchema:
     """Look up the ModelSchema for a model name."""
-    key = _normalize(model_name)
+    key = model_name.lower().replace("-", "_")
     if key not in MODEL_SCHEMA:
         available = ", ".join(sorted(MODEL_SCHEMA.keys()))
         raise ValueError(f"Unknown model-name '{model_name}'. Available: [{available}]")

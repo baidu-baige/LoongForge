@@ -396,6 +396,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 | root reshard 策略 | `--fsdp-reshard-root` | `False` | `true`, `false`, `none`, 大于 1 的整数 | root FSDP group 的 reshard 策略 |
 | 指定 wrap 类 | `--fsdp-wrap-modules` | `None` | 逗号分隔模块类名 | 指定 FSDP unit |
 | 排除 wrap 类 | `--fsdp-no-wrap-modules` | `None` | 逗号分隔模块类名 | 排除指定模块类 |
+| 排除分片的参数 | `--fsdp-ignored-param-names` | `[]` | 空格分隔的参数名子串 | 命中任一子串的冻结参数在每张卡各留一份完整副本 |
 | 自动 wrap 阈值 | `--fsdp-min-num-params` | `1000000` | 非负整数 | 自动包装重复层的参数阈值 |
 | leftover wrap 阈值 | `--fsdp-leftover-min-num-params` | `1000000` | 非负整数 | 自动包装剩余模块的参数阈值 |
 | 原始参数 dtype | `--fsdp-original-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | FSDP 分片前参数 dtype |

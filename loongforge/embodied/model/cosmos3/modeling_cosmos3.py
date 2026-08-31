@@ -121,7 +121,7 @@ class Cosmos3(nn.Module):
         if config.compile_model:
             _layers = self.net.language_model.model.layers
             for _layer in _layers:
-                _layer.compile(fullgraph=True, dynamic=config.compile_dynamic)
+                _layer.compile(fullgraph=False, dynamic=config.compile_dynamic)
             logger.info("[compile] in-place torch.compile on %d MoTDecoderLayer blocks (fullgraph=True, dynamic=%s)",
                         len(_layers), config.compile_dynamic)
 
@@ -153,7 +153,7 @@ class Cosmos3(nn.Module):
         self.train_modules = config.train_modules
         if torch.are_deterministic_algorithms_enabled():
             self.keys_to_skip_loading = []
-            logger.info(f"clean config `keys_to_skip_loading` on deterministic mode")
+            logger.info("clean config `keys_to_skip_loading` on deterministic mode")
         else:
             self.keys_to_skip_loading = config.keys_to_skip_loading
 
@@ -295,7 +295,6 @@ class Cosmos3(nn.Module):
         device = next(self.net.parameters()).device
         dtype = next(self.net.parameters()).dtype
         special_tokens = self._get_special_tokens()
-        cpu_kwargs = {"device": "cpu", "dtype": torch.float32}
 
         B = len(batch.videos)
         action_loss_weight = float(self.action_loss_weight)

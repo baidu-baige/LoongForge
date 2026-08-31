@@ -40,6 +40,12 @@ class GrootN1d7PreparedBatch(PreparedBatch):
     action_mask: torch.Tensor = None
     embodiment_id: torch.Tensor = None
     action_is_pad: Optional[torch.Tensor] = None
+    _loongforge_host_grid_signature: Optional[tuple] = None
+    _loongforge_host_image_token_count: Optional[int] = None
+    _loongforge_host_visual_indices: Optional[torch.Tensor] = None
+    _loongforge_host_visual_index_signature: Optional[tuple] = None
+    _loongforge_host_visual_mask: Optional[torch.Tensor] = None
+    _loongforge_host_attention_mask_all_valid: Optional[bool] = None
 
     def to_model_inputs(self) -> Dict[str, Any]:
         """Convert to model input dictionary."""

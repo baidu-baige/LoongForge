@@ -32,26 +32,16 @@ import argparse
 import dataclasses
 import logging
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, List, Optional, get_args, get_origin, Union
 
 import torch
 
 logger = logging.getLogger(__name__)
 
-
-_FSDP_CONCRETE_DTYPE_CHOICES = ("fp32", "bf16", "fp16")
-_FSDP_DTYPE_BY_NAME = {
-    "fp32": torch.float32,
-    "bf16": torch.bfloat16,
-    "fp16": torch.float16,
-}
-
-
 # ---------------------------------------------------------------------------
 # Custom CLI value parsers (referenced by field metadata below)
 # ---------------------------------------------------------------------------
-
-
 def parse_reshard_after_forward(value: str):
     """Parse FSDP2 reshard_after_forward from CLI text: true|false|none|int>1."""
     normalized = value.strip().lower()
@@ -74,23 +64,32 @@ def parse_reshard_after_forward(value: str):
     return int_value
 
 
-def parse_reshard_after_forward_map(value: str):
-    """Parse comma-separated ClassName=value pairs for per-module FSDP reshard."""
-    result = {}
-    for item in value.split(","):
-        item = item.strip()
-        if not item:
+def parse_reshard_after_forward_map(raw_map: str):
+    """Parse comma-separated ClassName=value pairs for per-module FSDP reshard_after_forward.
+
+    Each pair maps a module class name to a reshard strategy accepted by
+    ``parse_reshard_after_forward``.  Unknown keys are passed through as-is.
+
+    Example::
+
+        "TransformerLayer=True,EmbeddingLayer=False"
+        # -> {"TransformerLayer": True, "EmbeddingLayer": False}
+    """
+    class_to_reshard = {}
+    for pair in raw_map.split(","):
+        pair = pair.strip()
+        if not pair:
             continue
-        if "=" not in item:
+        if "=" not in pair:
             raise argparse.ArgumentTypeError(
                 "expected comma-separated ClassName=value pairs"
             )
-        class_name, raw_value = item.split("=", 1)
+        class_name, reshard_value = pair.split("=", 1)
         class_name = class_name.strip()
         if not class_name:
             raise argparse.ArgumentTypeError("empty class name in reshard map")
-        result[class_name] = parse_reshard_after_forward(raw_value)
-    return result
+        class_to_reshard[class_name] = parse_reshard_after_forward(reshard_value)
+    return class_to_reshard
 
 
 def parse_positive_int(value: str) -> int:
@@ -105,11 +104,17 @@ def parse_positive_int(value: str) -> int:
 
 
 def parse_module_key_patterns(
-    value: str | None,
+    value: str | list[str] | None,
     *,
     option_name: str,
 ) -> list[str]:
-    """Parse comma-separated qualified module-key patterns."""
+    """Parse comma-separated qualified module-key patterns.
+
+    Accepts a raw CLI string or an already-split list so the same helper can
+    serve both argparse ``type=`` and the later wrap-time re-parse.
+    """
+    if isinstance(value, (list, tuple)):
+        value = ",".join(value)
     normalized_patterns = (value or "").strip()
     if not normalized_patterns:
         return []
@@ -127,6 +132,48 @@ def parse_module_key_patterns(
     return patterns
 
 
+def parse_class_names(value: str) -> list[str]:
+    """Parse a comma-separated list of class names."""
+    return [name.strip() for name in (value or "").split(",") if name.strip()]
+
+
+def parse_dtype_from_str(dtype_name: str) -> torch.dtype:
+    """Map a canonical FSDP CLI dtype name to ``torch.dtype``."""
+    DTYPE_MAP_BY_STR = {
+        "fp32": torch.float32,
+        "float32": torch.float32,
+        "bf16": torch.bfloat16,
+        "bfloat16": torch.bfloat16,
+        "fp16": torch.float16,
+        "float16": torch.float16,
+    }
+
+    try:
+        return DTYPE_MAP_BY_STR[dtype_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported FSDP dtype {dtype_name!r}") from exc
+
+
+def parse_optional_int_list(raw_value: str | None) -> list[int] | None:
+    """Parse a comma-separated string of integers into ``list[int]``.
+
+    Returns ``None`` for empty or whitespace-only input so optional kwargs
+    remain unset.
+
+    Example::
+
+        parse_optional_int_list("25,50,100")
+        # -> [25, 50, 100]
+
+        parse_optional_int_list(None)
+        # -> None
+    """
+    if not raw_value or not raw_value.strip():
+        return None
+    items = [item.strip() for item in raw_value.split(",") if item.strip()]
+    return [int(item) for item in items] if items else None
+
+
 # ---------------------------------------------------------------------------
 # TrainingArgs - single source of truth for generic training params
 #
@@ -136,7 +183,6 @@ def parse_module_key_patterns(
 # (``training_args.lr_base``) and the CLI/serialization behavior is unchanged.
 # To add or change a generic parameter, edit the matching _XxxArgs mixin.
 # ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class _ModelRoutingArgs:
@@ -647,6 +693,13 @@ class _DataArgs:
     num_workers: int = field(
         default=4,
         metadata={"help": "Number of DataLoader worker processes per rank."})
+    dataloader_prefetch_factor: int = field(
+        default=2,
+        metadata={
+            "cli_type": parse_positive_int,
+            "help": "Number of batches prefetched by each DataLoader worker.",
+        },
+    )
     dataloader_seed_workers: bool = field(
         default=False,
         metadata={"help": "Set DataLoader worker_init_fn and generator from --seed. "
@@ -945,7 +998,7 @@ class _CudaGraphArgs:
     cuda_graph_grad_sync_dtype: str = field(
         default="fp32",
         metadata={
-            "choices": ["fp32", "bf16"],
+            "choices": ["fp32", "float32", "bf16", "bfloat16"],
             "help": "Communication dtype for the manual gradient all-reduce "
                     "(bf16 halves comm volume).",
         },
@@ -955,18 +1008,25 @@ class _CudaGraphArgs:
 @dataclass(frozen=True)
 class _ActivationCheckpointArgs:
     """activation-checkpoint module selection."""
-
-    activation_checkpoint_module_patterns: Optional[str] = field(
+    activation_checkpoint_module_patterns: Optional[list[str]] = field(
         default=None,
         metadata={
+            "cli_type": partial(
+                parse_module_key_patterns,
+                option_name="--activation-checkpoint-module-patterns",
+            ),
             "help": "Comma-separated qualified module-key patterns to wrap "
                     "with activation checkpointing. '*' matches one module-key "
-                    "segment."
+                    "segment.",
         },
     )
-    activation_checkpoint_skip_modules: Optional[str] = field(
+    activation_checkpoint_skip_modules: Optional[list[str]] = field(
         default=None,
         metadata={
+            "cli_type": partial(
+                parse_module_key_patterns,
+                option_name="--activation-checkpoint-skip-modules",
+            ),
             "help": "Optional comma-separated qualified module-key patterns to "
                     "exclude from --activation-checkpoint-module-patterns. Same "
                     "syntax: '*' matches one module-key segment. Every pattern "
@@ -1011,15 +1071,9 @@ class _DistributedArgs:
             "cli_type": parse_reshard_after_forward,
             "help": "Default FSDP2 reshard_after_forward policy: "
                     "true|false|none|int>1. Controls whether params are "
-                    "re-sharded after forward to save memory.",
-        },
-    )
-    fsdp_reshard_root: Any = field(
-        default=False,
-        metadata={
-            "cli_type": parse_reshard_after_forward,
-            "help": "reshard_after_forward policy for the root FSDP group "
-                    "specifically.",
+                    "re-sharded after forward to save memory. Does not apply to "
+                    "the root group, which FSDP2 always keeps unsharded after "
+                    "forward.",
         },
     )
     fsdp_reshard_module_overrides: Any = field(
@@ -1030,65 +1084,83 @@ class _DistributedArgs:
                     "reshard_after_forward, e.g. GemmaMLP=false,Linear=true.",
         },
     )
-    fsdp_wrap_modules: Optional[str] = field(
+    fsdp_ignored_param_names: List[str] = field(
+        default_factory=list,
+        metadata={
+            "help": "Parameter-name substrings excluded from FSDP sharding; "
+                    "matched params stay replicated on every rank. Frozen params "
+                    "only. Example: q_proj lm_head",
+        },
+    )
+    fsdp_wrap_modules: Optional[list[str]] = field(
         default=None,
         metadata={
+            "cli_type": parse_class_names,
             "help": "Comma-separated module class names that define exact FSDP "
                     "units. Activation-checkpoint wrappers are matched by their "
                     "wrapped module class. When set, automatic unit selection "
                     "is disabled."
         },
     )
-    fsdp_no_wrap_modules: Optional[str] = field(
+    fsdp_no_wrap_modules: Optional[list[str]] = field(
         default=None,
         metadata={
-            "help": "Comma-separated module class names to exclude from FSDP "
-                    "wrapping."
+            "cli_type": parse_class_names,
+            "help": "Comma-separated module class names that must never become "
+                    "FSDP units. Their parameters are still sharded by the "
+                    "closest enclosing FSDP group."
         },
     )
-    fsdp_min_num_params: int = field(
+    fsdp_min_param_num: int = field(
         default=1_000_000,
         metadata={
             "help": "Minimum parameter count for auto-wrapping repeated "
                     "transformer layers."
         },
     )
-    fsdp_leftover_min_num_params: int = field(
-        default=1_000_000,
-        metadata={
-            "help": "Minimum parameter count for auto-wrapping remaining "
-                    "(leftover) modules."
-        },
-    )
     fsdp_original_param_dtype: Optional[str] = field(
         default=None,
         metadata={
-            "choices": _FSDP_CONCRETE_DTYPE_CHOICES,
-            "help": "Optional model parameter dtype before FSDP sharding. "
-                    "Unset preserves authored mixed dtypes and otherwise follows "
-                    "--dtype."
+            "choices": ["fp32", "float32", "bf16", "bfloat16", "fp16", "float16"],
+            "help": "Dtype the sharded parameters are stored (and optimizer-stepped) "
+                    "in. Unset follows --dtype. Set this to fp32 while --dtype is "
+                    "bf16 to keep fp32 master weights with bf16 compute; "
+                    "--fsdp-unshard-param-dtype then defaults to --dtype instead of "
+                    "'no cast'. Ignored when the model is authored with mixed "
+                    "parameter dtypes, which are preserved as-is.",
         },
     )
-    fsdp_unsharded_param_dtype: Optional[str] = field(
+    fsdp_unshard_param_dtype: Optional[str] = field(
         default=None,
         metadata={
-            "choices": _FSDP_CONCRETE_DTYPE_CHOICES,
+            "choices": ["fp32", "float32", "bf16", "bfloat16", "fp16", "float16"],
             "help": "Optional dtype of all-gathered FSDP parameters used for "
-                    "forward/backward. Unset preserves authored mixed dtypes when "
-                    "the original dtype is also unset; otherwise follows --dtype."
+                    "forward/backward. Unset follows --dtype for uniform-dtype "
+                    "models (and whenever --fsdp-original-param-dtype is set). "
+                    "Authored mixed-dtype models keep 'no extra cast' so each "
+                    "group all-gathers in its original dtype.",
         },
     )
     fsdp_reduce_dtype: str = field(
         default="fp32",
         metadata={
-            "choices": _FSDP_CONCRETE_DTYPE_CHOICES,
-            "help": "FSDP gradient reduction dtype."
+            "choices": ["fp32", "float32", "bf16", "bfloat16", "fp16", "float16"],
+            "help": "FSDP gradient reduction dtype.",
         },
     )
     fsdp_cast_forward_inputs: bool = field(
         default=True,
         metadata={
             "help": "Cast FSDP unit forward inputs to its parameter dtype."
+        },
+    )
+    fsdp_output_dtype: Optional[str] = field(
+        default=None,
+        metadata={
+            "choices": ["fp32", "float32", "bf16", "bfloat16", "fp16", "float16"],
+            "help": "Dtype for casting floating-point forward outputs of each FSDP unit. "
+                    "Useful when different modules have different mixed precision policies. "
+                    "If unset, forward outputs are not cast.",
         },
     )
     fsdp_forward_prefetch_distance: int = field(
@@ -1153,11 +1225,12 @@ class _DistributedArgs:
                     "unused."
         },
     )
-    ddp_bucket_cap_mb_list: Optional[str] = field(
+    ddp_bucket_cap_mb_list: Optional[list[int]] = field(
         default=None,
         metadata={
+            "cli_type": parse_optional_int_list,
             "help": "Comma-separated per-bucket sizes (MiB) for fine-grained DDP "
-                    "bucketing."
+                    "bucketing.",
         },
     )
     ddp_batched_grad_copy: bool = field(
@@ -1194,7 +1267,7 @@ class _DistributedArgs:
             "choices": ["bfloat16", "float16", "float32"],
             "help": "Target training dtype. Uniform-dtype models are cast to "
                     "this dtype; mixed-original-dtype models may preserve some "
-                    "parameter dtypes for dtype-sensitive modules."
+                    "parameter dtypes for dtype-sensitive modules.",
         },
     )
     zero_optimizer: bool = field(
@@ -1268,19 +1341,6 @@ class TrainingArgs(
 
 
 # ---------------------------------------------------------------------------
-# FSDP dtype resolution
-# ---------------------------------------------------------------------------
-
-
-def resolve_fsdp_dtype(value: str) -> torch.dtype:
-    """Map a canonical FSDP CLI dtype name to ``torch.dtype``."""
-    try:
-        return _FSDP_DTYPE_BY_NAME[value]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported FSDP dtype {value!r}") from exc
-
-
-# ---------------------------------------------------------------------------
 # CLI generation — reflect TrainingArgs into an argparse parser
 # ---------------------------------------------------------------------------
 
@@ -1349,11 +1409,5 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 __all__ = [
     "TrainingArgs",
-    "add_args_from_dataclass",
     "build_arg_parser",
-    "parse_module_key_patterns",
-    "parse_reshard_after_forward",
-    "parse_reshard_after_forward_map",
-    "parse_positive_int",
-    "resolve_fsdp_dtype",
 ]

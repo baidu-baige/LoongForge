@@ -24,7 +24,6 @@ DiT (Diffusion Transformer) modules for Groot N1.6.
 Ported from gr00t-orig/model/modules/dit.py
 """
 from contextlib import nullcontext
-import os
 
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -33,7 +32,6 @@ from diffusers.configuration_utils import register_to_config
 from diffusers.models.attention import Attention, FeedForward
 from diffusers.models.embeddings import SinusoidalPositionalEmbedding, TimestepEmbedding, Timesteps
 from torch import nn
-
 
 def _is_spark_sm121() -> bool:
     if not torch.cuda.is_available():
@@ -44,12 +42,6 @@ def _is_spark_sm121() -> bool:
 
 
 def _should_force_math_sdpa() -> bool:
-    override = os.environ.get("GR00T_DIT_SDPA_MODE")
-    if override == "math":
-        return True
-    if override == "default":
-        return False
-
     return _is_spark_sm121()
 
 
@@ -221,12 +213,15 @@ class BasicTransformerBlock(nn.Module):
             norm_hidden_states = self.pos_embed(norm_hidden_states)
 
         with _sdpa_context():
+            selected_attention_mask = (
+                encoder_attention_mask
+                if encoder_hidden_states is not None
+                else attention_mask
+            )
             attn_output = self.attn1(
                 norm_hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
-                attention_mask=(
-                    encoder_attention_mask if encoder_hidden_states is not None else attention_mask
-                ),
+                attention_mask=selected_attention_mask,
             )
         if self.final_dropout:
             attn_output = self.final_dropout(attn_output)
@@ -317,7 +312,6 @@ class DiT(ModelMixin, ConfigMixin):
                 )
             ]
         self.transformer_blocks = nn.ModuleList(all_blocks)
-
         # Output blocks
         self.norm_out = nn.LayerNorm(self.inner_dim, elementwise_affine=False, eps=1e-6)
         self.proj_out_1 = nn.Linear(self.inner_dim, 2 * self.inner_dim)
@@ -342,7 +336,8 @@ class DiT(ModelMixin, ConfigMixin):
         all_hidden_states = [hidden_states]
 
         # Process through transformer blocks
-        for idx, block in enumerate(self.transformer_blocks):
+        blocks = self.transformer_blocks
+        for idx, block in enumerate(blocks):
             if idx % 2 == 1 and self.config.interleave_self_attention:
                 hidden_states = block(
                     hidden_states,
@@ -418,7 +413,8 @@ class AlternateVLDiT(DiT):
         assert self.config.interleave_self_attention, "Interleave self attention must be enabled"
 
         # Process through transformer blocks
-        for idx, block in enumerate(self.transformer_blocks):
+        blocks = self.transformer_blocks
+        for idx, block in enumerate(blocks):
             if idx % 2 == 1:
                 # Self-attention blocks
                 hidden_states = block(
@@ -437,10 +433,12 @@ class AlternateVLDiT(DiT):
                     # Attend to image tokens
                     curr_encoder_attention_mask = image_attention_mask
 
+                block_encoder_hidden_states = encoder_hidden_states
+
                 hidden_states = block(
                     hidden_states,
                     attention_mask=None,
-                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_hidden_states=block_encoder_hidden_states,
                     encoder_attention_mask=curr_encoder_attention_mask,
                     temb=temb,
                 )
@@ -533,7 +531,7 @@ class SelfAttentionTransformer(ModelMixin, ConfigMixin):
         all_hidden_states = [hidden_states]
 
         # Process through transformer blocks
-        for _idx, block in enumerate(self.transformer_blocks):
+        for block in self.transformer_blocks:
             hidden_states = block(hidden_states)
             all_hidden_states.append(hidden_states)
 

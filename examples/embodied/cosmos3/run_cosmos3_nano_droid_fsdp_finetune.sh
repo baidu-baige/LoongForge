@@ -53,7 +53,7 @@ MODEL_CONFIG_ARGS=(
 )
 
 # ── Data params ───────────────────────────────────────────────
-NUM_WORKERS=${NUM_WORKERS:-4}
+NUM_WORKERS=${NUM_WORKERS:-8}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-strategy cosmos3_droid
@@ -64,8 +64,8 @@ DATA_ARGS=(
 )
 
 # ── Training params ───────────────────────────────────────────
-TRAIN_ITERS=${TRAIN_ITERS:-20}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-2}
+TRAIN_ITERS=${TRAIN_ITERS:-50}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
 SEED=${SEED:-42}
@@ -104,6 +104,9 @@ DISTRIBUTED_TRAINING_ARGS=(
     --dtype bfloat16
     --fsdp-reduce-dtype bf16
     --fsdp-wrap-modules MoTDecoderLayer
+    --fsdp-ignored-param-names embed_tokens lm_head \
+            mlp.gate_proj mlp.up_proj mlp.down_proj \
+            q_proj.weight k_proj.weight v_proj.weight
 )
 
 # ── Logging params ────────────────────────────────────────────
@@ -129,8 +132,11 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
-    "${DISTRIBUTED_TRAINING_ARGS[@]}" \
-    "${LOGGING_ARGS[@]}" \
     "model.qwen3_vl_path=$TOKENIZER_PATH" \
     "model.vae_path=$VAE_PATH" \
+    "model.compile_model=true" \
+    "data.use_image_augmentation=true" \
+    "data.colorjitter_on_gpu=true" \
+    "${DISTRIBUTED_TRAINING_ARGS[@]}" \
+    "${LOGGING_ARGS[@]}" \
     "$@"
