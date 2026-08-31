@@ -40,19 +40,10 @@ from loongforge.embodied.data.datasets.groot_n1_6.transforms.eagle3_model.proces
     Eagle3VLProcessor,
 )
 from .utils import (
-    ALBUMENTATIONS_AVAILABLE,
-    EMBODIMENT_STAT_CONFIGS,
-    EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
-    MODALITY_CONFIGS,
     ActionRepresentation,
-    EmbodimentTag,
+    ActionType,
     ModalityConfig,
     apply_sin_cos_encoding,
-    apply_with_replay,
-    build_image_transformations,
-    build_image_transformations_albumentations,
-    compute_relative_action_stats,
-    convert_lerobot_stats_to_processor_format,
     nested_dict_to_numpy,
     normalize_values_meanstd,
     normalize_values_minmax,
@@ -364,7 +355,15 @@ class StateActionProcessor(object):
                         raise KeyError(f"Reference state key '{state_key}' not found in state dict")
 
                     reference_state = state[state_key][-1]
-                    action[key] = action[key] - reference_state
+                    if action_config.type == ActionType.NON_EEF:
+                        # Isaac's JointPose converts both operands to float64
+                        # before computing the relative joint displacement.
+                        action[key] = np.asarray(action[key], dtype=np.float64) - np.asarray(
+                            reference_state,
+                            dtype=np.float64,
+                        )
+                    else:
+                        action[key] = action[key] - reference_state
 
         normalized_values = {}
         for joint_group in modality_keys:

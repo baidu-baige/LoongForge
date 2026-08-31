@@ -6,16 +6,21 @@
 from __future__ import annotations
 
 import json
-import os
+import copy
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import threading
 from typing import Any
 
 import numpy as np
-import torch
 import torch.distributed as dist
 from torch.utils.data import IterableDataset, get_worker_info
 
 from loongforge.embodied.data.datasets.lerobot_dataset import _build_lerobot_dataset
+
+
+_GROOT_N1D7_SHARD_PREFETCH_DEPTH = 3
 
 
 def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args):
@@ -65,6 +70,11 @@ def prepare_groot_n1d7_lerobot_dataset(
     dataset._groot_n1d7_data_cfg = data_cfg
     seed = _resolve_data_seed(training_args)
     dataset._groot_n1d7_seed = seed
+    # Shard double buffering is a data-supply fix, not a CUDA-Graph feature.
+    # Keep it enabled for both Eager and full-iteration Graph; Graph additionally
+    # overlaps the next batch's CPU/H2D transfer in its static input buffers.
+    dataset._groot_n1d7_prefetch_shards = True
+    dataset._groot_n1d7_shard_prefetch_depth = _GROOT_N1D7_SHARD_PREFETCH_DEPTH
     action_horizon = _resolve_data_action_horizon(model_cfg, data_cfg)
     if not _has_episode_index(dataset):
         raise TypeError(
@@ -88,6 +98,8 @@ def prepare_groot_n1d7_lerobot_dataset(
             shard_lengths=shard_meta["shard_lengths"],
             seed=seed,
             num_shards_per_epoch=int(data_cfg.num_shards_per_epoch),
+            prefetch_shards=dataset._groot_n1d7_prefetch_shards,
+            prefetch_depth=dataset._groot_n1d7_shard_prefetch_depth,
         )
 
     dataset._step_index = _build_effective_step_index(dataset, action_horizon)
@@ -124,6 +136,13 @@ def _has_episode_index(dataset: Any) -> bool:
 
 def _resolve_data_seed(training_args: Any) -> int:
     return int(training_args.seed)
+
+
+def _uses_full_iteration_cuda_graph(training_args: Any) -> bool:
+    return (
+        getattr(training_args, "cuda_graph_impl", "none") == "local"
+        and getattr(training_args, "cuda_graph_scope", "full") == "full_iteration"
+    )
 
 
 def _load_groot_n1d7_stats_json(dataset: Any, root: Path) -> None:
@@ -243,6 +262,8 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         shard_lengths: list[int],
         seed: int,
         num_shards_per_epoch: int,
+        prefetch_shards: bool = False,
+        prefetch_depth: int = 1,
     ) -> None:
         self._dataset = dataset
         self._transform = None
@@ -250,8 +271,11 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         self._shard_lengths = np.asarray(shard_lengths, dtype=int)
         self._seed = int(seed)
         self._num_shards_per_epoch = int(num_shards_per_epoch)
+        self._prefetch_shards = bool(prefetch_shards)
+        self._shard_prefetch_depth = max(1, int(prefetch_depth))
         self._pair_to_dataset_index = dict(dataset._groot_n1d7_pair_to_dataset_index)
         self._groot_n1d7_sharded_order = True
+        self._thread_local = threading.local()
 
         if self._dataset._transform is not None:
             self._dataset._transform = None
@@ -281,27 +305,169 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
                 if schedule_index % global_worker_count == worker_slot
             ]
             rng = np.random.default_rng(self._seed + epoch)
-            for shard_index in worker_schedule:
-                shard = self._get_transformed_shard(int(shard_index))
+            shard_iterator = (
+                self._iter_prefetched_shards(worker_schedule)
+                if self._prefetch_shards
+                else self._iter_synchronous_shards(worker_schedule)
+            )
+            for shard in shard_iterator:
                 indices_in_shard = np.arange(len(shard))
                 rng.shuffle(indices_in_shard)
                 for index in indices_in_shard:
                     yield shard[int(index)]
             epoch += 1
 
-    def _get_transformed_shard(self, shard_index: int) -> list[dict[str, Any]]:
+    def _iter_synchronous_shards(self, shard_schedule):
+        for shard_index in shard_schedule:
+            yield self._get_transformed_shard(int(shard_index))
+
+    def _iter_prefetched_shards(self, shard_schedule):
+        """Build shards concurrently with legacy-ordered transform replays."""
+        shard_indices = iter(shard_schedule)
+        try:
+            first_shard_index = next(shard_indices)
+        except StopIteration:
+            return
+
+        with ThreadPoolExecutor(
+            max_workers=self._shard_prefetch_depth,
+            thread_name_prefix="groot-shard-prefetch",
+        ) as executor:
+            first_replays = self._prepare_shard_replays(int(first_shard_index))
+            pending = deque(
+                [
+                    executor.submit(
+                        self._get_transformed_shard,
+                        int(first_shard_index),
+                        replays=first_replays,
+                    )
+                ]
+            )
+            for _ in range(self._shard_prefetch_depth - 1):
+                try:
+                    shard_index = next(shard_indices)
+                except StopIteration:
+                    break
+                replays = self._prepare_shard_replays(int(shard_index))
+                pending.append(
+                    executor.submit(
+                        self._get_transformed_shard,
+                        int(shard_index),
+                        replays=replays,
+                    )
+                )
+
+            while pending:
+                current_shard = pending.popleft().result()
+                try:
+                    shard_index = next(shard_indices)
+                except StopIteration:
+                    pass
+                else:
+                    replays = self._prepare_shard_replays(int(shard_index))
+                    pending.append(
+                        executor.submit(
+                            self._get_transformed_shard,
+                            int(shard_index),
+                            replays=replays,
+                        )
+                    )
+                yield current_shard
+
+    def _get_transformed_shard(
+        self,
+        shard_index: int,
+        *,
+        replays: list[Any] | None = None,
+    ) -> list[dict[str, Any]]:
         datapoints: list[dict[str, Any]] = []
+        source_dataset = self._get_thread_dataset()
+        sample_position = 0
         for episode_index, split_step_indices in self._sharded_episodes[shard_index]:
             for step_index in split_step_indices:
                 dataset_index = self._pair_to_dataset_index[(int(episode_index), int(step_index))]
-                datapoint = self._dataset[dataset_index]
-                if self._transform is not None:
+                datapoint = source_dataset[dataset_index]
+                if self._transform is not None and replays is not None:
+                    datapoint = _apply_transform_replay(
+                        self._transform,
+                        datapoint,
+                        replays[sample_position],
+                    )
+                    sample_position += 1
+                elif self._transform is not None:
                     datapoint = self._transform(datapoint)
                 datapoints.append(datapoint)
+        if replays is not None and sample_position != len(replays):
+            raise RuntimeError(
+                f"Shard replay count mismatch: used {sample_position}, got {len(replays)}"
+            )
         return datapoints
+
+    def _prepare_shard_replays(self, shard_index: int) -> list[Any] | None:
+        if self._transform is None:
+            return None
+        replay_count = sum(
+            len(split_step_indices)
+            for _, split_step_indices in self._sharded_episodes[shard_index]
+        )
+        return [
+            _prepare_transform_replay(self._transform)
+            for _ in range(replay_count)
+        ]
 
     def __getattr__(self, name: str):
         return object.__getattribute__(self._dataset, name)
+
+    def _get_thread_dataset(self) -> Any:
+        """Give each prefetch thread an independent dataset cache/decoder state."""
+        source_dataset = getattr(self._thread_local, "dataset", None)
+        if source_dataset is None:
+            source_dataset = copy.copy(self._dataset)
+            if hasattr(source_dataset, "_transform"):
+                source_dataset._transform = None
+            if hasattr(source_dataset, "_cached_ep_idx"):
+                source_dataset._cached_ep_idx = None
+                source_dataset._cached_ep_data = None
+            self._thread_local.dataset = source_dataset
+        return source_dataset
+
+
+def _resolve_replayable_transform(transform: Any) -> Any:
+    transforms = getattr(transform, "transforms", None)
+    if transforms is None:
+        return transform
+    if len(transforms) != 1:
+        raise RuntimeError(
+            "Deterministic shard prefetch requires exactly one replayable transform"
+        )
+    return transforms[0]
+
+
+def _prepare_transform_replay(
+    transform: Any,
+    datapoint: dict[str, Any] | None = None,
+) -> Any:
+    replayable = _resolve_replayable_transform(transform)
+    prepare_replay = getattr(replayable, "prepare_replay", None)
+    if prepare_replay is None:
+        raise RuntimeError(
+            f"Transform {type(replayable).__name__} does not support deterministic replay"
+        )
+    return prepare_replay(datapoint)
+
+
+def _apply_transform_replay(
+    transform: Any,
+    datapoint: dict[str, Any],
+    replay: Any,
+) -> dict[str, Any]:
+    replayable = _resolve_replayable_transform(transform)
+    apply_with_replay = getattr(replayable, "apply_with_replay", None)
+    if apply_with_replay is None:
+        raise RuntimeError(
+            f"Transform {type(replayable).__name__} does not support deterministic replay"
+        )
+    return apply_with_replay(datapoint, replay)
 
 
 def make_groot_n1d7_isaac_iterable_dataset(dataset: Any, transform: Any) -> IterableDataset:
@@ -319,6 +485,8 @@ def make_groot_n1d7_isaac_iterable_dataset(dataset: Any, transform: Any) -> Iter
         shard_lengths=shard_lengths,
         seed=seed,
         num_shards_per_epoch=num_shards_per_epoch,
+        prefetch_shards=bool(getattr(dataset, "_groot_n1d7_prefetch_shards", False)),
+        prefetch_depth=int(getattr(dataset, "_groot_n1d7_shard_prefetch_depth", 1)),
     )
 
 

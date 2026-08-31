@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Sequence
 import inspect
+import random
 import warnings
 
 import albumentations as A
@@ -51,6 +52,135 @@ def _albumentations_transform_init_kwargs(
     # Albumentations 2.x removed always_apply from BasicTransform.__init__.
     # Preserve the old intent when callers request it explicitly.
     return {"p": 1.0 if always_apply else p}
+
+
+def _set_albumentations_seed_if_supported(transform, seed: int | None) -> None:
+    """Seed Albumentations 2.x local RNGs; 1.4 uses worker-global RNGs."""
+    if seed is not None and hasattr(transform, "set_random_seed"):
+        transform.set_random_seed(seed)
+
+
+def _albumentations_integers(transform, low, high, *, size=None, dtype=None):
+    generator = getattr(transform, "random_generator", None)
+    if generator is not None:
+        kwargs = {"size": size}
+        if dtype is not None:
+            kwargs["dtype"] = dtype
+        return generator.integers(low, high, **kwargs)
+    kwargs = {"size": size}
+    if dtype is not None:
+        kwargs["dtype"] = dtype
+    return np.random.randint(low, high, **kwargs)
+
+
+def _albumentations_uniform(transform, low, high):
+    generator = getattr(transform, "random_generator", None)
+    if generator is not None:
+        return generator.uniform(low, high)
+    return np.random.uniform(low, high)
+
+
+class _Albumentations14Replay:
+    """Reproduce the GR00T upstream Albumentations 1.4 training pipeline.
+
+    Albumentations 2.x moved transform RNGs from the worker-global Python and
+    NumPy streams into per-transform generators. Upstream GR00T uses 1.4, so
+    preserving only the seed value is insufficient: it changes every crop,
+    color jitter, and subsequent state-dropout decision.
+    """
+
+    use_replay = True
+
+    def __init__(
+        self,
+        *,
+        max_size: int,
+        crop_fraction: float,
+        color_jitter_params: dict | None,
+    ) -> None:
+        self.max_size = int(max_size)
+        self.crop_fraction = float(crop_fraction)
+        self.mask_transforms = []
+        self._color_jitter = None
+        if color_jitter_params is not None:
+            self._color_jitter = A.ColorJitter(
+                brightness=color_jitter_params.get("brightness", 0.0),
+                contrast=color_jitter_params.get("contrast", 0.0),
+                saturation=color_jitter_params.get("saturation", 0.0),
+                hue=color_jitter_params.get("hue", 0.0),
+                p=1.0,
+            )
+
+    @staticmethod
+    def _resize_smallest(image: np.ndarray, max_size: int) -> np.ndarray:
+        height, width = image.shape[:2]
+        scale = max_size / min(height, width)
+        if scale == 1.0:
+            return image
+        new_height, new_width = (round(height * scale), round(width * scale))
+        return cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+    def sample_replay_for_shape(self, image_shape: tuple[int, int]) -> dict:
+        """Sample augmentation parameters from image geometry only."""
+        # ReplayCompose 1.4 checks its p with the worker-global Python RNG even
+        # when p=1.0. Basic transforms with p=1.0 do not consume this RNG.
+        random.random()
+        # Albumentations 1.4 normalizes max_size to a one-element sequence and
+        # calls random.choice for each SmallestMaxSize, including this no-op
+        # choice. Keep both draws because they precede ColorJitter sampling.
+        random.choice([self.max_size])
+        height, width = image_shape
+        scale = self.max_size / min(height, width)
+        height, width = round(height * scale), round(width * scale)
+        crop_height = max(1, int(height * self.crop_fraction))
+        crop_width = max(1, int(width * self.crop_fraction))
+        max_y = height - crop_height
+        max_x = width - crop_width
+        y_min = int(np.random.randint(0, max_y + 1)) if max_y > 0 else 0
+        x_min = int(np.random.randint(0, max_x + 1)) if max_x > 0 else 0
+        random.choice([self.max_size])
+
+        color = None
+        if self._color_jitter is not None:
+            brightness = random.uniform(*self._color_jitter.brightness)
+            contrast = random.uniform(*self._color_jitter.contrast)
+            saturation = random.uniform(*self._color_jitter.saturation)
+            hue = random.uniform(*self._color_jitter.hue)
+            order = np.asarray([0, 1, 2, 3])
+            order_rng = np.random.RandomState(random.randint(0, (1 << 32) - 1))
+            order_rng.shuffle(order)
+            color = {
+                "brightness": brightness,
+                "contrast": contrast,
+                "saturation": saturation,
+                "hue": hue,
+                "order": order.tolist(),
+            }
+        return {
+            "crop_coords": (x_min, y_min, x_min + crop_width, y_min + crop_height),
+            "color": color,
+        }
+
+    def sample_replay(self, image: np.ndarray) -> dict:
+        """Sample augmentation parameters without applying the image transform."""
+        return self.sample_replay_for_shape(image.shape[:2])
+
+    def _apply(self, image: np.ndarray, replay: dict) -> np.ndarray:
+        image = self._resize_smallest(image, self.max_size)
+        x_min, y_min, x_max, y_max = replay["crop_coords"]
+        image = image[y_min:y_max, x_min:x_max]
+        image = self._resize_smallest(image, self.max_size)
+        if replay["color"] is not None:
+            image = self._color_jitter.apply(image, **replay["color"])
+        return image
+
+    def __call__(self, *, image: np.ndarray) -> dict:
+        replay = self.sample_replay(image)
+        return {"image": self._apply(image, replay), "replay": replay}
+
+    def replay(self, *, image: np.ndarray, saved_augmentations: dict) -> dict:
+        """Re-apply previously sampled augmentation parameters to an image."""
+        return {"image": self._apply(image, saved_augmentations)}
 
 
 def apply_with_replay(transform, images, masks=None, replay=None):
@@ -124,8 +254,8 @@ class MaskedColorTransform(A.ImageOnlyTransform):
         if not region_mask.any():
             return img
 
-        random_color = self.random_generator.integers(0, 256, size=3).astype(np.float32)
-        alpha = self.random_generator.uniform(self.alpha_range[0], self.alpha_range[1])
+        random_color = _albumentations_integers(self, 0, 256, size=3).astype(np.float32)
+        alpha = _albumentations_uniform(self, self.alpha_range[0], self.alpha_range[1])
         result = img.copy().astype(np.float32)
         for channel in range(3):
             result[region_mask, channel] = (
@@ -163,7 +293,7 @@ class BackgroundNoiseTransform(A.ImageOnlyTransform):
         mask_2d = mask[..., 0] if mask.ndim == 3 else mask
         background = np.isin(mask_2d, self.target_mask_values)
         if background.any():
-            noise = self.random_generator.integers(0, 256, size=result.shape, dtype=np.uint8)
+            noise = _albumentations_integers(self, 0, 256, size=result.shape, dtype=np.uint8)
             result[background] = noise[background]
         return result
 
@@ -229,8 +359,8 @@ class FractionalRandomCrop(A.DualTransform):
         crop_width = max(1, int(width * self.crop_fraction))
         max_y = height - crop_height
         max_x = width - crop_width
-        y_min = int(self.random_generator.integers(0, max_y + 1)) if max_y > 0 else 0
-        x_min = int(self.random_generator.integers(0, max_x + 1)) if max_x > 0 else 0
+        y_min = int(_albumentations_integers(self, 0, max_y + 1)) if max_y > 0 else 0
+        x_min = int(_albumentations_integers(self, 0, max_x + 1)) if max_x > 0 else 0
         return {"crop_coords": (x_min, y_min, x_min + crop_width, y_min + crop_height)}
 
     def get_transform_init_args_names(self) -> tuple[str, ...]:
@@ -368,6 +498,31 @@ def build_image_transformations_albumentations(
     else:
         max_size = shortest_image_edge
 
+    extra_augmentation_config = extra_augmentation_config or {}
+    use_albumentations14_replay = (
+        not _ALBUMENTATIONS_ACCEPTS_ALWAYS_APPLY
+        and not letter_box_transform
+        and (random_rotation_angle is None or random_rotation_angle == 0)
+        and not extra_augmentation_config.get("background_noise_transforms")
+        and not extra_augmentation_config.get("masked_region_transforms")
+    )
+    if use_albumentations14_replay:
+        train_transform = _Albumentations14Replay(
+            max_size=max_size,
+            crop_fraction=fraction_to_use,
+            color_jitter_params=color_jitter_params,
+        )
+        eval_transform = A.Compose(
+            [
+                A.SmallestMaxSize(max_size=max_size, interpolation=cv2.INTER_AREA),
+                FractionalCenterCrop(crop_fraction=fraction_to_use),
+                A.SmallestMaxSize(max_size=max_size, interpolation=cv2.INTER_AREA),
+            ]
+        )
+        eval_transform.use_replay = False
+        eval_transform.mask_transforms = []
+        return train_transform, eval_transform
+
     train_transform_list = []
     if letter_box_transform:
         train_transform_list.append(LetterBoxPad())
@@ -395,11 +550,9 @@ def build_image_transformations_albumentations(
 
     train_transform = A.ReplayCompose(train_transform_list, p=1.0)
     train_transform.use_replay = True
-    if seed is not None:
-        train_transform.set_random_seed(seed)
+    _set_albumentations_seed_if_supported(train_transform, seed)
 
     mask_transforms = []
-    extra_augmentation_config = extra_augmentation_config or {}
     for noise_config in extra_augmentation_config.get("background_noise_transforms", []):
         mask_transforms.append(
             BackgroundNoiseTransform(
@@ -417,7 +570,7 @@ def build_image_transformations_albumentations(
         )
     if seed is not None:
         for index, mask_transform in enumerate(mask_transforms):
-            mask_transform.set_random_seed(seed + index + 1)
+            _set_albumentations_seed_if_supported(mask_transform, seed + index + 1)
     train_transform.mask_transforms = mask_transforms
 
     eval_transform_list = []
@@ -433,8 +586,7 @@ def build_image_transformations_albumentations(
     eval_transform = A.Compose(eval_transform_list)
     eval_transform.use_replay = False
     eval_transform.mask_transforms = []
-    if seed is not None:
-        eval_transform.set_random_seed(seed)
+    _set_albumentations_seed_if_supported(eval_transform, seed)
 
     return train_transform, eval_transform
 
