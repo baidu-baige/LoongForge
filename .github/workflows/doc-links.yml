@@ -1,0 +1,22 @@
+name: Doc Links
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify example and config references in docs
+        run: python3 ci/check_doc_links.py

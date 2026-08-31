@@ -1,1 +1,1 @@
-["check", "spdx", "gitleaks", "ruff", "build", "actionlint", "scan"]
+["check", "spdx", "gitleaks", "ruff", "build", "actionlint", "scan", "doc-links"]
