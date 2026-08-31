@@ -1,7 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from LingBot-VA under the Apache-2.0 License.
+# Modified from LingBot-VA (``wan_va/dataset/lerobot_latent_dataset.py``) under the
+# Apache-2.0 License.
 # Copyright 2024-2025 The Robbyant Team Authors. All rights reserved.
 
 """Latent LeRobot dataset implementation for LingBot-VA."""
@@ -10,19 +11,30 @@ from dataclasses import dataclass, field
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, List
 import json
 import os
 import time
 
 import datasets
+from datasets import config as datasets_config
+
+# datasets 4.0 probes VideoReader even for action-only formatting. torchvision
+# stays optional: a missing install is the same situation as a build without
+# VideoReader, so the probe is switched off either way.
+try:
+    import torchvision.io as torchvision_io
+except ImportError:
+    torchvision_io = None
+
+if torchvision_io is None or not hasattr(torchvision_io, "VideoReader"):
+    datasets_config.TORCHVISION_AVAILABLE = False
 import numpy as np
 import torch
 
 from loongforge.embodied.model.lingbot_va.features import (
     REPO_DISCOVERY_CACHE_POLL_SECONDS,
     REPO_DISCOVERY_CACHE_WAIT_SECONDS,
-    feature_enabled,
 )
 from einops import rearrange
 from torch.utils.data import Dataset, get_worker_info
@@ -231,15 +243,6 @@ class LingBotVAMultiLatentDataset(Dataset):
         dataset_id = np.searchsorted(self.offsets, index, side="right") - 1
         local_index = index - self.offsets[dataset_id]
         output = self.datasets[dataset_id][local_index]
-        if (
-            feature_enabled("LINGBOT_SAMPLE_META_EXPORT")
-            and "_lingbot_sample_meta" in output
-        ):
-            sample_meta = dict(output["_lingbot_sample_meta"])
-            sample_meta["global_index"] = int(index)
-            sample_meta["dataset_id"] = int(dataset_id)
-            sample_meta["dataset_offset"] = int(self.offsets[dataset_id])
-            output["_lingbot_sample_meta"] = sample_meta
         return output
 
     def estimate_sample_cost(self, index: int) -> float:
@@ -336,46 +339,11 @@ class LingBotVALatentDataset(LeRobotV3Dataset):
         hf_data = self.hf_torch_view[global_start:global_end]
         latent_data.update(hf_data)
         output = self._cat_video_latents(latent_data)
-        cfg_meta = output.pop("_lingbot_cfg_meta", None)
         output["actions"], output["actions_mask"] = self._action_post_process(
             local_start, local_end, latent_frame_ids, latent_data["action"]
         )
         output["latents"] = output["latents"].permute(3, 0, 1, 2).contiguous()
         output["frame_ids"] = torch.as_tensor(latent_frame_ids, dtype=torch.long)
-        if feature_enabled("LINGBOT_SAMPLE_META_EXPORT"):
-            frame_ids = torch.as_tensor(latent_frame_ids, dtype=torch.long)
-            stride = (
-                int(frame_ids[1].item() - frame_ids[0].item())
-                if frame_ids.numel() > 1
-                else 0
-            )
-            output["_lingbot_sample_meta"] = {
-                "repo_id": str(self.repo_id),
-                "local_index": int(index % len(self.sample_metas)),
-                "episode_index": int(episode_index),
-                "start_frame": int(local_start),
-                "end_frame": int(local_end),
-                "span": int(local_end - local_start),
-                "frame_ids_len": int(frame_ids.numel()),
-                "frame_ids_first": (
-                    int(frame_ids[0].item()) if frame_ids.numel() else -1
-                ),
-                "frame_ids_last": (
-                    int(frame_ids[-1].item()) if frame_ids.numel() else -1
-                ),
-                "frame_stride": stride,
-                "latent_c": int(output["latents"].shape[0]),
-                "latent_f": int(output["latents"].shape[1]),
-                "latent_h": int(output["latents"].shape[2]),
-                "latent_w": int(output["latents"].shape[3]),
-                "action_c": int(output["actions"].shape[0]),
-                "action_f": int(output["actions"].shape[1]),
-                "action_tokens": int(output["actions"].shape[2]),
-                "action_w": int(output["actions"].shape[3]),
-                "action_mask_sum": int(output["actions_mask"].sum().item()),
-            }
-            if isinstance(cfg_meta, dict):
-                output["_lingbot_sample_meta"].update(cfg_meta)
         return output
 
     def estimate_sample_cost(self, index: int) -> float:
@@ -512,55 +480,6 @@ class LingBotVALatentDataset(LeRobotV3Dataset):
         if cfg_dropped:
             text_emb = self.empty_emb
         output = {"latents": cat_latent, "text_emb": text_emb}
-        if feature_enabled("LINGBOT_SAMPLE_META_EXPORT"):
-            with torch.no_grad():
-                text_float = (
-                    text_emb.detach().float() if torch.is_tensor(text_emb) else None
-                )
-                empty_float = (
-                    self.empty_emb.detach().float()
-                    if torch.is_tensor(self.empty_emb)
-                    else None
-                )
-                if (
-                    text_float is not None
-                    and empty_float is not None
-                    and text_float.shape == empty_float.shape
-                ):
-                    text_is_empty = bool(
-                        torch.equal(text_emb.cpu(), self.empty_emb.cpu())
-                    )
-                else:
-                    text_is_empty = bool(cfg_dropped)
-                output["_lingbot_cfg_meta"] = {
-                    "cfg_draw": float(cfg_draw),
-                    "cfg_prob": float(self.config.cfg_prob),
-                    "cfg_dropped": int(cfg_dropped),
-                    "text_is_empty": int(text_is_empty),
-                    "text_numel": (
-                        int(text_float.numel()) if text_float is not None else 0
-                    ),
-                    "text_sum": (
-                        float(text_float.sum().item())
-                        if text_float is not None and text_float.numel()
-                        else 0.0
-                    ),
-                    "text_abs_sum": (
-                        float(text_float.abs().sum().item())
-                        if text_float is not None and text_float.numel()
-                        else 0.0
-                    ),
-                    "text_sq_sum": (
-                        float(text_float.pow(2).sum().item())
-                        if text_float is not None and text_float.numel()
-                        else 0.0
-                    ),
-                    "text_max_abs": (
-                        float(text_float.abs().max().item())
-                        if text_float is not None and text_float.numel()
-                        else 0.0
-                    ),
-                }
         return output
 
     def _action_post_process(
@@ -634,10 +553,9 @@ def _find_lerobot_repos(config: LingBotVALatentDatasetConfig) -> List[str]:
         The computed result.
     """
     max_repos = int(os.getenv("LINGBOT_VA_MAX_REPOS", 0))
-    if feature_enabled("LINGBOT_REPO_DISCOVERY_CACHE"):
-        cached = _load_or_build_repo_discovery_cache(config, max_repos)
-        if cached is not None:
-            return cached
+    cached = _load_or_build_repo_discovery_cache(config, max_repos)
+    if cached is not None:
+        return cached
     return _scan_lerobot_repos(config, max_repos)
 
 
