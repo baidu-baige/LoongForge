@@ -6,11 +6,11 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="520">
+    <img alt="LoongForge — 更快地训练 LLM、VLM、Diffusion 与具身模型。" src="./docs/assets/images/logo/banner.svg" width="700">
   </picture>
 </p>
 
-<h4>一个高性能的训练框架，覆盖 LLM、VLM、Diffusion 与具身模型。</h4>
+<h4>更快地训练 LLM、VLM、Diffusion 与具身模型。</h4>
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/"><b>🌐 官网</b></a>

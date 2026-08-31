@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 140" width="680" height="140"
-     role="img" aria-label="LoongForge">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 830 160" width="830" height="160"
+     role="img" aria-label="LoongForge — Train LLMs, VLMs, diffusion and embodied models, faster.">
   <defs>
     <linearGradient id="lf-icon" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%"   stop-color="#4F46E5"/>
@@ -14,7 +14,7 @@
   </defs>
 
   <!-- Icon: 100×100 squircle + S-curve -->
-  <g transform="translate(20,20) scale(1.5625)">
+  <g transform="translate(20,30) scale(1.5625)">
     <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#lf-icon)"/>
     <path d="M18 40 C 22 30, 28 28, 32 32 C 36 36, 42 34, 46 24"
           stroke="#fff" stroke-width="3.2" stroke-linecap="round" fill="none"/>
@@ -23,9 +23,15 @@
     <path d="M24 46 L40 46" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
   </g>
 
-  <!-- Wordmark, vertically centered with the icon -->
-  <text x="145" y="96"
+  <!-- Wordmark -->
+  <text x="145" y="83"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
-        font-weight="800" font-size="78" letter-spacing="-2"
+        font-weight="800" font-size="70" letter-spacing="-2"
         fill="url(#lf-text)">LoongForge</text>
+
+  <!-- Tagline -->
+  <text x="148" y="125"
+        font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
+        font-weight="500" font-size="22"
+        fill="#8B5CF6">Train LLMs, VLMs, diffusion &amp; embodied models — <tspan font-weight="800" fill="#EC4899">faster</tspan>.</text>
 </svg>

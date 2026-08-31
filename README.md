@@ -6,11 +6,9 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="520">
+    <img alt="LoongForge — Train LLMs, VLMs, diffusion &amp; embodied models, faster." src="./docs/assets/images/logo/banner.svg" width="700">
   </picture>
 </p>
-
-<h4>A high-performance framework for training LLMs, VLMs, diffusion, and embodied models.</h4>
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/"><b>🌐 Website</b></a>
