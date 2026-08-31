@@ -397,6 +397,7 @@ The following arguments give fine-grained control over FSDP sharding, wrap polic
 | Root reshard policy | `--fsdp-reshard-root` | `False` | `true`, `false`, `none`, integer > 1 | Reshard policy for the root FSDP group |
 | Wrap classes | `--fsdp-wrap-modules` | `None` | Comma-separated module class names | Specify FSDP units |
 | Exclude wrap classes | `--fsdp-no-wrap-modules` | `None` | Comma-separated module class names | Exclude the given module classes |
+| Exclude params from sharding | `--fsdp-ignored-param-names` | `[]` | Space-separated name substrings | Frozen params matching any substring stay replicated on every rank |
 | Auto wrap threshold | `--fsdp-min-num-params` | `1000000` | Non-negative integer | Parameter threshold for auto-wrapping repeated layers |
 | Leftover wrap threshold | `--fsdp-leftover-min-num-params` | `1000000` | Non-negative integer | Parameter threshold for auto-wrapping leftover modules |
 | Original parameter dtype | `--fsdp-original-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | Parameter dtype before FSDP sharding |
