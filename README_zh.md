@@ -47,7 +47,6 @@
 
 > 🐉 LoongForge 名字源于中国传统 **龙舟**，象征协同发力与破浪前行。
 
-<a id="architecture"></a>
 ## 🏗️ 架构
 
 由于不同类别、不同规模的模型，最优训练策略不同，LoongForge 采用多后端架构。
@@ -56,7 +55,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/architecture/loongforge-architecture-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/architecture/loongforge-architecture.svg">
-    <img alt="LoongForge 架构图" src="./docs/assets/images/architecture/loongforge-architecture.svg" width="100%">
+    <img alt="LoongForge 架构：面向 LLM / VLM / 扩散模型的 Megatron 栈，与面向具身模型的 torch-native 栈" src="./docs/assets/images/architecture/loongforge-architecture.svg" width="100%">
   </picture>
 </p>
 
@@ -74,6 +73,10 @@
 - **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
+
+<details>
+<summary><b>📅 更多</b></summary>
+
 - **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/05]** ⚡ **Wan 2.2** 训练 **加速 116%**，并新增 CP（上下文并行）与数据 packing 策略支持。
 - **[2026/05]** ✨ 新增 **Kimi K2.5 / K2.6** 训练支持，并支持 **INT4 / NVFP4** PTQ 量化能力。
@@ -82,6 +85,8 @@
 - **[2026/04]** 🧩 新增 **MiniMax-M2.7** 在 NVIDIA GPU 与昆仑芯 XPU 上的训练支持。
 - **[2026/04]** 🚀 LoongForge 源码在 GitHub 上正式公开。[[blog](https://zhuanlan.zhihu.com/p/2031006068797600446)]
 - **[2025/10]** 🌟 基于AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。[[blog](https://mp.weixin.qq.com/s/1y7Br15pBpUZ-90j5OGncA)]
+
+</details>
 
 ## ✨ 核心特性
 
@@ -120,7 +125,7 @@
 以下是一些模型相对主流开源基线的训练加速示例——每个模型与其基线的对比，均在相同机型与相同训练超参数下测得：
 
 <p align="center">
-  <img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" width="860" />
+  <img alt="LoongForge Benchmark Speedup" src="./docs/assets/images/benchmark_speedup.png" width="860" />
 </p>
 
 > DeepSeek-V3.2 Lite 为 DSA 算子级优化的结果，受测试环境规模限制，在减层配置下验证。<br>
@@ -146,7 +151,7 @@
 
 LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型家族。点击模型名称可查看对应的训练示例；完整的使用说明请参阅[用户手册](https://loongforge.readthedocs.io/zh-cn/latest/index.html)，模型变体请参阅[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
 
-<table width="100%" style="table-layout: fixed; border-collapse: collapse;">
+<table width="100%">
 <colgroup>
 <col width="25%">
 <col width="25%">
@@ -187,7 +192,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
 <li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
-<li><a href="examples/glm5.2_vit/">GLM-5.2 + Kimi-K2.6 ViT</a> ✅</li>
+<li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
 <li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>
 <li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a> ✅</li>
 <li><a href="examples/internvl2.5/">InternVL2.5</a> ✅</li>
@@ -199,7 +204,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 <ul>
 <li><a href="examples/wan/">Wan2.1</a> ✅</li>
 <li><a href="examples/wan/">Wan2.2</a> ✅</li>
-<li><a href="examples/qwen_image/">Qwen-Image</a> ✅</li>
+<li><a href="examples/qwen_image/">Qwen-Image-Edit-2511</a> ✅</li>
 </ul>
 </td>
 <td valign="top">

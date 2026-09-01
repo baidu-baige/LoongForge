@@ -47,7 +47,6 @@
 
 > 🐉 LoongForge is named after the traditional Chinese **loong boat (龙舟)**, a symbol of coordinated power and forward momentum.
 
-<a id="architecture"></a>
 ## 🏗️ Architecture
 
 Since optimal training strategies differ across model families and scales, LoongForge adopts a multi-backend architecture.
@@ -56,7 +55,7 @@ Since optimal training strategies differ across model families and scales, Loong
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/architecture/loongforge-architecture-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/architecture/loongforge-architecture.svg">
-    <img alt="LoongForge Architecture" src="./docs/assets/images/architecture/loongforge-architecture.svg" width="100%">
+    <img alt="LoongForge architecture: a patched-Megatron stack for LLMs, VLMs and diffusion models alongside a torch-native stack for embodied models" src="./docs/assets/images/architecture/loongforge-architecture.svg" width="100%">
   </picture>
 </p>
 
@@ -74,6 +73,10 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
+
+<details>
+<summary><b>📅 More</b></summary>
+
 - **[2026/06]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **2.3× speedup** on GR00T training. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/05]** ⚡ Accelerated **Wan 2.2** training by **116%**, and added CP and data packing support.
 - **[2026/05]** ✨ Added training support for **Kimi K2.5 / K2.6**, and introduced **INT4 / NVFP4** PTQ.
@@ -82,6 +85,8 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/04]** 🧩 Added training support for **MiniMax-M2.7** on both NVIDIA GPU and Kunlun XPU.
 - **[2026/04]** 🚀 LoongForge source code publicly available on GitHub. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-04-announcing-loongforge.html)]
 - **[2025/10]** 🌟 Powered the training and public release of **LLaVA-OneVision-1.5** under **AIAK-Training-LLM**, the predecessor of LoongForge. [[blog](https://baidu-baige.github.io/LoongForge/blog/2025-10-llava-onevision-case-study.html)]
+
+</details>
 
 ## ✨ Key Features
 
@@ -120,7 +125,7 @@ Since optimal training strategies differ across model families and scales, Loong
 Below are some examples of training speedups over mainstream open-source baselines — for each model, LoongForge and its baseline were benchmarked on the same machine type with the same training hyperparameters:
 
 <p align="center">
-  <img alt="LoongForge Benchmark Speedup" src="docs/assets/images/benchmark_speedup.png" width="860" />
+  <img alt="LoongForge Benchmark Speedup" src="./docs/assets/images/benchmark_speedup.png" width="860" />
 </p>
 
 > DeepSeek-V3.2 Lite reflects DSA operator-level optimizations and was validated on a reduced-layer configuration due to test-bed scale limits.<br>
@@ -146,7 +151,7 @@ See the full documentation for installation, tutorials, and advanced usage — [
 
 LoongForge supports a broad range of model families across LLM, VLM, diffusion, and embodied. Select a model below to open its training examples. For complete usage instructions, see the [User Guide](https://loongforge.readthedocs.io/en/latest/index.html) and the full [model support matrix](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html).
 
-<table width="100%" style="table-layout: fixed; border-collapse: collapse;">
+<table width="100%">
 <colgroup>
 <col width="25%">
 <col width="25%">
@@ -187,7 +192,7 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
 <li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
-<li><a href="examples/glm5.2_vit/">GLM-5.2 + Kimi-K2.6 ViT</a> ✅</li>
+<li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
 <li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>
 <li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a> ✅</li>
 <li><a href="examples/internvl2.5/">InternVL2.5</a> ✅</li>
@@ -199,7 +204,7 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 <ul>
 <li><a href="examples/wan/">Wan2.1</a> ✅</li>
 <li><a href="examples/wan/">Wan2.2</a> ✅</li>
-<li><a href="examples/qwen_image/">Qwen-Image</a> ✅</li>
+<li><a href="examples/qwen_image/">Qwen-Image-Edit-2511</a> ✅</li>
 </ul>
 </td>
 <td valign="top">
