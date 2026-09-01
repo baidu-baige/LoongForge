@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Correctness tests for the GR00T-N1.7 precision-compatible AdamW paths."""
 
 import math

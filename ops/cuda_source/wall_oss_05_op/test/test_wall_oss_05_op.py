@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Correctness and performance tests for the wall_oss_05_op CUDA extension.
 
 Install first:

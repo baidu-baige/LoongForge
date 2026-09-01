@@ -1,3 +1,9 @@
+// Copyright 2026 The LoongForge Authors.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Modified from Wall-X (https://github.com/X-Square-Robot/wall-x)
+// under the Apache-2.0 License.
+
 // Re-enable CUDA half operators (PyTorch disables them)
 #undef __CUDA_NO_HALF_OPERATORS__
 #undef __CUDA_NO_HALF_CONVERSIONS__

@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Python interface for GR00T-N1.7 DDP reducer bucket control."""
 
 from . import _ddp_reducer_bucket_control

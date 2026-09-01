@@ -1,3 +1,10 @@
+// Copyright 2026 The LoongForge Authors.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
+// SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
+//
+// Modified from PyTorch (https://github.com/pytorch/pytorch)
+// under the BSD-3-Clause License.
+
 #include <torch/extension.h>
 
 #include <vector>

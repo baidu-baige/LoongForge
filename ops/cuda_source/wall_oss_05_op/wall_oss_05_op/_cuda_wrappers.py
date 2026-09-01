@@ -1,7 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from Wall-X under the Apache-2.0 License.
+# Modified from Wall-X (https://github.com/X-Square-Robot/wall-x)
+# under the Apache-2.0 License.
 
 """CUDA kernel wrappers with autograd support."""
 

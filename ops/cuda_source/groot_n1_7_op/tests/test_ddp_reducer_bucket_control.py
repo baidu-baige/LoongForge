@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Smoke tests for the PyTorch-internal DDP reducer binding."""
 
 import os

@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """AOT package for the GR00T-N1.7 fused operators."""
 
 try:

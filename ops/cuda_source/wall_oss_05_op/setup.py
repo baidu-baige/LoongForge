@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from Wall-X under the Apache-2.0 License.
-#
 # Builds the wall_oss_0_5 CUDA operator extension.
 #
 # Usage (from this directory):
@@ -141,6 +139,8 @@ setup(
         "(rope, m_rope, permute, rot_pos, window_index, get_rope_index, "
         "swiglu_exact, rmsnorm_exact)."
     ),
+    license="Apache-2.0",
+    classifiers=["License :: OSI Approved :: Apache Software License"],
     package_dir={"wall_oss_05_op": "wall_oss_05_op"},
     packages=["wall_oss_05_op"],
     ext_modules=build_ext_modules(),

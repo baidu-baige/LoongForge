@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Correctness tests for the Qwen3-VL fused inference operators."""
 
 import pytest

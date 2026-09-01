@@ -1,3 +1,6 @@
+// Copyright 2026 The LoongForge Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 #include <torch/extension.h>
 
 #include <torch/csrc/distributed/c10d/reducer.hpp>

@@ -1,3 +1,6 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 """Build the GR00T-N1.7 CUDA and DDP operator extensions."""
 
 import os
@@ -69,6 +72,11 @@ setup(
     name="groot_n1_7_op",
     version="1.0.0",
     description="GR00T-N1.7 fused CUDA and DDP operators",
+    license="Apache-2.0",
+    classifiers=[
+        "License :: OSI Approved :: Apache Software License",
+        "License :: OSI Approved :: BSD License",
+    ],
     packages=find_packages(include=["groot_n1_7_op"]),
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExtension},

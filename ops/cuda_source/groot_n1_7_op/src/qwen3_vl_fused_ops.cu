@@ -1,3 +1,10 @@
+// Copyright 2026 The LoongForge Authors.
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Modified from Isaac-GR00T (https://github.com/NVIDIA/Isaac-GR00T)
+// under the Apache-2.0 License.
+
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAStream.h>

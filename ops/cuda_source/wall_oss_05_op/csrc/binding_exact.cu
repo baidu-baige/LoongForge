@@ -1,6 +1,9 @@
 // Copyright 2026 The LoongForge Authors.
 // SPDX-License-Identifier: Apache-2.0
 //
+// Modified from Wall-X (https://github.com/X-Square-Robot/wall-x)
+// under the Apache-2.0 License.
+//
 // Bindings for the bitwise-exact fused kernels.
 //
 // These live in a SEPARATE extension module (``_cuda_ext_exact_bin``) from the
