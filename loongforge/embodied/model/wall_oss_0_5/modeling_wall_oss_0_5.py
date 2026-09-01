@@ -311,6 +311,6 @@ class WallOss05Model(nn.Module):
 
     def on_train_begin(self, *, ctx) -> None:
         """Emit operator backend inventory before measured iterations."""
-        from wall_oss_05_op import log_backend_inventory
+        from loongforge.embodied.model.wall_oss_0_5.wall_oss_05_fused_ops import log_backend_inventory
 
         log_backend_inventory(rank=ctx.rank, world_size=ctx.world_size)

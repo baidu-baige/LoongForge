@@ -59,7 +59,13 @@ from transformers.utils import (
 
 from .configuration_qwen2_5_vl import Qwen25VLConfig, Qwen25VLVisionConfig
 from loongforge.embodied.model.wall_oss_0_5.core.attention.selector import AttentionsSelectorMixin
-from wall_oss_05_op import rot_pos_emb, get_window_index, m_rope, rmsnorm, swiglu
+from loongforge.embodied.model.wall_oss_0_5.wall_oss_05_fused_ops import (
+    rot_pos_emb,
+    get_window_index,
+    m_rope,
+    rmsnorm,
+    swiglu,
+)
 
 if is_flash_attn_2_available():
     from flash_attn import flash_attn_func

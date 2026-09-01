@@ -53,7 +53,11 @@ from loongforge.embodied.model.wall_oss_0_5.core.action.normalizer import (
 from loongforge.embodied.model.wall_oss_0_5.core.action.moe import TokenTypeRouter, SparseMoeBlock
 from loongforge.embodied.model.wall_oss_0_5.core.attention.joint import JOINT_QWEN_ATTENTION_CLASSES
 from loongforge.embodied.model.wall_oss_0_5.core.moe_indices import build_moe_group_indices
-from wall_oss_05_op import unpermute, permute, get_rope_index
+from loongforge.embodied.model.wall_oss_0_5.wall_oss_05_fused_ops import (
+    unpermute,
+    permute,
+    get_rope_index,
+)
 from loongforge.embodied.model.wall_oss_0_5.core.vision_metadata import (
     compute_vision_grid_metadata,
 )

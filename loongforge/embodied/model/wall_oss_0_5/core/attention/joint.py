@@ -20,7 +20,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 )
 from transformers.utils import logging
 
-from wall_oss_05_op import m_rope, permute, unpermute
+from loongforge.embodied.model.wall_oss_0_5.wall_oss_05_fused_ops import m_rope, permute, unpermute
 
 
 logger = logging.get_logger(__name__)
