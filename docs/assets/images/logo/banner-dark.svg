@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 755 138" width="755" height="138"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 812 138" width="812" height="138"
      role="img" aria-label="LoongForge — Train LLMs, VLMs, diffusion and embodied models, faster.">
   <defs>
     <linearGradient id="lf-icon" x1="0" y1="0" x2="1" y2="1">
@@ -32,9 +32,10 @@
         font-weight="800" font-size="86" letter-spacing="-2.5"
         fill="url(#lf-text)">LoongForge</text>
 
-  <!-- Tagline: lighter weight + slight tracking for contrast against the wordmark -->
+  <!-- Tagline: one colour for both banners — must stay legible even when a
+       renderer picks the light banner but paints it on a dark surface -->
   <text x="151" y="121"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
-        font-weight="400" font-size="19" letter-spacing="0.3"
-        fill="#FFFFFF">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
+        font-weight="600" font-size="19" letter-spacing="0.3"
+        fill="#A855F7">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
 </svg>

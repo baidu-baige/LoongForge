@@ -6,7 +6,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge — Train LLMs, VLMs, diffusion &amp; embodied models, faster." src="./docs/assets/images/logo/banner.svg" width="620">
+    <img alt="LoongForge — Train LLMs, VLMs, diffusion &amp; embodied models, faster." src="./docs/assets/images/logo/banner.svg" width="667">
   </picture>
 </p>
 
