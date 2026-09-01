@@ -33,5 +33,5 @@
   <text x="148" y="125"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
         font-weight="500" font-size="22"
-        fill="#A78BFA">Train LLMs, VLMs, diffusion &amp; embodied models — <tspan font-weight="800" fill="#F472B6">faster</tspan>.</text>
+        fill="url(#lf-text)">Train LLMs, VLMs, diffusion &amp; embodied models — <tspan font-weight="800">faster</tspan>.</text>
 </svg>
