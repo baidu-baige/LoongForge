@@ -32,7 +32,7 @@
       theme: { extend: { colors: { brand: { 50: '#EEF2FF', 100: '#E0E7FF', 500: '#6366F1', 600: '#4F46E5', 700: '#4338CA' } } } }
     };
   </script>
-  <link rel="stylesheet" href="assets/css/style.css?v=20260831-r4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260901-r13" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -51,53 +51,50 @@
     <div class="hero-orb o3"></div>
     <div class="absolute inset-0 hero-grid"></div>
     <div
-      class="relative max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-24 pb-28 text-center">
+      class="relative max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-16 pb-16 text-center">
       <!-- Copy -->
       <div class="max-w-5xl mx-auto">
-        <div
-          class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-indigo-200 text-indigo-700 dark:bg-white/10 dark:border-white/15 dark:text-white text-xs mb-6"
-          data-i18n="hero.badge">
-          🐉 Part of the Baidu-Baige Loong open-source series
-        </div>
         <h1 class="text-6xl md:text-8xl font-extrabold tracking-tight mb-4 leading-[1.05]">
           <span class="text-gradient">LoongForge</span>
         </h1>
         <div
           class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-5 md:whitespace-nowrap [text-wrap:balance]"
           data-i18n="hero.slogan">
-          Train LLMs, VLMs, Diffusion &amp; Embodied models — faster.
+          Train LLMs, VLMs, Diffusion&nbsp;&amp; Embodied models — faster.
         </div>
-        <p class="max-w-[60rem] mx-auto text-base md:text-lg text-gray-600 dark:text-gray-300 mb-8 [text-wrap:balance]"
+        <p class="max-w-[60rem] mx-auto text-base md:text-lg text-gray-600 dark:text-gray-300 mb-8"
           data-i18n-html="hero.subtitle_html">
-          A <b>unified</b>, <b>high-performance</b> framework for training <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>,
-          and <b>embodied</b> models — <span class="whitespace-nowrap">multi-backend</span>, with native NVIDIA GPU
-          &amp;
-          Kunlun XPU support
+          <b>Ready-to-run</b> configs for <b>35+</b> model families — built on Megatron-LM and
+          <span class="whitespace-nowrap">torch-native</span> backends.
         </p>
-        <div class="flex flex-wrap gap-3 justify-center mb-6">
+        <div class="flex flex-wrap items-center gap-3 justify-center">
           <a href="#quickstart" class="lf-btn" data-i18n="hero.cta.start">🚀 Quick Start</a>
           <a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener" class="lf-btn-ghost"
             data-i18n="hero.cta.github">⭐ View on GitHub</a>
           <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link
             class="lf-btn-ghost" data-i18n="hero.cta.docs">📚 Read the Docs</a>
         </div>
-        <div class="flex flex-wrap gap-2 justify-center text-xs font-semibold">
-          <span
-            class="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-white/10 dark:text-indigo-200 dark:border-white/10"
-            data-i18n="hero.vp.1.k">Easy</span>
-          <span
-            class="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 dark:bg-white/10 dark:text-amber-200 dark:border-white/10"
-            data-i18n="hero.vp.2.k">Efficient</span>
-          <span
-            class="px-3 py-1 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 dark:bg-white/10 dark:text-cyan-200 dark:border-white/10"
-            data-i18n="hero.vp.3.k">Multi-chip</span>
-        </div>
-        <div class="mt-6">
-          <a href="#benchmark"
-            class="lf-inline-link inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200"
-            data-i18n="hero.bench.link">📊 See the training speedup benchmark</a>
-        </div>
       </div>
+
+      <!-- Speedup demo: silent loop until clicked, then the full recording -->
+      <figure class="lf-demo max-w-4xl mx-auto mt-12">
+        <a class="lf-demo-shot" href="assets/video/dreamzero-comparison.mp4" data-demo-play data-w="1920"
+          data-h="1080">
+          <picture>
+            <source media="(prefers-reduced-motion: reduce)" srcset="assets/img/dreamzero-poster.jpg">
+            <img src="assets/img/dreamzero-loop.webp"
+              alt="DreamZero training run compared side by side: LoongForge against the baseline" width="1280"
+              height="720" loading="eager" fetchpriority="low" decoding="async">
+          </picture>
+          <span class="lf-demo-badge" aria-hidden="true"></span>
+          <span class="sr-only" data-i18n="hero.demo.play">Play the demo — 83 seconds, has background music</span>
+        </a>
+        <figcaption class="lf-demo-cap">
+          <span data-i18n="hero.demo.label">🎬 4.38× faster on this run — loss curves stay
+            aligned with the baseline</span>
+          <a href="#benchmark" class="lf-inline-link lf-demo-cap-link" data-i18n="bench.title">📊 Benchmark</a>
+        </figcaption>
+      </figure>
     </div>
     <!-- Wave divider -->
     <div class="lf-wave" aria-hidden="true">
@@ -136,9 +133,24 @@
     </div>
   </section>
 
+  <!-- ===== Latest post strip ===== -->
+  <!-- A dated liveness signal that costs one line instead of a whole section.
+       Stays hidden until posts.json resolves, so no empty bar ever flashes. -->
+  <div class="lf-newsbar" data-news-bar hidden>
+    <div
+      class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 lf-newsbar-row">
+      <span class="lf-newsbar-tag" data-i18n="news.title">🔥 Latest News</span>
+      <a class="lf-newsbar-link" href="blog.html" data-news-bar-link>
+        <span class="lf-newsbar-title" data-news-bar-title></span>
+        <time class="lf-newsbar-date" data-news-bar-date></time>
+      </a>
+      <a class="lf-newsbar-all" href="blog.html" data-i18n="news.all">All posts →</a>
+    </div>
+  </div>
+
   <!-- ===== Why LoongForge (value props) ===== -->
   <section
-    class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-16 md:pt-20 pb-10 reveal">
+    class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-16 md:pt-20 pb-16 md:pb-20 reveal">
     <div class="grid md:grid-cols-3 gap-6">
       <div class="lf-card">
         <div class="lf-ico mb-4">🧩</div>
@@ -172,16 +184,106 @@
     </div>
   </section>
 
-  <!-- ===== Latest News ===== -->
-  <section
-    class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pt-10 pb-20 md:pb-24 reveal">
-    <div class="flex items-end justify-between mb-8">
-      <h2 class="text-2xl md:text-3xl font-bold" data-i18n="news.title">🔥 Latest News</h2>
-      <a href="blog.html" class="text-sm text-indigo-600 dark:text-indigo-300 hover:underline" data-i18n="news.all">All
-        posts →</a>
+  <!-- ===== Benchmark ===== -->
+  <section id="benchmark"
+    class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
+    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
+        <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Training throughput
+          speedup over mainstream open-source baselines — each model benchmarked on the same machine type with the same
+          training hyperparameters</p>
+      </div>
+      <div class="lf-card lf-card-static max-w-6xl mx-auto">
+        <div class="space-y-4">
+          <div class="bench-row">
+            <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 55.6%"><span class="bench-val">2.80×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 45.8%"><span class="bench-val">2.31×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">GR00T N1.7 <span class="bench-type">VLA</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">X-VLA <span class="bench-type">VLA</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">DreamZero <span class="bench-type">WAM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 86.9%"><span class="bench-val">4.38×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">FastWAM <span class="bench-type">WAM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 44.6%"><span class="bench-val">2.25×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">LingBot VA <span class="bench-type">WAM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 43.7%"><span class="bench-val">2.20×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">Qwen3-VL-30B-A3B <span class="bench-type">VLM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar" style="width: 28.8%"><span class="bench-val">1.45×</span></div>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="bench-label">DeepSeek-V3.2 Lite <span class="bench-type">LLM</span></div>
+            <div class="bench-track">
+              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">5.04×</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="bench-baseline" data-i18n="bench.baseline">1.0× baseline</div>
+        <div class="mt-4 space-y-1 text-xs text-gray-500 dark:text-gray-500">
+          <p data-i18n="bench.ds.desc">DeepSeek-V3.2 Lite reflects DSA operator-level optimizations and was validated on
+            a reduced-layer configuration due to test-bed scale limits.</p>
+          <p data-i18n="bench.note">Numbers were measured at a point in time and may evolve as implementations change on
+            both sides.</p>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800">
+          <p class="text-center text-sm text-gray-600 dark:text-gray-400">
+            <span data-i18n="bench.issue.ask">Need a model LoongForge doesn't cover yet?</span>
+            <a href="https://github.com/baidu-baige/LoongForge/issues" target="_blank" rel="noopener"
+              class="lf-inline-link font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200"
+              data-i18n="bench.issue.cta">Open an issue</a>
+          </p>
+        </div>
+      </div>
     </div>
-    <div id="home-news-list" class="grid md:grid-cols-3 gap-6 min-h-[13rem] md:min-h-[11rem]">
-      <!-- Auto-rendered from assets/data/posts.json by assets/js/home-news.js -->
+  </section>
+
+  <!-- ===== Architecture ===== -->
+  <section class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
+    <div class="text-center mb-10">
+      <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="arch.title">🏗️ Architecture</h2>
+      <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="arch.subtitle">One unified stack — from
+        model composition down to GPU / XPU silicon.</p>
+    </div>
+
+    <div class="lf-card max-w-6xl mx-auto">
+      <img src="assets/img/loongforge-architecture.svg" alt="LoongForge architecture" loading="lazy" width="1778"
+        height="822" class="w-full h-auto block dark:hidden" />
+      <img src="assets/img/loongforge-architecture-dark.svg" alt="LoongForge architecture" loading="lazy" width="1778"
+        height="822" class="w-full h-auto hidden dark:block" />
     </div>
   </section>
 
@@ -301,100 +403,6 @@
             Megatron</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.5.item.1.d">Bidirectional checkpoint
             conversion + online HF load/save.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== Architecture ===== -->
-  <section class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
-    <div class="text-center mb-10">
-      <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="arch.title">🏗️ Architecture</h2>
-      <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="arch.subtitle">One unified stack — from
-        model composition down to GPU / XPU silicon.</p>
-    </div>
-
-    <div class="lf-card max-w-6xl mx-auto">
-      <img src="assets/img/loongforge-architecture.svg" alt="LoongForge architecture" loading="lazy" width="1778"
-        height="822" class="w-full h-auto block dark:hidden" />
-      <img src="assets/img/loongforge-architecture-dark.svg" alt="LoongForge architecture" loading="lazy" width="1778"
-        height="822" class="w-full h-auto hidden dark:block" />
-    </div>
-  </section>
-
-  <!-- ===== Benchmark ===== -->
-  <section id="benchmark"
-    class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
-    <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
-      <div class="text-center mb-10">
-        <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="bench.title">📊 Benchmark</h2>
-        <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto" data-i18n="bench.subtitle">Training throughput
-          speedup over mainstream open-source baselines — each model benchmarked on the same machine type with the same
-          training hyperparameters</p>
-      </div>
-      <div class="max-w-6xl mx-auto">
-        <div class="space-y-4">
-          <div class="bench-row">
-            <div class="bench-label">Pi0.5 <span class="bench-type">VLA</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 55.6%"><span class="bench-val">2.80×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">GR00T N1.6 <span class="bench-type">VLA</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 45.8%"><span class="bench-val">2.31×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">GR00T N1.7 <span class="bench-type">VLA</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">X-VLA <span class="bench-type">VLA</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">DreamZero <span class="bench-type">WAM</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 86.9%"><span class="bench-val">4.38×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">FastWAM <span class="bench-type">WAM</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 44.6%"><span class="bench-val">2.25×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">LingBot VA <span class="bench-type">WAM</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 43.7%"><span class="bench-val">2.20×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">Qwen3-VL-30B-A3B <span class="bench-type">VLM</span></div>
-            <div class="bench-track">
-              <div class="bench-bar" style="width: 28.8%"><span class="bench-val">1.45×</span></div>
-            </div>
-          </div>
-          <div class="bench-row">
-            <div class="bench-label">DeepSeek-V3.2 Lite <span class="bench-type">LLM</span></div>
-            <div class="bench-track">
-              <div class="bench-bar bench-bar-top" style="width: 100%"><span class="bench-val">5.04×</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="bench-baseline" data-i18n="bench.baseline">1.0× baseline</div>
-        <div class="mt-4 space-y-1 text-xs text-gray-500 dark:text-gray-500">
-          <p data-i18n="bench.ds.desc">DeepSeek-V3.2 Lite reflects DSA operator-level optimizations and was validated on
-            a reduced-layer configuration due to test-bed scale limits.</p>
-          <p data-i18n="bench.note">Numbers were measured at a point in time and may evolve as implementations change on
-            both sides.</p>
         </div>
       </div>
     </div>
@@ -945,6 +953,8 @@
         </div>
         <p class="text-gray-600 dark:text-gray-400" data-i18n="footer.tagline">Modular, scalable training framework for
           LLM / VLM / VLA / Diffusion.</p>
+        <p class="mt-3 text-gray-500 dark:text-gray-500" data-i18n="hero.badge">🐉 Part of the Baidu-Baige Loong
+          open-source series</p>
       </div>
       <div>
         <h4 class="font-semibold mb-3" data-i18n="footer.project">Project</h4>
@@ -989,8 +999,8 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js?v=20260831-r4"></script>
-  <script src="assets/js/home-news.js"></script>
+  <script src="assets/js/main.js?v=20260901-r13"></script>
+  <script src="assets/js/home-news.js?v=20260901-r13"></script>
 </body>
 
 </html>
