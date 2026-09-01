@@ -71,7 +71,7 @@ export DIFFSYNTH_MODEL_BASE_PATH=/workspace/huggingface.co/Wan-AI/Wan2.2-TI2V-5B
 Single-node DDP training example:
 
 ```bash
-bash examples/embodied/fastwam/run_fastwam_sft_ddp.sh
+bash examples/embodied/fastwam/run_fastwam_sft_ddp_finetune.sh
 ```
 
 ### 2.2 Correctness Verification
