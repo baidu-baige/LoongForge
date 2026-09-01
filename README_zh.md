@@ -6,7 +6,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge — 更快地训练 LLM、VLM、Diffusion 与具身模型。" src="./docs/assets/images/logo/banner.svg" width="667">
+    <img alt="LoongForge — 更快地训练 LLM、VLM、Diffusion 与具身模型。" src="./docs/assets/images/logo/banner.svg" width="676">
   </picture>
 </p>
 
