@@ -32,9 +32,10 @@
         font-weight="800" font-size="86" letter-spacing="-2.5"
         fill="url(#lf-text)">LoongForge</text>
 
-  <!-- Tagline: white for maximum contrast on the dark background -->
+  <!-- Tagline: mirror of the light banner — near-white with the same violet
+       cast, quiet on saturation rather than on lightness -->
   <text x="175" y="121"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
         font-weight="600" font-size="19" letter-spacing="0.3"
-        fill="#FFFFFF">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
+        fill="#E8E4F0">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
 </svg>
