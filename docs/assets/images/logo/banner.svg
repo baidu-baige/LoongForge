@@ -31,10 +31,10 @@
         font-weight="800" font-size="86" letter-spacing="-2.5"
         fill="url(#lf-text)">LoongForge</text>
 
-  <!-- Tagline: one colour for both banners — must stay legible even when a
-       renderer picks the light banner but paints it on a dark surface -->
+  <!-- Tagline: slate grey — comfortable on white, and still readable if a
+       renderer drops this light banner onto a dark surface -->
   <text x="163" y="121"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
         font-weight="600" font-size="19" letter-spacing="0.3"
-        fill="#A855F7">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
+        fill="#64748B">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
 </svg>
