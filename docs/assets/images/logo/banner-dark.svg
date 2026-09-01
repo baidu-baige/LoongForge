@@ -32,10 +32,9 @@
         font-weight="800" font-size="86" letter-spacing="-2.5"
         fill="url(#lf-text)">LoongForge</text>
 
-  <!-- Tagline: near-white, kept a touch below the wordmark's brightness so the
-       wordmark stays the lightest element -->
+  <!-- Tagline: white for maximum contrast on the dark background -->
   <text x="175" y="121"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
         font-weight="600" font-size="19" letter-spacing="0.3"
-        fill="#E2E8F0">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
+        fill="#FFFFFF">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
 </svg>
