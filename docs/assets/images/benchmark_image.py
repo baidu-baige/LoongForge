@@ -34,12 +34,14 @@ from matplotlib.patches import FancyBboxPatch
 # the pink accent gradient.
 ROWS = [
     # VLA
+    ("Pi0.5",              "VLA", 2.80),
     ("GR00T N1.6",         "VLA", 2.31),
-    ("Pi0.5",              "VLA", 2.23),
-    ("X-VLA",              "VLA", 1.69),
+    ("GR00T N1.7",         "VLA", 1.79),
+    ("X-VLA",              "VLA", 1.79),
     # WAM
-    ("DreamZero",          "WAM", 2.67),
-    ("LingBot VA",         "WAM", 1.80),
+    ("DreamZero",          "WAM", 4.38),
+    ("FastWAM",            "WAM", 2.25),
+    ("LingBot VA",         "WAM", 2.20),
     # VLM
     ("Qwen3-VL-30B-A3B",   "VLM", 1.45),
     # LLM

@@ -58,12 +58,13 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
+- **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
 - **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
-- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **2.67× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 - **[2026/06]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **2.3× speedup** on GR00T training. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
@@ -200,6 +201,7 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 <li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a> ✅</li>
 <li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a> ✅</li>
 <li><a href="examples/embodied/xvla/">xVLA</a> ✅</li>
+<li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a> ✅</li>
 <li><a href="examples/embodied/fastwam/">FastWAM</a> ✅</li>
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a> ✅</li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a> ✅</li>
@@ -288,7 +290,7 @@ We warmly welcome community contributions — bug reports, feature proposals, an
 Thanks to all our contributors:
 
 <a href="https://github.com/baidu-baige/LoongForge/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=baidu-baige/LoongForge" alt="LoongForge contributors" />
+  <img src="https://contrib.rocks/image?repo=baidu-baige/LoongForge&v=2026-08-31" alt="LoongForge contributors" />
 </a>
 
 ## 🙏 Acknowledgments
