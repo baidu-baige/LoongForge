@@ -26,6 +26,15 @@
   <a href="#contact"><b>💬 联系我们</b></a>
 </p>
 
+<p align="center">
+  <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcset="./docs/assets/images/demo/dreamzero-poster.jpg">
+      <img alt="DreamZero 训练左右对照：LoongForge 吞吐达到基线的 4.38 倍，训练 loss 曲线保持对齐" src="./docs/assets/images/demo/dreamzero-loop.webp" width="830" />
+    </picture>
+  </a>
+</p>
+
 </div>
 
 ## 💡 为什么选择 LoongForge？

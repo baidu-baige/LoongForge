@@ -26,6 +26,15 @@
   <a href="#contact"><b>💬 Contact Us</b></a>
 </p>
 
+<p align="center">
+  <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcset="./docs/assets/images/demo/dreamzero-poster.jpg">
+      <img alt="DreamZero training run compared side by side: LoongForge reaches 4.38x the baseline throughput while the training loss curves stay aligned" src="./docs/assets/images/demo/dreamzero-loop.webp" width="830" />
+    </picture>
+  </a>
+</p>
+
 </div>
 
 ## 💡 Why LoongForge?
