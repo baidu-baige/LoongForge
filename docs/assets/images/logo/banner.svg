@@ -31,9 +31,10 @@
         font-weight="800" font-size="86" letter-spacing="-2.5"
         fill="url(#lf-text)">LoongForge</text>
 
-  <!-- Tagline: black for maximum contrast on the light background -->
+  <!-- Tagline: grey with a violet cast, so it never reads green beside the
+       purple wordmark the way a slate grey does -->
   <text x="175" y="121"
         font-family="'Inter','Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif"
         font-weight="600" font-size="19" letter-spacing="0.3"
-        fill="#000000">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
+        fill="#6E6880">Train LLMs, VLMs, diffusion &amp; embodied models — faster.</text>
 </svg>
