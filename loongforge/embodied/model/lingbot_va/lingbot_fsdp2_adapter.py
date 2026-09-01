@@ -116,7 +116,7 @@ def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
     # 0-dim parameters cannot be sharded on dim-0; upstream collects them and
     # moves them onto the compute device, and every group must ignore the same
     # set, so this is built once for the whole pass.
-    scalar_ignored = build_ignored_params(model, ctx)
+    scalar_ignored = build_ignored_params(training_args, model, ctx)
     fsdp_kwargs = {
         "mesh": build_fsdp_device_mesh(training_args, ctx),
         "reshard_after_forward": reshard,
