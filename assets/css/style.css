@@ -210,6 +210,102 @@ header[data-site-header]:empty {
   background: linear-gradient(120deg, #3730A3 0%, #5B21B6 50%, #9D174D 100%);
 }
 
+/* Latest-post strip. Sits between the gradient stat band and the white "Why"
+   section, so it takes a light indigo tint to read as a continuation of the
+   band rather than as a new section. */
+.lf-newsbar {
+  background: #EEF2FF;
+  border-bottom: 1px solid #E0E7FF;
+}
+
+.lf-newsbar-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 3.75rem;
+  font-size: .9375rem;
+}
+
+.lf-newsbar-tag {
+  flex: none;
+  font-weight: 700;
+  color: #4338CA;
+}
+
+/* min-width:0 is what lets the title actually shrink and ellipsize inside a
+   flex row — without it the flex item refuses to go below its content width. */
+.lf-newsbar-link {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+.lf-newsbar-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.lf-newsbar-link:hover .lf-newsbar-title {
+  color: #4F46E5;
+  text-decoration: underline;
+}
+
+.lf-newsbar-date {
+  flex: none;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.lf-newsbar-all {
+  flex: none;
+  font-weight: 600;
+  color: #4F46E5;
+  text-decoration: none;
+}
+
+.lf-newsbar-all:hover {
+  text-decoration: underline;
+}
+
+.dark .lf-newsbar {
+  background: rgba(49, 46, 129, .28);
+  border-bottom-color: rgba(99, 102, 241, .25);
+}
+
+.dark .lf-newsbar-tag {
+  color: #A5B4FC;
+}
+
+.dark .lf-newsbar-link {
+  color: #e5e7eb;
+}
+
+.dark .lf-newsbar-link:hover .lf-newsbar-title,
+.dark .lf-newsbar-all {
+  color: #A5B4FC;
+}
+
+.dark .lf-newsbar-date {
+  color: #9ca3af;
+}
+
+/* Narrow screens: drop the date and the trailing link so the strip stays on
+   one line instead of wrapping into a two-line block. */
+@media (max-width: 640px) {
+
+  .lf-newsbar-date,
+  .lf-newsbar-all {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .lf-statband .lf-stat-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -313,6 +409,20 @@ header[data-site-header]:empty {
   background: #0f172a;
   border-color: #1f2937;
   box-shadow: none;
+}
+
+/* Large content surfaces (a whole chart, a video panel) should not lift on
+   hover the way a clickable card does — the pointer sits over them while
+   reading, and they may contain their own interactive controls. */
+.lf-card-static:hover {
+  transform: none;
+  box-shadow: var(--lf-card-shadow);
+  border-color: #E9EBF5;
+}
+
+.dark .lf-card-static:hover {
+  box-shadow: none;
+  border-color: #1f2937;
 }
 
 html {
@@ -1374,5 +1484,153 @@ footer a:hover {
   .bench-track {
     width: 100%;
     height: 24px;
+  }
+}
+
+/* ===== Benchmark case demo (DreamZero) =====
+   --lf-demo-ar is the single knob: set it to the real clip's aspect ratio and
+   both the preview and the injected <video> follow, so swapping the asset can
+   never introduce layout shift. */
+.lf-demo {
+  --lf-demo-ar: 16 / 9;
+}
+
+.lf-demo-shot {
+  display: block;
+  position: relative;
+  aspect-ratio: var(--lf-demo-ar);
+  border-radius: var(--lf-card-radius);
+  overflow: hidden;
+  border: 1px solid #E9EBF5;
+  background: #eef2ff;
+  box-shadow: var(--lf-card-shadow);
+  transition: box-shadow .25s ease, border-color .25s ease;
+}
+
+.lf-demo-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* contain, not cover: this frame is an information graphic (the 4.38× figure,
+     the loss chart). If a future clip is not 16:9, letterbox it rather than
+     silently cropping numbers out of view. */
+  object-fit: contain;
+}
+
+.lf-demo-shot:hover {
+  border-color: #C7D2FE;
+  box-shadow: var(--lf-card-shadow-hover);
+}
+
+.lf-demo-shot:focus-visible {
+  outline: 3px solid #6366f1;
+  outline-offset: 3px;
+}
+
+/* Play affordance is drawn in CSS, never written into translated text —
+   applyI18n() assigns textContent and would wipe a glyph on language switch. */
+.lf-demo-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 39, .28);
+  transition: background .25s ease;
+}
+
+.lf-demo-shot:hover .lf-demo-badge {
+  background: rgba(17, 24, 39, .18);
+}
+
+.lf-demo-badge::before {
+  content: "";
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 10px 30px -8px rgba(17, 24, 39, .5);
+  transition: transform .25s ease;
+}
+
+.lf-demo-shot:hover .lf-demo-badge::before {
+  transform: scale(1.06);
+}
+
+.lf-demo-badge::after {
+  content: "";
+  position: absolute;
+  margin-left: 0.28rem;
+  border-style: solid;
+  border-width: 0.7rem 0 0.7rem 1.15rem;
+  border-color: transparent transparent transparent #4f46e5;
+}
+
+.lf-demo-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: var(--lf-demo-ar);
+  border-radius: var(--lf-card-radius);
+  border: 1px solid #E9EBF5;
+  background: #000;
+  box-shadow: var(--lf-card-shadow);
+}
+
+.lf-demo-cap {
+  margin-top: 0.85rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.dark .lf-demo-shot,
+.dark .lf-demo-video {
+  border-color: rgba(255, 255, 255, .08);
+}
+
+.dark .lf-demo-shot {
+  background: rgba(255, 255, 255, .04);
+}
+
+.dark .lf-demo-cap {
+  color: #9ca3af;
+}
+
+/* Benchmark hand-off inside the demo caption: the caption states one measured
+   number, this link leads to the table it came from. The arrow is drawn by
+   .lf-inline-link::after — never written into the label, since applyI18n()
+   assigns textContent and would wipe it on a language switch. */
+.lf-demo-cap-link {
+  margin-left: .75rem;
+  color: #4F46E5;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dark .lf-demo-cap-link {
+  color: #A5B4FC;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lf-demo-shot,
+  .lf-demo-badge,
+  .lf-demo-badge::before {
+    transition: none;
+  }
+
+  .lf-demo-shot:hover .lf-demo-badge::before {
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .lf-demo-badge::before {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+
+  .lf-demo-badge::after {
+    border-width: 0.5rem 0 0.5rem 0.85rem;
   }
 }

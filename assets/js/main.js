@@ -14,13 +14,14 @@
       'footer.training': 'Training framework', 'footer.workflow': 'Agent framework',
 
       'hero.badge': '🐉 Part of the Baidu-Baige Loong open-source series',
-      'hero.subtitle_html': 'A <b>unified</b>, <b>high-performance</b> framework for training <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — <span class="whitespace-nowrap">multi-backend</span>, with native NVIDIA GPU & Kunlun XPU support',
+      'hero.subtitle_html': '<b>Ready-to-run</b> configs for <b>35+</b> model families — built on Megatron-LM and <span class="whitespace-nowrap">torch-native</span> backends.',
       'hero.cta.start': '🚀 Quick Start',
       'hero.cta.github': '⭐ View on GitHub',
       'hero.cta.docs': '📚 Read the Docs',
       'hero.stat.speedup': 'Max training speedup',
-      'hero.bench.link': '📊 See the training speedup benchmark',
-      'hero.slogan': 'Train LLMs, VLMs, Diffusion & Embodied models — faster.',
+      'hero.demo.label': '🎬 4.38× faster on this run — loss curves stay aligned with the baseline',
+      'hero.demo.play': 'Play the demo — 83 seconds, has background music',
+      'hero.slogan': 'Train LLMs, VLMs, Diffusion & Embodied models — faster.',
       'sb.models': 'Model families supported',
       'sb.chips': 'NVIDIA & Kunlun backends',
       'sb.license': 'Open source license',
@@ -140,6 +141,8 @@
       'bench.baseline': '1.0× baseline',
       'bench.note': 'Numbers were measured at a point in time and may evolve as implementations change on both sides.',
       'bench.ds.desc': 'DeepSeek-V3.2 Lite reflects DSA operator-level optimizations and was validated on a reduced-layer configuration due to test-bed scale limits.',
+      'bench.issue.ask': "Need a model LoongForge doesn't cover yet?",
+      'bench.issue.cta': 'Open an issue',
       'hw.title': '💎 Hardware Compatibility',
       'hw.subtitle': 'One codebase, two silicon stacks — production-ready on NVIDIA GPU and Baidu Kunlun XPU',
       'hw.nv.t': 'NVIDIA GPU',
@@ -167,12 +170,13 @@
       'footer.training': '训练框架', 'footer.workflow': '智能体框架',
 
       'hero.badge': '🐉 百度百舸 Loong 开源家族成员',
-      'hero.subtitle_html': '面向 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与<b>具身智能</b>模型训练的<b>统一</b>、<b>高性能</b>框架 —— 多后端架构，原生支持 NVIDIA GPU 与昆仑芯 XPU',
+      'hero.subtitle_html': '<b>35+</b> 模型家族的训练配置<b>开箱可用</b> —— 基于 Megatron-LM 与 <span class="whitespace-nowrap">torch-native</span> 双后端。',
       'hero.cta.start': '🚀 快速上手',
       'hero.cta.github': '⭐ 访问 GitHub',
       'hero.cta.docs': '📚 阅读文档',
       'hero.stat.speedup': '最大训练加速',
-      'hero.bench.link': '📊 查看训练加速实测数据',
+      'hero.demo.label': '🎬 实测举例：训练吞吐加速 4.38×，loss 曲线与基线对齐',
+      'hero.demo.play': '播放演示 —— 83 秒，含背景音乐',
       'hero.slogan': '更快地训练 LLM、VLM、Diffusion 与具身智能模型。',
       'sb.models': '支持模型家族',
       'sb.chips': 'NVIDIA 与昆仑芯后端',
@@ -293,6 +297,8 @@
       'bench.baseline': '1.0× 基线',
       'bench.note': '数据为某一时间点的实测结果，随双方实现演进可能发生变化。',
       'bench.ds.desc': 'DeepSeek-V3.2 Lite 体现的是 DSA 算子级优化，且受测试集群规模限制，基于减层模型配置验证。',
+      'bench.issue.ask': '需要的模型还没被覆盖？',
+      'bench.issue.cta': '到 Issues 提出',
 
       'hw.title': '💎 硬件兼容性',
       'hw.subtitle': '同一套代码，两套芯片栈 —— NVIDIA GPU 与百度昆仑芯 XPU 均已生产化落地',
@@ -668,7 +674,40 @@
     // Contributors wall — driven entirely by the GitHub API; no manual list to
     // maintain. New contributors appear automatically as the repo changes.
     initContributors();
+    initDemoVideo();
   });
+
+  // Demo video is click-to-load: the preview is a real link to the mp4, so with
+  // no JS a click just opens the file in the browser's own player. Nothing of
+  // the video is fetched until the visitor asks for it, which keeps the shared
+  // GitHub Pages bandwidth spent on actual plays rather than page views.
+  function initDemoVideo() {
+    document.querySelectorAll('[data-demo-play]').forEach(link => {
+      link.addEventListener('click', e => {
+        // Let the browser handle "open in new tab/window" itself.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        const video = document.createElement('video');
+        video.className = 'lf-demo-video';
+        video.controls = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        if (link.dataset.w) video.setAttribute('width', link.dataset.w);
+        if (link.dataset.h) video.setAttribute('height', link.dataset.h);
+        video.src = link.getAttribute('href');
+        // If the file cannot be fetched, fall back to the preview rather than
+        // leaving an empty player behind.
+        video.addEventListener('error', () => {
+          video.remove();
+          link.hidden = false;
+        });
+        link.hidden = true;
+        link.parentNode.insertBefore(video, link.nextSibling);
+        video.focus();
+      });
+    });
+  }
 
   function initContributors() {
     const countEl = document.getElementById('gh-contrib');

@@ -1,0 +1,4 @@
+# Spec-driven development artifacts: design docs, task plans and summaries.
+# Collaboration records, not site content — they should not ship with the page
+# or show up in review diffs.
+.comate/
