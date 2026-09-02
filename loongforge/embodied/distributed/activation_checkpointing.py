@@ -16,6 +16,7 @@ def apply_activation_checkpointing(
     model: nn.Module,
     raw_module_patterns: str | list[str] | None,
     raw_skip_modules: str | list[str] | None,
+    fp8_backend: str | None = None,
 ) -> None:
     """Checkpoint the modules selected by the patterns, minus those the skip patterns match."""
     from loongforge.embodied.train.training_args import parse_module_key_patterns
@@ -69,18 +70,34 @@ def apply_activation_checkpointing(
             "checkpoint_wrapper"
         ) from exc
 
+    # TE's FP8 path saves a different set of tensors during the original forward
+    # than during recompute, which makes the non-reentrant PyTorch checkpoint
+    # raise CheckpointError. TE ships its own checkpoint that handles this.
+    checkpoint_fn = None
+    if fp8_backend == "te":
+        from loongforge.embodied.distributed.fp8_utils import te_checkpoint_fn
+
+        checkpoint_fn = te_checkpoint_fn()
+
+    checkpoint_wrapper_kwargs = {
+        "checkpoint_impl": CheckpointImpl.NO_REENTRANT,
+    }
+    if checkpoint_fn is not None:
+        checkpoint_wrapper_kwargs["checkpoint_fn"] = checkpoint_fn
+
     for module_key, module in selected_modules.items():
         model.set_submodule(
             module_key,
             checkpoint_wrapper(
                 module,
-                checkpoint_impl=CheckpointImpl.NO_REENTRANT,
+                **checkpoint_wrapper_kwargs,
             ),
         )
     logger.info(
-        "Applied activation checkpointing: wrapped=%d skipped=%d",
+        "Applied activation checkpointing: wrapped=%d skipped=%d impl=%s",
         len(selected_modules),
         len(skip_module_keys),
+        "te.checkpoint" if fp8_backend == "te" else "torch non-reentrant",
     )
 
 
@@ -134,4 +151,3 @@ def _module_key_matches(pattern: str, module_key: str) -> bool:
             module_key_segments,
         )
     )
-

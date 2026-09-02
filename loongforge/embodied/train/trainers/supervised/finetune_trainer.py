@@ -81,7 +81,7 @@ class FinetuneTrainer(BaseTrainer):
             else torch.autocast("cuda", dtype=dtype)
         )
 
-        with autocast_ctx:
+        with self._fp8_forward_ctx(), autocast_ctx:
             loss, log_loss_dict = self.model(batch, **fwd_kwargs)
 
         return loss, log_loss_dict

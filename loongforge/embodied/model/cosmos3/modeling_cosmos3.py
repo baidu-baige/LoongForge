@@ -65,6 +65,22 @@ class Cosmos3(nn.Module):
         """
         return cls(cfg)
 
+    @staticmethod
+    def fp8_unsupported_reason(backend: str = "te") -> str | None:
+        """Explain why the current pre-wrap TE conversion cannot handle Cosmos3.
+
+        TorchAO can construct its Float8Linear shell on meta and reuse the
+        source parameters, so this TE-specific lifecycle restriction does not
+        automatically apply to the TorchAO backend.
+        """
+        if backend != "te":
+            return None
+        return (
+            "Cosmos3 constructs its network on the meta device and materializes "
+            "weights only after FSDP wrapping; te.Linear conversion requires "
+            "materialized CUDA weights before wrapping"
+        )
+
     def __init__(self, config: Cosmos3ModelConfig):
         """__init__."""
         super().__init__()

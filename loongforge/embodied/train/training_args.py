@@ -103,6 +103,19 @@ def parse_positive_int(value: str) -> int:
     return int_value
 
 
+def parse_non_negative_int(value: str) -> int:
+    """Parse a non-negative integer CLI value."""
+    try:
+        int_value = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "expected a non-negative integer"
+        ) from exc
+    if int_value < 0:
+        raise argparse.ArgumentTypeError("expected a non-negative integer")
+    return int_value
+
+
 def parse_module_key_patterns(
     value: str | list[str] | None,
     *,
@@ -1125,6 +1138,162 @@ class _ActivationCheckpointArgs:
 
 
 @dataclass(frozen=True)
+class _FP8Args:
+    """FP8 configuration shared by, or specific to, each backend."""
+
+    # Backend-independent FP8 switches and module selection.
+    fp8: bool = field(
+        default=False,
+        metadata={
+            "help": "Convert selected nn.Linear modules for FP8 training with "
+                    "the backend selected by --fp8-backend.",
+        },
+    )
+    fp8_backend: str = field(
+        default="te",
+        metadata={
+            "choices": ["te", "torchao"],
+            "help": "FP8 implementation: TransformerEngine (te) or native "
+                    "PyTorch TorchAO (torchao).",
+        },
+    )
+
+    fp8_module_patterns: Optional[list[str]] = field(
+        default=None,
+        metadata={
+            "cli_type": partial(
+                parse_module_key_patterns,
+                option_name="--fp8-module-patterns",
+            ),
+            "help": "Comma-separated qualified module-key patterns whose "
+                    "nn.Linear descendants are converted for FP8. Unlike "
+                    "--activation-checkpoint-module-patterns, a pattern selects "
+                    "a subtree, not one module. Unset falls back to the model's "
+                    "default_fp8_targets().",
+        },
+    )
+    fp8_skip_modules: Optional[list[str]] = field(
+        default=None,
+        metadata={
+            "cli_type": partial(
+                parse_module_key_patterns,
+                option_name="--fp8-skip-modules",
+            ),
+            "help": "Optional comma-separated qualified module-key patterns to "
+                    "exclude from --fp8-module-patterns. Use this to keep "
+                    "numerically sensitive layers (vision towers, action "
+                    "projections) out of FP8. Every pattern must match at least "
+                    "one selected layer.",
+        },
+    )
+    fp8_min_dim: int = field(
+        default=2048,
+        metadata={
+            "cli_type": parse_positive_int,
+            "help": "Only convert layers whose max(in_features, out_features) "
+                    "reaches this size. Smaller GEMMs are slower in FP8 than in "
+                    "bf16, so converting them costs throughput.",
+        },
+    )
+
+    # TransformerEngine-only recipe and scaling parameters.
+    fp8_te_recipe: str = field(
+        default="blockwise",
+        metadata={
+            "choices": ["blockwise", "current", "delayed"],
+            "help": "TransformerEngine FP8 scaling recipe: blockwise "
+                    "(Float8BlockScaling), "
+                    "current (Float8CurrentScaling), or delayed (DelayedScaling).",
+        },
+    )
+    fp8_te_format: Optional[str] = field(
+        default=None,
+        metadata={
+            "choices": ["e4m3", "hybrid"],
+            "help": "TransformerEngine-only FP8 data format override. Unset preserves each "
+                    "TransformerEngine recipe's native default: E4M3 for "
+                    "blockwise and HYBRID for current/delayed.",
+        },
+    )
+    fp8_te_margin: int = field(
+        default=0,
+        metadata={
+            "cli_type": parse_non_negative_int,
+            "help": "TransformerEngine DelayedScaling only: power-of-two safety "
+                    "margin used when "
+                    "computing scale = FP8_MAX / (amax * 2**margin).",
+        },
+    )
+    fp8_te_amax_history_len: int = field(
+        default=1024,
+        metadata={
+            "cli_type": parse_positive_int,
+            "help": "TransformerEngine DelayedScaling only: number of historical "
+                    "amax values "
+                    "retained for scale computation.",
+        },
+    )
+    fp8_te_amax_compute_algo: str = field(
+        default="max",
+        metadata={
+            "choices": ["max", "most_recent"],
+            "help": "TransformerEngine DelayedScaling only: choose the largest "
+                    "historical amax "
+                    "or the most recently observed value.",
+        },
+    )
+    fp8_te_reduce_amax: bool = field(
+        default=True,
+        metadata={
+            "help": "TransformerEngine DelayedScaling only: reduce amax across "
+                    "the fp8 process "
+                    "group so data-parallel ranks use synchronized scales.",
+        },
+    )
+    fp8_te_current_use_power_2_scales: bool = field(
+        default=False,
+        metadata={
+            "help": "TransformerEngine Float8CurrentScaling only: constrain "
+                    "scaling factors to "
+                    "powers of two.",
+        },
+    )
+    fp8_te_block_use_f32_scales: bool = field(
+        default=False,
+        metadata={
+            "help": "TransformerEngine Float8BlockScaling only: allow "
+                    "unconstrained FP32 scales "
+                    "instead of the default power-of-two scales.",
+        },
+    )
+
+    # TorchAO-only recipe and FSDP/shape parameters.
+    fp8_torchao_recipe: str = field(
+        default="tensorwise",
+        metadata={
+            "choices": ["tensorwise", "rowwise", "rowwise_with_gw_hp"],
+            "help": "TorchAO Float8Linear recipe. Tensorwise is fastest; "
+                    "rowwise improves outlier handling; rowwise_with_gw_hp "
+                    "keeps grad-weight GEMM in high precision.",
+        },
+    )
+    fp8_torchao_pad_inner_dim: bool = field(
+        default=True,
+        metadata={
+            "help": "TorchAO only: zero-pad unaligned GEMM inner dimensions. "
+                    "Enabled by default so Linear K/hidden dimensions that are "
+                    "not 16-aligned can use the scaled GEMM. This does not pad "
+                    "the flattened token/batch M dimension.",
+        },
+    )
+    fp8_torchao_fsdp_float8_all_gather: bool = field(
+        default=False,
+        metadata={
+            "help": "TorchAO tensorwise + FSDP only: cast weight shards to FP8 "
+                    "for all-gather to reduce communication bandwidth.",
+        },
+    )
+@dataclass(frozen=True)
 class _DistributedArgs:
     """Parallelism strategy (FSDP/DDP), dtype, ZeRO, and meta-device init."""
 
@@ -1412,6 +1581,7 @@ class TrainingArgs(
     _ProfilerArgs,
     _CudaGraphArgs,
     _ActivationCheckpointArgs,
+    _FP8Args,
     _DistributedArgs,
 ):
     """Generic training args (single source of truth). Frozen after construction.

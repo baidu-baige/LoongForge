@@ -28,7 +28,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 import torch
@@ -1082,6 +1082,41 @@ class PI05Policy(nn.Module):
         action_stats = convert_stats(dataset_stats.get("action")) if dataset_stats else None
         actions = _q99_unnormalize_actions(actions, action_stats)
         return actions.cpu().numpy()
+
+    @staticmethod
+    def default_fp8_targets() -> Dict[str, Any]:
+        """FP8 conversion targets: the whole model minus its fp32-critical layers.
+
+        The skip list is the module-key spelling of the two
+        ``_FP32_PARAM_SELECTORS`` lists (``PaliGemmaWithExpertModel`` and
+        ``PI05Pytorch``). Those layers are deliberately held in fp32 by
+        ``to_bfloat16_for_selected_params``, so converting them to te.Linear
+        would quantize exactly the tensors the model asks to keep at full
+        precision.
+
+        Only the action expert carries adaRMS conditioning (``use_adarms=[False,
+        True]``), so only its layernorms own a ``dense`` Linear; the PaliGemma
+        language-model layernorms have no Linear to skip and naming them here
+        would raise as an unmatched pattern.
+        """
+        expert = "model.paligemma_with_expert.gemma_expert.model"
+        vlm = "model.paligemma_with_expert.paligemma.model"
+        return {
+            "module_patterns": ["model"],
+            "skip_modules": [
+                # PaliGemmaWithExpertModel._FP32_PARAM_SELECTORS
+                f"{vlm}.vision_tower",
+                f"{vlm}.multi_modal_projector",
+                f"{expert}.layers.*.input_layernorm",
+                f"{expert}.layers.*.post_attention_layernorm",
+                f"{expert}.norm",
+                # PI05Pytorch._FP32_PARAM_SELECTORS
+                "model.action_in_proj",
+                "model.action_out_proj",
+                "model.time_mlp_in",
+                "model.time_mlp_out",
+            ],
+        }
 
     @classmethod
     def from_pretrained(cls, model_cfg) -> "PI05Policy":

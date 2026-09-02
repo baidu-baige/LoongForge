@@ -444,6 +444,20 @@ class GrootN1d7Policy(nn.Module):
         self._predict_action_processor_cache: dict[str, StateActionProcessor] = {}
         self._predict_action_eval_image_transform = None
 
+    @staticmethod
+    def default_fp8_targets() -> Dict[str, Any]:
+        """Convert the action DiT blocks while preserving projection heads."""
+        return {
+            "module_patterns": ["model.action_head.model.transformer_blocks"],
+            "skip_modules": [],
+        }
+
+    def fp8_unsupported_reason(self) -> str | None:
+        """Reject FP8 when the only default target, the action DiT, is frozen."""
+        if not self.config.tune_diffusion_model:
+            return "tune_diffusion_model=false freezes the action DiT"
+        return None
+
     def reset_data_iterator_rng(self, seed: int) -> None:
         """Align DataLoader worker base seeds with Isaac's finetune path."""
         seed = int(seed)
