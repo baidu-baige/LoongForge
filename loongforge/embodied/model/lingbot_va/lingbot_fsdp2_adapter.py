@@ -16,8 +16,30 @@ from loongforge.embodied.distributed.fsdp_utils.builders import (
     build_ignored_params,
     build_mp_policy,
 )
+from loongforge.embodied.distributed.fp8_utils import apply_fp8_linear_conversion
 from loongforge.embodied.model.lingbot_va.features import feature_enabled
 from loongforge.embodied.model.lingbot_va.modules.wan_model import WanTransformerBlock
+
+
+def _configure_lingbot_checkpoint(model, training_args):
+    """Use TE's FP8-aware checkpoint for LingBot's internal block recompute."""
+    if not (
+        getattr(training_args, "fp8", False)
+        and getattr(training_args, "fp8_backend", None) == "te"
+    ):
+        return
+
+    backbone = getattr(model, "model", None)
+    set_checkpoint = getattr(backbone, "set_block_checkpoint_fn", None)
+    if not callable(set_checkpoint):
+        raise RuntimeError(
+            "LingBot TE FP8 requires a backbone that supports "
+            "set_block_checkpoint_fn()."
+        )
+
+    from loongforge.embodied.distributed.fp8_utils import te_checkpoint_fn
+
+    set_checkpoint(te_checkpoint_fn())
 
 
 def module_params(
@@ -105,6 +127,9 @@ def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
         raise RuntimeError(
             "LingBot native nested FSDP2 requires embodied FSDP strategy"
         )
+
+    apply_fp8_linear_conversion(model, training_args, ctx.device)
+    _configure_lingbot_checkpoint(model, training_args)
 
     if not getattr(ctx, "is_distributed", False):
         return model.to(device=ctx.device)

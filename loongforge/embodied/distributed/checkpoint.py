@@ -673,7 +673,20 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
 
     # 1) Model — strict.
     model_state = {"model": model_sd}
-    dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
+    try:
+        dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
+    except Exception as exc:
+        # te.Linear contributes `_extra_state` keys that plain nn.Linear does
+        # not, so toggling --fp8 between the saving and resuming run changes the
+        # key set and trips the strict load with an opaque planner error.
+        if _has_te_module(model):
+            raise RuntimeError(
+                "Strict DCP model load failed for an FP8 (te.Linear) model. If "
+                "this checkpoint was saved without --fp8, its key set does not "
+                "match: resume with --fp8 off, or start from "
+                "--pretrained-checkpoint instead of --resume."
+            ) from exc
+        raise
     set_state_dict(
         model, optimizers=[],
         model_state_dict=model_state["model"],
@@ -878,6 +891,14 @@ def _is_zero_optimizer(optimizer) -> bool:
     from torch.distributed.optim import ZeroRedundancyOptimizer
     return isinstance(optimizer, ZeroRedundancyOptimizer) or getattr(
         optimizer, "_is_multi_dtype_zero_optimizer", False
+    )
+
+
+def _has_te_module(model) -> bool:
+    """Whether the model contains any TransformerEngine module."""
+    return any(
+        type(module).__module__.startswith("transformer_engine")
+        for module in model.modules()
     )
 
 

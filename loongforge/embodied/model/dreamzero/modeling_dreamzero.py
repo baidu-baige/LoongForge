@@ -200,6 +200,19 @@ class DreamZeroPolicy(PreTrainedPolicy):
         }
 
     @staticmethod
+    def default_fp8_targets() -> dict[str, Any]:
+        """Convert the Causal Wan transformer blocks while keeping heads in bf16.
+
+        The block subtree contains the large attention and FFN ``nn.Linear``
+        modules. Embodiment-specific encoders use custom category-aware linears
+        and the zero-initialized output head is deliberately left untouched.
+        """
+        return {
+            "module_patterns": ["action_head.model.blocks"],
+            "skip_modules": [],
+        }
+
+    @staticmethod
     def lora_requires_pretrained_checkpoint() -> bool:
         """DreamZero providers load component checkpoints from model config."""
         return False

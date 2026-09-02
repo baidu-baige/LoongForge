@@ -843,6 +843,7 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
         super().__init__()
         self.patch_size = tuple(patch_size)
         self.recompute_granularity = recompute_granularity
+        self._block_checkpoint_fn = checkpoint
         inner_dim = num_attention_heads * attention_head_dim
         self.rope = WanRotaryPosEmbed(attention_head_dim, patch_size, rope_max_seq_len)
         self.patch_embedding_mlp = nn.Linear(
@@ -874,6 +875,12 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
         )
         self._padding_cache = {}
         self._padded_rope_cache = {}
+
+    def set_block_checkpoint_fn(self, checkpoint_fn) -> None:
+        """Set the runtime checkpoint implementation for full block recompute."""
+        if not callable(checkpoint_fn):
+            raise TypeError("block checkpoint implementation must be callable")
+        self._block_checkpoint_fn = checkpoint_fn
 
     def _padding_zeros(self, reference: torch.Tensor, shape):
         cache_key = (tuple(shape), str(reference.device), str(reference.dtype))
@@ -1098,7 +1105,7 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
 
         for block in self.blocks:
             if self.training and self.recompute_granularity == "full":
-                hidden_states = checkpoint(
+                hidden_states = self._block_checkpoint_fn(
                     block,
                     hidden_states,
                     text_hidden,
