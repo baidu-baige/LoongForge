@@ -122,7 +122,7 @@ def prepare_rope_freqs(freqs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
         freqs: Complex RoPE frequencies, shape [S, 1, rope_dim // 2].
 
     Returns:
-        Tuple of contiguous fp32 `(cos, sin)` tables, each shaped [S, rope_dim // 2].
+        Tuple of contiguous `(cos, sin)` tables, each shaped [S, rope_dim // 2].
     """
     if freqs.ndim != 3 or freqs.shape[1] != 1:
         raise ValueError(f"Expected RoPE frequencies shaped [S, 1, D/2], got {tuple(freqs.shape)}")
@@ -142,6 +142,8 @@ def rope_apply(x, freqs, num_heads):
     """
     cos, sin = freqs
     x = rearrange(x, "b s (n d) -> b s n d", n=num_heads)
+    cos = cos.to(device=x.device, dtype=x.dtype, non_blocking=True)
+    sin = sin.to(device=x.device, dtype=x.dtype, non_blocking=True)
     return _TritonRoPE.apply(x, cos, sin).flatten(2)
 
 

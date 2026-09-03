@@ -64,6 +64,7 @@ class FastWAMModelConfig:
     tokenizer_max_len: int = 128
     load_text_encoder: bool = False
     mot_checkpoint_mixed_attn: bool = True
+    attention_backend: str = "auto"  # {"auto", "sdpa", "fa2", "fa3", "fa4"}
     skip_dit_load_from_pretrain: bool = False
     action_dit_pretrained_path: str | None = (
         "checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt"
@@ -130,6 +131,13 @@ class FastWAMModelConfig:
             raise ValueError(
                 "FastWAMModelConfig.mot_compile_blocks must be one of "
                 f"{sorted(valid_compile_scopes)}, got {self.mot_compile_blocks!r}"
+            )
+
+        valid_attention_backends = {"auto", "sdpa", "fa2", "fa3", "fa4"}
+        if self.attention_backend not in valid_attention_backends:
+            raise ValueError(
+                "FastWAMModelConfig.attention_backend must be one of "
+                f"{sorted(valid_attention_backends)}, got {self.attention_backend!r}"
             )
 
         # ── Validate rmsnorm_impl ─────────────────────────────────────────────

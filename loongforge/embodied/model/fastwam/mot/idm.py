@@ -22,6 +22,12 @@ import torch
 import torch.nn.functional as F
 
 from loongforge.embodied.model.fastwam.mot.joint import FastWAMJoint
+from loongforge.embodied.model.fastwam.attention import (
+    AttentionSegment,
+    StructuredAttentionMask,
+    build_structured_attention_mask,
+    video_attention_segments,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +47,7 @@ class FastWAMIDM(FastWAMJoint):
         noisy_video_tokens_per_frame: int,
         cond_video_tokens_per_frame: int,
         device: torch.device,
-    ) -> torch.Tensor:
+    ) -> StructuredAttentionMask:
         """Build a joint attention mask for teacher-forcing IDM training."""
         if noisy_video_tokens_per_frame != cond_video_tokens_per_frame:
             raise ValueError(
@@ -52,25 +58,19 @@ class FastWAMIDM(FastWAMJoint):
         noisy_end = noisy_video_seq_len
         cond_end = noisy_video_seq_len + cond_video_seq_len
         total_seq_len = cond_end + action_seq_len
-        mask = torch.zeros((total_seq_len, total_seq_len), dtype=torch.bool, device=device)
-
-        # noisy_video -> noisy_video
-        mask[:noisy_end, :noisy_end] = self.video_expert.build_video_to_video_mask(
-            video_seq_len=noisy_video_seq_len,
-            video_tokens_per_frame=noisy_video_tokens_per_frame,
-            device=device,
+        mode = self.video_expert.video_attention_mask_mode
+        segments = video_attention_segments(
+            mode, 0, noisy_video_seq_len, noisy_video_tokens_per_frame
         )
-        # cond_video -> cond_video
-        mask[noisy_end:cond_end, noisy_end:cond_end] = self.video_expert.build_video_to_video_mask(
-            video_seq_len=cond_video_seq_len,
-            video_tokens_per_frame=cond_video_tokens_per_frame,
-            device=device,
+        segments.extend(
+            video_attention_segments(
+                mode, noisy_end, cond_video_seq_len, cond_video_tokens_per_frame
+            )
         )
-        # action -> action
-        mask[cond_end:, cond_end:] = True
-        # action -> cond_video only
-        mask[cond_end:, noisy_end:cond_end] = True
-        return mask
+        segments.append(
+            AttentionSegment(cond_end, total_seq_len, ((noisy_end, total_seq_len),))
+        )
+        return build_structured_attention_mask(total_seq_len, total_seq_len, segments, device)
 
     def training_loss(self, sample, tiled: bool = False):
         """Compute IDM video and action denoising losses for one training batch."""

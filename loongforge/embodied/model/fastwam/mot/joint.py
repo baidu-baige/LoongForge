@@ -21,6 +21,12 @@ from typing import Any, Optional
 import torch
 
 from loongforge.embodied.model.fastwam.mot.fastwam import FastWAM
+from loongforge.embodied.model.fastwam.attention import (
+    AttentionSegment,
+    StructuredAttentionMask,
+    build_structured_attention_mask,
+    video_attention_segments,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +51,17 @@ class FastWAMJoint(FastWAM):
         action_seq_len: int,
         video_tokens_per_frame: int,
         device: torch.device,
-    ) -> torch.Tensor:
+    ) -> StructuredAttentionMask:
         """Build a joint attention mask where action tokens see the full video prefix."""
         total_seq_len = video_seq_len + action_seq_len
-        mask = torch.zeros((total_seq_len, total_seq_len), dtype=torch.bool, device=device)
-        mask[:video_seq_len, :video_seq_len] = self.video_expert.build_video_to_video_mask(
-            video_seq_len=video_seq_len,
-            video_tokens_per_frame=video_tokens_per_frame,
-            device=device,
+        segments = video_attention_segments(
+            self.video_expert.video_attention_mask_mode,
+            0,
+            video_seq_len,
+            video_tokens_per_frame,
         )
-        mask[video_seq_len:, video_seq_len:] = True
-        mask[video_seq_len:, :video_seq_len] = True
-        return mask
+        segments.append(AttentionSegment(video_seq_len, total_seq_len, ((0, total_seq_len),)))
+        return build_structured_attention_mask(total_seq_len, total_seq_len, segments, device)
 
     @torch.no_grad()
     def infer_joint(

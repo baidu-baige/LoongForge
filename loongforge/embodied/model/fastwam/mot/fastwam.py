@@ -29,6 +29,12 @@ from loongforge.embodied.model.fastwam.utils.state_dict import drop_extra_state
 from loongforge.embodied.model.fastwam.wan.loader import load_wan22_ti2v_5b_components
 from loongforge.embodied.model.fastwam.mot.model import MoT
 from loongforge.embodied.model.fastwam.action.schedulers import WanContinuousFlowMatchScheduler
+from loongforge.embodied.model.fastwam.attention import (
+    AttentionSegment,
+    StructuredAttentionMask,
+    build_structured_attention_mask,
+    video_attention_segments,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +131,7 @@ class FastWAM(torch.nn.Module):
         drop_all_true_cross_attn_mask: bool = False,
         compile_mot_blocks: str = "none",
         compile_dynamic: bool = False,
+        attention_backend: str = "auto",
         video_train_shift: float = 5.0,
         video_infer_shift: float = 5.0,
         video_num_train_timesteps: int = 1000,
@@ -173,6 +180,7 @@ class FastWAM(torch.nn.Module):
             drop_all_true_cross_attn_mask=drop_all_true_cross_attn_mask,
             compile_mot_blocks=compile_mot_blocks,
             compile_dynamic=compile_dynamic,
+            attention_backend=attention_backend,
         )
 
         model = cls(
@@ -443,23 +451,22 @@ class FastWAM(torch.nn.Module):
         action_seq_len: int,
         video_tokens_per_frame: int,
         device: torch.device,
-    ) -> torch.Tensor:
+    ) -> StructuredAttentionMask:
         """Build the mixed video-action attention mask for MoT blocks."""
         total_seq_len = video_seq_len + action_seq_len
-        mask = torch.zeros((total_seq_len, total_seq_len), dtype=torch.bool, device=device)
-
-        # video -> video
-        mask[:video_seq_len, :video_seq_len] = self.video_expert.build_video_to_video_mask(
-            video_seq_len=video_seq_len,
-            video_tokens_per_frame=video_tokens_per_frame,
-            device=device,
+        mode = self.video_expert.video_attention_mask_mode
+        segments = video_attention_segments(
+            mode, 0, video_seq_len, video_tokens_per_frame
         )
-        # action -> action
-        mask[video_seq_len:, video_seq_len:] = True
-        # action -> first-frame video only
         first_frame_tokens = min(video_tokens_per_frame, video_seq_len)
-        mask[video_seq_len:, :first_frame_tokens] = True
-        return mask
+        segments.append(
+            AttentionSegment(
+                video_seq_len,
+                total_seq_len,
+                ((0, first_frame_tokens), (video_seq_len, total_seq_len)),
+            )
+        )
+        return build_structured_attention_mask(total_seq_len, total_seq_len, segments, device)
 
     def _compute_video_loss_per_sample(
         self,

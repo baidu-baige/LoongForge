@@ -24,7 +24,12 @@ import torch
 import torch.nn as nn
 
 from loongforge.embodied.model.fastwam.utils.norm_modulate import triton_norm_modulate
-from loongforge.embodied.model.fastwam.wan.dit import flash_attention, rope_apply
+from loongforge.embodied.model.fastwam.attention import (
+    StructuredAttentionMask,
+    normalize_attention_backend,
+    run_attention,
+)
+from loongforge.embodied.model.fastwam.wan.dit import rope_apply
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +68,7 @@ class MoT(nn.Module):
         drop_all_true_cross_attn_mask: bool = False,
         compile_mot_blocks: str = "none",
         compile_dynamic: bool = False,
+        attention_backend: str = "auto",
     ):
         """Initialize expert modules and validate shared transformer geometry."""
         super().__init__()
@@ -75,6 +81,7 @@ class MoT(nn.Module):
         self.expert_order = list(self.mixtures.keys())
         self.mot_checkpoint_mixed_attn = mot_checkpoint_mixed_attn
         self.drop_all_true_cross_attn_mask = drop_all_true_cross_attn_mask
+        self.attention_backend = normalize_attention_backend(attention_backend)
         # (expert, mask shape) -> is the mask all True. Filled on first sight so the
         # device->host sync of `mask.all()` happens once per shape, not per step.
         self._all_true_ctx_mask: Dict[tuple, bool] = {}
@@ -154,14 +161,21 @@ class MoT(nn.Module):
         q_cat: torch.Tensor,
         k_cat: torch.Tensor,
         v_cat: torch.Tensor,
-        attention_mask: torch.Tensor,
+        attention_mask: torch.Tensor | StructuredAttentionMask,
     ) -> torch.Tensor:
         """Run mixed attention across concatenated expert tokens."""
         attn_mask = attention_mask.to(device=q_cat.device)
 
         def _forward(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
             """Apply flash attention with the captured MoT attention mask."""
-            return flash_attention(q=q, k=k, v=v, num_heads=self.num_heads, ctx_mask=attn_mask)
+            return run_attention(
+                q=q,
+                k=k,
+                v=v,
+                num_heads=self.num_heads,
+                attention_mask=attn_mask,
+                backend=self.attention_backend,
+            )
 
         if self.mot_checkpoint_mixed_attn and self.training:
             return torch.utils.checkpoint.checkpoint(
@@ -339,7 +353,7 @@ class MoT(nn.Module):
         video_freqs: Tuple[torch.Tensor, torch.Tensor],
         video_t_mod: torch.Tensor,
         video_context_payload: Optional[dict],
-        video_attention_mask: torch.Tensor,
+        video_attention_mask: torch.Tensor | StructuredAttentionMask,
     ) -> list[dict[str, torch.Tensor]]:
         """Prefill video branch once and cache per-layer K/V for action denoising.
 
@@ -426,7 +440,7 @@ class MoT(nn.Module):
         action_t_mod: torch.Tensor,
         action_context_payload: Optional[dict],
         video_kv_cache: list[dict[str, torch.Tensor]],
-        attention_mask: torch.Tensor,
+        attention_mask: torch.Tensor | StructuredAttentionMask,
         video_seq_len: int,
     ) -> torch.Tensor:
         """Run action branch with cached video K/V instead of recomputing video tokens.
@@ -464,7 +478,10 @@ class MoT(nn.Module):
                 f"mask={attention_mask.shape[0]} vs expected_total={total_seq_len}"
             )
         # Use the action query rows from the joint [video+action] mask.
-        action_attention_mask = attention_mask[video_seq_len:total_seq_len, :total_seq_len]
+        if isinstance(attention_mask, StructuredAttentionMask):
+            action_attention_mask = attention_mask.slice(video_seq_len, total_seq_len)
+        else:
+            action_attention_mask = attention_mask[video_seq_len:total_seq_len, :total_seq_len]
 
         expert = self.mixtures["action"]
         x = action_tokens
@@ -555,7 +572,7 @@ class MoT(nn.Module):
     def forward(
         self,
         embeds_all: Dict[str, torch.Tensor],
-        attention_mask: torch.Tensor,
+        attention_mask: torch.Tensor | StructuredAttentionMask,
         freqs_all: Dict[str, Tuple[torch.Tensor, torch.Tensor]],
         context_all: Dict[str, Optional[dict]],
         t_mod_all: Dict[str, torch.Tensor],

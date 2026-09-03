@@ -18,6 +18,8 @@ model:
   tokenizer_max_len: 128
   load_text_encoder: false
   mot_checkpoint_mixed_attn: false
+  # auto prefers FA4/FA3/FA2 for structured MoT masks, then falls back to SDPA.
+  attention_backend: ${oc.env:FASTWAM_ATTENTION_BACKEND,auto}
   skip_dit_load_from_pretrain: false
   action_dit_pretrained_path: checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt
   redirect_common_files: true

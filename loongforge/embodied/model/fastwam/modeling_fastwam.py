@@ -85,6 +85,7 @@ class FastWAMPolicy(nn.Module):
             drop_all_true_cross_attn_mask=config.drop_all_true_cross_attn_mask,
             compile_mot_blocks=config.mot_compile_blocks,
             compile_dynamic=config.compile_dynamic,
+            attention_backend=config.attention_backend,
             video_train_shift=float(config.video_scheduler["train_shift"]),
             video_infer_shift=float(config.video_scheduler["infer_shift"]),
             video_num_train_timesteps=int(config.video_scheduler["num_train_timesteps"]),
