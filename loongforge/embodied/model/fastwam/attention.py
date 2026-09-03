@@ -180,21 +180,6 @@ def _load_flash_kernel(backend: str) -> Callable:
     return kernel
 
 
-def _load_flash_varlen_kernel(backend: str) -> Callable:
-    """Load the varlen entry point used to batch independent FastWAM regions."""
-    cache_key = f"{backend}:varlen"
-    if cache_key in _FLASH_KERNELS:
-        return _FLASH_KERNELS[cache_key]
-    if backend != "fa2":
-        raise ImportError(f"Packed varlen attention currently requires FA2, got {backend!r}.")
-    try:
-        kernel = import_module("flash_attn").flash_attn_varlen_func
-    except (ImportError, AttributeError) as exc:
-        raise ImportError("Packed varlen attention requires flash-attn with flash_attn_varlen_func.") from exc
-    _FLASH_KERNELS[cache_key] = kernel
-    return kernel
-
-
 def _resolve_backend(requested: str, q: torch.Tensor) -> str:
     requested = normalize_attention_backend(requested)
     eligible = (
@@ -246,90 +231,6 @@ def _segmented_flash_attention(
     return outputs[0] if len(outputs) == 1 else torch.cat(outputs, dim=1)
 
 
-def _packed_varlen_flash_attention(
-    backend: str,
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    mask: StructuredAttentionMask,
-) -> torch.Tensor:
-    """Execute all independent regions in one FA2 varlen launch.
-
-    Each batch/region pair is represented as one varlen sequence. Key ranges
-    are concatenated only into the packed buffer, so softmax normalization is
-    identical to the previous per-region calls.
-    """
-    # Packing pays off only when launch overhead dominates. The common
-    # first-frame-causal FastWAM plan has two regions and is faster through
-    # the direct calls; frame-wise causal plans benefit from packing.
-    if backend != "fa2" or len(mask.segments) < 4:
-        return _segmented_flash_attention(backend, q, k, v, mask)
-    q_parts, k_parts, v_parts = [], [], []
-    q_lengths, k_lengths = [], []
-    destinations = []
-    for batch_index in range(q.shape[0]):
-        for segment in mask.segments:
-            q_part = q[batch_index, segment.query_start : segment.query_end]
-            key_parts = [k[batch_index, start:end] for start, end in segment.key_ranges]
-            value_parts = [v[batch_index, start:end] for start, end in segment.key_ranges]
-            if not key_parts:
-                q_lengths.append(q_part.shape[0])
-                k_lengths.append(0)
-                destinations.append((batch_index, segment.query_start, segment.query_end, None))
-                continue
-            k_part = key_parts[0] if len(key_parts) == 1 else torch.cat(key_parts, dim=0)
-            v_part = value_parts[0] if len(value_parts) == 1 else torch.cat(value_parts, dim=0)
-            q_parts.append(q_part)
-            k_parts.append(k_part)
-            v_parts.append(v_part)
-            q_lengths.append(q_part.shape[0])
-            k_lengths.append(k_part.shape[0])
-            destinations.append((batch_index, segment.query_start, segment.query_end, len(q_parts) - 1))
-
-    output = torch.zeros_like(q)
-    active = [i for i, length in enumerate(k_lengths) if length > 0]
-    if not active:
-        return output
-    # Empty-key regions are uncommon; compact active entries while retaining
-    # their original destination metadata for exact output placement.
-    q_parts = [q_parts[destinations[i][3]] for i in active]
-    k_parts = [k_parts[destinations[i][3]] for i in active]
-    v_parts = [v_parts[destinations[i][3]] for i in active]
-    q_lengths_active = [q_lengths[i] for i in active]
-    k_lengths_active = [k_lengths[i] for i in active]
-    q_packed = torch.cat(q_parts, dim=0)
-    k_packed = torch.cat(k_parts, dim=0)
-    v_packed = torch.cat(v_parts, dim=0)
-    cu_q = torch.zeros(len(q_lengths_active) + 1, dtype=torch.int32, device=q.device)
-    cu_k = torch.zeros(len(k_lengths_active) + 1, dtype=torch.int32, device=q.device)
-    cu_q[1:] = torch.tensor(q_lengths_active, dtype=torch.int32, device=q.device).cumsum(0)
-    cu_k[1:] = torch.tensor(k_lengths_active, dtype=torch.int32, device=q.device).cumsum(0)
-    varlen = _load_flash_varlen_kernel(backend)
-    packed_output = varlen(
-        q_packed,
-        k_packed,
-        v_packed,
-        cu_q,
-        cu_k,
-        max(q_lengths_active),
-        max(k_lengths_active),
-        dropout_p=0.0,
-        causal=False,
-    )
-    cursor = 0
-    active_set = set(active)
-    active_cursor = 0
-    for index, destination in enumerate(destinations):
-        if index not in active_set:
-            continue
-        batch_index, query_start, query_end, _ = destination
-        length = q_lengths[index]
-        output[batch_index, query_start:query_end] = packed_output[cursor : cursor + length]
-        cursor += length
-        active_cursor += 1
-    return output
-
-
 def run_attention(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -364,7 +265,7 @@ def run_attention(
     if use_external and attention_mask is None:
         output = _call_external_flash(selected, q_heads, k_heads, v_heads)
     elif use_external:
-        output = _packed_varlen_flash_attention(selected, q_heads, k_heads, v_heads, attention_mask)
+        output = _segmented_flash_attention(selected, q_heads, k_heads, v_heads, attention_mask)
     else:
         dense_mask = attention_mask.dense if isinstance(attention_mask, StructuredAttentionMask) else attention_mask
         if dense_mask is not None:
