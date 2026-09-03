@@ -174,6 +174,7 @@ def validate(training_args, model_cfg, data_cfg):
         raise ValueError(
             "--fsdp-delta-fp8-allgather requires --distributed-strategy fsdp"
         )
+    _validate_fsdp_ignored_frozen_args(training_args)
 
     if (
         training_args.hsdp_shard_size is not None
@@ -198,7 +199,6 @@ def validate(training_args, model_cfg, data_cfg):
             "fsdp; parameter storage follows --dtype under %s.",
             training_args.distributed_strategy,
         )
-    _validate_fsdp_ignored_frozen_args(training_args)
 
     # ── ZeRO optimizer options ──
     if training_args.zero_parameters_as_bucket_view and not training_args.zero_optimizer:

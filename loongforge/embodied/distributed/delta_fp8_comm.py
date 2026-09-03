@@ -30,7 +30,7 @@ DEFAULT_BLOCK = 256
 
 
 def require_triton() -> None:
-    """Raise if the delta-FP8 kernels cannot be compiled or launched."""
+    """Raise if the delta-FP8 kernels cannot run."""
     if triton is None:
         raise RuntimeError(
             "--fsdp-delta-fp8-allgather requires Triton to be installed"
@@ -52,13 +52,7 @@ def _backend_for_device(backend: str, device_type: str) -> str:
 
 
 def validate_runtime(device: torch.device, backend: str) -> None:
-    """Validate the runtime used by the CUDA-only delta-FP8 kernels.
-
-    The kernels use Triton's NVIDIA ``float8e4nv`` type and are launched on the
-    same CUDA stream as NCCL's FSDP all-gather.  Failing here keeps unsupported
-    XPU/CPU devices, non-NCCL process groups, and pre-FP8 NVIDIA GPUs from
-    failing much later at the first parameter unshard.
-    """
+    """Fail early when the CUDA Triton FP8 path is unavailable."""
     device = torch.device(device)
     backend_name = str(backend).lower()
     device_backend = _backend_for_device(backend_name, device.type)
@@ -80,8 +74,7 @@ def validate_runtime(device: torch.device, backend: str) -> None:
         )
     if tl is None or not hasattr(tl, "float8e4nv"):
         raise RuntimeError(
-            "--fsdp-delta-fp8-allgather requires Triton FP8 type "
-            "tl.float8e4nv; "
+            "--fsdp-delta-fp8-allgather requires Triton FP8 type tl.float8e4nv; "
             f"got {context}"
         )
     if not torch.cuda.is_available():
@@ -94,7 +87,6 @@ def validate_runtime(device: torch.device, backend: str) -> None:
             "--fsdp-delta-fp8-allgather requires PyTorch FP8 E4M3 support; "
             f"got {context}"
         )
-
     try:
         capability = torch.cuda.get_device_capability(device)
     except Exception as exc:
@@ -108,7 +100,6 @@ def validate_runtime(device: torch.device, backend: str) -> None:
             f"compute capability >= 8.9 for tl.float8e4nv; got {capability} "
             f"({context})"
         )
-
     try:
         target = triton.runtime.driver.active.get_current_target()
         triton_backend = str(target.backend).lower()
@@ -135,7 +126,6 @@ if triton is not None:
         x = tl.load(X + offs, mask=mask, other=0.0).to(tl.float32)
         yref = tl.load(YREF + offs, mask=mask, other=0.0).to(tl.float32)
         delta = x - yref
-        # Per-block scaling keeps the FP8 payload at one byte per element.
         amax = tl.max(tl.abs(delta), axis=0)
         scale = amax / 448.0
         inv_scale = tl.where(scale > 0.0, 1.0 / scale, 0.0)
@@ -160,9 +150,80 @@ if triton is not None:
         delta = quantized.to(tl.float8e4nv, bitcast=True).to(tl.float32)
         scale = tl.load(S + rank * num_blocks + pid)
         y = tl.load(Y + offs, mask=mask, other=0.0).to(tl.float32)
-        # Update this rank's replica of the global reference in place; the next
-        # step measures its delta against this reconstructed value.
         tl.store(Y + offs, (y + delta * scale).to(tl.bfloat16), mask=mask)
+
+    @triton.jit
+    def _quantize_delta_param_major_kernel(
+        X,
+        YREF,
+        Q,
+        S,
+        BLOCK_META,
+        shard_numel,
+        num_blocks,
+        rank,
+        BLOCK: tl.constexpr,
+    ):
+        """Quantize a rank-local shard against a parameter-major reference."""
+        pid = tl.program_id(0)
+        q_start = tl.load(BLOCK_META + pid * 3)
+        ref_start = tl.load(BLOCK_META + pid * 3 + 1)
+        rank_stride = tl.load(BLOCK_META + pid * 3 + 2)
+        next_q_start = tl.load(
+            BLOCK_META + (pid + 1) * 3,
+            mask=pid + 1 < num_blocks,
+            other=shard_numel,
+        )
+        block_offs = tl.arange(0, BLOCK)
+        mask = block_offs < tl.minimum(BLOCK, next_q_start - q_start)
+        x = tl.load(X + q_start + block_offs, mask=mask, other=0.0).to(tl.float32)
+        yref = tl.load(
+            YREF + ref_start + rank * rank_stride + block_offs,
+            mask=mask,
+            other=0.0,
+        ).to(tl.float32)
+        delta = x - yref
+        amax = tl.max(tl.abs(delta), axis=0)
+        scale = amax / 448.0
+        inv_scale = tl.where(scale > 0.0, 1.0 / scale, 0.0)
+        quantized = (delta * inv_scale).to(tl.float8e4nv)
+        tl.store(S + pid, scale)
+        tl.store(
+            Q + q_start + block_offs,
+            quantized.to(tl.uint8, bitcast=True),
+            mask=mask,
+        )
+
+    @triton.jit
+    def _dequantize_add_param_major_kernel(
+        Y,
+        Q,
+        S,
+        BLOCK_META,
+        shard_numel,
+        num_blocks,
+        BLOCK: tl.constexpr,
+    ):
+        """Apply rank-major deltas to a parameter-major FSDP output buffer."""
+        pid = tl.program_id(0)
+        rank = tl.program_id(1)
+        q_start = tl.load(BLOCK_META + pid * 3)
+        ref_start = tl.load(BLOCK_META + pid * 3 + 1)
+        rank_stride = tl.load(BLOCK_META + pid * 3 + 2)
+        next_q_start = tl.load(
+            BLOCK_META + (pid + 1) * 3,
+            mask=pid + 1 < num_blocks,
+            other=shard_numel,
+        )
+        block_offs = tl.arange(0, BLOCK)
+        mask = block_offs < tl.minimum(BLOCK, next_q_start - q_start)
+        q_offs = rank * shard_numel + q_start + block_offs
+        y_offs = ref_start + rank * rank_stride + block_offs
+        quantized = tl.load(Q + q_offs, mask=mask, other=0).to(tl.uint8)
+        delta = quantized.to(tl.float8e4nv, bitcast=True).to(tl.float32)
+        scale = tl.load(S + rank * num_blocks + pid)
+        y = tl.load(Y + y_offs, mask=mask, other=0.0).to(tl.float32)
+        tl.store(Y + y_offs, (y + delta * scale).to(tl.bfloat16), mask=mask)
 
 
 def quantize_delta(x, yref, block=DEFAULT_BLOCK):
@@ -191,3 +252,51 @@ def quantize_delta_into(x, yref, quantized, scales, block=DEFAULT_BLOCK):
     numel = x.numel()
     num_blocks = (numel + block - 1) // block
     _quantize_delta_kernel[(num_blocks,)](x, yref, quantized, scales, numel, BLOCK=block)
+
+
+def quantize_delta_param_major_into(
+    x,
+    yref,
+    quantized,
+    scales,
+    block_metadata,
+    rank,
+    block=DEFAULT_BLOCK,
+):
+    """Quantize a flat local shard against persistent parameter-major outputs."""
+    require_triton()
+    num_blocks = block_metadata.shape[0]
+    _quantize_delta_param_major_kernel[(num_blocks,)](
+        x,
+        yref,
+        quantized,
+        scales,
+        block_metadata,
+        x.numel(),
+        num_blocks,
+        rank,
+        BLOCK=block,
+    )
+
+
+def dequantize_add_param_major(
+    y,
+    quantized,
+    scales,
+    block_metadata,
+    shard_numel,
+    world_size,
+    block=DEFAULT_BLOCK,
+):
+    """Apply gathered deltas directly to persistent FSDP all-gather outputs."""
+    require_triton()
+    num_blocks = block_metadata.shape[0]
+    _dequantize_add_param_major_kernel[(num_blocks, world_size)](
+        y,
+        quantized,
+        scales,
+        block_metadata,
+        shard_numel,
+        num_blocks,
+        BLOCK=block,
+    )

@@ -130,7 +130,9 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
         training_args: ``fsdp_ignored_param_names`` supplies name substrings;
             ``fsdp_ignore_frozen_module_classes`` supplies exact class names;
             ``fsdp_ignored_frozen_param_dtype`` optionally casts parameters from
-            those matched classes (the validator requires it to match ``dtype``).
+            those matched classes. Configuration-level constraints for these
+            options are checked by ``train.validators.validate`` before this
+            model-dependent builder runs.
             Name matching is on substrings, not suffixes,
             so ``q_proj`` also selects ``q_proj_moe_gen``; qualify with
             ``.weight`` to separate the two MoT pathways.
@@ -218,11 +220,6 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
 
     ignored_frozen_dtype = None
     if training_args.fsdp_ignored_frozen_param_dtype is not None:
-        if not frozen_class_names:
-            raise ValueError(
-                "--fsdp-ignored-frozen-param-dtype requires "
-                "--fsdp-ignore-frozen-module-classes"
-            )
         from loongforge.embodied.train.training_args import parse_dtype_from_str
 
         ignored_frozen_dtype = parse_dtype_from_str(
