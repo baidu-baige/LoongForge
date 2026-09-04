@@ -137,15 +137,13 @@ def convert_to_wds(args):
         args.media,
         args.sample_type
     )
-    print(f"Dataset successfully converted to wds")
+    print("Dataset successfully converted to wds")
 
 def write_config(path: EPath, media: str=None, sample_type: bool=False):
     """ Write config to path """
     (path / MAIN_FOLDER_NAME).mkdir()
     all_tars = list(path.glob("**/*.tar")) + list(path.glob("**/*.tgz"))
     all_tars = [str(p.relative_to(path)) for p in sorted(all_tars)]
-    class_type = "MultiMixQASample" if media == 'mix' else "MultiVidQASample"
-
     # Construct dataset configuration based on sample_type
     if sample_type == "vqa":
         # VQA sample type with field mapping

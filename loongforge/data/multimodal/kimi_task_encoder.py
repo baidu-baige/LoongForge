@@ -6,26 +6,12 @@
 import logging
 import torch
 from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
-from typing import Dict, List, Optional, Tuple, Union
-from typing_extensions import override
-from dataclasses import dataclass
+from typing import Optional, Tuple, Union
 
 from megatron.energon import (
     CaptioningSample,
     VQASample,
 )
-from importlib.metadata import version
-
-if version("megatron-energon") < "7.0.0":
-    from megatron.energon.flavors.webdataset import VideoData as AVData
-
-    _ENERGON_NEEDS_SUBFLAVOR = True
-else:
-    from megatron.energon.flavors.webdataset import AVData
-
-    _ENERGON_NEEDS_SUBFLAVOR = False
-
-
 from loongforge.utils import constants, get_chat_template
 from loongforge.data.chat_template import HFChatTemplate
 from megatron.energon.task_encoder.base import stateless
@@ -35,10 +21,7 @@ from loongforge.data.multimodal import (
     MultiVidQASample,
 )
 from .base.task_encoder import (
-    BaseTaskEncoder,
     BaseTaskSample,
-    BaseTaskSamplePacked,
-    BaseTaskBatchPacked,
 )
 from .vlm_task_encoder import VLMTaskSample
 

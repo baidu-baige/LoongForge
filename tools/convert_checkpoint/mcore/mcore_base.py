@@ -3,7 +3,6 @@
 
 """Base utilities for converting common checkpoints to and from Megatron Core format."""
 
-import io
 from typing import Any, Optional
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 import torch
@@ -11,10 +10,13 @@ import logging
 from omegaconf.dictconfig import DictConfig
 from dataclasses import dataclass
 
-logging.basicConfig(level=logging.INFO)
-
-from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import EMBED_NAMES, QUANT_DTYPE_BF16, QUANT_DTYPE_FP8, QUANT_HF_BF16_AND_MCORE_FP8, VISION_WORD_EMBEDDINGS, CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import (
+    EMBED_NAMES,
+    QUANT_DTYPE_BF16,
+    QUANT_DTYPE_FP8,
+    QUANT_HF_BF16_AND_MCORE_FP8,
+    CommonCheckpoint,
+)
 from convert_checkpoint.utils.utils import (
     add_embedding_padding, cut_embedding_padding,
     transpose_shape0,
@@ -30,15 +32,17 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    WEIGHT, BIAS, WEIGHT_SCALE, LAYERNORM_WEIGHT, LAYERNORM_BIAS, LORA_NAME_IN, LORA_NAME_OUT, MIXER_ATT_IN_PROJ_QKVZ, MIXER_ATT_IN_PROJ_BA,
-    ATTENTION_QUERY_GATE_KEY_VALUE, WORD_EMBEDDINGS, WORD_EMBEDDINGS_FOR_HEAD, MTP_SHARED_HEAD_HEAD, MLP_DENSE_H_TO_4H,
-    MLP_DENSE_4H_TO_H, MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
+    WEIGHT, BIAS, LAYERNORM_WEIGHT, LAYERNORM_BIAS, LORA_NAME_IN, LORA_NAME_OUT,
+    WORD_EMBEDDINGS, WORD_EMBEDDINGS_FOR_HEAD, MTP_SHARED_HEAD_HEAD, MLP_DENSE_H_TO_4H,
+    MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
     LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER, EXTRA_DATA, LAYER_NAME, LAYER_EXTRA_DATA,
     LAYER_IS_LAYERNORM, LAYER_IS_FP8, LAYER_FP8_IGNORE_TP, LAYER_IGNORE_TP,
     LAYER_DTYPE
 )
 
 from convert_checkpoint.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
+
+logging.basicConfig(level=logging.INFO)
 
 
 @dataclass
@@ -134,7 +138,11 @@ class McoreBase:
         self.tensor_parallel_dim = TENSOR_PARALLEL_DIM.copy()
         self.tensor_parallel_dim.update(c_config.get("tensor_parallel_dim", {}))
         self.layer_prefix = self.name_map[LAYER_PREFIX]
-        self.name_prefix_for_layer = self.name_map[MTP_NAME_PREFIX_FOR_LAYER] if MTP_NAME_PREFIX_FOR_LAYER in self.name_map else None
+        self.name_prefix_for_layer = (
+            self.name_map[MTP_NAME_PREFIX_FOR_LAYER]
+            if MTP_NAME_PREFIX_FOR_LAYER in self.name_map
+            else None
+        )
         self.add_embed_padding = margs.get("add_embedding_padding", False)
         self.untie_embeddings_and_output_weights = margs.get("untie_embeddings_and_output_weights", False)
 
@@ -258,7 +266,11 @@ class McoreBase:
         if bias_name in self.name_map:
             (mcore_bias_name, _, _), (_, _), (_, _, _) = self.get_mcore_name_and_extra(self.name_map[bias_name])
             m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
-            mcore_bias_path = f"{layer_prefix}.{mcore_layer_id}.{m_bias_name}" if mcore_layer_id is not None else mcore_bias_name
+            mcore_bias_path = (
+                f"{layer_prefix}.{mcore_layer_id}.{m_bias_name}"
+                if mcore_layer_id is not None
+                else mcore_bias_name
+            )
 
         # Build LoRA paths if requested
         mcore_lora_in_path = None
@@ -428,11 +440,17 @@ class McoreBase:
             if ignore_tp:
                 weight_list = [weight] * m_tp
             else:
-                weight_list = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose, clear_source=clear_source)
+                weight_list = self.get_tp_chunk_list(
+                    name, m_tp, chunk_dim, weight,
+                    need_transpose=need_transpose, clear_source=clear_source
+                )
         bias_list = None
         if bias is not None:
             bias_chunk_dim = self.tensor_parallel_dim.get(f"{name}.{BIAS}", None)
-            bias_list = self.get_tp_chunk_list(name, m_tp, bias_chunk_dim, bias, need_transpose=need_transpose, clear_source=clear_source)
+            bias_list = self.get_tp_chunk_list(
+                name, m_tp, bias_chunk_dim, bias,
+                need_transpose=need_transpose, clear_source=clear_source
+            )
         if weight_scale is None:
             if quant_type == QUANT_HF_BF16_AND_MCORE_FP8:
                 # ======weight need quantization when dtype is not equal =======
@@ -440,7 +458,11 @@ class McoreBase:
                         name, m_tp, chunk_dim, weight, fp8_ignore_tp, ignore_tp, need_transpose=need_transpose)
                 weight_list = []
                 for w, w_scale in zip(weight_s, weight_scale_s):
-                    weight_list.append(get_quantizer_with_weight_scale_inv(w, w_scale, self.dtype, amax_epsilon=self.args.amax_epsilon))
+                    weight_list.append(
+                        get_quantizer_with_weight_scale_inv(
+                            w, w_scale, self.dtype, amax_epsilon=self.args.amax_epsilon
+                        )
+                    )
         else:
             # fp8 chunk
             if (self.args.fp8_force_no_requant \
@@ -449,9 +471,14 @@ class McoreBase:
                     weight_s = [weight] * m_tp
                     weight_scale_s = [weight_scale] * m_tp
                 else:
-                    weight_s = self.get_tp_chunk_list(name, m_tp, chunk_dim, weight, need_transpose=need_transpose, clear_source=clear_source)
+                    weight_s = self.get_tp_chunk_list(
+                        name, m_tp, chunk_dim, weight,
+                        need_transpose=need_transpose, clear_source=clear_source
+                    )
                     weight_scale_s = self.get_tp_chunk_list(
-                            name, m_tp, chunk_dim, weight_scale, need_transpose=need_transpose, clear_source=clear_source)
+                            name, m_tp, chunk_dim, weight_scale,
+                            need_transpose=need_transpose, clear_source=clear_source
+                        )
             else:
                 # First do dequantization then re-quantize back to FP8
                 weight_bf16 = convert_fp8_to_bf16(weight, weight_scale, dtype=torch.float32)
@@ -459,11 +486,18 @@ class McoreBase:
                         name, m_tp, chunk_dim, weight_bf16, fp8_ignore_tp, ignore_tp, need_transpose=need_transpose)
             weight_list = []
             for w, w_scale in zip(weight_s, weight_scale_s):
-                weight_list.append(get_quantizer_with_weight_scale_inv(w, w_scale, self.dtype, amax_epsilon=self.args.amax_epsilon))
+                weight_list.append(
+                    get_quantizer_with_weight_scale_inv(
+                        w, w_scale, self.dtype, amax_epsilon=self.args.amax_epsilon
+                    )
+                )
 
         weight_shapes = [obj.shape for obj in weight_list]
         if log_flag:
-            logging.info(f"Chunk weight({name=}) {weight_path}, {m_tp=}, {chunk_dim=}, ori_weight: {weight.shape}, {weight_shapes=}")
+            logging.info(
+                f"Chunk weight({name=}) {weight_path}, {m_tp=}, {chunk_dim=}, "
+                f"ori_weight: {weight.shape}, {weight_shapes=}"
+            )
         if bias is not None:
             bias_shapes = [obj.shape for obj in bias_list]
             if log_flag:
@@ -481,12 +515,14 @@ class McoreBase:
             return
 
         # Handle special case for MTP_SHARED_HEAD_HEAD
-        path_info = self.build_mcore_paths(name, layer_id, m_layer_id, layer_prefix, expert_name, name_prefix, include_lora_paths=True)
+        path_info = self.build_mcore_paths(
+            name, layer_id, m_layer_id, layer_prefix, expert_name, name_prefix,
+            include_lora_paths=True,
+        )
 
         if path_info is None:
             return
         name = path_info.name
-        mcore_path = path_info.mcore_path
         mcore_weight_path = path_info.mcore_weight_path
         mcore_bias_path = path_info.mcore_bias_path
         is_fp8 = path_info.is_fp8
@@ -519,11 +555,15 @@ class McoreBase:
             lora_out_weight_list, _, _ = self.get_mcore_weight_list(m_dict, t_name, mcore_lora_out_path, None)
 
         weight, bias, weight_scale = self.get_cat_weight(
-            name, self.tp, weight_list, bias_list, weight_scale_list, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type)
+            name, self.tp, weight_list, bias_list, weight_scale_list,
+            is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type,
+        )
         if lora_in_weight_list is not None and lora_out_weight_list is not None:
             # Merge lora weight
             lora_out_weight, _, _ = self.get_cat_weight(
-                name, self.tp, lora_out_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, chunk_dim=0)
+                name, self.tp, lora_out_weight_list, None, None,
+                is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, chunk_dim=0,
+            )
             lora_in_weight, _, _ = self.get_cat_weight(
                 name, self.tp, lora_in_weight_list, None, None, is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp)
             weight = self.lora_merge(weight, lora_out_weight, lora_in_weight, self.lora_alpha, self.lora_dim)
@@ -552,7 +592,7 @@ class McoreBase:
                 temp_weight = weight
                 weight = temp_weight._rowwise_data.view(torch.float8_e4m3fn)
                 weight_scale = temp_weight._rowwise_scale_inv
-        except:
+        except Exception:
             if self.args.pretrain_as_fp8:
                 raise Exception("Please install Float8BlockwiseQTensor first when pretrain_as_fp8 is true.")
         return weight, bias, weight_scale
@@ -620,7 +660,10 @@ class McoreBase:
                 weight_scale = None
         elif weight_scale_list is not None and quant_type == QUANT_HF_BF16_AND_MCORE_FP8:
             # ======weight need cat and need quantization when dtype is not equal =======
-            weight = self.convert_fp8s_to_bf16(name, m_tp, chunk_dim, weight_list, weight_scale_list, need_transpose=need_transpose)
+            weight = self.convert_fp8s_to_bf16(
+                name, m_tp, chunk_dim, weight_list, weight_scale_list,
+                need_transpose=need_transpose,
+            )
             weight_scale = None
         elif weight_scale_list is None and not (is_fp8 and self.convert_to_fp8):
             # bf16 and not convert to fp8
@@ -633,16 +676,23 @@ class McoreBase:
                 weight = weight_list[0] if weight_list is not None else None
                 weight_scale = weight_scale_list[0] if weight_scale_list is not None else None
             else:
-                BLOCK_SIZE = 128  # TODO: quantization block size fixs to 128 for now, generalize to others for compatibility
+                # TODO: Generalize the currently fixed FP8 quantization block size.
+                BLOCK_SIZE = 128
                 for i in range(len(weight_list)):
                     _w_dim0, _w_dim1 = weight_list[i].size()
                     _ws_dim0, _ws_dim1 = _w_dim0 // BLOCK_SIZE, _w_dim1 // BLOCK_SIZE
                     weight_scale_list[i] = weight_scale_list[i][:_ws_dim0, :_ws_dim1]
                 weight = self.get_tp_cat_source(name, m_tp, chunk_dim, weight_list, need_transpose=need_transpose)
-                weight_scale = self.get_tp_cat_source(name, m_tp, chunk_dim, weight_scale_list, need_transpose=need_transpose)
+                weight_scale = self.get_tp_cat_source(
+                    name, m_tp, chunk_dim, weight_scale_list,
+                    need_transpose=need_transpose,
+                )
         else:
             # need quantization. fp8 or bf16 convert_to_fp8
-            weight_bf16 = self.convert_fp8s_to_bf16(name, m_tp, chunk_dim, weight_list, weight_scale_list, need_transpose=need_transpose)
+            weight_bf16 = self.convert_fp8s_to_bf16(
+                name, m_tp, chunk_dim, weight_list, weight_scale_list,
+                need_transpose=need_transpose,
+            )
             weight, weight_scale = convert_bf16_to_fp8(
                     weight_bf16, method=self.args.quant_method, amax_epsilon=self.args.amax_epsilon,
                     force_pow_2_scales=self.args.force_pow_2_scales)

@@ -7,7 +7,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from math import gcd
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn.functional as F
@@ -18,7 +18,6 @@ from megatron import energon
 from megatron.core import parallel_state
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.models.multimodal import context_parallel
-from megatron.core.transformer.enums import AttnMaskType
 from megatron.training import get_args
 from megatron.training.checkpointing import get_checkpoint_name
 from loongforge.utils import constants, get_model_config, print_rank_0
@@ -271,7 +270,6 @@ class VLMPretrainCollator:
             batch["cu_lengths"][..., -1] += pad_len
 
     def _build_masks_and_positions(self, batch: Dict[str, Any]) -> None:
-        tokens = batch["tokens"]
         labels = batch["labels"]
         attention_mask = batch["attn_mask"]
         cu_lengths = batch["cu_lengths"]

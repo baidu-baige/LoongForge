@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
 import torch
-from megatron.core.transformer import TransformerConfig
-from transformers import PretrainedConfig
 
 from loongforge.models.common.base_model_config import BaseModelConfig
 

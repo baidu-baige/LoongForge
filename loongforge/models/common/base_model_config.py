@@ -9,7 +9,6 @@ from megatron.core.transformer import TransformerConfig
 from megatron.core.transformer.transformer_config import MLATransformerConfig
 import dataclasses
 from typing import Optional, List, Dict, Set
-import torch
 from collections import defaultdict
 
 

@@ -11,9 +11,7 @@ Kimi uses a different token format than Qwen2-VL:
 """
 
 import logging
-import math
 from copy import deepcopy
-from io import BytesIO
 from typing import (
     TYPE_CHECKING,
     Dict,
@@ -24,7 +22,6 @@ from typing import (
     Union,
 )
 
-import numpy as np
 from typing_extensions import override
 from PIL import Image
 
@@ -34,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import torch
-    from transformers.image_processing_utils import BaseImageProcessor
+    from transformers.processing_utils import ProcessorMixin
     from PIL.Image import Image as ImageObject
 
     ImageInput = Union[str, Dict, "ImageObject"]

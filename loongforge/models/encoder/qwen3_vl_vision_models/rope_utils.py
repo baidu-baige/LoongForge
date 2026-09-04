@@ -8,21 +8,19 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Optional
+
+import torch
+from torch import Tensor
+from transformer_engine.pytorch.attention.rope import (
+    apply_rotary_pos_emb as te_apply_rotary_pos_emb,
+)
 
 if TYPE_CHECKING:
     from megatron.core.transformer.transformer_config import TransformerConfig
 
-import logging
-
-import torch
-from torch import Tensor
-
 logger = logging.getLogger(__name__)
-
-from transformer_engine.pytorch.attention.rope import (
-    apply_rotary_pos_emb as te_apply_rotary_pos_emb,
-)
 
 
 def _rotate_half(x: Tensor, rotary_interleaved: bool) -> Tensor:

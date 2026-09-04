@@ -6,12 +6,8 @@
 import os
 import torch
 import logging
-import argparse
-
-logging.basicConfig(level=logging.INFO)
 
 import concurrent.futures
-from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
 from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
 from convert_checkpoint.mcore.mcore_base import McoreBase
@@ -25,12 +21,13 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX, WORD_EMBEDDINGS,
-    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES,
+    TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX, FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES,
     LAYER_LOCAL_LAST_NAMES, MTP_NAMES,
     MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT, MTP_NAME_PREFIX_FOR_LAYER,
     HC_NAMES
 )
+
+logging.basicConfig(level=logging.INFO)
 
 
 class McoreCheckpoint(AbstractCheckpoint):
@@ -51,7 +48,6 @@ class McoreCheckpoint(AbstractCheckpoint):
         self.checkpoint_version = 3.0
         self.rng_state = None
         self.model_id = model_id
-        margs = c_config.get_args("mcore")
         cargs = c_config.get_args("common")
         num_layers = cargs["num_layers"]
         num_layers_per_stage = self.args.num_layers_per_virtual_pipeline_stage
@@ -63,7 +59,11 @@ class McoreCheckpoint(AbstractCheckpoint):
         self.num_stages = stage or 1
         self.name_map = self.c_config.get("name_map")["mcore"]
         self.optim_state_dict = None
-        self.name_prefix_for_layer = self.name_map[MTP_NAME_PREFIX_FOR_LAYER] if MTP_NAME_PREFIX_FOR_LAYER in self.name_map else None
+        self.name_prefix_for_layer = (
+            self.name_map[MTP_NAME_PREFIX_FOR_LAYER]
+            if MTP_NAME_PREFIX_FOR_LAYER in self.name_map
+            else None
+        )
 
 
     @staticmethod
@@ -105,7 +105,10 @@ class McoreCheckpoint(AbstractCheckpoint):
         return need_check_dones, done_keys
 
 
-    def convert_from_common(self, c_ckpt, m_config, layer_dict, expert_dict=None, save_file=True, tp_ranks=None, etp_ranks=None):
+    def convert_from_common(
+        self, c_ckpt, m_config, layer_dict, expert_dict=None, save_file=True,
+        tp_ranks=None, etp_ranks=None,
+    ):
         """
         Convert common checkpoint to mcore checkpoint.
 
@@ -116,18 +119,23 @@ class McoreCheckpoint(AbstractCheckpoint):
 
         name_map = self.c_config.get("name_map")["mcore"]
         cargs = self.c_config.get_args("common")
-        margs = self.c_config.get_args("mcore")
 
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
 
-        mtp_num_layers = self.args.mtp_num_layers if self.args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
+        mtp_num_layers = (
+            self.args.mtp_num_layers
+            if self.args.mtp_num_layers is not None
+            else cargs.get("mtp_num_layers", 0)
+        )
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers
         num_layers_in_last_pipeline_stage = self.args.decoder_last_pipeline_num_layers
         if num_layers_in_first_pipeline_stage is not None or num_layers_in_last_pipeline_stage is not None:
-            assert self.args.num_virtual_stages_per_pipeline_rank is not None, "num_virtual_stages_per_pipeline_rank is required"
+            assert self.args.num_virtual_stages_per_pipeline_rank is not None, (
+                "num_virtual_stages_per_pipeline_rank is required"
+            )
 
         num_layers_in_vp = get_num_layers_in_vp_map(
             stage, num_layers, self.pp, mtp_num_layers=mtp_num_layers,
@@ -140,7 +148,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         self.args = c_ckpt.other_args.get("args", self.args)
         self.rng_state = c_ckpt.other_args.get("rng_state", self.rng_state)
 
-        assert layer_dict != None and len(layer_dict) == 1, "layer_dict must be provided and size == 1"
+        assert layer_dict is not None and len(layer_dict) == 1, "layer_dict must be provided and size == 1"
         p = list(layer_dict.keys())[0]
         layer_ids = layer_dict[p]
 
@@ -186,13 +194,21 @@ class McoreCheckpoint(AbstractCheckpoint):
                     self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
                 for c_name in name_map.keys():
                     if c_name.startswith(VISION_MAP):
-                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
+                        self.m_base.common_to_mcore(
+                            c_name, c_ckpt, m_dict, t_name,
+                            ep_id=ep_id, clear_source=clear_source,
+                        )
             elif self.args.enable_full_hetero_dp:
                 t_name = self.get_transformer_name(0)
-                self.m_base.common_to_mcore(VISION_WORD_EMBEDDINGS, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
+                self.m_base.common_to_mcore(
+                    VISION_WORD_EMBEDDINGS, c_ckpt, m_dict, t_name,
+                    ep_id=ep_id, clear_source=clear_source,
+                )
 
             for stage_index in range(stage):
-                virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
+                virtual_p, mcore_layer_offset = get_virtual_partition(
+                    dualpipev, stage_index, p, self.pp, num_layers_in_vp
+                )
                 t_name = self.get_transformer_name(stage_index)
                 for cur_layer_id in range(num_layers_in_vp[virtual_p]):
                     layer_id = cur_layer_id + mcore_layer_offset
@@ -207,19 +223,29 @@ class McoreCheckpoint(AbstractCheckpoint):
                     for c_name in BASE_NAMES:
                         if layer_id >= num_layers and c_name in HC_NAMES:
                             continue
-                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                                    layer_prefix=layer_prefix, ep_id=ep_id, name_prefix=name_prefix, clear_source=clear_source)
+                        self.m_base.common_to_mcore(
+                            c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                            layer_prefix=layer_prefix, ep_id=ep_id,
+                            name_prefix=name_prefix, clear_source=clear_source,
+                        )
                     # ====moe shared_expert
                     for c_name in MOE_EXPERT_PROJS:
-                        self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix,
-                                                    ep_id=ep_id, expert_name=MOE_SHARED_EXPERT, name_prefix=name_prefix, clear_source=clear_source)
+                        self.m_base.common_to_mcore(
+                            c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                            layer_prefix=layer_prefix, ep_id=ep_id,
+                            expert_name=MOE_SHARED_EXPERT, name_prefix=name_prefix,
+                            clear_source=clear_source,
+                        )
 
                     # EXPERT
                     if expert_dict is not None:
                         for expert_id in expert_dict[ep_id]:
                             for c_name in MOE_EXPERT_PROJS:
-                                self.m_moe.common_e_to_mcore(MOE_EXPERT, c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
-                                                                ep_id, expert_id, layer_prefix=layer_prefix, name_prefix=name_prefix)
+                                self.m_moe.common_e_to_mcore(
+                                    MOE_EXPERT, c_name, c_ckpt, m_dict, t_name,
+                                    layer_id, m_layer_id, ep_id, expert_id,
+                                    layer_prefix=layer_prefix, name_prefix=name_prefix,
+                                )
 
                     # MTP
                     if layer_id >= num_layers:
@@ -274,11 +300,16 @@ class McoreCheckpoint(AbstractCheckpoint):
                 futures = []
                 with concurrent.futures.ThreadPoolExecutor(max_workers=self.args.max_workers) as executor:
                     for ep_id in expert_dict.keys():
-                        futures.append(executor.submit(convert_one_ep_from_common, ep_id=ep_id, clear_source=clear_source))
+                        futures.append(
+                            executor.submit(
+                                convert_one_ep_from_common,
+                                ep_id=ep_id, clear_source=clear_source,
+                            )
+                        )
                 concurrent.futures.wait(futures)
                 for future in futures:
                     try:
-                        result = future.result()
+                        future.result()
                     except Exception as e:
                         logging.info(f"An error({p=}) occurred: {e}")
                         raise e
@@ -304,7 +335,10 @@ class McoreCheckpoint(AbstractCheckpoint):
             logging.info(f"load checkpoint: {checkpoint_path}")
             return torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
-    def load_state_dict_from_mcore(self, load_path, p, ep_ids=None, tp_to_ep=None, etp_to_tp_mapping=None, mcore_dict=None):
+    def load_state_dict_from_mcore(
+        self, load_path, p, ep_ids=None, tp_to_ep=None,
+        etp_to_tp_mapping=None, mcore_dict=None,
+    ):
         tp = self.tp
         # return {ep_id: {tp: state_dict}}
         m_dict = {}
@@ -373,7 +407,7 @@ class McoreCheckpoint(AbstractCheckpoint):
                             ep_mcore_state_dict[ep_id][et] = mcore_dict[p][ep_id][t]
 
         if m_dict is not None:
-            assert len(m_dict) > 0, f"m_dict must not be empty"
+            assert len(m_dict) > 0, "m_dict must not be empty"
             self.checkpoint_version = m_dict[0].get('checkpoint_version', self.checkpoint_version)
             self.rng_state = m_dict[0].get('rng_state', None)
         return m_dict, ep_mcore_state_dict
@@ -393,7 +427,9 @@ class McoreCheckpoint(AbstractCheckpoint):
             ep_ids = list(expert_dict.keys())
             etp_to_tp_mapping, tp_to_ep = get_etp_map(self.tp, self.ep, self.etp)
             self.m_dict, self.ep_mcore_state_dict = self.load_state_dict_from_mcore(
-                    load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping, mcore_dict=mcore_dict)
+                    load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep,
+                    etp_to_tp_mapping=etp_to_tp_mapping, mcore_dict=mcore_dict,
+                )
             if lora_load_path is not None:
                 lora_m_dict, lora_ep_mcore_state_dict = self.load_state_dict_from_mcore(
                         lora_load_path, p, ep_ids=ep_ids, tp_to_ep=tp_to_ep, etp_to_tp_mapping=etp_to_tp_mapping)
@@ -428,13 +464,19 @@ class McoreCheckpoint(AbstractCheckpoint):
         dualpipev = self.args.vpp_scheduler == 'dualpipev'
         custom_pipeline_layers = self.args.custom_pipeline_layers
 
-        mtp_num_layers = self.args.mtp_num_layers if self.args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)
+        mtp_num_layers = (
+            self.args.mtp_num_layers
+            if self.args.mtp_num_layers is not None
+            else cargs.get("mtp_num_layers", 0)
+        )
         num_layers = cargs["num_layers"]
         stage = self.args.num_virtual_stages_per_pipeline_rank or 1
         num_layers_in_first_pipeline_stage = self.args.decoder_first_pipeline_num_layers
         num_layers_in_last_pipeline_stage = self.args.decoder_last_pipeline_num_layers
         if num_layers_in_first_pipeline_stage is not None or num_layers_in_last_pipeline_stage is not None:
-            assert self.args.num_virtual_stages_per_pipeline_rank is not None, "num_virtual_stages_per_pipeline_rank is required"
+            assert self.args.num_virtual_stages_per_pipeline_rank is not None, (
+                "num_virtual_stages_per_pipeline_rank is required"
+            )
 
         c_ckpt = CommonCheckpoint(self.c_config)
 
@@ -444,7 +486,7 @@ class McoreCheckpoint(AbstractCheckpoint):
             num_layers_in_first_pipeline_stage=num_layers_in_first_pipeline_stage,
             num_layers_in_last_pipeline_stage=num_layers_in_last_pipeline_stage)
 
-        assert layer_dict != None and len(layer_dict) == 1, "layer_dict must be provided and size == 1"
+        assert layer_dict is not None and len(layer_dict) == 1, "layer_dict must be provided and size == 1"
         p = list(layer_dict.keys())[0]
  
         def convert_one_ep_to_common(ep_id=None):
@@ -457,7 +499,9 @@ class McoreCheckpoint(AbstractCheckpoint):
                         self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
 
             for stage_index in range(stage):
-                virtual_p, mcore_layer_offset, = get_virtual_partition(dualpipev, stage_index, p, self.pp, num_layers_in_vp)
+                virtual_p, mcore_layer_offset = get_virtual_partition(
+                    dualpipev, stage_index, p, self.pp, num_layers_in_vp
+                )
                 t_name = self.get_transformer_name(stage_index)
                 for cur_layer_id in range(num_layers_in_vp[virtual_p]):
                     layer_id = cur_layer_id + mcore_layer_offset
@@ -475,8 +519,11 @@ class McoreCheckpoint(AbstractCheckpoint):
                                                     layer_prefix=layer_prefix, name_prefix=name_prefix)
                     # ====moe shared_expert
                     for c_name in MOE_EXPERT_PROJS:
-                        self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
-                                                    expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix, name_prefix=name_prefix)
+                        self.m_base.mcore_to_common(
+                            c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
+                            expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix,
+                            name_prefix=name_prefix,
+                        )
 
                     # EXPERT
                     if expert_dict is not None:
@@ -484,13 +531,19 @@ class McoreCheckpoint(AbstractCheckpoint):
                         e_m_dict = self.ep_mcore_state_dict[ep_id]
                         for expert_id in expert_ids:
                             for c_name in MOE_EXPERT_PROJS:
-                                self.m_moe.mcore_e_to_common(MOE_EXPERT, c_name, c_ckpt, e_m_dict, t_name,
-                                                            layer_id, m_layer_id, expert_id, layer_prefix=layer_prefix, name_prefix=name_prefix)
+                                self.m_moe.mcore_e_to_common(
+                                    MOE_EXPERT, c_name, c_ckpt, e_m_dict, t_name,
+                                    layer_id, m_layer_id, expert_id,
+                                    layer_prefix=layer_prefix, name_prefix=name_prefix,
+                                )
 
                     # MTP
                     if layer_id >= num_layers:
                         for c_name in MTP_NAMES:
-                            self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id, layer_prefix=layer_prefix)                                                                                                
+                            self.m_base.mcore_to_common(
+                                c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
+                                layer_prefix=layer_prefix,
+                            )
 
                     # final pp
                     if layer_id == num_layers - 1:
@@ -511,7 +564,7 @@ class McoreCheckpoint(AbstractCheckpoint):
                 concurrent.futures.wait(futures)
                 for future in futures:
                     try:
-                        result = future.result()
+                        future.result()
                     except Exception as e:
                         logging.info(f"An error({p=}) occurred: {e}")
                         raise e
@@ -625,8 +678,14 @@ class McoreCheckpoint(AbstractCheckpoint):
         vision_layer_dict = {}
         vision_layer_dict[0] = list(range(vision_num_layers))
         encoder_tp = m_vision_ckpt.tp
-        state_dict = m_ckpt.convert_from_common(c_ckpt, target_c_config, layer_dict, expert_dict=expert_dict, save_file=False)
-        vision_dict = m_vision_ckpt.convert_from_common(c_vision_ckpt, target_c_vision_config, vision_layer_dict, save_file=False)
+        state_dict = m_ckpt.convert_from_common(
+            c_ckpt, target_c_config, layer_dict,
+            expert_dict=expert_dict, save_file=False,
+        )
+        vision_dict = m_vision_ckpt.convert_from_common(
+            c_vision_ckpt, target_c_vision_config, vision_layer_dict,
+            save_file=False,
+        )
         if save_file:
             done_dir = os.path.join(save_path, "dones")
             need_check_dones, done_keys = McoreCheckpoint.get_need_check_dones(done_dir, layer_dict, expert_dict)
