@@ -66,24 +66,13 @@ bash path/to/fsdp_launcher.sh \
 4. 在 rank 之间 gather FP8 payload 和 scale，并保留调用方的异步 collective 语义。
 5. 反量化 gathered delta，并将其累加到 FSDP 使用的 BF16 reference。
 
-将重建后的差值累加回 reference，可以使量化残差进入后续更新，而不是每次都相对固定初始值量化。reference 直接复用 FSDP unsharded 参数存储，量化 scratch buffer 在 FSDP unit 间共享，以避免为每个 unit 持久分配 staging buffer。
+将重建后的差值累加回 reference，可以使量化残差进入后续更新，而不是每次都相对固定初始值量化。对于标准连续 dim-0 FSDP 布局，reference 会复用 FSDP unsharded 参数存储，FP8 payload/scale scratch buffer 也会在 FSDP unit 间共享。不支持的布局会回退到独立 reference，非连续输入则会按需为对应 unit 分配 BF16 copy buffer。
 
-## 5. 验证建议
-
-Delta-FP8 使用有损通信。对新模型、优化器、block size 或重新初始化策略，应使用相同的权重、数据顺序、batch 配置、精度、硬件和测量区间，与 canonical 原生 BF16 FSDP 运行进行对比。至少检查：
-
-- 代表性训练区间内的逐步 loss 和 gradient norm
-- 排除初始化和编译 warmup 后的稳定 step time
-- 每个 rank 的 GPU 峰值显存
-- NaN、Inf、通信和分布式运行时错误
-
-不应仅根据一次短测成功就认定该模型已完成支持。只有在该 workload 的数值和性能行为完成验证后，才应将该配置纳入默认 recipe。
-
-## 6. 常见问题
+## 5. 常见问题
 
 | 现象 | 处理方式 |
 | --- | --- |
 | 启动时报设备、backend 或 Triton FP8 类型不支持 | 使用原生 BF16 AllGather，或切换到支持的 CUDA/NCCL 环境 |
-| 性能没有提升 | 确认通信使用 BF16 默认 FSDP AllGather，并确认 AllGather 是当前主要瓶颈 |
+| 性能没有提升 | 确认启动日志显示已注册 FSDP group、这些 group 使用 BF16 和默认 AllGather 实现，并确认 AllGather 是当前主要瓶颈 |
 | loss 偏离 BF16 reference | 恢复默认 block 和 prime 设置；若差异仍不可接受，对该 workload 关闭 Delta-FP8 |
 | 参数非连续更新后行为改变 | 验证非零 `--fsdp-delta-fp8-reprime-interval`，或重启训练以重新初始化 reference |

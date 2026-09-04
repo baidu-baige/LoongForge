@@ -66,24 +66,13 @@ For each eligible FSDP unit:
 4. FP8 payloads and scales are gathered across ranks while preserving the caller's asynchronous collective semantics.
 5. Gathered deltas are dequantized and accumulated into the BF16 reference used by FSDP.
 
-Accumulating reconstructed deltas into the reference feeds quantization residuals into later updates instead of repeatedly quantizing against a fixed initial value. The reference aliases FSDP's unsharded parameter storage, and quantization scratch buffers are shared across FSDP units to avoid persistent per-unit staging allocations.
+Accumulating reconstructed deltas into the reference feeds quantization residuals into later updates instead of repeatedly quantizing against a fixed initial value. For the standard contiguous dim-0 FSDP layout, the reference aliases FSDP's unsharded parameter storage and FP8 payload/scale scratch buffers are shared across FSDP units. Unsupported layouts fall back to a separate reference, and non-contiguous inputs lazily allocate a per-unit BF16 copy buffer.
 
-## 5. Validation
-
-Delta-FP8 uses lossy communication. For a new model, optimizer, block size, or re-priming policy, compare it with a canonical native BF16 FSDP run under the same weights, data order, batch configuration, precision, hardware, and measurement window. At minimum, check:
-
-- Step-by-step loss and gradient norm over a representative training window
-- Stable step time after excluding initialization and compilation warmup
-- Per-rank peak GPU memory
-- NaN, Inf, communication, and distributed runtime errors
-
-Do not infer support for a model solely from a successful short smoke test. Promote the setting into a default recipe only after its numerical and performance behavior has been validated for that workload.
-
-## 6. Troubleshooting
+## 5. Troubleshooting
 
 | Symptom | Action |
 | --- | --- |
 | Startup reports an unsupported device, backend, or Triton FP8 type | Use native BF16 AllGather or run on a supported CUDA/NCCL environment |
-| Performance does not improve | Confirm that communication uses BF16 default FSDP AllGather and that AllGather is a material bottleneck |
+| Performance does not improve | Confirm that the startup log reports registered FSDP groups, those groups use BF16 and the default AllGather implementation, and AllGather is a material bottleneck |
 | Loss diverges from the BF16 reference | Restore the default block and priming settings; if the difference remains unacceptable, disable Delta-FP8 for that workload |
 | Behavior changes after a discontinuous parameter update | Validate a nonzero `--fsdp-delta-fp8-reprime-interval` or restart the run so references are initialized again |

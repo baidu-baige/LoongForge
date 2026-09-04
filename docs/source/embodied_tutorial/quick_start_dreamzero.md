@@ -210,13 +210,14 @@ CACHE_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b SAMPLE_TRANSFORM_SEED=0 
 The training script strictly validates the cache at startup. When manifest, `_SUCCESS`, or transform config mismatch, training aborts before the first step.
 
 ### 2.4 Performance Optimization Switches
-The DROID 5B / 14B configs enable validated default optimizations. The 5B Full FSDP recipe also enables Delta-FP8 AllGather by default on supported CUDA/NCCL devices; pass `--no-fsdp-delta-fp8-allgather` for a native BF16 communication A/B comparison. LIBERO, AgiBot, and YAM use conservative defaults. After adjusting performance switches, we recommend running 3–10 steps first and checking loss, grad norm, and memory usage.
+The DROID 5B / 14B configs enable validated default optimizations. The 5B Full FSDP recipe also enables Delta-FP8 AllGather by default and requires a supported CUDA/NCCL environment; pass `--no-fsdp-delta-fp8-allgather` to use native BF16 AllGather on an unsupported environment or for an A/B comparison. LIBERO, AgiBot, and YAM use conservative defaults. After adjusting performance switches, we recommend running 3–10 steps first and checking loss, grad norm, and memory usage.
 
-Control group (disable all kernel optimizations, for isolating loss / performance issues):
+Control group (disable optional model-side optimizations and Delta-FP8 to isolate loss or performance issues):
 
 ```bash
 # Wan2.2 5B
 bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+    --no-fsdp-delta-fp8-allgather \
     model.flash_attention_dense=false model.compile_causal_attention_block=false \
     model.batch_vae_encode=false 'model.prompt_emb_cache=""'
 
@@ -235,7 +236,7 @@ Main switches:
 | Switch | Default | Description |
 | --- | --- | --- |
 | `model.flash_attention_dense` | `true` | dense attention uses FlashAttention directly |
-| `model.compile_causal_attention_block` | `true` | compile the causal attention block |
+| `model.compile_causal_attention_block` (5B) | `true` | compile the full `CausalWanAttentionBlock` forward with `torch.compile` |
 | `model.batch_vae_encode` | `true` | batched VAE encoding; higher throughput but larger peak memory; disable when OOM |
 | `model.prompt_emb_cache` | `gpu` | cache frozen Text Encoder outputs; set to `cpu` or empty string to disable |
 | `model.compile_causal_cross_attention` (14B) | `true` | `torch.compile` compile causal cross-attention |
