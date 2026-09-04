@@ -46,6 +46,7 @@ LoongForge 中文文档
    :caption: Embodied 训练
 
    embodied_tutorial/overview.md
+   features/delta_fp8_allgather.md
    embodied_tutorial/quick_start_pi05.md
    embodied_tutorial/quick_start_groot_n1_6.md
    embodied_tutorial/quick_start_groot_n1_7.md

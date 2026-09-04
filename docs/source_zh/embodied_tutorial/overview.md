@@ -124,6 +124,7 @@ model.forward(batch)
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | worker 数 | `--num-workers` | `4` | 非负整数 | 每个 rank 的 DataLoader worker 数 |
+| 预取倍数 | `--dataloader-prefetch-factor` | `2` | 正整数 | 每个 worker 预取的 batch 数；仅在 `--num-workers` 大于 0 时生效 |
 | worker seed | `--dataloader-seed-workers` | `False` | 布尔开关 | 是否基于 `--seed` 设置 worker seed |
 | 多进程上下文 | `--dataloader-multiprocessing-context` | `None` | `fork`, `spawn`, `forkserver` | DataLoader worker 启动方式 |
 | 分布式采样方式 | `--distributed-sampler-mode` | `cyclic` | `cyclic`, `block` | 分布式 sampler 的 index 切分方式（可扩展） |
@@ -383,26 +384,36 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 
 #### 4.2.2 FSDP 通用参数
 
-以下参数提供对 FSDP 分片、wrap 策略和 dtype 的精细控制，仅在 `--distributed-strategy fsdp` 时生效：
+以下参数提供对 FSDP 分片、wrap 策略、dtype、预取和通信的精细控制，仅在 `--distributed-strategy fsdp` 时生效：
 
-- **分片与 reshard**：控制 forward 后是否立即 reshard，可针对 root group 单独配置
+- **分片与 reshard**：控制 forward 后是否立即 reshard，并可按模块类覆盖；FSDP2 root group 在 forward 后保持 unsharded
 - **wrap 策略**：可手动指定或排除 FSDP unit 类，也可按参数量阈值自动包装
 - **dtype 控制**：分片前参数 dtype、all-gather 后 dtype 与梯度 reduce dtype 均可独立配置
+- **执行与通信**：可预取相邻 FSDP unit，并可选用 Delta-FP8 压缩 BF16 AllGather 通信
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | HSDP | `--hsdp-shard-size` | `None` | 正整数 | 启用二维 mesh 的 shard 维度 |
 | 默认 reshard 策略 | `--fsdp-reshard-default` | `None` | `true`, `false`, `none`, 大于 1 的整数 | 控制 forward 后参数 reshard |
-| root reshard 策略 | `--fsdp-reshard-root` | `False` | `true`, `false`, `none`, 大于 1 的整数 | root FSDP group 的 reshard 策略 |
+| 按类覆盖 reshard 策略 | `--fsdp-reshard-module-overrides` | `None` | 逗号分隔的 `ClassName=value` | 为指定模块类覆盖 `reshard_after_forward` |
 | 指定 wrap 类 | `--fsdp-wrap-modules` | `None` | 逗号分隔模块类名 | 指定 FSDP unit |
 | 排除 wrap 类 | `--fsdp-no-wrap-modules` | `None` | 逗号分隔模块类名 | 排除指定模块类 |
 | 排除分片的参数 | `--fsdp-ignored-param-names` | `[]` | 空格分隔的参数名子串 | 命中任一子串的冻结参数在每张卡各留一份完整副本 |
-| 自动 wrap 阈值 | `--fsdp-min-num-params` | `1000000` | 非负整数 | 自动包装重复层的参数阈值 |
-| leftover wrap 阈值 | `--fsdp-leftover-min-num-params` | `1000000` | 非负整数 | 自动包装剩余模块的参数阈值 |
+| 复制冻结模块类 | `--fsdp-ignore-frozen-module-classes` | `None` | 逗号分隔模块类名 | 将完全冻结的命中模块保留在 FSDP 分片外，避免无效 AllGather；会增加参数副本显存 |
+| 复制冻结参数 dtype | `--fsdp-ignored-frozen-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | 可选指定复制冻结参数的 dtype；设置时必须与 `--dtype` 一致 |
+| 自动 wrap 阈值 | `--fsdp-min-param-num` | `1000000` | 非负整数 | 自动包装重复层的参数阈值 |
 | 原始参数 dtype | `--fsdp-original-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | FSDP 分片前参数 dtype |
-| unsharded 参数 dtype | `--fsdp-unsharded-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | all-gather 后前向/反向 dtype |
+| unsharded 参数 dtype | `--fsdp-unshard-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | AllGather 后前向/反向 dtype |
 | reduce dtype | `--fsdp-reduce-dtype` | `fp32` | `fp32`, `bf16`, `fp16` | 梯度 reduce dtype |
+| 输出 dtype | `--fsdp-output-dtype` | `None` | `fp32`, `bf16`, `fp16` | 可选指定每个 FSDP unit 浮点输出的 dtype |
 | cast forward inputs | `--fsdp-cast-forward-inputs` | `True` | 布尔开关 | 是否将输入 cast 到参数 dtype |
+| forward 预取距离 | `--fsdp-forward-prefetch-distance` | `0` | 非负整数 | forward 时预取后续已配置 FSDP unit 的数量 |
+| backward 预取距离 | `--fsdp-backward-prefetch-distance` | `0` | 非负整数 | backward 时预取前序已配置 FSDP unit 的数量 |
+| Delta-FP8 AllGather | `--fsdp-delta-fp8-allgather` | `False` | 布尔开关 | 将 BF16 FSDP2 AllGather 的参数差值按 block 压缩为 FP8；详见[使用文档](../features/delta_fp8_allgather.md) |
+
+复制冻结模块类时，所有命中参数都必须满足 `requires_grad=False`。该模式与 `--init-on-meta` 不兼容；若设置 `--fsdp-ignored-frozen-param-dtype`，其值必须与 `--dtype` 选择的训练计算 dtype 一致。
+
+Delta-FP8 只改变 FSDP 参数通信精度，模型计算仍使用 FSDP 混合精度策略选择的 dtype。使用条件、启动方式、参数说明和验证建议详见 [Delta-FP8 AllGather](../features/delta_fp8_allgather.md)。
 
 ### 4.3 稳定性与运行时控制
 

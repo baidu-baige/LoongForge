@@ -144,30 +144,30 @@ cd "$LOONGFORGE_PATH"
 export DATA_PATH=$DROID_DATA_ROOT
 export WANDB_MODE=disabled
 
-# 5B Full，默认 200000 步
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_finetune.sh
+# 5B Full（FSDP + Delta-FP8），默认 200000 步
+bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 
 # 5B LoRA
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_finetune.sh
+    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
 
 # 14B Full
-bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_finetune.sh
+bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_fsdp_finetune.sh
 
 # 14B LoRA，DROID
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_finetune.sh
+    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
 
 # LIBERO 5B Full
 MODEL_NAME=dreamzero_libero_wan22_5b DATA_PATH="$LIBERO_DATA_ROOT" \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_finetune.sh
+    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 
 # AgiBot / YAM 14B LoRA（从 DreamZero-AgiBot 初始化）
 MODEL_NAME=dreamzero_agibot_wan21_14b DATA_PATH=/path/to/agibot_lerobot \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_finetune.sh
+    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
 
 MODEL_NAME=dreamzero_yam_wan21_14b DATA_PATH=/path/to/yam_lerobot \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_finetune.sh
+    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
 ```
 
 DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置；仅切换到 LIBERO、AgiBot 或 YAM 时需要按示例覆盖。
@@ -176,7 +176,7 @@ DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置�
 
 | 场景 | 分布式策略 | 每卡 batch | 默认 global batch | 默认 LR |
 | --- | --- | --- | --- | --- |
-| 5B Full | 8 卡 DDP + ZeRO-1 | 1 | 8 | `1e-5` |
+| 5B Full | 8 卡 FSDP + Delta-FP8 | 1 | 8 | `1e-5` |
 | 5B LoRA | 8 卡 FSDP | 1 | 8 | `1e-5` |
 | 14B Full | 8 卡 FSDP | 1 | 8 | `1e-5` |
 | 14B DROID LoRA | 8 卡 FSDP | 1 | 8 | `1e-4` |
@@ -188,7 +188,7 @@ DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置�
 ```bash
 TRAIN_ITERS=20000 SAVE_INTERVAL=1000 \
 OUTPUT_DIR=/workspace/outputs/dreamzero/droid_wan22_5b_lora \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_finetune.sh \
+    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh \
     --resume
 ```
 
@@ -204,24 +204,24 @@ GPUS_PER_NODE=8 SAMPLE_TRANSFORM_SEED=0 VALIDATION_REQUIRE_FULL_COVERAGE=1 \
 
 # 使用 cache 训练（须与生成时 SAMPLE_TRANSFORM_SEED、分辨率、语言 chunk 配置一致）
 CACHE_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b SAMPLE_TRANSFORM_SEED=0 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_finetune.sh
+    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 ```
 
 训练脚本会在启动阶段严格校验 cache。manifest、`_SUCCESS` 或 transform 配置不匹配时，训练会在执行首步前终止。
 
 ### 2.4 性能优化开关
-DROID 5B / 14B 配置已启用经过验证的默认性能优化。LIBERO、AgiBot 和 YAM 默认采用保守配置；调整性能开关后，建议先运行 3～10 步，检查 loss、grad norm 和显存占用。
+DROID 5B / 14B 配置已启用经过验证的默认性能优化。5B Full FSDP recipe 在支持的 CUDA/NCCL 设备上默认开启 Delta-FP8 AllGather；可传入 `--no-fsdp-delta-fp8-allgather` 与原生 BF16 通信做 A/B 对比。LIBERO、AgiBot 和 YAM 默认采用保守配置；调整性能开关后，建议先运行 3～10 步，检查 loss、grad norm 和显存占用。
 
 对照组（关闭全部内核优化，用于定位 loss / 性能问题）：
 
 ```bash
 # Wan2.2 5B
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_finetune.sh \
-    model.flash_attention_dense=false model.avoid_rope_reconcat=false \
+bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+    model.flash_attention_dense=false model.compile_causal_attention_block=false \
     model.batch_vae_encode=false 'model.prompt_emb_cache=""'
 
 # Wan2.1 14B
-bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_finetune.sh \
+bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_fsdp_finetune.sh \
     model.skip_single_state_attention=false model.compile_causal_cross_attention=false \
     model.compile_cross_attention_emulate_precision_casts=false model.compile_block_norm_modulate=false \
     model.qk_rmsnorm_impl=wan model.manual_self_attn_linear_backward=false model.fused_rope=false \
@@ -235,7 +235,7 @@ bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_finetune.sh \
 | 开关 | 默认值 | 作用 |
 | --- | --- | --- |
 | `model.flash_attention_dense` | `true` | dense attention 直接用 FlashAttention |
-| `model.avoid_rope_reconcat` | `true` | 复用分段 RoPE 结果，减少临时张量 |
+| `model.compile_causal_attention_block` | `true` | 编译 causal attention block |
 | `model.batch_vae_encode` | `true` | 批量 VAE 编码，吞吐更高但显存峰值更大，OOM 时关闭 |
 | `model.prompt_emb_cache` | `gpu` | 缓存冻结 Text Encoder 输出，可设 `cpu` 或空字符串关闭 |
 | `model.compile_causal_cross_attention`（14B） | `true` | `torch.compile` 编译 causal cross-attention |
