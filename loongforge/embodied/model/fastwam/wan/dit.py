@@ -142,6 +142,9 @@ def rope_apply(x, freqs, num_heads):
     """
     cos, sin = freqs
     x = rearrange(x, "b s (n d) -> b s n d", n=num_heads)
+    # FlashAttention's Triton kernel requires tables matching the Q/K dtype.
+    cos = cos.to(dtype=x.dtype, device=x.device)
+    sin = sin.to(dtype=x.dtype, device=x.device)
     return _TritonRoPE.apply(x, cos, sin).flatten(2)
 
 
