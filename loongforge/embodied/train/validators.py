@@ -262,6 +262,81 @@ def validate(training_args, model_cfg, data_cfg):
                 "--save-interval=0 disables both checkpoints and LoRA adapter saving."
             )
 
+    # ── FP8 ──
+    if training_args.fp8:
+        if training_args.init_on_meta:
+            raise ValueError(
+                "--fp8 does not currently support --init-on-meta in the "
+                "embodied model wrapping lifecycle."
+            )
+        if training_args.use_lora:
+            raise ValueError(
+                "--fp8 and --use-lora are mutually exclusive. PEFT selects "
+                "targets and replaces Linear modules before FP8 conversion; "
+                "this combination has not been validated for either backend."
+            )
+        if training_args.cuda_graph_impl == "local":
+            raise ValueError(
+                "--fp8 and --cuda-graph-impl=local are mutually exclusive; "
+                "the model-managed graph runners do not capture FP8 scaling "
+                "and conversion state."
+            )
+        if training_args.fp8_skip_modules and not training_args.fp8_module_patterns:
+            logger.warning(
+                "--fp8-skip-modules is set without --fp8-module-patterns; it "
+                "will be applied against the model's default_fp8_targets()."
+            )
+        if (
+            training_args.fp8_backend == "te"
+            and getattr(model_cfg, "compile_model", False)
+        ):
+            raise ValueError(
+                "--fp8 conflicts with model.compile_model=true: te.Linear.forward "
+                "carries torch.compiler.disable, so Dynamo raises "
+                "'Skip inlining torch.compiler.disable()d function' instead of "
+                "graph-breaking. Pass model.compile_model=false to run FP8."
+            )
+        if training_args.fp8_backend == "torchao":
+            te_overrides = (
+                training_args.fp8_te_format is not None
+                or training_args.fp8_te_margin != 0
+                or training_args.fp8_te_amax_history_len != 1024
+                or training_args.fp8_te_amax_compute_algo != "max"
+                or not training_args.fp8_te_reduce_amax
+                or training_args.fp8_te_current_use_power_2_scales
+                or training_args.fp8_te_block_use_f32_scales
+            )
+            if te_overrides:
+                raise ValueError(
+                    "TransformerEngine recipe options cannot be used with "
+                    "--fp8-backend=torchao; configure --fp8-torchao-recipe "
+                    "and TorchAO-specific options instead."
+                )
+            if (
+                training_args.fp8_torchao_fsdp_float8_all_gather
+                and training_args.distributed_strategy != "fsdp"
+            ):
+                raise ValueError(
+                    "--fp8-torchao-fsdp-float8-all-gather requires "
+                    "--distributed-strategy=fsdp."
+                )
+            if (
+                training_args.fp8_torchao_fsdp_float8_all_gather
+                and training_args.fp8_torchao_recipe != "tensorwise"
+            ):
+                raise ValueError(
+                    "TorchAO FP8 FSDP all-gather currently supports only "
+                    "--fp8-torchao-recipe=tensorwise."
+                )
+        elif (
+            training_args.fp8_torchao_recipe != "tensorwise"
+            or not training_args.fp8_torchao_pad_inner_dim
+            or training_args.fp8_torchao_fsdp_float8_all_gather
+        ):
+            raise ValueError(
+                "TorchAO-specific FP8 options require --fp8-backend=torchao."
+            )
+
     # ── Model config sanity ──
     if not model_cfg.model_type:
         raise ValueError("ModelConfig.model_type must be set (from YAML model.model_type).")

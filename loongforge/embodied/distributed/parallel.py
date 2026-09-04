@@ -24,6 +24,7 @@ from .fsdp_utils import (
     fully_shard_unit,
     resolve_wrap_runs,
 )
+from .fp8_utils import apply_fp8_linear_conversion
 from .utils import filter_kwargs, is_mixed_param_dtype
 
 
@@ -37,10 +38,15 @@ def wrap_model(model: nn.Module, training_args, ctx: DistributedContext) -> nn.M
     from loongforge.embodied.train.training_args import parse_dtype_from_str
 
     dtype = parse_dtype_from_str(training_args.dtype)
+    # FP8 conversion must precede activation checkpointing: the checkpoint
+    # wrapper has to wrap already-converted modules, otherwise the set of
+    # tensors saved by the original forward and by recompute diverge.
+    apply_fp8_linear_conversion(model, training_args, ctx.device)
     apply_activation_checkpointing(
         model,
         training_args.activation_checkpoint_module_patterns,
         training_args.activation_checkpoint_skip_modules,
+        fp8_backend=training_args.fp8_backend if training_args.fp8 else None,
     )
 
     if not ctx.is_distributed:

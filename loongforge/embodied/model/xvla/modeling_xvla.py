@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict
 
 import numpy as np
 import os
@@ -272,6 +272,19 @@ class XVLAPolicy(torch.nn.Module):
         self._num_image_views = int(getattr(config, "num_image_views", 3) or 3)
         self._tokenize_transform = None
         self._image_transform = None
+
+    @staticmethod
+    def default_fp8_targets() -> Dict[str, Any]:
+        """Convert only the action transformer's attention and MLP blocks.
+
+        The Florence VLM is initialized in fp32, while the action projections
+        can be domain-aware custom linears. Restricting the default to the
+        transformer blocks avoids changing either precision contract.
+        """
+        return {
+            "module_patterns": ["model.transformer.blocks"],
+            "skip_modules": [],
+        }
 
     def _prepare_inputs(self, batch) -> Dict[str, torch.Tensor]:
         """Map an XVLAProcessor-style batch dict into XVLA model forward arguments.

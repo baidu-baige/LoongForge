@@ -658,6 +658,17 @@ class BaseTrainer(ABC):
         """Hook for model-specific backend precision controls."""
         pass
 
+    def _fp8_forward_ctx(self):
+        """Return the FP8 forward context, or a no-op when ``--fp8`` is off.
+
+        Lives on the base class because every paradigm's forward needs it: the
+        standard finetune path and the CUDA-graph runner each wrap their own
+        forward, and ``te.fp8_autocast`` has to enclose the whole model call.
+        """
+        from loongforge.embodied.distributed.fp8_utils import resolve_fp8_forward_ctx
+
+        return resolve_fp8_forward_ctx(self.training_args)
+
     def _apply_lora_before_wrap(self, model: nn.Module) -> nn.Module:
         """Apply generic LoRA injection before distributed wrapping."""
         if not is_lora_enabled(self.training_args):

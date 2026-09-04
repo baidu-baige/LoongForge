@@ -7,7 +7,7 @@
 """Embodied training adapter for the native PyTorch LingBot-VA backend."""
 
 from collections import OrderedDict
-from typing import Dict
+from typing import Any, Dict
 
 import torch
 import torch.nn as nn
@@ -135,6 +135,22 @@ class LingBotVAEmbodiedModel(nn.Module):
             attn_mode="flex" if use_flex else "torch",
             recompute_granularity=_cfg_get(cfg, "recompute_granularity", None),
         )
+
+    @staticmethod
+    def default_fp8_targets() -> Dict[str, Any]:
+        """Convert only FFN projections inside Wan transformer blocks.
+
+        Attention projections are intentionally kept in BF16. Quantization
+        noise in Q/K/V and attention output projections is amplified by the
+        softmax and then fed through the residual stream, which can produce a
+        large loss drift over the full training run. FFN GEMMs are the largest
+        remaining safe target and still provide most of the FP8 throughput
+        benefit.
+        """
+        return {
+            "module_patterns": ["model.blocks.*.ffn"],
+            "skip_modules": [],
+        }
 
     @classmethod
     def from_pretrained(cls, cfg):

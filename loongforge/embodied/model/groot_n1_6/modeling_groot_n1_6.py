@@ -931,6 +931,20 @@ class GrootN1d6Policy(nn.Module):
         self._predict_action_default_processor: StateActionProcessor | None = None
         self._predict_action_processor_cache: dict[str, StateActionProcessor] = {}
 
+    @staticmethod
+    def default_fp8_targets() -> Dict[str, Any]:
+        """Convert the action DiT blocks while preserving projection heads."""
+        return {
+            "module_patterns": ["model.action_head.model.transformer_blocks"],
+            "skip_modules": [],
+        }
+
+    def fp8_unsupported_reason(self) -> str | None:
+        """Reject FP8 when the only default target, the action DiT, is frozen."""
+        if not self.config.tune_diffusion_model:
+            return "tune_diffusion_model=false freezes the action DiT"
+        return None
+
     def _apply(self, fn, recurse=True):
         result = super()._apply(fn, recurse)
         if not self._restoring_after_apply:

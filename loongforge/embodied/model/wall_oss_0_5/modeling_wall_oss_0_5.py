@@ -166,6 +166,19 @@ class WallOss05Model(nn.Module):
         super().__init__()
         self.model = model
 
+    @staticmethod
+    def default_fp8_targets() -> Dict[str, Any]:
+        """Convert the decoder blocks while preserving precision-sensitive heads.
+
+        The decoder subtree contains the large attention and FFN/MoE ``nn.Linear``
+        modules. The vision tower, language-model head, and action preprocessor
+        remain at their configured precision.
+        """
+        return {
+            "module_patterns": ["model.model.layers"],
+            "skip_modules": [],
+        }
+
     @classmethod
     def from_pretrained(cls, model_cfg: WallOss05ModelConfig) -> "WallOss05Model":
         """Build the model shell only; weights are loaded later via ``load_pretrained``.
