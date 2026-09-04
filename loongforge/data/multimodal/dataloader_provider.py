@@ -327,6 +327,16 @@ def _energon_read_order_kwargs(args):
     }
 
 
+def _validate_energon_data_paths(paths):
+    for path in paths:
+        if str(path).lower().endswith((".json", ".jsonl")):
+            raise ValueError(
+                "VLM training requires an Energon WebDataset directory, not raw "
+                f"JSON/JSONL: {path}. Convert it first with "
+                "tools/data_preprocess/vlm/convert_to_webdataset.py."
+            )
+
+
 def get_train_dataset(task_encoder):
     """Get the training dataset"""
     args = get_args()
@@ -347,6 +357,7 @@ def get_train_dataset(task_encoder):
     )
 
     if len(args.data_path) == 1:
+        _validate_energon_data_paths(args.data_path)
         train_ds = energon.get_train_dataset(
             args.data_path[0],
             batch_size=args.micro_batch_size,
@@ -359,6 +370,7 @@ def get_train_dataset(task_encoder):
         )
     else:
         data_paths, data_weights = get_blend_from_list(args.data_path)
+        _validate_energon_data_paths(data_paths)
         yaml_path = create_metadataset_yaml(data_paths, data_weights, split="train")
         train_ds = energon.get_train_dataset(
             yaml_path,
@@ -376,7 +388,17 @@ def get_train_dataset(task_encoder):
 def get_val_dataset(task_encoder):
     """Build the validation split from the configured Energon dataset."""
     args = get_args()
-    valid_data_path = getattr(args, "valid_data_path", None)
+    paths = getattr(args, "valid_data_path", None) or args.data_path
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+
+    if len(paths) == 1:
+        _validate_energon_data_paths(paths)
+        path = paths[0]
+    else:
+        data_paths, data_weights = get_blend_from_list(list(paths))
+        _validate_energon_data_paths(data_paths)
+        path = create_metadataset_yaml(data_paths, data_weights, split="val")
 
     worker_config = energon.WorkerConfig(
         rank=parallel_state.get_data_parallel_rank(),
@@ -386,21 +408,6 @@ def get_val_dataset(task_encoder):
         worker_debug_path=None,
         worker_log_level=0,
     )
-    if valid_data_path:
-        if isinstance(valid_data_path, (list, tuple)) and len(valid_data_path) > 1:
-            data_paths, data_weights = get_blend_from_list(list(valid_data_path))
-            path = create_metadataset_yaml(data_paths, data_weights, split="val")
-        else:
-            path = (
-                valid_data_path[0]
-                if isinstance(valid_data_path, (list, tuple))
-                else valid_data_path
-            )
-    elif len(args.data_path) == 1:
-        path = args.data_path[0]
-    else:
-        data_paths, data_weights = get_blend_from_list(args.data_path)
-        path = create_metadataset_yaml(data_paths, data_weights, split="val")
     return energon.get_val_dataset(
         path,
         split_part="val",

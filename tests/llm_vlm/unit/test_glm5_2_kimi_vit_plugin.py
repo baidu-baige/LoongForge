@@ -18,10 +18,10 @@ from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
 from loongforge.data.chat_template import MAPPING_NAME_TO_TEMPLATE
-from loongforge.data.kimi_k25_plugin import KimiK25Plugin
+from loongforge.data.kimi_plugin import KimiPlugin
 from loongforge.data.multimodal import dataloader_provider
 from loongforge.data.multimodal.base.task_encoder import BaseTaskEncoder
-from loongforge.data.multimodal.kimi_task_encoder import KimiVLMTaskEncoder
+from loongforge.data.multimodal.kimi_task_encoder import KimiTaskEncoder
 from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
 from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
 from loongforge.utils import constants
@@ -42,7 +42,7 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
     def test_glm_template_expands_glm_image_span(self):
         """The GLM template must wrap MoonViT features in GLM image markers."""
         plugin = MAPPING_NAME_TO_TEMPLATE["glm5.2-hf"].mm_plugin
-        self.assertIsInstance(plugin, KimiK25Plugin)
+        self.assertIsInstance(plugin, KimiPlugin)
 
         mm_inputs = {
             "image_grid_thw": [[1, 4, 6]],
@@ -63,7 +63,7 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
 
     def test_vqa_uses_glm_template_with_kimi_media_processing(self):
         """Kimi pixels and GLM text tokens must share the normal SFT path."""
-        encoder = object.__new__(KimiVLMTaskEncoder)
+        encoder = object.__new__(KimiTaskEncoder)
         encoder.chat_template = MAPPING_NAME_TO_TEMPLATE["glm5.2-hf"]
         processed = tuple(object() for _ in range(7))
         encoder.process_sft_qa = Mock(return_value=processed)
@@ -90,7 +90,7 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
 
     def test_vqa_adds_missing_image_placeholder(self):
         """The legacy VQA input contract adds one placeholder for its image."""
-        encoder = object.__new__(KimiVLMTaskEncoder)
+        encoder = object.__new__(KimiTaskEncoder)
         encoder.chat_template = MAPPING_NAME_TO_TEMPLATE["glm5.2-hf"]
         encoder.process_sft_qa = Mock(return_value=tuple(object() for _ in range(7)))
         image = object()
@@ -110,7 +110,7 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
         tokenizer = AutoTokenizer.from_pretrained(
             processor_path, trust_remote_code=True
         )
-        encoder = object.__new__(KimiVLMTaskEncoder)
+        encoder = object.__new__(KimiTaskEncoder)
         encoder.args = SimpleNamespace(
             train_on_prompt=False, history_mask_loss=False
         )
@@ -292,11 +292,12 @@ class VLMValidationDatasetTest(unittest.TestCase):
         self.assertEqual(get_val_dataset.call_args.args[0], "valid")
         self.assertEqual(get_val_dataset.call_args.kwargs["split_part"], "val")
 
-    def test_single_training_path_without_validation_path_is_skipped(self):
-        result, _, get_val_dataset = self._get_val_dataset(self._args(["train"]))
+    def test_single_training_path_is_the_validation_fallback(self):
+        result, dataset, get_val_dataset = self._get_val_dataset(self._args(["train"]))
 
-        self.assertIsNone(result)
-        get_val_dataset.assert_not_called()
+        self.assertIs(result, dataset)
+        self.assertEqual(get_val_dataset.call_args.args[0], "train")
+        self.assertEqual(get_val_dataset.call_args.kwargs["split_part"], "val")
 
     def test_multiple_validation_paths_use_metadataset(self):
         args = self._args(["train"], ["0.6", "valid-a", "0.4", "valid-b"])

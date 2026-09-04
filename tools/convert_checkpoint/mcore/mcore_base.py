@@ -131,11 +131,8 @@ class McoreBase:
         self.lora_alpha = self.args.lora_alpha
         self.lora_dim = self.args.lora_dim
         self.transpose_mlp_dense = margs.get("transpose_mlp_dense", False)
-        self.tensor_parallel_dim = TENSOR_PARALLEL_DIM
-        if c_config.get("tensor_parallel_dim", None) is not None:
-            for k, v in c_config.get("tensor_parallel_dim").items():
-                if k not in TENSOR_PARALLEL_DIM or (k in TENSOR_PARALLEL_DIM and TENSOR_PARALLEL_DIM[k] != v):
-                    self.tensor_parallel_dim[k] = v
+        self.tensor_parallel_dim = TENSOR_PARALLEL_DIM.copy()
+        self.tensor_parallel_dim.update(c_config.get("tensor_parallel_dim", {}))
         self.layer_prefix = self.name_map[LAYER_PREFIX]
         self.name_prefix_for_layer = self.name_map[MTP_NAME_PREFIX_FOR_LAYER] if MTP_NAME_PREFIX_FOR_LAYER in self.name_map else None
         self.add_embed_padding = margs.get("add_embedding_padding", False)
@@ -226,18 +223,21 @@ class McoreBase:
         (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, mcore_dtype) = \
                 self.get_mcore_name_and_extra(self.name_map[name])
 
+        # Common and MCore layer IDs differ for global weights stored on a layer.
+        mcore_layer_id = layer_id if m_layer_id is None else m_layer_id
+
         # Build mcore_path
-        if layer_id is None:
+        if mcore_layer_id is None:
             mcore_path = mcore_name
         elif expert_name is not None:
             if expert_name not in self.name_map:
                 return None
             m_name_prefix = self.name_map[expert_name] if name_prefix is None \
                     else f"{name_prefix}.{self.name_map[expert_name]}"
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}.{mcore_name}"
+            mcore_path = f"{layer_prefix}.{mcore_layer_id}.{m_name_prefix}.{mcore_name}"
         else:
             m_name_prefix = mcore_name if name_prefix is None else f"{name_prefix}.{mcore_name}"
-            mcore_path = f"{layer_prefix}.{m_layer_id}.{m_name_prefix}"
+            mcore_path = f"{layer_prefix}.{mcore_layer_id}.{m_name_prefix}"
 
         # Build mcore_weight_path
         if is_direct_name:
@@ -258,7 +258,7 @@ class McoreBase:
         if bias_name in self.name_map:
             (mcore_bias_name, _, _), (_, _), (_, _, _) = self.get_mcore_name_and_extra(self.name_map[bias_name])
             m_bias_name = mcore_bias_name if name_prefix is None else f"{name_prefix}.{mcore_bias_name}"
-            mcore_bias_path = f"{layer_prefix}.{m_layer_id}.{m_bias_name}" if layer_id is not None else mcore_bias_name
+            mcore_bias_path = f"{layer_prefix}.{mcore_layer_id}.{m_bias_name}" if mcore_layer_id is not None else mcore_bias_name
 
         # Build LoRA paths if requested
         mcore_lora_in_path = None

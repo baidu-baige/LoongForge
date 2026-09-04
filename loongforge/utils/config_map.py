@@ -232,6 +232,12 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen3_next_80b_a3b",
     },
 
+    # Kimi K3 multimodal model
+    "kimi-k3": {
+        "config_path": "configs/models/kimi_k3",
+        "config_name": "kimi_k3",
+    },
+
     # qwen3.5
     "qwen3.5-0.8b": {
         "config_path": "configs/models/qwen3.5",

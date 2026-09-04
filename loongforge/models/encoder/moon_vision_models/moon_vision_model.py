@@ -206,6 +206,8 @@ class MoonVision3dPatchEmbed(nn.Module):
         pos_emb_width: int = 14,
         pos_emb_time: int = 4,
         pos_emb_type: str = "divided_fixed",
+        patch_embed_proj_bias: bool = True,
+        pos_emb_interpolation_mode: str = "bicubic",
     ) -> None:
         super().__init__()
         assert isinstance(
@@ -220,7 +222,11 @@ class MoonVision3dPatchEmbed(nn.Module):
         self.in_channels = in_dim
 
         self.proj = nn.Conv2d(
-            in_dim, out_dim, kernel_size=self.patch_size, stride=self.patch_size
+            in_dim,
+            out_dim,
+            kernel_size=self.patch_size,
+            stride=self.patch_size,
+            bias=patch_embed_proj_bias,
         )
 
         if pos_emb_type == "divided_fixed":
@@ -229,6 +235,7 @@ class MoonVision3dPatchEmbed(nn.Module):
                 width=pos_emb_width,
                 num_frames=pos_emb_time,
                 dim=out_dim,
+                interpolation_mode=pos_emb_interpolation_mode,
             )
         else:
             raise NotImplementedError(f"Not support pos_emb_type: {pos_emb_type}")
@@ -373,10 +380,14 @@ class MoonVisionModel(BaseVisionModel):
             pos_emb_width=config.init_pos_emb_width,
             pos_emb_time=config.init_pos_emb_time,
             pos_emb_type=config.pos_emb_type,
+            patch_embed_proj_bias=config.patch_embed_proj_bias,
+            pos_emb_interpolation_mode=config.pos_emb_interpolation_mode,
         )
 
         self.rope_2d = Rope2DPosEmbRepeated(
-            dim=config.hidden_size // config.num_attention_heads,
+            # K3 projects QKV to num_attention_heads * kv_channels; hidden_size
+            # is the residual width and need not be divisible by head count.
+            dim=config.kv_channels,
             max_height=512,
             max_width=512,
         )

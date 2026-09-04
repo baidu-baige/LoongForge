@@ -20,7 +20,9 @@ from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
-from transformer_engine.pytorch.attention import apply_rotary_pos_emb as te_apply_rotary_pos_emb
+from transformer_engine.pytorch.attention.rope import (
+    apply_rotary_pos_emb as te_apply_rotary_pos_emb,
+)
 
 
 def _rotate_half(x: Tensor, rotary_interleaved: bool) -> Tensor:

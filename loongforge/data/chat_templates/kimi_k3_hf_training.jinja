@@ -1,0 +1,77 @@
+{# Kimi K3 XTML training template.
+   The released tokenizer renders this structure in Python rather than storing a
+   tokenizer_config Jinja template. This file mirrors that contract and adds
+   generation blocks for LoongForge assistant-only SFT masks. #}
+{%- if tools %}
+{{- '<|open|>message role="system" type="tool-declare"<|sep|># Tools\nHere are the available tools, described in JSONSchema.\n\n```json\n' }}
+{{- tools | tojson }}
+{{- '\n```<|close|>message<|sep|><|end_of_msg|>' }}
+{%- endif %}
+{%- if thinking_effort is defined and thinking_effort %}
+{{- '<|open|>message role="system" type="thinking-effort"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=' + thinking_effort + '`.<|close|>message<|sep|><|end_of_msg|>' }}
+{%- endif %}
+{%- set ns = namespace(tool_index=0) %}
+{%- for message in messages %}
+    {%- if message.role == 'system' %}
+        {{- '<|open|>message role="system"<|sep|>' + message.content + '<|close|>message<|sep|><|end_of_msg|>' }}
+    {%- elif message.role == 'user' %}
+        {{- '<|open|>message role="user"<|sep|>' }}
+        {%- if message.content is string %}{{- message.content }}
+        {%- else %}
+            {%- for part in message.content %}
+                {%- if part.type == 'text' %}{{- part.text }}
+                {%- elif part.type == 'image' or part.type == 'image_url' %}{{- '<|media_begin|>image' }}{{- (' ' + part.width|string + 'x' + part.height|string) if part.width is defined and part.height is defined else '' }}{{- '<|media_content|><|media_pad|><|media_end|>' }}
+                {%- endif %}
+            {%- endfor %}
+        {%- endif %}
+        {{- '<|close|>message<|sep|><|end_of_msg|>' }}
+    {%- elif message.role == 'assistant' %}
+        {{- '<|open|>message role="assistant"<|sep|>' }}
+        {%- generation %}
+        {{- '<|open|>think<|sep|>' }}
+        {{- message.reasoning_content | default('', true) }}
+        {{- '<|close|>think<|sep|><|open|>response<|sep|>' }}
+        {{- message.content | default('', true) }}
+        {%- if message.tool_calls %}
+            {{- '<|close|>response<|sep|><|open|>tools<|sep|>' }}
+            {%- for tool_call in message.tool_calls %}
+                {%- if tool_call.function %}{%- set call = tool_call.function %}{%- else %}{%- set call = tool_call %}{%- endif %}
+                {{- '<|open|>call tool="' + (call.name|string|replace('&', '&amp;')|replace('"', '&quot;')) + '" index="' + loop.index|string + '"<|sep|>' }}
+                {%- if call.arguments is mapping %}
+                    {%- for key, value in call.arguments.items() %}
+                        {{- '<|open|>argument key="' + (key|string|replace('&', '&amp;')|replace('"', '&quot;')) + '" type="' }}
+                        {%- if value is boolean %}{{- 'boolean' }}
+                        {%- elif value is none %}{{- 'null' }}
+                        {%- elif value is number %}{{- 'number' }}
+                        {%- elif value is string %}{{- 'string' }}
+                        {%- elif value is mapping %}{{- 'object' }}
+                        {%- else %}{{- 'array' }}
+                        {%- endif %}
+                        {{- '"<|sep|>' }}
+                        {{- value if value is string else value | tojson }}
+                        {{- '<|close|>argument<|sep|>' }}
+                    {%- endfor %}
+                {%- else %}
+                    {{- '<|open|>json type="object"<|sep|>' }}
+                    {{- call.arguments | default('{}', true) }}
+                    {{- '<|close|>json<|sep|>' }}
+                {%- endif %}
+                {{- '<|close|>call<|sep|>' }}
+            {%- endfor %}
+            {{- '<|close|>tools<|sep|>' }}
+        {%- else %}
+            {{- '<|close|>response<|sep|>' }}
+        {%- endif %}
+        {{- '<|close|>message<|sep|><|end_of_msg|>' }}
+        {%- endgeneration %}
+    {%- elif message.role == 'tool' %}
+        {%- set ns.tool_index = ns.tool_index + 1 %}
+        {{- '<|open|>message role="tool"' }}
+        {%- if message.name %}{{- ' tool="' + message.name + '"' }}{%- endif %}
+        {{- ' index="' + ns.tool_index|string + '"' }}
+        {{- '<|sep|>' + message.content + '<|close|>message<|sep|><|end_of_msg|>' }}
+    {%- endif %}
+{%- endfor %}
+{%- if add_generation_prompt %}
+{{- '<|open|>message role="assistant"<|sep|><|open|>think<|sep|>' }}
+{%- endif %}

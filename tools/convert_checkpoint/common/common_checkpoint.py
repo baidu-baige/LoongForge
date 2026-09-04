@@ -133,6 +133,30 @@ MIXER_ATT_IN_PROJ_QKVZ = "mixer_att.in_proj_qkvz"
 MIXER_ATT_IN_PROJ_BA = "mixer_att.in_proj_ba"
 MIXER_INPUT_LAYERNORM = "mixer_input_layernorm"
 
+# Kimi K3 KDA, AttnRes, and latent-MoE tensors.
+K3_ATTENTION_Q_PROJ = "kimi_k3.attention.q_proj"
+K3_ATTENTION_K_PROJ = "kimi_k3.attention.k_proj"
+K3_ATTENTION_V_PROJ = "kimi_k3.attention.v_proj"
+K3_ATTENTION_Q_CONV = "kimi_k3.attention.q_conv1d"
+K3_ATTENTION_K_CONV = "kimi_k3.attention.k_conv1d"
+K3_ATTENTION_V_CONV = "kimi_k3.attention.v_conv1d"
+K3_ATTENTION_F_A_PROJ = "kimi_k3.attention.f_a_proj"
+K3_ATTENTION_F_B_PROJ = "kimi_k3.attention.f_b_proj"
+K3_ATTENTION_B_PROJ = "kimi_k3.attention.b_proj"
+K3_ATTENTION_G_PROJ = "kimi_k3.attention.g_proj"
+K3_ATTENTION_A_LOG = "kimi_k3.attention.A_log"
+K3_ATTENTION_DT_BIAS = "kimi_k3.attention.dt_bias"
+K3_ATTENTION_O_NORM = "kimi_k3.attention.o_norm"
+K3_SELF_ATTN_RES_NORM = "kimi_k3.self_attention_res_norm"
+K3_SELF_ATTN_RES_PROJ = "kimi_k3.self_attention_res_proj"
+K3_MLP_RES_NORM = "kimi_k3.mlp_res_norm"
+K3_MLP_RES_PROJ = "kimi_k3.mlp_res_proj"
+K3_MOE_FC1_LATENT_PROJ = "kimi_k3.moe.fc1_latent_proj"
+K3_MOE_ROUTED_EXPERT_NORM = "kimi_k3.moe.routed_expert_norm"
+K3_MOE_FC2_LATENT_PROJ = "kimi_k3.moe.fc2_latent_proj"
+K3_OUTPUT_ATTN_RES_NORM = "kimi_k3.output_attn_res_norm"
+K3_OUTPUT_ATTN_RES_PROJ = "kimi_k3.output_attn_res_proj"
+
 ATTENTION_DENSE = "attention.dense"
 ATTENTION_QNORM = "attention.q_a_layernorm"
 ATTENTION_KNORM = "attention.kv_a_layernorm"
@@ -213,11 +237,22 @@ BASE_NAMES = [INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FRE
             # DeepSeek V4 Hyper-Connection per-layer
             HC_ATTN_FN, HC_ATTN_BASE, HC_ATTN_ALPHA_PRE, HC_ATTN_ALPHA_POST, HC_ATTN_ALPHA_RES, HC_FFN_FN, HC_FFN_BASE, HC_FFN_ALPHA_PRE, HC_FFN_ALPHA_POST, HC_FFN_ALPHA_RES,
             # DeepSeek V4 Hash Router tid2eid
-            MOE_GATE_TID2EID]
+            MOE_GATE_TID2EID,
+            # Kimi K3 additions
+            K3_ATTENTION_Q_PROJ, K3_ATTENTION_K_PROJ, K3_ATTENTION_V_PROJ,
+            K3_ATTENTION_Q_CONV, K3_ATTENTION_K_CONV, K3_ATTENTION_V_CONV,
+            K3_ATTENTION_F_A_PROJ, K3_ATTENTION_F_B_PROJ, K3_ATTENTION_B_PROJ,
+            K3_ATTENTION_G_PROJ, K3_ATTENTION_A_LOG, K3_ATTENTION_DT_BIAS,
+            K3_ATTENTION_O_NORM, K3_SELF_ATTN_RES_NORM, K3_SELF_ATTN_RES_PROJ,
+            K3_MLP_RES_NORM, K3_MLP_RES_PROJ, K3_MOE_FC1_LATENT_PROJ,
+            K3_MOE_ROUTED_EXPERT_NORM, K3_MOE_FC2_LATENT_PROJ]
 MOE_EXPERT_PROJS = [MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H]
+LAYER_LOCAL_LAST_NAMES = [K3_OUTPUT_ATTN_RES_NORM, K3_OUTPUT_ATTN_RES_PROJ]
 LAST_LAYER_NAMES = [FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD,
                     # DeepSeek V4 HyperHead global parameters
-                    HC_HEAD_FN, HC_HEAD_BASE, HC_HEAD_SCALE] # in the last layer
+                    HC_HEAD_FN, HC_HEAD_BASE, HC_HEAD_SCALE,
+                    # Kimi K3 final AttnRes parameters live on the final MCore layer.
+                    *LAYER_LOCAL_LAST_NAMES] # in the last layer
 
 # DeepSeek V4 Hyper-Connection per-layer names (not standard BASE_NAMES, handled separately)
 HC_NAMES = [HC_ATTN_FN, HC_ATTN_BASE, HC_ATTN_ALPHA_PRE, HC_ATTN_ALPHA_POST, HC_ATTN_ALPHA_RES, HC_FFN_FN, HC_FFN_BASE, HC_FFN_ALPHA_PRE, HC_FFN_ALPHA_POST, HC_FFN_ALPHA_RES]

@@ -101,7 +101,11 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
     }
     namespace = _load_functions(
         "loongforge/data/multimodal/dataloader_provider.py",
-        {"_energon_read_order_kwargs", "get_train_dataset"},
+        {
+            "_energon_read_order_kwargs",
+            "_validate_energon_data_paths",
+            "get_train_dataset",
+        },
         namespace,
     )
 

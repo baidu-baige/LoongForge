@@ -26,7 +26,8 @@ from convert_checkpoint.utils.utils import (
 
 from convert_checkpoint.common.common_checkpoint import (
     TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX, WORD_EMBEDDINGS,
-    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES,
+    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES,
+    LAYER_LOCAL_LAST_NAMES, MTP_NAMES,
     MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT, MTP_NAME_PREFIX_FOR_LAYER,
     HC_NAMES
 )
@@ -231,7 +232,11 @@ class McoreCheckpoint(AbstractCheckpoint):
                     # final pp
                     if layer_id == num_layers - 1:
                         for c_name in LAST_LAYER_NAMES:
-                            self.m_base.common_to_mcore(c_name, c_ckpt, m_dict, t_name, ep_id=ep_id, clear_source=clear_source)
+                            local_layer_id = m_layer_id if c_name in LAYER_LOCAL_LAST_NAMES else None
+                            self.m_base.common_to_mcore(
+                                c_name, c_ckpt, m_dict, t_name,
+                                m_layer_id=local_layer_id, ep_id=ep_id,
+                                clear_source=clear_source)
 
             for mt in m_dict.keys():
                 if ep_id is None:
@@ -490,7 +495,10 @@ class McoreCheckpoint(AbstractCheckpoint):
                     # final pp
                     if layer_id == num_layers - 1:
                         for c_name in LAST_LAYER_NAMES:
-                            self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
+                            local_layer_id = m_layer_id if c_name in LAYER_LOCAL_LAST_NAMES else None
+                            self.m_base.mcore_to_common(
+                                c_name, c_ckpt, self.m_dict, t_name,
+                                m_layer_id=local_layer_id)
 
         if expert_dict is None:
             convert_one_ep_to_common(ep_id=None)
@@ -658,4 +666,3 @@ class McoreCheckpoint(AbstractCheckpoint):
 
 if __name__ == "__main__":
     pass
-

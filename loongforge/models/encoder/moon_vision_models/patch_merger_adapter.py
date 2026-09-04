@@ -7,7 +7,7 @@ from typing import Union
 from megatron.core.transformer.spec_utils import build_module
 from loongforge.models.common import BaseMegatronModule
 from loongforge.models.utils import import_module
-from .moon_vision_config import PatchMergerMLPAdapterConfig
+from .moon_vision_config import KimiK3PatchMergerConfig, PatchMergerMLPAdapterConfig
 
 
 class PatchMergerMLP(BaseMegatronModule):
@@ -115,3 +115,42 @@ class PatchMergerMLP(BaseMegatronModule):
             x = x[reverse_indices, :].contiguous()
 
         return x
+
+
+class KimiK3PatchMerger(BaseMegatronModule):
+    """K3's bias-free 2x2 patch merger with output RMSNorm."""
+
+    config_class = KimiK3PatchMergerConfig
+
+    def __init__(
+        self,
+        config: KimiK3PatchMergerConfig,
+        input_size: int,
+        output_size: int,
+        spatial_merge_size: Union[int, tuple] = 2,
+        **kwargs,
+    ) -> None:
+        super().__init__(config=config)
+        if isinstance(spatial_merge_size, (list, tuple)):
+            merge_h, merge_w = spatial_merge_size
+        else:
+            merge_h = merge_w = spatial_merge_size
+        merged_size = input_size * merge_h * merge_w
+        self.linear_fc1 = torch.nn.Linear(merged_size, merged_size, bias=False)
+        self.linear_fc2 = torch.nn.Linear(merged_size, output_size, bias=False)
+        self.activation_func = config.activation_func
+        self.post_norm = torch.nn.RMSNorm(output_size, eps=config.layernorm_epsilon)
+
+    def forward(
+        self, x: Union[torch.Tensor, list, tuple], window_index=None
+    ) -> torch.Tensor:
+        del window_index
+        if isinstance(x, (list, tuple)):
+            lengths = [item.shape[0] for item in x]
+            x = torch.cat([item.reshape(item.shape[0], -1) for item in x], dim=0)
+            x = self.linear_fc2(self.activation_func(self.linear_fc1(x)))
+            x = self.post_norm(x)
+            return list(torch.split(x, lengths, dim=0))
+        x = x.reshape(x.shape[0], -1, self.linear_fc1.in_features)
+        x = self.linear_fc2(self.activation_func(self.linear_fc1(x)))
+        return self.post_norm(x)

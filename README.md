@@ -64,6 +64,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
+- **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** training support for both LLMs and VLMs.
 - **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
@@ -181,6 +182,7 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 <li><a href="examples/mimo/">MIMO</a> ✅</li>
 <li><a href="examples/glm5/">GLM-5</a> ✅</li>
 <li><a href="examples/glm5.2/">GLM-5.2</a> ✅</li>
+<li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 </ul>
 </td>
 <td valign="top">
@@ -191,6 +193,7 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 <li><a href="examples/qwen3.6/">Qwen3.6</a> ✅</li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
 <li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
+<li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
 <li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>

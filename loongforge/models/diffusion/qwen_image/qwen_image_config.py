@@ -3,7 +3,7 @@
 
 """Qwen-Image model config."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from loongforge.models.common import BaseModelStditConfig
 from loongforge.models.factory import register_model_config
@@ -26,7 +26,7 @@ class QwenImageConfig(BaseModelStditConfig):
     patch_size: int = 2
     patch_dim: int = 64
     time_dim: int = 256
-    axes_dim: list[int] = field(default_factory=lambda: [16, 56, 56])
+    axes_dim: tuple[int, ...] = (16, 56, 56)
     rope_theta: int = 10000
     scale_rope: bool = True
     use_layer3d_rope: bool = False

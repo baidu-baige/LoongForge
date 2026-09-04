@@ -4,17 +4,11 @@
 """InternVL configuration"""
 
 import torch
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from ...common.base_model_config import BaseModelConfig
 from loongforge.utils import get_tokenizer
 from loongforge.data.multimodal.internvl.internvl_constants import IMG_CONTEXT_TOKEN
 
-
-def generate_id() -> int:
-    """generate image_token_id automatically"""
-    tokenizer = get_tokenizer().tokenizer
-    image_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
-    return image_token_id
 
 @dataclass
 class InternVisionConfig(BaseModelConfig):
@@ -55,8 +49,17 @@ class InternVisionConfig(BaseModelConfig):
     original_num_attention_heads: int = None
     original_num_query_groups: int = None
     model_spec = None
-    image_token_id: int = field(default_factory=generate_id)
+    image_token_id: int = None
     model_type: str = "intern_vit"
+
+    def __post_init__(self, **kwargs):
+        super().__post_init__(**kwargs)
+        if self.image_token_id is None:
+            # Unlike the other vision towers, InternVL's context-image token has no
+            # fixed id: it is whatever the tokenizer in use assigns to IMG_CONTEXT_TOKEN.
+            self.image_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
+                IMG_CONTEXT_TOKEN
+            )
 
 
 @dataclass

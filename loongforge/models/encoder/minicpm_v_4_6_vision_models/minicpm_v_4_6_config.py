@@ -3,8 +3,8 @@
 
 """MiniCPM-V-4.6 vision and merger configs."""
 
-from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from dataclasses import dataclass
+from typing import Callable, Optional, Tuple
 
 import torch
 from megatron.core.transformer import TransformerConfig
@@ -42,26 +42,18 @@ class MiniCPMV46VisionConfig(BaseModelConfig):
     normalization: str = "LayerNorm"
     position_embedding_type: str = "none"
     insert_layer_id: int = 6
-    window_kernel_size: List[int] = field(default_factory=lambda: [2, 2])
+    window_kernel_size: Tuple[int, int] = (2, 2)
     image_token_id: int = 248056
     downsample_mode: str = "16x"
     mix_used_vision_encoder: bool = True
     mix_used_vision_projector: bool = True
 
-    model_spec: Optional[List[str]] = field(default_factory=lambda: [
+    model_spec: Optional[Tuple[str, str]] = (
         "loongforge.models.encoder.minicpm_v_4_6_vision_models.minicpm_v_4_6_layer_spec",
         "get_minicpm_v_4_6_vision_layer_spec",
-    ])
+    )
 
     model_type: str = "minicpm_v_4_6_vit"
-
-    def __post_init__(self) -> None:
-        pretrained_post_init = getattr(PretrainedConfig, "__post_init__", None)
-        if pretrained_post_init is not None:
-            pretrained_post_init(self)
-        else:
-            PretrainedConfig.__init__(self)
-        TransformerConfig.__post_init__(self)
 
     @property
     def num_position_embeddings(self) -> int:
@@ -91,9 +83,6 @@ class MiniCPMV46MergerConfig(BaseModelConfig):
     bias_activation_fusion: bool = False
     add_bias_linear: bool = True
     layernorm_epsilon: float = 1e-6
-    merge_kernel_size: List[int] = field(default_factory=lambda: [2, 2])
+    merge_kernel_size: Tuple[int, int] = (2, 2)
     merger_times: int = 1
     model_type: str = "minicpm_v_4_6_merger"
-
-    def __post_init__(self) -> None:
-        BaseModelConfig.__post_init__(self)

@@ -15,6 +15,7 @@ from convert_checkpoint.common.common_checkpoint import (
     FINAL_LAYERNORM,
     FIRST_LAYER_NAMES,
     LAST_LAYER_NAMES,
+    LAYER_LOCAL_LAST_NAMES,
     LAYER_EXTRA_DATA,
     LAYER_IGNORE_TP,
     LAYER_IS_DIRECT_NAME,
@@ -176,7 +177,10 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
     if adapter is not None:
         c_config = replace_vlm_config(c_config, adapter, vision_patch)
     if for_vlm:
-        for name in [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES:
+        prefixed_names = [LAYER_PREFIX] + FIRST_LAYER_NAMES + [
+            name for name in LAST_LAYER_NAMES if name not in LAYER_LOCAL_LAST_NAMES
+        ]
+        for name in prefixed_names:
             if name not in c_config.get("name_map")["mcore"]:
                 continue
             old_key = c_config.get("name_map")["mcore"].get(name, None)
@@ -210,7 +214,10 @@ def replace_vlm_config(c_config, adapter, vision_patch):
         if k1 in name_map:
             continue
         extra_data = True
-        if k1.startswith("adapter.linear_fc1") or k1.startswith("adapter.linear_fc2"):
+        # Only Transformer Engine modules carry _extra_state. K3's projector ends
+        # in a plain torch RMSNorm, so emitting one there produces a key no
+        # module can consume.
+        if k1.startswith(("adapter.linear_fc1", "adapter.linear_fc2", "adapter.post_norm")):
             extra_data = False
         name_map[k1] = {
             LAYER_NAME: k2,
@@ -255,7 +262,9 @@ def replace_vlm_config(c_config, adapter, vision_patch):
                                    LAYER_IS_LAYERNORM: mcore_is_layernorm, LAYER_EXTRA_DATA: value[LAYER_EXTRA_DATA]}
             hf_dict[hf_name] = True
 
-    replace_prefix_keys = [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES
+    replace_prefix_keys = [LAYER_PREFIX] + FIRST_LAYER_NAMES + [
+        name for name in LAST_LAYER_NAMES if name not in LAYER_LOCAL_LAST_NAMES
+    ]
     for key in replace_prefix_keys:
         mcore_key = c_config.get("name_map")["mcore"].get(key, None)
         if mcore_key is None:

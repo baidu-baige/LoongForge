@@ -1,0 +1,59 @@
+# Kimi K3 language backbone configuration.
+_target_: loongforge.models.foundation.kimi_k3.KimiK3Config
+
+num_layers: 93
+hidden_size: 7168
+ffn_hidden_size: 33792
+num_attention_heads: 96
+num_query_groups: 96
+
+kimi_kda_layers: [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29, 30, 31, 33, 34, 35, 37, 38, 39, 41, 42, 43, 45, 46, 47, 49, 50, 51, 53, 54, 55, 57, 58, 59, 61, 62, 63, 65, 66, 67, 69, 70, 71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89, 90, 91]
+kimi_linear_num_heads: 96
+kimi_linear_head_dim: 128
+kimi_linear_conv_kernel_size: 4
+kimi_kda_gate_lower_bound: -5.0
+
+q_lora_rank: 1536
+kv_lora_rank: 512
+qk_head_dim: 128
+qk_pos_emb_head_dim: 64
+v_head_dim: 128
+multi_latent_attention: true
+kv_channels: 128
+position_embedding_type: none
+# K3 uses NoPE; MCore requires this compatibility flag.
+add_position_embedding: true
+apply_rope_fusion: false
+
+num_experts: 896
+moe_ffn_hidden_size: 3072
+moe_latent_size: 3584
+moe_shared_expert_intermediate_size: 6144
+moe_layer_freq: ${moe_freq:"[0]*1+[1]*92"}
+moe_router_topk: 16
+moe_router_score_function: sigmoid
+moe_router_pre_softmax: true
+moe_router_enable_expert_bias: true
+moe_router_bias_update_rate: 0.0
+moe_router_num_groups: 1
+moe_router_group_topk: 1
+moe_grouped_gemm: true
+moe_shared_expert_overlap: false
+moe_token_dispatcher_type: alltoall
+
+kimi_attn_res_block_size: 12
+kimi_output_layer_index: 92
+normalization: RMSNorm
+layernorm_epsilon: 1.0e-5
+attention_dropout: 0.0
+hidden_dropout: 0.0
+add_bias_linear: false
+add_qkv_bias: false
+qk_layernorm: true
+gated_linear_unit: true
+untie_embeddings_and_output_weights: true
+vocab_size_in_config_file: 163840
+make_vocab_size_divisible_by: 128
+
+model_type: kimi_k3
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/kimi_k3/ckpt_convert/kimi_k3_convert.yaml

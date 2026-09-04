@@ -3,15 +3,35 @@
 
 """initialize the model"""
 
+from importlib import import_module
+
 from ..common.base_model_mixins import (
     BaseMegatronVisionModule,
     BaseMegatronLanguageModule,
     BaseMegatronModule,
 )
-from .omni_encoder_model import OmniEncoderModel
-from .omni_decoder_model import OmniDecoderModel
-from .omni_combination_model import OmniCombinationModel
-from .omni_model_provider import omni_model_provider
+
+_LAZY_EXPORTS = {
+    "OmniEncoderModel": (".omni_encoder_model", "OmniEncoderModel"),
+    "OmniDecoderModel": (".omni_decoder_model", "OmniDecoderModel"),
+    "OmniCombinationModel": (".omni_combination_model", "OmniCombinationModel"),
+    "omni_model_provider": (".omni_model_provider", "omni_model_provider"),
+}
+
+
+def __getattr__(name):
+    """Resolve the multimodal models on first use.
+
+    Importing them here instead would run while ``loongforge.models`` is still
+    initializing, and ``omni_encoder_model`` imports back into that package.
+    """
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(name)
+    module_name, attr_name = target
+    value = getattr(import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
 
 __all__ = [
     # Basic Mixins

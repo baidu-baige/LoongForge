@@ -82,6 +82,7 @@ class LanguageModelFamilies(_BaseFamilies):
     QWEN2_5 = "qwen2.5"
     QWEN3 = "qwen3"
     QWEN3_NEXT = "qwen3_next"
+    KIMI_K3_LLM = "kimi_k3_llm"
     DEEPSEEK = "deepseek"
     DEEPSEEK_V4 = "deepseek_v4"
     INTERNLM2_5 = "internlm2.5"
@@ -104,6 +105,7 @@ class VisionLanguageModelFamilies(_BaseFamilies):
     MINICPM_V_4_6 = "minicpm_v_4_6"
     KIMI_K2_5 = "kimi_k2_5"
     KIMI_K2_6 = "kimi_k2_6"
+    KIMI_K3 = "kimi_k3"
 
 
 class CustomModelFamilies(_BaseFamilies):

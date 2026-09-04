@@ -43,6 +43,7 @@ from convert_checkpoint.huggingface.mxfp4_dequant import (
     dequantize_mxfp4_state_dict,
     progress_print,
 )
+from convert_checkpoint.kimi_k3 import normalize_kimi_k3_state_dict
 
 
 def _hf_dequantize_int4_enabled(args):
@@ -594,6 +595,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # dequant work scale with 1/EP.
         self._drop_unowned_expert_tensors(c_config, expert_ids)
 
+        # K3 names MXFP4 pairs as ``weight_packed``/``weight_scale``. Rename
+        # them before dequantization so the shared path can consume the pair.
+        normalize_kimi_k3_state_dict(self.state_dict, c_config)
         self.dequantize_compressed_tensors_if_needed(load_path, target_weight_keys=dequant_weight_keys)
         # MXFP4 dequant must run before the DSV4 `.scale` -> `.weight_scale_inv`
         # rename below: it matches routed-expert scale companions by the raw
@@ -601,7 +605,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # the pairing key would already be gone and the packed MXFP4 weights
         # would reach mcore conversion still as int8 with a stale scale.
         self.dequantize_mxfp4_if_needed()
-
         # DeepSeek-V4 preprocessing for native and HF-Transformers key layouts.
         # HF-Transformers checkpoints prefix every key with "model." (e.g.
         # "model.layers.0...", "model.embed_tokens.weight"); native DSV4
