@@ -7,8 +7,6 @@
 """Embodied training adapter for the native PyTorch LingBot-VA backend."""
 
 from collections import OrderedDict
-import hashlib
-import os
 from typing import Any, Dict
 
 import torch
