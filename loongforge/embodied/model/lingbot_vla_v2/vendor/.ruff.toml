@@ -1,0 +1,18 @@
+# Vendored upstream sources (MoGe, lingbot-depth/mdm, dinov2, lumos_dinov3, lingbot_vla).
+# These trees are kept close to upstream so they stay diffable against it, so the import
+# hygiene and naming findings below are suppressed rather than rewritten.
+# Only these codes are ignored here -- anything else still fails lint.
+extend = "../../../../../pyproject.toml"
+
+[lint.per-file-ignores]
+"**/*.py" = [
+    "E402",  # module import not at top of file
+    "E722",  # bare except
+    "E741",  # ambiguous variable name (I, l)
+    "F401",  # imported but unused
+    "F403",  # `from ... import *` used
+    "F405",  # name may be undefined, or defined from star imports
+    "F811",  # redefinition of unused name
+    "F821",  # undefined name (string annotation resolved by a function-local import)
+    "F841",  # local variable assigned but never used
+]

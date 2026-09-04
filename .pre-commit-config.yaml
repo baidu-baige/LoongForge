@@ -24,7 +24,7 @@ repos:
         alias: spdx-check-script
         name: SPDX header check (Python/Shell)
         files: '\.(py|sh)$'
-        exclude: '^(third_party|patches|tests/datasets)/'
+        exclude: '^(third_party|patches|tests/datasets|loongforge/embodied/model/lingbot_vla_v2/vendor)/'
         args:
           - --license-filepath=.license-header.txt
           - --use-current-year
@@ -36,7 +36,7 @@ repos:
         alias: spdx-check-cpp
         name: SPDX header check (C/C++/CUDA)
         files: '\.(c|cc|cpp|cxx|h|hh|hpp|hxx|cu|cuh)$'
-        exclude: '^(third_party|patches|tests/datasets)/'
+        exclude: '^(third_party|patches|tests/datasets|loongforge/embodied/model/lingbot_vla_v2/vendor)/'
         args:
           - --license-filepath=.license-header.txt
           - --use-current-year
