@@ -9,7 +9,6 @@ from megatron.core.transformer import TransformerConfig
 from megatron.core.transformer.transformer_config import MLATransformerConfig
 import dataclasses
 from typing import Optional, List, Dict, Set
-import torch
 from collections import defaultdict
 
 
@@ -44,8 +43,9 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     """Effective per-GPU token count for FP8 dynamic policy decisions.
     When left at 0 (default), auto-computed from ``args.seq_length * args.micro_batch_size``."""
 
-    def __post_init__(self):
-        PretrainedConfig.__init__(self)
+    def __post_init__(self, **kwargs):
+        # transformers >= 5.6 moves PretrainedConfig setup to __post_init__.
+        PretrainedConfig.__post_init__(self, **kwargs)
         TransformerConfig.__post_init__(self)
 
 
@@ -64,8 +64,8 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     fp8_dynamic_policy_path: Optional[str] = None
     fp8_dynamic_num_tokens: int = 0
 
-    def __post_init__(self):
-        PretrainedConfig.__init__(self)
+    def __post_init__(self, **kwargs):
+        PretrainedConfig.__post_init__(self, **kwargs)
         MLATransformerConfig.__post_init__(self)
 
 
@@ -135,4 +135,3 @@ class BaseModelStditConfig(TransformerConfig):
             raise ValueError(
                 f'latent_space_scale: {self.latent_space_scale} must be 1.0 / latent_patch_size[1].'
             )
-

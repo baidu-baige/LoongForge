@@ -22,7 +22,7 @@ TASK_ENCODER_REGISTRY = {
     "internvltaskencoder": "loongforge.data.multimodal.internvl.internvl_task_encoder.InternVLTaskEncoder",
     "llavaov15taskencoder": "loongforge.data.multimodal.llava_ov_task_encoder.LLavaOv15TaskEncoder",
     "ernietaskencoder": "loongforge.data.multimodal.ernie_task_encoder.ErnieTaskEncoder",
-    "kimitaskencoder": "loongforge.data.multimodal.kimi_task_encoder.KimiVLMTaskEncoder",
+    "kimitaskencoder": "loongforge.data.multimodal.kimi_task_encoder.KimiTaskEncoder",
     "minicpmv46taskencoder": (
         "loongforge.data.multimodal.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
     ),
@@ -30,12 +30,10 @@ TASK_ENCODER_REGISTRY = {
 
 
 def resolve_task_encoder(name: str):
-    """Resolve and import a task encoder class by registry key or class name."""
+    """Resolve and import a task encoder class by registry name."""
     normalized = name.lower()
     if normalized not in TASK_ENCODER_REGISTRY:
-        available = [
-            path.rsplit(".", 1)[-1] for path in TASK_ENCODER_REGISTRY.values()
-        ]
+        available = sorted(TASK_ENCODER_REGISTRY)
         raise ValueError(f"Unknown task encoder '{name}'. Available: {available}")
     module_path, cls_name = TASK_ENCODER_REGISTRY[normalized].rsplit(".", 1)
     module = importlib.import_module(module_path)
@@ -50,12 +48,7 @@ def build_task_encoder(args, *encoder_args, **encoder_kwargs):
     extensibility for other encoder classes.
     """
     encoder_name = getattr(args, "task_encoder", None) or "VLMTaskEncoder"
-    try:
-        encoder_cls = resolve_task_encoder(encoder_name)
-    except ValueError:
-        # Fallback: keep training running even if config typo slips in.
-        from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
-        encoder_cls = VLMTaskEncoder
+    encoder_cls = resolve_task_encoder(encoder_name)
     return encoder_cls(args, *encoder_args, **encoder_kwargs)
 
 

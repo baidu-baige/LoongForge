@@ -448,9 +448,9 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
         "--task-encoder",
         type=str,
         default=None,
-        help="Task encoder class for multimodal data pipeline. Responsible for "
+        help="Registry name for the multimodal task encoder. Responsible for "
              "encoding task-specific inputs (images, video, text). "
-             "Examples: 'VLMTaskEncoder', 'InternVLTaskEncoder'. Default: None"
+             "Examples: 'VLMTaskEncoder', 'KimiTaskEncoder'. Default: None"
     )
     return parser
 

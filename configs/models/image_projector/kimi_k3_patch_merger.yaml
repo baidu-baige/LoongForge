@@ -1,0 +1,9 @@
+_target_: loongforge.models.encoder.KimiK3PatchMergerConfig
+
+normalization: RMSNorm
+activation_func: ${act:gelu}
+add_bias_linear: false
+layernorm_epsilon: 1.0e-5
+model_type: kimi_k3_patch_merger
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/kimi_k3_patch_merger_convert.yaml

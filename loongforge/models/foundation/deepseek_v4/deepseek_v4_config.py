@@ -55,13 +55,13 @@ class DeepseekV4Config(BaseModelMLAConfig):
     hc_sinkhorn_iters: int = 20
     hc_eps: float = 1e-6
 
-    def __post_init__(self):
+    def __post_init__(self, **kwargs):
         if self.num_moe_experts is None:
             self.num_moe_experts = self.num_experts
         if self.moe_ffn_hidden_size is None:
             self.moe_ffn_hidden_size = self.ffn_hidden_size
 
-        super().__post_init__()
+        super().__post_init__(**kwargs)
 
         assert self.num_moe_experts and self.num_moe_experts > 0, "DeepSeek-V4 requires MoE."
         assert self.multi_latent_attention, "DeepSeek-V4 requires multi_latent_attention."

@@ -1,0 +1,19 @@
+# Kimi K3 multimodal model configuration.
+# The public training entry point includes the K3 vision tower and projector.
+defaults:
+  - ../../models/image_encoder@model.image_encoder: kimi_k3_vit
+  - ../../models/image_projector@model.image_projector: kimi_k3_patch_merger
+  - ../../models/kimi_k3@model.foundation: kimi_k3_backbone
+  - _self_
+
+model:
+  model_type: kimi_k3
+  loss_func: ${loss_func:default}
+  task_encoder: KimiTaskEncoder
+  image_encoder:
+    model_spec:
+      - loongforge.models.encoder.moon_vision_models.moon_vision_layer_spec
+      - get_moon_vision_model_layer_with_te_spec
+  image_projector:
+    model_spec: null
+  vision_token_id: 163603

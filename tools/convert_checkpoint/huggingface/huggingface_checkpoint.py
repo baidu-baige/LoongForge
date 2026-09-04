@@ -9,11 +9,8 @@ import json
 import re
 import logging
 
-logging.basicConfig(level=logging.INFO)
-
 import concurrent.futures
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.arguments import parse_args
 from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
 
 from convert_checkpoint.utils.utils import (
@@ -22,13 +19,13 @@ from convert_checkpoint.utils.utils import (
 )
 
 from convert_checkpoint.common.common_checkpoint import (
-    TRANSFORMER, MTP_TRANSFORMER, MTP_LAYER_PREFIX, LAYER_PREFIX, MOE_EXPERT, MOE_SHARED_EXPERT, LAYER_IS_DICT_FOR_EXPERT,
-    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES, MTP_WORD_EMBEDDING,
-    MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H, MOE_SHARED_EXPERT_H_TO_4H, MOE_SHARED_EXPERT_4H_TO_H,
+    TRANSFORMER, MTP_TRANSFORMER, MTP_LAYER_PREFIX, LAYER_PREFIX, MOE_EXPERT,
+    MOE_SHARED_EXPERT, LAYER_IS_DICT_FOR_EXPERT,
+    FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES,
+    MOE_EXPERT_H_TO_4H, MOE_SHARED_EXPERT_H_TO_4H, MOE_SHARED_EXPERT_4H_TO_H,
     MTP_MOE_EXPERT_H_TO_4H, MTP_MOE_EXPERT_4H_TO_H, MTP_MOE_SHARED_EXPERT_H_TO_4H, MTP_MOE_SHARED_EXPERT_4H_TO_H
 )
 
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
 from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase, is_dsv4_hybrid_config
 from convert_checkpoint.huggingface.huggingface_moe import HuggingfaceMoe
 from convert_checkpoint.huggingface.compressed_tensors_dequant import (
@@ -43,6 +40,9 @@ from convert_checkpoint.huggingface.mxfp4_dequant import (
     dequantize_mxfp4_state_dict,
     progress_print,
 )
+from convert_checkpoint.kimi_k3 import normalize_kimi_k3_state_dict
+
+logging.basicConfig(level=logging.INFO)
 
 
 def _hf_dequantize_int4_enabled(args):
@@ -65,7 +65,11 @@ def _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=No
         return
     if weight_key in weight_map:
         return
-    packed_key = weight_key[: -len(".weight")] + ".weight_packed" if weight_key.endswith(".weight") else f"{weight_key}.weight_packed"
+    packed_key = (
+        weight_key[: -len(".weight")] + ".weight_packed"
+        if weight_key.endswith(".weight")
+        else f"{weight_key}.weight_packed"
+    )
     if packed_key in weight_map:
         dequant_weight_keys.add(weight_key)
 
@@ -217,7 +221,9 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
         return checkpoint_names, dequant_weight_keys
     return checkpoint_names
 
-def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, max_workers=1, hf_checkpoint_device="cpu"):
+def merge_transformers_sharded_states(
+    path, checkpoint_names, load_safe=False, max_workers=1, hf_checkpoint_device="cpu"
+):
     """
     Merge sharded checkpoints from transformers into a single checkpoint.
 
@@ -254,7 +260,7 @@ def merge_transformers_sharded_states(path, checkpoint_names, load_safe=False, m
         concurrent.futures.wait(futures)
         for future in futures:
             try:
-                result = future.result()
+                future.result()
             except Exception as e:
                 logging.info(f"An error occurred: {e}")
                 raise e
@@ -291,7 +297,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             else:
                 all_done = True
                 for ep_id in ep_ids:
-                    if not (p, ep_id) in done_keys:
+                    if (p, ep_id) not in done_keys:
                         all_done = False
                 if all_done:
                     logging.info(f"> p: {p}, ep_id: {ep_ids} already converted. pass...")
@@ -331,7 +337,11 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
 
         for layer_id in layer_ids:
-            hf_layer_id = mtp_layer_id + (layer_id - num_layers) if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
+            hf_layer_id = (
+                mtp_layer_id + (layer_id - num_layers)
+                if layer_id >= num_layers and mtp_layer_id is not None
+                else layer_id
+            )
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
             for c_name in BASE_NAMES:
@@ -356,15 +366,21 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                                 spec_name = MTP_MOE_EXPERT_H_TO_4H if layer_id >= num_layers else None
                             else:
                                 spec_name = MTP_MOE_EXPERT_4H_TO_H if layer_id >= num_layers else None
-                            self.h_moe.common_e_to_hf(MOE_EXPERT, c_name, c_ckpt, self.state_dict, layer_id=layer_id,
-                                                      hf_layer_id=hf_layer_id, expert_id=expert_id,
-                                                      transformer=transformer, layer_prefix=layer_prefix, spec_name=spec_name)
+                            self.h_moe.common_e_to_hf(
+                                MOE_EXPERT, c_name, c_ckpt, self.state_dict,
+                                layer_id=layer_id, hf_layer_id=hf_layer_id,
+                                expert_id=expert_id, transformer=transformer,
+                                layer_prefix=layer_prefix, spec_name=spec_name,
+                            )
             self.merge_dict_tensor(self.state_dict)
             # MTP
             if layer_id >= num_layers:
                 for c_name in MTP_NAMES:
-                    self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
-                                             hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
+                    self.h_base.common_to_hf(
+                        c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                        hf_layer_id=hf_layer_id, transformer=transformer,
+                        layer_prefix=layer_prefix,
+                    )
 
         if num_layers - 1 in layer_ids:
             for c_name in LAST_LAYER_NAMES:
@@ -435,8 +451,12 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     spec_name = MTP_MOE_SHARED_EXPERT_H_TO_4H if layer_id >= num_layers else MOE_SHARED_EXPERT_H_TO_4H
                 else:
                     spec_name = MTP_MOE_SHARED_EXPERT_4H_TO_H if layer_id >= num_layers else MOE_SHARED_EXPERT_4H_TO_H
-                self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id, hf_layer_id=hf_layer_id,
-                                         transformer=transformer, expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix, spec_name=spec_name)
+                self.h_base.hf_to_common(
+                    c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                    hf_layer_id=hf_layer_id, transformer=transformer,
+                    expert_name=MOE_SHARED_EXPERT, layer_prefix=layer_prefix,
+                    spec_name=spec_name,
+                )
 
             # EXPERT
             if expert_dict is not None:
@@ -447,15 +467,21 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                                 spec_name = MTP_MOE_EXPERT_H_TO_4H if layer_id >= num_layers else None
                             else:
                                 spec_name = MTP_MOE_EXPERT_4H_TO_H if layer_id >= num_layers else None
-                            self.h_moe.hf_e_to_common(MOE_EXPERT, c_name, c_ckpt, self.state_dict,
-                                                      layer_id=layer_id, hf_layer_id=hf_layer_id,
-                                                      transformer=transformer, expert_id=expert_id, layer_prefix=layer_prefix, spec_name=spec_name)
+                            self.h_moe.hf_e_to_common(
+                                MOE_EXPERT, c_name, c_ckpt, self.state_dict,
+                                layer_id=layer_id, hf_layer_id=hf_layer_id,
+                                transformer=transformer, expert_id=expert_id,
+                                layer_prefix=layer_prefix, spec_name=spec_name,
+                            )
 
             # MTP
             if layer_id >= num_layers:
                 for c_name in MTP_NAMES:
-                    self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
-                                             hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
+                    self.h_base.hf_to_common(
+                        c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                        hf_layer_id=hf_layer_id, transformer=transformer,
+                        layer_prefix=layer_prefix,
+                    )
                 
 
         if num_layers - 1 in layer_ids:
@@ -547,7 +573,10 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             sub_dirs = [x for x in os.listdir(load_path) if x.endswith("safetensors")]
             if not os.path.exists(os.path.join(load_path, "model.safetensors.index.json")):
                 checkpoint_name = "model.safetensors"
-                self.state_dict = load_file(os.path.join(load_path, checkpoint_name), device=self.args.hf_checkpoint_device)
+                self.state_dict = load_file(
+                    os.path.join(load_path, checkpoint_name),
+                    device=self.args.hf_checkpoint_device,
+                )
                 logging.info(f"Load HuggingFace from: {os.path.join(load_path, checkpoint_name)}")
             else:
                 meta_path = f"{load_path}/model.safetensors.index.json"
@@ -563,7 +592,10 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     0 if dequant_weight_keys is None else len(dequant_weight_keys),
                 )
                 self.state_dict = merge_transformers_sharded_states(
-                    load_path, checkpoint_names, load_safe=True, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
+                    load_path, checkpoint_names, load_safe=True,
+                    max_workers=self.args.max_workers,
+                    hf_checkpoint_device=self.args.hf_checkpoint_device,
+                )
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
         else:
             sub_dirs = [x for x in os.listdir(load_path) if x.startswith("pytorch_model")]
@@ -586,7 +618,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     0 if dequant_weight_keys is None else len(dequant_weight_keys),
                 )
                 self.state_dict = merge_transformers_sharded_states(
-                    load_path, checkpoint_names, max_workers=self.args.max_workers, hf_checkpoint_device=self.args.hf_checkpoint_device)
+                    load_path, checkpoint_names, max_workers=self.args.max_workers,
+                    hf_checkpoint_device=self.args.hf_checkpoint_device,
+                )
                 logging.info(f"merge_transformers_sharded_states: {load_path}")
 
 
@@ -594,6 +628,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # dequant work scale with 1/EP.
         self._drop_unowned_expert_tensors(c_config, expert_ids)
 
+        # K3 names MXFP4 pairs as ``weight_packed``/``weight_scale``. Rename
+        # them before dequantization so the shared path can consume the pair.
+        normalize_kimi_k3_state_dict(self.state_dict, c_config)
         self.dequantize_compressed_tensors_if_needed(load_path, target_weight_keys=dequant_weight_keys)
         # MXFP4 dequant must run before the DSV4 `.scale` -> `.weight_scale_inv`
         # rename below: it matches routed-expert scale companions by the raw
@@ -601,7 +638,6 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # the pairing key would already be gone and the packed MXFP4 weights
         # would reach mcore conversion still as int8 with a stale scale.
         self.dequantize_mxfp4_if_needed()
-
         # DeepSeek-V4 preprocessing for native and HF-Transformers key layouts.
         # HF-Transformers checkpoints prefix every key with "model." (e.g.
         # "model.layers.0...", "model.embed_tokens.weight"); native DSV4
@@ -716,7 +752,7 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             concurrent.futures.wait(futures)
             for future in futures:
                 try:
-                    result = future.result()
+                    future.result()
                 except Exception as e:
                     logging.info(f"An error occurred: {e}")
                     raise e
@@ -764,13 +800,19 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 state_dict[key] = torch.stack(tensors, dim=0)
 
     @staticmethod
-    def save_vlm_checkpoint(hf_ckpt, hf_vision_ckpt, c_vision_patch_config, c_ckpt, c_vision_ckpt, save_path, layer_dict, expert_dict=None):
+    def save_vlm_checkpoint(
+        hf_ckpt, hf_vision_ckpt, c_vision_patch_config, c_ckpt,
+        c_vision_ckpt, save_path, layer_dict, expert_dict=None,
+    ):
         if hf_ckpt.check_done_files(save_path, layer_dict, expert_dict=expert_dict):
             return
         vision_num_layers = c_vision_patch_config.get_args("common")["num_layers"]
         vision_layer_dict = {}
         vision_layer_dict[0] = list(range(vision_num_layers)) 
-        state_dict = hf_ckpt.convert_from_common(c_ckpt, layer_dict, expert_dict=expert_dict, save_path=save_path, save_file=False)
+        state_dict = hf_ckpt.convert_from_common(
+            c_ckpt, layer_dict, expert_dict=expert_dict,
+            save_path=save_path, save_file=False,
+        )
         vision_ckpt = hf_vision_ckpt.convert_from_common(c_vision_ckpt, vision_layer_dict, save_file=False)
         state_dict.update(vision_ckpt)
         # save checkpoint file

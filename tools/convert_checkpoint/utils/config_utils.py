@@ -11,12 +11,10 @@ from omegaconf import DictConfig, OmegaConf
 from convert_checkpoint.common.common_config import CommonConfig
 from convert_checkpoint.common.common_checkpoint import (
     BIAS,
-    EXTRA_DATA,
-    FINAL_LAYERNORM,
     FIRST_LAYER_NAMES,
     LAST_LAYER_NAMES,
+    LAYER_LOCAL_LAST_NAMES,
     LAYER_EXTRA_DATA,
-    LAYER_IGNORE_TP,
     LAYER_IS_DIRECT_NAME,
     LAYER_IS_LAYERNORM,
     LAYER_NAME,
@@ -113,7 +111,7 @@ def update_overwrite(model_cfg, module_cfg, module_type):
     for key in module_cfg.data.module.keys():
         try:
             module_cfg.data.module[key] = model_cfg['model'][module_type][key]
-        except:
+        except Exception:
             continue
 
 prefix_mapping = {'vision_model': 'encoder_model.image_encoder',
@@ -147,7 +145,10 @@ def parse_yaml_config(config_file, convert_file):
     # Filter out PEFT config keys (e.g., 'lora') which are not model module types
     module_keys = [k for k in module_names.keys() if k not in ['lora']]
     if len(module_keys) == 0: # llm
-        cfg = load_config(convert_file, hydra_overrides={module_type+'@module='+config_file.split("/")[-1].split(".")[0]})
+        config_name = config_file.split("/")[-1].split(".")[0]
+        cfg = load_config(
+            convert_file, hydra_overrides={module_type + "@module=" + config_name}
+        )
     else: # omni vlm
         cfg = load_config(convert_file, hydra_overrides = {module_type+'@module='+module_names[module_type]})
     OmegaConf.set_struct(cfg, False)
@@ -176,7 +177,10 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
     if adapter is not None:
         c_config = replace_vlm_config(c_config, adapter, vision_patch)
     if for_vlm:
-        for name in [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES:
+        prefixed_names = [LAYER_PREFIX] + FIRST_LAYER_NAMES + [
+            name for name in LAST_LAYER_NAMES if name not in LAYER_LOCAL_LAST_NAMES
+        ]
+        for name in prefixed_names:
             if name not in c_config.get("name_map")["mcore"]:
                 continue
             old_key = c_config.get("name_map")["mcore"].get(name, None)
@@ -200,7 +204,9 @@ def convert_vlm_config(c_config, adapter=None, vision_patch=None, for_vlm=False)
 
         word_embeddings = c_config.get("name_map")["mcore"].get(WORD_EMBEDDINGS, None)
         if word_embeddings == "foundation_model.embedding.word_embeddings":
-            c_config.get("name_map")["huggingface"][VISION_WORD_EMBEDDINGS] = c_config.get("name_map")["huggingface"][WORD_EMBEDDINGS]
+            c_config.get("name_map")["huggingface"][VISION_WORD_EMBEDDINGS] = (
+                c_config.get("name_map")["huggingface"][WORD_EMBEDDINGS]
+            )
             c_config.get("name_map")["mcore"][VISION_WORD_EMBEDDINGS] = "encoder_model.text_encoder.word_embeddings"
     return c_config
 
@@ -210,7 +216,10 @@ def replace_vlm_config(c_config, adapter, vision_patch):
         if k1 in name_map:
             continue
         extra_data = True
-        if k1.startswith("adapter.linear_fc1") or k1.startswith("adapter.linear_fc2"):
+        # Only Transformer Engine modules carry _extra_state. K3's projector ends
+        # in a plain torch RMSNorm, so emitting one there produces a key no
+        # module can consume.
+        if k1.startswith(("adapter.linear_fc1", "adapter.linear_fc2", "adapter.post_norm")):
             extra_data = False
         name_map[k1] = {
             LAYER_NAME: k2,
@@ -250,12 +259,21 @@ def replace_vlm_config(c_config, adapter, vision_patch):
                 if suffix in [f".{LAYERNORM_WEIGHT}", f".{LAYERNORM_BIAS}"]:
                     mcore_is_layernorm = True
         if hf_name not in hf_dict:
-            c_config.get("name_map")["huggingface"][f"{VISION_MAP}_{hf_name}"] = {LAYER_NAME: hf_name, LAYER_IS_DIRECT_NAME: hf_is_direct}
-            c_config.get("name_map")["mcore"][f"{VISION_MAP}_{hf_name}"] = {LAYER_NAME: mcore_name, LAYER_IS_DIRECT_NAME: mcore_is_direct,
-                                   LAYER_IS_LAYERNORM: mcore_is_layernorm, LAYER_EXTRA_DATA: value[LAYER_EXTRA_DATA]}
+            c_config.get("name_map")["huggingface"][f"{VISION_MAP}_{hf_name}"] = {
+                LAYER_NAME: hf_name,
+                LAYER_IS_DIRECT_NAME: hf_is_direct,
+            }
+            c_config.get("name_map")["mcore"][f"{VISION_MAP}_{hf_name}"] = {
+                LAYER_NAME: mcore_name,
+                LAYER_IS_DIRECT_NAME: mcore_is_direct,
+                LAYER_IS_LAYERNORM: mcore_is_layernorm,
+                LAYER_EXTRA_DATA: value[LAYER_EXTRA_DATA],
+            }
             hf_dict[hf_name] = True
 
-    replace_prefix_keys = [LAYER_PREFIX] + FIRST_LAYER_NAMES + LAST_LAYER_NAMES
+    replace_prefix_keys = [LAYER_PREFIX] + FIRST_LAYER_NAMES + [
+        name for name in LAST_LAYER_NAMES if name not in LAYER_LOCAL_LAST_NAMES
+    ]
     for key in replace_prefix_keys:
         mcore_key = c_config.get("name_map")["mcore"].get(key, None)
         if mcore_key is None:

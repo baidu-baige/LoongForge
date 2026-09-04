@@ -1,31 +1,17 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Kimi Task Encoder."""
+"""Kimi multimodal task encoder."""
 
 import logging
 import torch
 from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
-from typing import Dict, List, Optional, Tuple, Union
-from typing_extensions import override
-from dataclasses import dataclass
+from typing import Optional, Tuple, Union
 
 from megatron.energon import (
     CaptioningSample,
     VQASample,
 )
-from importlib.metadata import version
-
-if version("megatron-energon") < "7.0.0":
-    from megatron.energon.flavors.webdataset import VideoData as AVData
-
-    _ENERGON_NEEDS_SUBFLAVOR = True
-else:
-    from megatron.energon.flavors.webdataset import AVData
-
-    _ENERGON_NEEDS_SUBFLAVOR = False
-
-
 from loongforge.utils import constants, get_chat_template
 from loongforge.data.chat_template import HFChatTemplate
 from megatron.energon.task_encoder.base import stateless
@@ -35,16 +21,13 @@ from loongforge.data.multimodal import (
     MultiVidQASample,
 )
 from .base.task_encoder import (
-    BaseTaskEncoder,
     BaseTaskSample,
-    BaseTaskSamplePacked,
-    BaseTaskBatchPacked,
 )
 from .vlm_task_encoder import VLMTaskSample
 
 IGNORE_INDEX = -100  # ID for labels that should be ignored.
 
-# Kimi K2.5 special tokens
+# Kimi multimodal special tokens
 MEDIA_BEGIN = "<|media_begin|>"
 MEDIA_END = "<|media_end|>"
 MEDIA_CONTENT = "<|media_content|>"
@@ -64,10 +47,10 @@ THINK_START = "<think>"
 THINK_END = "</think>"
 
 
-class KimiVLMTaskEncoder(VLMTaskEncoder):
-    """VLM Task Encoder for Kimi K2.5 models.
+class KimiTaskEncoder(VLMTaskEncoder):
+    """VLM task encoder for Kimi K2.x and K3 models.
 
-    Kimi K2.5 uses a different tokenization format:
+    Kimi models use a different tokenization format:
     - Image: <|media_begin|>image<|media_content|><|media_pad|><|media_end|>
     - Video chunk: timestamp<|media_begin|>video<|media_content|><|media_pad|><|media_end|>
     - Chat template: <|im_user|>user<|im_middle|>...<|im_end|><|im_assistant|>assistant\
@@ -75,7 +58,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
 
     This encoder also expands the single <|media_content|> placeholder token to multiple
     tokens based on the actual image feature length (computed from grid_thws), which is
-    the functionality of _merge_input_ids_with_image_features in modeling_kimi_k25.py
+    the functionality of the Kimi processor's media-token merge step.
     """
 
     def __init__(self, args):
@@ -232,7 +215,8 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         """Match <|media_content|> token count to the image feature count.
 
         This implements the core logic of _merge_input_ids_with_image_features from
-        modeling_kimi_k25.py, but operates on token IDs instead of embeddings.
+        the Kimi processor's media-token merge step, but operates on token IDs
+        instead of embeddings.
 
         Args:
             input_ids: Token IDs with single placeholders or plugin-expanded tokens
@@ -306,7 +290,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         return expanded_input_ids, expanded_target, expanded_attn_mask
 
     def _process(self, image, text):
-        """Process the data to get the model's input for Kimi K2.5.
+        """Process data into model inputs for a Kimi multimodal model.
 
         Expands `<|media_content|>` tokens to match the actual image feature
         length, eliminating the need for ``_merge_input_ids_with_image_features``
@@ -356,7 +340,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         return input_ids, target, pixel, image_grid_thw, attn_mask
 
     def _build_kimi_chat_text(self, context, answer, has_image=True):
-        """Build Kimi K2.5 chat format text.
+        """Build Kimi chat-format text.
 
         Format:
         <|im_user|>user<|im_middle|>{context}<|im_end|><|im_assistant|>assistant\
@@ -413,7 +397,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         return target
 
     def process_sft_vqa(self, context, answer, image):
-        """Process the data for SFT VQA with Kimi K2.5 format.
+        """Process VQA data for SFT with Kimi chat formatting.
 
         Args:
             context: User question/context
@@ -458,7 +442,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         return input_ids, target, attn_mask, imgs, image_grid_thw
 
     def encode_captioning(self, sample: CaptioningSample) -> BaseTaskSample:
-        """Encode CaptioningSample for Kimi K2.5."""
+        """Encode a captioning sample for a Kimi multimodal model."""
         assert (
             self.args.training_phase == constants.TrainingPhase.PRETRAIN
         ), "Only support PRETRAIN phase"
@@ -492,7 +476,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         )
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
-        """Encode VQA sample for Kimi K2.5."""
+        """Encode a VQA sample for a Kimi multimodal model."""
         if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
             if self.args.add_question_in_pretrain:
                 # Replace <image> placeholder with Kimi format
@@ -537,7 +521,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
     def process_sft_qa(
         self, messages: list, system: str, raw_video: list, raw_image: list, tools=None
     ):
-        """Process multi-turn conversation data for SFT with Kimi K2.5 format.
+        """Process multi-turn conversation data for Kimi SFT.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
@@ -557,8 +541,8 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
 
         if self.chat_template.mm_plugin is None:
             raise ValueError(
-                "KimiTaskEncoder requires a chat template with KimiK25Plugin. "
-                "Use --chat-template kimi-k2.5 or kimi-k2.5-hf."
+                "KimiTaskEncoder requires a Kimi multimodal chat template. "
+                "Use --chat-template kimi-k2.5-hf or kimi-k3-hf."
             )
 
         if raw_image is not None:
@@ -590,8 +574,8 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         # Expand <|media_content|> tokens to match actual image/video feature length.
         # Images and videos share the same <|media_content|> token ID, so all grid_thws
         # must be passed together in message order (images first, then videos) to match
-        # the placeholder appearance order in input_ids. This mirrors the HF design in
-        # modeling_kimi_k25.py where a single unified grid_thws covers all media.
+        # the placeholder appearance order in input_ids. The processor returns one
+        # unified grid_thws sequence for all media.
         combined_grid_thws = None
         if image_grid_thw is not None and video_grid_thw is not None:
             combined_grid_thws = torch.cat([image_grid_thw, video_grid_thw], dim=0)
@@ -616,7 +600,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         )
 
     def encode_multi_mix_qa(self, sample) -> BaseTaskSample:
-        """Encode MultiMixQASample for Kimi K2.5."""
+        """Encode a mixed image/video QA sample for Kimi SFT."""
         if self.args.training_phase == constants.TrainingPhase.SFT:
             num_tiles = []
 
@@ -666,7 +650,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         )
 
     def encode_multi_vid_qa(self, sample) -> BaseTaskSample:
-        """Encode video QA sample for Kimi K2.5."""
+        """Encode a video QA sample for Kimi SFT."""
         if self.args.training_phase == constants.TrainingPhase.SFT:
             (
                 input_ids,
@@ -712,7 +696,7 @@ class KimiVLMTaskEncoder(VLMTaskEncoder):
         self,
         sample: ChatMixSample,
     ) -> Optional["VLMTaskSample"]:
-        """Encode ChatMixSample for Kimi K2.5 (with optional tool calling).
+        """Encode a ChatMixSample for Kimi SFT (with optional tool calling).
 
         Overlong samples are dropped via ``_gate_overlong`` (logs a warning
         and returns ``None``).

@@ -2,18 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Kimi K2.5 Multimodal Plugin for LoongForge
+Kimi Multimodal Plugin for LoongForge
 
-This plugin handles Kimi K2.5 specific image/video processing and token formatting.
-Kimi K2.5 uses a different token format than Qwen2-VL:
+This plugin handles the shared Kimi image/video processing and token formatting.
+Kimi uses a different token format than Qwen2-VL:
 - Image: <|media_begin|>image<|media_content|><|media_pad|><|media_end|>
 - Video: timestamp<|media_begin|>video<|media_content|><|media_pad|><|media_end|>
 """
 
 import logging
-import math
 from copy import deepcopy
-from io import BytesIO
 from typing import (
     TYPE_CHECKING,
     Dict,
@@ -24,7 +22,6 @@ from typing import (
     Union,
 )
 
-import numpy as np
 from typing_extensions import override
 from PIL import Image
 
@@ -34,14 +31,14 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import torch
-    from transformers.image_processing_utils import BaseImageProcessor
+    from transformers.processing_utils import ProcessorMixin
     from PIL.Image import Image as ImageObject
 
     ImageInput = Union[str, Dict, "ImageObject"]
     VideoInput = str
 
 
-# Kimi K2.5 special tokens
+# Kimi multimodal special tokens
 MEDIA_BEGIN = "<|media_begin|>"
 MEDIA_END = "<|media_end|>"
 MEDIA_CONTENT = "<|media_content|>"
@@ -53,10 +50,10 @@ IMAGE_PLACEHOLDER_TEMPLATE = f"{MEDIA_BEGIN}image{MEDIA_CONTENT}{{tokens}}{MEDIA
 VIDEO_CHUNK_TEMPLATE = "{{timestamp}}" + f"{MEDIA_BEGIN}video{MEDIA_CONTENT}{{tokens}}{MEDIA_END}"
 
 
-class KimiK25Plugin(MMPlugin):
-    """Kimi K2.5 multimodal plugin.
+class KimiPlugin(MMPlugin):
+    """Shared Kimi multimodal plugin.
 
-    Handles Kimi K2.5 specific:
+    Handles the Kimi multimodal contract used by K2.x and K3:
     - Image preprocessing (NaViT-style dynamic resolution)
     - Video chunking with timestamps
     - Token placeholder expansion based on grid_thw
@@ -70,8 +67,9 @@ class KimiK25Plugin(MMPlugin):
         temporal_merge_kernel_size: int = 4,
         image_prefix: str = f"{MEDIA_BEGIN}image",
         image_suffix: str = MEDIA_END,
+        include_image_size: bool = False,
     ) -> None:
-        """Initialize KimiK25Plugin.
+        """Initialize the Kimi multimodal plugin.
 
         Args:
             image_token: Token used for image placeholders (default: <|media_content|>)
@@ -80,20 +78,22 @@ class KimiK25Plugin(MMPlugin):
             temporal_merge_kernel_size: Temporal merge kernel size (default: 4)
             image_prefix: Text before expanded image tokens.
             image_suffix: Text after expanded image tokens.
+            include_image_size: Include ``{width}x{height}`` in image placeholders.
         """
         super().__init__(image_token=image_token, video_token=video_token)
         self.merge_kernel_size = merge_kernel_size
         self.temporal_merge_kernel_size = temporal_merge_kernel_size
         self.image_prefix = image_prefix
         self.image_suffix = image_suffix
+        self.include_image_size = include_image_size
         # Kimi uses <|media_content|> as the placeholder token
         self.media_placeholder_token_id = 163605
 
     @override
     def _preprocess_image(self, image: "ImageObject", **kwargs) -> "ImageObject":
-        """Preprocess image for Kimi K2.5.
+        """Preprocess an image for the Kimi processor.
 
-        Kimi K2.5 uses NaViT-style dynamic resolution, but we apply basic constraints here.
+        Kimi uses NaViT-style dynamic resolution, but we apply basic constraints here.
         The actual resizing is done by the Kimi processor.
         """
         image = super()._preprocess_image(image, **kwargs)
@@ -119,7 +119,7 @@ class KimiK25Plugin(MMPlugin):
     def _compute_num_tokens_from_grid_thw(self, grid_thw) -> int:
         """Compute number of tokens after spatial merge and temporal pooling.
 
-        For Kimi K2.5:
+        Kimi processors return:
         - grid_thw = [T, H, W] where H, W are in patch units
         - After spatial merge: new_h = H // merge_h, new_w = W // merge_w
         - After temporal pooling: T dimension is pooled away
@@ -149,7 +149,7 @@ class KimiK25Plugin(MMPlugin):
         videos: Sequence["VideoInput"],
         processor: "ProcessorMixin",
     ) -> Dict[str, "torch.Tensor"]:
-        """Process visual inputs for Kimi K2.5.
+        """Process visual inputs for the Kimi processor.
 
         Returns:
             pixel_values: tensor with shape (num_patches, patch_dim)
@@ -210,14 +210,21 @@ class KimiK25Plugin(MMPlugin):
 
         return mm_inputs
 
-    def _build_image_placeholder(self, num_tokens: int) -> str:
+    def _build_image_placeholder(
+        self, num_tokens: int, image_size: Optional[Tuple[int, int]] = None
+    ) -> str:
         """Build image placeholder string with correct number of tokens.
 
         Format: <|media_begin|>image<|media_content|>...<|media_content|><|media_end|>
         """
         # Kimi uses multiple <|media_content|> tokens as placeholders
         tokens_str = self.image_token * num_tokens
-        return f"{self.image_prefix}{tokens_str}{self.image_suffix}"
+        size = ""
+        if self.include_image_size:
+            if image_size is None:
+                raise ValueError("Kimi K3 image placeholders require image dimensions")
+            size = f" {image_size[0]}x{image_size[1]}"
+        return f"{self.image_prefix}{size}{tokens_str}{self.image_suffix}"
 
     def _build_video_chunk_placeholder(self, num_tokens: int, timestamp: str = "") -> str:
         """Build video chunk placeholder string with timestamp.
@@ -235,7 +242,7 @@ class KimiK25Plugin(MMPlugin):
         videos: Sequence["VideoInput"],
         processor: Optional["ProcessorMixin"],
     ) -> Tuple[List[Dict[str, str]], Dict]:
-        """Process messages and replace placeholders with Kimi K2.5 format.
+        """Process messages and replace placeholders with Kimi format.
 
         Replaces generic <image>/<video> placeholders with Kimi-specific format:
         - <image> -> <|media_begin|>image<|media_content|>...<|media_end|>
@@ -281,7 +288,10 @@ class KimiK25Plugin(MMPlugin):
                 )
 
                 # Build placeholder string
-                placeholder = self._build_image_placeholder(num_tokens)
+                image = images[num_image_tokens]
+                placeholder = self._build_image_placeholder(
+                    num_tokens, image.size if self.include_image_size else None
+                )
 
                 content = content.replace(Placeholder.IMAGE, placeholder, 1)
                 num_image_tokens += 1
@@ -351,9 +361,9 @@ class KimiK25Plugin(MMPlugin):
 
 
 # Plugin registry entry
-def get_kimi_k25_plugin(**kwargs) -> KimiK25Plugin:
-    """Factory function to create KimiK25Plugin with default settings."""
-    return KimiK25Plugin(
+def get_kimi_plugin(**kwargs) -> KimiPlugin:
+    """Create a Kimi multimodal plugin with default settings."""
+    return KimiPlugin(
         image_token=MEDIA_CONTENT,
         video_token=MEDIA_CONTENT,
         merge_kernel_size=(2, 2),

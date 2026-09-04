@@ -33,9 +33,13 @@ from .ernie4_5_vl_vision_models.ernie_adapter import ErnieAdapter
 from .ernie4_5_vl_vision_models.ernie_config import ErnieVisionConfig, ErnieAdapterConfig
 
 from .moon_vision_models.moon_vision_model import MoonVisionModel
-from .moon_vision_models.moon_vision_config import MoonVisionModelConfig
+from .moon_vision_models.moon_vision_config import (
+    KimiK3PatchMergerConfig,
+    MoonVisionModelConfig,
+)
 from .moon_vision_models.patch_merger_adapter import PatchMergerMLPAdapterConfig
 from .moon_vision_models.patch_merger_adapter import PatchMergerMLP
+from .moon_vision_models.patch_merger_adapter import KimiK3PatchMerger
 from .minicpm_v_4_6_vision_models import (
     MiniCPMV46Merger,
     MiniCPMV46MergerConfig,
@@ -56,5 +60,6 @@ AutoModel.register(ErnieVisionConfig, ErnieVisionModel)
 AutoModel.register(ErnieAdapterConfig, ErnieAdapter)
 AutoModel.register(MoonVisionModelConfig, MoonVisionModel)
 AutoModel.register(PatchMergerMLPAdapterConfig, PatchMergerMLP)
+AutoModel.register(KimiK3PatchMergerConfig, KimiK3PatchMerger)
 AutoModel.register(MiniCPMV46VisionConfig, MiniCPMV46VisionModel)
 AutoModel.register(MiniCPMV46MergerConfig, MiniCPMV46Merger)

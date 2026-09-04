@@ -4,7 +4,8 @@
 """ Convert dataset into WebDataset (WDS) format """
 
 import argparse
-import uuid
+import base64
+import binascii
 import json
 import os
 import yaml
@@ -13,8 +14,53 @@ from tqdm import tqdm
 from megatron.energon.epathlib import EPath
 from megatron.energon.flavors import BaseWebdatasetFactory
 from megatron.energon.flavors.webdataset import MAIN_FOLDER_NAME
-from megatron.energon.flavors.webdataset.prepare import WebdatasetPreparator
-from megatron.energon.flavors.webdataset.structs import ShardInfo, WebdatasetInfo, WebdatasetSplits
+
+
+def _read_media(directory, reference, index, vision):
+    """Read a media path or an embedded base64 data URI."""
+    if reference.startswith("data:"):
+        header, separator, payload = reference.partition(",")
+        media_type, *parameters = header[5:].split(";")
+        suffix = {
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
+            "image/bmp": ".bmp",
+            "image/tiff": ".tiff",
+            "video/mp4": ".mp4",
+            "video/x-msvideo": ".avi",
+            "video/quicktime": ".mov",
+            "video/webm": ".webm",
+        }.get(media_type.lower())
+        if not separator or "base64" not in parameters or suffix is None:
+            raise ValueError(f"Unsupported {vision} data URI at sample {index}")
+        if not media_type.lower().startswith(vision + "/"):
+            raise ValueError(f"Expected {vision} data URI at sample {index}")
+        try:
+            data = base64.b64decode(payload, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError(
+                f"Invalid base64 {vision} data URI at sample {index}"
+            ) from exc
+        return f"{index}_{vision}{suffix}", data
+
+    if directory is None:
+        raise ValueError(f"--{vision}_dir is required for media path {reference!r}")
+    name = f"{index}_{os.path.basename(reference)}"
+    with open(os.path.join(directory, reference), "rb") as media_file:
+        return name, media_file.read()
+
+
+def _build_content(args, entry, media, names=None):
+    field = "messages" if args.sample_type == "chat_mix" else "texts"
+    content = {field: entry[args.columns_messages], "media": media}
+    if names is not None:
+        content["name"] = names
+    if args.sample_type == "chat_mix" and entry.get("tools"):
+        content["tools"] = entry["tools"]
+    return content
 
 
 def construct_sample(args, vision, paths, index, entry):
@@ -30,15 +76,11 @@ def construct_sample(args, vision, paths, index, entry):
     if len(paths) == 1 and isinstance(paths[0], (list, tuple)):
         paths = paths[0]
     for i, path in enumerate(iterable=paths):
-        with open(os.path.join(directory, path), "rb") as vision_file:
-            vision_data.update({str(i) + '_' + os.path.basename(path) : vision_file.read()})
-            vision_name.append(str(i) + '_' + os.path.basename(path))
+        name, data = _read_media(directory, path, i, vision)
+        vision_data[name] = data
+        vision_name.append(name)
 
-    content = {
-        "texts": entry[args.columns_messages],
-        "media": vision,
-        "name": vision_name
-    }
+    content = _build_content(args, entry, vision, vision_name)
     sample = {
         "__key__": vision + '_' + str(index),
         **vision_data,
@@ -49,11 +91,6 @@ def construct_sample(args, vision, paths, index, entry):
 def convert_to_wds(args):
     """ Convert dataset to wds format """
     assert args.media in ['video', 'image', 'mix'], "Invalid media type: {args.media}"
-
-    if args.media == "video":
-        assert args.video_dir is not None
-    if args.media == "image":
-        assert args.image_dir is not None
 
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
@@ -71,10 +108,12 @@ def convert_to_wds(args):
         for index, entry in enumerate(tqdm(data)):
             if args.sample_type  == 'vqa' or args.sample_type == 'caption':
                 image_path = entry.get('image') or entry.get('images')[0]
-                with open(os.path.join(args.image_dir, image_path), "rb") as img_file:
-                    image_data = img_file.read()
+                _, image_data = _read_media(args.image_dir, image_path, index, "image")
+                default_key = (
+                    f"image_{index}" if image_path.startswith("data:") else image_path
+                )
                 sample = {
-                    "__key__": entry.get('id', image_path).replace('.', '_'),
+                    "__key__": str(entry.get('id') or default_key).replace('.', '_'),
                     "jpg": image_data,
                     "json": json.dumps(entry[args.columns_messages]).encode("utf-8"),
                 }
@@ -87,10 +126,7 @@ def convert_to_wds(args):
                 elif image_paths is not None:
                     sample = construct_sample(args, 'image', image_paths, index, entry)
                 else:   # for pure text
-                    content = {
-                        "texts": entry[args.columns_messages],
-                        "media": "text",
-                    }
+                    content = _build_content(args, entry, "text")
                     sample = {
                         "__key__": 'text_' + str(index),
                         "json": json.dumps(content).encode("utf-8"),
@@ -101,15 +137,13 @@ def convert_to_wds(args):
         args.media,
         args.sample_type
     )
-    print(f"Dataset successfully converted to wds")
+    print("Dataset successfully converted to wds")
 
 def write_config(path: EPath, media: str=None, sample_type: bool=False):
     """ Write config to path """
     (path / MAIN_FOLDER_NAME).mkdir()
     all_tars = list(path.glob("**/*.tar")) + list(path.glob("**/*.tgz"))
     all_tars = [str(p.relative_to(path)) for p in sorted(all_tars)]
-    class_type = "MultiMixQASample" if media == 'mix' else "MultiVidQASample"
-
     # Construct dataset configuration based on sample_type
     if sample_type == "vqa":
         # VQA sample type with field mapping

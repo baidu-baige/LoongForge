@@ -5,8 +5,7 @@
 
 import torch
 from dataclasses import dataclass
-from typing import List, Optional
-from dataclasses import dataclass, field
+from typing import Optional, Tuple
 from megatron.core.activations import quick_gelu
 from loongforge.models.common.base_model_config import BaseModelConfig
 
@@ -60,14 +59,14 @@ class ErnieVisionConfig(BaseModelConfig):
     swiglu: bool = False
 
     # layer spec — default points to ERNIE's own spec function
-    model_spec: Optional[List[str]] = field(default_factory=lambda: [
+    model_spec: Optional[Tuple[str, str]] = (
         "loongforge.models.encoder.ernie4_5_vl_vision_models.ernie_encoder_spec",
         "get_ernie_vl_vision_layer_spec",
-    ])
+    )
 
-    def __post_init__(self):
+    def __post_init__(self, **kwargs):
         self.activation_func = quick_gelu
-        super().__post_init__()
+        super().__post_init__(**kwargs)
 
 
 @dataclass

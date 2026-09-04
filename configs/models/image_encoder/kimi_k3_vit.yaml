@@ -1,0 +1,41 @@
+# Kimi K3 vision tower.  The execution path is shared with MoonVisionModel;
+# these values capture the K3 checkpoint contract.
+_target_: loongforge.models.encoder.MoonVisionModelConfig
+
+num_layers: 27
+hidden_size: 1024
+kv_channels: 128
+ffn_hidden_size: 4096
+num_attention_heads: 12
+num_query_groups: 12
+
+activation_func: ${act:gelu_tanh}
+normalization: RMSNorm
+add_bias_linear: false
+add_qkv_bias: false
+swiglu: false
+group_query_attention: false
+gated_linear_unit: false
+position_embedding_type: none
+bias_activation_fusion: false
+attention_dropout: 0.0
+hidden_dropout: 0.0
+bias_dropout_fusion: false
+apply_rope_fusion: false
+layernorm_epsilon: 1.0e-5
+
+patch_size: 14
+temporal_patch_size: 1
+patch_embed_proj_bias: false
+pos_emb_interpolation_mode: bilinear
+init_pos_emb_height: 64
+init_pos_emb_width: 64
+init_pos_emb_time: 4
+pos_emb_type: divided_fixed
+video_attn_type: spatial_temporal
+merge_kernel_size: [2, 2]
+merge_type: sd2_tpool
+image_token_id: 163603
+model_type: kimi_k3_vit
+
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/kimi_k3_vit_convert.yaml

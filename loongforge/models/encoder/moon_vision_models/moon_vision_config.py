@@ -3,8 +3,8 @@
 
 """register moon vision model with different config"""
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Optional, Tuple
 import torch
 from loongforge.models.common.base_model_config import BaseModelConfig
 
@@ -33,6 +33,8 @@ class MoonVisionModelConfig(BaseModelConfig):
     hidden_dropout: float = 0.0
     bias_dropout_fusion: bool = False
     apply_rope_fusion: bool = False
+    patch_embed_proj_bias: bool = True
+    pos_emb_interpolation_mode: str = "bicubic"
 
     patch_size: int = 14
     temporal_patch_size: int = 1
@@ -42,7 +44,7 @@ class MoonVisionModelConfig(BaseModelConfig):
     vision_token_id: int = 163603
     pos_emb_type: str = "divided_fixed"
     video_attn_type: str = "spatial_temporal"
-    merge_kernel_size: List[int] = field(default_factory=lambda: [2, 2])
+    merge_kernel_size: Tuple[int, int] = (2, 2)
     merge_type: str = "sd2_tpool"
     image_token_id: int = 163603
     model_type: str = "moon_vit_3d"
@@ -60,3 +62,15 @@ class PatchMergerMLPAdapterConfig(BaseModelConfig):
     layernorm_epsilon: float = 1e-06
 
     model_type: str = "patch_merger_adapter"
+
+
+@dataclass
+class KimiK3PatchMergerConfig(BaseModelConfig):
+    """K3 patch merger configuration."""
+
+    normalization: str = "RMSNorm"
+    activation_func: torch.nn.Module = torch.nn.functional.gelu
+    add_bias_linear: bool = False
+    layernorm_epsilon: float = 1e-5
+
+    model_type: str = "kimi_k3_patch_merger"

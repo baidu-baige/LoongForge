@@ -64,6 +64,7 @@
 
 ## 🔥 最新动态
 
+- **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** LLM 与 VLM 训练支持。
 - **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
@@ -181,6 +182,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 <li><a href="examples/mimo/">MIMO</a> ✅</li>
 <li><a href="examples/glm5/">GLM-5</a> ✅</li>
 <li><a href="examples/glm5.2/">GLM-5.2</a> ✅</li>
+<li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 </ul>
 </td>
 <td valign="top">
@@ -191,6 +193,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 <li><a href="examples/qwen3.6/">Qwen3.6</a> ✅</li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
 <li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
+<li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
 <li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>

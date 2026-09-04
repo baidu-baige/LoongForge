@@ -41,7 +41,7 @@ from typing import (
 
 from loongforge.utils.constants import DataRoles
 from .mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
-from .kimi_k25_plugin import KimiK25Plugin
+from .kimi_plugin import KimiPlugin
 from .minicpm_v_4_6_plugin import MiniCPMV46Plugin
 
 
@@ -835,7 +835,7 @@ _register_chat_template(
     name="kimi-k2.5-hf",
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("kimi_k2_5_training.jinja"),
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
@@ -848,7 +848,7 @@ _register_chat_template(
     name="kimi-k2.6-hf",
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("kimi_k2_5_training.jinja"),
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
@@ -861,11 +861,26 @@ _register_chat_template(
     name="kimi-k2.7-code-hf",
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("kimi_k2_7_code_training.jinja"),
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
         temporal_merge_kernel_size=4,
+    ),
+)
+
+# XTML generation blocks define the assistant loss mask.
+_register_chat_template(
+    name="kimi-k3-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("kimi_k3_hf_training.jinja"),
+    stop_words=["<|end_of_msg|>"],
+    mm_plugin=KimiPlugin(
+        image_token="<|media_content|>",
+        video_token="<|media_content|>",
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+        include_image_size=True,
     ),
 )
 
@@ -1209,7 +1224,7 @@ _register_chat_template(
     format_separator=EmptyFormatter(slots=[""]),
     stop_words=["<|im_end|>"],
     replace_eos=True,
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
@@ -1232,7 +1247,7 @@ _register_chat_template(
     format_separator=EmptyFormatter(slots=[""]),
     stop_words=["<|im_end|>"],
     replace_eos=True,
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
@@ -1240,7 +1255,7 @@ _register_chat_template(
     ),
 )
 
-# Kimi K2.6 uses the same chat format and media plugin as Kimi K2.5.
+# Kimi K2.6 uses the same chat format and shared Kimi multimodal plugin as K2.5.
 _register_chat_template(
     name="kimi-k2.6",
     format_user=StringFormatter(
@@ -1255,7 +1270,7 @@ _register_chat_template(
     format_separator=EmptyFormatter(slots=[""]),
     stop_words=["<|im_end|>"],
     replace_eos=True,
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
@@ -1277,7 +1292,7 @@ _register_chat_template(
     format_separator=EmptyFormatter(slots=[""]),
     stop_words=["<|im_end|>"],
     replace_eos=True,
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|media_content|>",
         video_token="<|media_content|>",
         merge_kernel_size=(2, 2),
@@ -1305,7 +1320,7 @@ _register_chat_template(
     cls=HFChatTemplate,
     chat_template=_read_builtin_chat_template("glm5_2_hf_training.jinja"),
     stop_words=["<|user|>", "<|observation|>"],
-    mm_plugin=KimiK25Plugin(
+    mm_plugin=KimiPlugin(
         image_token="<|image|>",
         video_token=None,
         merge_kernel_size=(2, 2),

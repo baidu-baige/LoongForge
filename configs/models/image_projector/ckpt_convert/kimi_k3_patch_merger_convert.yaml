@@ -1,0 +1,16 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - image_projector@module: ???
+  - _self_
+
+# K3 projector is bias-free and ends with RMSNorm.
+adapter.linear_fc1.weight: mm_projector.proj.0.weight
+adapter.linear_fc2.weight: mm_projector.proj.2.weight
+adapter.post_norm.weight: mm_projector.post_norm.weight
+
+name_map:
+  mcore:
+    layer_prefix: adapter. # don't remove the dot
