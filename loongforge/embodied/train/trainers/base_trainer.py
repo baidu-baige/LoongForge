@@ -346,7 +346,8 @@ class BaseTrainer(ABC):
             # ── Metrics ──
             step_time = time.perf_counter() - t0
             local_batch_size = training_args.gradient_accumulation_steps * training_args.per_device_batch_size
-            global_batch_size = local_batch_size * self.ctx.world_size
+            effective_world_size = self.ctx.world_size
+            global_batch_size = local_batch_size * effective_world_size
             consumed_samples = self.completed_steps * global_batch_size
             metrics = self.logger.collect_metrics(
                 log_dict, step_time,
@@ -369,7 +370,7 @@ class BaseTrainer(ABC):
             if self.completed_steps % log_interval == 0:
                 self.logger.log_metrics(
                     metrics, self.completed_steps, self.train_iters,
-                    training_args.per_device_batch_size, self.ctx.world_size, self.ctx.is_distributed,
+                    training_args.per_device_batch_size, effective_world_size, self.ctx.is_distributed,
                     gradient_accumulation_steps=training_args.gradient_accumulation_steps,
                 )
 
