@@ -384,11 +384,12 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 
 #### 4.2.2 FSDP Common Arguments
 
-The following arguments give fine-grained control over FSDP sharding, wrap policy, and dtypes, and take effect only under `--distributed-strategy fsdp`:
+The following arguments give fine-grained control over FSDP sharding, wrap policy, dtypes, and communication, and take effect only under `--distributed-strategy fsdp`:
 
 - **Sharding and reshard**: control whether to reshard immediately after forward, configurable separately for the root group
 - **Wrap policy**: manually specify or exclude FSDP unit classes, or auto-wrap by a parameter-count threshold
 - **dtype control**: pre-shard parameter dtype, post-all-gather dtype, and gradient reduce dtype can each be configured independently
+- **Communication**: optionally compress BF16 AllGather traffic with Delta-FP8
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
@@ -398,12 +399,19 @@ The following arguments give fine-grained control over FSDP sharding, wrap polic
 | Wrap classes | `--fsdp-wrap-modules` | `None` | Comma-separated module class names | Specify FSDP units |
 | Exclude wrap classes | `--fsdp-no-wrap-modules` | `None` | Comma-separated module class names | Exclude the given module classes |
 | Exclude params from sharding | `--fsdp-ignored-param-names` | `[]` | Space-separated name substrings | Frozen params matching any substring stay replicated on every rank |
+| Replicate frozen module classes | `--fsdp-ignore-frozen-module-classes` | `None` | Comma-separated module class names | Leave fully frozen matched modules outside FSDP sharding to avoid unused AllGathers; increases replicated parameter memory |
+| Replicated frozen parameter dtype | `--fsdp-ignored-frozen-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | Optional dtype for replicated frozen parameters; when set, it must match `--dtype` |
 | Auto wrap threshold | `--fsdp-min-num-params` | `1000000` | Non-negative integer | Parameter threshold for auto-wrapping repeated layers |
 | Leftover wrap threshold | `--fsdp-leftover-min-num-params` | `1000000` | Non-negative integer | Parameter threshold for auto-wrapping leftover modules |
 | Original parameter dtype | `--fsdp-original-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | Parameter dtype before FSDP sharding |
 | Unsharded parameter dtype | `--fsdp-unsharded-param-dtype` | `None` | `fp32`, `bf16`, `fp16` | Forward/backward dtype after all-gather |
 | Reduce dtype | `--fsdp-reduce-dtype` | `fp32` | `fp32`, `bf16`, `fp16` | Gradient reduce dtype |
 | Cast forward inputs | `--fsdp-cast-forward-inputs` | `True` | Bool flag | Whether to cast inputs to the parameter dtype |
+| Delta-FP8 AllGather | `--fsdp-delta-fp8-allgather` | `False` | Bool flag | Compress BF16 FSDP2 AllGather deltas into blockwise FP8; see the [usage guide](../features/delta_fp8_allgather.md) |
+
+When replicating frozen module classes, every matched parameter must have `requires_grad=False`. This mode is incompatible with `--init-on-meta`; if `--fsdp-ignored-frozen-param-dtype` is specified, it must match the training compute dtype selected by `--dtype`.
+
+Delta-FP8 changes only FSDP parameter communication precision; model computation remains in the dtype selected by the FSDP mixed-precision policy. See [Delta-FP8 AllGather](../features/delta_fp8_allgather.md) for prerequisites, usage, parameter reference, and troubleshooting.
 
 ### 4.3 Stability and Runtime Control
 

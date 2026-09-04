@@ -44,6 +44,7 @@ A modular, scalable, and highly efficient training framework for language, multi
    :caption: Embodied Training
 
    embodied_tutorial/overview
+   features/delta_fp8_allgather
    embodied_tutorial/quick_start_pi05
    embodied_tutorial/quick_start_groot_n1_6
    embodied_tutorial/quick_start_groot_n1_7
