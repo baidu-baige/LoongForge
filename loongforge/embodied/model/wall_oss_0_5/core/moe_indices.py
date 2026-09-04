@@ -33,7 +33,7 @@ def build_moe_group_indices(
     if any(count < 0 for count in group_counts):
         raise ValueError(f"MoE group counts must be non-negative, got {group_counts}")
 
-    padded_counts = group_counts + (0,) * (num_experts - len(group_counts))
+    padded_counts = list(group_counts) + [0] * (num_experts - len(group_counts))
     start_indices = []
     end_indices = []
     running_total = 0

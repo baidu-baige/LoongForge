@@ -220,6 +220,125 @@ def test_rmsnorm_exact_matches_pytorch(ext_exact, dtype):
     torch.testing.assert_close(cuda_out, ref, rtol=1e-3, atol=1e-3)
 
 
+def test_rmsnorm_exact_inv_is_bitwise_identical_to_aten(ext_exact):
+    """The fused inv kernel must reproduce ``rsqrt(var + eps)`` bit for bit."""
+    torch.manual_seed(11)
+    eps = 1e-6
+    var = torch.rand(4096, 1, device="cuda", dtype=torch.float32).mul_(50.0)
+    inv = torch.empty_like(var)
+    ext_exact.rmsnorm_exact_inv(var, inv, eps)
+    assert torch.equal(inv, torch.rsqrt(var + eps))
+
+
+@pytest.mark.parametrize("cols", [256, 1024, 2048])
+def test_rmsnorm_exact_gsq2_is_bitwise_identical_to_aten(ext_exact, cols):
+    """The fused g_sq2 kernel must reproduce the ATen pointwise chain bit for bit."""
+    torch.manual_seed(13)
+    rows = 3072
+    g_inv = torch.randn(rows, 1, device="cuda", dtype=torch.float32)
+    inv = torch.rand(rows, 1, device="cuda", dtype=torch.float32).add_(0.1)
+    g_sq2 = torch.empty_like(g_inv)
+    ext_exact.rmsnorm_exact_gsq2(g_inv, inv, g_sq2, cols)
+
+    g_var = (-0.5 * g_inv) * inv.pow(3)
+    ref = ((g_var / cols) * 2.0).contiguous()
+    assert torch.equal(g_sq2, ref)
+
+
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float32])
+def test_rmsnorm_exact_backward_matches_unfused_chain(ext_exact, dtype):
+    """Forward and backward must stay bit-identical after the launch fusion."""
+    from wall_oss_05_op._cuda_wrappers import rmsnorm_exact_kernel
+
+    torch.manual_seed(23)
+    eps = 1e-6
+    x = torch.randn(129, 1024, device="cuda", dtype=dtype).requires_grad_()
+    w = torch.randn(1024, device="cuda", dtype=dtype).requires_grad_()
+    out = rmsnorm_exact_kernel(x, w, eps)
+    grad = torch.randn_like(out)
+    dx, dw = torch.autograd.grad((out * grad).sum(), (x, w))
+
+    # Unfused reference: same kernels, ATen pointwise glue (pre-fusion ordering).
+    module = ext_exact
+    xd = x.detach()
+    sq = torch.empty(xd.shape, dtype=torch.float32, device=xd.device)
+    module.rmsnorm_exact_square(xd, sq)
+    inv = torch.rsqrt(sq.mean(-1, keepdim=True) + eps)
+    ref_out = torch.empty(xd.shape, dtype=dtype, device=xd.device)
+    module.rmsnorm_exact_fwd_out(xd, inv.reshape(-1), w.detach(), ref_out)
+    assert torch.equal(out, ref_out)
+
+    opts = dict(dtype=torch.float32, device=xd.device)
+    p_dw = torch.empty(xd.shape, **opts)
+    p_inv = torch.empty(xd.shape, **opts)
+    module.rmsnorm_exact_bwd_prod(grad, xd, inv.reshape(-1), w.detach(), p_dw, p_inv)
+    ref_dw = p_dw.sum(dim=tuple(range(xd.dim() - 1))).to(dtype)
+    g_inv = p_inv.sum(-1, keepdim=True)
+    n = xd.shape[-1]
+    g_sq2 = (((-0.5 * g_inv) * inv.pow(3) / n) * 2.0).reshape(-1).contiguous()
+    ref_dx = torch.empty(xd.shape, dtype=dtype, device=xd.device)
+    module.rmsnorm_exact_bwd_dx(grad, xd, inv.reshape(-1), g_sq2, w.detach(), ref_dx)
+
+    assert torch.equal(dx, ref_dx)
+    assert torch.equal(dw, ref_dw)
+
+
+def _upcast_reference(x_bf16, w_fp32, eps=1e-6):
+    """Model today's path: FSDP casts the input to fp32, the scatter casts back."""
+    from wall_oss_05_op._cuda_wrappers import rmsnorm_exact_kernel
+
+    x32 = x_bf16.to(torch.float32)
+    out32 = rmsnorm_exact_kernel(x32, w_fp32, eps)
+    return out32.to(torch.bfloat16)
+
+
+@pytest.mark.parametrize("padding", [0, 1024])
+def test_rmsnorm_exact_fp32_weight_matches_upcast_path(ext_exact, padding):
+    """bf16 activations with an fp32 weight must equal the fp32-upcast path.
+
+    ``padding`` > 0 exercises a strided activation view, which is what the norm
+    receives once FSDP stops materializing a contiguous fp32 copy.
+    """
+    from wall_oss_05_op._cuda_wrappers import rmsnorm_exact_kernel
+
+    torch.manual_seed(31)
+    rows, cols = 137, 1024
+    storage = torch.randn(rows, cols + padding, device="cuda", dtype=torch.bfloat16)
+    weight = torch.randn(cols, device="cuda", dtype=torch.float32)
+    grad = torch.randn(rows, cols, device="cuda", dtype=torch.bfloat16)
+
+    x_ref = storage.clone().requires_grad_()
+    w_ref = weight.clone().requires_grad_()
+    ref = _upcast_reference(x_ref[:, :cols], w_ref)
+    ref_dx, ref_dw = torch.autograd.grad((ref * grad).sum(), (x_ref, w_ref))
+
+    x_cand = storage.clone().requires_grad_()
+    w_cand = weight.clone().requires_grad_()
+    cand = rmsnorm_exact_kernel(x_cand[:, :cols], w_cand)
+    cand_dx, cand_dw = torch.autograd.grad((cand * grad).sum(), (x_cand, w_cand))
+
+    assert cand.dtype is torch.bfloat16
+    assert cand_dw.dtype is torch.float32
+    assert torch.equal(cand, ref)
+    assert torch.equal(cand_dx, ref_dx)
+    assert torch.equal(cand_dw, ref_dw)
+
+
+def test_rmsnorm_dispatcher_uses_cuda_for_fp32_weight_with_bf16_activation(ext_exact):
+    """The dispatcher must not silently fall back for the mixed dtype pair."""
+    from wall_oss_05_op.norm import rmsnorm as rmsnorm_op
+
+    torch.manual_seed(37)
+    x = torch.randn(64, 256, device="cuda", dtype=torch.bfloat16)
+    w = torch.randn(256, device="cuda", dtype=torch.float32)
+    assert rmsnorm_op._cuda_supported(x, w)
+
+    out = rmsnorm_op(x, w, 1e-6)
+    assert out.dtype is torch.bfloat16
+    assert torch.equal(out, _upcast_reference(x, w))
+    assert not rmsnorm_op._input_fallback_logged
+
+
 @pytest.mark.parametrize("dtype", [torch.bfloat16])
 def test_swiglu_exact_matches_pytorch(ext_exact, dtype):
     """Exact SwiGLU CUDA must match eager PyTorch forward."""
@@ -400,6 +519,50 @@ def test_public_api_m_rope():
     assert k_out.shape == k.shape
 
 
+def test_public_api_m_rope_pack_matches_split_path():
+    """Packed M-RoPE preserves split-path outputs and gradients."""
+    from wall_oss_05_op import m_rope
+
+    torch.manual_seed(3)
+    b, s, hq, hkv, d = 2, 5, 8, 2, 32
+    q_dim = hq * d
+    kv_dim = hkv * d
+    first, second = 8, 8
+    qkv_data = torch.randn(
+        (b, s, q_dim + 2 * kv_dim), device="cuda", dtype=torch.bfloat16
+    )
+    cos = torch.randn(
+        (3, b, s, d // 2), device="cuda", dtype=torch.float32
+    )
+    sin = torch.randn_like(cos)
+
+    qkv_ref = qkv_data.detach().clone().requires_grad_()
+    q_ref = qkv_ref[..., :q_dim].view(b, s, hq, d)
+    k_ref = qkv_ref[..., q_dim : q_dim + kv_dim].view(b, s, hkv, d)
+    q_out, k_out = m_rope(q_ref, k_ref, cos, sin, (first, second))
+    reference = torch.cat(
+        (
+            q_out.reshape(b, s, q_dim),
+            k_out.reshape(b, s, kv_dim),
+            qkv_ref[..., q_dim + kv_dim :],
+        ),
+        dim=-1,
+    )
+
+    qkv_candidate = qkv_data.detach().clone().requires_grad_()
+    candidate = m_rope.pack(
+        qkv_candidate, hq, hkv, cos, sin, (first, second)
+    )
+    torch.testing.assert_close(candidate, reference, rtol=0, atol=0)
+
+    upstream = torch.randn_like(reference)
+    (reference * upstream).sum().backward()
+    (candidate * upstream).sum().backward()
+    torch.testing.assert_close(
+        qkv_candidate.grad, qkv_ref.grad, rtol=0, atol=0
+    )
+
+
 def test_public_api_rmsnorm():
     """rmsnorm() via top-level import with matching float32 weight."""
     from wall_oss_05_op import rmsnorm
@@ -431,6 +594,47 @@ def test_public_api_permute_unpermute():
     assert restored.shape == tokens.shape
     # Single topk: restored should equal original
     torch.testing.assert_close(restored, tokens)
+
+
+def test_single_qkv_unpermute_matches_three_separate_unpermutes():
+    """One packed QKV unpermute preserves three-path outputs and gradients."""
+    from wall_oss_05_op import permute, unpermute
+
+    torch.manual_seed(4)
+    n, q_dim, kv_dim = 37, 64, 16
+    qkv_dim = q_dim + 2 * kv_dim
+    qkv_data = torch.randn(
+        (n, qkv_dim), device="cuda", dtype=torch.bfloat16
+    )
+    expert_indices = torch.randint(
+        0, 2, (n,), device="cuda", dtype=torch.int32
+    )
+    permuted, row_map = permute(qkv_data, expert_indices)
+    probs = torch.rand((n, 1), device="cuda", dtype=torch.float32)
+
+    packed_ref = permuted.detach().clone().requires_grad_()
+    q_ref, k_ref, v_ref = torch.split(
+        packed_ref, (q_dim, kv_dim, kv_dim), dim=-1
+    )
+    reference = torch.cat(
+        (
+            unpermute(q_ref, row_map, probs),
+            unpermute(k_ref, row_map, probs),
+            unpermute(v_ref, row_map, probs),
+        ),
+        dim=-1,
+    )
+
+    packed_candidate = permuted.detach().clone().requires_grad_()
+    candidate = unpermute(packed_candidate, row_map, probs)
+    torch.testing.assert_close(candidate, reference, rtol=0, atol=0)
+
+    upstream = torch.randn_like(reference)
+    (reference * upstream).sum().backward()
+    (candidate * upstream).sum().backward()
+    torch.testing.assert_close(
+        packed_candidate.grad, packed_ref.grad, rtol=0, atol=0
+    )
 
 
 def test_public_api_get_rope_index(ext):

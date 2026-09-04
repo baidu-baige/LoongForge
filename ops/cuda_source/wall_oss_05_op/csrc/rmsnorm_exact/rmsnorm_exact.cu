@@ -79,6 +79,18 @@ void check_elem(const at::Tensor &t, at::ScalarType dtype, const char *name) {
     TORCH_CHECK(t.is_cuda(), "rmsnorm_exact: ", name, " must be a CUDA tensor");
 }
 
+// The weight may stay fp32 while the activations are bf16. That happens when the
+// norm leaf keeps fp32 parameters but FSDP no longer casts the forward inputs:
+// bf16 -> fp32 widening is lossless, so the kernel can do it per element instead
+// of materializing an fp32 copy of the activation.
+at::ScalarType weight_dtype(const at::Tensor &w, at::ScalarType elem) {
+    TORCH_CHECK(w.is_cuda(), "rmsnorm_exact: weight must be a CUDA tensor");
+    TORCH_CHECK(w.scalar_type() == elem || w.scalar_type() == at::kFloat,
+                "rmsnorm_exact: weight must match the activation dtype or be float32, got ",
+                w.scalar_type(), " for ", elem, " activations");
+    return w.scalar_type();
+}
+
 at::ScalarType elem_dtype(const at::Tensor &t) {
     TORCH_CHECK(t.scalar_type() == at::kBFloat16 || t.scalar_type() == at::kFloat,
                 "rmsnorm_exact: only bfloat16 and float32 are supported, got ", t.scalar_type());
@@ -110,6 +122,27 @@ long grid_for(long total) { return (total + kThreads - 1) / kThreads; }
         }                                                                    \
     } while (0)
 
+// Dispatch over the element type and, independently, the weight type. Only three
+// combinations exist: (bf16, bf16), (bf16, fp32) and (fp32, fp32) -- an fp32
+// activation never pairs with a bf16 weight.
+#define WALLX_RMSNORM_DISPATCH_W(DTYPE, WDTYPE, ...)                          \
+    do {                                                                      \
+        if ((DTYPE) == at::kBFloat16) {                                       \
+            using scalar_t = __nv_bfloat16;                                   \
+            if ((WDTYPE) == at::kBFloat16) {                                  \
+                using weight_t = __nv_bfloat16;                               \
+                __VA_ARGS__;                                                  \
+            } else {                                                          \
+                using weight_t = float;                                       \
+                __VA_ARGS__;                                                  \
+            }                                                                 \
+        } else {                                                              \
+            using scalar_t = float;                                           \
+            using weight_t = float;                                           \
+            __VA_ARGS__;                                                      \
+        }                                                                     \
+    } while (0)
+
 // sq = x32 * x32; consumed by at::mean afterwards. Matches eager's
 // `x.to(fp32).pow(2)` (ATen lowers pow(t, 2) to t*t).
 template <typename T>
@@ -123,18 +156,42 @@ __global__ void rmsnorm_exact_square_kernel(const T *__restrict__ x, long x_rs,
     sq[r * s_rs + c] = __fmul_rn(xf, xf);
 }
 
+// inv = rsqrt(var + eps), replacing the ATen `add` + `rsqrt` pair with one launch.
+// ``rsqrtf`` is the same device function ATen's rsqrt_kernel_cuda calls, and this
+// module is built without --use_fast_math, so the result is bit-identical.
+__global__ void rmsnorm_exact_inv_kernel(const float *__restrict__ var,
+                                         float *__restrict__ inv, float eps, long n) {
+    long idx = blockIdx.x * (long)blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+    inv[idx] = rsqrtf(__fadd_rn(var[idx], eps));
+}
+
+// g_sq2 = ((-0.5 * g_inv) * inv^3 / N) * 2, collapsing five ATen pointwise launches.
+// Mirrors ATen op-for-op: pow(t, 3) lowers to t*t*t, and division by a CPU scalar
+// lowers to a multiply by the fp32 reciprocal, which is why recip_n is passed in.
+__global__ void rmsnorm_exact_gsq2_kernel(const float *__restrict__ g_inv,
+                                          const float *__restrict__ inv, float recip_n,
+                                          float *__restrict__ g_sq2, long n) {
+    long idx = blockIdx.x * (long)blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+    float i = inv[idx];
+    float cube = __fmul_rn(__fmul_rn(i, i), i);
+    float g_var = __fmul_rn(__fmul_rn(-0.5f, g_inv[idx]), cube);
+    g_sq2[idx] = __fmul_rn(__fmul_rn(g_var, recip_n), 2.0f);
+}
+
 // out = (w * (x32 * inv)).to(input_dtype)
-template <typename T>
+template <typename T, typename W>
 __global__ void rmsnorm_exact_fwd_out_kernel(const T *__restrict__ x, long x_rs,
                                              const float *__restrict__ inv,
-                                             const T *__restrict__ w,
+                                             const W *__restrict__ w,
                                              T *__restrict__ out, long o_rs,
                                              long rows, long cols) {
     long idx = blockIdx.x * (long)blockDim.x + threadIdx.x;
     if (idx >= rows * cols) return;
     long r = idx / cols, c = idx - r * cols;
     float xf = Cvt<T>::load(x[r * x_rs + c]);
-    float wf = Cvt<T>::load(w[c]);
+    float wf = Cvt<W>::load(w[c]);
     float normed = __fmul_rn(xf, inv[r]);
     out[r * o_rs + c] = Cvt<T>::store(__fmul_rn(wf, normed));
 }
@@ -142,11 +199,11 @@ __global__ void rmsnorm_exact_fwd_out_kernel(const T *__restrict__ x, long x_rs,
 // The two fp32 products consumed by the ATen reductions:
 //   p_dw  = g32 * normed       -> sum over leading dims = dw
 //   p_inv = (g32 * w32) * x32  -> sum over last dim     = grad wrt inv
-template <typename T>
+template <typename T, typename W>
 __global__ void rmsnorm_exact_bwd_prod_kernel(const T *__restrict__ go, long g_rs,
                                               const T *__restrict__ x, long x_rs,
                                               const float *__restrict__ inv,
-                                              const T *__restrict__ w,
+                                              const W *__restrict__ w,
                                               float *__restrict__ p_dw, long pd_rs,
                                               float *__restrict__ p_inv, long pi_rs,
                                               long rows, long cols) {
@@ -155,19 +212,19 @@ __global__ void rmsnorm_exact_bwd_prod_kernel(const T *__restrict__ go, long g_r
     long r = idx / cols, c = idx - r * cols;
     float gf = Cvt<T>::load(go[r * g_rs + c]);
     float xf = Cvt<T>::load(x[r * x_rs + c]);
-    float wf = Cvt<T>::load(w[c]);
+    float wf = Cvt<W>::load(w[c]);
     float invf = inv[r];
     p_dw[r * pd_rs + c] = __fmul_rn(gf, __fmul_rn(xf, invf));
     p_inv[r * pi_rs + c] = __fmul_rn(__fmul_rn(gf, wf), xf);
 }
 
 // dx = ((g32*w32) * inv + g_sq2 * x32).to(input_dtype), g_sq2 = 2*g_var/N from ATen.
-template <typename T>
+template <typename T, typename W>
 __global__ void rmsnorm_exact_bwd_dx_kernel(const T *__restrict__ go, long g_rs,
                                             const T *__restrict__ x, long x_rs,
                                             const float *__restrict__ inv,
                                             const float *__restrict__ g_sq2,
-                                            const T *__restrict__ w,
+                                            const W *__restrict__ w,
                                             T *__restrict__ dx, long d_rs,
                                             long rows, long cols) {
     long idx = blockIdx.x * (long)blockDim.x + threadIdx.x;
@@ -175,7 +232,7 @@ __global__ void rmsnorm_exact_bwd_dx_kernel(const T *__restrict__ go, long g_rs,
     long r = idx / cols, c = idx - r * cols;
     float gf = Cvt<T>::load(go[r * g_rs + c]);
     float xf = Cvt<T>::load(x[r * x_rs + c]);
-    float wf = Cvt<T>::load(w[c]);
+    float wf = Cvt<W>::load(w[c]);
     float dx_a = __fmul_rn(__fmul_rn(gf, wf), inv[r]);
     float dx_b = __fmul_rn(g_sq2[r], xf);
     dx[r * d_rs + c] = Cvt<T>::store(__fadd_rn(dx_a, dx_b));
@@ -198,7 +255,7 @@ void RmsNormExactSquare(const at::Tensor &x, const at::Tensor &sq) {
 void RmsNormExactFwdOut(const at::Tensor &x, const at::Tensor &inv, const at::Tensor &weight,
                         const at::Tensor &out) {
     at::ScalarType dt = elem_dtype(x);
-    check_elem(weight, dt, "weight");
+    at::ScalarType wt = weight_dtype(weight, dt);
     check_elem(out, dt, "out");
     Shape2D sx = collapse(x), so = collapse(out);
     check_rowvec(inv, sx.rows, "inv");
@@ -206,12 +263,46 @@ void RmsNormExactFwdOut(const at::Tensor &x, const at::Tensor &inv, const at::Te
                 "rmsnorm_exact: weight must be contiguous with cols entries");
     long total = sx.rows * sx.cols;
     if (total == 0) return;
-    WALLX_RMSNORM_DISPATCH(dt,
-        rmsnorm_exact_fwd_out_kernel<scalar_t>
+    WALLX_RMSNORM_DISPATCH_W(dt, wt,
+        rmsnorm_exact_fwd_out_kernel<scalar_t, weight_t>
             <<<grid_for(total), kThreads, 0, at::cuda::getCurrentCUDAStream()>>>(
                 reinterpret_cast<const scalar_t *>(x.data_ptr()), sx.row_stride,
-                inv.data_ptr<float>(), reinterpret_cast<const scalar_t *>(weight.data_ptr()),
+                inv.data_ptr<float>(), reinterpret_cast<const weight_t *>(weight.data_ptr()),
                 reinterpret_cast<scalar_t *>(out.data_ptr()), so.row_stride, sx.rows, sx.cols));
+    sync_check_cuda_error();
+}
+
+void RmsNormExactInv(const at::Tensor &var, const at::Tensor &inv, double eps) {
+    TORCH_CHECK(var.scalar_type() == at::kFloat && inv.scalar_type() == at::kFloat,
+                "rmsnorm_exact: var/inv must be float32");
+    TORCH_CHECK(var.is_cuda() && inv.is_cuda(), "rmsnorm_exact: var/inv must be CUDA tensors");
+    TORCH_CHECK(var.is_contiguous() && inv.is_contiguous(),
+                "rmsnorm_exact: var/inv must be contiguous");
+    TORCH_CHECK(var.numel() == inv.numel(), "rmsnorm_exact: var/inv size mismatch");
+    long total = var.numel();
+    if (total == 0) return;
+    rmsnorm_exact_inv_kernel<<<grid_for(total), kThreads, 0, at::cuda::getCurrentCUDAStream()>>>(
+        var.data_ptr<float>(), inv.data_ptr<float>(), static_cast<float>(eps), total);
+    sync_check_cuda_error();
+}
+
+void RmsNormExactGsq2(const at::Tensor &g_inv, const at::Tensor &inv, const at::Tensor &g_sq2,
+                      long cols) {
+    TORCH_CHECK(g_inv.scalar_type() == at::kFloat && inv.scalar_type() == at::kFloat &&
+                    g_sq2.scalar_type() == at::kFloat,
+                "rmsnorm_exact: g_inv/inv/g_sq2 must be float32");
+    TORCH_CHECK(g_inv.is_cuda() && inv.is_cuda() && g_sq2.is_cuda(),
+                "rmsnorm_exact: g_inv/inv/g_sq2 must be CUDA tensors");
+    TORCH_CHECK(g_inv.is_contiguous() && inv.is_contiguous() && g_sq2.is_contiguous(),
+                "rmsnorm_exact: g_inv/inv/g_sq2 must be contiguous");
+    TORCH_CHECK(g_inv.numel() == inv.numel() && g_inv.numel() == g_sq2.numel(),
+                "rmsnorm_exact: g_inv/inv/g_sq2 size mismatch");
+    TORCH_CHECK(cols > 0, "rmsnorm_exact: cols must be positive");
+    long total = g_inv.numel();
+    if (total == 0) return;
+    float recip_n = 1.0f / static_cast<float>(cols);
+    rmsnorm_exact_gsq2_kernel<<<grid_for(total), kThreads, 0, at::cuda::getCurrentCUDAStream()>>>(
+        g_inv.data_ptr<float>(), inv.data_ptr<float>(), recip_n, g_sq2.data_ptr<float>(), total);
     sync_check_cuda_error();
 }
 
@@ -219,19 +310,19 @@ void RmsNormExactBwdProd(const at::Tensor &grad_out, const at::Tensor &x, const 
                          const at::Tensor &weight, const at::Tensor &p_dw,
                          const at::Tensor &p_inv) {
     at::ScalarType dt = elem_dtype(x);
+    at::ScalarType wt = weight_dtype(weight, dt);
     check_elem(grad_out, dt, "grad_out");
-    check_elem(weight, dt, "weight");
     Shape2D sgo = collapse(grad_out), sx = collapse(x);
     Shape2D spd = collapse(p_dw), spi = collapse(p_inv);
     check_rowvec(inv, sx.rows, "inv");
     long total = sx.rows * sx.cols;
     if (total == 0) return;
-    WALLX_RMSNORM_DISPATCH(dt,
-        rmsnorm_exact_bwd_prod_kernel<scalar_t>
+    WALLX_RMSNORM_DISPATCH_W(dt, wt,
+        rmsnorm_exact_bwd_prod_kernel<scalar_t, weight_t>
             <<<grid_for(total), kThreads, 0, at::cuda::getCurrentCUDAStream()>>>(
                 reinterpret_cast<const scalar_t *>(grad_out.data_ptr()), sgo.row_stride,
                 reinterpret_cast<const scalar_t *>(x.data_ptr()), sx.row_stride,
-                inv.data_ptr<float>(), reinterpret_cast<const scalar_t *>(weight.data_ptr()),
+                inv.data_ptr<float>(), reinterpret_cast<const weight_t *>(weight.data_ptr()),
                 p_dw.data_ptr<float>(), spd.row_stride, p_inv.data_ptr<float>(), spi.row_stride,
                 sx.rows, sx.cols));
     sync_check_cuda_error();
@@ -240,21 +331,21 @@ void RmsNormExactBwdProd(const at::Tensor &grad_out, const at::Tensor &x, const 
 void RmsNormExactBwdDx(const at::Tensor &grad_out, const at::Tensor &x, const at::Tensor &inv,
                        const at::Tensor &g_sq2, const at::Tensor &weight, const at::Tensor &dx) {
     at::ScalarType dt = elem_dtype(x);
+    at::ScalarType wt = weight_dtype(weight, dt);
     check_elem(grad_out, dt, "grad_out");
-    check_elem(weight, dt, "weight");
     check_elem(dx, dt, "dx");
     Shape2D sgo = collapse(grad_out), sx = collapse(x), sd = collapse(dx);
     check_rowvec(inv, sx.rows, "inv");
     check_rowvec(g_sq2, sx.rows, "g_sq2");
     long total = sx.rows * sx.cols;
     if (total == 0) return;
-    WALLX_RMSNORM_DISPATCH(dt,
-        rmsnorm_exact_bwd_dx_kernel<scalar_t>
+    WALLX_RMSNORM_DISPATCH_W(dt, wt,
+        rmsnorm_exact_bwd_dx_kernel<scalar_t, weight_t>
             <<<grid_for(total), kThreads, 0, at::cuda::getCurrentCUDAStream()>>>(
                 reinterpret_cast<const scalar_t *>(grad_out.data_ptr()), sgo.row_stride,
                 reinterpret_cast<const scalar_t *>(x.data_ptr()), sx.row_stride,
                 inv.data_ptr<float>(), g_sq2.data_ptr<float>(),
-                reinterpret_cast<const scalar_t *>(weight.data_ptr()),
+                reinterpret_cast<const weight_t *>(weight.data_ptr()),
                 reinterpret_cast<scalar_t *>(dx.data_ptr()), sd.row_stride, sx.rows, sx.cols));
     sync_check_cuda_error();
 }

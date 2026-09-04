@@ -25,6 +25,16 @@ model:
   action_horizon: 10
   action_horizon_flow: 10
   use_state_string_representation: false
+  # FSDP2 forward-prefetch depth for Wall-OSS norm leaves. Wall-OSS-specific:
+  # its norms are sharded separately from the decoder layers, so their
+  # AllGathers are not covered by the layer prefetch and need their own
+  # distance. The value is how many following norm leaves each norm unshards
+  # ahead of time.
+  #   0 = off; norms fall back to demand unshard and the AllGather sits on the
+  #       compute critical path
+  #   4 = current default, picked from a repeated sweep over
+  #       0/1/2/3/4/5/6/8/12/16/24 where 4 was the most stable
+  norm_forward_prefetch_distance: 4
 
 data:
   episodes: null

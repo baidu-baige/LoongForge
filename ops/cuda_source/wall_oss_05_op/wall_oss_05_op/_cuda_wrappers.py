@@ -789,6 +789,8 @@ def unpermute_kernel(input_act, row_id_map, probs=None):
 SWIGLU_EXACT_SYMBOLS = ("swiglu_exact_fwd", "swiglu_exact_bwd")
 RMSNORM_EXACT_SYMBOLS = (
     "rmsnorm_exact_square",
+    "rmsnorm_exact_inv",
+    "rmsnorm_exact_gsq2",
     "rmsnorm_exact_fwd_out",
     "rmsnorm_exact_bwd_prod",
     "rmsnorm_exact_bwd_dx",
@@ -856,8 +858,10 @@ class _RmsNormExactFunction(Function):
         sq = torch.empty(hidden_states.shape, dtype=torch.float32, device=hidden_states.device)
         module = _m_exact()
         module.rmsnorm_exact_square(hidden_states, sq)
-        inv = torch.rsqrt(sq.mean(-1, keepdim=True) + eps)
+        var = sq.mean(-1, keepdim=True)
         del sq
+        inv = torch.empty_like(var)
+        module.rmsnorm_exact_inv(var, inv, eps)
         out = torch.empty(
             hidden_states.shape, dtype=hidden_states.dtype, device=hidden_states.device
         )
@@ -883,8 +887,9 @@ class _RmsNormExactFunction(Function):
         del p_dw, p_inv
 
         n = hidden_states.shape[-1]
-        g_var = (-0.5 * g_inv) * inv.pow(3)
-        g_sq2 = ((g_var / n) * 2.0).reshape(-1).contiguous()
+        g_sq2 = torch.empty_like(g_inv)
+        module.rmsnorm_exact_gsq2(g_inv, inv, g_sq2, n)
+        g_sq2 = g_sq2.reshape(-1)
         dx = torch.empty(
             hidden_states.shape, dtype=hidden_states.dtype, device=hidden_states.device
         )

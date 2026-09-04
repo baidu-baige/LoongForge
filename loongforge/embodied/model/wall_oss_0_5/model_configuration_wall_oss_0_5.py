@@ -59,6 +59,7 @@ class WallOss05ModelConfig:
     action_horizon: int = 10
     action_horizon_flow: int = 10
     use_state_string_representation: bool = False
+    norm_forward_prefetch_distance: int = 0
 
     @property
     def action_dim(self) -> int:

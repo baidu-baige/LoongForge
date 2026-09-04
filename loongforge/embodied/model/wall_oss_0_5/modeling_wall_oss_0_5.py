@@ -26,7 +26,8 @@ from loongforge.embodied.model.wall_oss_0_5.qwen2_5 import (
     Qwen25VLConfig,
     Qwen25VLMoEForAction,
 )
-from loongforge.embodied.train.global_vars import get_training_args
+
+from loongforge.embodied.train.global_vars import get_model_config, get_training_args
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +262,11 @@ class WallOss05Model(nn.Module):
             offload_policy=offload_policy,
             reshard_after_forward=reshard_after_forward,
             use_dmuon=use_dmuon,
+            norm_forward_prefetch_distance=getattr(
+                get_model_config(),
+                "norm_forward_prefetch_distance",
+                0,
+            ),
         )
         if use_dmuon and hasattr(wrapped, "_dedicated_comm_ctx"):
             self._dedicated_comm_ctx = wrapped._dedicated_comm_ctx

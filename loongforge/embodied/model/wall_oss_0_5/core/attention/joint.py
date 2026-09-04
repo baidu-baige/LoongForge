@@ -133,7 +133,7 @@ class JointQwen2VLAttention(nn.Module):
 
         if self.config.mot_opt:
             bsz, q_len, _ = orig_shape
-            query_states, key_states, value_states = self._generate_qkv_mot_opt(
+            qkv_states = self._generate_qkv_mot_opt(
                 hidden_states,
                 token_types,
                 start_indices,
@@ -155,9 +155,33 @@ class JointQwen2VLAttention(nn.Module):
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
         cos, sin = position_embeddings
-        query_states, key_states = self._apply_rotary_pos_embed(
-            query_states, key_states, cos, sin, unsqueeze_dim=2
-        )
+        if self.config.mot_opt:
+            kv_dim = self.num_key_value_heads * self.head_dim
+            q_dim = self.num_heads * self.head_dim
+            qkv_states = m_rope.pack(
+                qkv_states,
+                self.num_heads,
+                self.num_key_value_heads,
+                cos,
+                sin,
+                self.rope_scaling["mrope_section"],
+            )
+            query_states, key_states, value_states = torch.split(
+                qkv_states, [q_dim, kv_dim, kv_dim], dim=-1
+            )
+            query_states = query_states.view(
+                bsz, q_len, self.num_heads, self.head_dim
+            )
+            key_states = key_states.view(
+                bsz, q_len, self.num_key_value_heads, self.head_dim
+            )
+            value_states = value_states.view(
+                bsz, q_len, self.num_key_value_heads, self.head_dim
+            )
+        else:
+            query_states, key_states = self._apply_rotary_pos_embed(
+                query_states, key_states, cos, sin, unsqueeze_dim=2
+            )
         query_states = query_states.transpose(1, 2)
         key_states = key_states.transpose(1, 2)
         value_states = value_states.transpose(1, 2)
@@ -361,7 +385,7 @@ class JointQwen2VLAttention(nn.Module):
         row_id_map: torch.Tensor,
         batch_size: int,
         seq_length: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         """
         Generate Q, K, V based on expert-sharded segments (start_indices / end_indices),
         then restore them to the original sequence order.
@@ -375,25 +399,26 @@ class JointQwen2VLAttention(nn.Module):
             batch_size, seq_length: original batch size and sequence length
 
         Returns:
-            query_states: [B, num_heads, S, head_dim]
-            key_states:   [B, num_key_value_heads, S, head_dim]
-            value_states: [B, num_key_value_heads, S, head_dim]
+            qkv_states: [B, S, q_dim + 2 * kv_dim]
         """
 
-        total_tokens, hidden_dim = hidden_states.shape
+        total_tokens, _ = hidden_states.shape
         device, dtype = hidden_states.device, hidden_states.dtype
 
-        # Initialize Q/K/V buffers in the permuted token space
-        q_buffer = torch.zeros(total_tokens, hidden_dim, device=device, dtype=dtype)
-        k_buffer = torch.zeros(
-            total_tokens,
-            self.num_key_value_heads * self.head_dim,
-            device=device,
-            dtype=dtype,
+        q_dim = self.num_heads * self.head_dim
+        kv_dim = self.num_key_value_heads * self.head_dim
+        # ``torch.empty`` leaves rows uninitialized, so it is only safe when the
+        # expert segments cover every row below. ``build_moe_group_indices``
+        # guarantees that, but the compatibility fallback that counts token types
+        # in ``range(num_experts)`` silently drops out-of-range types, which would
+        # otherwise feed uninitialized memory into m_rope/attention.
+        experts_cover_all_rows = (
+            len(end_indices) > 0 and int(end_indices[-1]) == total_tokens
         )
-        v_buffer = torch.zeros(
+        alloc = torch.empty if experts_cover_all_rows else torch.zeros
+        qkv_buffer = alloc(
             total_tokens,
-            self.num_key_value_heads * self.head_dim,
+            q_dim + 2 * kv_dim,
             device=device,
             dtype=dtype,
         )
@@ -409,35 +434,13 @@ class JointQwen2VLAttention(nn.Module):
             if expert_input.dtype != qkv_proj.weight.dtype:
                 expert_input = expert_input.to(qkv_proj.weight.dtype)
 
-            # Compute Q/K/V
-            qkv_out = qkv_proj(expert_input)
-            kv_dim = self.num_key_value_heads * self.head_dim
-            q_out, k_out, v_out = torch.split(
-                qkv_out, [self.num_heads * self.head_dim, kv_dim, kv_dim], dim=-1
-            )
-
-            q_buffer[start:end] = q_out
-            k_buffer[start:end] = k_out
-            v_buffer[start:end] = v_out
+            qkv_buffer[start:end] = qkv_proj(expert_input)
 
         # === Restore tokens to the original order ===
-        #  unpermute (using the same unpermute operation)
-        q_unpermuted = unpermute(q_buffer, row_id_map, probs)
-        k_unpermuted = unpermute(k_buffer, row_id_map, probs)
-        v_unpermuted = unpermute(v_buffer, row_id_map, probs)
-
-        # === Reshape to final form ===
-        query_states = q_unpermuted.view(
-            batch_size, seq_length, self.num_heads, self.head_dim
+        qkv_unpermuted = unpermute(qkv_buffer, row_id_map, probs)
+        return qkv_unpermuted.view(
+            batch_size, seq_length, q_dim + 2 * kv_dim
         )
-        key_states = k_unpermuted.view(
-            batch_size, seq_length, self.num_key_value_heads, self.head_dim
-        )
-        value_states = v_unpermuted.view(
-            batch_size, seq_length, self.num_key_value_heads, self.head_dim
-        )
-
-        return query_states, key_states, value_states
 
     def _apply_rotary_pos_embed(
         self, query_states, key_states, cos, sin, unsqueeze_dim=1
@@ -585,7 +588,7 @@ class JointQwen2VLFlashAttention(JointQwen2VLAttention):
 
         if self.config.mot_opt:
             bsz, q_len, _ = orig_shape
-            query_states, key_states, value_states = self._generate_qkv_mot_opt(
+            qkv_states = self._generate_qkv_mot_opt(
                 hidden_states,
                 token_types,
                 start_indices,
@@ -607,9 +610,33 @@ class JointQwen2VLFlashAttention(JointQwen2VLAttention):
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
         cos, sin = position_embeddings
-        query_states, key_states = self._apply_rotary_pos_embed(
-            query_states, key_states, cos, sin, unsqueeze_dim=2
-        )
+        if self.config.mot_opt:
+            kv_dim = self.num_key_value_heads * self.head_dim
+            q_dim = self.num_heads * self.head_dim
+            qkv_states = m_rope.pack(
+                qkv_states,
+                self.num_heads,
+                self.num_key_value_heads,
+                cos,
+                sin,
+                self.rope_scaling["mrope_section"],
+            )
+            query_states, key_states, value_states = torch.split(
+                qkv_states, [q_dim, kv_dim, kv_dim], dim=-1
+            )
+            query_states = query_states.view(
+                bsz, q_len, self.num_heads, self.head_dim
+            )
+            key_states = key_states.view(
+                bsz, q_len, self.num_key_value_heads, self.head_dim
+            )
+            value_states = value_states.view(
+                bsz, q_len, self.num_key_value_heads, self.head_dim
+            )
+        else:
+            query_states, key_states = self._apply_rotary_pos_embed(
+                query_states, key_states, cos, sin, unsqueeze_dim=2
+            )
 
         if past_key_value is not None:
             cache_kwargs = {
