@@ -25,6 +25,8 @@ void SwigluExactBwd(const at::Tensor& grad_out, const at::Tensor& gate, const at
 
 namespace wallx_cuda_rmsnorm_exact {
 void RmsNormExactSquare(const at::Tensor& x, const at::Tensor& sq);
+void RmsNormExactInv(const at::Tensor& var, const at::Tensor& inv, double eps);
+void RmsNormExactGsq2(const at::Tensor& g_inv, const at::Tensor& inv, const at::Tensor& g_sq2, long cols);
 void RmsNormExactFwdOut(const at::Tensor& x, const at::Tensor& inv, const at::Tensor& weight, const at::Tensor& out);
 void RmsNormExactBwdProd(const at::Tensor& grad_out, const at::Tensor& x, const at::Tensor& inv, const at::Tensor& weight, const at::Tensor& p_dw, const at::Tensor& p_inv);
 void RmsNormExactBwdDx(const at::Tensor& grad_out, const at::Tensor& x, const at::Tensor& inv, const at::Tensor& g_sq2, const at::Tensor& weight, const at::Tensor& dx);
@@ -34,6 +36,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("swiglu_exact_fwd", &wallx_cuda_swiglu_exact::SwigluExactFwd);
     m.def("swiglu_exact_bwd", &wallx_cuda_swiglu_exact::SwigluExactBwd);
     m.def("rmsnorm_exact_square", &wallx_cuda_rmsnorm_exact::RmsNormExactSquare);
+    m.def("rmsnorm_exact_inv", &wallx_cuda_rmsnorm_exact::RmsNormExactInv);
+    m.def("rmsnorm_exact_gsq2", &wallx_cuda_rmsnorm_exact::RmsNormExactGsq2);
     m.def("rmsnorm_exact_fwd_out", &wallx_cuda_rmsnorm_exact::RmsNormExactFwdOut);
     m.def("rmsnorm_exact_bwd_prod", &wallx_cuda_rmsnorm_exact::RmsNormExactBwdProd);
     m.def("rmsnorm_exact_bwd_dx", &wallx_cuda_rmsnorm_exact::RmsNormExactBwdDx);

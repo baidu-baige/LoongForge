@@ -35,6 +35,20 @@ class RMSNormOp(OpsProxy):
         super().__init__(name)
         self._input_fallback_logged = False
 
+    @staticmethod
+    def _weight_dtype_supported(hidden_states, weight):
+        """Return whether this activation/weight dtype pair has a kernel.
+
+        An fp32 weight with bf16 activations is allowed: the kernel widens the
+        activation per element, which is lossless, so an fp32 norm leaf does not
+        need FSDP to materialize an fp32 copy of its input.
+        """
+        if weight.dtype is hidden_states.dtype:
+            return True
+        return (
+            hidden_states.dtype is torch.bfloat16 and weight.dtype is torch.float32
+        )
+
     def _cuda_supported(self, hidden_states, weight):
         """Return whether the inputs satisfy the RMSNorm CUDA constraints."""
         return (
@@ -42,7 +56,7 @@ class RMSNormOp(OpsProxy):
             and type(weight) in (torch.Tensor, torch.nn.Parameter)
             and hidden_states.is_cuda
             and hidden_states.dtype in (torch.bfloat16, torch.float32)
-            and weight.dtype is hidden_states.dtype
+            and self._weight_dtype_supported(hidden_states, weight)
             and hidden_states.stride(-1) == 1
             and weight.is_contiguous()
         )

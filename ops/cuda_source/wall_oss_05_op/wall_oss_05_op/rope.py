@@ -1,8 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modified from Wall-X (https://github.com/X-Square-Robot/wall-x)
-# under the Apache-2.0 License.
+# Modified from Wall-X under the Apache-2.0 License.
 
 """Rotary position embedding operators."""
 
@@ -156,13 +155,56 @@ class MRoPEOp(OpsProxy):
         )
         return q_embed.to(query_states.dtype), k_embed.to(key_states.dtype)
 
+    def _pytorch_fallback_pack(
+        self,
+        qkv,
+        q_num_heads,
+        kv_num_heads,
+        cos,
+        sin,
+        mrope_section: List[int],
+        inference=False,
+    ):
+        """Packed-QKV M-RoPE with PyTorch, mirroring ``MRope.pack``.
+
+        ``qkv`` is [bz, seq_len, q_dim + 2 * kv_dim] with Q, K and V concatenated
+        on the last dim; only Q and K are rotated and V passes through. Unlike the
+        CUDA kernel, which rotates in place, this returns a new tensor — every
+        caller consumes the return value, so the packed layout is preserved and
+        ``torch.split`` downstream keeps working.
+        """
+        del inference
+        head_dim = qkv.shape[-1] // (q_num_heads + 2 * kv_num_heads)
+        q_dim = q_num_heads * head_dim
+        kv_dim = kv_num_heads * head_dim
+        bz, seq_len = qkv.shape[0], qkv.shape[1]
+
+        query_states, key_states, value_states = qkv.split(
+            [q_dim, kv_dim, kv_dim], dim=-1
+        )
+        q_embed, k_embed = self._pytorch_fallback(
+            query_states.reshape(bz, seq_len, q_num_heads, head_dim),
+            key_states.reshape(bz, seq_len, kv_num_heads, head_dim),
+            cos,
+            sin,
+            mrope_section,
+        )
+        return torch.cat(
+            [
+                q_embed.reshape(bz, seq_len, q_dim),
+                k_embed.reshape(bz, seq_len, kv_dim),
+                value_states,
+            ],
+            dim=-1,
+        )
+
     def pack(self, *args, **kwargs):
-        """Delegate to resolved backend's pack method if available."""
+        """Delegate to resolved backend's pack, else use the PyTorch packed fallback."""
         if self._resolved_fn is None:
             self._resolve()
         if hasattr(self._resolved_fn, "pack"):
             return self._resolved_fn.pack(*args, **kwargs)
-        return args
+        return self._pytorch_fallback_pack(*args, **kwargs)
 
 
 class RotPosEmbOp(OpsProxy):

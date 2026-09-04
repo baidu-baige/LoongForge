@@ -81,7 +81,20 @@ class ActionModelMixMin:
             # Case 1A: mot_opt=True (segments assigned by start/end)
             # ---------------------------------------------------------
             if self.config.mot_opt:
-                new_hidden_states = torch.zeros_like(hidden_states)
+                # ``build_moe_group_indices`` hands out contiguous segments that
+                # start at 0, so when they reach the last row every row is owned
+                # by some expert and the scatter below overwrites it. Only the
+                # column tail an expert leaves untouched still needs zeroing,
+                # which is far less traffic than filling the whole tensor.
+                full_dim = hidden_states.shape[-1]
+                experts_cover_all_rows = (
+                    len(end_indices) > 0
+                    and int(end_indices[-1]) == hidden_states.shape[0]
+                )
+                if experts_cover_all_rows:
+                    new_hidden_states = torch.empty_like(hidden_states)
+                else:
+                    new_hidden_states = torch.zeros_like(hidden_states)
 
                 for expert_idx, expert_norm in enumerate(norms):
                     start = start_indices[expert_idx]
@@ -132,12 +145,23 @@ class ActionModelMixMin:
                         processed, gate = expert_norm(input_slice, cond)
 
                     # reshape back if needed
-                    if self.config.use_adarms and expert_idx == 1:
+                    if (
+                        processed is not None
+                        and self.config.use_adarms
+                        and expert_idx == 1
+                    ):
                         processed = processed.view(-1, dim_input)
 
-                    new_hidden_states[start:end, :dim_input] = processed.to(
-                        hidden_states.dtype
-                    )
+                    if processed is not None:
+                        new_hidden_states[start:end, :dim_input] = processed.to(
+                            hidden_states.dtype
+                        )
+                        if experts_cover_all_rows and dim_input < full_dim:
+                            new_hidden_states[start:end, dim_input:].zero_()
+                    elif experts_cover_all_rows:
+                        # Nothing was scattered for this expert, so its rows
+                        # still hold uninitialized memory.
+                        new_hidden_states[start:end].zero_()
 
                 hidden_states = new_hidden_states
 

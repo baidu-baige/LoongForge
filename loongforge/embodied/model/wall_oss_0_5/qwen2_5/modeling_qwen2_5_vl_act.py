@@ -470,6 +470,13 @@ class Qwen25VLMoEModel(Qwen25VLPreTrainedModel, ActionModelMixMin):
 
         # create position embeddings to be shared across the decoder layers
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
+        if self.config.mot_opt:
+            cos, sin = position_embeddings
+            mrope_half_dim = cos.size(-1) // 2
+            position_embeddings = (
+                cos[..., :mrope_half_dim].float().contiguous(),
+                sin[..., :mrope_half_dim].float().contiguous(),
+            )
 
         # When mot_opt is enabled, permute tokens from different experts first; shape becomes [Tokens, HiddenSize]
         orig_shape = hidden_states.shape
@@ -2027,6 +2034,99 @@ class Qwen25VLMoEForAction(
             if name in params_to_keep_float32:
                 param.data = param.data.to(torch.float32)
 
+    @staticmethod
+    def relink_dmuon_forward_prefetch(root, subtree_order) -> int:
+        """Rebuild DMuon's forward-prefetch chain in true execution order.
+
+        ``dmuon.api._link_forward_prefetch_states`` orders states by
+        ``model.modules()``, i.e. by the order submodules were *assigned* in
+        ``__init__``. Wall-OSS declares ``action_preprocessor`` after ``model``
+        but runs it before ``model.layers``, so every ``visual.*`` group prefetches
+        ``model.layers.0..N`` and ``action_preprocessor.*`` never gets prefetched at
+        all. Its demand unshard then queues behind the already-dispatched layer
+        broadcasts on the single ``broadcast_stream``, and the compute stream stalls
+        for the full head-of-line latency.
+
+        ``subtree_order`` lists the roots of each subtree in the order they actually
+        run; modules under an earlier subtree sort before modules under a later one,
+        and declaration order is preserved inside each subtree. ``root`` itself
+        always sorts first (it owns the embedding/head groups and is unsharded
+        before the first forward). Modules matching no entry keep their declaration
+        order and sort last.
+        """
+        states = []
+        for module in root.modules():
+            states.extend(getattr(module, "_dedicated_states", ()))
+        if not states:
+            return 0
+        comm_ctx = states[0].comm_ctx
+        # ``comm_ctx.all_states`` is the list DMuon itself iterates; reorder that
+        # exact list rather than a re-derived one.
+        states = list(comm_ctx.all_states)
+        if len(states) <= 1:
+            return 0
+
+        decl_index = {id(module): idx for idx, module in enumerate(root.modules())}
+        phase_of: dict[int, int] = {id(root): -1}
+        for phase, subtree_root in enumerate(subtree_order):
+            if subtree_root is None:
+                continue
+            for module in subtree_root.modules():
+                phase_of.setdefault(id(module), phase)
+        fallback_phase = len(subtree_order)
+
+        def sort_key(state):
+            module_id = id(state.module)
+            return (
+                phase_of.get(module_id, fallback_phase),
+                decl_index.get(module_id, len(decl_index)),
+            )
+
+        ordered = sorted(states, key=sort_key)
+        for state in ordered:
+            state._next_group = None
+            state._next_groups = []
+        for index in range(len(ordered) - 1):
+            ordered[index]._next_group = ordered[index + 1].group
+            ordered[index]._next_groups = [
+                later.group for later in ordered[index + 1 :]
+            ]
+        ordered[0].comm_ctx.all_states[:] = ordered
+
+        logger.info(
+            "[DMuon] forward prefetch relinked in execution order: states=%d head=%s",
+            len(ordered),
+            [type(state.module).__name__ for state in ordered[:4]],
+        )
+        return len(ordered)
+
+    @staticmethod
+    def configure_norm_forward_prefetch(ordered_norms, distance: int) -> int:
+        """Prefetch future norm leaves without changing their ownership."""
+        from torch.distributed.fsdp import FSDPModule
+
+        if distance <= 0:
+            return 0
+
+        modules = [module for module in ordered_norms if isinstance(module, FSDPModule)]
+        if len(modules) <= 1:
+            return 0
+
+        edge_count = 0
+        for index, module in enumerate(modules):
+            targets = modules[index + 1 : index + 1 + distance]
+            if targets:
+                module.set_modules_to_forward_prefetch(targets)
+                edge_count += len(targets)
+
+        logger.info(
+            "[FSDP2] norm forward prefetch: modules=%d distance=%d edges=%d",
+            len(modules),
+            distance,
+            edge_count,
+        )
+        return edge_count
+
     def convert_to_fsdp(
         self,
         *,
@@ -2035,6 +2135,7 @@ class Qwen25VLMoEForAction(
         offload_policy=None,
         reshard_after_forward: bool = True,
         use_dmuon: bool = False,
+        norm_forward_prefetch_distance: int = 0,
     ):
         """Wrap with FSDP2: per-decoder-layer + per-vision-block fully_shard
         with bf16 ``mp_policy``; layernorms and ``action_preprocessor`` leaves
@@ -2101,9 +2202,36 @@ class Qwen25VLMoEForAction(
                 len(assignment),
             )
 
+            # DMuon links its forward-prefetch chain by __init__ assignment
+            # order, in which ``action_preprocessor`` (declared after
+            # ``self.model``) lands behind every decoder layer even though it
+            # runs right after the vision encoder. Relink in execution order so
+            # its unshard is prefetched instead of queueing behind the
+            # already-dispatched layer broadcasts.
+            self.relink_dmuon_forward_prefetch(
+                self,
+                (self.visual, self.action_preprocessor),
+            )
+
+        ordered_norms = []
+        for layer in self.model.layers:
+            for norm_name in ("input_layernorms", "post_attention_layernorms"):
+                norm_container = getattr(layer, norm_name, None)
+                if norm_container is not None:
+                    ordered_norms.extend(list(norm_container))
+
         fp32_mp = MixedPrecisionPolicy(
             param_dtype=torch.float32,
             reduce_dtype=torch.float32,
+        )
+        # Same fp32 params and fp32 gradient reduction, but FSDP no longer
+        # materializes an fp32 copy of the activation. The RMSNorm kernel widens
+        # bf16 -> fp32 per element instead, which is lossless, so this removes a
+        # cast without touching how the norm parameters are sharded or reduced.
+        fp32_mp_nocast = MixedPrecisionPolicy(
+            param_dtype=torch.float32,
+            reduce_dtype=torch.float32,
+            cast_forward_inputs=False,
         )
         shard_kwargs = dict(
             mesh=mesh,
@@ -2113,6 +2241,21 @@ class Qwen25VLMoEForAction(
         if offload_policy is not None:
             shard_kwargs["offload_policy"] = offload_policy
         fp32_shard_kwargs = dict(shard_kwargs, mp_policy=fp32_mp)
+        fp32_nocast_shard_kwargs = dict(shard_kwargs, mp_policy=fp32_mp_nocast)
+        nocast_leaves = 0
+
+        def fp32_kwargs_for(leaf: nn.Module) -> dict:
+            """Skip the forward-input cast for plain (non-adaptive) RMSNorm leaves.
+
+            An AdaRMSNorm leaf keeps the cast: it returns a ``gate`` whose dtype
+            follows the input, and downstream ``_gated_residual`` consumes that
+            gate in fp32.
+            """
+            nonlocal nocast_leaves
+            if getattr(leaf, "dense", None) is not None:
+                return fp32_shard_kwargs
+            nocast_leaves += 1
+            return fp32_nocast_shard_kwargs
 
         def fully_shard_fp32_leaf_or_container(name: str, module: nn.Module) -> None:
             # FSDP2 cannot shard containers without forward(), e.g. ModuleList.
@@ -2137,11 +2280,11 @@ class Qwen25VLMoEForAction(
                         name,
                         leaf_name,
                     )
-                    fully_shard(leaf, **fp32_shard_kwargs)
+                    fully_shard(leaf, **fp32_kwargs_for(leaf))
                 return
 
             logger.info("[FSDP2] fully_shard fp32 layernorm: %s", name)
-            fully_shard(module, **fp32_shard_kwargs)
+            fully_shard(module, **fp32_kwargs_for(module))
 
         # Layernorm leaves inside decoder layers / vision blocks / model.norm
         # - wrap with fp32 mp_policy BEFORE wrapping their parents so the
@@ -2155,6 +2298,11 @@ class Qwen25VLMoEForAction(
                     fully_shard_fp32_leaf_or_container(
                         f"{module_name}.{child_name}", child
                     )
+
+        logger.info(
+            "[FSDP2] fp32 norm leaves without forward-input cast: %d",
+            nocast_leaves,
+        )
 
         # action_preprocessor leaves: same fp32 treatment as layernorms.
         for name, module in list(self.named_modules()):
@@ -2189,4 +2337,8 @@ class Qwen25VLMoEForAction(
         # nested fully_shard. Inner fp32 wraps maintain their own policy.
         logger.info("[FSDP2] fully_shard root (bf16)")
         fully_shard(self, **shard_kwargs)
+        self.configure_norm_forward_prefetch(
+            ordered_norms,
+            norm_forward_prefetch_distance,
+        )
         return self
