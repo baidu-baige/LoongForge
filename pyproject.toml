@@ -52,7 +52,7 @@ gpu = [
     # NLP / dataset utils
     "jsonlines==4.0.0",
     "ftfy==6.1.3",
-    "nltk==3.9.1",
+    "nltk==3.10.3",
     "py-cpuinfo==9.0.0",
     # Monitoring / logging
     "wandb==0.21.4",
