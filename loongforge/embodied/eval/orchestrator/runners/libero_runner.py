@@ -457,6 +457,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
         episodes_per_task=args.episodes_per_task,
         continuous_gripper=getattr(args, "continuous_gripper", False),
         resolution=_render_resolution(args),
+        prefer_controller_ee=getattr(args, "prefer_controller_ee", True),
     )
     payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
     logging.info(

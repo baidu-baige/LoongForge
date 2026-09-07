@@ -53,13 +53,19 @@ def _warmup_model(model_spec: Any) -> None:
     # Models that need more than one camera view reject the single-view dummy;
     # the factory reports how many views the model consumes so the warmup can
     # be shaped correctly instead of failing into the ignored-exception path.
-    n_views = max(1, int(getattr(model_spec, "metadata", {}).get("num_camera_views", 1) or 1))
+    metadata = getattr(model_spec, "metadata", {})
+    n_views = max(1, int(metadata.get("num_camera_views", 1) or 1))
+    state_dim = int(metadata.get("state_dim", 0) or 0)
+    # Keep the warmup compatible with older factories that do not expose
+    # state_dim yet: RoboTwin's 3-camera layout always uses 14D proprio.
+    if state_dim == 0 and n_views == 3:
+        state_dim = 14
     try:
         dummy_image = np.zeros((224, 224, 3), dtype=np.uint8)
         model_spec.model.predict_action(
             images=[[dummy_image] * n_views],
             instructions=["warmup"],
-            state=None,
+            state=np.zeros(state_dim, dtype=np.float32) if state_dim > 0 else None,
             dataset_stats=None,
         )
         logging.info("Model warmup complete.")

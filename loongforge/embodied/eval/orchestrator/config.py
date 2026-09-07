@@ -169,6 +169,10 @@ CONFIG_MAPPING = {
     "benchmark.num_steps_wait": "num_steps_wait",
     "benchmark.max_steps": "max_steps",
     "benchmark.continuous_gripper": "continuous_gripper",
+    # False -> proprio reads obs['robot0_eef_pos']/quat (official FastWAM
+    # convention); True -> prefer the OSC controller's ee_pos/ee_ori_mat
+    # (X-VLA client convention).
+    "benchmark.prefer_controller_ee": "prefer_controller_ee",
     # Camera render resolution passed to robosuite. Omit to keep the shared
     # default (LIBERO_ENV_RESOLUTION); set it when the official eval client of
     # a model renders natively at another size (e.g. LingBot-VA renders 128).

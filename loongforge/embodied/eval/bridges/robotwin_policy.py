@@ -14,6 +14,9 @@ Per-model protocol wiring:
                          + RoboTwinEe6dDualDecoder
 - ``pi05_aloha_14d``  -> Pi05PayloadBuilder(state_encoding="aloha_pi")
                          + RoboTwinPi05AlohaDecoder
+- ``fastwam_joint14`` -> FastWAMPayloadBuilder(state_encoding=
+                         "robotwin_joint14") + IdentityDecoder (absolute
+                         14D qpos, official client does no reorder)
 """
 
 from __future__ import annotations
@@ -36,6 +39,10 @@ _BRIDGE_WIRING = {
     # LingBot-VA consumes no proprio (images + instruction only) and emits a
     # dual-arm ee pose relative to the episode's initial endpose.
     "lingbot_va_ee_quat_16d": ("lingbot_va", "", "lingbot_va_robotwin_ee_dual"),
+    # FastWAM RoboTwin: 14D joint pass-through proprio + absolute 14D qpos
+    # actions; the official deploy_policy feeds the chunk straight to
+    # take_action (identity decode, no reorder, no per-arm remap).
+    "fastwam_joint14": ("fastwam", "robotwin_joint14", ""),
 }
 
 
@@ -245,6 +252,14 @@ def eval(TASK_ENV: Any, model: ModelClient, observation: Dict[str, Any]) -> None
         instruction = str(TASK_ENV.get_instruction())
         action = model.step(observation, instruction=instruction, step=TASK_ENV.take_action_cnt)
         TASK_ENV.take_action(action, action_type="ee")
+    elif model.action_bridge == "fastwam_joint14":
+        # Official FastWAM robotwin deploy_policy: env instruction as prompt
+        # (wrapped into the training-time template by the payload builder) and
+        # the raw 14D chunk executed as absolute joint qpos — take_action's
+        # default action_type, no reorder.
+        instruction = str(TASK_ENV.get_instruction())
+        action = model.step(observation, instruction=instruction, step=TASK_ENV.take_action_cnt)
+        TASK_ENV.take_action(action)
     else:
         instruction = str(TASK_ENV.get_instruction())
         action = model.step(observation, instruction=instruction, step=TASK_ENV.take_action_cnt)

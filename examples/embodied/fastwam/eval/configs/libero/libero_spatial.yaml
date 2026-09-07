@@ -1,0 +1,114 @@
+# FastWAM LIBERO config — libero_spatial (open-source).
+# Verified on official libero_optional_idm_2cam224.pt (Wan2.2-TI2V-5B backbone,
+# optional-IDM weights), 10 tasks x 10 episodes, HEAD model code + bf16/fp64:
+#   first_frame mode:  98/100 (official repo: 98.2% full-suite)
+#   idm mode:          99/100 (official repo: 99.0% full-suite)
+# The single optional-IDM checkpoint serves both modes (model.variant: idm).
+#
+# Open weights:
+#   checkpoint:   https://github.com/yuantianyuan01/FastWAM#inference-with-released-checkpoints
+#   Wan2.2-TI2V-5B: https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B  (T5/VAE + google/umt5-xxl tokenizer)
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+#
+# Protocol notes (do not change without re-validating):
+# - instruction wrapper: "A video recorded from a robot's point of view
+#   executing the following instruction: {task}" (training-time
+#   DEFAULT_PROMPT; applied by the payload builder — adapter-side raw task
+#   text is out-of-distribution and collapses success to ~6%).
+# - num_steps_wait 30 and binarize_gripper (continuous_gripper: false,
+#   prefer_controller_ee: false) are the official eval settings; changing
+#   either costs tens of points. Official FastWAM reads obs['robot0_eef_pos'],
+#   not the OSC controller pose.
+# - action_infer_mode first_frame: 10 flow-matching steps, sigma_shift 5.0 (official passes null -> infer_shift),
+#   32-action chunk with 10 steps executed open-loop per replan (official
+#   replan cadence, applied server-side via chunk_execute_steps=0->10).
+# - 2 cams: agentview + wrist at env-native resolution; cover-style resize +
+#   center crop to 224x224 each, horizontal concat (agent left | wrist right)
+#   -> 224x448, pixels [-1, 1] (model-side).
+# - proprio 8D = eef_pos + quat->axis-angle + 2-DoF gripper qpos, min/max
+#   normalized from the checkpoint's *_dataset_stats.json (model-side).
+# - actions 7D: pos + axis-angle deltas + absolute gripper.
+# - model base precision is bf16 (official; train.yaml mixed_precision="bf16",
+#   eval defaults to bf16). RoPE is applied in fp64 internally by the official
+#   rope_apply. `model.dtype` below is the real field; the legacy
+#   `model_dtype:` key is ignored. Set `dtype: float32` ONLY if your shipped
+#   wan/dit.py rope cannot run bf16 (e.g. an unmodified HEAD flash_attn rope
+#   raises "Input and cos/sin must have the same dtype"); fp32 reproduces
+#   bf16+fp64 scores within small-sample noise but is not the official regime.
+# - benchmark.max_steps: official per-suite horizon (spatial/object/goal 400,
+#   libero_10 700). 0 = use the suite default from the adapter.
+#
+# Optional overrides (edit this file or copy it):
+#   action_infer_mode: idm  — imagine-then-act mode (official IDM numbers;
+#     ~2.5s/chunk vs ~0.9s for first_frame, and raise timeouts if needed)
+#   suite: libero_spatial | libero_object | libero_goal | libero_10
+#   max_tasks / episodes_per_task: raise for full-suite eval (official: 10x50)
+
+benchmark:
+  name: libero
+  suite: libero_spatial
+  max_tasks: 0          # 0 = all tasks in the suite
+  episodes_per_task: 10 # official full-suite: 50
+  max_steps: 0          # 0 = suite default (official per-suite horizon)
+  num_steps_wait: 30  # official eval settles the scene before the first replan
+  continuous_gripper: false  # official binarize_gripper: true (model >0.5 -> open)
+
+model:
+  backend: loongforge
+  model_type: fastwam
+  name: fastwam-libero-spatial
+  backbone_variant: wan22_5b
+  dtype: bfloat16        # official base precision; float32 only for bf16-incompatible rope
+  variant: idm
+  load_text_encoder: true
+  skip_dit_load_from_pretrain: true
+  action_dit_pretrained_path: null
+  redirect_common_files: false
+  action_dim: 7
+  action_horizon: 32
+  proprio_dim: 8
+  # Eval protocol (consumed by FastWAMPolicy.set_eval_protocol).
+  action_infer_mode: first_frame
+  num_inference_steps: 10
+  sigma_shift: 5.0
+  num_video_frames: 9   # IDM mode only
+  # Offline Wan release dirs (redirect_common_files=false, no modelscope
+  # download). model_id resolves against DIFFSYNTH_MODEL_BASE_PATH (exported by
+  # run_libero_eval.sh): point it at the dir CONTAINING Wan-AI/, so
+  # ${DIFFSYNTH_MODEL_BASE_PATH}/Wan-AI/Wan2.2-TI2V-5B is the release dir.
+  # tokenizer_model_id / server.tokenizer_path point at that release dir directly.
+  model_id: Wan-AI/Wan2.2-TI2V-5B
+  tokenizer_model_id: /path/to/Wan2.2-TI2V-5B
+
+server:
+  host: 127.0.0.1
+  port: 12160
+  health_port: 12161
+  python: /path/to/loongforge_vla/bin/python
+  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/libero/libero_spatial/policy_server.log
+  start_timeout_sec: 1800   # 5B video DiT + 1B action DiT + UMT5 + VAE load
+  ckpt_path: /path/to/libero_optional_idm_2cam224.pt
+  # min/max stats; ships with the checkpoint as libero_optional_idm_2cam224_dataset_stats.json
+  dataset_statistics_path: /path/to/libero_optional_idm_2cam224_dataset_stats.json
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/Wan2.2-TI2V-5B/google/umt5-xxl
+  use_bf16: true
+  chunk_execute_steps: 0    # 0 -> official 10; N>0 -> N; -1 -> full 32
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/libero/libero_spatial
+  seed: 7
+  save_trace: true
+  save_replay: true
+
+timeouts:
+  policy_call_ms: 600000   # 10 flow-matching steps + VAE/T5 on first call
+  per_step_sec: 600
+  per_episode_sec: 1800

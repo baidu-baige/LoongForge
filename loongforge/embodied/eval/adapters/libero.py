@@ -64,6 +64,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         episodes_per_task: int = 50,
         resolution: int = LIBERO_ENV_RESOLUTION,
         continuous_gripper: bool = False,
+        prefer_controller_ee: bool = True,
     ) -> None:
         """Initialize the LIBERO adapter."""
         if suite_name not in SUITE_MAX_STEPS:
@@ -74,6 +75,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         self.episodes_per_task = episodes_per_task
         self.resolution = resolution
         self.continuous_gripper = continuous_gripper
+        self.prefer_controller_ee = prefer_controller_ee
 
     def obs_to_canonical(self, env_obs: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """Convert a LIBERO obs into a benchmark-neutral canonical dict."""
@@ -88,8 +90,8 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         # Prefer controller's ee_pos / ee_ori_mat if available (matches the
         # original X-VLA LIBERO client, which reads them from the robosuite
         # OSC controller rather than the raw obs).
-        ctrl_ee_pos = context.get("ee_pos")
-        ctrl_ee_ori_mat = context.get("ee_ori_mat")
+        ctrl_ee_pos = context.get("ee_pos") if self.prefer_controller_ee else None
+        ctrl_ee_ori_mat = context.get("ee_ori_mat") if self.prefer_controller_ee else None
         if ctrl_ee_pos is not None:
             eef_pos = ctrl_ee_pos[:3]
 
