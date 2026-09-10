@@ -625,14 +625,14 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.rank == 0:
         print('using world size: {}, data-parallel size: {}, '
               'context-parallel size: {}, '
-              'hierarchical context-parallel sizes: {}'
+              'hierarchical context-parallel sizes: {}, '
               'tensor-model-parallel size: {}, '
               'pipeline-model-parallel size: {}, '.format(
                   args.world_size, args.data_parallel_size,
                   args.context_parallel_size,
                   args.hierarchical_context_parallel_sizes,
                   args.tensor_model_parallel_size,
-                  args.pipeline_model_parallel_size, flush=True))
+                  args.pipeline_model_parallel_size), flush=True)
 
     if args.hierarchical_context_parallel_sizes:
         from numpy import prod
