@@ -31,6 +31,7 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from .flow_match import get_mesh_id
+from .rope import apply_triton_rope_pair
 from .wan_model import WanAttention, WanTransformerBlock, WanTransformer3DModel
 
 
@@ -218,8 +219,7 @@ class WanStreamingAttention(WanAttention):
         key = self.norm_k(self.to_k(k)).unflatten(2, (self.heads, -1))
         value = self.to_v(v).unflatten(2, (self.heads, -1))
         if rotary_emb is not None:
-            query = self._apply_rotary(query, rotary_emb)
-            key = self._apply_rotary(key, rotary_emb)
+            query, key = apply_triton_rope_pair(query, key, rotary_emb)
 
         slots = None
         if kv_cache is not None and kv_cache["k"] is not None:
