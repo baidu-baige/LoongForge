@@ -828,12 +828,6 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         """Generates an encoded vid_qa sample from a raw sample."""
         raise NotImplementedError("encode_multi_vid_qa not supported", sample)
 
-
-    def encode_multi_vid_qa(self, sample: MultiMixQASample) -> BaseTaskSample:
-        """Generates an encoded multimodal mix sample from a raw sample."""
-        raise NotImplementedError("encode_multi_vid_qa not supported", sample)
-
-
     def encode_packed_captioning(self, sample: PackedCaptioningSample) -> BaseTaskSample:
         """Generates an encoded multimodal packed captioning sample from a raw sample."""
         raise NotImplementedError("encode_packed_captioning not supported", sample)
