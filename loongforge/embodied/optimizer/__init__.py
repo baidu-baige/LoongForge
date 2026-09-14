@@ -6,6 +6,7 @@
 from loongforge.embodied.optimizer.lr_scheduler import build_param_groups, build_scheduler
 from loongforge.embodied.optimizer.optimizer import build_optimizer
 from loongforge.embodied.optimizer.clip_gradients import clip_gradients, clean_nan_gradients, get_grad_norm
+from loongforge.embodied.optimizer.ema import EMAModel, build_ema_model
 
 __all__ = [
     "build_param_groups",
@@ -14,4 +15,6 @@ __all__ = [
     "clip_gradients",
     "clean_nan_gradients",
     "get_grad_norm",
+    "EMAModel",
+    "build_ema_model",
 ]

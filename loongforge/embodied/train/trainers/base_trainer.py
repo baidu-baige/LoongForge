@@ -23,6 +23,7 @@ from loongforge.embodied.distributed.checkpoint import (
     resume_training_state,
 )
 from loongforge.embodied.distributed.parallel import wrap_model
+from loongforge.embodied.distributed.utils import unwrap_model
 from loongforge.embodied.train.lora import (
     apply_lora,
     is_lora_enabled,
@@ -76,6 +77,9 @@ class BaseTrainer(ABC):
         self.lr_scheduler = None
         self.dataloaders: Dict[str, DataLoader] = {}
         self.logger: Optional[TrainingLogger] = None
+        # Optional EMA shadow model, built in _setup when --with-ema is set
+        # (see optimizer/ema.py — LoongForge has no other EMA mechanism).
+        self.ema_model = None
 
         # Training state
         self.completed_steps: int = 0
@@ -239,6 +243,15 @@ class BaseTrainer(ABC):
             # 8. Optimizer + Scheduler (after wrapping; FSDP use_orig_params=True)
             self.optimizer = self._build_optimizer()
             self.lr_scheduler = self._build_scheduler()
+
+        # 8.5 EMA (optional) — initialize the shadow model from the freshly
+        # wrapped+loaded weights, mirroring giga_train's Trainer.set_ema_models
+        # (initialized once, right after the model is built/loaded/wrapped).
+        if training_args.with_ema:
+            with log_stage(
+                "ema", start_msg="initializing EMA model", end_msg="EMA initialized in {elapsed}",
+            ):
+                self.ema_model = self._build_ema_model()
 
         # 9. Resume optimizer/scheduler/RNG state (after wrapping + optimizer creation).
         # Gate on `training_args.resume` only — step==0 is a valid resume point and must
@@ -451,6 +464,14 @@ class BaseTrainer(ABC):
             with st("optimizer-scheduler-step"):
                 self.lr_scheduler.step()
 
+        # ── EMA update (once per optimizer step, i.e. after grad sync) ──
+        # Mirrors giga_train.Trainer.backward_step's EMA update, which fires
+        # once per optimizer step rather than per gradient-accumulation
+        # micro-step (see optimizer/ema.py).
+        if self.ema_model is not None:
+            with st("ema-update"):
+                self._update_ema_model()
+
         return log_dict, grad_norm
 
     # ═══════════════════════════════════════════════
@@ -633,6 +654,43 @@ class BaseTrainer(ABC):
         wrapping policy).
         """
         self.model = wrap_model(self.model, self.training_args, self.ctx)
+
+    def _full_model_state_dict(self) -> Dict[str, torch.Tensor]:
+        """Return the model's full (unsharded, CPU) state dict for EMA use.
+
+        FSDP2 (``fully_shard``) parameters are ``DTensor``s; gather them into a
+        regular full state dict the same way ``distributed/checkpoint.py``
+        does for the legacy safetensors/pt save path. DDP / no-parallelism
+        models already hold local full tensors, so ``model.state_dict()``
+        is sufficient.
+        """
+        from torch.distributed.fsdp import FSDPModule
+        if isinstance(self.model, FSDPModule):
+            from torch.distributed.checkpoint.state_dict import (
+                StateDictOptions,
+                get_model_state_dict,
+            )
+            options = StateDictOptions(full_state_dict=True, cpu_offload=True)
+            return get_model_state_dict(self.model, options=options)
+        return {k: v.detach().cpu() for k, v in unwrap_model(self.model).state_dict().items()}
+
+    def _build_ema_model(self):
+        """Build the EMA shadow model from the current (post-load, post-wrap) weights."""
+        from loongforge.embodied.optimizer import build_ema_model
+        full_state_dict = self._full_model_state_dict()
+        return build_ema_model(self.model, self.training_args.ema_decay, full_state_dict)
+
+    def _update_ema_model(self):
+        """Update the EMA shadow model from the current model weights.
+
+        Only rank0 needs the result for saving, but every rank must call the
+        FSDP2 ``get_model_state_dict(full_state_dict=True)`` gather
+        collectively, so this runs unconditionally on all ranks (mirrors the
+        collective-gather pattern used elsewhere in this file, e.g.
+        ``_full_model_state_dict``).
+        """
+        full_state_dict = self._full_model_state_dict()
+        self.ema_model.step(full_state_dict)
 
     def _run_forward_backward_block(self) -> dict:
         """Run zero_grad + one optimizer step's forward/backward block.

@@ -566,6 +566,17 @@ class _OptimizerArgs:
             "help": "Adam epsilon added to the denominator for numerical stability."
         },
     )
+    with_ema: bool = field(
+        default=False,
+        metadata={
+            "help": "Maintain an exponential moving average (EMA) of model weights, "
+                    "updated once per optimizer step. See optimizer/ema.py."
+        },
+    )
+    ema_decay: float = field(
+        default=0.9999,
+        metadata={"help": "EMA decay rate; only effective when --with-ema is set."},
+    )
 
 
 @dataclass(frozen=True)
@@ -576,7 +587,7 @@ class _DataArgs:
         default="lerobot_datasets",
         metadata={
             "help": "Dataset backend to use "
-                    "(e.g. lerobot_datasets, hdf5_datasets, dummy_datasets)."
+                    "(e.g. lerobot_datasets, hdf5_datasets, dummy_datasets, giga_brain_datasets)."
         },
     )
     dataset_path: Optional[str] = field(

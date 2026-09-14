@@ -10,6 +10,7 @@ only declares these as abstract methods.
 
 import inspect
 import logging
+import os
 from contextlib import nullcontext
 from typing import Dict, Tuple
 
@@ -342,6 +343,25 @@ class FinetuneTrainer(BaseTrainer):
             dataloader_state=self._get_dataloader_state(),
             model_cfg=self.model_cfg,
         )
+        if self.ema_model is not None:
+            self._save_ema_checkpoint()
+
+    def _save_ema_checkpoint(self):
+        """Persist the EMA shadow weights alongside the regular checkpoint.
+
+        Written as a plain safetensors file (rank0-only) under
+        ``steps_<N>/ema.safetensors`` — LoongForge has no other EMA
+        persistence mechanism (see optimizer/ema.py). Kept separate from the
+        main ``model.safetensors``/``dcp/`` state so a normal
+        ``--resume``/``load_pretrained`` never has to special-case it.
+        """
+        if self.ctx.is_main:
+            from safetensors.torch import save_file
+            path = os.path.join(
+                self.checkpoint_dir, f"steps_{self.completed_steps}", "ema.safetensors",
+            )
+            state_dict = {k: v.detach().cpu().clone() for k, v in self.ema_model.state_dict().items()}
+            save_file(state_dict, path)
 
     # ═══════════════════════════════════════════════
     # Data / state — per-loader epoch + one-shot RNG restore

@@ -1,0 +1,101 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# model: — everything under this block maps 1:1 to GigaBrainModelConfig(**model),
+# which GigaBrainPolicy.from_pretrained/__init__ passes straight through to
+# GigaBrain0Policy(**kwargs). Values below mirror the reference
+# GigaBrain-0.1-3.5B-Base/config.json, EXCEPT enable_knowledge_insulation:
+# the reference finetune configs (configs/giga_brain_0_agibot_a2d_finetune*.py
+# `models=dict(..., enable_knowledge_insulation=False, ...)`) override the
+# checkpoint's `True` to `False` at finetune time via GigaBrain0Trainer's
+# `process_model` rebuild path — this YAML reproduces that override directly
+# instead of re-implementing the rebuild-and-copy-weights dance.
+# ─────────────────────────────────────────────────────────────────────────────
+model:
+  model_type: giga_brain
+
+  max_state_dim: 32
+  max_action_dim: 32
+  proj_width: 1024
+  vlm_type: paligemma2
+  vlm_hidden_size: 2304
+  n_action_steps: 50
+  num_steps: 10
+  use_cache: true
+  vision_in_channels: 3
+  enable_knowledge_insulation: false
+  enable_next_token_prediction: true
+  enable_learnable_traj_token: false
+  num_traj_tokens: 10
+  max_traj_dim: 4
+  traj_hidden_dim: 256
+  num_embodiments: 3
+
+  # AgiBot-World Alpha (A2D) dual-arm robot -> maps to the AgiBot-G1 embodiment
+  # (id=1) in giga_brain_0_transforms.py::robot_type_mapping.
+  robot_type: a2d
+
+# ─────────────────────────────────────────────────────────────────────────────
+# data: — everything under this block maps 1:1 to GigaBrainDataConfig(**data).
+# Mirrors configs/giga_brain_0_agibot_a2d_finetune_v30.py exactly (v3.0
+# dataset path + norm_stats path), so training numerics match the reference.
+# Override data_path / norm_stats_path via --data.data_path=... /
+# --data.norm_cfg.norm_stats_path.1=... dotlist flags for a different dataset.
+# ─────────────────────────────────────────────────────────────────────────────
+data:
+  data_path: /ssd2/pxy/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327
+
+  delta_action_cfg:
+    use_delta_joint_actions: true
+    # '1' == AgiBot G1 embodiment id, which A2D (robot_type='a2d') maps to.
+    # 20-dim mask matching observation.state; action's trailing (velocity)
+    # dims beyond the mask length default to absolute (see DeltaActions).
+    mask:
+      "1":
+        - true
+        - true
+        - true
+        - true
+        - true
+        - true
+        - true
+        - false
+        - true
+        - true
+        - true
+        - true
+        - true
+        - true
+        - true
+        - false
+        - true
+        - true
+        - true
+        - true
+
+  norm_cfg:
+    norm_stats_path:
+      "1": /ssd2/pxy/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibot_a2d_norm_stats.json
+    use_quantiles: true
+    enable_clamp: false
+
+  image_cfg:
+    resize_imgs_with_padding: [224, 224]
+    enable_image_aug: true
+    present_img_keys:
+      - observation.images.top_head
+      - observation.images.hand_left
+      - observation.images.hand_right
+    enable_depth_img: false
+
+  prompt_cfg:
+    tokenizer_model_path: /ssd2/pxy/ckpt/paligemma-3b-pt-224
+    fast_tokenizer_path: /ssd2/pxy/ckpt/physical-intelligence/fast
+    max_length: 200
+    discrete_state_input: true
+    encode_action_input: false
+    encode_sub_task_input: false
+    sample_ratios:
+      task_only: 1.0
+      task_with_subtask: 0
+      task_only_using_subtask_regression: 0
+      task_only_using_fast_regression: 0
+      task_with_subtask_using_fast_regression: 0

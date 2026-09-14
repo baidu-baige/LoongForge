@@ -213,7 +213,12 @@ def _build_dataset(model_cfg, data_cfg, training_args, dataset_format: str):
 
         return build_dummy_dataset(model_cfg, data_cfg, training_args)
 
+    if dataset_format == "giga_brain_datasets":
+        from .datasets.giga_brain_dataset import build_giga_brain_dataset
+
+        return build_giga_brain_dataset(model_cfg, data_cfg, training_args)
+
     raise ValueError(
         f"Unknown dataset_format: '{dataset_format}'. "
-        f"Supported: lerobot_datasets, hdf5_datasets, dummy_datasets"
+        f"Supported: lerobot_datasets, hdf5_datasets, dummy_datasets, giga_brain_datasets"
     )
