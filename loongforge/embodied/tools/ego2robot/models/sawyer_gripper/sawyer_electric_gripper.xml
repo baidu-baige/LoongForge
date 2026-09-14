@@ -1,0 +1,56 @@
+<mujoco model="sawyer_electric_gripper">
+  <compiler angle="radian" meshdir="assets" discardvisual="false"/>
+  <asset>
+    <mesh name="connector_plate" file="connector_plate.stl"/>
+    <mesh name="electric_gripper_base" file="electric_gripper_base.stl"/>
+    <mesh name="standard_narrow" file="standard_narrow.stl"/>
+    <mesh name="basic_soft_tip" file="basic_soft_tip.stl"/>
+    <material name="sawyer_gripper_black" rgba="0.035 0.035 0.035 1"/>
+    <material name="sawyer_gripper_gray" rgba="0.35 0.35 0.35 1"/>
+    <material name="sawyer_gripper_soft" rgba="0.08 0.08 0.08 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- This body is attached to Sawyer right_l6 at the native hand frame. -->
+    <body name="base_mount">
+      <!-- Official Intera connector plate: gripper_base -> plate -> tool. -->
+      <geom name="connector_plate_visual" type="mesh" mesh="connector_plate"
+            pos="0 0 0.0018" material="sawyer_gripper_black"
+            contype="0" conaffinity="0" group="2"/>
+
+      <body name="electric_gripper_base" pos="0 0 0.0194">
+        <geom name="electric_gripper_base_visual" type="mesh" mesh="electric_gripper_base"
+              material="sawyer_gripper_black" contype="0" conaffinity="0" group="2"/>
+
+        <!-- standard_narrow finger, slot=2, as used by the official Sawyer Xacro. -->
+        <body name="l_finger" pos="0.003 -0.0015 0.04552">
+          <joint name="l_finger_joint" type="slide" axis="0 1 0"
+                 range="0 0.020833" damping="0.1"/>
+          <geom name="l_finger_visual" type="mesh" mesh="standard_narrow"
+                euler="0 0 3.141592653589793" material="sawyer_gripper_gray"
+                contype="0" conaffinity="0" group="2"/>
+          <body name="l_finger_tip" pos="0 0.01725 0.075">
+            <geom name="l_soft_tip_visual" type="mesh" mesh="basic_soft_tip"
+                  euler="0 0 3.141592653589793" material="sawyer_gripper_soft"
+                  contype="0" conaffinity="0" group="2"/>
+          </body>
+        </body>
+
+        <body name="r_finger" pos="0.003 0.0015 0.04552">
+          <joint name="r_finger_joint" type="slide" axis="0 1 0"
+                 range="-0.020833 0" damping="0.1"/>
+          <geom name="r_finger_visual" type="mesh" mesh="standard_narrow"
+                material="sawyer_gripper_gray" contype="0" conaffinity="0" group="2"/>
+          <body name="r_finger_tip" pos="0 -0.01725 0.075">
+            <geom name="r_soft_tip_visual" type="mesh" mesh="basic_soft_tip"
+                  material="sawyer_gripper_soft" contype="0" conaffinity="0" group="2"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- TCP at the center of the two standard-narrow soft tips. -->
+      <site name="pinch" pos="0 0 0.14062" size="0.005"
+            rgba="0.9 0.9 0.9 0.0" group="5"/>
+    </body>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,64 @@
+# Core ego2robot dependencies (reduced from the ego2lerobot conda environment's
+# pip freeze to packages used directly by the pipeline)
+#
+# Notes:
+#   - The full environment includes many indirect dependencies such as
+#     nvidia-*-cu12 and torch. They are installed with torch/mujoco and are not
+#     listed individually here.
+#   - opencv-python-headless conflicts by package name with the opencv-python
+#     dependency used by ProPainter. They run in separate processes (inpaint.py
+#     calls ProPainter's inference_propainter.py via subprocess), so they do not
+#     import cv2 in the same process and need not coexist in one pip environment.
+#     See "Known Limitations and Migration Notes" in README.md.
+#   - On first use, robot_descriptions downloads mujoco_menagerie to
+#     MENAGERIE_DIR. For offline use, download the cache in advance and point
+#     EGO2ROBOT_MENAGERIE_DIR to it.
+
+numpy==2.4.6
+scipy==1.17.1
+pandas==3.0.5
+pyarrow==25.0.0
+
+# Zarr v3 episode loading
+zarr==3.1.6
+simplejpeg==1.9.0
+
+# Video I/O and image processing
+opencv-python-headless==5.0.0.93
+av==18.0.0
+imageio-ffmpeg==0.6.0
+
+# SAM3 temporal segmentation of visible body, hands, and forearms (Step 3)
+torch==2.5.1
+torchvision==0.20.1
+sam3 @ git+https://github.com/facebookresearch/sam3.git
+pycocotools==2.0.11
+
+# Path B WiLoR inference (install the official WiLoR checkout separately)
+ultralytics==8.1.34
+smplx==0.1.28
+pytorch-lightning
+yacs
+scikit-image
+pyrender
+chumpy
+
+# Depth Anything estimation (Step 5, standalone step / run-all --with_depth)
+# - transformers backend: V2 Metric / V3 standard HF weights (AutoModelForDepthEstimation)
+transformers==4.51.3
+timm==1.0.28
+safetensors==0.8.0
+# - da3 backend: official Depth Anything 3 weights and package (not on PyPI;
+#   install separately):
+#   git clone https://github.com/ByteDance-Seed/depth-anything-3 && pip install -e .
+
+# Panda dual-arm IK and MuJoCo rendering (retarget)
+mujoco==3.11.0
+robot_descriptions==3.1.0
+PyOpenGL==3.1.10
+# morphology-aware Mink 6-DOF IK
+mink==1.3.0
+quadprog==0.1.13
+
+# LeRobot v3.0 dataset I/O and the real loader smoke test used by validate
+lerobot==0.4.4
