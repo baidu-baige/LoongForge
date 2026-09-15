@@ -231,7 +231,6 @@ def write_data_parquet(all_rows: list, out_path: str, state_dim: int):
         pa.field("index", pa.int64()),
         pa.field("task_index", pa.int64()),
     ])
-    n = len(all_rows)
     arrays = {
         "action": pa.array([r["action"] for r in all_rows], type=action_type),
         "observation.state": pa.array([r["observation.state"] for r in all_rows], type=state_type),
@@ -371,9 +370,15 @@ def discover_episodes(ik_dir: str, state_dir: str) -> list:
     missing_ik = state_eps - ik_eps
     missing_state = ik_eps - state_eps
     if missing_ik:
-        print(f"  [WARN] {len(missing_ik)} episode(s) in state_dir have no matching IK result; skipped: {sorted(missing_ik)[:3]}...")
+        print(
+            f"  [WARN] {len(missing_ik)} episode(s) in state_dir have no matching IK result; "
+            f"skipped: {sorted(missing_ik)[:3]}..."
+        )
     if missing_state:
-        print(f"  [WARN] {len(missing_state)} episode(s) in ik_dir have no matching state; skipped: {sorted(missing_state)[:3]}...")
+        print(
+            f"  [WARN] {len(missing_state)} episode(s) in ik_dir have no matching state; "
+            f"skipped: {sorted(missing_state)[:3]}..."
+        )
     return eps
 
 
@@ -523,7 +528,6 @@ def run(args):
         st_stats = compute_stats(state)
         ac_stats = compute_stats(action)
 
-        from_ts = 0.0
         to_ts = float(n) / FPS
 
         ep_meta = {

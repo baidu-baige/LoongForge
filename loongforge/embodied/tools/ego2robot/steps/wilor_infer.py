@@ -182,13 +182,8 @@ def run(args):
                 output = model(batch)
             kp = output["pred_keypoints_3d"].detach().cpu().numpy().astype(np.float32)
             kp = kp[:, OPENPOSE_TO_MANO, :]
-            kp2d_crop = output["pred_keypoints_2d"].detach().cpu().numpy().astype(np.float32)
-            # WiLoR predicts crop-centered coordinates. Convert them to the
-            # original image using each detector box for Dyn-HaMR's 2D loss.
             centers = batch["box_center"].detach().cpu().numpy().astype(np.float32)
             sizes = batch["box_size"].detach().cpu().numpy().astype(np.float32).reshape(-1)
-            kp2d_crop = kp2d_crop[:, OPENPOSE_TO_MANO, :] + 128.0
-            kp2d = centers[:, None, :] + (kp2d_crop - 128.0) * sizes[:, None, None] / 256.0
             params = output["pred_mano_params"]
             pose = params["hand_pose"].detach().cpu().numpy().astype(np.float32)
             orient = params["global_orient"].detach().cpu().numpy().astype(np.float32)

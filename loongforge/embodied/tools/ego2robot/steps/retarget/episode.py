@@ -364,13 +364,6 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
     mink_position_context = (
         MinkIKContext(single, arm_ids, ee_ref_single, orientation_cost=0.0)
         if use_mink_ik else None)
-    mink_fallback_context = (
-        MinkIKContext(
-            single, arm_ids, ee_ref_single,
-            orientation_cost=0.1 * np.asarray(
-                spec.ik_orientation_cost, dtype=float),
-            continuity_cost=max(mink_continuity_cost, 0.2))
-        if use_mink_ik and spec.ik_position_priority else None)
     support_surface = None
     if spec.scene_support_surface:
         if depth_mode != "depth-aware":
@@ -751,7 +744,7 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
     # 5. Render and composite.
     bg_frames = read_video_frames(bg_path)
     if not bg_frames:
-        print(f"    [SKIP] no bg frames")
+        print("    [SKIP] no bg frames")
         return None
     Nrender = min(N, len(bg_frames))
     H, W = bg_frames[0].shape[:2]
@@ -773,7 +766,7 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
             raise ValueError(f"depth shape {scene_depth.shape} does not match video {(H, W)}")
         if (saved_h, saved_w) != (H, W) or scene_depth.shape[0] < Nrender:
             raise ValueError(f"invalid scene depth metadata/frames for {ep}")
-    n_hidden = hide_non_arm_geoms(dual, spec)
+    hide_non_arm_geoms(dual, spec)
     # MuJoCo's offscreen renderer has no MSAA.  The legacy pipeline rendered
     # at 2x and reduced with area filtering to suppress edge noise.
     SS = 2

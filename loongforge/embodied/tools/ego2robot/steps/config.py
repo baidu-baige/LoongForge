@@ -180,7 +180,6 @@ def reencode_h264(src: str, crf: int = 20):
     original file and print a warning without interrupting the pipeline.
     """
     import subprocess
-    import tempfile
     tmp = f"{src}.h264tmp.mp4"
     try:
         cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", src,
@@ -237,7 +236,10 @@ def parse_robot_spec(spec: str | None):
         la, lg = (int(x) for x in m.groups())
         ra, rg = 0, 0
     if la not in (7, 0) or ra not in (7, 0) or lg not in (0, 1, 2) or rg not in (0, 1, 2):
-        raise ValueError("Supported values: arm DOF must be 7 or 0 (matching source IK); gripper DOF must be 0, 1, or 2")
+        raise ValueError(
+            "Supported values: arm DOF must be 7 or 0 (matching source IK); "
+            "gripper DOF must be 0, 1, or 2"
+        )
     return (la, lg, ra, rg)
 
 

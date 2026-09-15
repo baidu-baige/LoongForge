@@ -61,8 +61,12 @@ def build_arg_parser():
     ap.add_argument("--fy", type=float, default=None,
                     help="Camera vertical focal length in pixels; inferred from dataset intrinsics by default, "
                          "falling back to 490.1961")
-    ap.add_argument("--max_jump_rad", type=float, default=0.0,
-                    help="Maximum per-frame joint displacement during IK post-processing in radians; 0 disables clamping")
+    ap.add_argument(
+        "--max_jump_rad",
+        type=float,
+        default=0.0,
+        help="Maximum per-frame IK joint displacement in radians; 0 disables clamping",
+    )
     ap.add_argument("--mink_continuity_max_step", type=float,
                     default=MINK_CONTINUITY_MAX_STEP,
                     help=("Mink maximum joint displacement from the previous "

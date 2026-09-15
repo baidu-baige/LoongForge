@@ -32,7 +32,6 @@ Usage:
 """
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -178,7 +177,6 @@ def episode_inpaint(ep_hash: str, zarr_dir: Path, mask_dir: Path, output_dir: Pa
     chunk_times = []
     for start in range(0, n, chunk_frames):
         end = min(start + chunk_frames, n)
-        t_chunk = time.time()
         chunk_dir = work_dir / f"chunk_{start:06d}"
         fdir, mdir = stage_inputs(frames[start:end], masks[start:end], chunk_dir)
         pp_out = chunk_dir / "pp_out"
@@ -202,10 +200,10 @@ def episode_inpaint(ep_hash: str, zarr_dir: Path, mask_dir: Path, output_dir: Pa
         if not frames_out_dir.exists():
             raise RuntimeError(f"ProPainter chunk [{start}:{end}] output missing at {frames_out_dir}")
         for t in range(start, end):
-            p = frames_out_dir / f"{t - start:04d}.png"  # ProPainter uses zero-padded four-digit names, restarting at 0 for each chunk.
+            # ProPainter restarts zero-padded frame names for each chunk.
+            p = frames_out_dir / f"{t - start:04d}.png"
             bgr = cv2.imread(str(p))
             bg_frames.append(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
-        popped = len(bg_frames)
         elapsed = time.time() - t0
         chunk_times.append((start, end, round(elapsed, 1)))
         print(f"    chunk [{start}:{end}] done in {elapsed:.1f}s")

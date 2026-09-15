@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import numpy as np
 
-from steps import robot_retarget
 from steps.retarget import base_search as retarget_base_search
 from steps.robot_registry import ROBOT_SPECS, get_robot_spec
 from steps.robot_retarget import (

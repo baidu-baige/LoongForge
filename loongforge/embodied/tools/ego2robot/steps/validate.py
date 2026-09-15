@@ -9,7 +9,8 @@ to any dataset produced by this pipeline:
   - Complete directory structure
   - Consistent key info.json fields (codebase_version/fps/robot_type/feature dimensions)
   - Correct data parquet rows and columns, monotonic global index, and episode_index coverage of 0..total_episodes-1
-  - episodes parquet has total_episodes rows; every episode has length > 0, consistent from/to indices, and covers the full data range
+  - episodes parquet has total_episodes rows; every episode has length > 0,
+    consistent from/to indices, and covers the full data range
   - tasks parquet has total_tasks rows and every task has non-empty text
   - Each stats.json feature dimension matches the shape declared in info.json
   - Video frame count and dimensions match info.json
@@ -178,10 +179,16 @@ def build_arg_parser():
                      help="Optionally check total_frames exactly against a specific historical run")
     ap.add_argument("--skip_loader_check", action="store_true",
                      help="Skip the real LeRobotDataset loader smoke test (useful when lerobot is not installed)")
-    ap.add_argument("--depth_dir", default=None,
-                    help="Depth-step output directory containing {ep}/scene_depth.npz; enables numeric depth consistency checks")
-    ap.add_argument("--depth_ik_dir", default=None,
-                    help="Retarget IK directory containing {ep}_ik.npz, used to compare rendered robot depth with DA3 depth")
+    ap.add_argument(
+        "--depth_dir",
+        default=None,
+        help="Depth-step output containing {ep}/scene_depth.npz; enables numeric depth consistency checks",
+    )
+    ap.add_argument(
+        "--depth_ik_dir",
+        default=None,
+        help="Retarget IK directory containing {ep}_ik.npz, used for robot and DA3 depth comparison",
+    )
     ap.add_argument("--depth_samples", type=int, default=12,
                     help="Number of frames sampled for depth consistency checks (default: 12)")
     return ap
@@ -189,7 +196,6 @@ def build_arg_parser():
 
 def check_depth_consistency(args):
     """Optional section 8: compare sampled DA3 metric depth with rendered robot view depth."""
-    import glob as _gl
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import mujoco
     from steps.robot_retarget import build_dual_model

@@ -45,7 +45,11 @@ def build_arg_parser():
         description="run-all: convert EgoVerse zarr to a LeRobot v3.0 dataset and 3x3 demo in one command"
     )
     ap.add_argument("--input_dir", required=True, help="Raw EgoVerse zarr directory (for example, bimanual_sample/)")
-    ap.add_argument("--output_dir", required=True, help="Output root containing intermediate artifacts in fixed subdirectories")
+    ap.add_argument(
+        "--output_dir",
+        required=True,
+        help="Output root containing intermediate artifacts in fixed subdirectories",
+    )
     ap.add_argument("--episodes", nargs="*", default=None, help="Episode directory names to process (default: all)")
     ap.add_argument("--robot_type", choices=tuple(sorted(ROBOT_SPECS)), default="panda",
                     help="Target dual-arm morphology (default: panda)")
@@ -65,8 +69,15 @@ def build_arg_parser():
                     help="Move both arm mounts backward from the head gaze direction, in meters (default: disabled)")
     ap.add_argument("--max_jump_rad", type=float, default=0.0,
                     help="Maximum per-frame joint displacement during IK postprocessing, in radians (0 disables it)")
-    ap.add_argument("--mink_continuity_max_step", type=float, default=0.35,
-                    help="Mink maximum joint displacement from the previous frame during one solve, in radians (0 disables the hard bound)")
+    ap.add_argument(
+        "--mink_continuity_max_step",
+        type=float,
+        default=0.35,
+        help=(
+            "Mink maximum joint displacement from the previous frame during one solve, "
+            "in radians (0 disables the hard bound)"
+        ),
+    )
     ap.add_argument("--mink_continuity_cost", type=float, default=0.2,
                     help="Mink soft posture cost toward the previous frame (0 disables it)")
     ap.add_argument("--target_smooth_window", type=int, default=11,
@@ -88,12 +99,22 @@ def build_arg_parser():
     ap.add_argument("--mask_mode", choices=("both", "person", "arms"), default="both",
                     help="SAM3 tracks: both, person text only, or arm boxes only")
     ap.add_argument("--no_body", action="store_true", help="Deprecated alias for --mask_mode arms")
-    ap.add_argument("--with_depth", action="store_true",
-                    help="Insert DA3 depth estimation after inpaint and write 05_depth/; requires the official depth-anything-3 package")
+    ap.add_argument(
+        "--with_depth",
+        action="store_true",
+        help=(
+            "Insert DA3 depth estimation after inpaint and write 05_depth/; "
+            "requires the official depth-anything-3 package"
+        ),
+    )
     ap.add_argument("--depth_mode", choices=("depth-aware", "alpha"), default="depth-aware",
                     help="depth-aware uses scene/robot depth for occlusion; alpha uses the original mask composite")
-    ap.add_argument("--depth_epsilon", type=float, default=0.02,
-                    help="Depth occlusion safety margin in meters; the robot must be this much closer than the background")
+    ap.add_argument(
+        "--depth_epsilon",
+        type=float,
+        default=0.02,
+        help="Depth occlusion margin in meters; the robot must be closer than the background by this amount",
+    )
     ap.add_argument("--skip_depth", action="store_true",
                     help="Skip depth estimation and force alpha compositing (fallback for --with_depth)")
     return ap

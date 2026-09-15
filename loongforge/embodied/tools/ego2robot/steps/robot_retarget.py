@@ -9,7 +9,7 @@ callers.
 """
 
 if __package__:
-    from .robot_registry import (
+    from .robot_registry import (  # noqa: F401
         ROBOT_SPECS,
         get_model_path,
         get_robot_spec,
@@ -18,7 +18,7 @@ if __package__:
         resolve_robot_spec,
     )
     from .retarget.base_search import *  # noqa: F401,F403
-    from .retarget.base_search import (
+    from .retarget.base_search import (  # noqa: F401
         _base_orientation_candidates,
         _base_visual_min_z,
         _candidate_score,
@@ -37,10 +37,10 @@ if __package__:
         _quality_collision_metrics,
         _snap_base_to_support,
     )
-    from .retarget.cli import build_arg_parser, main, run
+    from .retarget.cli import main
     from .retarget.episode import *  # noqa: F401,F403
     from .retarget.ik import *  # noqa: F401,F403
-    from .retarget.ik import (
+    from .retarget.ik import (  # noqa: F401
         _JointContinuityLimit,
         _ee_pos,
         _ee_pose_and_jacobian,
@@ -50,14 +50,14 @@ if __package__:
     )
     from .retarget.rendering import *  # noqa: F401,F403
     from .retarget.targets import *  # noqa: F401,F403
-    from .retarget.targets import (
+    from .retarget.targets import (  # noqa: F401
         _fill_invalid_keypoints,
         _quat_to_mat,
         _savgol_window,
         _smooth_rotations,
     )
 else:
-    from robot_registry import (
+    from robot_registry import (  # noqa: F401
         ROBOT_SPECS,
         get_model_path,
         get_robot_spec,
@@ -66,7 +66,7 @@ else:
         resolve_robot_spec,
     )
     from retarget.base_search import *  # noqa: F401,F403
-    from retarget.base_search import (
+    from retarget.base_search import (  # noqa: F401
         _base_orientation_candidates,
         _base_visual_min_z,
         _candidate_score,
@@ -85,10 +85,10 @@ else:
         _quality_collision_metrics,
         _snap_base_to_support,
     )
-    from retarget.cli import build_arg_parser, main, run
+    from retarget.cli import main
     from retarget.episode import *  # noqa: F401,F403
     from retarget.ik import *  # noqa: F401,F403
-    from retarget.ik import (
+    from retarget.ik import (  # noqa: F401
         _JointContinuityLimit,
         _ee_pos,
         _ee_pose_and_jacobian,
@@ -98,7 +98,7 @@ else:
     )
     from retarget.rendering import *  # noqa: F401,F403
     from retarget.targets import *  # noqa: F401,F403
-    from retarget.targets import (
+    from retarget.targets import (  # noqa: F401
         _fill_invalid_keypoints,
         _quat_to_mat,
         _savgol_window,

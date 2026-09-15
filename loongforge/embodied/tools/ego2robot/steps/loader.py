@@ -24,7 +24,6 @@ Output:
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -104,7 +103,8 @@ def decode_frame_jpeg(episode_path: str, frame_idx: int) -> Optional[np.ndarray]
 
 def find_invalid_frames(data: dict, sentinel: float = 1e9) -> np.ndarray:
     """
-    Detect frames containing 1e9 sentinel values. A value >= sentinel in any pose/keypoint field marks the frame invalid.
+    Detect frames containing 1e9 sentinel values. A value greater than or equal
+    to the sentinel in any pose/keypoint field marks the frame invalid.
 
     Returns:
         valid_mask: bool array, shape (total_frames,), True = valid
@@ -344,7 +344,7 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
     print(f"    Frames: {n_orig} total, {n_invalid} invalid (1e9 sentinel)")
 
     if n_valid == 0:
-        print(f"    SKIP: all frames invalid")
+        print("    SKIP: all frames invalid")
         return None
 
     # Drop invalid frames when the ratio is below 50%; otherwise drop the entire episode.
@@ -378,7 +378,7 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
 
     # Head-relative transform.
     data = apply_head_relative_transform(data)
-    print(f"    Head-relative transform applied")
+    print("    Head-relative transform applied")
 
     return data
 

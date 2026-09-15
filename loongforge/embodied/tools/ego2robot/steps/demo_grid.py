@@ -88,7 +88,7 @@ def make_info_cell(ep, t, n_total, robot_type="panda"):
     img = np.zeros((CELL_H, CELL_W, 3), dtype=np.uint8)
     font = cv2.FONT_HERSHEY_SIMPLEX
     lines = [
-        f"Episode:",
+        "Episode:",
         f"  {ep[:10]}",
         f"  ...{ep[10:]}",
         f"Frame: {t+1}/{n_total}",
@@ -165,7 +165,7 @@ def load_keypoint_frames(zarr_dir, ep, n_frames):
     K = (dataset_intrinsics_k(_ep_attrs, camera="front_1", img_shape=(ih0, iw0))
          if _ep_attrs is not None else None)
     if K is None:
-        print(f"  ⚠️ No intrinsics for front_1, skipping keypoint frames")
+        print("  ⚠️ No intrinsics for front_1, skipping keypoint frames")
         return []
     left_kp = np.array(store["left.obs_keypoints"][:total]).reshape(total, 21, 3)
     right_kp = np.array(store["right.obs_keypoints"][:total]).reshape(total, 21, 3)
@@ -237,7 +237,7 @@ def load_gripper_frames(zarr_dir, ep, n_frames):
     K = (dataset_intrinsics_k(_ep_attrs, camera="front_1", img_shape=(ih0, iw0))
          if _ep_attrs is not None else None)
     if K is None:
-        print(f"  ⚠️ No intrinsics for front_1, skipping keypoint frames")
+        print("  ⚠️ No intrinsics for front_1, skipping keypoint frames")
         return []
     left_kp = np.array(store["left.obs_keypoints"][:total]).reshape(total, 21, 3)
     right_kp = np.array(store["right.obs_keypoints"][:total]).reshape(total, 21, 3)
@@ -339,7 +339,6 @@ def load_robot_only_frames(zarr_dir, ik_dir, ep, n_frames):
     # For visual alignment, derive fy from dataset intrinsics when possible,
     # supporting both new flat dictionaries and legacy 3x4 matrices.
     try:
-        import zarr as _z
         from steps.config import dataset_fy_for_height, fallback_episode_attrs
         _ep_a, _ = fallback_episode_attrs(f"{zarr_dir}/{ep}")
         _fy = dataset_fy_for_height(_ep_a or {}, height)
@@ -478,7 +477,11 @@ def build_arg_parser():
     ap.add_argument("--zarr_dir", required=True, help="Original EgoVerse Zarr directory, such as bimanual_sample")
     ap.add_argument("--mask_dir", required=True, help="Step 3 SAM3 mask output directory")
     ap.add_argument("--inpaint_dir", required=True, help="Step 4 inpainting output directory containing {ep}/bg.mp4")
-    ap.add_argument("--ik_dir", required=True, help="Retargeting output directory containing {ep}_ik.npz and {ep}_robot_on_bg.mp4")
+    ap.add_argument(
+        "--ik_dir",
+        required=True,
+        help="Retargeting output directory containing {ep}_ik.npz and {ep}_robot_on_bg.mp4",
+    )
     ap.add_argument("--depth_dir", default=None,
                     help="Step 5 depth output directory containing {ep}/depth_vis.mp4; enables the demo depth cell")
     ap.add_argument("--output_dir", required=True)

@@ -312,7 +312,7 @@ def run(args):
     # Summary.
     print(f"\n{'='*60}")
     print(f"Step 2 Path A Complete: {len(results)}/{len(npz_files)} episodes processed")
-    print(f"State/Action shape: (N, 16)")
+    print("State/Action shape: (N, 16)")
     print(f"Action construction: state[t + {args.skip}]")
     print(f"Smoothing: {'OFF' if args.no_smooth else f'ON (savgol window={args.smooth_window})'}")
     for r in results:

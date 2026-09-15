@@ -36,7 +36,6 @@ def export_hdf5(input_dir: str, output: str, with_images: bool = False,
     tasks_py = pq.read_table(inp / "meta" / "tasks.parquet").to_pydict()
     task_by_idx = {int(t): str(n)
                    for t, n in zip(tasks_py["task_index"], tasks_py["task"])}
-    D = info["features"]["action"]["shape"][0]
     if with_images:
         H = info["features"]["observation.images.ego"]["shape"][0]
         W = info["features"]["observation.images.ego"]["shape"][1]
