@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """Checkpoint-compatible GLM-5.3-Flash multimodal model for LoongForge."""
 
 from __future__ import annotations

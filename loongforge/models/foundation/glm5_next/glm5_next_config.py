@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """Configuration for the LoongForge GLM-5.3-Flash adapter."""
 
 from __future__ import annotations

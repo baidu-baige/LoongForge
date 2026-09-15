@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """GLM-5.3-Flash text attention components."""
 
 from __future__ import annotations

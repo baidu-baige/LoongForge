@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """Unit tests for the GLM-5.3-Flash text adapter."""
 
 import sys

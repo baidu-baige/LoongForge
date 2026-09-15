@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """GLM-5.3-Flash vision encoder and projector."""
 
 from __future__ import annotations

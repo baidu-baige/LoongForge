@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """Loong-Megatron layer specification for GLM-5.3-Flash."""
 
 from copy import copy

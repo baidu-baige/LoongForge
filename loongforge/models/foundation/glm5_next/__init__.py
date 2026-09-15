@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """GLM-5.3-Flash foundation model."""
 
 from .glm5_next_config import Glm5NextConfig, Glm5NextVisionConfig

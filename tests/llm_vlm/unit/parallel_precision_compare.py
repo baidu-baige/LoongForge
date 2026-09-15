@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 """Validate GLM-5.3-Flash TP/PP/CP with Loong-Megatron's native schedule."""
 
 import argparse
