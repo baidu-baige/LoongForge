@@ -1,0 +1,410 @@
+torch_dtype: bfloat16
+
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - glm5_next@module: ???
+  - _self_
+
+args:
+  common:
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+    num_key_value_heads: ${module.num_key_value_heads}
+    vocab_size: ${module.vocab_size}
+    num_experts: ${module.n_routed_experts}
+    mtp_num_layers: ${module.mtp_num_layers}
+  huggingface:
+    # GLM-5.3 keeps the MTP (nextn) layer as the trailing HF layer:
+    # model.language_model.layers.{num_layers + k}.*.
+    mtp_layer_id: ${module.num_layers}
+  mcore:
+    add_embedding_padding: false
+    untie_embeddings_and_output_weights: true
+    transpose_mlp_dense: true
+    transpose_query_key_value: true
+
+name_map:
+  huggingface:
+    word_embeddings: model.language_model.embed_tokens
+    transformer: model.language_model
+    layer_prefix: layers
+    input_layernorm: input_layernorm
+    post_attention_layernorm: post_attention_layernorm
+
+    # MLA/DSA layers (every fourth layer in the full model).
+    attention.q_down: self_attn.q_a_proj
+    attention.q_up: self_attn.q_b_proj
+    attention.q_up_layernorm: self_attn.q_a_layernorm
+    attention.kv_down: self_attn.kv_a_proj_with_mqa
+    attention.kv_up: self_attn.kv_b_proj
+    attention.kv_up_layernorm: self_attn.kv_a_layernorm
+    attention.indexer.k_norm: self_attn.indexer.k_norm
+    attention.indexer.weights_proj: self_attn.indexer.weights_proj
+    attention.indexer.wk: self_attn.indexer.wk
+    attention.indexer.wq_b: self_attn.indexer.wq_b
+    attention.indexer.kpool_ape:
+      name: self_attn.indexer.index_kpool_compress_ape
+      is_direct_name: true
+    attention.indexer.kpool_gate:
+      name: self_attn.indexer.index_kpool_compress_gate
+      is_direct_name: true
+    attention.dense: self_attn.o_proj
+
+    # KDA layers.
+    mixer_att.log:
+      name: self_attn.A_log
+      is_direct_name: true
+    mixer_att.dt_bias:
+      name: self_attn.dt_bias
+      is_direct_name: true
+    mixer_att.out_proj: self_attn.o_proj
+    mixer_att.norm: self_attn.o_norm
+    mixer_att.q_proj: self_attn.q_proj
+    mixer_att.k_proj: self_attn.k_proj
+    mixer_att.v_proj: self_attn.v_proj
+    mixer_att.q_conv1d: self_attn.q_conv1d
+    mixer_att.k_conv1d: self_attn.k_conv1d
+    mixer_att.v_conv1d: self_attn.v_conv1d
+    mixer_att.f_a_proj: self_attn.f_a_proj
+    mixer_att.f_b_proj: self_attn.f_b_proj
+    mixer_att.b_proj: self_attn.b_proj
+    mixer_att.g_a_proj: self_attn.g_a_proj
+    mixer_att.g_b_proj: self_attn.g_b_proj
+
+    # Dense blocks and routed/shared MoE blocks.
+    mlp.dense_h_to_4h:
+    - mlp.gate_proj
+    - mlp.up_proj
+    mlp.dense_4h_to_h: mlp.down_proj
+    moe.gate: mlp.gate
+    moe.gate.bias: mlp.gate.e_score_correction_bias
+    moe.expert: mlp.experts
+    moe.shared_expert: mlp.shared_experts
+    moe.expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    moe.expert_4h_to_h: down_proj
+    moe.shared_expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    moe.shared_expert_4h_to_h: down_proj
+
+    # HF stores the three mHC alpha values in hc_*_scale. The native model
+    # loader splits that tensor into these direct parameter names.
+    hc_attn_fn:
+      name: hc_attn_fn
+      is_direct_name: true
+    hc_attn_base:
+      name: hc_attn_base
+      is_direct_name: true
+    hc_attn_alpha_pre:
+      name: hc_attn_alpha_pre
+      is_direct_name: true
+    hc_attn_alpha_post:
+      name: hc_attn_alpha_post
+      is_direct_name: true
+    hc_attn_alpha_res:
+      name: hc_attn_alpha_res
+      is_direct_name: true
+    hc_ffn_fn:
+      name: hc_ffn_fn
+      is_direct_name: true
+    hc_ffn_base:
+      name: hc_ffn_base
+      is_direct_name: true
+    hc_ffn_alpha_pre:
+      name: hc_ffn_alpha_pre
+      is_direct_name: true
+    hc_ffn_alpha_post:
+      name: hc_ffn_alpha_post
+      is_direct_name: true
+    hc_ffn_alpha_res:
+      name: hc_ffn_alpha_res
+      is_direct_name: true
+
+    final_layernorm: model.language_model.norm
+    word_embeddings_for_head: lm_head
+
+    # MTP (nextn) layer: HF keys live at model.language_model.layers.{num_layers}.*
+    # (mtp_transformer + mtp_layer_prefix + mtp_layer_id above).
+    mtp_transformer: model.language_model
+    mtp_layer_prefix: layers
+    mtp_eh_proj: eh_proj
+    mtp_enorm: enorm
+    mtp_hnorm: hnorm
+    mtp_norm: shared_head.norm
+    mtp_hc_attn_fn:
+      name: hc_attn_fn
+      is_direct_name: true
+    mtp_hc_attn_base:
+      name: hc_attn_base
+      is_direct_name: true
+    mtp_hc_attn_alpha_pre:
+      name: hc_attn_alpha_pre
+      is_direct_name: true
+    mtp_hc_attn_alpha_post:
+      name: hc_attn_alpha_post
+      is_direct_name: true
+    mtp_hc_attn_alpha_res:
+      name: hc_attn_alpha_res
+      is_direct_name: true
+    mtp_hc_ffn_fn:
+      name: hc_ffn_fn
+      is_direct_name: true
+    mtp_hc_ffn_base:
+      name: hc_ffn_base
+      is_direct_name: true
+    mtp_hc_ffn_alpha_pre:
+      name: hc_ffn_alpha_pre
+      is_direct_name: true
+    mtp_hc_ffn_alpha_post:
+      name: hc_ffn_alpha_post
+      is_direct_name: true
+    mtp_hc_ffn_alpha_res:
+      name: hc_ffn_alpha_res
+      is_direct_name: true
+    # MTP MoE expert mappings (same HF names as decoder MoE layers).
+    mtp_moe.expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    mtp_moe.expert_4h_to_h: down_proj
+    mtp_moe.shared_expert_h_to_4h:
+    - gate_proj
+    - up_proj
+    mtp_moe.shared_expert_4h_to_h: down_proj
+  mcore:
+    word_embeddings: model.language_model.embedding.word_embeddings
+    transformer: model.language_model
+    layer_prefix: decoder.layers
+    input_layernorm: input_layernorm
+    post_attention_layernorm: pre_mlp_layernorm
+
+    # MLA/DSA layers. GLM-5.3 quantizes q_a/q_b/kv_a/o_proj (e4m3); kv_b and
+    # the indexer stay BF16 in the released checkpoint.
+    attention.q_down:
+      name: self_attention.linear_q_down_proj
+      extra: true
+      fp8: true
+      fp8_ignore_tp: true
+    attention.q_up:
+      name: self_attention.linear_q_up_proj
+      extra: true
+      fp8: true
+    attention.q_up_layernorm:
+      name: self_attention.q_layernorm
+      extra: true
+    attention.kv_down:
+      name: self_attention.linear_kv_down_proj
+      extra: true
+      fp8: true
+      fp8_ignore_tp: true
+    attention.kv_up:
+      name: self_attention.linear_kv_up_proj
+      extra: true
+    attention.kv_up_layernorm:
+      name: self_attention.kv_layernorm
+      extra: true
+    attention.indexer.k_norm:
+      name: self_attention.core_attention.indexer.k_norm
+      extra: true
+    attention.indexer.weights_proj:
+      name: self_attention.core_attention.indexer.linear_weights_proj
+      extra: true
+    attention.indexer.wk:
+      name: self_attention.core_attention.indexer.linear_wk
+      extra: true
+    attention.indexer.wq_b:
+      name: self_attention.core_attention.indexer.linear_wq_b
+      extra: true
+    attention.indexer.kpool_ape:
+      name: self_attention.core_attention.indexer.index_kpool_compress_ape
+      is_direct_name: true
+      ignore_tp: true
+    attention.indexer.kpool_gate:
+      name: self_attention.core_attention.indexer.index_kpool_compress_gate
+      is_direct_name: true
+      ignore_tp: true
+    attention.dense:
+      name: self_attention.linear_proj
+      extra: true
+      fp8: true
+
+    # KDA modules are replicated because this adapter reconstructs SP input
+    # before KDA and selects the local sequence shard afterwards.
+    mixer_att.log:
+      name: self_attention.A_log
+      is_direct_name: true
+      ignore_tp: true
+    mixer_att.dt_bias:
+      name: self_attention.dt_bias
+      is_direct_name: true
+      ignore_tp: true
+    mixer_att.out_proj:
+      name: self_attention.o_proj
+      extra: true
+    mixer_att.norm: self_attention.o_norm.norm
+    mixer_att.q_proj:
+      name: self_attention.q_proj
+      ignore_tp: true
+    mixer_att.k_proj:
+      name: self_attention.k_proj
+      ignore_tp: true
+    mixer_att.v_proj:
+      name: self_attention.v_proj
+      ignore_tp: true
+    mixer_att.q_conv1d:
+      name: self_attention.q_conv1d
+      ignore_tp: true
+    mixer_att.k_conv1d:
+      name: self_attention.k_conv1d
+      ignore_tp: true
+    mixer_att.v_conv1d:
+      name: self_attention.v_conv1d
+      ignore_tp: true
+    mixer_att.f_a_proj:
+      name: self_attention.f_a_proj
+      ignore_tp: true
+    mixer_att.f_b_proj:
+      name: self_attention.f_b_proj
+      ignore_tp: true
+    mixer_att.b_proj:
+      name: self_attention.b_proj
+      ignore_tp: true
+    mixer_att.g_a_proj:
+      name: self_attention.g_a_proj
+      ignore_tp: true
+    mixer_att.g_b_proj:
+      name: self_attention.g_b_proj
+      ignore_tp: true
+
+    # Dense and routed/shared MoE blocks. `fp8: true` marks the families the
+    # released e4m3 checkpoint quantizes (128x128 block-wise scales); BF16
+    # sources simply lack the scale keys and take the plain path.
+    mlp.dense_h_to_4h:
+      name: mlp.linear_fc1
+      extra: true
+      fp8: true
+    mlp.dense_4h_to_h:
+      name: mlp.linear_fc2
+      extra: true
+      fp8: true
+    moe.gate: mlp.router
+    moe.gate.bias: mlp.router.expert_bias
+    moe.expert: mlp.experts.local_experts
+    moe.groupedgemm.expert: mlp.experts
+    moe.shared_expert: mlp.shared_experts
+    moe.expert_h_to_4h:
+      name: linear_fc1
+      extra: true
+      fp8: true
+    moe.expert_4h_to_h:
+      name: linear_fc2
+      extra: true
+      fp8: true
+    moe.shared_expert_h_to_4h:
+      name: mlp.shared_experts.linear_fc1
+      extra: true
+      fp8: true
+    moe.shared_expert_4h_to_h:
+      name: mlp.shared_experts.linear_fc2
+      extra: true
+      fp8: true
+
+    # mHC parameters are replicated across TP ranks.
+    hc_attn_fn:
+      name: self_attention_hyper_connection.mapping_proj
+      ignore_tp: true
+    hc_attn_base:
+      name: self_attention_hyper_connection.bias
+      is_direct_name: true
+      ignore_tp: true
+    hc_attn_alpha_pre:
+      name: self_attention_hyper_connection.alpha_pre
+      is_direct_name: true
+      ignore_tp: true
+    hc_attn_alpha_post:
+      name: self_attention_hyper_connection.alpha_post
+      is_direct_name: true
+      ignore_tp: true
+    hc_attn_alpha_res:
+      name: self_attention_hyper_connection.alpha_res
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_fn:
+      name: mlp_hyper_connection.mapping_proj
+      ignore_tp: true
+    hc_ffn_base:
+      name: mlp_hyper_connection.bias
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_alpha_pre:
+      name: mlp_hyper_connection.alpha_pre
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_alpha_post:
+      name: mlp_hyper_connection.alpha_post
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_alpha_res:
+      name: mlp_hyper_connection.alpha_res
+      is_direct_name: true
+      ignore_tp: true
+
+    final_layernorm:
+      name: decoder.final_layernorm
+      extra: true
+    word_embeddings_for_head: lm_head
+
+    # MTP (nextn) layer: nested under the model.language_model root as
+    # mtp.layers.{k}.*, mirroring the native model's MultimodalContainer layout.
+    mtp_layer_prefix: mtp.layers
+    mtp_name_prefix_for_layer: transformer_layer
+    mtp_eh_proj:
+      name: eh_proj
+      ignore_tp: true
+    mtp_enorm: enorm
+    mtp_hnorm: hnorm
+    mtp_norm: final_layernorm
+    mtp_hc_attn_fn:
+      name: transformer_layer.self_attention_hyper_connection.mapping_proj
+      ignore_tp: true
+    mtp_hc_attn_base:
+      name: transformer_layer.self_attention_hyper_connection.bias
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_attn_alpha_pre:
+      name: transformer_layer.self_attention_hyper_connection.alpha_pre
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_attn_alpha_post:
+      name: transformer_layer.self_attention_hyper_connection.alpha_post
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_attn_alpha_res:
+      name: transformer_layer.self_attention_hyper_connection.alpha_res
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_ffn_fn:
+      name: transformer_layer.mlp_hyper_connection.mapping_proj
+      ignore_tp: true
+    mtp_hc_ffn_base:
+      name: transformer_layer.mlp_hyper_connection.bias
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_ffn_alpha_pre:
+      name: transformer_layer.mlp_hyper_connection.alpha_pre
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_ffn_alpha_post:
+      name: transformer_layer.mlp_hyper_connection.alpha_post
+      is_direct_name: true
+      ignore_tp: true
+    mtp_hc_ffn_alpha_res:
+      name: transformer_layer.mlp_hyper_connection.alpha_res
+      is_direct_name: true
+      ignore_tp: true
