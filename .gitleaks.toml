@@ -6,3 +6,9 @@
 
 [extend]
 useDefault = true
+
+# This is a serialized prediction schema key, not a credential.  Keep the
+# exception exact so other key-like values in the pipeline remain scanned.
+[allowlist]
+description = "Known ego2robot prediction schema field"
+regexes = ['pred_keypoints_3d']
