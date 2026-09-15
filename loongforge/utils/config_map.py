@@ -435,6 +435,14 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/glm5.2",
         "config_name": "glm5_2",
     },
+    "glm5.3-flash-tiny-4l": {
+        "config_path": "configs/models/glm5_next",
+        "config_name": "glm5.3_flash_tiny_4l",
+    },
+    "glm5.3-flash": {
+        "config_path": "configs/models/glm5_next",
+        "config_name": "glm5.3_flash",
+    },
 }
 
 

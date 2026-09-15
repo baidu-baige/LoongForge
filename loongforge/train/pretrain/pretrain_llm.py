@@ -176,6 +176,8 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 tokens, position_ids, attention_mask, labels=labels, loss_mask=loss_mask,
                 extra_block_kwargs=extra_block_kwargs,
             )
+            if hasattr(output_tensor, "loss") and output_tensor.loss is not None:
+                output_tensor = output_tensor.loss
 
     return output_tensor, partial(loss_func, loss_mask)
 

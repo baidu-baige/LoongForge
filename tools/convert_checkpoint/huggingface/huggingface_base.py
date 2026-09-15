@@ -176,6 +176,12 @@ class HuggingfaceBase:
     def _materialize_fp8_weight_if_needed(self, weight, weight_scale):
         if weight is None:
             return weight, weight_scale
+        # --fp8_force_no_requant: keep FP8 weights and their scales unchanged
+        # (the GLM-5.2-style fp8->hf_fp8 flow) instead of dequantizing.
+        if weight_scale is not None and getattr(
+            getattr(self, "args", None), "fp8_force_no_requant", False
+        ):
+            return weight, weight_scale
         output_dtype = self._get_output_dtype()
 
         if weight_scale is not None and self._has_fp8_storage(weight):

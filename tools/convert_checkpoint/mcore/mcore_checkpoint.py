@@ -9,7 +9,12 @@ import logging
 
 import concurrent.futures
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import (
+    VISION_MAP,
+    VISION_WORD_EMBEDDINGS,
+    CommonCheckpoint,
+    is_glm5_next_config,
+)
 from convert_checkpoint.mcore.mcore_base import McoreBase
 from convert_checkpoint.mcore.mcore_moe import McoreMoe
 from convert_checkpoint.utils.utils import (
@@ -198,6 +203,21 @@ class McoreCheckpoint(AbstractCheckpoint):
                             c_name, c_ckpt, m_dict, t_name,
                             ep_id=ep_id, clear_source=clear_source,
                         )
+                # GLM-5.3-Flash vision passthrough: emit the stashed
+                # `model.visual.*` tensors under a dedicated top-level root,
+                # mirroring the native model's MultimodalContainer layout.
+                # The tower is replicated (not TP-sharded), so every rank
+                # carries the full copy.
+                if is_glm5_next_config(self.c_config):
+                    visual = {
+                        key: value for key, value in c_ckpt.model_dict.items()
+                        if key.startswith("model.visual.")
+                    }
+                    if visual:
+                        stripped = {key[len("model.visual."):]: value for key, value in visual.items()}
+                        for rank in m_dict:
+                            m_dict[rank]["model.visual"] = dict(stripped)
+                        logging.info("passed through %d GLM-5.3 vision tensors to mcore", len(visual))
             elif self.args.enable_full_hetero_dp:
                 t_name = self.get_transformer_name(0)
                 self.m_base.common_to_mcore(
@@ -497,6 +517,14 @@ class McoreCheckpoint(AbstractCheckpoint):
                 for c_name in name_map.keys():
                     if c_name.startswith(VISION_MAP):
                         self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name)
+                # GLM-5.3-Flash vision passthrough: read the `model.visual`
+                # top-level root back into common (HF-identical names).
+                if is_glm5_next_config(self.c_config):
+                    visual_root = self.m_dict.get(0, {}).get("model.visual") if self.m_dict else None
+                    if isinstance(visual_root, dict):
+                        for key, value in visual_root.items():
+                            c_ckpt.model_dict[f"model.visual.{key}"] = value
+                        logging.info("read back %d GLM-5.3 vision tensors from mcore", len(visual_root))
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset = get_virtual_partition(

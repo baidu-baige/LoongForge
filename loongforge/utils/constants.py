@@ -89,6 +89,7 @@ class LanguageModelFamilies(_BaseFamilies):
     MINIMAX = "minimax"
     MIMO = "mimo"
     GLM = "glm"
+    GLM5_NEXT = "glm5_next"
 
 
 class VisionLanguageModelFamilies(_BaseFamilies):

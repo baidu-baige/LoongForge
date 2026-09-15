@@ -145,7 +145,9 @@ def parse_yaml_config(config_file, convert_file):
     # Filter out PEFT config keys (e.g., 'lora') which are not model module types
     module_keys = [k for k in module_names.keys() if k not in ['lora']]
     if len(module_keys) == 0: # llm
-        config_name = config_file.split("/")[-1].split(".")[0]
+        # Keep dots in config basenames (e.g. ``glm5.3_flash.yaml``). Splitting
+        # on every dot would incorrectly resolve this file as the ``glm5`` config.
+        config_name = os.path.splitext(os.path.basename(config_file))[0]
         cfg = load_config(
             convert_file, hydra_overrides={module_type + "@module=" + config_name}
         )

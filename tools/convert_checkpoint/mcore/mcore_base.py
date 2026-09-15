@@ -158,6 +158,11 @@ class McoreBase:
         self.etp_to_tp_mapping, _ = get_etp_map(self.tp, self.ep, self.etp)
 
     def _should_materialize_fp8_for_hf(self):
+        # --fp8_force_no_requant asks the converter to carry FP8 weights and
+        # their scales through unchanged (the GLM-5.2-style fp8->hf_fp8 flow);
+        # without it the HF export materializes dequantized BF16 weights.
+        if getattr(self.args, "fp8_force_no_requant", False):
+            return False
         return getattr(self.args, "save_platform", None) == "huggingface"
 
     def _get_hf_output_dtype(self):

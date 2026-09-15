@@ -436,6 +436,8 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 inner_group_id=inner_group_id,
                 enable_full_hetero_dp=args.enable_full_hetero_dp,
             )
+            if hasattr(output_tensor, "loss") and output_tensor.loss is not None:
+                output_tensor = output_tensor.loss
 
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 

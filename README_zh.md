@@ -84,6 +84,7 @@
 
 ## 🔥 最新动态
 
+- **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
 - **[2026/09]** ⚡ 新增优化后的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 Delta-FP8 AllGather。
 - **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
@@ -216,6 +217,7 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 <li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
+<li><a href="examples/glm5_next/">GLM-5.3-flash</a> ✅</li>
 <li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>
 <li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a> ✅</li>
 <li><a href="examples/internvl2.5/">InternVL2.5</a> ✅</li>

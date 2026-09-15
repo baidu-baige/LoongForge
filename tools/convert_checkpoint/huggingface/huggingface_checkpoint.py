@@ -11,7 +11,12 @@ import logging
 
 import concurrent.futures
 from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
+from convert_checkpoint.common.common_checkpoint import (
+    VISION_MAP,
+    VISION_WORD_EMBEDDINGS,
+    CommonCheckpoint,
+    is_glm5_next_config,
+)
 
 from convert_checkpoint.utils.utils import (
     get_done_keys,
@@ -123,7 +128,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     if 0 in layer_ids:
         for c_name in name_map.keys():
             if c_name.startswith(VISION_MAP):
-                hf_name, _, _, _, no_layer_id, _, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
+                hf_name, _, _, _, _, no_layer_id, _ = HuggingfaceBase.get_hf_name_and_args(name_map[c_name])
                 for ext in ["", ".weight", ".bias"]:
                     name = hf_name + ext
                     if ext == ".bias":
@@ -134,6 +139,14 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                             weight_map, filenames_in_the_layer, name, args=args,
                             dequant_weight_keys=dequant_weight_keys
                         )
+
+        if is_glm5_next_config(c_config):
+            # GLM-5.3-Flash: vision tensors use `model.visual.*` keys that no
+            # name_map entry covers; select their shards explicitly so the
+            # passthrough in convert_to_common can carry the tower through.
+            for key, fname in weight_map.items():
+                if key.startswith("model.visual."):
+                    filenames_in_the_layer.add(fname)
 
 
 
@@ -335,6 +348,11 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             for c_name in name_map.keys():
                 if c_name.startswith(VISION_MAP):
                     self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict)
+            if is_glm5_next_config(self.c_config):
+                # GLM-5.3-Flash vision passthrough: emit the stashed
+                # `model.visual.*` tensors unchanged into the HF checkpoint.
+                for key in [k for k in c_ckpt.model_dict if k.startswith("model.visual.")]:
+                    self.state_dict[key] = c_ckpt.model_dict[key]
 
         for layer_id in layer_ids:
             hf_layer_id = (
@@ -386,6 +404,32 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             for c_name in LAST_LAYER_NAMES:
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_prefix=layer_prefix)
 
+        if is_glm5_next_config(self.c_config):
+            # GLM-5.3-Flash: the HF format stores each mHC triplet fused in a
+            # single `hc_*_scale` [3] tensor (the load side splits it into
+            # alpha_pre/alpha_post/alpha_res). Merge them back on save so the
+            # round-trip checkpoint keeps the released naming.
+            merged = 0
+            marker = "_alpha_"
+            bases = {
+                key[: key.rfind(marker)]
+                for key in list(self.state_dict.keys())
+                if ".hc_" in key and marker in key
+            }
+            for base in sorted(bases):
+                triplet = [
+                    self.state_dict.get(f"{base}_alpha_{part}")
+                    for part in ("pre", "post", "res")
+                ]
+                if any(t is None for t in triplet):
+                    continue
+                for part in ("pre", "post", "res"):
+                    self.state_dict.pop(f"{base}_alpha_{part}", None)
+                self.state_dict[base + "_scale"] = torch.cat(triplet)
+                merged += 1
+            if merged:
+                logging.info("merged %d GLM-5.3 hc alpha triplets into fused hc_*_scale", merged)
+
         if save_file:
             self.save_ckpt_file(save_path, p, ep_ids, self.state_dict)
         else:
@@ -435,6 +479,15 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             for c_name in name_map.keys():
                 if c_name.startswith(VISION_MAP):
                     self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict)
+            if is_glm5_next_config(self.c_config):
+                # GLM-5.3-Flash vision passthrough: the native model keeps
+                # HF-identical `model.visual.*` names, so stash the raw tensors
+                # in the common checkpoint; the mcore/HF writers re-emit them.
+                vision_keys = [k for k in self.state_dict if k.startswith("model.visual.")]
+                for key in vision_keys:
+                    c_ckpt.model_dict[key] = self.state_dict.pop(key)
+                if vision_keys:
+                    logging.info("passed through %d GLM-5.3 vision tensors", len(vision_keys))
         elif self.args.enable_full_hetero_dp:
             self.h_base.hf_to_common(VISION_WORD_EMBEDDINGS, c_ckpt, self.state_dict)
 
@@ -651,13 +704,18 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 return key[len(_MODEL_PREFIX):]
             return key
 
-        if (is_dsv4_hybrid_config(c_config) and self.state_dict
+        module_args = c_config.get("module", {}) if c_config is not None else {}
+        is_glm5_next = module_args.get("model_type") == "glm5_next"
+        if ((is_dsv4_hybrid_config(c_config) or is_glm5_next) and self.state_dict
                 and any(_strip_model_prefix(k).startswith(('layers.', 'mtp.'))
+                        or k.startswith('model.language_model.layers.')
                         or _strip_model_prefix(k) == 'embed.weight'
                         for k in self.state_dict.keys())):
             new_sd = {}
             for key, value in self.state_dict.items():
-                new_key = _strip_model_prefix(key)
+                # GLM-5.3 keeps the multimodal model.language_model prefix in
+                # its name map; only DeepSeek-V4 uses the stripped layout.
+                new_key = key if is_glm5_next else _strip_model_prefix(key)
                 # Rename FP8 scale keys: *.scale -> *.weight_scale_inv
                 if new_key.endswith('.scale'):
                     new_key = new_key[:-len('.scale')] + '.weight_scale_inv'

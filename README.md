@@ -84,6 +84,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
+- **[2026/09]** ✨ Added training support for **[GLM-5.3-flash](./examples/glm5_next/)**.
 - **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** BF16 training support for both LLMs and VLMs.
 - **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and Delta-FP8 AllGather.
 - **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
@@ -216,6 +217,7 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 <li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
+<li><a href="examples/glm5_next/">GLM-5.3-flash</a> ✅</li>
 <li><a href="examples/ernie4.5/">ERNIE4.5-VL</a> ✅</li>
 <li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a> ✅</li>
 <li><a href="examples/internvl2.5/">InternVL2.5</a> ✅</li>

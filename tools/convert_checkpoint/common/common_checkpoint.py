@@ -131,6 +131,19 @@ MIXER_ATT_OUT_PROJ = "mixer_att.out_proj"
 MIXER_ATT_IN_PROJ = "mixer_att.in_proj"
 MIXER_ATT_IN_PROJ_QKVZ = "mixer_att.in_proj_qkvz"
 MIXER_ATT_IN_PROJ_BA = "mixer_att.in_proj_ba"
+# GLM-5.3-Flash KDA uses independent projections and depthwise convolutions
+# instead of the packed GatedDeltaNet projections above.
+MIXER_ATT_Q_PROJ = "mixer_att.q_proj"
+MIXER_ATT_K_PROJ = "mixer_att.k_proj"
+MIXER_ATT_V_PROJ = "mixer_att.v_proj"
+MIXER_ATT_Q_CONV1D = "mixer_att.q_conv1d"
+MIXER_ATT_K_CONV1D = "mixer_att.k_conv1d"
+MIXER_ATT_V_CONV1D = "mixer_att.v_conv1d"
+MIXER_ATT_F_A_PROJ = "mixer_att.f_a_proj"
+MIXER_ATT_F_B_PROJ = "mixer_att.f_b_proj"
+MIXER_ATT_B_PROJ = "mixer_att.b_proj"
+MIXER_ATT_G_A_PROJ = "mixer_att.g_a_proj"
+MIXER_ATT_G_B_PROJ = "mixer_att.g_b_proj"
 MIXER_INPUT_LAYERNORM = "mixer_input_layernorm"
 
 # Kimi K3 KDA, AttnRes, and latent-MoE tensors.
@@ -156,6 +169,8 @@ K3_MOE_ROUTED_EXPERT_NORM = "kimi_k3.moe.routed_expert_norm"
 K3_MOE_FC2_LATENT_PROJ = "kimi_k3.moe.fc2_latent_proj"
 K3_OUTPUT_ATTN_RES_NORM = "kimi_k3.output_attn_res_norm"
 K3_OUTPUT_ATTN_RES_PROJ = "kimi_k3.output_attn_res_proj"
+ATTENTION_INDEXER_KPOOL_APE = "attention.indexer.kpool_ape"
+ATTENTION_INDEXER_KPOOL_GATE = "attention.indexer.kpool_gate"
 
 ATTENTION_DENSE = "attention.dense"
 ATTENTION_QNORM = "attention.q_a_layernorm"
@@ -223,10 +238,15 @@ FIRST_LAYER_NAMES = [WORD_EMBEDDINGS, WORD_POSITION_EMBEDDINGS, WORD_BLOCK_POSIT
 BASE_NAMES = [INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FREQ, ATTENTION_QUERY_KEY_VALUE,
             ATTENTION_QUERY_GATE_KEY_VALUE, MIXER_ATT_LOG, MIXER_ATT_DT, MIXER_INPUT_LAYERNORM, MIXER_ATT_CONV1D,
             MIXER_ATT_NORM, MIXER_ATT_OUT_PROJ, MIXER_ATT_IN_PROJ, MIXER_ATT_IN_PROJ_QKVZ, MIXER_ATT_IN_PROJ_BA,
+            MIXER_ATT_Q_PROJ, MIXER_ATT_K_PROJ, MIXER_ATT_V_PROJ,
+            MIXER_ATT_Q_CONV1D, MIXER_ATT_K_CONV1D, MIXER_ATT_V_CONV1D,
+            MIXER_ATT_F_A_PROJ, MIXER_ATT_F_B_PROJ, MIXER_ATT_B_PROJ,
+            MIXER_ATT_G_A_PROJ, MIXER_ATT_G_B_PROJ,
             ATTENTION_Q_DOWN, ATTENTION_Q_UP, ATTENTION_Q_UP_LAYERNORM, ATTENTION_KV_DOWN, ATTENTION_KV_UP,
             ATTENTION_KV_UP_LAYERNORM, ATTENTION_Q, ATTENTION_DENSE,
             ATTENTION_INDEXER_K_NORM, ATTENTION_INDEXER_WEIGHTS_PROJ,
-            ATTENTION_INDEXER_WK, ATTENTION_INDEXER_WQ_B, MOE_SHARED_EXPERT_GATE,
+            ATTENTION_INDEXER_WK, ATTENTION_INDEXER_WQ_B,
+            ATTENTION_INDEXER_KPOOL_APE, ATTENTION_INDEXER_KPOOL_GATE, MOE_SHARED_EXPERT_GATE,
             POST_ATTENTION_LAYERNORM, POST_ATTENTION_LAYERSCALE, ATTENTION_QNORM, ATTENTION_KNORM,
             POST_MLP_LAYERNORM, POST_MLP_LAYERSCALE, MLP_DENSE_H_TO_4H, MLP_DENSE_4H_TO_H, MOE_GATE,
             # DeepSeek V4 additions
@@ -276,6 +296,24 @@ EMBED_NAMES = [
     WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD,
     VISION_WORD_EMBEDDINGS, MTP_SHARED_HEAD_HEAD,
 ]
+
+
+def is_glm5_next_config(c_config) -> bool:
+    """GLM-5.3-Flash multimodal checkpoints carry an HF-identical vision tower.
+
+    The native model keeps `model.visual.*` parameter names verbatim, so the
+    converter passes the tower through without name_map translation.
+    """
+    if c_config is None:
+        return False
+    module_args = c_config.get("module", {})
+    if not module_args:
+        return False
+    try:
+        return module_args.get("model_type") == "glm5_next"
+    except AttributeError:
+        return False
+
 
 WEIGHT = "weight"
 BIAS = "bias"

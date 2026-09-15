@@ -1328,3 +1328,23 @@ _register_chat_template(
         image_suffix="<|end_of_image|>",
     ),
 )
+
+# GLM-5.3-Flash prompt format: Reasoning Effort system line (max/high/low, default max,
+# selectable via --chat-template-kwargs), a `clear_thinking` switch, tool_reference
+# responses, and real image/video/audio token emission inside the template.
+# Registered as an HFChatTemplate so OpenAI-style SFT gets assistant-only loss masks
+# from the template's generation blocks. Video SFT additionally needs plugin support
+# for the <|begin_of_video|>/<|end_of_video|> wrapper.
+_register_chat_template(
+    name="glm5.3-hf",
+    cls=HFChatTemplate,
+    chat_template=_read_builtin_chat_template("glm5_3_hf_training.jinja"),
+    stop_words=["<|user|>", "<|assistant|>"],
+    mm_plugin=KimiPlugin(
+        image_token="<|image|>",
+        video_token=None,
+        merge_kernel_size=(2, 2),
+        image_prefix="<|begin_of_image|>",
+        image_suffix="<|end_of_image|>",
+    ),
+)
