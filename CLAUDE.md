@@ -173,7 +173,7 @@ Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--con
 
 - **`configs/models/<family>/<model>.yaml`** — Hydra/OmegaConf YAML configs defining model architecture params. The `_target_` field maps to a Python config dataclass (e.g., `loongforge.models.llm.LLaMAConfig`).
 - **`configs/data/`** — Data configuration templates.
-- **`loongforge/models/catalog.py`** — `MCORE_CONFIGS` maps `--model-name` strings to `{"config_path": ..., "config_name": ...}` dicts. `TORCH_CONFIGS` selects Torch YAML and model/data schemas.
+- **`loongforge/models/catalog.py`** — `MCORE_CONFIGS` and `TORCH_CONFIGS` both map `--model-name` strings to `ModelSpec` entries built by `_mcore()` / `_torch()`; the Torch helper also names the model and data config classes.
 
 ### Data Pipeline: `loongforge/datasets/`
 

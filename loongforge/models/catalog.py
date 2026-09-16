@@ -8,438 +8,156 @@ from pathlib import Path
 from loongforge.contracts import ModelSpec
 
 
-# registry for model config
-MCORE_CONFIGS = {
-    # deepseek
-    "deepseek-v2": {
-        "config_path": "configs/models/deepseek2",
-        "config_name": "deepseek_v2",
-    },
-    "deepseek-v2-lite": {
-        "config_path": "configs/models/deepseek2",
-        "config_name": "deepseek_v2_lite",
-    },
-    "deepseek-v3": {
-        "config_path": "configs/models/deepseek3",
-        "config_name": "deepseek_v3",
-    },
-    "deepseek-v3.2-sparse": {
-        "config_path": "configs/models/deepseek3",
-        "config_name": "deepseek_v3_2_sparse",
-    },
-    "deepseek-v4-flash": {
-        "config_path": "configs/models/deepseek4",
-        "config_name": "deepseek_v4_flash_base",
-    },
-    "deepseek-v4-flash-lite": {
-        "config_path": "configs/models/deepseek4",
-        "config_name": "deepseek_v4_flash_lite",
-    },
-    "deepseek-v4-flash-lite-2l": {
-        "config_path": "configs/models/deepseek4",
-        "config_name": "deepseek_v4_flash_lite_2l",
-    },
-    "deepseek-v4-flash-lite-4l": {
-        "config_path": "configs/models/deepseek4",
-        "config_name": "deepseek_v4_flash_lite_4l",
-    },
-    "deepseek-v4-flash-lite-6l": {
-        "config_path": "configs/models/deepseek4",
-        "config_name": "deepseek_v4_flash_lite_6l",
-    },
-    "deepseek-v4-pro": {
-        "config_path": "configs/models/deepseek4",
-        "config_name": "deepseek_v4_pro_base",
-    },
-    # internlm2.5
-    "internlm2.5-8b": {
-        "config_path": "configs/models/internlm2.5",
-        "config_name": "internlm2_5_8b",
-    },
-    "internlm2.5-20b": {
-        "config_path": "configs/models/internlm2.5",
-        "config_name": "internlm2_5_20b",
-    },
-    # llama
-    "llama2-7b": {
-        "config_path": "configs/models/llama2",
-        "config_name": "llama2_7b",
-    },
-    "llama2-13b": {
-        "config_path": "configs/models/llama2",
-        "config_name": "llama2_13b",
-    },
-    "llama2-70b": {
-        "config_path": "configs/models/llama2",
-        "config_name": "llama2_70b",
-    },
-    "llama3-8b": {
-        "config_path": "configs/models/llama3",
-        "config_name": "llama3_8b",
-    },
-    "llama3-70b": {
-        "config_path": "configs/models/llama3",
-        "config_name": "llama3_70b",
-    },
-    "llama3.1-8b": {
-        "config_path": "configs/models/llama3",
-        "config_name": "llama3_1_8b",
-    },
-    "llama3.1-70b": {
-        "config_path": "configs/models/llama3",
-        "config_name": "llama3_1_70b",
-    },
-    "llama3.1-405b": {
-        "config_path": "configs/models/llama3",
-        "config_name": "llama3_1_405b",
-    },
-
-    # qwen
-    "qwen-1.8b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen_1_8b",
-    },
-    "qwen-7b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen_7b",
-    },
-    "qwen-14b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen_14b",
-    },
-    "qwen-72b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen_72b",
-    },
-    "qwen1.5-0.5b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_0_5b",
-    },
-    "qwen1.5-1.8b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_1_8b",
-    },
-    "qwen1.5-4b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_4b",
-    },
-    "qwen1.5-7b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_7b",
-    },
-    "qwen1.5-14b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_14b",
-    },
-    "qwen1.5-32b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_32b",
-    },
-    "qwen1.5-72b": {
-        "config_path": "configs/models/qwen",
-        "config_name": "qwen1_5_72b",
-    },
-    "qwen2-0.5b": {
-        "config_path": "configs/models/qwen2",
-        "config_name": "qwen2_0_5b",
-    },
-    "qwen2-1.5b": {
-        "config_path": "configs/models/qwen2",
-        "config_name": "qwen2_1_5b",
-    },
-    "qwen2-7b": {
-        "config_path": "configs/models/qwen2",
-        "config_name": "qwen2_7b",
-    },
-    "qwen2-72b": {
-        "config_path": "configs/models/qwen2",
-        "config_name": "qwen2_72b",
-    },
-    "qwen2.5-0.5b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_0_5b",
-    },
-    "qwen2.5-1.5b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_1_5b",
-    },
-    "qwen2.5-3b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_3b",
-    },
-    "qwen2.5-7b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_7b",
-    },
-    "qwen2.5-14b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_14b",
-    },
-    "qwen2.5-32b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_32b",
-    },
-    "qwen2.5-72b": {
-        "config_path": "configs/models/qwen2.5",
-        "config_name": "qwen2_5_72b",
-    },
-    "qwen3-0.6b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_0_6b",
-    },
-    "qwen3-1.7b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_1_7b",
-    },
-    "qwen3-4b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_4b",
-    },
-    "qwen3-8b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_8b",
-    },
-    "qwen3-14b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_14b",
-    },
-    "qwen3-30b-a3b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_30b_a3b",
-    },
-    "qwen3-32b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_32b",
-    },
-    "qwen3-235b-a22b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_235b_a22b",
-    },
-    "qwen3-480b-a35b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_480b_a35b",
-    },
-    "qwen3-coder-30b-a3b": {
-        "config_path": "configs/models/qwen3",
-        "config_name": "qwen3_coder_30b_a3b",
-    },
-
-    # qwen3-next-80b-a3b
-    "qwen3-next-80b-a3b": {
-        "config_path": "configs/models/qwen3_next",
-        "config_name": "qwen3_next_80b_a3b",
-    },
-
-    # Kimi K3 multimodal model
-    "kimi-k3": {
-        "config_path": "configs/models/kimi_k3",
-        "config_name": "kimi_k3",
-    },
-
-    # qwen3.5
-    "qwen3.5-0.8b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_0_8b",
-    },
-    "qwen3.5-2b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_2b",
-    },
-    "qwen3.5-4b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_4b",
-    },
-    "qwen3.5-9b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_9b",
-    },
-    "qwen3.5-27b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_27b",
-    },
-    "qwen3.5-35b-a3b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_35b_a3b",
-    },
-    "qwen3.5-122b-a10b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_122b_a10b",
-    },
-    "qwen3.5-397b-a17b": {
-        "config_path": "configs/models/qwen3.5",
-        "config_name": "qwen3_5_397b_a17b",
-    },
-
-    # qwen3.6
-    "qwen3.6-27b": {
-        "config_path": "configs/models/qwen3.6",
-        "config_name": "qwen3_6_27b",
-    },
-    "qwen3.6-35b-a3b": {
-        "config_path": "configs/models/qwen3.6",
-        "config_name": "qwen3_6_35b_a3b",
-    },
-
-    # qwen3.8
-    "qwen3.8-27b": {
-        "config_path": "configs/models/qwen3.8",
-        "config_name": "qwen3_8_27b",
-    },
-
-    # kimi-k2.x
-    "kimi-k2.5": {
-        "config_path": "configs/models/kimi_k2.5",
-        "config_name": "kimi_k2_5",
-    },
-    "kimi-k2.6": {
-        "config_path": "configs/models/kimi_k2.6",
-        "config_name": "kimi_k2_6",
-    },
-
-    # qwen2.5-vl
-    "qwen2.5-vl-3b": {
-        "config_path": "configs/models/qwen2.5vl",
-        "config_name": "qwen2_5_vl_3b",
-    },
-    "qwen2.5-vl-3b-lora": {
-        "config_path": "configs/models/qwen2.5vl",
-        "config_name": "qwen2_5_vl_3b_lora",
-    },
-    "qwen2.5-vl-7b": {
-        "config_path": "configs/models/qwen2.5vl",
-        "config_name": "qwen2_5_vl_7b",
-    },
-    "qwen2.5-vl-32b": {
-        "config_path": "configs/models/qwen2.5vl",
-        "config_name": "qwen2_5_vl_32b",
-    },
-    "qwen2.5-vl-72b": {
-        "config_path": "configs/models/qwen2.5vl",
-        "config_name": "qwen2_5_vl_72b",
-    },
-
-    # internvl 2.5
-    "internvl2.5-8b": {
-        "config_path": "configs/models/internvl2.5",
-        "config_name": "internvl2_5_8b",
-    },
-    "internvl2.5-26b": {
-        "config_path": "configs/models/internvl2.5",
-        "config_name": "internvl2_5_26b",
-    },
-    "internvl2.5-38b": {
-        "config_path": "configs/models/internvl2.5",
-        "config_name": "internvl2_5_38b",
-    },
-    "internvl2.5-78b": {
-        "config_path": "configs/models/internvl2.5",
-        "config_name": "internvl2_5_78b",
-    },
-
-    # internvl 3.5
-    "internvl3.5-8b": {
-        "config_path": "configs/models/internvl3.5",
-        "config_name": "internvl3_5_8b",
-    },
-    "internvl3.5-14b": {
-        "config_path": "configs/models/internvl3.5",
-        "config_name": "internvl3_5_14b",
-    },
-    "internvl3.5-30b-a3b": {
-        "config_path": "configs/models/internvl3.5",
-        "config_name": "internvl3_5_30b_a3b",
-    },
-    "internvl3.5-38b": {
-        "config_path": "configs/models/internvl3.5",
-        "config_name": "internvl3_5_38b",
-    },
-    "internvl3.5-241b-a28b": {
-        "config_path": "configs/models/internvl3.5",
-        "config_name": "internvl3_5_241b_a28b",
-    },
-
-    # llavaov 1.5
-    "llava-onevision-1.5-4b": {
-        "config_path": "configs/models/llava_onevision",
-        "config_name": "llava_onevision_1_5_4b",
-    },
-
-    # qwen3-vl
-    "qwen3-vl-30b-a3b": {
-        "config_path": "configs/models/qwen3_vl",
-        "config_name": "qwen3_vl_30b_a3b",
-    },
-    "qwen3-vl-235b-a22b": {
-        "config_path": "configs/models/qwen3_vl",
-        "config_name": "qwen3_vl_235b_a22b",
-    },
-
-    # minicpm-v
-    "minicpm-v-4.6": {
-        "config_path": "configs/models/minicpm_v_4_6",
-        "config_name": "minicpm_v_4_6",
-    },
-
-    # wan
-    "wan2-1-i2v": {
-        "config_path": "configs/models/wan",
-        "config_name": "wan2_1_i2v",
-    },
-    "wan2-2-i2v": {
-        "config_path": "configs/models/wan",
-        "config_name": "wan2_2_i2v",
-    },
-
-    # qwen image
-    "qwen-image-edit-2511": {
-        "config_path": "configs/models/qwen_image",
-        "config_name": "qwen_image_edit_2511",
-    },
-
-    # mimo
-    "mimo": {
-        "config_path": "configs/models/mimo",
-        "config_name": "mimo_7b",
-    },
-
-    # minimax
-    "minimax2.1-230b": {
-        "config_path": "configs/models/minimax",
-        "config_name": "minimax_m2_1",
-    },
-    "minimax2.5-230b": {
-        "config_path": "configs/models/minimax",
-        "config_name": "minimax_m2_5",
-    },
-    "minimax2.7-230b": {
-        "config_path": "configs/models/minimax",
-        "config_name": "minimax_m2_7",
-    },
-
-    # ernie4.5-vl
-    "ernie4.5-28b-a3b-base": {
-        "config_path": "configs/models/ernie4_5_vl",
-        "config_name": "ernie4_5_28b_a3b_base",
-    },
-    "ernie4.5-vl-28b-a3b": {
-        "config_path": "configs/models/ernie4_5_vl",
-        "config_name": "ernie4_5_vl_28b_a3b",
-    },
-    "glm5": {
-        "config_path": "configs/models/glm5",
-        "config_name": "glm5",
-    },
-    "glm5.2": {
-        "config_path": "configs/models/glm5.2",
-        "config_name": "glm5_2",
-    },
-}
-
-
 _CONFIGS_DIR = Path(__file__).resolve().parents[2] / "configs" / "models"
 
-def _torch(yaml_file, model, data):
+
+def _mcore(yaml_file: str) -> ModelSpec:
+    """Catalog entry for a model trained by the Megatron-backed engine."""
+    return ModelSpec("mcore", _CONFIGS_DIR / yaml_file)
+
+
+def _torch(yaml_file: str, model: str, data: str) -> ModelSpec:
+    """Catalog entry for a model trained by the standalone Torch engine."""
     return ModelSpec("torch", _CONFIGS_DIR / yaml_file, model, data)
+
+
+MCORE_CONFIGS = {
+    # deepseek
+    "deepseek-v2": _mcore("deepseek2/deepseek_v2.yaml"),
+    "deepseek-v2-lite": _mcore("deepseek2/deepseek_v2_lite.yaml"),
+    "deepseek-v3": _mcore("deepseek3/deepseek_v3.yaml"),
+    "deepseek-v3.2-sparse": _mcore("deepseek3/deepseek_v3_2_sparse.yaml"),
+    "deepseek-v4-flash": _mcore("deepseek4/deepseek_v4_flash_base.yaml"),
+    "deepseek-v4-flash-lite": _mcore("deepseek4/deepseek_v4_flash_lite.yaml"),
+    "deepseek-v4-flash-lite-2l": _mcore("deepseek4/deepseek_v4_flash_lite_2l.yaml"),
+    "deepseek-v4-flash-lite-4l": _mcore("deepseek4/deepseek_v4_flash_lite_4l.yaml"),
+    "deepseek-v4-flash-lite-6l": _mcore("deepseek4/deepseek_v4_flash_lite_6l.yaml"),
+    "deepseek-v4-pro": _mcore("deepseek4/deepseek_v4_pro_base.yaml"),
+    # internlm2.5
+    "internlm2.5-8b": _mcore("internlm2.5/internlm2_5_8b.yaml"),
+    "internlm2.5-20b": _mcore("internlm2.5/internlm2_5_20b.yaml"),
+    # llama
+    "llama2-7b": _mcore("llama2/llama2_7b.yaml"),
+    "llama2-13b": _mcore("llama2/llama2_13b.yaml"),
+    "llama2-70b": _mcore("llama2/llama2_70b.yaml"),
+    "llama3-8b": _mcore("llama3/llama3_8b.yaml"),
+    "llama3-70b": _mcore("llama3/llama3_70b.yaml"),
+    "llama3.1-8b": _mcore("llama3/llama3_1_8b.yaml"),
+    "llama3.1-70b": _mcore("llama3/llama3_1_70b.yaml"),
+    "llama3.1-405b": _mcore("llama3/llama3_1_405b.yaml"),
+
+    # qwen
+    "qwen-1.8b": _mcore("qwen/qwen_1_8b.yaml"),
+    "qwen-7b": _mcore("qwen/qwen_7b.yaml"),
+    "qwen-14b": _mcore("qwen/qwen_14b.yaml"),
+    "qwen-72b": _mcore("qwen/qwen_72b.yaml"),
+    "qwen1.5-0.5b": _mcore("qwen/qwen1_5_0_5b.yaml"),
+    "qwen1.5-1.8b": _mcore("qwen/qwen1_5_1_8b.yaml"),
+    "qwen1.5-4b": _mcore("qwen/qwen1_5_4b.yaml"),
+    "qwen1.5-7b": _mcore("qwen/qwen1_5_7b.yaml"),
+    "qwen1.5-14b": _mcore("qwen/qwen1_5_14b.yaml"),
+    "qwen1.5-32b": _mcore("qwen/qwen1_5_32b.yaml"),
+    "qwen1.5-72b": _mcore("qwen/qwen1_5_72b.yaml"),
+    "qwen2-0.5b": _mcore("qwen2/qwen2_0_5b.yaml"),
+    "qwen2-1.5b": _mcore("qwen2/qwen2_1_5b.yaml"),
+    "qwen2-7b": _mcore("qwen2/qwen2_7b.yaml"),
+    "qwen2-72b": _mcore("qwen2/qwen2_72b.yaml"),
+    "qwen2.5-0.5b": _mcore("qwen2.5/qwen2_5_0_5b.yaml"),
+    "qwen2.5-1.5b": _mcore("qwen2.5/qwen2_5_1_5b.yaml"),
+    "qwen2.5-3b": _mcore("qwen2.5/qwen2_5_3b.yaml"),
+    "qwen2.5-7b": _mcore("qwen2.5/qwen2_5_7b.yaml"),
+    "qwen2.5-14b": _mcore("qwen2.5/qwen2_5_14b.yaml"),
+    "qwen2.5-32b": _mcore("qwen2.5/qwen2_5_32b.yaml"),
+    "qwen2.5-72b": _mcore("qwen2.5/qwen2_5_72b.yaml"),
+    "qwen3-0.6b": _mcore("qwen3/qwen3_0_6b.yaml"),
+    "qwen3-1.7b": _mcore("qwen3/qwen3_1_7b.yaml"),
+    "qwen3-4b": _mcore("qwen3/qwen3_4b.yaml"),
+    "qwen3-8b": _mcore("qwen3/qwen3_8b.yaml"),
+    "qwen3-14b": _mcore("qwen3/qwen3_14b.yaml"),
+    "qwen3-30b-a3b": _mcore("qwen3/qwen3_30b_a3b.yaml"),
+    "qwen3-32b": _mcore("qwen3/qwen3_32b.yaml"),
+    "qwen3-235b-a22b": _mcore("qwen3/qwen3_235b_a22b.yaml"),
+    "qwen3-480b-a35b": _mcore("qwen3/qwen3_480b_a35b.yaml"),
+    "qwen3-coder-30b-a3b": _mcore("qwen3/qwen3_coder_30b_a3b.yaml"),
+
+    # qwen3-next-80b-a3b
+    "qwen3-next-80b-a3b": _mcore("qwen3_next/qwen3_next_80b_a3b.yaml"),
+
+    # Kimi K3 multimodal model
+    "kimi-k3": _mcore("kimi_k3/kimi_k3.yaml"),
+
+    # qwen3.5
+    "qwen3.5-0.8b": _mcore("qwen3.5/qwen3_5_0_8b.yaml"),
+    "qwen3.5-2b": _mcore("qwen3.5/qwen3_5_2b.yaml"),
+    "qwen3.5-4b": _mcore("qwen3.5/qwen3_5_4b.yaml"),
+    "qwen3.5-9b": _mcore("qwen3.5/qwen3_5_9b.yaml"),
+    "qwen3.5-27b": _mcore("qwen3.5/qwen3_5_27b.yaml"),
+    "qwen3.5-35b-a3b": _mcore("qwen3.5/qwen3_5_35b_a3b.yaml"),
+    "qwen3.5-122b-a10b": _mcore("qwen3.5/qwen3_5_122b_a10b.yaml"),
+    "qwen3.5-397b-a17b": _mcore("qwen3.5/qwen3_5_397b_a17b.yaml"),
+
+    # qwen3.6
+    "qwen3.6-27b": _mcore("qwen3.6/qwen3_6_27b.yaml"),
+    "qwen3.6-35b-a3b": _mcore("qwen3.6/qwen3_6_35b_a3b.yaml"),
+
+    # qwen3.8
+    "qwen3.8-27b": _mcore("qwen3.8/qwen3_8_27b.yaml"),
+
+    # kimi-k2.x
+    "kimi-k2.5": _mcore("kimi_k2.5/kimi_k2_5.yaml"),
+    "kimi-k2.6": _mcore("kimi_k2.6/kimi_k2_6.yaml"),
+
+    # qwen2.5-vl
+    "qwen2.5-vl-3b": _mcore("qwen2.5vl/qwen2_5_vl_3b.yaml"),
+    "qwen2.5-vl-3b-lora": _mcore("qwen2.5vl/qwen2_5_vl_3b_lora.yaml"),
+    "qwen2.5-vl-7b": _mcore("qwen2.5vl/qwen2_5_vl_7b.yaml"),
+    "qwen2.5-vl-32b": _mcore("qwen2.5vl/qwen2_5_vl_32b.yaml"),
+    "qwen2.5-vl-72b": _mcore("qwen2.5vl/qwen2_5_vl_72b.yaml"),
+
+    # internvl 2.5
+    "internvl2.5-8b": _mcore("internvl2.5/internvl2_5_8b.yaml"),
+    "internvl2.5-26b": _mcore("internvl2.5/internvl2_5_26b.yaml"),
+    "internvl2.5-38b": _mcore("internvl2.5/internvl2_5_38b.yaml"),
+    "internvl2.5-78b": _mcore("internvl2.5/internvl2_5_78b.yaml"),
+
+    # internvl 3.5
+    "internvl3.5-8b": _mcore("internvl3.5/internvl3_5_8b.yaml"),
+    "internvl3.5-14b": _mcore("internvl3.5/internvl3_5_14b.yaml"),
+    "internvl3.5-30b-a3b": _mcore("internvl3.5/internvl3_5_30b_a3b.yaml"),
+    "internvl3.5-38b": _mcore("internvl3.5/internvl3_5_38b.yaml"),
+    "internvl3.5-241b-a28b": _mcore("internvl3.5/internvl3_5_241b_a28b.yaml"),
+
+    # llavaov 1.5
+    "llava-onevision-1.5-4b": _mcore("llava_onevision/llava_onevision_1_5_4b.yaml"),
+
+    # qwen3-vl
+    "qwen3-vl-30b-a3b": _mcore("qwen3_vl/qwen3_vl_30b_a3b.yaml"),
+    "qwen3-vl-235b-a22b": _mcore("qwen3_vl/qwen3_vl_235b_a22b.yaml"),
+
+    # minicpm-v
+    "minicpm-v-4.6": _mcore("minicpm_v_4_6/minicpm_v_4_6.yaml"),
+
+    # wan
+    "wan2-1-i2v": _mcore("wan/wan2_1_i2v.yaml"),
+    "wan2-2-i2v": _mcore("wan/wan2_2_i2v.yaml"),
+
+    # qwen image
+    "qwen-image-edit-2511": _mcore("qwen_image/qwen_image_edit_2511.yaml"),
+
+    # mimo
+    "mimo": _mcore("mimo/mimo_7b.yaml"),
+
+    # minimax
+    "minimax2.1-230b": _mcore("minimax/minimax_m2_1.yaml"),
+    "minimax2.5-230b": _mcore("minimax/minimax_m2_5.yaml"),
+    "minimax2.7-230b": _mcore("minimax/minimax_m2_7.yaml"),
+
+    # ernie4.5-vl
+    "ernie4.5-28b-a3b-base": _mcore("ernie4_5_vl/ernie4_5_28b_a3b_base.yaml"),
+    "ernie4.5-vl-28b-a3b": _mcore("ernie4_5_vl/ernie4_5_vl_28b_a3b.yaml"),
+    "glm5": _mcore("glm5/glm5.yaml"),
+    "glm5.2": _mcore("glm5.2/glm5_2.yaml"),
+}
 
 
 _PI05 = (
@@ -500,17 +218,12 @@ TORCH_CONFIGS = {
 }
 
 
-
 def get_model_spec(model_name: str, engine: str | None = None) -> ModelSpec:
     """Resolve a registered model and reject unsupported engine selection."""
-    torch_name = model_name.lower().replace("-", "_")
-    if torch_name in TORCH_CONFIGS:
-        spec = TORCH_CONFIGS[torch_name]
-    elif model_name.lower() in MCORE_CONFIGS:
-        entry = MCORE_CONFIGS[model_name.lower()]
-        path = Path(__file__).resolve().parents[2] / entry["config_path"]
-        spec = ModelSpec("mcore", path / (entry["config_name"] + ".yaml"))
-    else:
+    spec = TORCH_CONFIGS.get(model_name.lower().replace("-", "_"))
+    if spec is None:
+        spec = MCORE_CONFIGS.get(model_name.lower())
+    if spec is None:
         raise ValueError(f"Unknown model: {model_name}")
     if engine is not None and spec.engine != engine:
         raise ValueError(f"Model {model_name} supports {spec.engine}, not {engine}")
