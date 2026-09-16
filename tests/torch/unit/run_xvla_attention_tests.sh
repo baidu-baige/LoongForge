@@ -6,8 +6,8 @@
 # Self-contained: no dataset / checkpoint / external files required (a CUDA GPU is).
 set -euo pipefail
 
-LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
-TEST_FILE="$LOONGFORGE_PATH/loongforge/models/vla/xvla/tests/test_attention_forward.py"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 
-PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-    python -m pytest "$TEST_FILE" -v "$@"
+PYTHONPATH="$REPO_ROOT:${PYTHONPATH:-}" \
+    python -m pytest "$SCRIPT_DIR/test_xvla_attention_forward.py" -v "$@"

@@ -101,8 +101,9 @@ tests/torch/
 │   ├── manifest.py             #   config/scripts.yaml manifest loading
 │   ├── executor.py             #   single-script execution (timeout control, model-specific env injection)
 │   └── metrics.py              #   metrics.jsonl / stdout log metric parsing
-└── reporting/                  # result layer: baseline comparison + colored logging
-    └── baseline.py             #   baseline read/write, tolerance comparison, write back baseline on performance improvement
+├── reporting/                  # result layer: baseline comparison + colored logging
+│   └── baseline.py             #   baseline read/write, tolerance comparison, write back baseline on performance improvement
+└── unit/                       # standalone pytest units; GPU cases self-skip (e.g. bash unit/run_xvla_attention_tests.sh)
 
 # In-repo baseline collection (per-chip):
 tests/torch/baseline/<chip>/<name>.json
