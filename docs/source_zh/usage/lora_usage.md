@@ -122,7 +122,7 @@ model:
   mix_used_vision_projector: true
   foundation:
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["loongforge.models.llm.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["loongforge.models.llm.qwen2.layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
   image_projector:

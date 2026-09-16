@@ -3,5 +3,5 @@
 
 """DeepSeek-V4 model implementation."""
 
-from .deepseek_v4_model import DeepseekV4Model
-from .deepseek_v4_config import DeepseekV4Config
+from .model import DeepseekV4Model
+from .config import DeepseekV4Config

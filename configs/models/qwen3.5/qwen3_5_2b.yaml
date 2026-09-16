@@ -17,13 +17,13 @@ model:
     rotary_base: 10000000
     mrope_section: [11, 11, 10]
     rotary_interleaved: False
-    model_spec: ["loongforge.models.llm.qwen3_5.qwen3_5_layer_spec", "get_qwen3_5_transformer_layer_spec"]
+    model_spec: ["loongforge.models.llm.qwen3_5.layer_spec", "get_qwen3_5_transformer_layer_spec"]
   image_encoder:
     num_layers: 24
     hidden_size: 1024
     kv_channels: 64
     ffn_hidden_size: 4096
-    model_spec: ["loongforge.models.vision.qwen3_5_vision_models.layer_spec",
+    model_spec: ["loongforge.models.vision.qwen3_5_vl.layer_spec",
                  "get_qwen3_5_vision_model_layer_with_te_spec"]
   image_projector:
     activation_func: ${act:gelu}
@@ -31,5 +31,5 @@ model:
     convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
     bias_activation_fusion: False
     gated_linear_unit: False
-    model_spec: ["loongforge.models.vision.qwen3_5_vision_models.layer_spec",
+    model_spec: ["loongforge.models.vision.qwen3_5_vl.layer_spec",
                  "get_adapeter_layer_with_te_spec"]

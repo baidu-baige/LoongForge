@@ -3,5 +3,5 @@
 
 """internlm model"""
 
-from .internlm_model import InternLMModel
-from .internlm_config import InternLMConfig
+from .model import InternLMModel
+from .config import InternLMConfig

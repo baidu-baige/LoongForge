@@ -180,7 +180,7 @@ class DreamZeroPolicy(PreTrainedPolicy):
     @classmethod
     def from_pretrained(cls, cfg: Any) -> "DreamZeroPolicy":
         """Build DreamZero from the new embodied model registry entrypoint."""
-        from .dreamzero_provider import dreamzero_model_provider
+        from .provider import dreamzero_model_provider
 
         return dreamzero_model_provider(config=_config_to_dreamzero(cfg))
 

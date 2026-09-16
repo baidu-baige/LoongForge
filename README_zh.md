@@ -269,7 +269,7 @@ LoongForge/
 │   ├── __main__.py               # 统一引擎入口（`python -m loongforge`、`LoongForge`）
 │   ├── contracts.py              # 模型、batch、训练与 checkpoint 协议
 │   ├── engine/{dispatch.py,mcore,torch}/ # 引擎分发与训练生命周期
-│   ├── models/                   # 统一的模型抽象层
+│   ├── models/                   # 统一的模型抽象层：一族一目录，模块按角色命名
 │   │   ├── llm/                  #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
 │   │   ├── vision/               #   视觉编码器（ViT、Qwen-VL、InternVL、...）
 │   │   ├── vlm/                  #   多模态组合

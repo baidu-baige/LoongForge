@@ -161,13 +161,18 @@ Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--con
 - **`torch_registry.py`** — Torch model registry. `register_model(model_type)` (decorator) fills `MODEL_REGISTRY`; `build_model(model_cfg)` lazily imports only the selected model module and instantiates the registered class. Distinct from `mcore_registry.py`, which serves MCore.
 - **`dtype.py`** — `resolve_dtype()`: config dtype string → `torch.dtype`, shared by models and training engines.
 - **`dispatch.py`** — Hardware-abstraction layer (`MultiAccModules`). Provides unified access to TransformerEngine or local linear/attention/norm implementations.
-- **`llm/`** — LLM backbone implementations: LLaMA, Qwen (all versions through Qwen3-Next), DeepSeek, InternLM, MiniMax, MIMO, GLM. Each defines a transformer spec and config dataclass.
-- **`vision/`** — Vision encoder implementations: base ViT, Qwen2-VL/3-VL, InternVL, LLaVA-OV, ERNIE-VL.
+- **`llm/`** — LLM backbone implementations: LLaMA, Qwen (all versions through Qwen3-Next), DeepSeek, InternLM, MiniMax, MIMO, GLM. One subdirectory per family, holding that family's config, model, and layer spec.
+- **`vision/`** — Vision encoder implementations, one subdirectory per tower: base ViT, Qwen2-VL/3-VL, InternVL, LLaVA-OV, ERNIE-VL.
 - **`vlm/`** — Multi-modal model composition: `OmniCombinationModel` assembles encoder + projector + decoder into a unified pipeline, with `model_chunk_schedule_plan.py` for pipeline parallelism scheduling.
 - **`common/`** — Shared layers (norms, projectors, PEFT) and MCore model-config helpers (`utils.py`).
 - **`diffusion/`** — WAN and Qwen-Image diffusion models.
 - **`vla/`** — Torch Pi05, GR00T, X-VLA, and Wall-Oss.
 - **`world/`** — Torch DreamZero, FastWAM, Cosmos3, and LingBot-VA.
+
+Module naming: the family name lives in the directory, not the file — `llm/deepseek/config.py`,
+`vision/qwen3_vl/vision_model.py`, `world/dreamzero/provider.py`. Files copied from HF upstream
+keep their upstream names (`modeling_*.py`, `model_configuration_*.py`, `configuration_*.py`) so
+they stay diffable against upstream; those live under `vla/` and `world/`.
 
 ### Configuration System: `configs/`
 
@@ -214,7 +219,7 @@ Kunlun XPU training scripts, mirroring `examples/` structure.
 
 ### Adding a New Model
 
-1. Create a config dataclass in `loongforge/models/llm/` (or `vision/` for vision), decorated with `@register_model_config(family, arch)`.
+1. Create a config dataclass in `loongforge/models/llm/<family>/config.py` (or `models/vision/<family>/` for vision), decorated with `@register_model_config(family, arch)`.
 2. Create a model provider function decorated with `@register_model_provider(family)`.
 3. Register a trainer function with `@register_model_trainer(family, training_phase)`.
 4. Add YAML config under `configs/models/<family>/`.

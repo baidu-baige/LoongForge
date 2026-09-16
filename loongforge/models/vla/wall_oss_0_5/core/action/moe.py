@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from transformers.activations import ACT2FN
 
-from loongforge.models.vla.wall_oss_0_5.wall_oss_05_fused_ops import permute, swiglu, unpermute
+from loongforge.models.vla.wall_oss_0_5.fused_ops import permute, swiglu, unpermute
 
 
 class TokenTypeRouter(nn.Module):

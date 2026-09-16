@@ -85,14 +85,14 @@ model:
     rotary_emb_func: "Qwen3VLRotaryEmbedding"
     mrope_section: [24, 20, 20]
     rotary_base: 1000000
-    model_spec: ["loongforge.models.llm.qwen3.qwen_layer_spec",
+    model_spec: ["loongforge.models.llm.qwen3.layer_spec",
                  "get_qwen3_vl_layer_with_te_spec"]
     # <-- FP8 block-wise GEMM & weights -->
     fp8: "e4m3"
     fp8_recipe: "blockwise"
     fp8_param: True
   image_encoder:
-    model_spec: ["loongforge.models.vision.qwen3_vl_vision_models.layer_spec",
+    model_spec: ["loongforge.models.vision.qwen3_vl.layer_spec",
                  "get_qwen3_vl_vision_model_layer_with_te_spec"]
     # <-- FP8 block-wise GEMM & weights -->
     fp8: "e4m3"

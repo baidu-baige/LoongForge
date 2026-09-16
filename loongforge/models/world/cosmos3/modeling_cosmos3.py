@@ -29,7 +29,7 @@ from torch.distributed.checkpoint import FileSystemReader
 from transformers import AutoTokenizer
 from accelerate import init_on_device
 
-from loongforge.models.world.cosmos3.cosmos3_vfm_network import (
+from loongforge.models.world.cosmos3.vfm_network import (
     Cosmos3VFMNetwork,
     Cosmos3VFMNetworkConfig,
 )

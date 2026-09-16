@@ -19,7 +19,7 @@
 """XVLA per-sample transforms.
 
 Thin :class:`BaseTransform` wrappers around the processing cores in
-:mod:`loongforge.models.vla.xvla.xvla_processor`. The cores hold the
+:mod:`loongforge.models.vla.xvla.processor`. The cores hold the
 tokenizer / image_processor loading + encode logic and have no dependency on
 the training-side ``loongforge.datasets`` package, so they can be reused
 from inference paths (e.g. :meth:`XVLAPolicy.predict_action`) without
@@ -49,7 +49,7 @@ from loongforge.datasets.common.transforms.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
-from loongforge.models.vla.xvla.xvla_processor import (
+from loongforge.models.vla.xvla.processor import (
     XVLAImageProcessorCore,
     XVLATokenizerCore,
 )

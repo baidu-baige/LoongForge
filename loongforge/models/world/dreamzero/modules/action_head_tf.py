@@ -6,7 +6,7 @@
 """DreamZero flow-matching action head.
 
 The module owns DreamZero's training loss path and closed-loop inference path.
-Submodules are supplied by ``dreamzero_provider``.
+Submodules are supplied by ``provider.py``.
 """
 
 from collections import OrderedDict
@@ -241,7 +241,7 @@ class WANPolicyHead(ActionHead):
     """Flow-matching action head.
 
     Constructor takes pre-built submodules (no Hydra). The provider
-    (``dreamzero_provider.py``) is responsible for instantiating the four
+    (``provider.py``) is responsible for instantiating the four
     submodules from ``DreamZeroConfig`` and passing them here.
 
     Args:

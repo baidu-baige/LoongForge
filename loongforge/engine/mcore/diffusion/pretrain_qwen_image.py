@@ -21,7 +21,7 @@ from loongforge.engine.mcore.global_vars import get_args, get_model_config
 from loongforge.utils import print_rank_0
 from loongforge.utils.constants import CustomModelFamilies, TrainingPhase
 
-from loongforge.models.diffusion.qwen_image.qwen_image_flow_match import QwenImageFlowMatchScheduler
+from loongforge.models.diffusion.qwen_image.flow_match import QwenImageFlowMatchScheduler
 
 SUPPORTED_MODELS = [CustomModelFamilies.QWEN_IMAGE]
 stimer = StragglerDetector()

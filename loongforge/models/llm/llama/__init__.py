@@ -3,5 +3,5 @@
 
 """llama model"""
 
-from .llama_model import LLaMAModel
-from .llama_config import LLaMAConfig
+from .model import LLaMAModel
+from .config import LLaMAConfig

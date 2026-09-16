@@ -3,5 +3,5 @@
 
 """diffusion models"""
 
-from .wan.wan_config import WanConfig
-from .qwen_image.qwen_image_config import QwenImageConfig
+from .wan.config import WanConfig
+from .qwen_image.config import QwenImageConfig

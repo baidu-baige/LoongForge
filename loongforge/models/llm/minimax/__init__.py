@@ -3,5 +3,5 @@
 
 """minimax model"""
 
-from .minimax_model import MinimaxModelWithMTP
-from .minimax_config import MinimaxConfig
+from .model import MinimaxModelWithMTP
+from .config import MinimaxConfig

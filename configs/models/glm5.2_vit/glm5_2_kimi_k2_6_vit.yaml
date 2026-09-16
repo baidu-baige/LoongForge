@@ -10,12 +10,12 @@ model:
   loss_func: ${loss_func:default}
   vision_token_id: 154854  # GLM-5.2 <|image|>
   image_encoder:
-    model_spec: ["loongforge.models.vision.moon_vision_models.layer_spec",
+    model_spec: ["loongforge.models.vision.moon.layer_spec",
                  "get_moon_vision_model_layer_with_te_spec"]
     image_token_id: 154854
     freeze: true
   image_projector:
-    model_spec: ["loongforge.models.vision.moon_vision_models.layer_spec",
+    model_spec: ["loongforge.models.vision.moon.layer_spec",
                  "get_adapeter_layer_with_te_spec"]
     add_bias_linear: true
   foundation:

@@ -167,7 +167,7 @@ model:
     rotary_base: 1000000
 
     # Megatron 层规范，支持 Transformer-Engine 加速
-    model_spec: ["loongforge.models.llm.internlm.internlm_layer_spec",
+    model_spec: ["loongforge.models.llm.internlm.layer_spec",
                  "get_internlm_layer_with_te_spec"]
 ```
 

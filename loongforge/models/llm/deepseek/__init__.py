@@ -3,5 +3,5 @@
 
 """Deepseek module"""
 
-from .deepseek_model import DeepseekModelWithMTP
-from .deepseek_config import DeepseekConfig
+from .model import DeepseekModelWithMTP
+from .config import DeepseekConfig

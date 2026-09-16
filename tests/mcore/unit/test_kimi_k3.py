@@ -8,11 +8,11 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from loongforge.models.llm.kimi_k3.kimi_k3_ops import (
+from loongforge.models.llm.kimi_k3.ops import (
     SiTUAndMul,
     situ_and_mul,
 )
-from loongforge.models.llm.kimi_k3.kimi_k3_pipeline import (
+from loongforge.models.llm.kimi_k3.pipeline import (
     bank_num_rows,
     pack_stage_boundary,
     unpack_stage_boundary,

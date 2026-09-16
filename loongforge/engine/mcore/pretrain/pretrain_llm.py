@@ -46,7 +46,7 @@ from loongforge.models import get_model_provider, get_model_family
 
 from loongforge.engine.mcore.megatron_trainer import MegatronTrainer
 from loongforge.engine.mcore.trainer_builder import register_model_trainer
-from loongforge.models.llm.llm_model_provider import llm_model_provider
+from loongforge.models.llm.model_provider import llm_model_provider
 
 from loongforge.engine.mcore.global_vars import get_model_config
 

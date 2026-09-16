@@ -5,7 +5,7 @@
 
 """DreamZero flow-matching scheduler.
 
-This scheduler is distinct from ``loongforge/models/diffusion/wan/wan_flow_match.py``.
+This scheduler is distinct from ``loongforge/models/diffusion/wan/flow_match.py``.
 The sigma sampling schedule (linear in [sigma_min, sigma_max], post-shifted via
 ``shift * sigma / (1 + (shift - 1) * sigma)``) and the ``shift`` default
 (3.0) are part of the checkpoint-compatible training recipe.

@@ -29,8 +29,8 @@ from typing import Optional
 
 from megatron.core.transformer.enums import ModelType
 
-from loongforge.models.vision.vision_transformer_block import TransformerBlock
-from loongforge.models.vision.qwen2_vl_vision_models.config import (
+from loongforge.models.vision.transformer_block import TransformerBlock
+from loongforge.models.vision.qwen2_vl.config import (
     Qwen2VisionModelConfig
 ) 
 from loongforge.models.common import BaseMegatronVisionModule
@@ -108,7 +108,7 @@ class BaseVisionModel(BaseMegatronVisionModule):
         super().__init__(config)
         if self.config.model_spec is None:
             model_spec = [
-                "loongforge.models.vision.qwen2_vl_vision_models.layer_spec",
+                "loongforge.models.vision.qwen2_vl.layer_spec",
                 "get_qwen2_vl_vision_model_layer_with_te_spec",
             ]
         else:

@@ -33,7 +33,7 @@ from .configuration_qwen3_vl import (
     Qwen3VLTextConfig,
     Qwen3VLVisionConfig,
 )
-from .qwen3_vl import (
+from .modeling_qwen3_vl import (
     Qwen3VLPreTrainedModel,
     Qwen3VLTextMLP,
     Qwen3VLTextRMSNorm,

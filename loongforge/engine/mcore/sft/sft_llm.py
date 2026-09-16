@@ -48,7 +48,7 @@ from .utils import (
     build_sft_cyclic_iterators,
     build_sft_data_collator,
 )
-from loongforge.models.llm.llm_model_provider import llm_model_provider
+from loongforge.models.llm.model_provider import llm_model_provider
 
 
 stimer = StragglerDetector()

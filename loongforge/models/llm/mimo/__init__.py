@@ -3,5 +3,5 @@
 
 """mimo model"""
 
-from .mimo_model import MimoModelWithMTP
-from .mimo_config import MimoConfig
+from .model import MimoModelWithMTP
+from .config import MimoConfig

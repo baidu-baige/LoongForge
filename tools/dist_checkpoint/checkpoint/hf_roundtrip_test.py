@@ -68,7 +68,7 @@ from megatron.training import print_rank_0
 
 from loongforge.engine.mcore.parser import parse_train_args
 from loongforge.engine.mcore.initialize import initialize_loongforge_megatron
-from loongforge.models.llm.llm_model_provider import llm_model_provider
+from loongforge.models.llm.model_provider import llm_model_provider
 from loongforge.models.vlm.omni_model_provider import omni_model_provider
 from loongforge.engine.mcore.global_vars import get_model_config
 

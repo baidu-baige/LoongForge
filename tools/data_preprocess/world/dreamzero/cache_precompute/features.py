@@ -47,7 +47,7 @@ from loongforge.datasets.world.dreamzero.transforms.dreamzero_collator import (
 from loongforge.datasets.world.dreamzero.transforms.dreamzero_collator import (
     collate as dreamzero_collate,
 )
-from loongforge.models.world.dreamzero.dreamzero_provider import _build_text_encoder
+from loongforge.models.world.dreamzero.provider import _build_text_encoder
 
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 

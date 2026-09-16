@@ -11,7 +11,7 @@ Runtime notes:
 - VAE/T5/CLIP encoders run inside ``ActionHead.forward()`` unless the structured
   ``precomputed_cache`` model section supplies cached features.
 - Flow matching uses DreamZero's scheduler implementation, not
-  ``loongforge/models/diffusion/wan/wan_flow_match.py``.
+  ``loongforge/models/diffusion/wan/flow_match.py``.
 - Megatron-style fields (``num_layers`` / ``hidden_size`` / etc.) are populated
   in ``__post_init__`` from ``backbone_variant`` for shared trainer utilities.
 """
@@ -179,7 +179,7 @@ class DreamZeroConfig(PreTrainedConfig):
     image_encoder_pretrained_path: str = ""  # CLIP (Wan2.1 only)
     vae_pretrained_path: str = ""
     # Directory containing diffusion_pytorch_model*.safetensors[.index.json].
-    # When non-empty, dreamzero_provider loads DiT weights into CausalWanModel
+    # When non-empty, the provider loads DiT weights into CausalWanModel
     # via the diffusers-to-Civitai rename table.
     dit_pretrained_path: str = ""
     # Optional full DreamZero checkpoint containing the complete

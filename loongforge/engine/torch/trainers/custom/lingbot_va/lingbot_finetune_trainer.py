@@ -83,7 +83,7 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
             raise RuntimeError(
                 "LingBot native nested FSDP2 requires Torch FSDP strategy"
             )
-        from loongforge.models.world.lingbot_va.lingbot_fsdp2_adapter import (
+        from loongforge.models.world.lingbot_va.fsdp2_adapter import (
             wrap_lingbot_torch_nested_fsdp2,
         )
 
@@ -97,7 +97,7 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
                 "LingBot native nested FSDP2 requires Torch FSDP strategy"
             )
 
-        from loongforge.models.world.lingbot_va.lingbot_fsdp2_adapter import (
+        from loongforge.models.world.lingbot_va.fsdp2_adapter import (
             apply_lingbot_fsdp2_tuning,
             register_lingbot_post_step_reshard,
         )
@@ -204,7 +204,7 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
 
     def _clip_gradients(self, max_norm: float) -> float:
         """Clip RAB=false gradients through the LingBot DTensor helper."""
-        from loongforge.models.world.lingbot_va.lingbot_fsdp2_adapter import (
+        from loongforge.models.world.lingbot_va.fsdp2_adapter import (
             clip_lingbot_optimizer_gradients,
         )
 
@@ -212,7 +212,7 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
 
     def _clean_nan_gradients(self) -> None:
         """Clean the optimizer-owned DTensor gradients used by LingBot."""
-        from loongforge.models.world.lingbot_va.lingbot_fsdp2_adapter import (
+        from loongforge.models.world.lingbot_va.fsdp2_adapter import (
             clean_lingbot_optimizer_gradients,
         )
 

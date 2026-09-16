@@ -9,7 +9,7 @@ import torch
 
 import loongforge.engine.mcore  # noqa: F401 - initialize package imports in repository order
 from loongforge.models.common import BaseMegatronModule
-from loongforge.models.vision.moon_vision_models import patch_merger_adapter
+from loongforge.models.vision.moon import patch_merger_adapter
 
 
 class _TupleLinear(torch.nn.Module):

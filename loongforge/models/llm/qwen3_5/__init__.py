@@ -3,5 +3,5 @@
 
 """qwen3_5 model"""
 
-from .qwen3_5_model import Qwen35Model
-from .qwen3_5_config import Qwen35Config
+from .model import Qwen35Model
+from .config import Qwen35Config

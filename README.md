@@ -269,7 +269,7 @@ LoongForge/
 │   ├── __main__.py               # Unified engine entry point (`python -m loongforge`, `LoongForge`)
 │   ├── contracts.py              # Model, batch, training, and checkpoint contracts
 │   ├── engine/{dispatch.py,mcore,torch}/ # Engine dispatch and training lifecycles
-│   ├── models/                   # Unified model abstractions
+│   ├── models/                   # Unified model abstractions: one dir per family, role-named modules
 │   │   ├── llm/                  #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── vision/               #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
 │   │   ├── vlm/                  #   Multi-modal composition

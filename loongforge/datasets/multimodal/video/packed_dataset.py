@@ -168,7 +168,7 @@ class PackedDataset(IterableDataset):
     # ------------------------------------------------------------------
 
     def __iter__(self):
-        from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
+        from loongforge.models.diffusion.wan.flow_match import FlowMatchScheduler
 
         scheduler = self.scheduler
         if scheduler is None:

@@ -29,7 +29,7 @@ from loongforge.datasets.multimodal.video.packed_dataset import (
 )
 
 from loongforge.models import get_model_provider, get_model_family
-from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
+from loongforge.models.diffusion.wan.flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
 from loongforge.engine.mcore.megatron_trainer import MegatronTrainer
@@ -47,11 +47,11 @@ from loongforge.models.diffusion.wan.gaussian_diffusion import (
     get_named_beta_schedule,
 )
 
-from loongforge.models.diffusion.wan.wan_utils import (
+from loongforge.models.diffusion.wan.utils import (
     broadcast_on_tp_group,
     broadcast_on_cp_group,
 )
-from loongforge.models.diffusion.wan.wan_provider import wan_i2v_model_provider
+from loongforge.models.diffusion.wan.provider import wan_i2v_model_provider
 
 SUPPORTED_MODELS = [
     CustomModelFamilies.WAN2_1_I2V,

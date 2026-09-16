@@ -3,5 +3,5 @@
 
 """ernie4_5_vl model"""
 
-from .ernie4_5_vl_moe_model import ErnieMoeModel
-from .ernie_config import ErnieMoeConfig
+from .moe_model import ErnieMoeModel
+from .config import ErnieMoeConfig
