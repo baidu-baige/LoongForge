@@ -117,7 +117,7 @@ loongforge/embodied/
 `BaseTrainer` 用模板方法固化训练全生命周期（`setup → 训练循环 → 单步 → 前向/反向 → 收尾`）：
 
 - **通用能力**：优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 保存与续训、分布式日志、确定性控制；
-- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/groot_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
+- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph、ZeRO-1）自定义子类，并在 `config_map.py` 绑定 `trainer_cls`。`--trainer-type` 仍作为通用 trainer 的回退入口；
 - **分布式**：内置多种策略，按需选择——`ddp`（数据并行）、`ddp` + `--zero-optimizer`（ZeRO Stage-1，分片优化器状态）、`fsdp`（全分片）、`hsdp`（混合分片，设 `--hsdp-shard-size`）。
 
 ### 新增一个模型
@@ -125,7 +125,7 @@ loongforge/embodied/
 1. 添加 `model/<name>/modeling_<name>.py` 与 `model_configuration_<name>.py`，用 `@register_model` 注册。
 2. 添加 `data/datasets/<name>/`，包含 `data_configuration_<name>.py`（DataConfig）、transform 与 collator。
 3. 在 `configs/models/embodied/` 下添加 YAML（含 `model:` / `data:` 段），并在 `config_map.py` 中登记（绑定 YAML + ModelConfig + DataConfig）。
-4. 若训练范式不同，继承 `BaseTrainer` 并在 `trainer_builder.py` 注册；否则复用 `FinetuneTrainer`。
+4. 若训练范式不同，继承 `BaseTrainer` 并在 `config_map.py` 绑定 `trainer_cls`；否则复用 `FinetuneTrainer`。
 5. 在 `examples/` 下添加启动脚本。
 
 ---

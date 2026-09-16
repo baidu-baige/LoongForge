@@ -119,7 +119,7 @@ Resolution flow: `--model-name` routes through `config_map.py` to the model's YA
 `BaseTrainer` fixes the training lifecycle into a template (`setup → training loop → step → forward/backward → finalize`):
 
 - **Common machinery** — optimizer / LR scheduling, gradient clipping & NaN cleanup, checkpoint save & resume, distributed logging, determinism control;
-- **Trainer selection** — standard SFT uses `FinetuneTrainer`; special paradigms (multi-stream, CUDA Graph) subclass it (e.g. `custom/groot_n1_6/`), registered in `trainer_builder.py` and selected with `--trainer-type`;
+- **Trainer selection** — standard SFT uses `FinetuneTrainer`; special paradigms (multi-stream, CUDA Graph, ZeRO-1) subclass it and bind `trainer_cls` in `config_map.py`. `--trainer-type` remains the fallback for models that still use the generic trainer;
 - **Distribution** — multiple strategies to choose from: `ddp` (data parallel), `ddp` + `--zero-optimizer` (ZeRO Stage-1, sharded optimizer states), `fsdp` (fully sharded), `hsdp` (hybrid sharded, set `--hsdp-shard-size`).
 
 ### Adding a new model
@@ -127,7 +127,7 @@ Resolution flow: `--model-name` routes through `config_map.py` to the model's YA
 1. Add `model/<name>/modeling_<name>.py` + `model_configuration_<name>.py`, register with `@register_model`.
 2. Add `data/datasets/<name>/`, including `data_configuration_<name>.py` (DataConfig), transform, and collator.
 3. Add a YAML under `configs/models/embodied/` (with `model:` / `data:` sections) and wire it in `config_map.py` (binding YAML + ModelConfig + DataConfig).
-4. If the training paradigm differs, subclass `BaseTrainer` and register in `trainer_builder.py`; otherwise reuse `FinetuneTrainer`.
+4. If the training paradigm differs, subclass `BaseTrainer` and bind it as `trainer_cls` in `config_map.py`; otherwise reuse `FinetuneTrainer`.
 5. Add a launch script under `examples/`.
 
 ---
