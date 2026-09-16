@@ -1,5 +1,5 @@
 
-_target_: loongforge.models.encoder.MLPAdapterConfig
+_target_: loongforge.models.vision.MLPAdapterConfig
 
 normalization: "RMSNorm"
 add_bias_linear: True

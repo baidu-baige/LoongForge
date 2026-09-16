@@ -11,12 +11,12 @@ from pathlib import Path
 
 import torch
 
-from convert_checkpoint.huggingface.compressed_tensors_dequant import (
+from tools.convert_checkpoint.huggingface.compressed_tensors_dequant import (
     DTYPE_MAP,
     build_quantization_scheme,
     iter_quantization_configs,
 )
-from convert_checkpoint.utils.utils import convert_fp8_to_bf16
+from tools.convert_checkpoint.utils.utils import convert_fp8_to_bf16
 
 
 LOGGER = logging.getLogger(__name__)

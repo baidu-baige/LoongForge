@@ -12,10 +12,10 @@ from copy import deepcopy
 
 from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
-sys.path.append(dirname(dirname(SCRIPT_DIR)))
+sys.path.append(dirname(dirname(dirname(SCRIPT_DIR))))
 
-from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.utils.ckpt_util import (
+from tools.convert_checkpoint.arguments import parse_args
+from tools.convert_checkpoint.utils.ckpt_util import (
     load_megatron_checkpoint,
     save_megatron_checkpoint,
     load_huggingface_checkpoint,
@@ -23,7 +23,7 @@ from convert_checkpoint.utils.ckpt_util import (
 )
 
 
-from convert_checkpoint.utils.config_utils import parse_at_configs, load_config, parallel_param_parser
+from tools.convert_checkpoint.utils.config_utils import parse_at_configs, load_config, parallel_param_parser
 
 args = parse_args()
 with open(args.config_file, 'r') as f:

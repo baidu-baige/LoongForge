@@ -1,6 +1,6 @@
 # LoongForge LLM/VLM E2E Test Guide
 
-This document explains how to use the automated E2E test scripts and configurations for the LLM/VLM CI suite. For the embodied (VLA) regression suite see [tests/embodied/README.md](../embodied/README.md).
+This document explains how to use the automated E2E test scripts and configurations for the LLM/VLM CI suite. For the Native VLA regression suite see [tests/native/README.md](../native/README.md).
 
 ## Directory Structure
 

@@ -170,7 +170,7 @@ LOGGING_ARGS=(
  
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $LOONGFORGE_PATH/loongforge/train.py \
+    -m loongforge train --engine mcore \
     ${MODEL_ARGS[@]} \
     ${MOE_ARGS[@]} \
     ${DATA_ARGS[@]} \

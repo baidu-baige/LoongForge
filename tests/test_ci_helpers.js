@@ -68,7 +68,7 @@ test('new commits invalidate suite GPU jobs without SHA-scoped concurrency', () 
   const regression = readWorkflow('gpu-regression.yml');
   const invalidation = readWorkflow('gpu-invalidate.yml');
   assert.doesNotMatch(regression, /group: gpu-regression-.*head_sha/);
-  for (const suite of ['llm_vlm', 'embodied']) {
+  for (const suite of ['llm_vlm', 'native']) {
     assert.match(regression, new RegExp(`group: gpu-regression-.*-${suite}`));
     assert.match(invalidation, new RegExp(`group: gpu-regression-.*-${suite}`));
   }
@@ -120,20 +120,20 @@ test('GPU invalidation reuses only an action_required check for the current SHA'
 
 test('GPU conclusion keeps cancelled runs distinct from failures', () => {
   assert.deepEqual(
-    gpuConclusion({ validate: 'success', embodied: 'success', llm_vlm: 'skipped' }, 'embodied'),
+    gpuConclusion({ validate: 'success', native: 'success', llm_vlm: 'skipped' }, 'native'),
     { conclusion: 'success', failed: [] },
   );
   assert.deepEqual(
-    gpuConclusion({ validate: 'success', embodied: 'cancelled', llm_vlm: 'skipped' }, 'embodied'),
-    { conclusion: 'cancelled', failed: ['embodied'] },
+    gpuConclusion({ validate: 'success', native: 'cancelled', llm_vlm: 'skipped' }, 'native'),
+    { conclusion: 'cancelled', failed: ['native'] },
   );
   assert.deepEqual(
-    gpuConclusion({ validate: 'success', embodied: 'failure', llm_vlm: 'skipped' }, 'embodied'),
-    { conclusion: 'failure', failed: ['embodied'] },
+    gpuConclusion({ validate: 'success', native: 'failure', llm_vlm: 'skipped' }, 'native'),
+    { conclusion: 'failure', failed: ['native'] },
   );
   assert.deepEqual(
-    gpuConclusion({ validate: 'failure', embodied: 'skipped', llm_vlm: 'skipped' }, 'embodied'),
-    { conclusion: 'failure', failed: ['validate', 'embodied'] },
+    gpuConclusion({ validate: 'failure', native: 'skipped', llm_vlm: 'skipped' }, 'native'),
+    { conclusion: 'failure', failed: ['validate', 'native'] },
   );
 });
 
@@ -155,7 +155,7 @@ test('GPU status is separate from the required CPU gate', () => {
   assert.match(dispatch, /name: 'gpu-regression'/);
   assert.match(regression, /name: 'gpu-regression'/);
   assert.match(dispatch, /CI_ENABLE_LLM_VLM|ENABLE_LLM_VLM/);
-  assert.doesNotMatch(dispatch, /Only the embodied suite/);
+  assert.doesNotMatch(dispatch, /Only the Native suite/);
   assert.equal((regression.match(/CANDIDATE_REVISION:/g) || []).length, 2);
 });
 

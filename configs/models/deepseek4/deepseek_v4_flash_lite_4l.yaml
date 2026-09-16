@@ -1,6 +1,6 @@
 # DeepSeek-V4 Flash-Base lite (4 layers + 1 MTP) — matches
 # DeepSeek-V4-Flash-Base-lite-lay4L-mtp1/config.json
-_target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
+_target_: loongforge.models.llm.deepseek_v4.DeepseekV4Config
 
 num_layers: 4
 hidden_size: 4096

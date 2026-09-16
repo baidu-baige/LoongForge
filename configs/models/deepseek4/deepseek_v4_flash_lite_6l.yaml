@@ -1,6 +1,6 @@
 # DeepSeek-V4 Flash-Base SLICED (6 layers + 1 MTP) model config
 # Used for Phase 3 verification on 8 GPUs with TP=4, PP=2, EP=4
-_target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
+_target_: loongforge.models.llm.deepseek_v4.DeepseekV4Config
 
 num_layers: 6
 hidden_size: 4096

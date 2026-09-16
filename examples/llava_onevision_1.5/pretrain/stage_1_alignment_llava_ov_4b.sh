@@ -179,7 +179,7 @@ export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
 PYTHONPATH="$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/train.py" \
+    -m loongforge train --engine mcore \
     "${DATA_ARGS[@]}" \
     ${IMG_ARGS:+${IMG_ARGS[@]}} \
     "${MODEL_CONFIG_ARGS[@]}" \

@@ -1,5 +1,5 @@
 # DeepSeek-V4 Flash-Base (full) model config
-_target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
+_target_: loongforge.models.llm.deepseek_v4.DeepseekV4Config
 
 num_layers: 43
 hidden_size: 4096

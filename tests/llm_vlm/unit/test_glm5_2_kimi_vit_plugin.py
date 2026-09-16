@@ -10,20 +10,20 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-import loongforge.train  # noqa: F401 - initialize package imports in training order
+import loongforge.engine.mcore  # noqa: F401 - initialize package imports in training order
 import torch
 from PIL import Image
 from transformers import AutoImageProcessor, AutoTokenizer
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
-from loongforge.data.chat_template import MAPPING_NAME_TO_TEMPLATE
-from loongforge.data.kimi_plugin import KimiPlugin
-from loongforge.data.multimodal import dataloader_provider
-from loongforge.data.multimodal.base.task_encoder import BaseTaskEncoder
-from loongforge.data.multimodal.kimi_task_encoder import KimiTaskEncoder
-from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
-from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
+from loongforge.datasets.text.chat_template import MAPPING_NAME_TO_TEMPLATE
+from loongforge.datasets.text.kimi_plugin import KimiPlugin
+from loongforge.engine.mcore import dataloader_provider
+from loongforge.datasets.multimodal.base.task_encoder import BaseTaskEncoder
+from loongforge.datasets.multimodal.kimi_task_encoder import KimiTaskEncoder
+from loongforge.datasets.multimodal.vlm_task_encoder import VLMTaskEncoder
+from loongforge.models.vlm.omni_encoder_model import OmniEncoderModel
 from loongforge.utils import constants
 
 
@@ -239,7 +239,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                     "__init__",
                     lambda encoder: setattr(encoder, "args", args),
                 ), patch(
-                    "loongforge.data.multimodal.vlm_task_encoder.AutoProcessor.from_pretrained",
+                    "loongforge.datasets.multimodal.vlm_task_encoder.AutoProcessor.from_pretrained",
                     side_effect=load_processor,
                 ):
                     VLMTaskEncoder(args)
@@ -351,7 +351,7 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
         return encoder
 
     @patch(
-        "loongforge.models.omni_models.omni_encoder_model.get_args",
+        "loongforge.models.vlm.omni_encoder_model.get_args",
         return_value=SimpleNamespace(use_vit_dp_balance=False),
     )
     def test_matching_image_tokens_and_features_are_accepted(self, _):
@@ -365,7 +365,7 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
         self.assertEqual(mask.sum().item(), 8)
 
     @patch(
-        "loongforge.models.omni_models.omni_encoder_model.get_args",
+        "loongforge.models.vlm.omni_encoder_model.get_args",
         return_value=SimpleNamespace(use_vit_dp_balance=False),
     )
     def test_mismatched_image_tokens_and_features_are_rejected(self, _):

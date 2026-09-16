@@ -1,0 +1,27 @@
+engine: native
+model: pi05
+args:
+  - --trainer-type
+  - FinetuneTrainer
+  - --distributed-strategy
+  - ddp
+  - --dataset-format
+  - lerobot_datasets
+  - --robot-type
+  - libero_franka
+  - --per-device-batch-size
+  - '12'
+  - --lr-base
+  - '2.5e-5'
+  - --lr-decay-style
+  - cosine_with_min_lr
+  - --lr-warmup-iters
+  - '10'
+  - --min-lr
+  - '1e-6'
+  - --optimizer
+  - AdamW
+  - --weight-decay
+  - '0.01'
+  - --adam-beta2
+  - '0.95'

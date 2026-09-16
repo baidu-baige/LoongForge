@@ -20,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = []
+dependencies = ["PyYAML>=6"]
 
 [project.optional-dependencies]
 gpu = [
@@ -171,7 +171,7 @@ Documentation = "https://baidu-baige.github.io/LoongForge/"
 Changelog = "CHANGELOG.md"
 
 [project.scripts]
-LoongForge = "loongforge.train:main"
+LoongForge = "loongforge.__main__:main"
 
 [dependency-groups]
 test = [
@@ -215,18 +215,22 @@ select = ["E4", "E7", "E9", "E501", "F", "S506"]
 "**/__init__.py" = ["F401", "F403"]
 
 [tool.hatch.build]
-packages = ["loongforge"]
+packages = ["loongforge", "tools"]
 include = [
     "loongforge/conf/*",
-    "loongforge/data/*",
+    "loongforge/datasets/*",
     "loongforge/**/*.yaml",
     "loongforge/**/*.json",
     "loongforge/**/*.jinja",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["loongforge"]
+packages = ["loongforge", "tools"]
 output-dir = "output/dist"
+
+[tool.hatch.build.targets.wheel.force-include]
+"configs" = "configs"
 
 [tool.hatch.build.targets.sdist]
 output-dir = "output/dist"
+include = ["loongforge/**", "tools/**", "configs/**", "pyproject.toml", "README.md", "LICENSE"]

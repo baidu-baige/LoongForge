@@ -161,7 +161,7 @@ Add adaptive FP8 parameters in the model YAML:
 
 ```yaml
 # Example: configs/models/deepseek3/deepseek_v3_fp8_sel.yaml
-_target_: loongforge.models.foundation.DeepseekConfig
+_target_: loongforge.models.llm.DeepseekConfig
 defaults:
   - deepseek_v3
   - _self_
@@ -216,7 +216,7 @@ export FP8_QUANT_FWD_WEIGHT_AMAX_EPS=1e-12
 export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 
 torchrun --nproc_per_node 8 \
-    loongforge/train.py \
+    -m loongforge train --engine mcore \
     --config-file configs/models/deepseek3/deepseek_v3_fp8_sel.yaml \
     --fp8-format e4m3 \
     --fp8-recipe blockwise \

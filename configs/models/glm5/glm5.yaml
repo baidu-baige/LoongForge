@@ -1,5 +1,5 @@
 # glm model config
-_target_: loongforge.models.foundation.GlmConfig
+_target_: loongforge.models.llm.GlmConfig
 
 num_layers: 78
 hidden_size: 6144

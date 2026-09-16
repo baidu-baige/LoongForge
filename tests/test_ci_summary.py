@@ -14,7 +14,7 @@ _SPEC.loader.exec_module(summarize)
 def _result(**overrides):
     base = {
         "model_name": "pi05_ddp",
-        "script": "/repo/examples/embodied/pi05/run.sh",
+        "script": "/repo/examples/vla/pi05/run.sh",
         "passed": True,
         "failed_metrics": [],
         "warnings": [],

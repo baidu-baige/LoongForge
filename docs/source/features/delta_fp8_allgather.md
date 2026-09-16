@@ -1,6 +1,6 @@
 # Delta-FP8 AllGather
 
-Delta-FP8 AllGather is an opt-in FSDP2 communication optimization for the LoongForge embodied training stack. It reduces parameter AllGather traffic by communicating blockwise FP8 deltas instead of complete BF16 parameters. It changes communication precision only; forward and backward computation continue to use the dtype configured by the FSDP mixed-precision policy.
+Delta-FP8 AllGather is an opt-in FSDP2 communication optimization for the LoongForge Native training stack. It reduces parameter AllGather traffic by communicating blockwise FP8 deltas instead of complete BF16 parameters. It changes communication precision only; forward and backward computation continue to use the dtype configured by the FSDP mixed-precision policy.
 
 Delta-FP8 AllGather is independent of LoongForge's end-to-end [FP8 training](fp8_training.md). Enabling this feature does not convert model weights, activations, or GEMMs to FP8.
 
@@ -24,13 +24,13 @@ The runtime capability check executes while FSDP groups are registered. Unsuppor
 The DreamZero Wan2.2-5B full FSDP recipe enables Delta-FP8 with its validated settings. No additional Delta-FP8 argument is required:
 
 ```bash
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+bash examples/world/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 ```
 
 To use native BF16 AllGather for an A/B comparison:
 
 ```bash
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+bash examples/world/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
     --no-fsdp-delta-fp8-allgather
 ```
 

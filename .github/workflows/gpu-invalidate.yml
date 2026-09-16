@@ -17,15 +17,15 @@ jobs:
       - name: Invalidate stale LLM/VLM work
         run: echo "Cancelled stale LLM/VLM GPU work for this pull request, if any."
 
-  invalidate_embodied:
+  invalidate_native:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: gpu-regression-${{ github.event.pull_request.number }}-embodied
+      group: gpu-regression-${{ github.event.pull_request.number }}-native
       cancel-in-progress: true
     steps:
-      - name: Invalidate stale embodied work
-        run: echo "Cancelled stale embodied GPU work for this pull request, if any."
+      - name: Invalidate stale native work
+        run: echo "Cancelled stale native GPU work for this pull request, if any."
 
   # The two jobs above only exist to steal the suite concurrency groups and
   # cancel in-flight GPU work; both always succeed, so their green ticks say

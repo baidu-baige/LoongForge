@@ -1,5 +1,5 @@
 # qwen2 model configuration
-_target_: loongforge.models.foundation.Qwen2Config
+_target_: loongforge.models.llm.Qwen2Config
 num_layers: 48
 hidden_size: 5120
 ffn_hidden_size: 13824

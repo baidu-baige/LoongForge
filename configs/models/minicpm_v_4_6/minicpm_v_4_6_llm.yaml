@@ -1,4 +1,4 @@
-_target_: loongforge.models.foundation.qwen3_5.qwen3_5_config.Qwen35Config
+_target_: loongforge.models.llm.qwen3_5.qwen3_5_config.Qwen35Config
 
 model_type: minicpm_v_4_6
 

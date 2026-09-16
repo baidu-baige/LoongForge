@@ -3,7 +3,7 @@
 
 import pytest
 
-from loongforge.train.checkpointing import _load_model_state_dict
+from loongforge.checkpoint.mcore.checkpointing import _load_model_state_dict
 
 
 class _FakeModule:

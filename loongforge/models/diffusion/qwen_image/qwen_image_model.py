@@ -23,7 +23,7 @@ from einops import rearrange
 from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 
-from loongforge.utils import get_args
+from loongforge.engine.mcore.global_vars import get_args
 
 from .qwen_image_config import QwenImageConfig
 from .qwen_image_modules import AdaLayerNorm, RMSNorm, TimestepEmbeddings

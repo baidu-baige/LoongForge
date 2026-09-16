@@ -75,7 +75,7 @@ jobs:
               core.setFailed('head repository does not match the pull request');
               return;
             }
-            if (!['llm_vlm', 'embodied'].includes(process.env.SUITE)) {
+            if (!['llm_vlm', 'native'].includes(process.env.SUITE)) {
               core.setFailed('invalid test suite');
               return;
             }
@@ -102,7 +102,7 @@ jobs:
           models: ${{ inputs.models }}
           repository: ${{ inputs.head_repo }}
           ref: ${{ inputs.head_sha }}
-          baseline_alias: ${{ inputs.suite == 'embodied' && 'p' || 'a' }}
+          baseline_alias: ${{ inputs.suite == 'native' && 'p' || 'a' }}
 
   llm_vlm:
     needs: validate
@@ -205,7 +205,7 @@ jobs:
       - id: regression
         name: Run LLM/VLM regression
         env:
-          MODELS: ${{ inputs.models || (inputs.suite == 'embodied' && 'pi05_ddp' || 'deepseek_v2_lite') }}
+          MODELS: ${{ inputs.models || (inputs.suite == 'native' && 'pi05_ddp' || 'deepseek_v2_lite') }}
           CANDIDATE_REVISION: ${{ steps.candidate.outputs.revision }}
           HEAD_SHA: ${{ inputs.head_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
@@ -220,15 +220,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  embodied:
+  native:
     needs: validate
-    if: ${{ needs.validate.result == 'success' && inputs.suite == 'embodied' }}
+    if: ${{ needs.validate.result == 'success' && inputs.suite == 'native' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER_P) }}
     timeout-minutes: 360
     outputs:
       regression_summary: ${{ steps.suite_summary.outputs.markdown }}
     concurrency:
-      group: gpu-regression-${{ inputs.pr_number }}-embodied
+      group: gpu-regression-${{ inputs.pr_number }}-native
       cancel-in-progress: true
     steps:
       - name: Revalidate current PR head
@@ -272,7 +272,7 @@ jobs:
           test "$(git -C source rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE_SHA"
           test -z "$(git -C source submodule status --recursive | grep -E '^[+-]' || true)"
       - name: Preflight self-hosted runner
-        run: trusted-ci/.github/scripts/self_runner/preflight.sh embodied "${{ inputs.build_image && 'true' || 'false' }}"
+        run: trusted-ci/.github/scripts/self_runner/preflight.sh native "${{ inputs.build_image && 'true' || 'false' }}"
       - name: Report candidate image build
         if: ${{ inputs.build_image && inputs.gate_check_id != '' }}
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
@@ -321,14 +321,14 @@ jobs:
               },
             });
       - id: regression
-        name: Run embodied regression
+        name: Run Native regression
         env:
-          MODELS: ${{ inputs.models || (inputs.suite == 'embodied' && 'pi05_ddp' || 'deepseek_v2_lite') }}
+          MODELS: ${{ inputs.models || (inputs.suite == 'native' && 'pi05_ddp' || 'deepseek_v2_lite') }}
           CANDIDATE_REVISION: ${{ steps.candidate.outputs.revision }}
           HEAD_SHA: ${{ inputs.head_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
           LOONGFORGE_REGRESSION_RUNNER: ${{ github.workspace }}/trusted-ci/.github/scripts/self_runner/run_regression.sh
-        run: trusted-ci/.github/scripts/run_regression.sh embodied
+        run: trusted-ci/.github/scripts/run_regression.sh native
       - id: suite_summary
         name: Render suite summary
         # The launcher copies the regression framework's results.json into
@@ -348,14 +348,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: gpu-embodied-${{ inputs.pr_number }}-${{ inputs.head_sha }}
+          name: gpu-native-${{ inputs.pr_number }}-${{ inputs.head_sha }}
           path: loongforge-artifacts
           if-no-files-found: error
           retention-days: 7
 
   finalize:
     timeout-minutes: 70
-    needs: [validate, llm_vlm, embodied]
+    needs: [validate, llm_vlm, native]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -376,11 +376,11 @@ jobs:
           CHECK_ID: ${{ inputs.gate_check_id }}
           VALIDATE_RESULT: ${{ needs.validate.result }}
           LLM_VLM_RESULT: ${{ needs.llm_vlm.result }}
-          EMBODIED_RESULT: ${{ needs.embodied.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
           SUITE: ${{ inputs.suite }}
           HEAD_SHA: ${{ inputs.head_sha }}
           PR_NUMBER: ${{ inputs.pr_number }}
-          REGRESSION_SUMMARY: ${{ needs.embodied.outputs.regression_summary }}
+          REGRESSION_SUMMARY: ${{ needs.native.outputs.regression_summary }}
         with:
           script: |
             const { gpuConclusion } = require('./.github/scripts/gpu_checks');
@@ -389,7 +389,7 @@ jobs:
             const results = {
               validate: process.env.VALIDATE_RESULT,
               llm_vlm: process.env.LLM_VLM_RESULT,
-              embodied: process.env.EMBODIED_RESULT,
+              native: process.env.NATIVE_RESULT,
             };
 
             // A failed suite job is a real failure: mark the check failed,

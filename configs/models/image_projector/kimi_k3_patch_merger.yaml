@@ -1,4 +1,4 @@
-_target_: loongforge.models.encoder.KimiK3PatchMergerConfig
+_target_: loongforge.models.vision.KimiK3PatchMergerConfig
 
 normalization: RMSNorm
 activation_func: ${act:gelu}

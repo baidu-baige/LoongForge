@@ -255,7 +255,7 @@ For further understanding of various parameters and detailed functions of weight
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting parameters provided by open-source Megatron, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/train/arguments.py file. Main parameter descriptions are as follows:
+Based on supporting parameters provided by open-source Megatron, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/engine/mcore/arguments.py file. Main parameter descriptions are as follows:
 
 * `--training-phase`: Specify the training phase as pretrain
 * `--add-question-in-pretrain`: When enabled, questions will be concatenated and added to the input for training; when disabled, only answers or other default text fields will be used for training
@@ -395,7 +395,7 @@ fi
 
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $LOONGFORGE_PATH/loongforge/train.py \
+    -m loongforge train --engine mcore \
     ${MODEL_CONFIG_ARGS[@]} \
     ${DATA_ARGS[@]} \
     ${TRAINING_ARGS[@]} \

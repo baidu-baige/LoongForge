@@ -1,6 +1,6 @@
 # DeepSeek-V4 Flash-Base SLICED (2 layers + 1 MTP) smoke-test model config
 # Used for SFT packing smoke tests on 8 GPUs with TP=1, PP=2, EP=4
-_target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
+_target_: loongforge.models.llm.deepseek_v4.DeepseekV4Config
 
 num_layers: 2
 hidden_size: 4096

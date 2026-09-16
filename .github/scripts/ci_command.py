@@ -42,7 +42,7 @@ def parse_command(comment: str) -> TestRequest:
         raise CommandError("comment must start with /ok-to-test")
 
     parser = _Parser(add_help=False, allow_abbrev=False)
-    parser.add_argument("--suite", required=True, choices=("llm_vlm", "embodied"))
+    parser.add_argument("--suite", required=True, choices=("llm_vlm", "native"))
     parser.add_argument("--model", default="")
     parser.add_argument("--build-image", action="store_true")
     args = parser.parse_args(tokens[1:])

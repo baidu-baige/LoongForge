@@ -17,7 +17,7 @@ container_source_mount="${LOONGFORGE_CONTAINER_SOURCE_MOUNT:-${container_source}
 docker_bin="${DOCKER_BIN:-docker}"
 gpu_device="${LOONGFORGE_GPU_DEVICE:-nvidia.com/gpu=all}"
 
-[[ -n "$image" && -d "$source_dir" && "$suite" =~ ^(llm_vlm|embodied)$ && -n "$container_name" ]] || {
+[[ -n "$image" && -d "$source_dir" && "$suite" =~ ^(llm_vlm|native)$ && -n "$container_name" ]] || {
   echo "usage: create_container.sh IMAGE SOURCE_DIR SUITE CONTAINER_NAME" >&2
   exit 2
 }

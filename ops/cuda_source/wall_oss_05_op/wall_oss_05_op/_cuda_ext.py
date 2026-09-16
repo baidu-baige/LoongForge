@@ -20,17 +20,8 @@ def load():
     if _module is not None:
         return _module
 
-    # Primary: installed as part of the wall_oss_05_op package.
     try:
         from wall_oss_05_op import _cuda_ext_bin  # noqa: PLC0415
-        _module = _cuda_ext_bin
-        return _module
-    except ImportError:
-        pass
-
-    # Fallback: installed inside the loongforge package.
-    try:
-        from loongforge.embodied.model.wall_oss_0_5.core.ops import _cuda_ext_bin  # noqa: PLC0415
         _module = _cuda_ext_bin
         return _module
     except ImportError as exc:
@@ -64,17 +55,8 @@ def load_exact():
     if _exact_module is not None:
         return _exact_module
 
-    # Primary: installed as part of the wall_oss_05_op package.
     try:
         from wall_oss_05_op import _cuda_ext_exact_bin  # noqa: PLC0415
-        _exact_module = _cuda_ext_exact_bin
-        return _exact_module
-    except ImportError:
-        pass
-
-    # Fallback: installed inside the loongforge package.
-    try:
-        from loongforge.embodied.model.wall_oss_0_5.core.ops import _cuda_ext_exact_bin  # noqa: PLC0415
         _exact_module = _cuda_ext_exact_bin
         return _exact_module
     except ImportError as exc:

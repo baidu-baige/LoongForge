@@ -233,17 +233,17 @@ def test_redactor_keeps_suite_results_and_redacts_nested_paths(tmp_path):
     source.write_text(json.dumps({
         "finished_at": "2026-08-28 12:12:39",
         "chip": "p",
-        "log_dir": "/private/runner/output/embodied/run_1",
+        "log_dir": "/private/runner/output/native/run_1",
         "auto_collect_baseline": False,
         "results": [
             {
                 "model_name": "pi05_ddp",
-                "script": "/workspace/source/examples/embodied/pi05/run.sh",
+                "script": "/workspace/source/examples/vla/pi05/run.sh",
                 "passed": True,
                 "failed_metrics": [],
                 "warnings": ["throughput degraded 10% > 5% (soft check, warning only)"],
                 "error": "",
-                "log_dir": "/private/runner/output/embodied/run_1/pi05_ddp",
+                "log_dir": "/private/runner/output/native/run_1/pi05_ddp",
                 "duration_sec": 716.2,
                 "metrics": [
                     {"iteration": 1, "action_loss": 0.4305, "grad_norm": 1.6127},

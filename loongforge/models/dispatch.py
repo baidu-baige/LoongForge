@@ -7,7 +7,7 @@ from typing import Any
 from dataclasses import dataclass
 from functools import cached_property
 
-from loongforge.utils import get_args
+from loongforge.engine.mcore.global_vars import get_args
 
 
 @dataclass

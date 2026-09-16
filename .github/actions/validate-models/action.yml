@@ -2,7 +2,7 @@ name: 'Validate regression models'
 description: 'Validate requested model names against the suite manifest at a given ref'
 inputs:
   suite:
-    description: 'Test suite (llm_vlm or embodied)'
+    description: 'Test suite (llm_vlm or native)'
     required: true
   models:
     description: 'Comma-separated model names'
@@ -34,7 +34,7 @@ runs:
           const { filterModelsWithBaselines, missingModels } = require('./.github/scripts/ci_model_validation');
           let models = process.env.MODELS.split(',').map((m) => m.trim()).filter(Boolean);
           if (!models.length) {
-            models = [suite === 'embodied' ? 'pi05_ddp' : 'deepseek_v2_lite'];
+            models = [suite === 'native' ? 'pi05_ddp' : 'deepseek_v2_lite'];
           }
           if (models.some((model) => !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(model))) {
             core.setFailed('invalid model list');
@@ -50,11 +50,11 @@ runs:
           // typos fail before runner time is spent on image pulls, container
           // creation, and a slow regression start.
           let knownModels;
-          if (suite === 'embodied') {
+          if (suite === 'native') {
             const { data: manifest } = await github.rest.repos.getContent({
               owner,
               repo,
-              path: 'tests/embodied/config/scripts.yaml',
+              path: 'tests/native/config/scripts.yaml',
               ref: process.env.SOURCE_REF,
             });
             const yaml = Buffer.from(
@@ -67,7 +67,7 @@ runs:
             let baselines = [];
             try {
               const response = await github.rest.repos.getContent({
-                owner, repo, path: `tests/embodied/baseline/${baselineDir}`, ref: process.env.SOURCE_REF,
+                owner, repo, path: `tests/native/baseline/${baselineDir}`, ref: process.env.SOURCE_REF,
               });
               baselines = response.data;
             } catch (error) {

@@ -10,18 +10,18 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 
-from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
-from convert_checkpoint.utils.utils import (
+from tools.convert_checkpoint.arguments import parse_args
+from tools.convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from tools.convert_checkpoint.utils.utils import (
     transpose_shape0,
     convert_fp8_to_bf16,
 )
-from convert_checkpoint.huggingface.compressed_tensors_dequant import DTYPE_MAP
+from tools.convert_checkpoint.huggingface.compressed_tensors_dequant import DTYPE_MAP
 
 from omegaconf import ListConfig
 from omegaconf.dictconfig import DictConfig
 
-from convert_checkpoint.common.common_checkpoint import (
+from tools.convert_checkpoint.common.common_checkpoint import (
     WEIGHT,
     BIAS,
     WEIGHT_SCALE,
@@ -52,8 +52,8 @@ from convert_checkpoint.common.common_checkpoint import (
     LAYER_DTYPE
 )
 
-from convert_checkpoint.huggingface.util.hf_attn_converter import HfAttnQkvConverter, HfAttnGateQkvConverter
-from convert_checkpoint.huggingface.util.hf_mixer_attn_converter import HfMixerAttnConverter
+from tools.convert_checkpoint.huggingface.util.hf_attn_converter import HfAttnQkvConverter, HfAttnGateQkvConverter
+from tools.convert_checkpoint.huggingface.util.hf_mixer_attn_converter import HfMixerAttnConverter
 
 def is_dsv4_hybrid_config(c_config):
     if c_config is None:

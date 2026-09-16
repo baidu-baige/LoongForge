@@ -25,7 +25,7 @@ jobs:
         with:
           script: |
             const runName = process.env.RUN_NAME || '';
-            const match = runName.match(/^GPU Regression PR #(\d+) (llm_vlm|embodied) ([0-9a-f]{40})$/);
+            const match = runName.match(/^GPU Regression PR #(\d+) (llm_vlm|native) ([0-9a-f]{40})$/);
             if (!match) {
               core.warning('GPU workflow run name has no immutable PR/suite identity; no check was changed.');
               return;

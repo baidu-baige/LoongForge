@@ -1,5 +1,5 @@
 # deepseek_v2_lite model config
-_target_: loongforge.models.foundation.DeepseekConfig
+_target_: loongforge.models.llm.DeepseekConfig
 
 num_layers: 27
 hidden_size: 2048

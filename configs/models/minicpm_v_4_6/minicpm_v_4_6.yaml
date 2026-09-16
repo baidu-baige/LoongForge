@@ -11,7 +11,7 @@ model:
   mix_used_vision_encoder: true
   mix_used_vision_projector: true
   foundation:
-    model_spec: ["loongforge.models.foundation.qwen3_5.qwen3_5_layer_spec", "get_qwen3_5_transformer_layer_spec"]
+    model_spec: ["loongforge.models.llm.qwen3_5.qwen3_5_layer_spec", "get_qwen3_5_transformer_layer_spec"]
   image_encoder:
     model_spec: null
   image_projector:

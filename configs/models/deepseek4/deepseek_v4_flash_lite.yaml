@@ -1,6 +1,6 @@
 # DeepSeek-V4 Flash-Base SLICED (21 layers + 1 MTP) model config
 # Used for roundtrip testing with the sliced checkpoint
-_target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
+_target_: loongforge.models.llm.deepseek_v4.DeepseekV4Config
 
 num_layers: 21
 hidden_size: 4096

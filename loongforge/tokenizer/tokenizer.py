@@ -15,7 +15,7 @@ from loongforge.utils import constants, print_rank_0
 from .tokenization_hf import AutoTokenizerFromHF
 
 if TYPE_CHECKING:
-    from loongforge.data import ChatTemplate
+    from loongforge.datasets.text import ChatTemplate
 
 
 def _update_tokenizer_with_template(

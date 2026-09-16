@@ -14,7 +14,7 @@ This heterogeneous TP mechanism enables the model to flexibly select the most ap
 Set `tensor-model-parallel-size` in the corresponding model's vit.yaml to specify the vit tp size. For example, adding `tensor_model_parallel_size: 2` in qwen3_vit specifies the vit's tp size:
 
 ```yaml
-_target_: loongforge.models.encoder.Qwen3VisionModelConfig
+_target_: loongforge.models.vision.Qwen3VisionModelConfig
 
 num_layers: 27
 hidden_size: 1152
@@ -86,7 +86,7 @@ MODEL_PARALLEL_ARGS=(
 
 Add `tensor_model_parallel_size: 1` to the corresponding model’s `vit.yaml`. Currently, when heterogeneous DP is enabled, only encoder TP size of 1 is supported.
 ```yaml
-_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.vision.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280
@@ -146,7 +146,7 @@ With Full Heterogeneous DP enabled:
 Full Heterogeneous DP requires `tensor_model_parallel_size: 1` for the encoder. Add or set this in the corresponding model's vit.yaml:
 
 ```yaml
-_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.vision.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280

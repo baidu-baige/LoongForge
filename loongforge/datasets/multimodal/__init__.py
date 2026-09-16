@@ -1,0 +1,66 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Multimodal data utilities and task encoder registry."""
+
+import importlib
+
+from loongforge.datasets.multimodal.flavors import (
+    PackedCaptioningSample,
+    PackedVQASample,
+    PackedMultiMixQASample,
+    PackedChatMixSample,
+    MultiVidQASample,
+    MultiMixQASample,
+    ChatMixSample,
+)
+
+# Registry for multimodal task encoders so configs can swap them without
+# touching individual encoder modules.
+TASK_ENCODER_REGISTRY = {
+    "vlmtaskencoder": "loongforge.datasets.multimodal.vlm_task_encoder.VLMTaskEncoder",
+    "internvltaskencoder": "loongforge.datasets.multimodal.internvl.internvl_task_encoder.InternVLTaskEncoder",
+    "llavaov15taskencoder": "loongforge.datasets.multimodal.llava_ov_task_encoder.LLavaOv15TaskEncoder",
+    "ernietaskencoder": "loongforge.datasets.multimodal.ernie_task_encoder.ErnieTaskEncoder",
+    "kimitaskencoder": "loongforge.datasets.multimodal.kimi_task_encoder.KimiTaskEncoder",
+    "minicpmv46taskencoder": (
+        "loongforge.datasets.multimodal.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
+    ),
+}
+
+
+def resolve_task_encoder(name: str):
+    """Resolve and import a task encoder class by registry name."""
+    normalized = name.lower()
+    if normalized not in TASK_ENCODER_REGISTRY:
+        available = sorted(TASK_ENCODER_REGISTRY)
+        raise ValueError(f"Unknown task encoder '{name}'. Available: {available}")
+    module_path, cls_name = TASK_ENCODER_REGISTRY[normalized].rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, cls_name)
+
+
+def build_task_encoder(args, *encoder_args, **encoder_kwargs):
+    """
+    Factory that builds a task encoder instance based on args.task_encoder.
+
+    Defaults to VLMTaskEncoder when unspecified, while keeping registry-based
+    extensibility for other encoder classes.
+    """
+    encoder_name = getattr(args, "task_encoder", None) or "VLMTaskEncoder"
+    encoder_cls = resolve_task_encoder(encoder_name)
+    return encoder_cls(args, *encoder_args, **encoder_kwargs)
+
+
+__all__ = [
+    "PackedCaptioningSample",
+    "PackedVQASample",
+    "PackedMultiMixQASample",
+    "PackedChatMixSample",
+    "MultiVidQASample",
+    "MultiMixQASample",
+    "ChatMixSample",
+    "TASK_ENCODER_REGISTRY",
+    "resolve_task_encoder",
+    "build_task_encoder",
+]

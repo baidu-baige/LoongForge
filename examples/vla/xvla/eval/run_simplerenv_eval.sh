@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Public open-source entry: X-VLA SimplerEnv WidowX (task-success template).
+# Fill /path/to/... in configs/simplerenv/widowx_stack_cube_smoke.yaml first.
+# Open weight: 2toINF/X-VLA-WidowX. Requires the SimplerEnv absolute EE controller:
+# check/apply per loongforge/evaluation/docs/benchmarks/simplerenv.md (Step 1)
+# (details in loongforge/evaluation/docs/patches/simplerenv/xvla.md).
+
+set -euo pipefail
+
+REPO_ROOT=${REPO_ROOT:-/path/to/LoongForge-VLA}
+EXAMPLE_EVAL_ROOT=${EXAMPLE_EVAL_ROOT:-${REPO_ROOT}/examples/vla/xvla/eval}
+CONFIG=${CONFIG:-${EXAMPLE_EVAL_ROOT}/configs/simplerenv/widowx_stack_cube_smoke.yaml}
+if [[ "${CONFIG}" != /* ]]; then
+  CONFIG=${REPO_ROOT}/${CONFIG}
+fi
+
+export PYTHONPATH=${REPO_ROOT}:${PYTHONPATH:-}
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/path/to/nvidia_lib:/usr/lib64}
+export VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/path/to/nvidia_icd.json}
+
+BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-/path/to/simplerenv/bin/python}
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.orchestrator.run --config "${CONFIG}"

@@ -1,4 +1,4 @@
-_target_: loongforge.models.foundation.Qwen35Config
+_target_: loongforge.models.llm.Qwen35Config
 
 convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3.8/ckpt_convert/qwen3_8_dense_convert.yaml
 

@@ -12,11 +12,3 @@ from .utils import (
     get_device_arch_version,
     convert_custom_pipeline_to_layout,
 )
-
-from .global_vars import (
-    get_tokenizer,
-    get_args,
-    get_chat_template,
-    get_model_config,
-    get_data_config,
-)

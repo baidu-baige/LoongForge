@@ -13,14 +13,14 @@ def _references(text: str):
 def test_finds_bare_relative_and_project_absolute_references():
     found = _references(
         """
-        Run `examples/embodied/pi05/run.sh`.
+        Run `examples/vla/pi05/run.sh`.
         [config](../../configs/models/qwen3/model.yaml)
-        https://github.com/baidu-baige/LoongForge/blob/master/examples/embodied/pi05/run.sh
+        https://github.com/baidu-baige/LoongForge/blob/master/examples/vla/pi05/run.sh
         https://raw.githubusercontent.com/baidu-baige/LoongForge/master/configs/models/qwen3/model.yaml
         """
     )
     targets = {target for _, target in found}
-    assert "examples/embodied/pi05/run.sh" in targets
+    assert "examples/vla/pi05/run.sh" in targets
     assert "configs/models/qwen3/model.yaml" in targets
 
 

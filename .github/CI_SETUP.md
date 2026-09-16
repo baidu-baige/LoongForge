@@ -10,7 +10,7 @@ are JSON arrays, not comma-separated strings. Set the custom labels to the
 labels actually registered on the target runners; the `a`/`p` labels in
 runner-local configuration are canonical aliases,
 not assumptions made by the workflows. `llm_vlm` resolves to `CI_RUNNER_A` and
-`embodied` resolves to `CI_RUNNER_P`; each suite runner builds its own local
+`native` resolves to `CI_RUNNER_P`; each suite runner builds its own local
 candidate image when `--build-image` is requested.
 
 - `CI_RUNNER_A`: JSON label array for the A-card regression runner.

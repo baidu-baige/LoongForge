@@ -123,7 +123,7 @@ fi
 echo "llm path: "  $LOONGFORGE_PATH, "megatron path: " $MEGATRON_PATH
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun ${DISTRIBUTED_ARGS[@]} \
-    $LOONGFORGE_PATH/loongforge/train.py \
+    -m loongforge train --engine mcore \
     ${MODEL_CONFIG_ARGS[@]} \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \

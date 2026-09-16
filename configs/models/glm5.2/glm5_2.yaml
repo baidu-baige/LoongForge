@@ -1,7 +1,7 @@
 # glm-5.2 model config
 # Architecturally identical to GLM-5 except for IndexShare: the DSA indexer lives on only 21 of
 # the 78 layers and the other 57 reuse the nearest preceding indexer layer's top-k indices.
-_target_: loongforge.models.foundation.GlmConfig
+_target_: loongforge.models.llm.GlmConfig
 
 num_layers: 78
 hidden_size: 6144

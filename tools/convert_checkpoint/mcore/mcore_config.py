@@ -8,8 +8,8 @@ import torch
 import types
 from tqdm import tqdm
 
-from convert_checkpoint.common.abstact_config import AbstractConfig
-from convert_checkpoint.arguments import parse_args
+from tools.convert_checkpoint.common.abstact_config import AbstractConfig
+from tools.convert_checkpoint.arguments import parse_args
 
 
 class McoreConfig(AbstractConfig):

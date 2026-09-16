@@ -33,7 +33,7 @@ def _load_functions(relative_path, names, namespace=None):
 class VlmDatasetInputTest(unittest.TestCase):
     def test_raw_json_is_rejected_before_energon(self):
         namespace = _load_functions(
-            "loongforge/data/multimodal/dataloader_provider.py",
+            "loongforge/engine/mcore/dataloader_provider.py",
             {"_validate_energon_data_paths"},
         )
 

@@ -34,11 +34,11 @@ dispatch inputs.
 Maintainers can request a baseline regression by commenting on a pull request:
 
 ```
-/ok-to-test --suite llm_vlm|embodied [--model model1,model2] [--build-image]
+/ok-to-test --suite llm_vlm|native [--model model1,model2] [--build-image]
 ```
 
 The suite selects both the test collection and its self-hosted runner:
-`llm_vlm` runs on a and `embodied` runs on p. The `embodied` suite is enabled
+`llm_vlm` runs on a and `native` runs on p. The `native` suite is enabled
 by default; `llm_vlm` requires a registered runner and
 `CI_ENABLE_LLM_VLM=true` in the workflow environment. With `--build-image`, that
 same runner builds the PR source context with a trusted Dockerfile and the
@@ -80,7 +80,7 @@ whole image.
 
 Operator hook contracts:
 
-- `LOONGFORGE_REGRESSION_RUNNER --source DIR --suite llm_vlm|embodied --sha SHA [--model LIST] [--candidate-revision REV]`
+- `LOONGFORGE_REGRESSION_RUNNER --source DIR --suite llm_vlm|native --sha SHA [--model LIST] [--candidate-revision REV]`
 - `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|p|auto --sha SHA --pr NUMBER --tree-sha SHA`; stdout must contain only the local candidate image reference
 
 The builder reads `CI_CONFIG_PATH_IMAGE` (or the wrapper's `CI_CONFIG_PATH`) from

@@ -8,11 +8,11 @@ import torch
 import logging
 
 import concurrent.futures
-from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
-from convert_checkpoint.mcore.mcore_base import McoreBase
-from convert_checkpoint.mcore.mcore_moe import McoreMoe
-from convert_checkpoint.utils.utils import (
+from tools.convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
+from tools.convert_checkpoint.common.common_checkpoint import VISION_MAP, VISION_WORD_EMBEDDINGS, CommonCheckpoint
+from tools.convert_checkpoint.mcore.mcore_base import McoreBase
+from tools.convert_checkpoint.mcore.mcore_moe import McoreMoe
+from tools.convert_checkpoint.utils.utils import (
     touch_file,
     get_done_keys,
     get_virtual_partition,
@@ -20,7 +20,7 @@ from convert_checkpoint.utils.utils import (
     get_etp_map,
 )
 
-from convert_checkpoint.common.common_checkpoint import (
+from tools.convert_checkpoint.common.common_checkpoint import (
     TRANSFORMER, TRANSFORMER_TPL, MTP_LAYER_PREFIX, FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES,
     LAYER_LOCAL_LAST_NAMES, MTP_NAMES,
     MTP_SHARED_HEAD_HEAD, MOE_SHARED_EXPERT, MOE_EXPERT, MTP_NAME_PREFIX_FOR_LAYER,

@@ -20,7 +20,7 @@
   * **多模态兼容性**：通过简单插入新分支即可添加新模态。
 
 ```python
-# loongforge/models/omni_models/omni_encoder_model.py
+# loongforge/models/vlm/omni_encoder_model.py
 class OmniEncoderModel(torch.nn.Module):
     def __init__(self, config, ...):
         # 文本模态
@@ -56,7 +56,7 @@ self.image_encoder.register_forward_hook(
 * **逻辑解耦**：通过外部配置动态决定是否加载编码器或基座模型，实现组件级解耦。
 
 ```python
-# loongforge/models/omni_models/omni_combination_model.py
+# loongforge/models/vlm/omni_combination_model.py
 class OmniCombinationModel(BaseMegatronModule):
     def __init__(self, config, ...):
         # 1. 动态初始化编码器模型
@@ -78,7 +78,7 @@ class OmniCombinationModel(BaseMegatronModule):
 * **分布式流水线并行**：检测当前流水线并行阶段并按需加载编码器/基座模型，实现**跨 GPU 流水线部署**。
 
 ```python
-# loongforge/models/omni_models/omni_model_provider.py
+# loongforge/models/vlm/omni_model_provider.py
 def omni_model_provider(...):
     # 自动检测当前 rank 是否为第一个 PP 阶段；决定是否加载编码器
     # 这对于将编码器和解码器放置在不同 GPU 上至关重要
@@ -167,7 +167,7 @@ model:
     rotary_base: 1000000
 
     # Megatron 层规范，支持 Transformer-Engine 加速
-    model_spec: ["loongforge.models.foundation.internlm.internlm_layer_spec",
+    model_spec: ["loongforge.models.llm.internlm.internlm_layer_spec",
                  "get_internlm_layer_with_te_spec"]
 ```
 

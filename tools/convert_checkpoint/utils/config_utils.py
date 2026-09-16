@@ -8,8 +8,8 @@ from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import DictConfig, OmegaConf
 
-from convert_checkpoint.common.common_config import CommonConfig
-from convert_checkpoint.common.common_checkpoint import (
+from tools.convert_checkpoint.common.common_config import CommonConfig
+from tools.convert_checkpoint.common.common_checkpoint import (
     BIAS,
     FIRST_LAYER_NAMES,
     LAST_LAYER_NAMES,

@@ -43,17 +43,17 @@ A modular, scalable, and highly efficient training framework for language, multi
    :maxdepth: 1
    :caption: Embodied Training
 
-   embodied_tutorial/overview
+   native_tutorial/overview
    features/delta_fp8_allgather
-   embodied_tutorial/quick_start_pi05
-   embodied_tutorial/quick_start_groot_n1_6
-   embodied_tutorial/quick_start_groot_n1_7
-   embodied_tutorial/quick_start_lingbot_va
-   embodied_tutorial/quick_start_xvla
-   embodied_tutorial/quick_start_dreamzero
-   embodied_tutorial/quick_start_fastwam
-   embodied_tutorial/quick_start_cosmos3
-   embodied_tutorial/eval_overview
+   native_tutorial/quick_start_pi05
+   native_tutorial/quick_start_groot_n1_6
+   native_tutorial/quick_start_groot_n1_7
+   native_tutorial/quick_start_lingbot_va
+   native_tutorial/quick_start_xvla
+   native_tutorial/quick_start_dreamzero
+   native_tutorial/quick_start_fastwam
+   native_tutorial/quick_start_cosmos3
+   native_tutorial/eval_overview
 
 .. toctree::
    :maxdepth: 1

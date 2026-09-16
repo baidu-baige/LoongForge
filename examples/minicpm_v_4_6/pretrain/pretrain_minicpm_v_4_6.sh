@@ -95,7 +95,7 @@ fi
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 PYTHONPATH="${MEGATRON_PATH}:${LOONGFORGE_PATH}:${PYTHONPATH:-}" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "${LOONGFORGE_PATH}/loongforge/train.py" \
+    -m loongforge train --engine mcore \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \

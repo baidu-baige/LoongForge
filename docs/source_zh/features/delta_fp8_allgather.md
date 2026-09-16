@@ -24,13 +24,13 @@ FSDP group 注册时会执行运行时能力检查。不支持的设备或 backe
 DreamZero Wan2.2-5B Full FSDP recipe 已默认启用 Delta-FP8 及验证过的参数，无需额外传入 Delta-FP8 参数：
 
 ```bash
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+bash examples/world/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 ```
 
 如需使用原生 BF16 AllGather 进行 A/B 对比：
 
 ```bash
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+bash examples/world/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
     --no-fsdp-delta-fp8-allgather
 ```
 

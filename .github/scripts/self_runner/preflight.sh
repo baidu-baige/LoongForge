@@ -6,7 +6,7 @@ set -euo pipefail
 
 suite="${1:-}"
 build_image="${2:-false}"
-[[ "$suite" =~ ^(llm_vlm|embodied)$ ]] || { printf '%s\n' 'suite: invalid' >&2; exit 2; }
+[[ "$suite" =~ ^(llm_vlm|native)$ ]] || { printf '%s\n' 'suite: invalid' >&2; exit 2; }
 [[ "$build_image" == true || "$build_image" == false ]] || {
   printf '%s\n' 'build_image: invalid' >&2
   exit 2
@@ -59,7 +59,7 @@ if [[ "$build_image" == true ]]; then
   fi
   printf '%s\n' 'buildx: ok'
 
-  if [[ -v LOONGFORGE_MIN_DOCKER_FREE_GB ]]; then
+  if [[ "${LOONGFORGE_MIN_DOCKER_FREE_GB+x}" ]]; then
     min_docker_free_gb="$LOONGFORGE_MIN_DOCKER_FREE_GB"
   else
     min_docker_free_gb=250
@@ -78,7 +78,7 @@ printf '%s\n' 'image-device: ok'
 # needs, instead of burning a full training run on a late OOM. Set
 # LOONGFORGE_MIN_FREE_GPU_MB (MiB per GPU) in the runner config to
 # override; an empty value disables the check.
-if [[ -v LOONGFORGE_MIN_FREE_GPU_MB ]]; then
+if [[ "${LOONGFORGE_MIN_FREE_GPU_MB+x}" ]]; then
   # An explicitly empty value is the documented way to disable this optional
   # host-occupancy check; only an unset variable receives the default.
   min_free_mb="$LOONGFORGE_MIN_FREE_GPU_MB"

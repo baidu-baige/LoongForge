@@ -1,0 +1,5 @@
+engine: mcore
+args:
+  - --distributed-backend
+  - nccl
+  - --bf16

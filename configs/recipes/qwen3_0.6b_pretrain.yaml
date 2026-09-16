@@ -1,0 +1,26 @@
+engine: mcore
+model: qwen3-0.6b
+args:
+  - --training-phase
+  - pretrain
+  - --seq-length
+  - '4096'
+  - --max-position-embeddings
+  - '32768'
+  - --micro-batch-size
+  - '4'
+  - --global-batch-size
+  - '1024'
+  - --lr
+  - '1e-5'
+  - --min-lr
+  - '1e-6'
+  - --lr-decay-style
+  - cosine
+  - --lr-warmup-fraction
+  - '0.002'
+  - --train-iters
+  - '50000'
+  - --tokenizer-type
+  - HFTokenizer
+  - --eod-mask-loss

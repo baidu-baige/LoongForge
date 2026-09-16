@@ -2432,7 +2432,7 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
         d_weights = d_weights * q_scale * ctx.softmax_scale
         # Same kernel + same blockwise FP8 dequant as the CSA indexer, hence
         # the same eps-floor hazard; reuse its unscale helper.
-        from loongforge.models.foundation.deepseek_v4.deepseek_v4_csa import (
+        from loongforge.models.llm.deepseek_v4.deepseek_v4_csa import (
             _unscale_indexer_grad,
         )
 

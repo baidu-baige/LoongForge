@@ -7,14 +7,14 @@ import os
 import shutil
 import time
 
-from dist_checkpoint.config.parallel_config import ParallelConfig
-from dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from tools.dist_checkpoint.config.parallel_config import ParallelConfig
+from loongforge.checkpoint.adapters.hf_checkpoint_converter import HfCheckpointConverter
 from omegaconf import OmegaConf
-from convert_checkpoint.utils.config_utils import get_yaml_config
+from tools.convert_checkpoint.utils.config_utils import get_yaml_config
 
-from convert_checkpoint.common.common_config import CommonConfig
+from tools.convert_checkpoint.common.common_config import CommonConfig
 
-from convert_checkpoint.utils.utils import(
+from tools.convert_checkpoint.utils.utils import(
     check_all_done,
     make_hf_sub_checkpoints
 )

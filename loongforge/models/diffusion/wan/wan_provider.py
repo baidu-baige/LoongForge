@@ -4,7 +4,8 @@
 """wan model provider"""
 
 from megatron.core.transformer.spec_utils import import_module
-from loongforge.utils import get_args, build_transformer_config, print_rank_0
+from loongforge.engine.mcore.global_vars import get_args
+from loongforge.utils import build_transformer_config, print_rank_0
 
 from .wan_config import WanConfig
 from .wan_model import WanModel

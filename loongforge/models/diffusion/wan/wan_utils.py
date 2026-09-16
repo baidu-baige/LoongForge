@@ -5,7 +5,7 @@
 
 import torch
 from megatron.core import mpu
-from loongforge.utils import get_args
+from loongforge.engine.mcore.global_vars import get_args
 from einops import rearrange
 from megatron.core.parallel_state import get_context_parallel_group
 from .communications import (

@@ -6,7 +6,7 @@
 import json
 
 import os
-from convert_checkpoint.common.abstact_config import AbstractConfig
+from tools.convert_checkpoint.common.abstact_config import AbstractConfig
 from pprint import pprint
 
 

@@ -1,5 +1,5 @@
 # mimo_7b model config
-_target_: loongforge.models.foundation.MimoConfig
+_target_: loongforge.models.llm.MimoConfig
 
 num_layers: 36
 hidden_size: 4096

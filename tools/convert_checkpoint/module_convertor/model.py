@@ -17,18 +17,18 @@ logging.basicConfig(level=logging.INFO)
 
 from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
-sys.path.append(dirname(dirname(SCRIPT_DIR)))
+sys.path.append(dirname(dirname(dirname(SCRIPT_DIR))))
 
-from convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
-from convert_checkpoint.huggingface.huggingface_config import HuggingFaceConfig
-from convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
-from convert_checkpoint.mcore.mcore_config import McoreConfig
-from convert_checkpoint.common.common_config import CommonConfig
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
-from convert_checkpoint.arguments import parse_args, set_args
-from convert_checkpoint.utils import utils
+from tools.convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
+from tools.convert_checkpoint.huggingface.huggingface_config import HuggingFaceConfig
+from tools.convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
+from tools.convert_checkpoint.mcore.mcore_config import McoreConfig
+from tools.convert_checkpoint.common.common_config import CommonConfig
+from tools.convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from tools.convert_checkpoint.arguments import parse_args, set_args
+from tools.convert_checkpoint.utils import utils
 
-from convert_checkpoint.utils.utils import(
+from tools.convert_checkpoint.utils.utils import(
     _flatten_expert_ids,
     get_pipeline_by_rank_id,
     get_layer_ids,
@@ -37,7 +37,7 @@ from convert_checkpoint.utils.utils import(
     convert_layout_to_custom_pipeline_layers
 )
 
-from convert_checkpoint.utils.config_utils import get_yaml_config, replace_vlm_config
+from tools.convert_checkpoint.utils.config_utils import get_yaml_config, replace_vlm_config
 
 
 BIG_MODEL_LIST = ['llama2-70b', 'qwen-72b', 'codellama-70b', 'codellama-34b']
@@ -444,7 +444,7 @@ def test():
             v3_params[p][e] = torch.load(f'/mnt/cluster/deepseek-ai/DeepSeek_V3_tp1pp2ep4/release/mp_rank_00_{p:03d}_{e:03d}/model_optim_rng.pt')
     verl_convert_mcore_to_hf_v3(v3_params, args)
 
-from convert_checkpoint.utils.utils import make_hf_sub_checkpoints
+from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints
 
 def test_merge_hf_ckpt():
     make_hf_sub_checkpoints('/mnt/cluster/deepseek-ai/DeepSeek_V3_Lite_hf')

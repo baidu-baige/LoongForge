@@ -146,7 +146,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 ## 3. 启动预训练
 
 ### 3.1 LoongForge 提供的额外参数
-除原生 Megatron 参数外，框架还添加了便捷选项（定义在 `loongforge/train/arguments.py` 中）：
+除原生 Megatron 参数外，框架还添加了便捷选项（定义在 `loongforge/engine/mcore/arguments.py` 中）：
 
 * `--config-file` -- 包含所有模型超参数的 YAML 文件路径，例如 `configs/models/deepseek3/deepseek_v3.yaml`。
 * `--model-name` -- 模型简短名称，如 `deepseek-v3`；系统会自动查找对应的 YAML 文件。
@@ -338,7 +338,7 @@ LOGGING_ARGS=(
 # ------------- 启动 -------------
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $LOONGFORGE_PATH/loongforge/train.py \
+  -m loongforge train --engine mcore \
   ${MODEL_ARGS[@]} \
   ${DATA_ARGS[@]} \
   ${TRAINING_ARGS[@]} \

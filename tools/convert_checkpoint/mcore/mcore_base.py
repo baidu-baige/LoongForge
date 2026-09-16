@@ -4,20 +4,20 @@
 """Base utilities for converting common checkpoints to and from Megatron Core format."""
 
 from typing import Any, Optional
-from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
+from tools.convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase
 import torch
 import logging
 from omegaconf.dictconfig import DictConfig
 from dataclasses import dataclass
 
-from convert_checkpoint.common.common_checkpoint import (
+from tools.convert_checkpoint.common.common_checkpoint import (
     EMBED_NAMES,
     QUANT_DTYPE_BF16,
     QUANT_DTYPE_FP8,
     QUANT_HF_BF16_AND_MCORE_FP8,
     CommonCheckpoint,
 )
-from convert_checkpoint.utils.utils import (
+from tools.convert_checkpoint.utils.utils import (
     add_embedding_padding, cut_embedding_padding,
     transpose_shape0,
     convert_fp8_to_bf16,
@@ -25,13 +25,13 @@ from convert_checkpoint.utils.utils import (
     is_power_of_two
 )
 
-from convert_checkpoint.utils.utils import (
+from tools.convert_checkpoint.utils.utils import (
     get_ep_map,
     get_etp_map,
     get_quantizer_with_weight_scale_inv
 )
 
-from convert_checkpoint.common.common_checkpoint import (
+from tools.convert_checkpoint.common.common_checkpoint import (
     WEIGHT, BIAS, LAYERNORM_WEIGHT, LAYERNORM_BIAS, LORA_NAME_IN, LORA_NAME_OUT,
     WORD_EMBEDDINGS, WORD_EMBEDDINGS_FOR_HEAD, MTP_SHARED_HEAD_HEAD, MLP_DENSE_H_TO_4H,
     MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
@@ -40,7 +40,7 @@ from convert_checkpoint.common.common_checkpoint import (
     LAYER_DTYPE
 )
 
-from convert_checkpoint.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
+from tools.convert_checkpoint.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
 
 logging.basicConfig(level=logging.INFO)
 

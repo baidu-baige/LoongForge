@@ -93,7 +93,7 @@ TRAINING_ARGS=(
 ```bash
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun --nproc_per_node 8 --nnodes 1 \
-    $LOONGFORGE_PATH/loongforge/train.py \
+    -m loongforge train --engine mcore \
     ${MODEL_ARGS[@]} ${DATA_ARGS[@]} ${TRAINING_ARGS[@]} ...
 ```
 
@@ -294,7 +294,7 @@ TRAINING_ARGS=(
 )
 ```
 
-> 注意：入口点是 `hf_roundtrip_test.py`，**不是** `loongforge/train.py`：
+> 注意：入口点是 `hf_roundtrip_test.py`，**不是** `-m loongforge train --engine mcore`：
 >
 > ```bash
 > PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \

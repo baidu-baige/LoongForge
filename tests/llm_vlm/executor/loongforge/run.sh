@@ -80,7 +80,7 @@ fi
 export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH
 
 command="torchrun ${DISTRIBUTED_ARGS[@]} \
-    $LOONGFORGE_PATH/loongforge/train.py \
+    -m loongforge train --engine mcore \
     ${MODEL_CONFIG_ARGS[@]} \
     ${MODEL_ARGS[@]} \
     ${DATA_ARGS[@]} \

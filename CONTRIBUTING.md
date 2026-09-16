@@ -183,9 +183,9 @@ replace, the PR commit-range and full CI scans.
 
 ### GPU validation
 
-Maintainers may request GPU validation with `/ok-to-test --suite llm_vlm|embodied`.
+Maintainers may request GPU validation with `/ok-to-test --suite llm_vlm|native`.
 The suite selects the corresponding self-hosted runner (`llm_vlm` on a and
-`embodied` on p). The default run uses the suite's known-good baseline;
+`native` on p). The default run uses the suite's known-good baseline;
 `--model` requests a baseline-backed subset for additional validation. Add
 `--build-image` to build the PR Dockerfile on that same runner and run the
 regression against the local candidate image. Runner and machine configuration

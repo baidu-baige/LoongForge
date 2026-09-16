@@ -16,12 +16,12 @@ sys.modules["ci_command"] = ci_command
 SPEC.loader.exec_module(ci_command)
 
 
-def test_embodied_suite_selects_image_build():
+def test_native_suite_selects_image_build():
     request = ci_command.parse_command(
-        "/ok-to-test --suite embodied --model pi05_ddp --build-image"
+        "/ok-to-test --suite native --model pi05_ddp --build-image"
     )
 
-    assert request.suite == "embodied"
+    assert request.suite == "native"
     assert request.models == ["pi05_ddp"]
     assert request.build_image is True
 
@@ -40,7 +40,7 @@ def test_models_are_optional_and_default_to_baselines():
         "/ok-to-test --suite unknown",
         "/ok-to-test --suite llm_vlm --unknown value",
         "/ok-to-test --suite llm_vlm --model 'x; uname'",
-        "/ok-to-test --suite embodied --build-image p",
+        "/ok-to-test --suite native --build-image p",
         "please /ok-to-test --suite llm_vlm",
     ],
 )

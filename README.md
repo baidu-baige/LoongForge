@@ -80,19 +80,19 @@ Since optimal training strategies differ across model families and scales, Loong
 </p>
 
 - **Megatron Stack** — For LLMs, VLMs, and diffusion models. Powered by a [patched Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) and extended with MoE parallelism, per-component heterogeneous parallelism, long-sequence optimizations, etc.
-- **Torch-Native Stack** — For embodied models (VLA and WAM). A standalone [torch-native subsystem](./loongforge/embodied) featuring **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
+- **Torch-Native Stack** — For embodied models (VLA and WAM). The Native engine in [`loongforge/engine/native`](./loongforge/engine/native) provides **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
 
 ## 🔥 Latest News
 
 - **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** BF16 training support for both LLMs and VLMs.
-- **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and Delta-FP8 AllGather.
-- **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
+- **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/world/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and Delta-FP8 AllGather.
+- **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/vla/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
-- **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
+- **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/evaluation/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
-- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 Released **[LoongForge Native](./loongforge/engine/native)**, a torch-native DDP/FSDP training engine for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 
@@ -129,7 +129,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 **🤖 Embodied Models**
 
-* **VLA & WAM Training** — A dedicated **torch-native DDP/FSDP** subsystem for **VLA and world-action (WAM)** models, decoupled from the Megatron core, with flexible **DDP / ZeRO-1 / FSDP / HSDP** strategies. [[README](./loongforge/embodied)]
+* **VLA & WAM Training** — A dedicated **torch-native DDP/FSDP** subsystem for **VLA and world-action (WAM)** models, decoupled from the Megatron core, with flexible **DDP / ZeRO-1 / FSDP / HSDP** strategies. [[README](./loongforge)]
 * **Delta-FP8 FSDP Communication** — Optionally compresses BF16 FSDP2 AllGather deltas into blockwise FP8 on supported NVIDIA GPUs while keeping model computation in BF16. [[Usage](./docs/source/features/delta_fp8_allgather.md)]
 * **Per-Model Deep Optimization** — Training code deeply customized for each supported model across I/O, communication strategy, and kernel efficiency — **1.79×–4.38×** over official baselines in our [benchmarks](#performance).
 * **Unified Evaluation** — Evaluate trained policies on **LIBERO / CALVIN / SimplerEnv / RoboTwin**, with coverage expanding continuously.
@@ -140,7 +140,7 @@ Since optimal training strategies differ across model families and scales, Loong
 * **Flexible Checkpointing** — Offline bidirectional **Megatron ↔ HuggingFace** conversion plus native online HF load/save — no format barriers across your workflow.
 * **Heterogeneous Hardware** — Native support for **NVIDIA GPUs** and **Kunlun XPUs** via a minimally-intrusive plugin design.
 
-> 📖 Deep-dive: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/features_index.html) · [Embodied Model](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/overview.html)
+> 📖 Deep-dive: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/features_index.html) · [Embodied Model](https://loongforge.readthedocs.io/en/latest/native_tutorial/overview.html)
 
 <a id="performance"></a>
 ## 📊 Performance
@@ -162,7 +162,7 @@ Training throughput speedups over mainstream open-source baselines — each mode
 - **Kunlun XPU**: [Installation Guide](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
 
 **2. Pick a tutorial** — by hardware and modality:
-- **NVIDIA GPU**: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/overview.html) · [Diffusion](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
+- **NVIDIA GPU**: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/en/latest/native_tutorial/overview.html) · [Diffusion](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
 - **Kunlun XPU**: [Kunlun XPU Tutorials](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.html)
 
 **3. Find your model's scripts** — ready-to-run launch scripts are available under [`examples/`](./examples) / [`examples_xpu/`](./examples_xpu), with configs in [`configs/models/`](./configs/models).
@@ -232,15 +232,15 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 </td>
 <td valign="top">
 <ul>
-<li><a href="examples/embodied/pi05/">Pi0.5</a> ✅</li>
-<li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a> ✅</li>
-<li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a> ✅</li>
-<li><a href="examples/embodied/xvla/">xVLA</a> ✅</li>
-<li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a> ✅</li>
-<li><a href="examples/embodied/fastwam/">FastWAM</a> ✅</li>
-<li><a href="examples/embodied/lingbot_va/">LingBot-VA</a> ✅</li>
-<li><a href="examples/embodied/cosmos3/">Cosmos3</a> ✅</li>
-<li><a href="examples/embodied/dreamzero/">DreamZero</a> ✅</li>
+<li><a href="examples/vla/pi05/">Pi0.5</a> ✅</li>
+<li><a href="examples/vla/groot_n1_6/">GR00T-N1.6</a> ✅</li>
+<li><a href="examples/vla/groot_n1_7/">GR00T-N1.7</a> ✅</li>
+<li><a href="examples/vla/xvla/">xVLA</a> ✅</li>
+<li><a href="examples/vla/wall_oss_0_5/">Wall-OSS-0.5</a> ✅</li>
+<li><a href="examples/world/fastwam/">FastWAM</a> ✅</li>
+<li><a href="examples/world/lingbot_va/">LingBot-VA</a> ✅</li>
+<li><a href="examples/world/cosmos3/">Cosmos3</a> ✅</li>
+<li><a href="examples/world/dreamzero/">DreamZero</a> ✅</li>
 </ul>
 </td>
 </tr>
@@ -266,23 +266,26 @@ Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM:
 ```
 LoongForge/
 ├── loongforge/                   # Core training framework
-│   ├── train/                    # Training entry points & trainers
-│   │   ├── pretrain/             #   Pretrain (LLM, VLM)
-│   │   ├── sft/                  #   SFT (LLM, VLM, InternVL, ERNIE)
-│   │   └── diffusion/            #   Diffusion (WAN, Qwen-Image)
+│   ├── __main__.py               # Unified engine entry point (`python -m loongforge`, `LoongForge`)
+│   ├── contracts/                # Model, batch, training, and checkpoint contracts
+│   ├── engine/{common,mcore,native}/ # Engine dispatch and training lifecycles
 │   ├── models/                   # Unified model abstractions
-│   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
-│   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
-│   │   ├── omni_models/          #   Multi-modal composition
+│   │   ├── llm/                  #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
+│   │   ├── vision/               #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
+│   │   ├── vlm/                  #   Multi-modal composition
 │   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
+│   │   ├── vla/                  #   Pi05, GR00T, X-VLA, Wall-Oss
+│   │   ├── world/                #   DreamZero, FastWAM, Cosmos3, LingBot-VA
 │   │   └── common/               #   Shared layers and utilities
-│   ├── embodied/                 # LoongForge-Embodied: standalone torch-native (DDP/FSDP)
-│   │                             #   embodied (VLA + world-action) subsystem — see loongforge/embodied/README.md
-│   ├── data/                     # Data pipelines (multi-modal, video, DP balance)
+│   ├── datasets/                 # Text, multimodal, robotics, world, common
+│   ├── distributed/              # Shared process identity and collectives
+│   ├── optim/                    # Parameter groups and learning-rate schedules
+│   ├── checkpoint/               # Metadata, MCore/Native formats, HF adapters
+│   ├── evaluation/               # Native model evaluation
 │   ├── tokenizer/                # Tokenizers
-│   └── utils/                    # Config map, constants, etc.
+│   └── utils/                    # Shared constants, version/device helpers, XPU init
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM (git submodule)
-├── configs/                      # Hydra YAML configs (models, data)
+├── configs/                      # Model/data configs, engine defaults, recipes
 ├── examples/                     # GPU launch scripts
 ├── examples_xpu/                 # Kunlun XPU launch scripts
 ├── tools/                        # Checkpoint conversion, data preprocessing

@@ -6,8 +6,9 @@
 import torch
 from megatron.core.transformer.spec_utils import import_module
 
-from loongforge.models.factory import register_model_provider
-from loongforge.utils import build_transformer_config, get_args, print_rank_0
+from loongforge.models.mcore_registry import register_model_provider
+from loongforge.engine.mcore.global_vars import get_args
+from loongforge.utils import build_transformer_config, print_rank_0
 from loongforge.utils.constants import CustomModelFamilies
 
 from .qwen_image_config import QwenImageConfig

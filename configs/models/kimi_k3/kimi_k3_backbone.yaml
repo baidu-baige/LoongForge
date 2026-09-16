@@ -1,5 +1,5 @@
 # Kimi K3 language backbone configuration.
-_target_: loongforge.models.foundation.kimi_k3.KimiK3Config
+_target_: loongforge.models.llm.kimi_k3.KimiK3Config
 
 num_layers: 93
 hidden_size: 7168

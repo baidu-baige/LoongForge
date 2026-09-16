@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$suite" =~ ^(llm_vlm|embodied)$ ]] || { echo "suite must be llm_vlm or embodied" >&2; exit 2; }
+[[ "$suite" =~ ^(llm_vlm|native)$ ]] || { echo "suite must be llm_vlm or native" >&2; exit 2; }
 [[ -d "$source_dir" && "$sha" =~ ^[0-9a-f]{40}$ ]] || {
   echo "source and a full commit SHA are required" >&2
   exit 2
@@ -110,19 +110,19 @@ trap cleanup EXIT INT TERM
 "$script_dir/create_container.sh" "$image" "$source_dir" "$suite" "$container_name" >>"$log_file" 2>&1
 
 set +e
-if [[ "$suite" == embodied ]]; then
-  # The embodied entry script is not executable in git (mode 100644), so
+if [[ "$suite" == native ]]; then
+  # The Native entry script is not executable in git (mode 100644), so
   # invoke it through bash instead of relying on the exec bit.
-  [[ -f "$source_dir/tests/embodied/run.sh" ]] || {
-    echo "embodied test suite is missing: tests/embodied/run.sh" >&2
+  [[ -f "$source_dir/tests/native/run.sh" ]] || {
+    echo "Native test suite is missing: tests/native/run.sh" >&2
     exit 2
   }
   read -r -a model_args <<<"${models//,/ }"
-  test_entry="bash tests/embodied/run.sh"
-  exec_args=(--chip "${LOONGFORGE_BASELINE_EMBODIED:-p}" --models "${model_args[@]}")
+  test_entry="bash tests/native/run.sh"
+  exec_args=(--chip "${LOONGFORGE_BASELINE_NATIVE:-p}" --models "${model_args[@]}")
   extra_env=(
     -e "LOCAL_VLA_ARTIFACTS_ROOT=$LOONGFORGE_CONTAINER_DATA_ROOT"
-    -e "EMBODIED_LOG_ROOT=$LOONGFORGE_CONTAINER_OUTPUT_ROOT/embodied"
+    -e "NATIVE_LOG_ROOT=$LOONGFORGE_CONTAINER_OUTPUT_ROOT/native"
   )
 else
   # main.py resolves configs/, tasks/, and optional_configs/ relative to the
@@ -155,12 +155,12 @@ status=$?
 set -e
 
 suite_results_copied=false
-if [[ "$suite" == embodied ]]; then
+if [[ "$suite" == native ]]; then
   # Surface the regression framework's per-model results (loss/grad_norm
   # baseline comparisons) so the workflow can report them on the pull
-  # request check run. The job concurrency group keeps parallel embodied
+  # request check run. The job concurrency group keeps parallel native
   # runs off this runner, so the newest run directory is this container's.
-  newest_results="$(ls -1t "$LOONGFORGE_HOST_OUTPUT_ROOT"/embodied/run_*/results.json 2>/dev/null | head -1 || true)"
+  newest_results="$(ls -1t "$LOONGFORGE_HOST_OUTPUT_ROOT"/native/run_*/results.json 2>/dev/null | head -1 || true)"
   if [[ -n "$newest_results" && -f "$newest_results" ]]; then
     if python3 "$script_dir/../../../ci/redact_ci_artifact.py" \
         --input "$newest_results" --output "$artifact_dir/suite-results.json"; then

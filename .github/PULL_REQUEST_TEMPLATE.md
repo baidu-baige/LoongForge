@@ -13,7 +13,7 @@
 ## CI, GPU, and Image Impact
 
 - [ ] This change affects dependencies, Dockerfiles, patches, or runtime environments.
-- [ ] GPU validation is required. Suggested suite: `llm_vlm` / `embodied`.
+- [ ] GPU validation is required. Suggested suite: `llm_vlm` / `native`.
 - [ ] A local candidate image should be built during GPU validation.
 - [ ] No GPU or image validation is required.
 

@@ -213,7 +213,7 @@ LOGGING_ARGS=(
 # Run the training
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   torchrun ${DISTRIBUTED_ARGS[@]} \
-  $LOONGFORGE_PATH/loongforge/train.py \
+  -m loongforge train --engine mcore \
   --sft-dataset-config ${LOONGFORGE_PATH}/configs/data/sft_dataset_config.yaml \
   ${MODEL_ARGS[@]} \
   ${MOE_ARGS[@]} \
