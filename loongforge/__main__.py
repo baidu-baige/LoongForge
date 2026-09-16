@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from loongforge.contracts.training import TrainSpec
+from loongforge.contracts import TrainSpec
 from loongforge.models.catalog import get_model_spec
 
 _CONFIGS = Path(__file__).resolve().parents[1] / "configs"
@@ -32,7 +32,7 @@ def main(argv=None):
     if args.dry_run:
         print(json.dumps(asdict(spec), indent=2))
         return
-    from loongforge.engine.common import run_train
+    from loongforge.engine.dispatch import run_train
 
     run_train(spec)
 

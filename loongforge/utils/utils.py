@@ -21,6 +21,23 @@ except Exception:
     # This is a WAR for building docs, where torch is not actually imported
     _torch_version = PkgVersion("0.0.0")
 
+
+def _init_xpu_plugin():
+    """Initialize the Megatron Core XPU plugin when the launcher asks for it."""
+    if os.getenv("XMLIR_MEGATRON_CORE_XPU_PLUGIN") not in ("true", "1", "True"):
+        return
+    try:
+        from xpu_plugin import init_megatron_core_xpu_plugin
+
+        init_megatron_core_xpu_plugin()
+    except ImportError:
+        print(
+            "xpu_plugin module not installed, skip Megatron Core LoongForge Plugin initialization"
+        )
+
+
+_init_xpu_plugin()
+
 _te_version = None
 _transformers_version = None
 

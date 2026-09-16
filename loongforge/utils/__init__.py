@@ -3,7 +3,6 @@
 
 """common module"""
 
-from . import xpu_init
 from .utils import (
     build_transformer_config,
     print_rank_0,

@@ -32,7 +32,7 @@ from loongforge.engine.mcore.validators import (validate_loongforge_extra_args,
                                                 validate_megatron_args)
 from loongforge.utils import constants
 from loongforge.models.catalog import get_model_spec
-from loongforge.distributed.context import rank, world_size
+from loongforge.distributed import rank, world_size
 from loongforge.engine.mcore.global_vars import (
     get_hydra_config,
     set_args_dict,

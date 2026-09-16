@@ -267,8 +267,8 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 LoongForge/
 ├── loongforge/                   # 核心训练框架
 │   ├── __main__.py               # 统一引擎入口（`python -m loongforge`、`LoongForge`）
-│   ├── contracts/                # 模型、batch、训练与 checkpoint 协议
-│   ├── engine/{common,mcore,torch}/ # 引擎分发与训练生命周期
+│   ├── contracts.py              # 模型、batch、训练与 checkpoint 协议
+│   ├── engine/{dispatch.py,mcore,torch}/ # 引擎分发与训练生命周期
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── llm/                  #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
 │   │   ├── vision/               #   视觉编码器（ViT、Qwen-VL、InternVL、...）
@@ -278,7 +278,7 @@ LoongForge/
 │   │   ├── world/                #   DreamZero、FastWAM、Cosmos3、LingBot-VA
 │   │   └── common/               #   公共 Layer 与工具
 │   ├── datasets/                 # text、multimodal、robotics、world、common
-│   ├── distributed/              # 公共 rank 与通信操作
+│   ├── distributed.py            # 公共 rank 与通信操作
 │   ├── optim/                    # 参数分组与学习率调度
 │   ├── checkpoint/               # 元数据、MCore/Torch 格式与 HF adapter
 │   ├── evaluation/               # Torch 模型评测

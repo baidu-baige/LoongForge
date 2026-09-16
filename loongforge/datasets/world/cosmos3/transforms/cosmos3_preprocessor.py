@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 import torch
 
 from loongforge.datasets.common.transforms.collator import BasePreprocessor, register_preprocessor
-from loongforge.contracts.data import Cosmos3Batch
+from loongforge.contracts import Cosmos3Batch
 
 
 class DeferredVideoTail:

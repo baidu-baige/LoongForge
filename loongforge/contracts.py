@@ -1,15 +1,13 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
-#
-# Modified from Cosmos (NVIDIA cosmos-framework) under the OpenMDW-1.1 License.
-# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: OpenMDW-1.1
 
-"""Data objects shared by dataset and model layers."""
+"""Types exchanged between the CLI, the engines, the models, and the data layer."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional
 
 if TYPE_CHECKING:
@@ -17,6 +15,44 @@ if TYPE_CHECKING:
     from loongforge.models.world.cosmos3.sequence_packing import SequencePlan
 
 
+@dataclass(frozen=True)
+class ModelSpec:
+    """Catalog entry for engine selection and lazy config construction."""
+
+    engine: str
+    config_file: Path
+    model_config_path: str | None = None
+    data_config_path: str | None = None
+
+    @staticmethod
+    def _load(path):
+        if path is None:
+            raise ValueError("This model uses Hydra configs, not Torch dataclasses")
+        module, name = path.rsplit(":", 1)
+        return getattr(import_module(module), name)
+
+    @property
+    def model_config_cls(self):
+        return self._load(self.model_config_path)
+
+    @property
+    def data_config_cls(self):
+        return self._load(self.data_config_path)
+
+
+@dataclass(frozen=True)
+class TrainSpec:
+    """Resolved training invocation passed from the CLI to the engine dispatch."""
+
+    engine: str
+    model: str | None
+    config_file: str
+    args: tuple[str, ...]
+
+
+# Modified from Cosmos (NVIDIA cosmos-framework) under the OpenMDW-1.1 License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: OpenMDW-1.1
 @dataclass
 class Cosmos3Batch:
     """Batch passed from the Cosmos3 preprocessor to the model."""
@@ -65,3 +101,17 @@ class Cosmos3Batch:
             if values is not None:
                 setattr(self, name, [value.to(device) for value in values])
         return self
+
+
+@dataclass(frozen=True)
+class TorchCheckpointMetadata:
+    """Metadata published after a Torch checkpoint save completes."""
+
+    completed_steps: int
+    epoch: int
+    ckpt_format: str
+    world_size: int
+    use_lora: bool
+
+
+__all__ = ["ModelSpec", "TrainSpec", "Cosmos3Batch", "TorchCheckpointMetadata"]

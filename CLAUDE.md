@@ -129,7 +129,7 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     ...
 ```
 
-- **`engine/mcore/entrypoint.py`** / **`engine/torch/entrypoint.py`** — Per-engine `main()` entry points. `engine/common/__init__.py` maps a `TrainSpec` to one of them after the CLI resolves the model, recipe, and engine defaults; `engine/mcore/__init__.py` only holds MCore model registration side effects.
+- **`engine/mcore/entrypoint.py`** / **`engine/torch/entrypoint.py`** — Per-engine `main()` entry points. `engine/dispatch.py` maps a `TrainSpec` to one of them after the CLI resolves the model, recipe, and engine defaults; `engine/mcore/__init__.py` only holds MCore model registration side effects.
 
 Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--config-file` (direct YAML path), `--training-phase` (pretrain/sft).
 

@@ -8,7 +8,7 @@ import os
 import torch
 import torch.distributed as dist
 
-from loongforge.distributed.collectives import all_reduce_mean
+from loongforge.distributed import all_reduce_mean
 
 
 class DistributedContext:

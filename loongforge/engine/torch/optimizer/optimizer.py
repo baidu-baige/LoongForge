@@ -9,7 +9,7 @@ from collections.abc import MutableMapping
 import torch
 import torch.nn as nn
 from torch.distributed.optim import ZeroRedundancyOptimizer
-from loongforge.distributed.context import is_rank_zero
+from loongforge.distributed import is_rank_zero
 from loongforge.optim.param_groups import build_param_groups
 from loongforge.engine.torch.distributed.utils import unwrap_model
 from loongforge.engine.torch.optimizer.dmuon import build_dmuon_optimizer

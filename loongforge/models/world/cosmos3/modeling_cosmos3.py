@@ -44,7 +44,7 @@ from loongforge.models.world.cosmos3.sequence_packing import (
 from loongforge.models.world.cosmos3.data_and_condition import GenerationDataClean
 from loongforge.models.world.cosmos3.unified_mot import Qwen3VLMoTConfig, Qwen3VLTextForCausalLM
 from loongforge.models.world.cosmos3.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
-from loongforge.contracts.data import Cosmos3Batch
+from loongforge.contracts import Cosmos3Batch
 from loongforge.models.dtype import resolve_dtype
 
 logger = logging.getLogger(__name__)

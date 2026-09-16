@@ -257,7 +257,7 @@ def loss_func(training_target, scale, noise_pred):
     loss = torch.nn.functional.mse_loss(noise_pred.float(), training_target.float())
     loss = loss * scale
     dp_group = parallel_state.get_data_parallel_group()
-    from loongforge.distributed.collectives import all_reduce_mean
+    from loongforge.distributed import all_reduce_mean
 
     averaged_losses = all_reduce_mean(loss.view(1), group=dp_group)
     return loss, {"lm loss": averaged_losses[0]}

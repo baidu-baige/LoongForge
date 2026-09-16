@@ -14,7 +14,7 @@ from torch.distributed.fsdp import MixedPrecisionPolicy
 
 from ..context import DistributedContext
 from ..utils import is_mixed_param_dtype, unwrap_checkpoint_module
-from loongforge.distributed.context import is_rank_zero
+from loongforge.distributed import is_rank_zero
 
 logger = logging.getLogger(__name__)
 

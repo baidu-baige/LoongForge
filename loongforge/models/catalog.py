@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-from loongforge.contracts.model import ModelSpec
+from loongforge.contracts import ModelSpec
 
 
 # registry for model config

@@ -15,8 +15,8 @@ from zipfile import ZipFile
 
 from loongforge.__main__ import resolve_train
 from loongforge.checkpoint.manifest import is_hf_checkpoint, read_torch_metadata, write_torch_metadata
-from loongforge.contracts.checkpoint import TorchCheckpointMetadata
-from loongforge.engine.common import run_train
+from loongforge.contracts import TorchCheckpointMetadata
+from loongforge.engine.dispatch import run_train
 from loongforge.models.catalog import MCORE_CONFIGS, TORCH_CONFIGS, get_model_spec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,7 +126,7 @@ main(['train', '--model', 'pi05', '--dry-run'])
         previous = sys.argv
         for model, module in (("pi05", "torch.entrypoint"), ("qwen3-0.6b", "mcore.entrypoint")):
             spec = resolve_train(None, model, None, ["--train-iters", "1"])
-            with patch("loongforge.engine.common.import_module") as load:
+            with patch("loongforge.engine.dispatch.import_module") as load:
                 def main():
                     self.assertEqual(sys.argv[1:], list(spec.args))
                     raise RuntimeError("backend failed")
@@ -184,8 +184,7 @@ main(['train', '--model', 'pi05', '--dry-run'])
         code = """
 import torch
 import torch.distributed as dist
-from loongforge.distributed.context import rank, world_size
-from loongforge.distributed.collectives import all_reduce_mean
+from loongforge.distributed import rank, world_size, all_reduce_mean
 dist.init_process_group('gloo')
 try:
     assert world_size() == 2

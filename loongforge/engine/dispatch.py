@@ -1,12 +1,12 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dispatch resolved invocations without combining engine lifecycles."""
+"""Dispatch a resolved invocation to its engine entry point."""
 
 from importlib import import_module
 import sys
 
-from loongforge.contracts.training import TrainSpec
+from loongforge.contracts import TrainSpec
 
 
 _ENTRYPOINTS = {

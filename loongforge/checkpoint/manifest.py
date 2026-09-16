@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from loongforge.contracts.checkpoint import TorchCheckpointMetadata
+from loongforge.contracts import TorchCheckpointMetadata
 
 
 def is_hf_checkpoint(path):

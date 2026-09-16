@@ -9,7 +9,7 @@ from typing import Dict, List
 
 import torch.nn as nn
 
-from loongforge.distributed.context import is_rank_zero
+from loongforge.distributed import is_rank_zero
 
 logger = logging.getLogger(__name__)
 

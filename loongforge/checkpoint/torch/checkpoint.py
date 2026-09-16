@@ -51,7 +51,7 @@ from torch.distributed.tensor import DTensor
 from loongforge.engine.torch.distributed.context import DistributedContext
 from loongforge.engine.torch.distributed.utils import is_dmuon_model, unwrap_dmuon_optimizer, unwrap_model
 from loongforge.checkpoint.manifest import read_torch_metadata, write_torch_metadata
-from loongforge.contracts.checkpoint import TorchCheckpointMetadata
+from loongforge.contracts import TorchCheckpointMetadata
 
 logger = logging.getLogger(__name__)
 

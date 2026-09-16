@@ -128,3 +128,17 @@ def build_tokenizer(
         args.padded_vocab_size = _vocab_size_with_padding(ori_vocab_size, args)
 
     return tokenizer
+
+
+MODEL_FAMILY_TO_DEFAULT_TOKENIZER = {
+    "DEFAULT": "HFTokenizer",
+    # add custom tokenizer type here
+}
+
+
+def get_default_tokenizer(family_name: str):
+    """Return the default tokenizer type for a model family."""
+    tokenizer_type = MODEL_FAMILY_TO_DEFAULT_TOKENIZER.get(family_name)
+    if tokenizer_type is None:
+        tokenizer_type = MODEL_FAMILY_TO_DEFAULT_TOKENIZER.get("DEFAULT")
+    return tokenizer_type

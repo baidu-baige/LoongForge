@@ -12,7 +12,7 @@ from torch.distributed.algorithms.ddp_comm_hooks.default_hooks import (
     fp16_compress_hook,
 )
 
-from loongforge.distributed.context import is_rank_zero
+from loongforge.distributed import is_rank_zero
 
 logger = logging.getLogger(__name__)
 

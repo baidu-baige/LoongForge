@@ -267,8 +267,8 @@ Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM:
 LoongForge/
 ├── loongforge/                   # Core training framework
 │   ├── __main__.py               # Unified engine entry point (`python -m loongforge`, `LoongForge`)
-│   ├── contracts/                # Model, batch, training, and checkpoint contracts
-│   ├── engine/{common,mcore,torch}/ # Engine dispatch and training lifecycles
+│   ├── contracts.py              # Model, batch, training, and checkpoint contracts
+│   ├── engine/{dispatch.py,mcore,torch}/ # Engine dispatch and training lifecycles
 │   ├── models/                   # Unified model abstractions
 │   │   ├── llm/                  #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── vision/               #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
@@ -278,7 +278,7 @@ LoongForge/
 │   │   ├── world/                #   DreamZero, FastWAM, Cosmos3, LingBot-VA
 │   │   └── common/               #   Shared layers and utilities
 │   ├── datasets/                 # Text, multimodal, robotics, world, common
-│   ├── distributed/              # Shared process identity and collectives
+│   ├── distributed.py            # Shared process identity and collectives
 │   ├── optim/                    # Parameter groups and learning-rate schedules
 │   ├── checkpoint/               # Metadata, MCore/Torch formats, HF adapters
 │   ├── evaluation/               # Torch model evaluation
