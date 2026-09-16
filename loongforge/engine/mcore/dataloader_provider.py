@@ -22,7 +22,7 @@ from megatron.training import get_args
 from megatron.training.checkpointing import get_checkpoint_name
 from loongforge.engine.mcore.global_vars import get_model_config
 from loongforge.utils import constants, print_rank_0
-from .base.task_encoder import print_error_handler
+from loongforge.datasets.multimodal.base.task_encoder import print_error_handler
 from loongforge.engine.mcore.get_position_idx_func import get_position_ids
 
 IGNORE_INDEX = constants.IGNORE_INDEX
