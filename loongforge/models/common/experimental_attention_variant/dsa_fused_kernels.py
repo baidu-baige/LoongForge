@@ -4,11 +4,25 @@
 """Kernels for Deepseek Sparse Attention."""
 
 import dataclasses
-from typing import Optional, Tuple, Any
+from typing import Optional
 from packaging.version import Version as PkgVersion
 
 import torch
 from torch import Tensor
+
+from megatron.core.transformer.module import MegatronModule
+from megatron.core.transformer.transformer_config import TransformerConfig
+from megatron.core.packed_seq_params import PackedSeqParams
+from megatron.core.transformer.enums import AttnMaskType
+from megatron.core.utils import get_te_version, is_te_min_version
+from megatron.core.fusions.fused_mla_yarn_rope_apply import _get_thd_token_idx
+
+# The five DSA kernels (indexer fwd/bwd, top-k, sparse MLA fwd/bwd) are resolved
+# lazily by dsa_kernel_backend so that importing this module does not require the
+# SM90/SM100 wheels.  Binding them at import time made `import dsa_fused` -- and
+# therefore MLASelfAttentionFused, via the package __init__ -- fail outright on the
+# COMPILE_ENV=ampere image, which deliberately skips FlashMLA.
+from .dsa_kernel_backend import get_dsa_backend
 
 _DSA_FUSED_DEPS_HINT = (
     "dsa_fused requires optional dependencies. "
@@ -22,33 +36,28 @@ except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 
 try:
-    import deep_gemm
-    import flashinfer
-    import lightning_indexer_bwd
-except ImportError as exc:
-    raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
-
-from megatron.core.transformer.module import MegatronModule
-from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.transformer.enums import AttnMaskType
-from megatron.core.utils import get_te_version, is_te_min_version
-from megatron.core.fusions.fused_mla_yarn_rope_apply import _get_thd_token_idx
-from megatron.core.fusions.fused_mla_yarn_rope_apply import ApplyMLARotaryEmbQ as ApplyMLARotaryEmbQNonInterleaved
-
-try:
-    import transformer_engine.pytorch as te
     import transformer_engine_torch as tex
-    from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer
 except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 
-try:
-    from flash_mla_fwd import flash_mla_sparse_fwd
-    from flash_mla_bwd import flash_mla_sparse_bwd
-except ImportError as exc:
-    raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
-from .sparse_mla_bwd import sparse_mla_bwd_interface
+
+def _get_fp8_block_quantizer():
+    """FP8 blockwise quantizer for the indexer, imported on demand.
+
+    Only the FP8 indexer path needs it, and it requires compute capability 8.9+;
+    A100/A800 are 8.0 and run the BF16 indexer instead.
+    """
+    from transformer_engine.pytorch.tensor.float8_blockwise_tensor import Float8BlockQuantizer
+
+    return Float8BlockQuantizer(
+        fp8_dtype=tex.DType.kFloat8E4M3,
+        rowwise=True,
+        columnwise=False,
+        amax_epsilon=1e-12,
+        force_pow_2_scales=True,
+        block_scaling_dim=1,
+    )
+
 
 
 @triton.autotune(
@@ -85,7 +94,7 @@ def rotary_fwd_q_kernel_interleaved(
 ):
     """
     Triton kernel for forward pass - Interleaved mode.
-    
+
     Interleaved layout:
     - Pairs adjacent elements: (x[0], x[1]), (x[2], x[3]), ..., (x[n-2], x[n-1])
     - For each pair (x_even, x_odd):
@@ -118,24 +127,24 @@ def rotary_fwd_q_kernel_interleaved(
     x_odd_off = x_even_off + 1
     x_even = tl.load(Q + x_even_off, mask=mask)
     x_odd = tl.load(Q + x_odd_off, mask=mask)
-    
+
     # Get corresponding cos/sin values for BOTH even and odd positions
     cos_even = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2)
     sin_even = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2)
     cos_odd = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2 + 1)
     sin_odd = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2 + 1)
-    
+
     cos_even = cos_even.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     sin_even = sin_even.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     cos_odd = cos_odd.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     sin_odd = sin_odd.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
-    
+
     # Apply rotation transformation
     # x_even_new = x_even * cos_even - x_odd * sin_even
     # x_odd_new = x_odd * cos_odd + x_even * sin_odd
     x_even_new = x_even * cos_even - x_odd * sin_even
     x_odd_new = x_odd * cos_odd + x_even * sin_odd
-    
+
     # Store back in interleaved positions
     tl.store(Q + x_even_off, x_even_new, mask=mask)
     tl.store(Q + x_odd_off, x_odd_new, mask=mask)
@@ -175,7 +184,7 @@ def rotary_bwd_q_kernel_interleaved(
 ):
     """
     Triton kernel for backward pass - Interleaved mode.
-    
+
     Backward rotation (inverse transformation):
     - x_even_grad = x_even_new_grad * cos + x_odd_new_grad * sin
     - x_odd_grad = -x_even_new_grad * sin + x_odd_new_grad * cos
@@ -196,24 +205,24 @@ def rotary_bwd_q_kernel_interleaved(
 
     x_off = tl.arange(0, BLOCK_H)[:, None] * stride_x_nheads + emb_offset
     mask = x_off < head_num * stride_x_nheads
-    
+
     # Load gradient values at even and odd positions
     x_even_off = x_off + tl.arange(0, emb_dim // 2)[None, :] * 2
     x_odd_off = x_even_off + 1
     x_even_grad = tl.load(DO + x_even_off, mask=mask)
     x_odd_grad = tl.load(DO + x_odd_off, mask=mask)
-    
+
     # Get corresponding cos/sin values for BOTH even and odd positions
     cos_even = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2)
     sin_even = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2)
     cos_odd = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2 + 1)
     sin_odd = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2 + 1)
-    
+
     cos_even = cos_even.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     sin_even = sin_even.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     cos_odd = cos_odd.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     sin_odd = sin_odd.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
-    
+
     # Apply inverse rotation
     # Forward was: x_even_new = x_even * cos_even - x_odd * sin_even
     #              x_odd_new = x_odd * cos_odd + x_even * sin_odd
@@ -221,7 +230,7 @@ def rotary_bwd_q_kernel_interleaved(
     #           x_odd_grad = -x_even_new_grad * sin_even + x_odd_new_grad * cos_odd
     x_even_out = x_even_grad * cos_even + x_odd_grad * sin_odd
     x_odd_out = -x_even_grad * sin_even + x_odd_grad * cos_odd
-    
+
     # Store back
     tl.store(DO + x_even_off, x_even_out, mask=mask)
     tl.store(DO + x_odd_off, x_odd_out, mask=mask)
@@ -277,7 +286,8 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
         assert headdim == qk_head_dim + emb_dim
         assert emb_dim % 4 == 0
 
-        grid = lambda META: (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
+        def grid(META):
+            return (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
         rotary_fwd_q_kernel_interleaved[grid](
             q,
             cos,
@@ -327,7 +337,8 @@ class ApplyMLARotaryEmbQInterleaved(torch.autograd.Function):
             total_seqlen, nheads, headdim = grad.shape
         assert grad.stride(-1) == 1
 
-        grid = lambda META: (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
+        def grid(META):
+            return (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
         rotary_bwd_q_kernel_interleaved[grid](
             grad,
             cos,
@@ -537,7 +548,8 @@ class ApplyMLARotaryEmbQNonInterleavedWithOffset(torch.autograd.Function):
         assert headdim == qk_head_dim + emb_dim
         assert emb_dim % 4 == 0
 
-        grid = lambda META: (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
+        def grid(META):
+            return (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
         rotary_fwd_q_kernel_non_interleaved[grid](
             q,
             cos,
@@ -581,7 +593,8 @@ class ApplyMLARotaryEmbQNonInterleavedWithOffset(torch.autograd.Function):
             total_seqlen, nheads, headdim = grad.shape
         assert grad.stride(-1) == 1
 
-        grid = lambda META: (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
+        def grid(META):
+            return (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
         rotary_bwd_q_kernel_non_interleaved[grid](
             grad,
             cos,
@@ -655,8 +668,6 @@ def fused_rope_permute_cat_fwd_kernel_non_interleaved(
 
     h_offs = pid_head * BLOCK_H + tl.arange(0, BLOCK_H)  # [BLOCK_H]
     h_mask = h_offs < head_num
-
-    d_total = d_out + emb_dim
 
     # Part 1: permute q_content (HSD → SHD)
     # Read  Q_CONTENT[h_offs, pid_m, d] and write to OUTPUT[pid_m, h_offs, d]
@@ -755,8 +766,6 @@ def fused_rope_permute_cat_fwd_kernel_interleaved(
     h_offs = pid_head * BLOCK_H + tl.arange(0, BLOCK_H)
     h_mask = h_offs < head_num
 
-    d_total = d_out + emb_dim
-
     # Part 1: permute q_content (HSD → SHD)
     for d_start in range(0, d_out, 64):
         d_offs = d_start + tl.arange(0, 64)
@@ -853,8 +862,6 @@ def fused_rope_permute_cat_bwd_kernel_non_interleaved(
 
     h_offs = pid_head * BLOCK_H + tl.arange(0, BLOCK_H)
     h_mask = h_offs < head_num
-
-    d_total = d_out + emb_dim
 
     # Part 1: grad_q_content: SHD → HSD (inverse permute)
     for d_start in range(0, d_out, 64):
@@ -955,8 +962,6 @@ def fused_rope_permute_cat_bwd_kernel_interleaved(
 
     h_offs = pid_head * BLOCK_H + tl.arange(0, BLOCK_H)
     h_mask = h_offs < head_num
-
-    d_total = d_out + emb_dim
 
     # Part 1: inverse permute (SHD → HSD)
     for d_start in range(0, d_out, 64):
@@ -1061,7 +1066,8 @@ class FusedRopePermuteCat(torch.autograd.Function):
         batch_size = b if cu_seqlens_q is None else None
         seq_num = (len(cu_seqlens_q) - 1) if cu_seqlens_q is not None else None
 
-        grid = lambda META: (S, triton.cdiv(nheads, META["BLOCK_H"]))
+        def grid(META):
+            return (S, triton.cdiv(nheads, META["BLOCK_H"]))
 
         kernel = (fused_rope_permute_cat_fwd_kernel_interleaved
                   if rotary_interleaved
@@ -1105,7 +1111,8 @@ class FusedRopePermuteCat(torch.autograd.Function):
         batch_size = b if ctx.cu_seqlens_q is None else None
         seq_num = (len(ctx.cu_seqlens_q) - 1) if ctx.cu_seqlens_q is not None else None
 
-        grid = lambda META: (S, triton.cdiv(nheads, META["BLOCK_H"]))
+        def grid(META):
+            return (S, triton.cdiv(nheads, META["BLOCK_H"]))
 
         kernel = (fused_rope_permute_cat_bwd_kernel_interleaved
                   if ctx.rotary_interleaved
@@ -1446,7 +1453,7 @@ def rotary_fwd_absorb_kv_kernel_interleaved(
 ):
     """
     Triton kernel for forward pass - Interleaved mode.
-    
+
     Interleaved layout:
     - Pairs adjacent elements in K_POS_EMB: (x[0], x[1]), (x[2], x[3]), ...
     - For each pair (x_even, x_odd):
@@ -1475,25 +1482,25 @@ def rotary_fwd_absorb_kv_kernel_interleaved(
 
     # Load K_POS_EMB and apply interleaved RoPE
     EMB = K_POS_EMB + pid_m * stride_emb_seq
-    
+
     # Extract even and odd indices from K_POS_EMB
     x_even = tl.load(EMB + tl.arange(0, emb_dim // 2) * 2)
     x_odd = tl.load(EMB + tl.arange(0, emb_dim // 2) * 2 + 1)
-    
+
     # Load cos/sin for BOTH even and odd positions
     cos_even = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2)
     sin_even = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2)
     cos_odd = tl.load(COS + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2 + 1)
     sin_odd = tl.load(SIN + token_idx * emb_dim + tl.arange(0, emb_dim // 2) * 2 + 1)
-    
+
     # Apply rotation transformation
     x_even_new = x_even * cos_even - x_odd * sin_even
     x_odd_new = x_odd * cos_odd + x_even * sin_odd
-    
+
     # Broadcast to BLOCK_H heads and store in interleaved positions
     x_even_new = x_even_new.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
     x_odd_new = x_odd_new.expand_dims(0).broadcast_to(BLOCK_H, emb_dim // 2)
-    
+
     # Store back in interleaved layout
     x_even_off = tl.arange(0, BLOCK_H)[:, None] * stride_k_nheads + k_dim + tl.arange(0, emb_dim // 2)[None, :] * 2
     x_odd_off = x_even_off + 1
@@ -1538,7 +1545,7 @@ def rotary_bwd_absorb_kv_kernel_interleaved(
 ):
     """
     Triton kernel for backward pass - Interleaved mode.
-    
+
     Accumulates gradients from all heads and applies inverse rotation
     in interleaved layout.
     """
@@ -1565,22 +1572,22 @@ def rotary_bwd_absorb_kv_kernel_interleaved(
     if pid_head == 0:
         x_even_accum = tl.zeros((BLOCK_H, emb_dim // 2), dtype=tl.float32)
         x_odd_accum = tl.zeros((BLOCK_H, emb_dim // 2), dtype=tl.float32)
-        
+
         # Accumulate from all heads
         for i in tl.static_range(triton.cdiv(head_num, BLOCK_H)):
             dK_ptr = dK + pid_m * stride_dk_seq + i * BLOCK_H * stride_dk_nheads
             x_off = tl.arange(0, BLOCK_H)[:, None] * stride_dk_nheads + k_dim
             mask = x_off < head_num * stride_dk_nheads
-            
+
             # Load gradients from interleaved positions
             x_even_off = x_off + tl.arange(0, emb_dim // 2)[None, :] * 2
             x_odd_off = x_even_off + 1
             x_even_grad = tl.load(dK_ptr + x_even_off, mask=mask)
             x_odd_grad = tl.load(dK_ptr + x_odd_off, mask=mask)
-            
+
             x_even_accum += x_even_grad
             x_odd_accum += x_odd_grad
-        
+
         # Sum across BLOCK_H dimension
         x_even_accum = tl.sum(x_even_accum, axis=0)
         x_odd_accum = tl.sum(x_odd_accum, axis=0)
@@ -1600,7 +1607,7 @@ def rotary_bwd_absorb_kv_kernel_interleaved(
         #           x_odd_grad = -x_even_new_grad * sin_even + x_odd_new_grad * cos_odd
         x_even_out = x_even_accum * cos_even + x_odd_accum * sin_odd
         x_odd_out = -x_even_accum * sin_even + x_odd_accum * cos_odd
-        
+
         # Store back in interleaved positions
         dEMB_ptr = dEMB + pid_m * stride_demb_seq
         tl.store(dEMB_ptr + tl.arange(0, emb_dim // 2) * 2, x_even_out)
@@ -1659,8 +1666,9 @@ class ApplyMLARotaryEmbAbsorbKV(torch.autograd.Function):
 
         o_key = kv.new_empty(total_seqlen, nheads, emb_dim + k_dim)
 
-        grid = lambda META: (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
-        
+        def grid(META):
+            return (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
+
         # Choose kernel based on mode
         if rotary_interleaved:
             rotary_fwd_absorb_kv_kernel_interleaved[grid](
@@ -1742,8 +1750,9 @@ class ApplyMLARotaryEmbAbsorbKV(torch.autograd.Function):
         d_kv = dk.new_empty(total_seqlen, nheads, ctx.k_dim)
         d_emb = dk.new_empty(total_seqlen, 1, ctx.emb_dim)
 
-        grid = lambda META: (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
-        
+        def grid(META):
+            return (total_seqlen, triton.cdiv(nheads, META["BLOCK_H"]))
+
         # Choose kernel based on mode
         if ctx.rotary_interleaved:
             rotary_bwd_absorb_kv_kernel_interleaved[grid](
@@ -1875,7 +1884,7 @@ def triton_attn_dist_kernel(
         BLOCK_K: Block size for topk dimension (constexpr, must equal topk)
     """
     s_idx = tl.program_id(0)
-    k_offs = tl.arange(0, BLOCK_K)    
+    k_offs = tl.arange(0, BLOCK_K)
     acc = tl.zeros([BLOCK_K], dtype=tl.float32)
 
     for h_idx in range(H_Q):
@@ -1987,11 +1996,12 @@ def padded_flashinfer_topk(logits, topk, sk, *, sorted=True):
     """
     d = logits.size(-1)
     topk = int(topk)
+    backend = get_dsa_backend()
     if topk <= d:
-        return flashinfer.top_k(logits, topk, sorted=sorted)
+        return backend.top_k(logits, topk, sorted=sorted)
 
     # compute full top-d, then pad
-    vals, idx = flashinfer.top_k(logits, d, sorted=sorted)
+    vals, idx = backend.top_k(logits, d, sorted=sorted)
     pad = topk - d
     vals = torch.cat([vals, vals.new_full((*vals.shape[:-1], pad), float("-inf"))], dim=-1)
     idx  = torch.cat([idx, idx.new_full((*idx.shape[:-1], pad), sk)], dim=-1)  # use key length to fill
@@ -2045,7 +2055,7 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
                 attn_sink = attn_sink.flatten().repeat_interleave(repeat_factor)
             attn_sink = attn_sink.contiguous().view(h_q)
 
-        out, _, lse, *p_out = flash_mla_sparse_fwd(
+        out, _, lse, p_out_t = get_dsa_backend().sparse_mla_fwd(
             q_flash,  # q: [s_q, h_q, d_qk], bfloat16
             kv_flash,  # kv: [s_kv, h_kv, d_qk], bfloat16
             indices_flash,  # [s_q, h_kv, topk], int32. Invalid indices should be set to -1 or numbers >= s_kv
@@ -2057,6 +2067,7 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
             attn_sink=attn_sink,
             window_size=window_size,
         )
+        p_out = [p_out_t] if p_out_t is not None else []
 
         ctx.save_for_backward(q_flash, kv_flash, indices_flash, out, lse)
         ctx.sm_scale = sm_scale
@@ -2075,40 +2086,20 @@ class DSADotProductAttentionFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_out, grad_p_out=None):
-        """
-        TileLang's sparse_mla_backward.
-        """
+        """Sparse MLA backward, dispatched by kernel backend."""
 
         q, kv, indices, out, lse = ctx.saved_tensors
         grad_out = grad_out.squeeze(0).contiguous()
-        major, _ = torch.cuda.get_device_capability()
 
-        if major == 10:
-            grad_q, grad_kv = flash_mla_sparse_bwd(
-                q, kv, out, grad_out, indices, lse,
-                sm_scale=ctx.sm_scale,
-                q_start_index_s=ctx.chunk_offset,
-                topk_length=ctx.topk_length,
-                fast_mode=ctx.fast_mode,
-                attn_sink=ctx.attn_sink,
-            )
-        else:
-            log2e = 1.44269504
-            offsets = torch.tensor([0, ctx.sq], dtype=torch.int32, device="cuda")
-            grad_q, grad_kv = sparse_mla_bwd_interface(
-                q,
-                kv,
-                out,
-                grad_out,
-                indices,
-                lse / log2e,
-                offsets,
-                chunk_offset=ctx.chunk_offset,
-                sm_scale=ctx.sm_scale,
-                return_kernel=False,
-                delta=None
-            )
-            
+        grad_q, grad_kv = get_dsa_backend().sparse_mla_bwd(
+            q, kv, out, grad_out, indices, lse,
+            sm_scale=ctx.sm_scale,
+            q_start_index_s=ctx.chunk_offset,
+            topk_length=ctx.topk_length,
+            fast_mode=ctx.fast_mode,
+            attn_sink=ctx.attn_sink,
+        )
+
         return grad_q, grad_kv, None, None, None, None, None, None, None, None, None, None
 
 
@@ -2286,33 +2277,32 @@ class DSADotProductAttention(MegatronModule):
 
 class DSAIndexerKernelFunction(torch.autograd.Function):
     """
-    Autograd function for DeepGEMM FP8Indexer kernel.
-
-    This function implements the forward and backward passes for computing
-    sparse attention indices using quantized query and key tensors with
-    Float8BlockQuantizer.
+    Autograd function for the lightning indexer.
 
     The forward pass:
-    1. Quantizes input query and key tensors using Float8BlockQuantizer
-    2. Computes scaled dot product between query and key in FP8
+    1. Prepares query/key for the active kernel backend (FP8 blockwise quantisation
+       on SM90/SM100, plain BF16 on SM80 which has no FP8 tensor cores)
+    2. Computes the weighted-relu MQA logits
     3. Computes top-k indices from the resulting score matrix
     4. Handles sequence packing and causal masking
 
-    The backward pass:
-    1. Computes gradients for query, key and weights
-    2. Handles the scaling factors properly during gradient computation
-
-    Attributes:
-        quantizer (Float8BlockQuantizer): FP8 quantizer with blockwise quantization
+    The backward pass computes gradients for query, key and weights, undoing
+    whichever scaling the forward pass folded into `weight_scaled`.
     """
-    quantizer = Float8BlockQuantizer(
-        fp8_dtype=tex.DType.kFloat8E4M3,
-        rowwise=True,
-        columnwise=False,
-        amax_epsilon=1e-12,
-        force_pow_2_scales=True,
-        block_scaling_dim=1
-    )
+
+    _quantizer = None
+
+    @classmethod
+    def get_quantizer(cls):
+        """FP8 blockwise quantizer, built on first use.
+
+        Constructing it at class-definition time made importing this module fail
+        wherever TransformerEngine's FP8 support is unavailable, and it is unused
+        entirely on the BF16 (SM80) path.
+        """
+        if cls._quantizer is None:
+            cls._quantizer = _get_fp8_block_quantizer()
+        return cls._quantizer
 
     @staticmethod
     def forward(
@@ -2325,9 +2315,11 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
         packed_seq_params: Optional[PackedSeqParams],
     ):
         """
-        DeepGEMM FP8Indexer forward.
+        Lightning indexer forward.
 
-        Quantizer: Float8BlockQuantizer with blockwise = 128.
+        FP8 backends quantise q/k blockwise (dim=1, 128) and fold both the
+        per-token q scale and softmax_scale into the weights.  BF16 backends have
+        no quantisation scales, so only softmax_scale is folded in.
         """
         assert index_q.ndim == 3 and index_k.ndim == 2 and weights.ndim == 2
         seq_q, head, dim = index_q.size()
@@ -2335,15 +2327,29 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
         assert dim == _dim, "Query and Key have diff dim."
         assert dim == 128, "Only support dim with size 128."
         device = index_q.device
-        
-        softmax_scale = (dim ** -0.5)
 
-        quantized_q = DSAIndexerKernelFunction.quantizer.quantize(index_q)
-        quantized_k = DSAIndexerKernelFunction.quantizer.quantize(index_k)
-        q_fp8 = quantized_q.get_data_tensors(rowwise_data=True, columnwise_data=False).view(torch.float8_e4m3fn)
-        k_fp8 = quantized_k.get_data_tensors(rowwise_data=True, columnwise_data=False).view(torch.float8_e4m3fn)
-        q_scale = quantized_q._rowwise_scale_inv.reshape(index_q.shape[:-1])  # [seq_q, head, 1] -> [seq_q, head]
-        k_scale = quantized_k._rowwise_scale_inv.reshape(index_k.shape[:-1])  # [seq_k, head, 1] -> [seq_k, head]
+        softmax_scale = (dim ** -0.5)
+        backend = get_dsa_backend()
+        ctx.indexer_is_fp8 = backend.indexer_is_fp8
+
+        if backend.indexer_is_fp8:
+            quantizer = DSAIndexerKernelFunction.get_quantizer()
+            quantized_q = quantizer.quantize(index_q)
+            quantized_k = quantizer.quantize(index_k)
+            q_in = quantized_q.get_data_tensors(rowwise_data=True, columnwise_data=False).view(torch.float8_e4m3fn)
+            k_in = quantized_k.get_data_tensors(rowwise_data=True, columnwise_data=False).view(torch.float8_e4m3fn)
+            q_scale = quantized_q._rowwise_scale_inv.reshape(index_q.shape[:-1])  # [seq_q, head, 1] -> [seq_q, head]
+            k_scale = quantized_k._rowwise_scale_inv.reshape(index_k.shape[:-1])  # [seq_k, head, 1] -> [seq_k, head]
+            weight_scaled = weights * q_scale * softmax_scale  # absorb the `sf_q` and `softmax_scale` into weights
+        else:
+            # Ampere: no FP8 tensor cores, and TE's Float8BlockQuantizer needs
+            # compute capability 8.9+ (A100/A800 are 8.0).  Run BF16 instead; with
+            # no q scale only softmax_scale is absorbed into the weights.
+            q_in = index_q.to(torch.bfloat16).contiguous()
+            k_in = index_k.to(torch.bfloat16).contiguous()
+            q_scale = None
+            k_scale = None
+            weight_scaled = (weights * softmax_scale).float().contiguous()
 
         if packed_seq_params is None:
             k_start = torch.zeros(seq_q, dtype=torch.int, device=device)
@@ -2359,22 +2365,20 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
 
         k_end = torch.arange(seq_q, dtype=torch.int, device=device) + chunk_offset + 1
 
-        weight_scaled = weights * q_scale * softmax_scale  # absorb the `sf_q` and `softmax_scale` into weights
-
         if packed_seq_params is None:
             # index_score [sq, sk]
-            index_score = deep_gemm.fp8_mqa_logits(q_fp8, (k_fp8, k_scale), weight_scaled, k_start, k_end)
+            index_score = backend.mqa_logits(q_in, k_in, weight_scaled, k_start, k_end,
+                                             k_scale=k_scale)
         else:
             # index_score [sq, max_seqlen_k]
-            max_seqlen_k = 0 if packed_seq_params is None else packed_seq_params.max_seqlen_kv
-            index_score = deep_gemm.fp8_mqa_logits(
-                q_fp8,
-                (k_fp8, k_scale),
-                weight_scaled,
-                k_start, k_end,
+            max_seqlen_k = packed_seq_params.max_seqlen_kv
+            index_score = backend.mqa_logits(
+                q_in, k_in, weight_scaled, k_start, k_end,
+                k_scale=k_scale,
                 clean_logits=False,
-                max_seqlen_k=max_seqlen_k
+                max_seqlen_k=max_seqlen_k,
             )
+
             # Post-process to clean logits, apply causal mask, k_start is all zeros so omit here
             mask = torch.arange(max_seqlen_k, device='cuda')[None, :] < (k_end - k_start)[:, None]
             index_score = index_score.masked_fill(~mask, float('-inf'))
@@ -2388,7 +2392,9 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
 
         ctx.softmax_scale = softmax_scale
         ctx.index_topk = index_topk
-        ctx.save_for_backward(q_fp8, k_fp8, q_scale, k_scale, weight_scaled, topk_indices, k_start, k_end)
+        # q_scale / k_scale are None on the BF16 path; save_for_backward accepts
+        # None entries and returns them unchanged.
+        ctx.save_for_backward(q_in, k_in, q_scale, k_scale, weight_scaled, topk_indices, k_start, k_end)
 
         return index_score_topk, topk_indices
 
@@ -2418,28 +2424,35 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
         """
         q_fp8, k_fp8, q_scale, k_scale, weight_scaled, topk_indices, ks, ke = ctx.saved_tensors
 
-        d_q, d_k, d_weights = lightning_indexer_bwd.fp8_mqa_logits_bwd(
+        d_q, d_k, d_weights = get_dsa_backend().mqa_logits_bwd(
             grad_score.contiguous(),
             q_fp8,
-            (k_fp8, k_scale),
+            k_fp8,
             weight_scaled,
             ks,
             ke,
-            topk_indices=topk_indices.int(),
-            topk=ctx.index_topk
+            topk_indices.int(),
+            ctx.index_topk,
+            k_scale=k_scale,
         )
 
-        d_weights = d_weights * q_scale * ctx.softmax_scale
-        # Same kernel + same blockwise FP8 dequant as the CSA indexer, hence
-        # the same eps-floor hazard; reuse its unscale helper.
-        from loongforge.models.foundation.deepseek_v4.deepseek_v4_csa import (
-            _unscale_indexer_grad,
-        )
+        if ctx.indexer_is_fp8:
+            d_weights = d_weights * q_scale * ctx.softmax_scale
+            # Same kernel + same blockwise FP8 dequant as the CSA indexer, hence
+            # the same eps-floor hazard; reuse its unscale helper.
+            from loongforge.models.foundation.deepseek_v4.deepseek_v4_csa import (
+                _unscale_indexer_grad,
+            )
 
-        d_q = _unscale_indexer_grad(d_q, q_scale)
-        d_k = _unscale_indexer_grad(d_k, k_scale)
+            d_q = _unscale_indexer_grad(d_q, q_scale)
+            d_k = _unscale_indexer_grad(d_k, k_scale)
+        else:
+            # BF16 path: forward folded only softmax_scale into weight_scaled, and
+            # there are no quantisation scales to undo on d_q / d_k.
+            d_weights = d_weights * ctx.softmax_scale
 
         return d_q, d_k, d_weights, None, None, None
+
 
 
 class DSAIndexerKernel(torch.nn.Module):
