@@ -3,7 +3,7 @@
 #
 # Modified from NVIDIA GR00T under the Apache-2.0 License.
 
-"""GR00T-N1.7 collator for the Native trainer."""
+"""GR00T-N1.7 collator for the Torch trainer."""
 
 from __future__ import annotations
 

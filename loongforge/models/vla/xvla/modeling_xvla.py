@@ -32,7 +32,7 @@ from .modeling_florence2 import Florence2ForConditionalGeneration
 from .transformer import SoftPromptedTransformer
 from .action_hub import build_action_space
 from .model_configuration_xvla import XVLAConfig, resolve_domain_id
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 from loongforge.models.vla.xvla.xvla_processor import (
     XVLATokenizerCore,
     XVLAImageProcessorCore,

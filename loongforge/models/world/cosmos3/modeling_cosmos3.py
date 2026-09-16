@@ -33,7 +33,7 @@ from loongforge.models.world.cosmos3.cosmos3_vfm_network import (
     Cosmos3VFMNetwork,
     Cosmos3VFMNetworkConfig,
 )
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 from loongforge.models.world.cosmos3.modeling_configuration_cosmos3 import Cosmos3ModelConfig
 from loongforge.models.world.cosmos3.flow_matching import compute_flow_matching_loss
 from loongforge.models.world.cosmos3.modeling_utils import has_noisy_tokens

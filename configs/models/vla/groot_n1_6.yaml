@@ -1,4 +1,4 @@
-# GR00T-N1.6 Native trainer config
+# GR00T-N1.6 Torch trainer config
 model:
   model_type: Gr00tN1d6
   backbone_model_type: eagle

@@ -57,7 +57,7 @@ except ImportError:
     _transformers_available = False
 
 from loongforge.models.vla.pi05.model_configuration_pi05 import Pi05ModelConfig
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 
 logger = logging.getLogger(__name__)
 

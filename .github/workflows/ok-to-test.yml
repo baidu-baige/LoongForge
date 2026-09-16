@@ -38,7 +38,7 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         env:
           REQUEST: ${{ steps.request.outputs.payload }}
-          ENABLE_LLM_VLM: ${{ vars.CI_ENABLE_LLM_VLM }}
+          ENABLE_MCORE: ${{ vars.CI_ENABLE_MCORE }}
         with:
           script: |
             const request = JSON.parse(process.env.REQUEST);
@@ -48,7 +48,7 @@ jobs:
               return;
             }
 
-            if (request.suite === 'llm_vlm' && process.env.ENABLE_LLM_VLM !== 'true') {
+            if (request.suite === 'mcore' && process.env.ENABLE_MCORE !== 'true') {
               core.setFailed('the requested GPU suite is disabled by repository configuration');
               return;
             }
@@ -67,7 +67,7 @@ jobs:
             core.setOutput('suite', request.suite);
             const models = request.models.length
               ? request.models
-              : [request.suite === 'native' ? 'pi05_ddp' : 'deepseek_v2_lite'];
+              : [request.suite === 'torch' ? 'pi05_ddp' : 'deepseek_v2_lite'];
             core.setOutput('models', models.join(','));
             core.setOutput('build_image', String(request.build_image));
       - name: Validate models against suite manifest
@@ -77,7 +77,7 @@ jobs:
           models: ${{ steps.context.outputs.models }}
           repository: ${{ steps.context.outputs.head_repo }}
           ref: ${{ steps.context.outputs.head_sha }}
-          baseline_alias: ${{ steps.context.outputs.suite == 'native' && 'p' || 'a' }}
+          baseline_alias: ${{ steps.context.outputs.suite == 'torch' && 'p' || 'a' }}
       - name: Dispatch immutable revision
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         env:

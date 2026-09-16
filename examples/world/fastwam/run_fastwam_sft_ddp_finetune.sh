@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Environment ───────────────────────────────────────────────
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
-export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_native_ci/vla_artifacts"}
+export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_torch_ci/vla_artifacts"}
 export DIFFSYNTH_MODEL_BASE_PATH=${DIFFSYNTH_MODEL_BASE_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/models/"}
 
 # ── Distributed ───────────────────────────────────────────────
@@ -139,7 +139,7 @@ echo "════════════════════════�
 
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    -m loongforge train --engine native \
+    -m loongforge train --engine torch \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \

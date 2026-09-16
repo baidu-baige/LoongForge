@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""LingBot-VA DataConfig for Native typed configuration."""
+"""LingBot-VA DataConfig for Torch typed configuration."""
 
 from __future__ import annotations
 

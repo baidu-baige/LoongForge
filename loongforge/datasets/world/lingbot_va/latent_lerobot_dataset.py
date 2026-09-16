@@ -770,7 +770,7 @@ def _as_int_list(value: Any) -> List[int]:
 
 
 def build_lingbot_dataset(model_cfg, data_cfg, training_args):
-    """Build the LingBot-VA latent dataset for the Native data engine."""
+    """Build the LingBot-VA latent dataset for the Torch data engine."""
     config = LingBotVALatentDatasetConfig.from_configs(
         model_cfg, data_cfg, training_args
     )

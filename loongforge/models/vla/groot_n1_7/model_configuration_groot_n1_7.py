@@ -4,7 +4,7 @@
 #
 # Modified from NVIDIA GR00T under the Apache-2.0 License.
 
-"""Configuration for GR00T-N1.7 in the Native trainer."""
+"""Configuration for GR00T-N1.7 in the Torch trainer."""
 
 from __future__ import annotations
 

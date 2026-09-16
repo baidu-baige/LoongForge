@@ -438,8 +438,8 @@ MCORE_CONFIGS = {
 
 _CONFIGS_DIR = Path(__file__).resolve().parents[2] / "configs" / "models"
 
-def _native(yaml_file, model, data):
-    return ModelSpec("native", _CONFIGS_DIR / yaml_file, model, data)
+def _torch(yaml_file, model, data):
+    return ModelSpec("torch", _CONFIGS_DIR / yaml_file, model, data)
 
 
 _PI05 = (
@@ -480,32 +480,32 @@ _WALL = (
 )
 
 
-NATIVE_CONFIGS = {
-    "lingbot_va_robotwin": _native("world/lingbot_va_robotwin.yaml", *_LINGBOT),
-    "lingbot_va_libero": _native("world/lingbot_va_libero.yaml", *_LINGBOT),
-    "pi05": _native("vla/pi05.yaml", *_PI05),
-    "groot_n1_6": _native("vla/groot_n1_6.yaml", *_GROOT16),
-    "xvla": _native("vla/xvla.yaml", *_XVLA),
-    "fastwam": _native("world/fastwam.yaml", *_FASTWAM),
-    "groot_n1_7": _native("vla/groot_n1_7.yaml", *_GROOT17),
-    "cosmos3_nano": _native("world/cosmos3/nano.yaml", *_COSMOS3),
-    "dreamzero_lora_wan22_5b": _native("world/dreamzero_wan22_5b.yaml", *_DREAMZERO),
-    "dreamzero_full_wan22_5b": _native("world/dreamzero_wan22_5b.yaml", *_DREAMZERO),
-    "dreamzero_lora_wan21_14b": _native("world/dreamzero_wan21_14b.yaml", *_DREAMZERO),
-    "dreamzero_full_wan21_14b": _native("world/dreamzero_wan21_14b.yaml", *_DREAMZERO),
-    "dreamzero_libero_wan22_5b": _native("world/dreamzero_libero_wan22_5b.yaml", *_DREAMZERO),
-    "dreamzero_agibot_wan21_14b": _native("world/dreamzero_agibot_wan21_14b.yaml", *_DREAMZERO),
-    "dreamzero_yam_wan21_14b": _native("world/dreamzero_yam_wan21_14b.yaml", *_DREAMZERO),
-    "wall_oss_0_5": _native("vla/wall_oss_0_5.yaml", *_WALL),
+TORCH_CONFIGS = {
+    "lingbot_va_robotwin": _torch("world/lingbot_va_robotwin.yaml", *_LINGBOT),
+    "lingbot_va_libero": _torch("world/lingbot_va_libero.yaml", *_LINGBOT),
+    "pi05": _torch("vla/pi05.yaml", *_PI05),
+    "groot_n1_6": _torch("vla/groot_n1_6.yaml", *_GROOT16),
+    "xvla": _torch("vla/xvla.yaml", *_XVLA),
+    "fastwam": _torch("world/fastwam.yaml", *_FASTWAM),
+    "groot_n1_7": _torch("vla/groot_n1_7.yaml", *_GROOT17),
+    "cosmos3_nano": _torch("world/cosmos3/nano.yaml", *_COSMOS3),
+    "dreamzero_lora_wan22_5b": _torch("world/dreamzero_wan22_5b.yaml", *_DREAMZERO),
+    "dreamzero_full_wan22_5b": _torch("world/dreamzero_wan22_5b.yaml", *_DREAMZERO),
+    "dreamzero_lora_wan21_14b": _torch("world/dreamzero_wan21_14b.yaml", *_DREAMZERO),
+    "dreamzero_full_wan21_14b": _torch("world/dreamzero_wan21_14b.yaml", *_DREAMZERO),
+    "dreamzero_libero_wan22_5b": _torch("world/dreamzero_libero_wan22_5b.yaml", *_DREAMZERO),
+    "dreamzero_agibot_wan21_14b": _torch("world/dreamzero_agibot_wan21_14b.yaml", *_DREAMZERO),
+    "dreamzero_yam_wan21_14b": _torch("world/dreamzero_yam_wan21_14b.yaml", *_DREAMZERO),
+    "wall_oss_0_5": _torch("vla/wall_oss_0_5.yaml", *_WALL),
 }
 
 
 
 def get_model_spec(model_name: str, engine: str | None = None) -> ModelSpec:
     """Resolve a registered model and reject unsupported engine selection."""
-    native_name = model_name.lower().replace("-", "_")
-    if native_name in NATIVE_CONFIGS:
-        spec = NATIVE_CONFIGS[native_name]
+    torch_name = model_name.lower().replace("-", "_")
+    if torch_name in TORCH_CONFIGS:
+        spec = TORCH_CONFIGS[torch_name]
     elif model_name.lower() in MCORE_CONFIGS:
         entry = MCORE_CONFIGS[model_name.lower()]
         path = Path(__file__).resolve().parents[2] / entry["config_path"]

@@ -18,7 +18,7 @@ import torch.nn as nn
 from safetensors.torch import load_file
 from transformers import AutoProcessor
 
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 from loongforge.models.vla.wall_oss_0_5.model_configuration_wall_oss_0_5 import (
     WallOss05ModelConfig,
 )
@@ -27,7 +27,7 @@ from loongforge.models.vla.wall_oss_0_5.qwen2_5 import (
     Qwen25VLMoEForAction,
 )
 
-from loongforge.engine.native.global_vars import get_model_config, get_training_args
+from loongforge.engine.torch.global_vars import get_model_config, get_training_args
 
 logger = logging.getLogger(__name__)
 

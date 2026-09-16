@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""FastWAM collator for LoongForge Native dataloaders."""
+"""FastWAM collator for LoongForge Torch dataloaders."""
 
 import sys
 import re

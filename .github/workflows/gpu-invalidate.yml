@@ -7,25 +7,25 @@ on:
 permissions: {}
 
 jobs:
-  invalidate_llm_vlm:
+  invalidate_mcore:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: gpu-regression-${{ github.event.pull_request.number }}-llm_vlm
+      group: gpu-regression-${{ github.event.pull_request.number }}-mcore
       cancel-in-progress: true
     steps:
-      - name: Invalidate stale LLM/VLM work
-        run: echo "Cancelled stale LLM/VLM GPU work for this pull request, if any."
+      - name: Invalidate stale MCore work
+        run: echo "Cancelled stale MCore GPU work for this pull request, if any."
 
   invalidate_native:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: gpu-regression-${{ github.event.pull_request.number }}-native
+      group: gpu-regression-${{ github.event.pull_request.number }}-torch
       cancel-in-progress: true
     steps:
-      - name: Invalidate stale native work
-        run: echo "Cancelled stale native GPU work for this pull request, if any."
+      - name: Invalidate stale torch work
+        run: echo "Cancelled stale torch GPU work for this pull request, if any."
 
   # The two jobs above only exist to steal the suite concurrency groups and
   # cancel in-flight GPU work; both always succeed, so their green ticks say

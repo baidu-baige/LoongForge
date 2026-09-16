@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 from PIL import Image
 
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class FastWAMPolicy(nn.Module):
     """
 
     def __init__(self, core: nn.Module):
-        """Wrap a FastWAM core module for the Native trainer interface."""
+        """Wrap a FastWAM core module for the Torch trainer interface."""
         super().__init__()
         self.core = core
         self.dit = getattr(core, "dit", None)

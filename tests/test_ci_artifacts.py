@@ -19,7 +19,7 @@ def run_redactor(source, target, values):
 
 
 def run_preflight(
-    tmp_path, values, suite="llm_vlm", build_image="false", extra_env=None
+    tmp_path, values, suite="mcore", build_image="false", extra_env=None
 ):
     config = tmp_path / "ci.env"
     config.write_text("\n".join(f"{key}={value}" for key, value in values.items()) + "\n", encoding="utf-8")
@@ -207,7 +207,7 @@ def test_redactor_filters_json_and_redacts_physical_device(tmp_path):
     target = tmp_path / "safe.json"
     source.write_text(json.dumps({
         "status": "passed",
-        "suite": "llm_vlm",
+        "suite": "mcore",
         "model": "pi05_ddp",
         "exit_code": 0,
         "log": "logs/run.log",
@@ -219,7 +219,7 @@ def test_redactor_filters_json_and_redacts_physical_device(tmp_path):
     assert result.returncode == 0
     payload = json.loads(target.read_text(encoding="utf-8"))
     assert payload["status"] == "passed"
-    assert payload["suite"] == "llm_vlm"
+    assert payload["suite"] == "mcore"
     assert payload["model"] == "pi05_ddp"
     assert payload["exit_code"] == 0
     assert payload["log"] == "logs/run.log"
@@ -233,7 +233,7 @@ def test_redactor_keeps_suite_results_and_redacts_nested_paths(tmp_path):
     source.write_text(json.dumps({
         "finished_at": "2026-08-28 12:12:39",
         "chip": "p",
-        "log_dir": "/private/runner/output/native/run_1",
+        "log_dir": "/private/runner/output/torch/run_1",
         "auto_collect_baseline": False,
         "results": [
             {
@@ -243,7 +243,7 @@ def test_redactor_keeps_suite_results_and_redacts_nested_paths(tmp_path):
                 "failed_metrics": [],
                 "warnings": ["throughput degraded 10% > 5% (soft check, warning only)"],
                 "error": "",
-                "log_dir": "/private/runner/output/native/run_1/pi05_ddp",
+                "log_dir": "/private/runner/output/torch/run_1/pi05_ddp",
                 "duration_sec": 716.2,
                 "metrics": [
                     {"iteration": 1, "action_loss": 0.4305, "grad_norm": 1.6127},
@@ -350,8 +350,8 @@ def test_preflight_accepts_a_runner_local_contract_without_echoing_values(tmp_pa
     (source / "third_party/Loong-Megatron/megatron/core/transformer").mkdir(parents=True)
     hyper_connection = source / "third_party/Loong-Megatron/megatron/core/transformer/hyper_connection.py"
     hyper_connection.write_text("", encoding="utf-8")
-    (source / "tests/llm_vlm").mkdir(parents=True)
-    (source / "tests/llm_vlm/main.py").write_text("", encoding="utf-8")
+    (source / "tests/mcore").mkdir(parents=True)
+    (source / "tests/mcore/main.py").write_text("", encoding="utf-8")
     values = {
         "LOONGFORGE_DEFAULT_IMAGE": "default-image",
         "LOONGFORGE_HOST_DATA_ROOT": str(data),
@@ -499,7 +499,7 @@ def test_runner_errors_do_not_echo_config_paths(tmp_path):
     env = os.environ.copy()
     env.update({"CI_CONFIG_PATH": str(missing_config)})
     result = subprocess.run(
-        ["bash", ".github/scripts/self_runner/preflight.sh", "llm_vlm", "false"],
+        ["bash", ".github/scripts/self_runner/preflight.sh", "mcore", "false"],
         env=env, capture_output=True, text=True, check=False,
     )
     assert result.returncode == 2
@@ -535,7 +535,7 @@ def test_runner_errors_do_not_echo_config_paths(tmp_path):
         "HEAD_SHA": "a" * 40,
     })
     result = subprocess.run(
-        ["bash", ".github/scripts/run_regression.sh", "llm_vlm"],
+        ["bash", ".github/scripts/run_regression.sh", "mcore"],
         env=env, capture_output=True, text=True, check=False,
     )
     assert result.returncode == 2
@@ -756,8 +756,8 @@ def test_regression_clears_stale_workspace_artifacts_between_runs(tmp_path):
     (source / "third_party/Loong-Megatron/megatron/core/transformer").mkdir(parents=True)
     hyper_connection = source / "third_party/Loong-Megatron/megatron/core/transformer/hyper_connection.py"
     hyper_connection.write_text("", encoding="utf-8")
-    (source / "tests/llm_vlm").mkdir(parents=True)
-    (source / "tests/llm_vlm/main.py").write_text("", encoding="utf-8")
+    (source / "tests/mcore").mkdir(parents=True)
+    (source / "tests/mcore/main.py").write_text("", encoding="utf-8")
     config = tmp_path / "ci.env"
     config.write_text(
         "\n".join([
@@ -780,13 +780,13 @@ def test_regression_clears_stale_workspace_artifacts_between_runs(tmp_path):
     artifact_root = Path("loongforge-artifacts")
     try:
         first = subprocess.run(
-            ["bash", ".github/scripts/run_regression.sh", "llm_vlm"],
+            ["bash", ".github/scripts/run_regression.sh", "mcore"],
             env={**env, "HEAD_SHA": "a" * 40}, capture_output=True, text=True, check=False,
         )
         assert first.returncode == 0
         (artifact_root / "stale-marker").write_text("old", encoding="utf-8")
         second = subprocess.run(
-            ["bash", ".github/scripts/run_regression.sh", "llm_vlm"],
+            ["bash", ".github/scripts/run_regression.sh", "mcore"],
             env={**env, "HEAD_SHA": "b" * 40}, capture_output=True, text=True, check=False,
         )
         assert second.returncode == 0

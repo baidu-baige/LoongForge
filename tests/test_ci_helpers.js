@@ -68,7 +68,7 @@ test('new commits invalidate suite GPU jobs without SHA-scoped concurrency', () 
   const regression = readWorkflow('gpu-regression.yml');
   const invalidation = readWorkflow('gpu-invalidate.yml');
   assert.doesNotMatch(regression, /group: gpu-regression-.*head_sha/);
-  for (const suite of ['llm_vlm', 'native']) {
+  for (const suite of ['mcore', 'torch']) {
     assert.match(regression, new RegExp(`group: gpu-regression-.*-${suite}`));
     assert.match(invalidation, new RegExp(`group: gpu-regression-.*-${suite}`));
   }
@@ -120,20 +120,20 @@ test('GPU invalidation reuses only an action_required check for the current SHA'
 
 test('GPU conclusion keeps cancelled runs distinct from failures', () => {
   assert.deepEqual(
-    gpuConclusion({ validate: 'success', native: 'success', llm_vlm: 'skipped' }, 'native'),
+    gpuConclusion({ validate: 'success', torch: 'success', mcore: 'skipped' }, 'torch'),
     { conclusion: 'success', failed: [] },
   );
   assert.deepEqual(
-    gpuConclusion({ validate: 'success', native: 'cancelled', llm_vlm: 'skipped' }, 'native'),
-    { conclusion: 'cancelled', failed: ['native'] },
+    gpuConclusion({ validate: 'success', torch: 'cancelled', mcore: 'skipped' }, 'torch'),
+    { conclusion: 'cancelled', failed: ['torch'] },
   );
   assert.deepEqual(
-    gpuConclusion({ validate: 'success', native: 'failure', llm_vlm: 'skipped' }, 'native'),
-    { conclusion: 'failure', failed: ['native'] },
+    gpuConclusion({ validate: 'success', torch: 'failure', mcore: 'skipped' }, 'torch'),
+    { conclusion: 'failure', failed: ['torch'] },
   );
   assert.deepEqual(
-    gpuConclusion({ validate: 'failure', native: 'skipped', llm_vlm: 'skipped' }, 'native'),
-    { conclusion: 'failure', failed: ['validate', 'native'] },
+    gpuConclusion({ validate: 'failure', torch: 'skipped', mcore: 'skipped' }, 'torch'),
+    { conclusion: 'failure', failed: ['validate', 'torch'] },
   );
 });
 
@@ -154,8 +154,8 @@ test('GPU status is separate from the required CPU gate', () => {
   const regression = readWorkflow('gpu-regression.yml');
   assert.match(dispatch, /name: 'gpu-regression'/);
   assert.match(regression, /name: 'gpu-regression'/);
-  assert.match(dispatch, /CI_ENABLE_LLM_VLM|ENABLE_LLM_VLM/);
-  assert.doesNotMatch(dispatch, /Only the Native suite/);
+  assert.match(dispatch, /CI_ENABLE_MCORE|ENABLE_MCORE/);
+  assert.doesNotMatch(dispatch, /Only the Torch suite/);
   assert.equal((regression.match(/CANDIDATE_REVISION:/g) || []).length, 2);
 });
 
@@ -178,14 +178,14 @@ test('model validation reports a model missing its baseline', () => {
   assert.deepEqual(missingModels(requested, validated), ['missing_model']);
 });
 
-test('llm_vlm feature gate is explicit in both trusted workflows', () => {
+test('mcore feature gate is explicit in both trusted workflows', () => {
   assert.match(
     readWorkflow('ok-to-test.yml'),
-    /request\.suite === 'llm_vlm' && process\.env\.ENABLE_LLM_VLM !== 'true'/,
+    /request\.suite === 'mcore' && process\.env\.ENABLE_MCORE !== 'true'/,
   );
   assert.match(
     readWorkflow('gpu-regression.yml'),
-    /process\.env\.SUITE === 'llm_vlm' && process\.env\.ENABLE_LLM_VLM !== 'true'/,
+    /process\.env\.SUITE === 'mcore' && process\.env\.ENABLE_MCORE !== 'true'/,
   );
 });
 

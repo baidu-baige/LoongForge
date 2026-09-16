@@ -18,7 +18,7 @@ class ModelSpec:
     @staticmethod
     def _load(path):
         if path is None:
-            raise ValueError("This model uses Hydra configs, not Native dataclasses")
+            raise ValueError("This model uses Hydra configs, not Torch dataclasses")
         module, name = path.rsplit(":", 1)
         return getattr(import_module(module), name)
 

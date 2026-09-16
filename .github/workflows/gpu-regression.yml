@@ -59,7 +59,7 @@ jobs:
           HEAD_SHA: ${{ inputs.head_sha }}
           INPUT_TREE_SHA: ${{ inputs.tree_sha }}
           SUITE: ${{ inputs.suite }}
-          ENABLE_LLM_VLM: ${{ vars.CI_ENABLE_LLM_VLM }}
+          ENABLE_MCORE: ${{ vars.CI_ENABLE_MCORE }}
         with:
           script: |
             const { data: pull } = await github.rest.pulls.get({
@@ -75,11 +75,11 @@ jobs:
               core.setFailed('head repository does not match the pull request');
               return;
             }
-            if (!['llm_vlm', 'native'].includes(process.env.SUITE)) {
+            if (!['mcore', 'torch'].includes(process.env.SUITE)) {
               core.setFailed('invalid test suite');
               return;
             }
-            if (process.env.SUITE === 'llm_vlm' && process.env.ENABLE_LLM_VLM !== 'true') {
+            if (process.env.SUITE === 'mcore' && process.env.ENABLE_MCORE !== 'true') {
               core.setFailed('the requested GPU suite is disabled by repository configuration');
               return;
             }
@@ -102,15 +102,15 @@ jobs:
           models: ${{ inputs.models }}
           repository: ${{ inputs.head_repo }}
           ref: ${{ inputs.head_sha }}
-          baseline_alias: ${{ inputs.suite == 'native' && 'p' || 'a' }}
+          baseline_alias: ${{ inputs.suite == 'torch' && 'p' || 'a' }}
 
-  llm_vlm:
+  mcore:
     needs: validate
-    if: ${{ needs.validate.result == 'success' && inputs.suite == 'llm_vlm' }}
+    if: ${{ needs.validate.result == 'success' && inputs.suite == 'mcore' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER_A) }}
     timeout-minutes: 360
     concurrency:
-      group: gpu-regression-${{ inputs.pr_number }}-llm_vlm
+      group: gpu-regression-${{ inputs.pr_number }}-mcore
       cancel-in-progress: true
     steps:
       - name: Revalidate current PR head
@@ -154,7 +154,7 @@ jobs:
           test "$(git -C source rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE_SHA"
           test -z "$(git -C source submodule status --recursive | grep -E '^[+-]' || true)"
       - name: Preflight self-hosted runner
-        run: trusted-ci/.github/scripts/self_runner/preflight.sh llm_vlm "${{ inputs.build_image && 'true' || 'false' }}"
+        run: trusted-ci/.github/scripts/self_runner/preflight.sh mcore "${{ inputs.build_image && 'true' || 'false' }}"
       - name: Report candidate image build
         if: ${{ inputs.build_image && inputs.gate_check_id != '' }}
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
@@ -203,14 +203,14 @@ jobs:
               },
             });
       - id: regression
-        name: Run LLM/VLM regression
+        name: Run MCore regression
         env:
-          MODELS: ${{ inputs.models || (inputs.suite == 'native' && 'pi05_ddp' || 'deepseek_v2_lite') }}
+          MODELS: ${{ inputs.models || (inputs.suite == 'torch' && 'pi05_ddp' || 'deepseek_v2_lite') }}
           CANDIDATE_REVISION: ${{ steps.candidate.outputs.revision }}
           HEAD_SHA: ${{ inputs.head_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
           LOONGFORGE_REGRESSION_RUNNER: ${{ github.workspace }}/trusted-ci/.github/scripts/self_runner/run_regression.sh
-        run: trusted-ci/.github/scripts/run_regression.sh llm_vlm
+        run: trusted-ci/.github/scripts/run_regression.sh mcore
       - name: Upload regression logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -220,15 +220,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  native:
+  torch:
     needs: validate
-    if: ${{ needs.validate.result == 'success' && inputs.suite == 'native' }}
+    if: ${{ needs.validate.result == 'success' && inputs.suite == 'torch' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER_P) }}
     timeout-minutes: 360
     outputs:
       regression_summary: ${{ steps.suite_summary.outputs.markdown }}
     concurrency:
-      group: gpu-regression-${{ inputs.pr_number }}-native
+      group: gpu-regression-${{ inputs.pr_number }}-torch
       cancel-in-progress: true
     steps:
       - name: Revalidate current PR head
@@ -272,7 +272,7 @@ jobs:
           test "$(git -C source rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE_SHA"
           test -z "$(git -C source submodule status --recursive | grep -E '^[+-]' || true)"
       - name: Preflight self-hosted runner
-        run: trusted-ci/.github/scripts/self_runner/preflight.sh native "${{ inputs.build_image && 'true' || 'false' }}"
+        run: trusted-ci/.github/scripts/self_runner/preflight.sh torch "${{ inputs.build_image && 'true' || 'false' }}"
       - name: Report candidate image build
         if: ${{ inputs.build_image && inputs.gate_check_id != '' }}
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
@@ -321,14 +321,14 @@ jobs:
               },
             });
       - id: regression
-        name: Run Native regression
+        name: Run Torch regression
         env:
-          MODELS: ${{ inputs.models || (inputs.suite == 'native' && 'pi05_ddp' || 'deepseek_v2_lite') }}
+          MODELS: ${{ inputs.models || (inputs.suite == 'torch' && 'pi05_ddp' || 'deepseek_v2_lite') }}
           CANDIDATE_REVISION: ${{ steps.candidate.outputs.revision }}
           HEAD_SHA: ${{ inputs.head_sha }}
           SOURCE_DIR: ${{ github.workspace }}/source
           LOONGFORGE_REGRESSION_RUNNER: ${{ github.workspace }}/trusted-ci/.github/scripts/self_runner/run_regression.sh
-        run: trusted-ci/.github/scripts/run_regression.sh native
+        run: trusted-ci/.github/scripts/run_regression.sh torch
       - id: suite_summary
         name: Render suite summary
         # The launcher copies the regression framework's results.json into
@@ -348,14 +348,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: gpu-native-${{ inputs.pr_number }}-${{ inputs.head_sha }}
+          name: gpu-torch-${{ inputs.pr_number }}-${{ inputs.head_sha }}
           path: loongforge-artifacts
           if-no-files-found: error
           retention-days: 7
 
   finalize:
     timeout-minutes: 70
-    needs: [validate, llm_vlm, native]
+    needs: [validate, mcore, torch]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -375,12 +375,12 @@ jobs:
         env:
           CHECK_ID: ${{ inputs.gate_check_id }}
           VALIDATE_RESULT: ${{ needs.validate.result }}
-          LLM_VLM_RESULT: ${{ needs.llm_vlm.result }}
-          NATIVE_RESULT: ${{ needs.native.result }}
+          MCORE_RESULT: ${{ needs.mcore.result }}
+          TORCH_RESULT: ${{ needs.torch.result }}
           SUITE: ${{ inputs.suite }}
           HEAD_SHA: ${{ inputs.head_sha }}
           PR_NUMBER: ${{ inputs.pr_number }}
-          REGRESSION_SUMMARY: ${{ needs.native.outputs.regression_summary }}
+          REGRESSION_SUMMARY: ${{ needs.torch.outputs.regression_summary }}
         with:
           script: |
             const { gpuConclusion } = require('./.github/scripts/gpu_checks');
@@ -388,8 +388,8 @@ jobs:
             // job; this workflow reports the GPU suites only.
             const results = {
               validate: process.env.VALIDATE_RESULT,
-              llm_vlm: process.env.LLM_VLM_RESULT,
-              native: process.env.NATIVE_RESULT,
+              mcore: process.env.MCORE_RESULT,
+              torch: process.env.TORCH_RESULT,
             };
 
             // A failed suite job is a real failure: mark the check failed,

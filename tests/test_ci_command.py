@@ -16,20 +16,20 @@ sys.modules["ci_command"] = ci_command
 SPEC.loader.exec_module(ci_command)
 
 
-def test_native_suite_selects_image_build():
+def test_torch_suite_selects_image_build():
     request = ci_command.parse_command(
-        "/ok-to-test --suite native --model pi05_ddp --build-image"
+        "/ok-to-test --suite torch --model pi05_ddp --build-image"
     )
 
-    assert request.suite == "native"
+    assert request.suite == "torch"
     assert request.models == ["pi05_ddp"]
     assert request.build_image is True
 
 
 def test_models_are_optional_and_default_to_baselines():
-    request = ci_command.parse_command("/ok-to-test --suite llm_vlm")
+    request = ci_command.parse_command("/ok-to-test --suite mcore")
 
-    assert request.suite == "llm_vlm"
+    assert request.suite == "mcore"
     assert request.models == []
     assert request.build_image is False
 
@@ -38,10 +38,10 @@ def test_models_are_optional_and_default_to_baselines():
     "comment",
     [
         "/ok-to-test --suite unknown",
-        "/ok-to-test --suite llm_vlm --unknown value",
-        "/ok-to-test --suite llm_vlm --model 'x; uname'",
-        "/ok-to-test --suite native --build-image p",
-        "please /ok-to-test --suite llm_vlm",
+        "/ok-to-test --suite mcore --unknown value",
+        "/ok-to-test --suite mcore --model 'x; uname'",
+        "/ok-to-test --suite torch --build-image p",
+        "please /ok-to-test --suite mcore",
     ],
 )
 def test_invalid_or_unsafe_commands_are_rejected(comment: str):

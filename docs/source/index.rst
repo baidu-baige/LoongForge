@@ -43,17 +43,17 @@ A modular, scalable, and highly efficient training framework for language, multi
    :maxdepth: 1
    :caption: Embodied Training
 
-   native_tutorial/overview
+   torch_tutorial/overview
    features/delta_fp8_allgather
-   native_tutorial/quick_start_pi05
-   native_tutorial/quick_start_groot_n1_6
-   native_tutorial/quick_start_groot_n1_7
-   native_tutorial/quick_start_lingbot_va
-   native_tutorial/quick_start_xvla
-   native_tutorial/quick_start_dreamzero
-   native_tutorial/quick_start_fastwam
-   native_tutorial/quick_start_cosmos3
-   native_tutorial/eval_overview
+   torch_tutorial/quick_start_pi05
+   torch_tutorial/quick_start_groot_n1_6
+   torch_tutorial/quick_start_groot_n1_7
+   torch_tutorial/quick_start_lingbot_va
+   torch_tutorial/quick_start_xvla
+   torch_tutorial/quick_start_dreamzero
+   torch_tutorial/quick_start_fastwam
+   torch_tutorial/quick_start_cosmos3
+   torch_tutorial/eval_overview
 
 .. toctree::
    :maxdepth: 1

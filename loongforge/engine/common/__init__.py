@@ -11,7 +11,7 @@ from loongforge.contracts.training import TrainSpec
 
 _ENTRYPOINTS = {
     "mcore": "loongforge.engine.mcore.entrypoint",
-    "native": "loongforge.engine.native.entrypoint",
+    "torch": "loongforge.engine.torch.entrypoint",
 }
 
 

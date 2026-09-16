@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$suite" =~ ^(llm_vlm|native)$ ]] || { echo "suite must be llm_vlm or native" >&2; exit 2; }
+[[ "$suite" =~ ^(mcore|torch)$ ]] || { echo "suite must be mcore or torch" >&2; exit 2; }
 [[ -d "$source_dir" && "$sha" =~ ^[0-9a-f]{40}$ ]] || {
   echo "source and a full commit SHA are required" >&2
   exit 2
@@ -110,30 +110,30 @@ trap cleanup EXIT INT TERM
 "$script_dir/create_container.sh" "$image" "$source_dir" "$suite" "$container_name" >>"$log_file" 2>&1
 
 set +e
-if [[ "$suite" == native ]]; then
-  # The Native entry script is not executable in git (mode 100644), so
+if [[ "$suite" == torch ]]; then
+  # The Torch entry script is not executable in git (mode 100644), so
   # invoke it through bash instead of relying on the exec bit.
-  [[ -f "$source_dir/tests/native/run.sh" ]] || {
-    echo "Native test suite is missing: tests/native/run.sh" >&2
+  [[ -f "$source_dir/tests/torch/run.sh" ]] || {
+    echo "Torch test suite is missing: tests/torch/run.sh" >&2
     exit 2
   }
   read -r -a model_args <<<"${models//,/ }"
-  test_entry="bash tests/native/run.sh"
-  exec_args=(--chip "${LOONGFORGE_BASELINE_NATIVE:-p}" --models "${model_args[@]}")
+  test_entry="bash tests/torch/run.sh"
+  exec_args=(--chip "${LOONGFORGE_BASELINE_TORCH:-p}" --models "${model_args[@]}")
   extra_env=(
     -e "LOCAL_VLA_ARTIFACTS_ROOT=$LOONGFORGE_CONTAINER_DATA_ROOT"
-    -e "NATIVE_LOG_ROOT=$LOONGFORGE_CONTAINER_OUTPUT_ROOT/native"
+    -e "TORCH_LOG_ROOT=$LOONGFORGE_CONTAINER_OUTPUT_ROOT/torch"
   )
 else
   # main.py resolves configs/, tasks/, and optional_configs/ relative to the
-  # llm_vlm suite directory, so run it from there rather than repo root.
-  [[ -f "$source_dir/tests/llm_vlm/main.py" ]] || {
-    echo "LLM/VLM test suite is missing: tests/llm_vlm/main.py" >&2
+  # mcore suite directory, so run it from there rather than repo root.
+  [[ -f "$source_dir/tests/mcore/main.py" ]] || {
+    echo "MCore test suite is missing: tests/mcore/main.py" >&2
     exit 2
   }
-  test_entry="cd tests/llm_vlm && python3 main.py"
+  test_entry="cd tests/mcore && python3 main.py"
   read -r -a model_args <<<"${models//,/ }"
-  exec_args=(--models "${model_args[@]}" --chip "${LOONGFORGE_BASELINE_LLM_VLM:-a}" \
+  exec_args=(--models "${model_args[@]}" --chip "${LOONGFORGE_BASELINE_MCORE:-a}" \
     --tasks check_correctness_task check_precess_data_task --training_type pretrain sft \
     --node_nums 1 --gpu_nums 8 --check_loss_only)
   extra_env=()
@@ -155,12 +155,12 @@ status=$?
 set -e
 
 suite_results_copied=false
-if [[ "$suite" == native ]]; then
+if [[ "$suite" == torch ]]; then
   # Surface the regression framework's per-model results (loss/grad_norm
   # baseline comparisons) so the workflow can report them on the pull
-  # request check run. The job concurrency group keeps parallel native
+  # request check run. The job concurrency group keeps parallel torch
   # runs off this runner, so the newest run directory is this container's.
-  newest_results="$(ls -1t "$LOONGFORGE_HOST_OUTPUT_ROOT"/native/run_*/results.json 2>/dev/null | head -1 || true)"
+  newest_results="$(ls -1t "$LOONGFORGE_HOST_OUTPUT_ROOT"/torch/run_*/results.json 2>/dev/null | head -1 || true)"
   if [[ -n "$newest_results" && -f "$newest_results" ]]; then
     if python3 "$script_dir/../../../ci/redact_ci_artifact.py" \
         --input "$newest_results" --output "$artifact_dir/suite-results.json"; then

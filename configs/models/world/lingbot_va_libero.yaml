@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-# LingBot-VA Native trainer config.
+# LingBot-VA Torch trainer config.
 model:
   model_type: lingbot_va
   num_layers: 30

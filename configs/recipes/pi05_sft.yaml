@@ -1,4 +1,4 @@
-engine: native
+engine: torch
 model: pi05
 args:
   - --trainer-type

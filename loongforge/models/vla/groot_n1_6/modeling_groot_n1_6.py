@@ -46,7 +46,7 @@ from loongforge.datasets.robotics.groot_n1_6.transforms.utils import (
     MODALITY_CONFIGS,
     convert_lerobot_stats_to_processor_format,
 )
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 
 from loongforge.datasets.robotics.groot_n1_6.transforms.eagle3_model.image_augmentations import (
     build_image_transformations_albumentations,
@@ -895,7 +895,7 @@ class Gr00tN1d6(nn.Module):
 
 @register_model("Gr00tN1d6")
 class GrootN1d6Policy(nn.Module):
-    """GR00T-N1.6 policy implementation for the Native trainer."""
+    """GR00T-N1.6 policy implementation for the Torch trainer."""
 
     def __init__(self, config: GrootN1d6ModelConfig):
         super().__init__()

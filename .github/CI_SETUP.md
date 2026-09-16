@@ -9,8 +9,8 @@ Configure the following Repository Variables in GitHub Settings. Runner values
 are JSON arrays, not comma-separated strings. Set the custom labels to the
 labels actually registered on the target runners; the `a`/`p` labels in
 runner-local configuration are canonical aliases,
-not assumptions made by the workflows. `llm_vlm` resolves to `CI_RUNNER_A` and
-`native` resolves to `CI_RUNNER_P`; each suite runner builds its own local
+not assumptions made by the workflows. `mcore` resolves to `CI_RUNNER_A` and
+`torch` resolves to `CI_RUNNER_P`; each suite runner builds its own local
 candidate image when `--build-image` is requested.
 
 - `CI_RUNNER_A`: JSON label array for the A-card regression runner.
@@ -19,8 +19,8 @@ candidate image when `--build-image` is requested.
 - `CI_RELEASE_RUNNER`: JSON label array for a GPU Docker runner with at least
   250 GiB free on Docker's storage filesystem. Its GPU target determines the
   release image architecture in the same way as a candidate build.
-- `CI_ENABLE_LLM_VLM`: `true` only when the A-card suite is provisioned;
-  otherwise `llm_vlm` dispatch is intentionally rejected.
+- `CI_ENABLE_MCORE`: `true` only when the A-card suite is provisioned;
+  otherwise `mcore` dispatch is intentionally rejected.
 
 Configure these Claude review repository variables:
 

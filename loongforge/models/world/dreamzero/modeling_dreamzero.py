@@ -26,14 +26,14 @@ except Exception:  # pragma: no cover - lerobot may be optional in some envs
 
 from transformers.feature_extraction_utils import BatchFeature
 
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 
 from .model_configuration_dreamzero import DreamZeroConfig
 from .modules.action_head_tf import WANPolicyHead, WANPolicyHeadConfig
 from .precomputed_cache import build_precomputed_cache_config
 
 if TYPE_CHECKING:
-    from loongforge.engine.native.distributed.context import DistributedContext
+    from loongforge.engine.torch.distributed.context import DistributedContext
 
 __all__ = ["DreamZeroPolicy", "DreamZeroConfig", "build_action_head_config"]
 
@@ -368,7 +368,7 @@ class DreamZeroPolicy(PreTrainedPolicy):
         if cpu_burn < 0:
             raise ValueError("DreamZeroConfig.train_rng_cpu_burn must be >= 0")
 
-        from loongforge.engine.native.utils.utils import set_seed
+        from loongforge.engine.torch.utils.utils import set_seed
 
         set_seed(seed)
         if cpu_burn:

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GR00T-N1.6 batch collator for the Native trainer."""
+"""GR00T-N1.6 batch collator for the Torch trainer."""
 
 from __future__ import annotations
 

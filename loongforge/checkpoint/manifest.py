@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Checkpoint format markers and Native resume metadata."""
+"""Checkpoint format markers and Torch resume metadata."""
 
 from dataclasses import asdict
 import json
@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from loongforge.contracts.checkpoint import NativeCheckpointMetadata
+from loongforge.contracts.checkpoint import TorchCheckpointMetadata
 
 
 def is_hf_checkpoint(path):
@@ -21,12 +21,12 @@ def is_hf_checkpoint(path):
     ))
 
 
-def read_native_metadata(path) -> NativeCheckpointMetadata:
+def read_torch_metadata(path) -> TorchCheckpointMetadata:
     with (Path(path) / "resume_meta.json").open(encoding="utf-8") as file:
-        return NativeCheckpointMetadata(**json.load(file))
+        return TorchCheckpointMetadata(**json.load(file))
 
 
-def write_native_metadata(path, meta: NativeCheckpointMetadata):
+def write_torch_metadata(path, meta: TorchCheckpointMetadata):
     # Publish the complete marker in one rename; readers never see partial JSON.
     with NamedTemporaryFile(mode="w", dir=path, encoding="utf-8", delete=False) as file:
         temporary = Path(file.name)

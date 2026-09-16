@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-# GR00T-N1.7 Native trainer config
+# GR00T-N1.7 Torch trainer config
 model:
   model_type: Gr00tN1d7
   base_model_path: nvidia/Cosmos-Reason2-2B

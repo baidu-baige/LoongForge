@@ -34,13 +34,13 @@ dispatch inputs.
 Maintainers can request a baseline regression by commenting on a pull request:
 
 ```
-/ok-to-test --suite llm_vlm|native [--model model1,model2] [--build-image]
+/ok-to-test --suite mcore|torch [--model model1,model2] [--build-image]
 ```
 
 The suite selects both the test collection and its self-hosted runner:
-`llm_vlm` runs on a and `native` runs on p. The `native` suite is enabled
-by default; `llm_vlm` requires a registered runner and
-`CI_ENABLE_LLM_VLM=true` in the workflow environment. With `--build-image`, that
+`mcore` runs on a and `torch` runs on p. The `torch` suite is enabled
+by default; `mcore` requires a registered runner and
+`CI_ENABLE_MCORE=true` in the workflow environment. With `--build-image`, that
 same runner builds the PR source context with a trusted Dockerfile and the
 runner-configured BuildKit APT, PyPI, and source mirrors, then immediately runs
 regression against the local candidate image. The Dockerfile itself is
@@ -80,7 +80,7 @@ whole image.
 
 Operator hook contracts:
 
-- `LOONGFORGE_REGRESSION_RUNNER --source DIR --suite llm_vlm|native --sha SHA [--model LIST] [--candidate-revision REV]`
+- `LOONGFORGE_REGRESSION_RUNNER --source DIR --suite mcore|torch --sha SHA [--model LIST] [--candidate-revision REV]`
 - `LOONGFORGE_IMAGE_BUILDER --source DIR --target a|p|auto --sha SHA --pr NUMBER --tree-sha SHA`; stdout must contain only the local candidate image reference
 
 The builder reads `CI_CONFIG_PATH_IMAGE` (or the wrapper's `CI_CONFIG_PATH`) from

@@ -44,7 +44,7 @@ from loongforge.evaluation.factories.registry import register_factory
 from loongforge.evaluation.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.servers.loongforge_policy import PredictActionModelSpec
 from loongforge.models.world.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
-from loongforge.models.native_registry import build_model
+from loongforge.models.torch_registry import build_model
 
 logger = logging.getLogger(__name__)
 

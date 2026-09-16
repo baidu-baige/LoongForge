@@ -3,7 +3,7 @@
 
 """LoongForge train module"""
 
-# MCore owns these registration side effects; Native imports only its selected model.
+# MCore owns these registration side effects; Torch imports only its selected model.
 from loongforge.models import llm as _llm  # noqa: F401
 from loongforge.models import vision as _vision  # noqa: F401
 from loongforge.models import diffusion as _diffusion  # noqa: F401

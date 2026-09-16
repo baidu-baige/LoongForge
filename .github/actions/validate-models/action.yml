@@ -2,7 +2,7 @@ name: 'Validate regression models'
 description: 'Validate requested model names against the suite manifest at a given ref'
 inputs:
   suite:
-    description: 'Test suite (llm_vlm or native)'
+    description: 'Test suite (mcore or torch)'
     required: true
   models:
     description: 'Comma-separated model names'
@@ -34,7 +34,7 @@ runs:
           const { filterModelsWithBaselines, missingModels } = require('./.github/scripts/ci_model_validation');
           let models = process.env.MODELS.split(',').map((m) => m.trim()).filter(Boolean);
           if (!models.length) {
-            models = [suite === 'native' ? 'pi05_ddp' : 'deepseek_v2_lite'];
+            models = [suite === 'torch' ? 'pi05_ddp' : 'deepseek_v2_lite'];
           }
           if (models.some((model) => !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(model))) {
             core.setFailed('invalid model list');
@@ -50,11 +50,11 @@ runs:
           // typos fail before runner time is spent on image pulls, container
           // creation, and a slow regression start.
           let knownModels;
-          if (suite === 'native') {
+          if (suite === 'torch') {
             const { data: manifest } = await github.rest.repos.getContent({
               owner,
               repo,
-              path: 'tests/native/config/scripts.yaml',
+              path: 'tests/torch/config/scripts.yaml',
               ref: process.env.SOURCE_REF,
             });
             const yaml = Buffer.from(
@@ -67,7 +67,7 @@ runs:
             let baselines = [];
             try {
               const response = await github.rest.repos.getContent({
-                owner, repo, path: `tests/native/baseline/${baselineDir}`, ref: process.env.SOURCE_REF,
+                owner, repo, path: `tests/torch/baseline/${baselineDir}`, ref: process.env.SOURCE_REF,
               });
               baselines = response.data;
             } catch (error) {
@@ -76,18 +76,18 @@ runs:
             const baselineModels = new Set(baselines.filter((e) => e.type === 'file' && e.name.endsWith('.json')).map((e) => e.name.replace(/\.json$/, '')));
             knownModels = new Set(filterModelsWithBaselines(models, knownModels, baselineModels));
           } else {
-            // The llm_vlm regression entry passes only --models, so it can
-            // resolve flat names from tests/llm_vlm/configs/ exclusively.
+            // The mcore regression entry passes only --models, so it can
+            // resolve flat names from tests/mcore/configs/ exclusively.
             if (models.some((model) => model.includes('/'))) {
               core.setFailed(
-                'llm_vlm model names must not contain "/"; the regression entry searches tests/llm_vlm/configs/ only',
+                'mcore model names must not contain "/"; the regression entry searches tests/mcore/configs/ only',
               );
               return;
             }
             const { data: entries } = await github.rest.repos.getContent({
               owner,
               repo,
-              path: 'tests/llm_vlm/configs',
+              path: 'tests/mcore/configs',
               ref: process.env.SOURCE_REF,
             });
             knownModels = new Set(
@@ -100,7 +100,7 @@ runs:
               try {
                 const { data: baselines } = await github.rest.repos.getContent({
                   owner, repo,
-                  path: `tests/llm_vlm/baseline/${kind}/${baselineDir}`,
+                  path: `tests/mcore/baseline/${kind}/${baselineDir}`,
                   ref: process.env.SOURCE_REF,
                 });
                 for (const entry of baselines) {

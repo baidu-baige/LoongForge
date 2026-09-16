@@ -80,7 +80,7 @@
 </p>
 
 - **Megatron 栈** —— 面向 LLM、VLM 与 Diffusion 模型。基于 [patch 过的 Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) 构建，并扩展了 MoE 并行、组件级异构并行、长序列优化等能力。
-- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。独立的 [torch-native 子系统](./loongforge/engine/native)，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
+- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。独立的 [torch-native 子系统](./loongforge/engine/torch)，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
 
 ## 🔥 最新动态
 
@@ -92,7 +92,7 @@
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
 - **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/evaluation/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / VLA / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/engine/native)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/engine/torch)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 
@@ -129,7 +129,7 @@
 
 **🤖 具身模型**
 
-* **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 子系统，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[README](./loongforge/engine/native)]
+* **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 子系统，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[README](./loongforge/engine/torch)]
 * **Delta-FP8 FSDP 通信** —— 在支持的 NVIDIA GPU 上，可选将 BF16 FSDP2 AllGather 的参数差值按 block 压缩为 FP8，模型计算仍保持 BF16。[[使用方法](./docs/source_zh/features/delta_fp8_allgather.md)]
 * **逐模型深度定制优化** —— 针对当前覆盖的每个模型深度优化训练代码，涵盖 I/O、通信策略、算子效率等维度，实测相对官方基线 **1.79×–4.38× 加速**（见[性能表现](#performance)）。
 * **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。
@@ -140,7 +140,7 @@
 * **灵活的 Checkpoint 机制** —— 支持离线 **Megatron ↔ HuggingFace** 双向转换，以及在线原生 HF 加载/保存，全流程无格式壁垒。
 * **异构硬件** —— 通过轻侵入式插件设计，原生支持 **NVIDIA GPU** 与**昆仑芯 XPU**。
 
-> 📖 深入阅读：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/features_index.html) · [具身模型](https://loongforge.readthedocs.io/zh-cn/latest/native_tutorial/overview.html)
+> 📖 深入阅读：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/features_index.html) · [具身模型](https://loongforge.readthedocs.io/zh-cn/latest/torch_tutorial/overview.html)
 
 <a id="performance"></a>
 ## 📊 性能表现
@@ -162,7 +162,7 @@
 - **昆仑芯 XPU**：[安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
 
 **2. 选教程** —— 按硬件与模态：
-- **NVIDIA GPU**：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/zh-cn/latest/native_tutorial/overview.html) · [Diffusion (WAN)](https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html)
+- **NVIDIA GPU**：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/zh-cn/latest/torch_tutorial/overview.html) · [Diffusion (WAN)](https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html)
 - **昆仑芯 XPU**：[昆仑芯 XPU 教程](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html)
 
 **3. 找到你模型的脚本** —— 现成启动脚本见 [`examples/`](./examples) / [`examples_xpu/`](./examples_xpu)，配置见 [`configs/models/`](./configs/models)。
@@ -268,7 +268,7 @@ LoongForge/
 ├── loongforge/                   # 核心训练框架
 │   ├── __main__.py               # 统一引擎入口（`python -m loongforge`、`LoongForge`）
 │   ├── contracts/                # 模型、batch、训练与 checkpoint 协议
-│   ├── engine/{common,mcore,native}/ # 引擎分发与训练生命周期
+│   ├── engine/{common,mcore,torch}/ # 引擎分发与训练生命周期
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── llm/                  #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
 │   │   ├── vision/               #   视觉编码器（ViT、Qwen-VL、InternVL、...）
@@ -280,8 +280,8 @@ LoongForge/
 │   ├── datasets/                 # text、multimodal、robotics、world、common
 │   ├── distributed/              # 公共 rank 与通信操作
 │   ├── optim/                    # 参数分组与学习率调度
-│   ├── checkpoint/               # 元数据、MCore/Native 格式与 HF adapter
-│   ├── evaluation/               # Native 模型评测
+│   ├── checkpoint/               # 元数据、MCore/Torch 格式与 HF adapter
+│   ├── evaluation/               # Torch 模型评测
 │   ├── tokenizer/                # Tokenizer
 │   └── utils/                    # 公共常量、版本与设备工具、XPU 初始化
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）

@@ -103,7 +103,7 @@ def _use_graph_safe_eagle() -> bool:
     if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
         return True
     try:
-        from loongforge.engine.native.global_vars import get_training_args
+        from loongforge.engine.torch.global_vars import get_training_args
         training_args = get_training_args()
         return (
             training_args.cuda_graph_impl == "local"

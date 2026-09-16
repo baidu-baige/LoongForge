@@ -14,21 +14,21 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from loongforge.__main__ import resolve_train
-from loongforge.checkpoint.manifest import is_hf_checkpoint, read_native_metadata, write_native_metadata
-from loongforge.contracts.checkpoint import NativeCheckpointMetadata
+from loongforge.checkpoint.manifest import is_hf_checkpoint, read_torch_metadata, write_torch_metadata
+from loongforge.contracts.checkpoint import TorchCheckpointMetadata
 from loongforge.engine.common import run_train
-from loongforge.models.catalog import MCORE_CONFIGS, NATIVE_CONFIGS, get_model_spec
+from loongforge.models.catalog import MCORE_CONFIGS, TORCH_CONFIGS, get_model_spec
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class TrainingEntrypointTest(unittest.TestCase):
     def test_catalog_and_recipe_overrides(self):
-        for model in (*MCORE_CONFIGS, *NATIVE_CONFIGS):
+        for model in (*MCORE_CONFIGS, *TORCH_CONFIGS):
             with self.subTest(model=model):
                 self.assertTrue(get_model_spec(model).config_file.is_file())
         for recipe, engine, flag in (
-            ("pi05_sft.yaml", "native", "--lr-base"),
+            ("pi05_sft.yaml", "torch", "--lr-base"),
             ("qwen3_0.6b_pretrain.yaml", "mcore", "--lr"),
         ):
             spec = resolve_train(None, None, ROOT / "configs/recipes" / recipe, [flag, "0.02"])
@@ -41,13 +41,13 @@ class TrainingEntrypointTest(unittest.TestCase):
         self.assertEqual(spec.engine, "mcore")
 
     def test_rejects_conflicts_and_malformed_recipes(self):
-        with self.assertRaisesRegex(ValueError, "supports native"):
+        with self.assertRaisesRegex(ValueError, "supports torch"):
             resolve_train("mcore", "pi05", None, [])
         with self.assertRaisesRegex(ValueError, "conflicts"):
             resolve_train(None, "pi05", None, ["--model-name", "xvla"])
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "invalid.yaml"
-            path.write_text("engine: native\nmodel: pi05\nargs: [12]\n")
+            path.write_text("engine: torch\nmodel: pi05\nargs: [12]\n")
             with self.assertRaisesRegex(ValueError, "argument strings"):
                 resolve_train(None, None, path, [])
 
@@ -56,10 +56,10 @@ class TrainingEntrypointTest(unittest.TestCase):
             "from loongforge.__main__ import main; import sys; "
             "main(['train', '--model', 'pi05', '--dry-run']); "
             "assert not any(m in sys.modules for m in "
-            "('torch', 'megatron', 'loongforge.engine.native.entrypoint', 'loongforge.engine.mcore.entrypoint'))"
+            "('torch', 'megatron', 'loongforge.engine.torch.entrypoint', 'loongforge.engine.mcore.entrypoint'))"
         )
         result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, text=True, capture_output=True, check=True)
-        self.assertEqual(json.loads(result.stdout)["engine"], "native")
+        self.assertEqual(json.loads(result.stdout)["engine"], "torch")
 
     def test_shared_utils_import_stays_megatron_free(self):
         code = """
@@ -77,13 +77,13 @@ assert not leaked, leaked
 """
         subprocess.run([sys.executable, "-c", code], cwd=ROOT, text=True, capture_output=True, check=True)
 
-    @unittest.skipUnless(importlib.util.find_spec("omegaconf"), "requires the Native config dependency")
-    def test_native_recipe_reaches_typed_parser(self):
+    @unittest.skipUnless(importlib.util.find_spec("omegaconf"), "requires the Torch config dependency")
+    def test_torch_recipe_reaches_typed_parser(self):
         code = """
 from pathlib import Path
 import sys
 from loongforge.__main__ import resolve_train
-from loongforge.engine.native.parser import parse_train_args
+from loongforge.engine.torch.parser import parse_train_args
 spec = resolve_train(None, None, Path('configs/recipes/pi05_sft.yaml'), [
     '--lr-base', '0.0001', '--train-iters', '20',
     'model.action_dim=6', 'data.image_size=128',
@@ -111,8 +111,8 @@ assert 'torch' not in sys.modules
             code = """
 from pathlib import Path
 from loongforge.__main__ import main
-from loongforge.models.catalog import MCORE_CONFIGS, NATIVE_CONFIGS, get_model_spec
-for model in (*MCORE_CONFIGS, *NATIVE_CONFIGS):
+from loongforge.models.catalog import MCORE_CONFIGS, TORCH_CONFIGS, get_model_spec
+for model in (*MCORE_CONFIGS, *TORCH_CONFIGS):
     assert get_model_spec(model).config_file.is_file()
 main(['train', '--model', 'pi05', '--dry-run'])
 """
@@ -124,7 +124,7 @@ main(['train', '--model', 'pi05', '--dry-run'])
 
     def test_dispatch_restores_arguments_even_on_failure(self):
         previous = sys.argv
-        for model, module in (("pi05", "native.entrypoint"), ("qwen3-0.6b", "mcore.entrypoint")):
+        for model, module in (("pi05", "torch.entrypoint"), ("qwen3-0.6b", "mcore.entrypoint")):
             spec = resolve_train(None, model, None, ["--train-iters", "1"])
             with patch("loongforge.engine.common.import_module") as load:
                 def main():
@@ -137,13 +137,13 @@ main(['train', '--model', 'pi05', '--dry-run'])
             self.assertIs(sys.argv, previous)
 
     def test_metadata_publish_preserves_previous_marker_on_error(self):
-        meta = NativeCheckpointMetadata(10, 1, "dcp", 2, False)
+        meta = TorchCheckpointMetadata(10, 1, "dcp", 2, False)
         with tempfile.TemporaryDirectory() as directory:
-            write_native_metadata(directory, meta)
+            write_torch_metadata(directory, meta)
             with patch("loongforge.checkpoint.manifest.json.dump", side_effect=OSError("disk full")):
                 with self.assertRaises(OSError):
-                    write_native_metadata(directory, NativeCheckpointMetadata(20, 2, "dcp", 2, False))
-            self.assertEqual(read_native_metadata(directory), meta)
+                    write_torch_metadata(directory, TorchCheckpointMetadata(20, 2, "dcp", 2, False))
+            self.assertEqual(read_torch_metadata(directory), meta)
             self.assertEqual([p.name for p in Path(directory).iterdir()], ["resume_meta.json"])
             self.assertFalse(is_hf_checkpoint(directory))
             (Path(directory) / "model.safetensors.index.json").write_text("{}")
@@ -152,7 +152,7 @@ main(['train', '--model', 'pi05', '--dry-run'])
     @unittest.skipUnless(importlib.util.find_spec("torch"), "requires PyTorch")
     def test_public_parameter_groups_update_only_trainable_weights(self):
         import torch
-        from loongforge.engine.native.training_args import TrainingArgs
+        from loongforge.engine.torch.training_args import TrainingArgs
         from loongforge.optim.param_groups import build_param_groups
 
         model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.LayerNorm(4), torch.nn.Linear(4, 1))

@@ -90,7 +90,7 @@ model:
       image_feature_source: [spatial_avg_pool, temporal_avg_pool]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# data: — consumed by the Native data pipeline, NOT by XVLAConfig.
+# data: — consumed by the Torch data pipeline, NOT by XVLAConfig.
 # Image resize/normalization is handled inside XVLAPreprocessor via the
 # checkpoint's AutoImageProcessor; action_horizon lives on the model block.
 # Only the number of camera views is needed here.

@@ -813,7 +813,7 @@ def dreamzero_model_provider(
     split for P0) plus the model config.
     """
     if config is None:
-        raise ValueError("DreamZero requires an explicit config in the new Native registry")
+        raise ValueError("DreamZero requires an explicit config in the new Torch registry")
     model_config = _coerce_dreamzero_config(config)
 
     if not hasattr(model_config, "device") or model_config.device is None:

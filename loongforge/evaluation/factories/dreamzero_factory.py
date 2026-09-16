@@ -39,7 +39,7 @@ from loongforge.evaluation.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.servers.loongforge_policy import PredictActionModelSpec
 from loongforge.models.world.dreamzero.model_configuration_dreamzero import DreamZeroConfig
 from loongforge.models.world.dreamzero.modeling_dreamzero_infer import DreamZeroInferenceModel
-from loongforge.models.native_registry import build_model
+from loongforge.models.torch_registry import build_model
 
 logger = logging.getLogger(__name__)
 

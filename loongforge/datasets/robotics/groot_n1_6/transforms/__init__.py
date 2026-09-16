@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GR00T-N1.6 transforms and collator for the Native trainer."""
+"""GR00T-N1.6 transforms and collator for the Torch trainer."""
 
 from loongforge.datasets.robotics.groot_n1_6.transforms.data_configuration_groot_n1_6 import (
     GrootN1d6DataConfig,

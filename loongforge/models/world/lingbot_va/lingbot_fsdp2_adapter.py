@@ -11,7 +11,7 @@ from dataclasses import replace as dataclass_replace
 from torch.distributed.fsdp import fully_shard
 from torch.distributed.tensor import DTensor
 
-from loongforge.engine.native.distributed.fsdp_utils.builders import (
+from loongforge.engine.torch.distributed.fsdp_utils.builders import (
     build_fsdp_device_mesh,
     build_ignored_params,
     build_mp_policy,
@@ -103,7 +103,7 @@ def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
     """Apply the phase4 block+root FSDP2 order and mixed-precision policy."""
     if getattr(training_args, "distributed_strategy", None) != "fsdp":
         raise RuntimeError(
-            "LingBot native nested FSDP2 requires Native FSDP strategy"
+            "LingBot native nested FSDP2 requires Torch FSDP strategy"
         )
 
     if not getattr(ctx, "is_distributed", False):

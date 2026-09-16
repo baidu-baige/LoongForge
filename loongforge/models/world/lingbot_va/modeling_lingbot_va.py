@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 
 from .checkpoint import load_sharded_safetensors
 from .modules.flow_match import (

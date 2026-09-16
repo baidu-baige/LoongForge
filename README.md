@@ -80,7 +80,7 @@ Since optimal training strategies differ across model families and scales, Loong
 </p>
 
 - **Megatron Stack** — For LLMs, VLMs, and diffusion models. Powered by a [patched Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) and extended with MoE parallelism, per-component heterogeneous parallelism, long-sequence optimizations, etc.
-- **Torch-Native Stack** — For embodied models (VLA and WAM). The Native engine in [`loongforge/engine/native`](./loongforge/engine/native) provides **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
+- **Torch-Native Stack** — For embodied models (VLA and WAM). The Torch engine in [`loongforge/engine/torch`](./loongforge/engine/torch) provides **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
 
 ## 🔥 Latest News
 
@@ -92,7 +92,7 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
 - **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/evaluation/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
-- **[2026/07]** 🤖 Released **[LoongForge Native](./loongforge/engine/native)**, a torch-native DDP/FSDP training engine for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/engine/torch)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 
@@ -140,7 +140,7 @@ Since optimal training strategies differ across model families and scales, Loong
 * **Flexible Checkpointing** — Offline bidirectional **Megatron ↔ HuggingFace** conversion plus native online HF load/save — no format barriers across your workflow.
 * **Heterogeneous Hardware** — Native support for **NVIDIA GPUs** and **Kunlun XPUs** via a minimally-intrusive plugin design.
 
-> 📖 Deep-dive: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/features_index.html) · [Embodied Model](https://loongforge.readthedocs.io/en/latest/native_tutorial/overview.html)
+> 📖 Deep-dive: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/features_index.html) · [Embodied Model](https://loongforge.readthedocs.io/en/latest/torch_tutorial/overview.html)
 
 <a id="performance"></a>
 ## 📊 Performance
@@ -162,7 +162,7 @@ Training throughput speedups over mainstream open-source baselines — each mode
 - **Kunlun XPU**: [Installation Guide](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/install_p800.html)
 
 **2. Pick a tutorial** — by hardware and modality:
-- **NVIDIA GPU**: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/en/latest/native_tutorial/overview.html) · [Diffusion](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
+- **NVIDIA GPU**: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM](https://loongforge.readthedocs.io/en/latest/torch_tutorial/overview.html) · [Diffusion](https://loongforge.readthedocs.io/en/latest/wan_tutorial/quick_start_wan_training.html)
 - **Kunlun XPU**: [Kunlun XPU Tutorials](https://loongforge.readthedocs.io/en/latest/kunlun_tutorial/README.html)
 
 **3. Find your model's scripts** — ready-to-run launch scripts are available under [`examples/`](./examples) / [`examples_xpu/`](./examples_xpu), with configs in [`configs/models/`](./configs/models).
@@ -268,7 +268,7 @@ LoongForge/
 ├── loongforge/                   # Core training framework
 │   ├── __main__.py               # Unified engine entry point (`python -m loongforge`, `LoongForge`)
 │   ├── contracts/                # Model, batch, training, and checkpoint contracts
-│   ├── engine/{common,mcore,native}/ # Engine dispatch and training lifecycles
+│   ├── engine/{common,mcore,torch}/ # Engine dispatch and training lifecycles
 │   ├── models/                   # Unified model abstractions
 │   │   ├── llm/                  #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── vision/               #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
@@ -280,8 +280,8 @@ LoongForge/
 │   ├── datasets/                 # Text, multimodal, robotics, world, common
 │   ├── distributed/              # Shared process identity and collectives
 │   ├── optim/                    # Parameter groups and learning-rate schedules
-│   ├── checkpoint/               # Metadata, MCore/Native formats, HF adapters
-│   ├── evaluation/               # Native model evaluation
+│   ├── checkpoint/               # Metadata, MCore/Torch formats, HF adapters
+│   ├── evaluation/               # Torch model evaluation
 │   ├── tokenizer/                # Tokenizers
 │   └── utils/                    # Shared constants, version/device helpers, XPU init
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM (git submodule)

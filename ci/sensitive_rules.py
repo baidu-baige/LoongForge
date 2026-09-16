@@ -30,7 +30,7 @@ CONFIG = {
         "outputs/*",
         # Model/training data: Chinese SFT corpora legitimately contain words
         # such as 机密 and long digit strings that would swamp the report.
-        "tests/llm_vlm/datasets/*",
+        "tests/mcore/datasets/*",
         "*.png",
         "*.jpg",
         "*.jpeg",

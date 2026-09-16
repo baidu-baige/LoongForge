@@ -358,14 +358,14 @@ class DreamZeroConfig(PreTrainedConfig):
         """Not supported; DreamZero reads optimizer settings from CLI args."""
         raise NotImplementedError(
             "DreamZero optimizer settings are launcher CLI args in the "
-            "LoongForge Native trainer; do not read them from model YAML."
+            "LoongForge Torch trainer; do not read them from model YAML."
         )
 
     def get_scheduler_preset(self):
         """Not supported; DreamZero reads scheduler settings from CLI args."""
         raise NotImplementedError(
             "DreamZero scheduler settings are launcher CLI args in the "
-            "LoongForge Native trainer; do not read them from model YAML."
+            "LoongForge Torch trainer; do not read them from model YAML."
         )
 
     @property

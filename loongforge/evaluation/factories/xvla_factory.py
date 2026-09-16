@@ -16,7 +16,7 @@ from loongforge.evaluation.servers.loongforge_policy import (
     PredictActionModelSpec,
 )
 from loongforge.models.vla.xvla.model_configuration_xvla import XvlaModelConfig
-from loongforge.models.native_registry import build_model
+from loongforge.models.torch_registry import build_model
 
 
 @register_factory("xvla")

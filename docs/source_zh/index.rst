@@ -45,17 +45,17 @@ LoongForge 中文文档
    :maxdepth: 1
    :caption: Embodied 训练
 
-   native_tutorial/overview.md
+   torch_tutorial/overview.md
    features/delta_fp8_allgather.md
-   native_tutorial/quick_start_pi05.md
-   native_tutorial/quick_start_groot_n1_6.md
-   native_tutorial/quick_start_groot_n1_7.md
-   native_tutorial/quick_start_lingbot_va.md
-   native_tutorial/quick_start_xvla.md
-   native_tutorial/quick_start_dreamzero.md
-   native_tutorial/quick_start_fastwam.md
-   native_tutorial/quick_start_cosmos3.md
-   native_tutorial/eval_user_guide.md
+   torch_tutorial/quick_start_pi05.md
+   torch_tutorial/quick_start_groot_n1_6.md
+   torch_tutorial/quick_start_groot_n1_7.md
+   torch_tutorial/quick_start_lingbot_va.md
+   torch_tutorial/quick_start_xvla.md
+   torch_tutorial/quick_start_dreamzero.md
+   torch_tutorial/quick_start_fastwam.md
+   torch_tutorial/quick_start_cosmos3.md
+   torch_tutorial/eval_user_guide.md
 
 .. toctree::
    :maxdepth: 1

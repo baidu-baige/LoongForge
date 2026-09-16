@@ -4,7 +4,7 @@
 
 """Render a regression suite results.json as a compact markdown table.
 
-The Native regression framework writes per-model pass/fail state, failed
+The Torch regression framework writes per-model pass/fail state, failed
 baseline comparisons, warnings, and per-iteration metrics to results.json.
 This script turns that file into a short markdown summary suitable for a
 pull request check run output. It never fails the job: any input problem

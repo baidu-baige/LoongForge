@@ -6,7 +6,7 @@ set -euo pipefail
 
 suite="${1:-}"
 case "$suite" in
-  llm_vlm|native) ;;
+  mcore|torch) ;;
   *) echo "unsupported test suite" >&2; exit 2 ;;
 esac
 
@@ -25,7 +25,7 @@ fi
   exit 2
 }
 args=(--source "$SOURCE_DIR" --suite "$suite" --sha "${HEAD_SHA:?HEAD_SHA is required}")
-if [[ "$suite" == native ]]; then
+if [[ "$suite" == torch ]]; then
   models="${MODELS:-pi05_ddp}"
 else
   models="${MODELS:-deepseek_v2_lite}"

@@ -37,7 +37,7 @@ from loongforge.evaluation.servers.loongforge_policy import PredictActionModelSp
 from loongforge.models.vla.groot_n1_7.model_configuration_groot_n1_7 import (
     GrootN1d7Config,
 )
-from loongforge.models.native_registry import build_model
+from loongforge.models.torch_registry import build_model
 
 
 def _load_statistics(path: str) -> Dict[str, Any]:

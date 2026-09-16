@@ -39,24 +39,24 @@ python -m build --sdist --wheel --outdir dist/
 
 ## Running Tests
 
-E2E tests use a custom YAML-driven framework (`tests/llm_vlm/main.py`), not pytest.
+E2E tests use a custom YAML-driven framework (`tests/mcore/main.py`), not pytest.
 
 The entry script does NOT download artifacts. Provision the datasets, HuggingFace base
 models, and pre-converted checkpoints referenced by the selected configs first, then run:
 
 ```bash
-# Run the default CI suite (all models in tests/llm_vlm/configs/)
-bash tests/llm_vlm/main_start.sh
+# Run the default CI suite (all models in tests/mcore/configs/)
+bash tests/mcore/main_start.sh
 ```
 
 ### Running a Single Model Test
 
-Edit variables in `tests/llm_vlm/main_start.sh`:
+Edit variables in `tests/mcore/main_start.sh`:
 ```bash
-# Run one model from tests/llm_vlm/configs/
+# Run one model from tests/mcore/configs/
 model_names="qwen3_14b"
 
-# Run one model from tests/llm_vlm/optional_configs/
+# Run one model from tests/mcore/optional_configs/
 model_names="deepseek_v2/deepseek_v2_lite"
 include_optional=true
 
@@ -66,43 +66,43 @@ optional_subdir="internvl2.5"
 include_optional=true
 ```
 
-Test configs: `tests/llm_vlm/configs/` (CI suite) and `tests/llm_vlm/optional_configs/` (regression, organized by model family). Each YAML defines model params and multi-step `scenarios` (checkpoint conversion + training).
+Test configs: `tests/mcore/configs/` (CI suite) and `tests/mcore/optional_configs/` (regression, organized by model family). Each YAML defines model params and multi-step `scenarios` (checkpoint conversion + training).
 
 ### Embodied/VLA Regression Tests
 
-`tests/native/` is the end-to-end regression suite for training scripts under
-`loongforge/engine/native/` and `examples/{vla,world}/`. Its entry point is
-`tests/native/run.sh`; execution, metric parsing, and baseline comparison are owned by
-`tests/native/cli.py`. Regression targets are registered in
-`tests/native/config/scripts.yaml` and run serially in manifest order.
+`tests/torch/` is the end-to-end regression suite for training scripts under
+`loongforge/engine/torch/` and `examples/{vla,world}/`. Its entry point is
+`tests/torch/run.sh`; execution, metric parsing, and baseline comparison are owned by
+`tests/torch/cli.py`. Regression targets are registered in
+`tests/torch/config/scripts.yaml` and run serially in manifest order.
 
 ```bash
-# List available native regression targets
-bash tests/native/run.sh --list_models
+# List available torch regression targets
+bash tests/torch/run.sh --list_models
 
 # Run the full regression suite on a chip
-bash tests/native/run.sh --chip a
+bash tests/torch/run.sh --chip a
 
 # Run selected targets
-bash tests/native/run.sh --chip a --models fastwam_ddp fastwam_ddp_zero1
+bash tests/torch/run.sh --chip a --models fastwam_ddp fastwam_ddp_zero1
 
 # Collect baselines for the current chip
-bash tests/native/run.sh --chip a --auto_collect_baseline
+bash tests/torch/run.sh --chip a --auto_collect_baseline
 
 # Artifacts are provisioned by the CI workflow/self-hosted runner before this step.
 
 # Validate commands/configuration without training
-bash tests/native/run.sh --chip a --dry_run
+bash tests/torch/run.sh --chip a --dry_run
 ```
 
 Embodied test conventions:
 
-- `tests/native/config/env.sh` centralizes `NATIVE_CI_ROOT`,
+- `tests/torch/config/env.sh` centralizes `TORCH_CI_ROOT`,
   `LOCAL_VLA_ARTIFACTS_ROOT`, log, and baseline paths. Prefer environment
   overrides or this file when moving the suite to another machine.
-- Add every new training script to `tests/native/config/scripts.yaml`; the manifest
+- Add every new training script to `tests/torch/config/scripts.yaml`; the manifest
   path is relative to `examples/{vla,world}/`. Add a baseline under
-  `tests/native/baseline/<chip>/<name>.json` for each supported chip.
+  `tests/torch/baseline/<chip>/<name>.json` for each supported chip.
 - The executor injects `OUTPUT_DIR`, `TENSORBOARD_DIR`, and model-specific environment
   variables. Training scripts should expose environment overrides for data, checkpoints,
   caches, and output paths instead of relying on the executor to rewrite training args.
@@ -129,7 +129,7 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     ...
 ```
 
-- **`engine/mcore/entrypoint.py`** / **`engine/native/entrypoint.py`** — Per-engine `main()` entry points. `engine/common/__init__.py` maps a `TrainSpec` to one of them after the CLI resolves the model, recipe, and engine defaults; `engine/mcore/__init__.py` only holds MCore model registration side effects.
+- **`engine/mcore/entrypoint.py`** / **`engine/torch/entrypoint.py`** — Per-engine `main()` entry points. `engine/common/__init__.py` maps a `TrainSpec` to one of them after the CLI resolves the model, recipe, and engine defaults; `engine/mcore/__init__.py` only holds MCore model registration side effects.
 
 Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--config-file` (direct YAML path), `--training-phase` (pretrain/sft).
 
@@ -137,8 +137,8 @@ Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--con
 
 ### Core Package: `loongforge/`
 
-- **`__main__.py`** — Unified entry point (the only entry file: `python -m loongforge` for torchrun, and the `LoongForge` console script both call its `main()`). Resolves engine defaults, recipe arguments, and CLI overrides through `models/catalog.py`; dispatches a `TrainSpec` to MCore or Native.
-- **`engine/mcore/global_vars.py`** — MCore global state: `get_args()` (Megatron args) plus model/hydra/data config, tokenizer, and chat template singletons. Native keeps its own typed singletons in `engine/native/global_vars.py`; `loongforge/utils/` exports no Megatron symbols.
+- **`__main__.py`** — Unified entry point (the only entry file: `python -m loongforge` for torchrun, and the `LoongForge` console script both call its `main()`). Resolves engine defaults, recipe arguments, and CLI overrides through `models/catalog.py`; dispatches a `TrainSpec` to MCore or Torch.
+- **`engine/mcore/global_vars.py`** — MCore global state: `get_args()` (Megatron args) plus model/hydra/data config, tokenizer, and chat template singletons. Torch keeps its own typed singletons in `engine/torch/global_vars.py`; `loongforge/utils/` exports no Megatron symbols.
 - **`engine/mcore/parser.py`** — MCore argument parsing: merges Megatron CLI args with Hydra YAML configs (OmegaConf). Supports `--model-name` (looked up in `models/catalog.py`) or `--config-file`.
 - **`engine/mcore/trainer_builder.py`** — Registry-based trainer dispatch. `register_model_trainer(model_family, training_phase)` decorator registers training functions per model family and phase.
 - **`engine/mcore/megatron_trainer.py`** — `MegatronTrainer` wraps model_provider, dataset_provider, and forward_step into Megatron's `pretrain()` loop.
@@ -148,17 +148,17 @@ Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--con
 - **`engine/mcore/pretrain/`** — Pretrain implementations for LLM and VLM.
 - **`engine/mcore/sft/`** — SFT implementations for LLM, VLM, InternVL, ERNIE.
 - **`engine/mcore/diffusion/`** — Diffusion model trainers (WAN and Qwen-Image).
-- **`engine/native/`** — Native VLA/WAM training engine, including parser, trainers,
+- **`engine/torch/`** — Torch VLA/WAM training engine, including parser, trainers,
   distributed strategies and optimizers.
-- **`datasets/{robotics,world,common}/`** — Native dataset backends and model-specific
+- **`datasets/{robotics,world,common}/`** — Torch dataset backends and model-specific
   transforms.
-- **`checkpoint/`** — Native/MCore save and resume, shared metadata, and online HF adapters.
-- **`evaluation/`** — Native model evaluation integrations.
+- **`checkpoint/`** — Torch/MCore save and resume, shared metadata, and online HF adapters.
+- **`evaluation/`** — Torch model evaluation integrations.
 
 ### Model System: `loongforge/models/`
 
 - **`mcore_registry.py`** — MCore model registry. `register_model_config(family, arch)` registers model configs; `register_model_provider(family)` registers model provider functions (accepts a single family string or list of families). Lookups: `get_model_config()`, `get_model_provider()`, `get_model_family()`.
-- **`native_registry.py`** — Native model registry. `register_model(model_type)` (decorator) fills `MODEL_REGISTRY`; `build_model(model_cfg)` lazily imports only the selected model module and instantiates the registered class. Distinct from `mcore_registry.py`, which serves MCore.
+- **`torch_registry.py`** — Torch model registry. `register_model(model_type)` (decorator) fills `MODEL_REGISTRY`; `build_model(model_cfg)` lazily imports only the selected model module and instantiates the registered class. Distinct from `mcore_registry.py`, which serves MCore.
 - **`dtype.py`** — `resolve_dtype()`: config dtype string → `torch.dtype`, shared by models and training engines.
 - **`dispatch.py`** — Hardware-abstraction layer (`MultiAccModules`). Provides unified access to TransformerEngine or local linear/attention/norm implementations.
 - **`llm/`** — LLM backbone implementations: LLaMA, Qwen (all versions through Qwen3-Next), DeepSeek, InternLM, MiniMax, MIMO, GLM. Each defines a transformer spec and config dataclass.
@@ -166,14 +166,14 @@ Key arguments: `--model-name` (maps to config via `models/catalog.py`) or `--con
 - **`vlm/`** — Multi-modal model composition: `OmniCombinationModel` assembles encoder + projector + decoder into a unified pipeline, with `model_chunk_schedule_plan.py` for pipeline parallelism scheduling.
 - **`common/`** — Shared layers (norms, projectors, PEFT) and MCore model-config helpers (`utils.py`).
 - **`diffusion/`** — WAN and Qwen-Image diffusion models.
-- **`vla/`** — Native Pi05, GR00T, X-VLA, and Wall-Oss.
-- **`world/`** — Native DreamZero, FastWAM, Cosmos3, and LingBot-VA.
+- **`vla/`** — Torch Pi05, GR00T, X-VLA, and Wall-Oss.
+- **`world/`** — Torch DreamZero, FastWAM, Cosmos3, and LingBot-VA.
 
 ### Configuration System: `configs/`
 
 - **`configs/models/<family>/<model>.yaml`** — Hydra/OmegaConf YAML configs defining model architecture params. The `_target_` field maps to a Python config dataclass (e.g., `loongforge.models.llm.LLaMAConfig`).
 - **`configs/data/`** — Data configuration templates.
-- **`loongforge/models/catalog.py`** — `MCORE_CONFIGS` maps `--model-name` strings to `{"config_path": ..., "config_name": ...}` dicts. `NATIVE_CONFIGS` selects Native YAML and model/data schemas.
+- **`loongforge/models/catalog.py`** — `MCORE_CONFIGS` maps `--model-name` strings to `{"config_path": ..., "config_name": ...}` dicts. `TORCH_CONFIGS` selects Torch YAML and model/data schemas.
 
 ### Data Pipeline: `loongforge/datasets/`
 

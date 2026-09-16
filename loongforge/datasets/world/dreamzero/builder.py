@@ -43,7 +43,7 @@ from loongforge.datasets.world.dreamzero.transforms.video import (
     VideoToNumpy,
     VideoToTensor,
 )
-from loongforge.engine.native.distributed import DistributedContext
+from loongforge.engine.torch.distributed import DistributedContext
 from loongforge.models.world.dreamzero.precomputed_cache import (
     DreamZeroPrecomputedCacheConfig,
     build_precomputed_cache_config,

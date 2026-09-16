@@ -16,7 +16,7 @@ from loongforge.evaluation.servers.loongforge_policy import (
     PredictActionModelSpec,
 )
 from loongforge.models.vla.pi05.model_configuration_pi05 import Pi05ModelConfig
-from loongforge.models.native_registry import build_model
+from loongforge.models.torch_registry import build_model
 
 
 def _load_pi05_pretrained(pi05_pytorch, pretrained_path: str, device=None):

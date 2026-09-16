@@ -153,7 +153,7 @@ After PR is created:
 | vlm | `loongforge/models/vision/`, `loongforge/models/vlm/` |
 | vla | `loongforge/models/vla/` (VLA models) |
 | diffusion | `loongforge/models/diffusion/` (diffusion models) |
-| train | `loongforge/engine/` (mcore and native) |
+| train | `loongforge/engine/` (mcore and torch) |
 | data | `loongforge/datasets/` |
 | ops | `ops/` |
 | ckpt | `tools/convert_checkpoint/` |

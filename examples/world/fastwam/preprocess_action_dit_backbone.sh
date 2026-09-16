@@ -39,7 +39,7 @@
 set -euo pipefail
 
 export LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
-export LOCAL_VLA_ARTIFACTS_ROOT="${LOCAL_VLA_ARTIFACTS_ROOT:-/ssd2/loongforge_native_ci/vla_artifacts}"
+export LOCAL_VLA_ARTIFACTS_ROOT="${LOCAL_VLA_ARTIFACTS_ROOT:-/ssd2/loongforge_torch_ci/vla_artifacts}"
 
 MODEL_ID="${MODEL_ID:-Wan-AI/Wan2.2-TI2V-5B}"
 TOKENIZER_MODEL_ID="${TOKENIZER_MODEL_ID:-Wan-AI/Wan2.1-T2V-1.3B}"

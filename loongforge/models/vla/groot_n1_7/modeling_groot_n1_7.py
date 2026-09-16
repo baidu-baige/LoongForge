@@ -4,7 +4,7 @@
 #
 # Modified from NVIDIA GR00T under the Apache-2.0 License.
 
-"""GR00T-N1.7 native model implementation for LoongForge Native trainer."""
+"""GR00T-N1.7 model implementation for the LoongForge Torch trainer."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from loongforge.datasets.robotics.groot_n1_7.transforms.groot_transform import (
 from loongforge.datasets.robotics.groot_n1_7.transforms.image_augmentations import (
     build_image_transformations_albumentations,
 )
-from loongforge.models.native_registry import register_model
+from loongforge.models.torch_registry import register_model
 from .model_configuration_groot_n1_7 import GrootN1d7Config
 from .modules.dit import AlternateVLDiT, DiT, SelfAttentionTransformer
 from .modules.embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder

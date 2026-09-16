@@ -6,7 +6,7 @@ set -euo pipefail
 
 suite="${1:-}"
 build_image="${2:-false}"
-[[ "$suite" =~ ^(llm_vlm|native)$ ]] || { printf '%s\n' 'suite: invalid' >&2; exit 2; }
+[[ "$suite" =~ ^(mcore|torch)$ ]] || { printf '%s\n' 'suite: invalid' >&2; exit 2; }
 [[ "$build_image" == true || "$build_image" == false ]] || {
   printf '%s\n' 'build_image: invalid' >&2
   exit 2
