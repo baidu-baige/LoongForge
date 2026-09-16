@@ -25,7 +25,7 @@ model:
     ffn_hidden_size: 3072
     num_attention_heads: 12
     num_query_groups: 12
-    model_spec: ["loongforge.models.vision.qwen3_5_vision_models.qwen3_5_vision_layer_spec",
+    model_spec: ["loongforge.models.vision.qwen3_5_vision_models.layer_spec",
                  "get_qwen3_5_vision_model_layer_with_te_spec"]
   image_projector:
     activation_func: ${act:gelu}
@@ -33,5 +33,5 @@ model:
     convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_3_mlp_adapter_convert.yaml
     bias_activation_fusion: False
     gated_linear_unit: False
-    model_spec: ["loongforge.models.vision.qwen3_5_vision_models.qwen3_5_vision_layer_spec",
+    model_spec: ["loongforge.models.vision.qwen3_5_vision_models.layer_spec",
                  "get_adapeter_layer_with_te_spec"]

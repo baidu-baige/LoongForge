@@ -27,8 +27,8 @@ import torch
 import torch.nn.functional as F
 from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
-from loongforge.models.vision.base_vision_models.base_vision_model import BaseVisionModel
-from .qwen2_vl_config import Qwen2VisionRMSNormConfig
+from loongforge.models.vision.base_vision_model import BaseVisionModel
+from .config import Qwen2VisionRMSNormConfig
 
 
 class Qwen2VisionModelWithRMSNorm(BaseVisionModel):

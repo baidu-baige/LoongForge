@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from megatron.core.transformer.enums import ModelType
 from loongforge.models.vision.vision_transformer_block import TransformerBlock
 
-from .internvl_config import InternVisionConfig
+from .config import InternVisionConfig
 from loongforge.models.common import BaseMegatronVisionModule
 from megatron.core import tensor_parallel
 from loongforge.models.common.utils import import_module
@@ -105,7 +105,7 @@ class InternVisionModel(BaseMegatronVisionModule):
         self.config = config
         if self.config.model_spec is None:
             model_spec = [
-                "loongforge.models.vision.internvl_vision_models.internvl_layer_spec",
+                "loongforge.models.vision.internvl_vision_models.layer_spec",
                 "get_vision_layer_with_te_spec",
             ]
         else:

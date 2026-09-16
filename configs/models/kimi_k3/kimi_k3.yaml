@@ -12,7 +12,7 @@ model:
   task_encoder: KimiTaskEncoder
   image_encoder:
     model_spec:
-      - loongforge.models.vision.moon_vision_models.moon_vision_layer_spec
+      - loongforge.models.vision.moon_vision_models.layer_spec
       - get_moon_vision_model_layer_with_te_spec
   image_projector:
     model_spec: null

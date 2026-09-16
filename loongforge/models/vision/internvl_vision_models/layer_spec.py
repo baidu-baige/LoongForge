@@ -14,12 +14,12 @@ from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
-from .intern_vision_attention import InternSelfAttention, SelfAttentionSubmodules
-from .intern_vision_transformer_layer import (
+from .attention import InternSelfAttention, SelfAttentionSubmodules
+from .transformer_layer import (
     TransformerLayerIntern,
     TransformerLayerInternVisionSubmodules,
 )
-from .internvl_config import InternVisionConfig
+from .config import InternVisionConfig
 from loongforge.models.dispatch import multiacc_modules
 from loongforge.utils import is_te_min_version
 from loongforge.models.common.local_layers.local_norm import LocalNorm
@@ -38,7 +38,7 @@ class AdapterSubmodules:
 def get_vision_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:
     """Use this spec for an implementation using transformer, local or multi-accel engine."""
 
-    from .intern_vision_attention import (
+    from .attention import (
         InternViTTEDotProductAttention,
         InternViTRMSNorm,
     )

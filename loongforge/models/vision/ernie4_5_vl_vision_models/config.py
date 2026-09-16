@@ -60,7 +60,7 @@ class ErnieVisionConfig(BaseModelConfig):
 
     # layer spec — default points to ERNIE's own spec function
     model_spec: Optional[Tuple[str, str]] = (
-        "loongforge.models.vision.ernie4_5_vl_vision_models.ernie_encoder_spec",
+        "loongforge.models.vision.ernie4_5_vl_vision_models.layer_spec",
         "get_ernie_vl_vision_layer_spec",
     )
 

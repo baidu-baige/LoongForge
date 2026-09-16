@@ -24,7 +24,7 @@ from megatron.core.transformer.transformer_layer import (
     TransformerLayerSubmodules,
 )
 
-from loongforge.models.vision.qwen2_vl_vision_models.qwen2_vl_layer_spec import (
+from loongforge.models.vision.qwen2_vl_vision_models.layer_spec import (
     apply_rotary_pos_emb_vision,
 )
 

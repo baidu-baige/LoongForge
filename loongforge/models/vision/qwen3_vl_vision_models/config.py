@@ -4,7 +4,7 @@
 """register qwen model with different config"""
 
 from dataclasses import dataclass
-from ..qwen2_vl_vision_models.qwen2_vl_config import Qwen2VisionModelConfig
+from ..qwen2_vl_vision_models.config import Qwen2VisionModelConfig
 
 
 @dataclass

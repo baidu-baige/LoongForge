@@ -10,8 +10,8 @@ import torch.nn.functional as F
 from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
-from .llavaov_1_5_config import RiceVisionConfig
-from loongforge.models.vision.base_vision_models.base_vision_model import (
+from .config import RiceVisionConfig
+from loongforge.models.vision.base_vision_model import (
     BaseVisionModel,
 )
 
@@ -58,7 +58,7 @@ class RiceViTModel(BaseVisionModel):
     ) -> None:
         if config.model_spec is None:
             config.model_spec = [
-                "loongforge.models.vision.llavaov1_5_vision_models.llavaov_1_5_layer_spec",
+                "loongforge.models.vision.llavaov1_5_vision_models.layer_spec",
                 "get_vision_layer_with_spec",
             ]
         super().__init__(config, spatial_merge_size, vp_stage=vp_stage)

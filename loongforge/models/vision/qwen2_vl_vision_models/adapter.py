@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Union
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import  build_module
-from .qwen2_vl_config import MLPAdapterConfig
+from .config import MLPAdapterConfig
 from loongforge.models.common import BaseMegatronModule
 from loongforge.models.common.utils import import_module
 
@@ -32,7 +32,7 @@ class Adapter(BaseMegatronModule):
         self.use_postshuffle_norm = use_postshuffle_norm
         if self.config.model_spec is None:
             model_spec = [
-                "loongforge.models.vision.qwen2_vl_vision_models.qwen2_vl_layer_spec",
+                "loongforge.models.vision.qwen2_vl_vision_models.layer_spec",
                 "get_adapeter_layer_with_te_spec",
             ]
         else:

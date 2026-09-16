@@ -7,7 +7,7 @@ from typing import Union
 from megatron.core.transformer.spec_utils import build_module
 from loongforge.models.common import BaseMegatronModule
 from loongforge.models.common.utils import import_module
-from .moon_vision_config import KimiK3PatchMergerConfig, PatchMergerMLPAdapterConfig
+from .config import KimiK3PatchMergerConfig, PatchMergerMLPAdapterConfig
 
 
 class PatchMergerMLP(BaseMegatronModule):
@@ -35,7 +35,7 @@ class PatchMergerMLP(BaseMegatronModule):
 
         if self.config.model_spec is None:
             model_spec = [
-                "loongforge.models.vision.qwen2_vl_vision_models.qwen2_vl_layer_spec",
+                "loongforge.models.vision.qwen2_vl_vision_models.layer_spec",
                 "get_adapeter_layer_with_te_spec",
             ]
         else:

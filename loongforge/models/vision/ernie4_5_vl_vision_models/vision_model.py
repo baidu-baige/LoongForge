@@ -33,8 +33,8 @@ from loongforge.models.vision.vision_transformer_block import TransformerBlock
 from loongforge.models.common.utils import import_module
 from loongforge.models.common import BaseMegatronVisionModule
 
-from .ernie_adapter import UniqueNameGuard
-from .ernie_image_preprocess import ErnieImagePreprocess
+from .adapter import UniqueNameGuard
+from .image_preprocess import ErnieImagePreprocess
 
 
 class PatchEmbed(nn.Module):
@@ -399,7 +399,7 @@ class ErnieVisionModel(BaseMegatronVisionModule):
             cu_seqlens_kv=cu_seqlens,
         )
         # rotary_pos_emb: [S, head_dim//2] -> [S, 1, 1, head_dim//2]
-        # ernie_encoder_spec.apply_rotary_pos_emb_vision does .repeat(..., 2)
+        # layer_spec.apply_rotary_pos_emb_vision does .repeat(..., 2)
         # internally, so pass the raw half-dim freqs here.
         hidden_states, _ = self.decoder(
             hidden_states,

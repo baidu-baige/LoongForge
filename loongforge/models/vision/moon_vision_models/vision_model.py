@@ -30,12 +30,12 @@ from typing import Optional, Sequence
 
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.transformer_config import TransformerConfig
-from loongforge.models.vision.base_vision_models.base_vision_model import (
+from loongforge.models.vision.base_vision_model import (
     BaseVisionModel,
 )
 
 from loongforge.models.vision.vision_transformer_block import TransformerBlock
-from .moon_vision_config import MoonVisionModelConfig
+from .config import MoonVisionModelConfig
 
 
 def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):

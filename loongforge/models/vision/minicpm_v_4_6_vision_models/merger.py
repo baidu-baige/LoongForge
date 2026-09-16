@@ -29,7 +29,7 @@ from megatron.core.transformer.spec_utils import build_module
 from loongforge.models.common import BaseMegatronModule
 from loongforge.models.dispatch import multiacc_modules
 
-from .minicpm_v_4_6_config import MiniCPMV46MergerConfig
+from .config import MiniCPMV46MergerConfig
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):

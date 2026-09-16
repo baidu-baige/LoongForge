@@ -7,7 +7,7 @@ import torch
 import math
 import transformer_engine as te
 from megatron.core.transformer.spec_utils import build_module
-from .internvl_config import InternMLPAdapterConfig
+from .config import InternMLPAdapterConfig
 from loongforge.models.common import BaseMegatronModule
 from loongforge.models.common.utils import import_module
 from megatron.core.transformer.transformer_config import TransformerConfig
@@ -36,7 +36,7 @@ class InternAdapter(BaseMegatronModule):
         super().__init__(config=config)
         if self.config.model_spec is None:
             model_spec = [
-                "loongforge.models.vision.internvl_vision_models.internvl_layer_spec",
+                "loongforge.models.vision.internvl_vision_models.layer_spec",
                 "get_adapeter_layer_with_te_spec",
             ]
         else:

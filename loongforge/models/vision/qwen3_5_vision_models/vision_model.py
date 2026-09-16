@@ -10,12 +10,12 @@ import torch.nn.functional as F
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.transformer_config import TransformerConfig
 
-from loongforge.models.vision.base_vision_models.base_vision_model import (
+from loongforge.models.vision.base_vision_model import (
     BaseVisionModel,
     PatchEmbed,
 )
 
-from .qwen3_5_vision_config import Qwen35VisionConfig
+from .config import Qwen35VisionConfig
 
 
 class Qwen35VisionModel(BaseVisionModel):

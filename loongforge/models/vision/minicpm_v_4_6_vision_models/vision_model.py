@@ -36,8 +36,8 @@ from loongforge.models.dispatch import multiacc_modules
 from loongforge.models.vision.vision_transformer_block import TransformerBlock
 from loongforge.models.common.utils import import_module
 
-from .minicpm_v_4_6_config import MiniCPMV46VisionConfig
-from .minicpm_v_4_6_layer_spec import MiniCPMV46TEDotProductAttention
+from .config import MiniCPMV46VisionConfig
+from .layer_spec import MiniCPMV46TEDotProductAttention
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
@@ -325,7 +325,7 @@ class MiniCPMV46VisionModel(BaseMegatronVisionModule):
         super().__init__(config)
         self.embeddings = MiniCPMV46VisionEmbeddings(config)
         model_spec = config.model_spec or [
-            "loongforge.models.vision.minicpm_v_4_6_vision_models.minicpm_v_4_6_layer_spec",
+            "loongforge.models.vision.minicpm_v_4_6_vision_models.layer_spec",
             "get_minicpm_v_4_6_vision_layer_spec",
         ]
         transformer_layer_spec = import_module(model_spec, config)

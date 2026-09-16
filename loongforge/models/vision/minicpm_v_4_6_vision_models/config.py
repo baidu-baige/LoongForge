@@ -47,7 +47,7 @@ class MiniCPMV46VisionConfig(BaseModelConfig):
     mix_used_vision_projector: bool = True
 
     model_spec: Optional[Tuple[str, str]] = (
-        "loongforge.models.vision.minicpm_v_4_6_vision_models.minicpm_v_4_6_layer_spec",
+        "loongforge.models.vision.minicpm_v_4_6_vision_models.layer_spec",
         "get_minicpm_v_4_6_vision_layer_spec",
     )
 
