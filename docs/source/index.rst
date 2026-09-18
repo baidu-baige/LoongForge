@@ -40,19 +40,12 @@ A modular, scalable, and highly efficient training framework for language, multi
    Advanced Features <vlm_tutorial/features_index>
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Embodied Training
 
    embodied_tutorial/overview
-   features/delta_fp8_allgather
-   embodied_tutorial/quick_start_pi05
-   embodied_tutorial/quick_start_groot_n1_6
-   embodied_tutorial/quick_start_groot_n1_7
-   embodied_tutorial/quick_start_lingbot_va
-   embodied_tutorial/quick_start_xvla
-   embodied_tutorial/quick_start_dreamzero
-   embodied_tutorial/quick_start_fastwam
-   embodied_tutorial/quick_start_cosmos3
+   Quick Start <embodied_tutorial/quick_start_index>
+   Advanced Features <embodied_tutorial/features_index>
    embodied_tutorial/eval_overview
 
 .. toctree::

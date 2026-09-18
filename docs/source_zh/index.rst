@@ -42,19 +42,12 @@ LoongForge 中文文档
    高级特性 <vlm_tutorial/features_index>
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Embodied 训练
 
    embodied_tutorial/overview.md
-   features/delta_fp8_allgather.md
-   embodied_tutorial/quick_start_pi05.md
-   embodied_tutorial/quick_start_groot_n1_6.md
-   embodied_tutorial/quick_start_groot_n1_7.md
-   embodied_tutorial/quick_start_lingbot_va.md
-   embodied_tutorial/quick_start_xvla.md
-   embodied_tutorial/quick_start_dreamzero.md
-   embodied_tutorial/quick_start_fastwam.md
-   embodied_tutorial/quick_start_cosmos3.md
+   快速入门 <embodied_tutorial/quick_start_index.md>
+   高级特性 <embodied_tutorial/features_index.md>
    embodied_tutorial/eval_user_guide.md
 
 .. toctree::
