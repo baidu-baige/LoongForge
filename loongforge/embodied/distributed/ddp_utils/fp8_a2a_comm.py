@@ -11,6 +11,7 @@ Replaces DDP's bf16 ring AllReduce with
 from __future__ import annotations
 
 import logging
+import os
 
 import torch
 import torch.distributed as dist
@@ -44,9 +45,195 @@ MAX_BLOCK = 1024
 _BLOCK = DEFAULT_BLOCK
 _MIN_BYTES = int(DEFAULT_MIN_MIB * 2**20)
 _MAX_SCRATCH_BYTES = int(DEFAULT_MAX_SCRATCH_GB * 2**30)
+# Error feedback: carry each quantization point's residual into the next step.
+# Off by default; see EF_MODES for what each mode costs.
+_ERROR_FEEDBACK = "none"
+# "allgather" only keeps the shard residual, which is 1/world_size of a bucket.
+# Measurement (experiment 3) puts 1.8 of the 2.9% end-to-end relative RMS on the
+# AllGather requantization and the rest on the AllToAll one, so this mode buys
+# the larger half of the error at 1/9 of the memory and of the residual work.
+EF_MODES = ("none", "allgather", "both")
+# Residuals are kept in fp32, not bf16. It is tempting to halve them: a residual
+# is ~3% of the gradient, so bf16's 2^-8 relative step is only ~1e-4 of a
+# gradient -- seemingly three decades below the fp8 error being corrected. That
+# per-step view is wrong, and measurably so: storing the residual in bf16 pushed
+# the 300-step accumulated bias from +0.40% back to +3.41% (baseline reference),
+# nearly the +4.19% of no error feedback at all. The reason is that EF's job is
+# to stop *systematic* drift, and the fp8 residual is systematically signed, so
+# rounding it each step contributes a same-sign term that does not telescope and
+# accumulates ~linearly over the run -- a smaller copy of the exact drift EF
+# removes. The correction has to be carried at higher precision than the error.
+EF_DTYPE = torch.float32
+_ACCELERATOR_ERROR = getattr(torch, "AcceleratorError", RuntimeError)
 
 
 FLAG = "--ddp-comm-hook fp8_a2a_allgather_hook"
+
+
+# ── Selective-precision exemption (FP8_A2A_EXEMPT) ───────────────────────────
+# id(param) -> qualified name, populated at DDP-wrap time so the comm hook can
+# attribute each slice of a bucket buffer to its parameter and decide, per
+# element, whether to keep it in exact precision instead of quantizing it.
+_PARAM_NAMES: dict[int, str] = {}
+# Per-bucket cache of the exempt element indices (LongTensor on device) and a
+# one-time layout log guard.
+_EXEMPT_IDX: dict[int, "tuple[int, torch.Tensor | None]"] = {}
+_LAYOUT_LOGGED: set[int] = set()
+# Persistent per-bucket buffers for the exempt reduce, so the snapshot/all-reduce
+# allocate nothing per step and the whole exempt correction is CUDA-graph
+# capture-safe. Keyed by bucket index, rebuilt when the exempt count changes.
+_EXEMPT_BUF: dict[int, "tuple[torch.Tensor, torch.Tensor]"] = {}
+
+
+def set_param_names(model) -> None:
+    """Record id(param) -> name for the model DDP is about to wrap.
+
+    Called from ``parallel.py`` before the comm hook is registered. The comm
+    hook only receives ``(state, bucket)``; matching ``bucket.parameters()`` back
+    to names needs this map built while the model is still in hand.
+    """
+    _PARAM_NAMES.clear()
+    _EXEMPT_IDX.clear()
+    _EXEMPT_BUF.clear()
+    _LAYOUT_LOGGED.clear()
+    for name, param in model.named_parameters():
+        _PARAM_NAMES[id(param)] = name
+
+
+def _exempt_spec():
+    """Parse ``FP8_A2A_EXEMPT``: comma list of {1d,embed,head}. Empty -> off."""
+    raw = os.environ.get("FP8_A2A_EXEMPT", "").strip()
+    if not raw:
+        return None
+    return {tok.strip() for tok in raw.split(",") if tok.strip()}
+
+
+def _is_exempt(name: str, param, spec) -> bool:
+    """Decide whether a parameter is kept in exact precision.
+
+    ``1d``    -> every 1-D tensor (RMSNorm/LayerNorm scales, biases): tiny byte
+                 count, high loss sensitivity (they scale activations directly).
+    ``embed`` -> names containing 'embed' (token/patch embeddings).
+    ``head``  -> names containing 'lm_head'/'output'/'head' (the un-embedding).
+    """
+    if spec is None:
+        return False
+    if "1d" in spec and param.dim() <= 1:
+        return True
+    lname = name.lower()
+    if "embed" in spec and "embed" in lname:
+        return True
+    if "head" in spec and ("lm_head" in lname or "head" in lname or ".output" in lname):
+        return True
+    return False
+
+
+def _bucket_param_slices(bucket):
+    """Yield (name, param, offset, numel) for each param in the bucket buffer.
+
+    Offsets come from comparing each gradient view's data_ptr against the buffer
+    base, so alignment padding between params is handled exactly rather than
+    assumed contiguous.
+    """
+    buffer = bucket.buffer()
+    base = buffer.data_ptr()
+    esize = buffer.element_size()
+    params = bucket.parameters()
+    grads = bucket.gradients()
+    for param, grad in zip(params, grads):
+        name = _PARAM_NAMES.get(id(param), f"<unknown@{id(param)}>")
+        offset = (grad.data_ptr() - base) // esize
+        yield name, param, offset, grad.numel()
+
+
+def _log_bucket_layout(bucket) -> None:
+    """One-time per-bucket dump of param name/shape/offset/exempt-flag.
+
+    Gated by ``FP8_A2A_LAYOUT_LOG``. Prints an aggregate exempt byte fraction so
+    the selective-precision cost can be read straight from the log.
+    """
+    if not os.environ.get("FP8_A2A_LAYOUT_LOG"):
+        return
+    index = bucket.index()
+    if index in _LAYOUT_LOGGED:
+        return
+    _LAYOUT_LOGGED.add(index)
+    spec = _exempt_spec()
+    total = exempt = 0
+    lines = []
+    for name, param, offset, numel in _bucket_param_slices(bucket):
+        ex = _is_exempt(name, param, spec)
+        total += numel
+        if ex:
+            exempt += numel
+        lines.append(
+            f"    off={offset:>10d} numel={numel:>10d} dim={param.dim()} "
+            f"exempt={int(ex)} {name} {tuple(param.shape)}"
+        )
+    frac = exempt / total if total else 0.0
+    logger.info(
+        "fp8_a2a layout: bucket=%d params=%d numel=%d exempt_numel=%d (%.4f%%)\n%s",
+        index, len(lines), total, exempt, frac * 100.0, "\n".join(lines),
+    )
+
+
+def _exempt_indices(bucket, device):
+    """Return a cached LongTensor of buffer positions kept in exact precision.
+
+    Built per bucket index from the parameter slices; ``None`` when the
+    exemption is off or the bucket has no exempt element. The reduction keeps
+    these positions at fp32 mean (a small extra AllReduce) and quantizes the
+    rest, so sensitive 1-D scales / embeddings never take the fp8 rounding.
+
+    The cache stores the buffer ``numel`` alongside the index tensor and
+    rebuilds on mismatch, mirroring ``_scratch_for``'s ``identity`` guard: DDP
+    reuses ``bucket.index() == 0`` for both the fused iteration-0 buffer
+    (~1.6e9 elements) and the far smaller steady-state bucket after rebuild, so
+    a cache keyed on index alone would hand the small buffer offsets past its
+    end and trip the scatter/gather bounds assert.
+    """
+    index = bucket.index()
+    buf_numel = bucket.buffer().numel()
+    cached = _EXEMPT_IDX.get(index)
+    if cached is not None and cached[0] == buf_numel:
+        return cached[1]
+    spec = _exempt_spec()
+    if spec is None:
+        _EXEMPT_IDX[index] = (buf_numel, None)
+        return None
+    ranges = []
+    for name, param, offset, numel in _bucket_param_slices(bucket):
+        if _is_exempt(name, param, spec):
+            ranges.append(torch.arange(offset, offset + numel, device=device))
+    idx = torch.cat(ranges) if ranges else None
+    _EXEMPT_IDX[index] = (buf_numel, idx)
+    return idx
+
+
+def _exempt_buffers(index, n, dtype, device):
+    """Persistent (gather, fp32) buffers for the capture-safe exempt reduce.
+
+    ``gather`` matches the bucket dtype and receives ``index_select(out=...)``;
+    ``fp32`` is the AllReduce buffer (the exempt mean is always accumulated in
+    fp32, matching the fp8 path's fp32 reduce). The two alias when the bucket is
+    already fp32. Cached per bucket index and rebuilt when the exempt count
+    changes, mirroring ``_scratch_for`` / ``_exempt_indices``: DDP reuses
+    ``bucket.index() == 0`` for the fused iteration-0 buffer and the smaller
+    steady-state bucket, so a stale-length buffer would misalign the copy.
+
+    Allocating these once (instead of ``index_select().float()`` per step) is
+    what lets the exempt correction be captured into a CUDA graph: capture
+    forbids fresh allocations on the capture stream.
+    """
+    buf = _EXEMPT_BUF.get(index)
+    if buf is None or buf[0].numel() != n:
+        gather = torch.empty(n, dtype=dtype, device=device)
+        fp32 = gather if dtype == torch.float32 else torch.empty(
+            n, dtype=torch.float32, device=device
+        )
+        buf = (gather, fp32)
+        _EXEMPT_BUF[index] = buf
+    return buf
 
 
 def validate_runtime(device, backend: str) -> None:
@@ -139,11 +326,20 @@ if triton is not None:
         x = tl.load(X + idx, mask=idx < numel, other=0.0).to(tl.float32)
         amax = tl.max(tl.abs(x), axis=1)
         scale = amax / 448.0  # E4M3_MAX; Triton cannot read non-constexpr globals
-        inv = tl.where(scale > 0.0, 1.0 / scale, 0.0)
+        # Guard on the normal range, not on zero: a denormal scale makes
+        # ``1 / scale`` overflow to +inf, every non-zero element of the block
+        # convert to fp8 NaN, and (with error feedback) that NaN latch into the
+        # residual forever. Flushing such a block costs nothing -- its largest
+        # element is below 5e-36, i.e. 27 decades under a typical gradient.
+        # Error feedback reaches this range on its own: a block whose gradient
+        # stays zero keeps requantizing its own residual, which shrinks by
+        # ~2% per step and lands in the denormals after a dozen steps.
+        inv = tl.where(scale > 1.1754944e-38, 1.0 / scale, 0.0)
         q = (x * inv[:, None]).to(tl.float8e4nv)
 
         tl.store(OUT_U8 + chunk * chunk_u8 + within, q.to(tl.uint8, bitcast=True))
-        tl.store(OUT_F32 + chunk * chunk_f32 + scale_base_f32 + blk0 + ob, scale)
+        tl.store(OUT_F32 + chunk * chunk_f32 + scale_base_f32 + blk0 + ob,
+                 tl.where(inv > 0.0, scale, 0.0))
 
     @triton.jit
     def _dequant_reduce_kernel(
@@ -208,6 +404,47 @@ if triton is not None:
         idx = chunk * S + within
         tl.store(OUT + idx, d * sc[:, None], mask=idx < numel)
 
+    @triton.jit
+    def _ef_residual_kernel(
+        Q_U8,
+        Q_F32,
+        VALUE,                  # what was quantized: gradient + previous residual
+        RES,                    # residual, numel elements, any float dtype
+        numel,
+        S,
+        chunk_u8,
+        chunk_f32,
+        scale_base_f32,
+        tiles_per_chunk,
+        BLOCK: tl.constexpr,
+        NB: tl.constexpr,
+    ):
+        """Close one error-feedback step: ``residual = value - dequant(q)``.
+
+        Same dataflow as ``_dequant_scatter_kernel`` plus one read of ``VALUE``,
+        which is what makes this worth its own kernel: dequantizing into ``RES``
+        and then fixing it up with ``neg_()``/``add_()`` costs two extra
+        full-bucket round trips through HBM per quantization point, and the
+        residual is bucket-sized. Keeping the subtraction inside the same program
+        also decouples ``RES``'s dtype from the arithmetic: the difference is
+        formed in fp32 regardless of how ``RES`` is stored.
+        """
+        pid = tl.program_id(0).to(tl.int64)
+        chunk = pid // tiles_per_chunk
+        blk0 = (pid % tiles_per_chunk) * NB
+
+        ob = tl.arange(0, NB).to(tl.int64)
+        oe = tl.arange(0, BLOCK).to(tl.int64)
+        within = (blk0 + ob)[:, None] * BLOCK + oe[None, :]
+
+        q = tl.load(Q_U8 + chunk * chunk_u8 + within)
+        d = q.to(tl.float8e4nv, bitcast=True).to(tl.float32)
+        sc = tl.load(Q_F32 + chunk * chunk_f32 + scale_base_f32 + blk0 + ob)
+        idx = chunk * S + within
+        mask = idx < numel
+        v = tl.load(VALUE + idx, mask=mask, other=0.0).to(tl.float32)
+        tl.store(RES + idx, v - d * sc[:, None], mask=mask)
+
 
 class _BucketScratch:
     """Persistent per-bucket scratch, keyed by bucket identity.
@@ -233,10 +470,11 @@ class _BucketScratch:
     it.
     """
 
-    __slots__ = ("send", "recv", "shard", "S", "chunk_u8", "tiles_per_chunk",
-                 "numel", "identity")
+    __slots__ = ("send", "recv", "shard", "res1", "res2", "S", "chunk_u8",
+                 "tiles_per_chunk", "numel", "identity")
 
-    def __init__(self, identity, numel: int, dtype, device, world_size, block):
+    def __init__(self, identity, numel: int, dtype, device, world_size, block,
+                 error_feedback="none"):
         self.S, self.chunk_u8, _ = self.plan(numel, dtype, world_size, block)
         self.numel = numel
         self.identity = identity
@@ -247,8 +485,19 @@ class _BucketScratch:
         self.recv = torch.empty(total, dtype=torch.uint8, device=device)
         self.shard = torch.empty(self.S, dtype=dtype, device=device)
 
+        # Error-feedback residuals, one per quantization point. These are the
+        # only state this hook carries across steps, so they deliberately live
+        # with the scratch: _scratch_for drops the whole object when the bucket
+        # layout changes, and a residual held against a stale
+        # parameter-to-offset mapping would inject a full bucket of noise.
+        self.res1 = self.res2 = None
+        if error_feedback == "both":
+            self.res1 = torch.zeros(numel, dtype=EF_DTYPE, device=device)
+        if error_feedback in ("both", "allgather"):
+            self.res2 = torch.zeros(self.S, dtype=EF_DTYPE, device=device)
+
     @staticmethod
-    def plan(numel: int, dtype, world_size: int, block: int):
+    def plan(numel: int, dtype, world_size: int, block: int, error_feedback="none"):
         """Size the scratch without allocating it.
 
         Kept as the single source of truth for the layout so the budget check
@@ -261,10 +510,16 @@ class _BucketScratch:
         per_rank = (numel + world_size - 1) // world_size
         S = (per_rank + align - 1) // align * align
         chunk_u8 = S + 4 * (S // block)
-        return S, chunk_u8, 2 * world_size * chunk_u8 + S * dtype.itemsize
+        total = 2 * world_size * chunk_u8 + S * dtype.itemsize
+        if error_feedback == "both":
+            total += (numel + S) * EF_DTYPE.itemsize
+        elif error_feedback == "allgather":
+            total += S * EF_DTYPE.itemsize
+        return S, chunk_u8, total
 
     def bytes(self) -> int:
-        return self.send.numel() + self.recv.numel() + self.shard.nbytes
+        residual = sum(r.nbytes for r in (self.res1, self.res2) if r is not None)
+        return self.send.numel() + self.recv.numel() + self.shard.nbytes + residual
 
 
 _SCRATCH: dict[int, _BucketScratch] = {}
@@ -274,7 +529,8 @@ _SCRATCH_BYTES = 0
 _OVER_BUDGET: set[int] = set()
 
 
-def _scratch_for(index, identity, numel, dtype, device, world_size, block, budget):
+def _scratch_for(index, identity, numel, dtype, device, world_size, block, budget,
+                 error_feedback="none"):
     """Get or (re)allocate scratch for one bucket, keyed by bucket index.
 
     Keyed by ``bucket.index()`` rather than by full identity so that DDP's
@@ -282,9 +538,11 @@ def _scratch_for(index, identity, numel, dtype, device, world_size, block, budge
     of accumulating a second full generation of it (~14 GiB each at
     bucket_cap_mb=200).
 
-    Rebuild is otherwise harmless here: these are pure scratch buffers with no
-    state carried across steps, so a changed parameter-to-offset mapping cannot
-    silently corrupt anything.
+    Rebuild is otherwise harmless here: the comm buffers are pure scratch with
+    no state carried across steps, so a changed parameter-to-offset mapping
+    cannot silently corrupt anything. The error-feedback residuals *are* state,
+    which is why they are allocated as part of this object and therefore
+    discarded by the same reallocation.
     """
     global _SCRATCH_BYTES
     scratch = _SCRATCH.get(index)
@@ -296,7 +554,7 @@ def _scratch_for(index, identity, numel, dtype, device, world_size, block, budge
         del scratch
         logger.info("fp8_a2a: bucket %d layout changed, reallocating scratch", index)
 
-    need = _BucketScratch.plan(numel, dtype, world_size, block)[2]
+    need = _BucketScratch.plan(numel, dtype, world_size, block, error_feedback)[2]
     if _SCRATCH_BYTES + need > budget:
         # Degrade, do not abort. A bucket layout we cannot afford is a reason to
         # send this bucket at full precision, not to kill the training job: the
@@ -314,7 +572,8 @@ def _scratch_for(index, identity, numel, dtype, device, world_size, block, budge
             )
         return None
 
-    scratch = _BucketScratch(identity, numel, dtype, device, world_size, block)
+    scratch = _BucketScratch(identity, numel, dtype, device, world_size, block,
+                             error_feedback)
     _SCRATCH[index] = scratch
     _SCRATCH_BYTES += scratch.bytes()
     logger.info(
@@ -332,6 +591,7 @@ def reset_scratch() -> None:
     _SCRATCH.clear()
     _SCRATCH_BYTES = 0
     _OVER_BUDGET.clear()
+    _EXEMPT_BUF.clear()
 
 
 def quantize_chunks(x, out_u8, numel, S, chunk_u8, num_chunks, block):
@@ -364,18 +624,36 @@ def dequant_scatter(ag_u8, out, numel, S, chunk_u8, num_chunks, block):
     )
 
 
+def ef_residual(quantized, residual, value, numel, S, chunk_u8, num_chunks, block):
+    """Close one error-feedback step: ``residual = value - dequant(quantized)``.
+
+    ``value`` already holds ``gradient + previous residual`` and ``quantized``
+    its fp8 form. One kernel, one pass: the residual is bucket-sized, so folding
+    the subtraction into the dequantization instead of post-processing it saves
+    two full-bucket HBM round trips per quantization point.
+    """
+    tiles_per_chunk = S // (block * NUM_BLOCKS_PER_TILE)
+    _ef_residual_kernel[(num_chunks * tiles_per_chunk,)](
+        quantized, quantized.view(torch.float32), value, residual,
+        numel, S, chunk_u8, chunk_u8 // 4, S // 4, tiles_per_chunk,
+        BLOCK=block, NB=NUM_BLOCKS_PER_TILE,
+    )
+
+
 def configure(block: int = DEFAULT_BLOCK, min_mib: float = DEFAULT_MIN_MIB,
-              max_scratch_gb: float = DEFAULT_MAX_SCRATCH_GB) -> None:
+              max_scratch_gb: float = DEFAULT_MAX_SCRATCH_GB,
+              error_feedback: str = "none") -> None:
     """Set the hook's tunables. Called once from ``parallel.py`` at install time.
 
     DDP fixes the comm-hook signature at ``(state, bucket)``, so the knobs cannot
     be passed per call and have to live in module state.
 
-    Changing ``block`` changes the wire layout, so any scratch allocated under
-    the previous value is dropped rather than silently reused with a stale
-    ``chunk_u8``.
+    Changing ``block`` changes the wire layout and changing ``error_feedback``
+    changes which buffers exist, so any scratch allocated under the previous
+    value is dropped rather than silently reused with a stale ``chunk_u8`` or a
+    missing residual.
     """
-    global _BLOCK, _MIN_BYTES, _MAX_SCRATCH_BYTES
+    global _BLOCK, _MIN_BYTES, _MAX_SCRATCH_BYTES, _ERROR_FEEDBACK
     # Power of two because all three kernels index with tl.arange(0, BLOCK).
     if block <= 0 or block & (block - 1):
         raise ValueError(
@@ -395,18 +673,50 @@ def configure(block: int = DEFAULT_BLOCK, min_mib: float = DEFAULT_MIN_MIB,
         raise ValueError(
             f"ddp_comm_hook_fp8_max_scratch_gb must be >= 0, got {max_scratch_gb}"
         )
-    if block != _BLOCK:
+    if error_feedback not in EF_MODES:
+        raise ValueError(
+            f"ddp_comm_hook_fp8_error_feedback must be one of {EF_MODES}, "
+            f"got {error_feedback!r}"
+        )
+    if block != _BLOCK or error_feedback != _ERROR_FEEDBACK:
         reset_scratch()
     _BLOCK = block
     _MIN_BYTES = int(min_mib * 2**20)
     _MAX_SCRATCH_BYTES = int(max_scratch_gb * 2**30)
+    _ERROR_FEEDBACK = error_feedback
     logger.info(
-        "fp8_a2a: block=%d min_mib=%g max_scratch_gb=%g", block, min_mib, max_scratch_gb
+        "fp8_a2a: block=%d min_mib=%g max_scratch_gb=%g error_feedback=%s",
+        block, min_mib, max_scratch_gb, _ERROR_FEEDBACK,
     )
 
 
 def _config():
-    return _BLOCK, _MIN_BYTES, _MAX_SCRATCH_BYTES
+    return _BLOCK, _MIN_BYTES, _MAX_SCRATCH_BYTES, _ERROR_FEEDBACK
+
+
+def _is_cuda_graph_capturing() -> bool:
+    """Return whether the current CUDA stream is inside graph capture.
+
+    The normal hook path deliberately uses NCCL ``Work`` futures so gradient
+    communication can overlap the rest of backward.  A future continuation is
+    not capture-safe, though: its callback can run on a host progress thread
+    (and therefore launch work on a different stream), leaving the capture
+    stream with unjoined work.  Capture mode uses the synchronous enqueue path
+    below, which keeps every operation on the stream being captured.
+    """
+    try:
+        return bool(torch.cuda.is_current_stream_capturing())
+    except (RuntimeError, _ACCELERATOR_ERROR):
+        # This can be queried before CUDA has been initialized on a few PyTorch
+        # builds.  In that case the eager path is the only possible path.
+        return False
+
+
+def _completed_future(tensor):
+    """Return a DDP-compatible Future already resolved to ``tensor``."""
+    result = torch.futures.Future()
+    result.set_result(tensor)
+    return result
 
 
 def fp8_a2a_allgather_hook(process_group, bucket):
@@ -424,7 +734,8 @@ def fp8_a2a_allgather_hook(process_group, bucket):
     group = process_group if process_group is not None else dist.group.WORLD
     world_size = dist.get_world_size(group)
     tensor = bucket.buffer()
-    block, min_bytes, budget = _config()
+    _log_bucket_layout(bucket)
+    block, min_bytes, budget, error_feedback = _config()
 
     if world_size < 2 or tensor.nbytes < min_bytes:
         return allreduce_hook(process_group, bucket)
@@ -432,13 +743,124 @@ def fp8_a2a_allgather_hook(process_group, bucket):
     identity = (tensor.numel(), tensor.dtype, tensor.device, id(group), block)
     st = _scratch_for(
         bucket.index(), identity, tensor.numel(), tensor.dtype, tensor.device,
-        world_size, block, budget,
+        world_size, block, budget, error_feedback,
     )
     if st is None:
         return allreduce_hook(process_group, bucket)
     S, chunk_u8 = st.S, st.chunk_u8
 
-    quantize_chunks(tensor, st.send, st.numel, S, chunk_u8, world_size, block)
+    # Selective precision: snapshot the exempt positions before the fp8 path
+    # mutates the buffer and reduce them to the exact fp32 cross-rank mean *now*.
+    # The all_reduce runs synchronously in the hook body so every rank issues it
+    # in the same deterministic bucket order as the a2a/all-gather below; issuing
+    # it from the async all-gather callback let ranks enqueue this third
+    # collective in divergent orders on the shared NCCL communicator and
+    # cross-wired the reduction. Because exempt always takes the synchronous
+    # inline path below (see the branch guard), the snapshot is produced and
+    # consumed on the same stream -- no cross-stream event is needed.
+    #
+    # Every buffer here is pre-allocated and reused (``_exempt_buffers``,
+    # ``_exempt_indices``): the ``index_select`` writes into ``gather`` via
+    # ``out=`` and the reduce is in place, so the whole correction allocates
+    # nothing per step and is CUDA-graph capture-safe. Only the scatter is
+    # deferred, because the fp8 all-gather overwrites the whole buffer and would
+    # otherwise clobber the exact values.
+    exempt_idx = _exempt_indices(bucket, tensor.device)
+    exempt_snapshot = None
+    exempt_gather = None
+    if exempt_idx is not None:
+        exempt_gather, exempt_snapshot = _exempt_buffers(
+            bucket.index(), exempt_idx.numel(), tensor.dtype, tensor.device
+        )
+        torch.index_select(tensor, 0, exempt_idx, out=exempt_gather)
+        if exempt_snapshot is not exempt_gather:
+            exempt_snapshot.copy_(exempt_gather)
+        dist.all_reduce(exempt_snapshot, group=group, async_op=False)
+        exempt_snapshot.div_(world_size)
+
+    def patch_exempt():
+        """Write the exact cross-rank mean back over the exempt positions."""
+        if exempt_snapshot is None:
+            return
+        if exempt_snapshot is exempt_gather:
+            tensor.index_copy_(0, exempt_idx, exempt_snapshot)
+        else:
+            # fp32 mean -> bucket dtype, into the persistent gather buffer.
+            exempt_gather.copy_(exempt_snapshot)
+            tensor.index_copy_(0, exempt_idx, exempt_gather)
+
+    def quantize_send():
+        """Quantize the bucket into ``st.send``, applying error feedback first.
+
+        ``tensor`` is safe to modify in place: it is the bucket buffer, and the
+        AllGather result overwrites it wholesale at the end of the hook.
+        """
+        if st.res1 is not None:
+            tensor.add_(st.res1)
+        quantize_chunks(tensor, st.send, st.numel, S, chunk_u8, world_size, block)
+        if st.res1 is not None:
+            ef_residual(st.send, st.res1, tensor, st.numel, S, chunk_u8,
+                        world_size, block)
+
+    def quantize_shard():
+        """Requantize the averaged shard for the AllGather, with error feedback.
+
+        Each rank reduces only its own chunk, so ``res2`` is legitimately
+        per-rank state; every rank still receives every quantized chunk, so the
+        final bucket stays bit-identical across ranks.
+        """
+        if st.res2 is not None:
+            st.shard.add_(st.res2)
+        ag_send = st.send[:chunk_u8]
+        quantize_chunks(st.shard, ag_send, S, S, chunk_u8, 1, block)
+        if st.res2 is not None:
+            ef_residual(ag_send, st.res2, st.shard, S, S, chunk_u8, 1, block)
+        return ag_send
+
+    def launch_allgather(async_op):
+        """Second collective: requantize the reduced shard and gather it as fp8.
+        Returns the NCCL Work (or None if sync)."""
+        ag_send = quantize_shard()
+        return dist.all_gather_into_tensor(
+            st.recv, ag_send, group=group, async_op=async_op
+        )
+
+    def finish_allgather():
+        """Write the gathered shards back into the bucket, in shard order."""
+        dequant_scatter(st.recv, tensor, st.numel, S, chunk_u8, world_size, block)
+
+    # Selective precision also forces the synchronous inline path. The exempt
+    # correction adds a third collective (the fp32 all_reduce above) that has to
+    # stay ordered against this bucket's a2a/all-gather on the shared NCCL
+    # communicator, and its result is consumed by ``patch_exempt``. Driving that
+    # through the async continuation chain let the exempt all_reduce interleave
+    # with other buckets' collectives differently on each rank -- provably
+    # nondeterministic (identical configs diverged by iter 3 and NaN'd within a
+    # few steps, while the plain hook stayed bit-reproducible). Running the whole
+    # dataflow inline on one stream, one bucket at a time, removes the
+    # interleaving and the cross-stream read; the cost is losing comm/backward
+    # overlap on exempt buckets.
+    #
+    # This inline path *is* CUDA-graph capturable: every exempt buffer is
+    # pre-allocated (``_exempt_buffers``), so capture -- which forbids fresh
+    # allocations and cannot join the host-side continuation chain the overlap
+    # path uses -- sees only pre-allocated tensors and stream-ordered kernels
+    # plus a synchronous NCCL enqueue.
+    if _is_cuda_graph_capturing() or exempt_snapshot is not None:
+        # CUDA Graph capture cannot join the host-side continuation chain used
+        # by the overlap path.  Enqueue the complete dataflow on the capture
+        # stream and hand DDP an already-resolved Future; NCCL's synchronous
+        # Python API waits only for enqueue completion, while stream ordering
+        # preserves the dependencies between each operation.
+        quantize_send()
+        dist.all_to_all_single(st.recv, st.send, group=group, async_op=False)
+        dequant_reduce(st.recv, st.shard, S, chunk_u8, world_size, block)
+        launch_allgather(async_op=False)
+        finish_allgather()
+        patch_exempt()
+        return _completed_future(tensor)
+
+    quantize_send()
     a2a = dist.all_to_all_single(st.recv, st.send, group=group, async_op=True)
 
     result = torch.futures.Future()
@@ -448,11 +870,7 @@ def fp8_a2a_allgather_hook(process_group, bucket):
             fut.wait()
             # fp32 accumulate across ranks, divide by world_size, requantize.
             dequant_reduce(st.recv, st.shard, S, chunk_u8, world_size, block)
-            ag_send = st.send[:chunk_u8]
-            quantize_chunks(st.shard, ag_send, S, S, chunk_u8, 1, block)
-            work = dist.all_gather_into_tensor(
-                st.recv, ag_send, group=group, async_op=True
-            )
+            work = launch_allgather(async_op=True)
         except Exception as exc:
             result.set_exception(exc)
             return
@@ -460,9 +878,7 @@ def fp8_a2a_allgather_hook(process_group, bucket):
         def after_ag(fut):
             try:
                 fut.wait()
-                dequant_scatter(
-                    st.recv, tensor, st.numel, S, chunk_u8, world_size, block
-                )
+                finish_allgather()
                 result.set_result(tensor)
             except Exception as exc:
                 result.set_exception(exc)
@@ -471,7 +887,3 @@ def fp8_a2a_allgather_hook(process_group, bucket):
 
     a2a.get_future().then(after_a2a)
     return result
-
-
-
-

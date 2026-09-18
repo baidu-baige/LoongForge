@@ -1616,6 +1616,21 @@ class _DistributedArgs:
                     "that removes the cap."
         },
     )
+    ddp_comm_hook_fp8_error_feedback: str = field(
+        default="none",
+        metadata={
+            "choices": ["none", "allgather", "both"],
+            "help": "fp8_a2a_allgather_hook only. Carry a quantization point's "
+                    "residual into the next step, which bounds the accumulated "
+                    "quantization bias at the cost of ~40% more per-step error. "
+                    "'allgather' keeps only the shard residual (0.5 extra bytes "
+                    "of resident scratch per element) and covers the larger of the "
+                    "two error contributions; 'both' also keeps the bucket-sized "
+                    "residual, for 4.5 bytes per element. Residuals are fp32: a "
+                    "lower-precision residual reintroduces the systematic drift "
+                    "error feedback exists to remove."
+        },
+    )
     dynamo_optimize_ddp: bool = field(
         default=True,
         metadata={
