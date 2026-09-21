@@ -56,6 +56,16 @@ class RobotSpec:
     # Keeping orientation soft avoids forcing a redundant arm through a new IK
     # branch merely to chase noisy human wrist rotations.
     ik_orientation_cost: tuple[float, float, float] = (0.05, 0.05, 0.05)
+    # Optional single-view orientation constraint. The selected local EEF axis
+    # is required to lie in the camera plane that projects to the observed 2D
+    # hand-opening line; its unobservable depth component remains free.
+    ik_projection_axis: tuple[float, float, float] | None = None
+    ik_projection_cost: float = 0.0
+    # Optional second image-space axis. This is useful for a 5-DoF arm where
+    # the jaw-opening line alone still leaves the gripper approach visibly
+    # underconstrained.
+    ik_secondary_projection_axis: tuple[float, float, float] | None = None
+    ik_secondary_projection_cost: float = 0.0
     # Underactuated arms cannot always satisfy position and all enabled
     # orientation axes simultaneously. Prefer a continuous position-priority
     # fallback over emitting an off-target pose or interpolating IK branches.
@@ -401,16 +411,30 @@ ROBOT_SPECS: dict[str, RobotSpec] = {
         ee_body=None, ee_site="left/gripper", reach=0.853, gripper_max=0.082,
         # The site is behind and slightly below the physical pad-center.
         tcp_pos_site=(0.01537, 0.0, 0.00425),
-        # ALOHA site axes are x=approach, y=opening, z=gripper-normal.
-        # Retargeting builds one base-at-origin model from the native left arm
-        # and attaches two copies of it. Both copies therefore have the same
-        # local site axes. The native ALOHA right arm is mounted with a 180
-        # degree base rotation, but applying that mirror compensation again
-        # here rotates the duplicated right TCP target by 180 degrees.
-        tcp_rot_site=(0.70710678, 0.0, -0.70710678, 0.0),
-        tcp_rot_site_left=(0.0, 0.70710678, 0.0, 0.70710678),
-        tcp_rot_site_right=(0.0, 0.70710678, 0.0, 0.70710678),
-        gripper_mode="aloha", visual_hide_keywords=("left/base_link",),
+        # ALOHA site axes are x=approach, y=opening, z=gripper-normal. In the
+        # common TCP frame, +z maps to site +x and the signed opening axis +y
+        # maps to site -y. The opening sign only selects an equivalent jaw
+        # direction; retaining site +x as approach is essential for IK. Both
+        # rendered arms are copies of this native left arm and use this same
+        # site-to-TCP calibration.
+        tcp_rot_site=(0.0, 0.70710678, 0.0, 0.70710678),
+        # aloha_agilex is a full 6-DOF arm, so it can track the gripper
+        # orientation as well as the pinch position. The RobotSpec default of
+        # 0.05 is tuned for underactuated arms (e.g. so_arm101); against the
+        # 10.0 position cost it makes the QP effectively ignore orientation,
+        # leaving a ~40 deg wrist residual on both arms. Weighting orientation
+        # at 0.3 halves that residual (rot ~14-21 deg) while keeping position
+        # perfect (both_position_ok=100%, ~1.5 mm). Pushing it to 1.0 lets the
+        # left arm reach ~8 deg but drives the duplicated right arm into a bad
+        # local minimum (rot ~70 deg, position sacrificed), so 0.3 is the
+        # balance that improves both arms without regressing the right.
+        ik_orientation_cost=(0.3, 0.3, 0.3),
+        gripper_mode="aloha",
+        # Show the native ViperX base pedestal (vx300s_1_base) on both arms so
+        # the rendered morphology matches the real dual-arm ALOHA instead of a
+        # pair of floating arms. Only the visual base geom (group 2) is kept;
+        # the base collision geom (group 3) is still hidden by hide_non_arm_geoms.
+        visual_hide_keywords=(),
     ),
     # Official SO-ARM101 MuJoCo model downloaded from
     # TheRobotStudio/SO-ARM100.  The ``new_calib`` model uses the calibrated
@@ -429,16 +453,22 @@ ROBOT_SPECS: dict[str, RobotSpec] = {
         reach=0.420, gripper_max=0.080,
         # Official gripperframe axes are x=approach and z=jaw opening.  The
         # common TCP convention is z=approach and y=opening.
+        # Site x is the gripper approach axis and site z is the jaw-opening
+        # axis.  The common TCP uses z for approach and y for opening, so the
+        # site-to-TCP rotation must map x -> TCP z and z -> TCP y.
         tcp_rot_site=(0.5, 0.5, 0.5, 0.5),
         # The fixed jaw inner edge is at site z=-6.98 mm. Since only the other
         # jaw moves, the physical two-jaw midpoint shifts by half the opening.
         tcp_pos_site=(0.0, 0.0, -0.00698),
         tcp_pos_site_width_gain=(0.0, 0.0, 0.5),
-        # SO-ARM101 has five arm DOFs.  Position consumes three; align the
-        # opening direction with two orientation constraints and leave the
-        # rotation around that direction free.  In the site frame that free
-        # rotation is the local z component.
+        # Fallback for episodes without 2D observations: align the site z
+        # opening axis while leaving rotation about it free. Path B uses the
+        # projection-plane task below, which does not invent axis depth.
         ik_orientation_cost=(0.2, 0.2, 0.0),
+        ik_projection_axis=(0.0, 0.0, 1.0),
+        ik_projection_cost=0.3,
+        ik_secondary_projection_axis=(1.0, 0.0, 0.0),
+        ik_secondary_projection_cost=0.1,
         ik_position_priority=True,
         ik_branch_jump_threshold=0.45,
         base_orientation_mode="upright",

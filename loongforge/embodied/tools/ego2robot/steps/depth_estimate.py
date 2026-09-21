@@ -164,12 +164,12 @@ def read_video_frames(path):
     n_bytes = v_h * v_w * 3
     N = len(raw) // n_bytes
     frames = np.frombuffer(raw, dtype=np.uint8).reshape(N, v_h, v_w, 3)
-    # Crop to scene resolution: legacy output has 4 px padding at top and bottom
-    # (368 -> 360), while new output is already 360 px high.
+    # Only the legacy EgoDex output carries 4 px H.264 padding at the top and
+    # bottom (368 -> 360). Every other source (e.g. the 640x480 Path B
+    # background) is processed at its native resolution so the depth map matches
+    # the background the retarget step reads back.
     if v_h == BG_H and CROP_TOP > 0:
         frames = frames[:, CROP_TOP:CROP_TOP + SCENE_H, :SCENE_W]
-    else:
-        frames = frames[:, :SCENE_H, :SCENE_W]
     return frames
 
 
@@ -210,7 +210,8 @@ def run_depth_batch(proc, model, frames, device, batch_size=4):
     """transformers backend: (N,H,W,3) → (N,H,W) float meters."""
     from PIL import Image
     N = len(frames)
-    depths = np.zeros((N, SCENE_H, SCENE_W), dtype=np.float32)
+    H, W = frames.shape[1], frames.shape[2]
+    depths = np.zeros((N, H, W), dtype=np.float32)
 
     for i in range(0, N, batch_size):
         batch_frames = frames[i:i + batch_size]
@@ -222,10 +223,10 @@ def run_depth_batch(proc, model, frames, device, batch_size=4):
         # bilinear interpolate to scene resolution
         preds_up = torch.nn.functional.interpolate(
             preds.unsqueeze(1),
-            size=(SCENE_H, SCENE_W),
+            size=(H, W),
             mode="bilinear",
             align_corners=False
-        ).squeeze(1)  # (B, SCENE_H, SCENE_W)
+        ).squeeze(1)  # (B, H, W)
         depths[i:i + len(batch_frames)] = preds_up.cpu().float().numpy()
     return depths
 
@@ -237,14 +238,15 @@ def run_depth_da3(model, frames, device, process_res=504):
     pre-normalize them.
     """
     N = len(frames)
-    depths = np.zeros((N, SCENE_H, SCENE_W), dtype=np.float32)
+    H, W = frames.shape[1], frames.shape[2]
+    depths = np.zeros((N, H, W), dtype=np.float32)
     for i, img in enumerate(frames):
         pred = _da3_inference(model, img, process_res)
         d = np.asarray(pred.depth)  # (1, H, W) meters
         if d.ndim == 3:
             d = d[0]
-        if d.shape[:2] != (SCENE_H, SCENE_W):
-            d = cv2.resize(d, (SCENE_W, SCENE_H), interpolation=cv2.INTER_LINEAR)
+        if d.shape[:2] != (H, W):
+            d = cv2.resize(d, (W, H), interpolation=cv2.INTER_LINEAR)
         depths[i] = d.astype(np.float32)
     return depths
 

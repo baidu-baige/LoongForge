@@ -169,6 +169,14 @@ def load_keypoint_frames(zarr_dir, ep, n_frames):
         return []
     left_kp = np.array(store["left.obs_keypoints"][:total]).reshape(total, 21, 3)
     right_kp = np.array(store["right.obs_keypoints"][:total]).reshape(total, 21, 3)
+    left_kp2d = (np.array(store["left.obs_keypoints_2d"][:total]).reshape(total, 21, 2)
+                 if "left.obs_keypoints_2d" in store else None)
+    right_kp2d = (np.array(store["right.obs_keypoints_2d"][:total]).reshape(total, 21, 2)
+                  if "right.obs_keypoints_2d" in store else None)
+    left_conf = (np.array(store["path_b_left_confidence"][:total])
+                 if "path_b_left_confidence" in store else np.ones(total))
+    right_conf = (np.array(store["path_b_right_confidence"][:total])
+                  if "path_b_right_confidence" in store else np.ones(total))
     head_pose = np.array(store["obs_head_pose"][:total])
 
     frames = []
@@ -192,16 +200,26 @@ def load_keypoint_frames(zarr_dir, ep, n_frames):
         R_inv = Rotation.from_quat(q_xyzw).as_matrix().T
         t_inv = -R_inv @ hp[:3]
 
-        for kp, color_base in [(left_kp[t], (0, 255, 0)), (right_kp[t], (0, 200, 255))]:
-            if np.any(np.abs(kp) > 1e8):
+        for kp, kp2d, confidence, color_base in [
+                (left_kp[t], left_kp2d[t] if left_kp2d is not None else None,
+                 left_conf[t], (0, 255, 0)),
+                (right_kp[t], right_kp2d[t] if right_kp2d is not None else None,
+                 right_conf[t], (0, 200, 255))]:
+            # Zero confidence marks an unobserved hand and must not appear in
+            # the demo overlay.
+            if confidence <= 0.0 or not np.isfinite(kp).all() or np.any(np.abs(kp) > 1e8):
                 continue
-            pts_cam = (R_inv @ kp.T).T + t_inv
-            z = pts_cam[:, 2]
-            valid = z > 0.01
-            proj = K @ pts_cam.T
-            px = np.zeros((21, 2))
-            px[valid, 0] = proj[0, valid] / proj[2, valid]
-            px[valid, 1] = proj[1, valid] / proj[2, valid]
+            if kp2d is not None and np.isfinite(kp2d).all():
+                px = kp2d.astype(np.float32, copy=False)
+                valid = np.isfinite(px).all(axis=1)
+            else:
+                pts_cam = (R_inv @ kp.T).T + t_inv
+                z = pts_cam[:, 2]
+                valid = z > 0.01
+                proj = K @ pts_cam.T
+                px = np.zeros((21, 2))
+                px[valid, 0] = proj[0, valid] / proj[2, valid]
+                px[valid, 1] = proj[1, valid] / proj[2, valid]
             for bi, (a, b) in enumerate(BONES):
                 if valid[a] and valid[b]:
                     pa = (int(px[a, 0]), int(px[a, 1]))
@@ -241,6 +259,14 @@ def load_gripper_frames(zarr_dir, ep, n_frames):
         return []
     left_kp = np.array(store["left.obs_keypoints"][:total]).reshape(total, 21, 3)
     right_kp = np.array(store["right.obs_keypoints"][:total]).reshape(total, 21, 3)
+    left_kp2d = (np.array(store["left.obs_keypoints_2d"][:total]).reshape(total, 21, 2)
+                 if "left.obs_keypoints_2d" in store else None)
+    right_kp2d = (np.array(store["right.obs_keypoints_2d"][:total]).reshape(total, 21, 2)
+                  if "right.obs_keypoints_2d" in store else None)
+    left_conf = (np.array(store["path_b_left_confidence"][:total])
+                 if "path_b_left_confidence" in store else np.ones(total))
+    right_conf = (np.array(store["path_b_right_confidence"][:total])
+                  if "path_b_right_confidence" in store else np.ones(total))
     head_pose = np.array(store["obs_head_pose"][:total])
 
     frames = []
@@ -263,9 +289,25 @@ def load_gripper_frames(zarr_dir, ep, n_frames):
         R_inv = Rotation.from_quat([q[1], q[2], q[3], q[0]]).as_matrix().T
         t_inv = -R_inv @ hp[:3]
 
-        for kp, label, color in [(left_kp[t], "L", (0, 255, 0)),
-                                 (right_kp[t], "R", (0, 200, 255))]:
-            if np.any(np.abs(kp) > 1e8):
+        for kp, kp2d, confidence, label, color in [
+                (left_kp[t], left_kp2d[t] if left_kp2d is not None else None,
+                 left_conf[t], "L", (0, 255, 0)),
+                (right_kp[t], right_kp2d[t] if right_kp2d is not None else None,
+                 right_conf[t], "R", (0, 200, 255))]:
+            if confidence <= 0.0 or not np.isfinite(kp).all() or np.any(np.abs(kp) > 1e8):
+                continue
+            if kp2d is not None and np.isfinite(kp2d).all():
+                p0 = tuple(np.round(kp2d[THUMB]).astype(int))
+                p1 = tuple(np.round(0.7 * kp2d[INDEX] + 0.3 * kp2d[MIDDLE]).astype(int))
+                width_cm = float(np.linalg.norm(kp2d[THUMB] -
+                                                 (0.7 * kp2d[INDEX] + 0.3 * kp2d[MIDDLE]))) / 100.0
+                cv2.line(bgr, p0, p1, (220, 220, 220), 2, cv2.LINE_AA)
+                cv2.circle(bgr, p0, 5, (255, 255, 255), -1, cv2.LINE_AA)
+                cv2.circle(bgr, p1, 6, color, -1, cv2.LINE_AA)
+                mid = ((p0[0] + p1[0]) // 2, (p0[1] + p1[1]) // 2)
+                cv2.putText(bgr, f"{label}:{width_cm:.1f}cm",
+                            (mid[0] + 4, mid[1] - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
                 continue
             k_thumb = kp[THUMB]
             k_vf = 0.7 * kp[INDEX] + 0.3 * kp[MIDDLE]
@@ -333,7 +375,11 @@ def load_robot_only_frames(zarr_dir, ik_dir, ep, n_frames):
     spec = get_robot_spec(robot_type)
     N = len(qpos_all)
 
-    head, _, _ = load_episode_world(zarr_dir, ep, N)
+    head, left_kp, right_kp = load_episode_world(zarr_dir, ep, N)
+    active_sides = tuple(
+        side for side, kp in (("left", left_kp), ("right", right_kp))
+        if np.isfinite(kp).all(axis=1).any()
+    )
 
     fy, height = 490.19609999999994, 368
     # For visual alignment, derive fy from dataset intrinsics when possible,
@@ -350,7 +396,7 @@ def load_robot_only_frames(zarr_dir, ik_dir, ep, n_frames):
     dual = build_dual_model(left_base_pos, left_base_quat, right_base_pos, right_base_quat,
                             fovy, spec)
     cam_id = mujoco.mj_name2id(dual, mujoco.mjtObj.mjOBJ_CAMERA, "ego")
-    hide_non_arm_geoms(dual, spec)
+    hide_non_arm_geoms(dual, spec, active_sides=active_sides)
     renderer = make_renderer(dual, 1280, 736)  # Match retargeting with 2x supersampling for noise reduction.
     data = mujoco.MjData(dual)
 

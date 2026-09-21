@@ -170,13 +170,17 @@ def smooth_state(state: np.ndarray, window: int = 11, polyorder: int = 3) -> np.
     for col_range in [(0, 3), (7, 10)]:
         start, end = col_range
         for d in range(start, end):
-            smoothed[:, d] = savgol_filter(state[:, d], window, polyorder)
+            # A missing hand is represented by NaN across its state columns.
+            # Keep that side missing instead of passing NaNs to SciPy.
+            if np.isfinite(state[:, d]).all():
+                smoothed[:, d] = savgol_filter(state[:, d], window, polyorder)
 
     # Gripper widths can also be smoothed to reduce jitter.
     for col in [14, 15]:  # left_gripper, right_gripper
-        smoothed[:, col] = savgol_filter(state[:, col], window, polyorder)
-        # Ensure gripper widths remain non-negative.
-        smoothed[:, col] = np.maximum(smoothed[:, col], 0.0)
+        if np.isfinite(state[:, col]).all():
+            smoothed[:, col] = savgol_filter(state[:, col], window, polyorder)
+            # Ensure gripper widths remain non-negative.
+            smoothed[:, col] = np.maximum(smoothed[:, col], 0.0)
 
     return smoothed
 

@@ -41,6 +41,8 @@ SCHEMA_VERSION = "ego2robot-quality-v1"
 DEFAULT_VLM_MAX_FRAMES = 32
 VLM_MODEL_ENV = "EGO2ROBOT_VLM_MODEL"
 DEFAULT_MIN_VALID_RUN_FRAMES = 9  # floor(0.3 * 30 fps), as in Ego2Robot.
+ALOHA_BASELINE_SELF_CONTACTS = 8
+ALOHA_BASELINE_SELF_PENETRATION = 0.02163086
 
 
 def _scalar(value: Any, default: Any = None) -> Any:
@@ -160,7 +162,6 @@ def _l1(ik: dict[str, np.ndarray], quality: dict[str, np.ndarray],
     if n <= 0:
         raise ValueError("episode has no frame-aligned IK/quality arrays")
 
-    ik_ok = _fit_matrix(ik.get("ik_ok"), n, 2, False).astype(bool)
     err_pos = _fit_matrix(ik.get("ik_err_pos"), n, 2, np.inf)
 
     hand = _fit_array(quality.get("hand_detected"), n, bool, False)
@@ -173,13 +174,35 @@ def _l1(ik: dict[str, np.ndarray], quality: dict[str, np.ndarray],
     cross_contacts = _fit_array(
         quality.get("cross_arm_contact_count"), n, np.int64, np.iinfo(np.int64).max)
 
-    # Older retarget artifacts were generated with the Kinova Gen3 menagerie
-    # mesh overlap counted as self-collision. Recognize only the deterministic
-    # baseline pattern (same positive contact count and penetration on every
-    # frame); real trajectory-dependent contacts remain quality failures.
+    # Older retarget artifacts counted fixed source-model mesh overlaps as
+    # self-collisions. Remove only a verified deterministic baseline; contacts
+    # or penetration beyond that baseline remain quality failures.
     robot_type = str(_scalar(quality.get("robot_type"), ""))
     baseline_collision = np.zeros(n, dtype=bool)
-    if robot_type == "kinova_gen3" and n and np.all(self_collision):
+    if robot_type == "aloha_agilex" and n:
+        baseline_only = (
+            (self_contact_count == ALOHA_BASELINE_SELF_CONTACTS)
+            & np.isclose(
+                self_penetration, ALOHA_BASELINE_SELF_PENETRATION,
+                rtol=0.0, atol=1e-6)
+        )
+        # Require at least one exact baseline-only frame before correcting a
+        # legacy episode. This keeps already-corrected artifacts unchanged.
+        if baseline_only.any():
+            baseline_collision = (
+                (self_contact_count >= ALOHA_BASELINE_SELF_CONTACTS)
+                & (self_penetration >=
+                   ALOHA_BASELINE_SELF_PENETRATION - 1e-6)
+            )
+            remaining_contacts = (
+                self_contact_count - ALOHA_BASELINE_SELF_CONTACTS)
+            remaining_penetration = (
+                self_penetration - ALOHA_BASELINE_SELF_PENETRATION)
+            self_collision[baseline_collision] = (
+                (remaining_contacts[baseline_collision] > 0)
+                | (remaining_penetration[baseline_collision] > 1e-6)
+            )
+    elif robot_type == "kinova_gen3" and n and np.all(self_collision):
         baseline_collision = (
             np.ptp(self_contact_count) == 0
             and self_contact_count[0] > 0
@@ -189,16 +212,18 @@ def _l1(ik: dict[str, np.ndarray], quality: dict[str, np.ndarray],
         if baseline_collision:
             self_collision = np.zeros(n, dtype=bool)
 
-    finite_ik = np.isfinite(err_pos).all(axis=1)
-    valid = (hand & ik_ok.all(axis=1) & finite_ik & (err_pos.max(axis=1) < 0.05)
+    # Appendix A.5 defines L1 IK validity solely as finite positional tracking
+    # error below 0.05 m. ``ik_ok`` is a full-pose flag in current retarget
+    # artifacts and would add an undocumented orientation-error gate.
+    position_ok = np.isfinite(err_pos).all(axis=1) & (err_pos.max(axis=1) < 0.05)
+    valid = (hand & position_ok
              & rendered & (pixels > 0) & (~self_collision)
              & (cross_contacts <= 1) & np.isfinite(mask_ratio)
              & (mask_ratio <= 0.70))
     eroded = _interior_short_runs(valid, max(int(min_valid_run_frames), 1))
     reasons = {
         "hand_missing": int((~hand).sum()),
-        "ik_failure_or_error": int((~(ik_ok.all(axis=1) & finite_ik
-                                        & (err_pos.max(axis=1) < 0.05))).sum()),
+        "ik_position_error": int((~position_ok).sum()),
         "not_rendered_or_empty": int((~(rendered & (pixels > 0))).sum()),
         "self_collision": int(self_collision.sum()),
         "baseline_self_collision_ignored": int(baseline_collision.sum()),

@@ -103,8 +103,9 @@ def decode_frame_jpeg(episode_path: str, frame_idx: int) -> Optional[np.ndarray]
 
 def find_invalid_frames(data: dict, sentinel: float = 1e9) -> np.ndarray:
     """
-    Detect frames containing 1e9 sentinel values. A value greater than or equal
-    to the sentinel in any pose/keypoint field marks the frame invalid.
+    Detect invalid hand/pose frames while allowing an unobserved hand side.
+    A value greater than or equal to the sentinel, NaN, or Inf in an observed
+    side marks the frame invalid; an entirely missing side is permitted.
 
     Returns:
         valid_mask: bool array, shape (total_frames,), True = valid
@@ -112,18 +113,41 @@ def find_invalid_frames(data: dict, sentinel: float = 1e9) -> np.ndarray:
     n = data["total_frames"]
     valid = np.ones(n, dtype=bool)
 
-    pose_keys = [
-        "left_obs_ee_pose", "right_obs_ee_pose",
-        "left_obs_wrist_pose", "right_obs_wrist_pose",
-        "obs_head_pose",
-        "left_obs_keypoints", "right_obs_keypoints",
-    ]
+    # Path B intentionally stores an unobserved hand as NaN.  Missing one
+    # side is valid; only an observed side containing NaN/Inf or a sentinel
+    # makes that frame invalid.  Use the translation/keypoint coordinates to
+    # determine whether a hand is present because its pose quaternion remains
+    # an identity quaternion even when the translation is missing.
+    hand_fields = (
+        ("left_obs_ee_pose", "left_obs_wrist_pose", "left_obs_keypoints"),
+        ("right_obs_ee_pose", "right_obs_wrist_pose", "right_obs_keypoints"),
+    )
+    any_hand = np.zeros(n, dtype=bool)
+    for fields in hand_fields:
+        side_present = np.zeros(n, dtype=bool)
+        side_valid = np.ones(n, dtype=bool)
+        for key in fields:
+            arr = np.asarray(data[key])
+            flat = arr.reshape(n, -1)
+            # First three values are translation for poses and wrist xyz for
+            # keypoints. All-NaN means the side was not detected this frame.
+            present = np.isfinite(flat[:, :3]).any(axis=1)
+            finite = np.isfinite(flat).all(axis=1)
+            below_sentinel = np.all(np.abs(np.nan_to_num(
+                flat, nan=0.0, posinf=sentinel, neginf=-sentinel)) < sentinel,
+                axis=1)
+            side_present |= present
+            side_valid &= ~present | (finite & below_sentinel)
+        any_hand |= side_present
+        valid &= side_valid
 
-    for key in pose_keys:
-        arr = data[key]
-        # A value above the sentinel in any dimension invalidates the frame.
-        frame_max = np.abs(arr).max(axis=1) if arr.ndim == 2 else np.abs(arr)
-        valid &= (frame_max < sentinel)
+    # Head pose is always required and remains finite for Path B episodes.
+    head = np.asarray(data["obs_head_pose"]).reshape(n, -1)
+    valid &= np.isfinite(head).all(axis=1)
+    valid &= np.all(np.abs(np.nan_to_num(
+        head, nan=sentinel, posinf=sentinel, neginf=-sentinel)) < sentinel,
+        axis=1)
+    valid &= any_hand
 
     return valid
 
@@ -341,7 +365,7 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
     valid_mask = find_invalid_frames(data)
     n_valid = valid_mask.sum()
     n_invalid = n_orig - n_valid
-    print(f"    Frames: {n_orig} total, {n_invalid} invalid (1e9 sentinel)")
+    print(f"    Frames: {n_orig} total, {n_invalid} invalid pose/keypoint frames")
 
     if n_valid == 0:
         print("    SKIP: all frames invalid")

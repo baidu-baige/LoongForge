@@ -20,14 +20,17 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-# WiLoR's MANO wrapper returns the 21 joints in its OpenPose-compatible order.
-# Path B downstream expects the canonical MANO order used by EgoVerse and by
-# ``action_alignment.py`` (wrist=0, thumb_tip=4, index_tip=8, middle_tip=12).
-WILOR_TO_OPENPOSE = np.asarray(
+# WiLoR's MANO wrapper already returns the 21 joints in OpenPose hand order.
+# Path B and Dyn-HaMR use this same order (wrist=0, thumb_tip=4,
+# index_tip=8, middle_tip=12).  This map is kept for callers that need to
+# convert native smplx/MANO order to the shared OpenPose protocol.
+MANO_TO_OPENPOSE = np.asarray(
     [0, 13, 14, 15, 16, 1, 2, 3, 17, 4, 5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20],
     dtype=np.int64,
 )
-OPENPOSE_TO_MANO = np.argsort(WILOR_TO_OPENPOSE)
+# Backward-compatible name for callers that imported the old mapping.
+WILOR_TO_OPENPOSE = MANO_TO_OPENPOSE
+OPENPOSE_TO_MANO = np.argsort(MANO_TO_OPENPOSE)
 
 
 def prepare_mano_assets(repo: Path, mano_dir: str | None = None):
@@ -180,8 +183,9 @@ def run(args):
             batch = recursive_to(batch, device)
             with torch.inference_mode():
                 output = model(batch)
+            # WiLoR's MANO wrapper applies MANO->OpenPose internally. Keep
+            # this order unchanged for Path B and Dyn-HaMR.
             kp = output["pred_keypoints_3d"].detach().cpu().numpy().astype(np.float32)
-            kp = kp[:, OPENPOSE_TO_MANO, :]
             centers = batch["box_center"].detach().cpu().numpy().astype(np.float32)
             sizes = batch["box_size"].detach().cpu().numpy().astype(np.float32).reshape(-1)
             params = output["pred_mano_params"]
@@ -257,6 +261,7 @@ def run(args):
                 all_orient.append(orient[j])
                 all_betas.append(betas[j])
                 all_trans.append(trans_j)
+                # ``desired_2d`` is already in WiLoR/Dyn-HaMR OpenPose order.
                 all_kp2d.append(desired_2d)
             offset += len(kp)
 

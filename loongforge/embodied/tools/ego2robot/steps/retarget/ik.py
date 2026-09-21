@@ -79,6 +79,82 @@ class _JointContinuityLimit:
         return mink.limits.Constraint(G=G, h=h)
 
 
+class AxisProjectionPlaneTask(mink.Task):
+    """Align one local frame axis with an optionally oriented image plane."""
+
+    k = 1
+
+    def __init__(self, frame_name, frame_type, axis, cost):
+        super().__init__(cost=np.full(1, float(cost)), gain=1.0,
+                         lm_damping=0.1)
+        self.frame_name = frame_name
+        self.frame_type = frame_type
+        self.axis = np.asarray(axis, dtype=float).reshape(3).copy()
+        norm = np.linalg.norm(self.axis)
+        if norm < 1e-8:
+            raise ValueError("projection axis must be non-zero")
+        self.axis /= norm
+        self.target_normal = None
+        self.target_direction = None
+
+    def set_target(self, normal, direction=None):
+        normal = np.asarray(normal, dtype=float).reshape(3)
+        norm = np.linalg.norm(normal)
+        if not np.isfinite(normal).all() or norm < 1e-8:
+            raise ValueError("projection plane normal must be finite and non-zero")
+        self.target_normal = normal / norm
+        self.target_direction = None
+        if direction is not None:
+            direction = np.asarray(
+                direction, dtype=float).reshape(3).copy()
+            direction -= self.target_normal * float(
+                direction @ self.target_normal)
+            direction_norm = np.linalg.norm(direction)
+            if not np.isfinite(direction).all() or direction_norm < 1e-8:
+                raise ValueError(
+                    "projection plane direction must be finite and non-zero")
+            self.target_direction = direction / direction_norm
+
+    def _local_normal_and_jacobian(self, configuration):
+        if self.target_normal is None:
+            raise ValueError("projection plane target has not been set")
+        transform = configuration.get_transform_frame_to_world(
+            self.frame_name, self.frame_type)
+        local_normal = transform.rotation().as_matrix().T @ self.target_normal
+        angular_jacobian = configuration.get_frame_jacobian(
+            self.frame_name, self.frame_type)[3:]
+        local_direction = (None if self.target_direction is None else
+                           transform.rotation().as_matrix().T @
+                           self.target_direction)
+        return local_normal, local_direction, angular_jacobian
+
+    def compute_error(self, configuration):
+        local_normal, local_direction, _ = \
+            self._local_normal_and_jacobian(configuration)
+        normal_error = float(np.dot(self.axis, local_normal))
+        if local_direction is None:
+            return np.array([normal_error])
+        direction_score = float(np.dot(self.axis, local_direction))
+        return np.array([np.arctan2(normal_error, direction_score)])
+
+    def compute_jacobian(self, configuration):
+        local_normal, local_direction, angular_jacobian = \
+            self._local_normal_and_jacobian(configuration)
+        normal_jacobian = np.cross(
+            self.axis, local_normal)[None] @ angular_jacobian
+        if local_direction is None:
+            return normal_jacobian
+        direction_jacobian = np.cross(
+            self.axis, local_direction)[None] @ angular_jacobian
+        normal_error = float(np.dot(self.axis, local_normal))
+        direction_score = float(np.dot(self.axis, local_direction))
+        denominator = max(
+            normal_error * normal_error + direction_score * direction_score,
+            1e-8)
+        return ((direction_score * normal_jacobian -
+                 normal_error * direction_jacobian) / denominator)
+
+
 class MinkIKContext:
     """Reusable Mink task stack for one single-arm MuJoCo model.
 
@@ -89,6 +165,8 @@ class MinkIKContext:
 
     def __init__(self, model, arm_ids, ee_ref, solver="daqp",
                  position_cost=10.0, orientation_cost=1.0,
+                 projection_axis=None, projection_cost=0.0,
+                 projection_axes=None, projection_costs=None,
                  continuity_max_step=MINK_CONTINUITY_MAX_STEP,
                  continuity_cost=MINK_CONTINUITY_COST):
         self.model = model
@@ -107,7 +185,27 @@ class MinkIKContext:
             lm_damping=0.1,
         )
         self.orientation_mask = self.orientation_cost > 0.0
-        self.orientation_enabled = bool(np.any(self.orientation_mask))
+        if projection_axes is None:
+            projection_axes = ([] if projection_axis is None else
+                               [projection_axis])
+        if projection_costs is None:
+            projection_costs = np.broadcast_to(
+                np.asarray(projection_cost, dtype=float),
+                (len(projection_axes),)).copy()
+        if len(projection_axes) != len(projection_costs):
+            raise ValueError("projection_axes and projection_costs must match")
+        self.projection_tasks = [
+            AxisProjectionPlaneTask(
+                frame_name=ee_ref[1], frame_type=ee_ref[0], axis=axis,
+                cost=cost)
+            for axis, cost in zip(projection_axes, projection_costs)
+            if float(cost) > 0.0
+        ]
+        # Preserve the single-axis attribute used by older callers/tests.
+        self.projection_task = (self.projection_tasks[0]
+                                if self.projection_tasks else None)
+        self.orientation_enabled = bool(
+            np.any(self.orientation_mask) or self.projection_tasks)
         self.posture_task = mink.PostureTask(model, cost=1e-3)
         self.continuity_task = mink.PostureTask(model, cost=np.zeros(model.nv))
         continuity_costs = np.zeros(model.nv)
@@ -115,7 +213,9 @@ class MinkIKContext:
             continuity_costs[int(model.jnt_dofadr[jid])] = float(continuity_cost)
         self.continuity_costs = continuity_costs
         self.continuity_task.set_cost(continuity_costs)
-        self.tasks = [self.ee_task, self.posture_task, self.continuity_task]
+        self.tasks = [self.ee_task]
+        self.tasks.extend(self.projection_tasks)
+        self.tasks.extend([self.posture_task, self.continuity_task])
         velocity_limits = {
             model.joint(jid).name: np.array([1.0]) for jid in arm_ids
         }
@@ -140,13 +240,34 @@ class MinkIKContext:
 
     def solve(self, target_pos, target_R, q_init=None, max_iterations=100,
               dt=0.05, tol_pos=8e-3, tol_rot=0.15, continuity_q=None,
-              continuity_max_step=None, position_first=False):
+              continuity_max_step=None, position_first=False,
+              projection_plane_normal=None, projection_plane_normals=None,
+              projection_plane_direction=None,
+              projection_plane_directions=None):
         """Solve inverse kinematics for the requested end-effector pose."""
         target = mink.SE3.from_rotation_and_translation(
             mink.SO3.from_matrix(np.asarray(target_R, dtype=float)),
             np.asarray(target_pos, dtype=float),
         )
         self.ee_task.set_target(target)
+        if self.projection_tasks:
+            normals = (projection_plane_normals
+                       if projection_plane_normals is not None else
+                       [projection_plane_normal])
+            if normals is None or len(normals) != len(self.projection_tasks):
+                raise ValueError("one projection plane normal is required per task")
+            directions = (projection_plane_directions
+                          if projection_plane_directions is not None else
+                          ([projection_plane_direction]
+                           if projection_plane_direction is not None else
+                           [None] * len(self.projection_tasks)))
+            if len(directions) != len(self.projection_tasks):
+                raise ValueError("projection plane directions must match tasks")
+            for task, normal, direction in zip(
+                    self.projection_tasks, normals, directions):
+                if normal is None:
+                    raise ValueError("projection plane normal is required")
+                task.set_target(normal, direction)
         self.reset(q_init, posture_target=continuity_q)
         self.continuity_task.set_target(
             self.configuration.q if continuity_q is None else continuity_q)
@@ -168,13 +289,23 @@ class MinkIKContext:
             # FrameTask always returns all three rotational residuals, even
             # when a morphology releases one axis by assigning it zero cost.
             # Success and candidate scoring must use only constrained axes.
-            err_rot = float(np.linalg.norm(error[3:][self.orientation_mask]))
+            frame_rot_error = float(np.linalg.norm(
+                error[3:][self.orientation_mask]))
+            projection_errors = [abs(float(
+                task.compute_error(self.configuration)[0]))
+                for task in self.projection_tasks]
+            projection_error = max(projection_errors, default=0.0)
+            err_rot = max(frame_rot_error, projection_error)
             # Select the best non-converged iterate using the same relative
             # task weights as the QP. This matters for underactuated arms:
             # unweighted radians otherwise dominate centimetre-scale position
             # residuals and return a visibly off-target TCP.
             orientation_objective = float(np.linalg.norm(
                 error[3:] * self.orientation_cost))
+            orientation_objective += sum(
+                float(task.cost[0] * task_error)
+                for task, task_error in zip(
+                    self.projection_tasks, projection_errors))
             total = (err_pos + 1e-3 * orientation_objective
                      if position_first else
                      float(np.linalg.norm(error[:3] * self.position_cost)) +
@@ -209,17 +340,45 @@ class MinkIKContext:
         _, err_pos, err_rot, q = best
         return q, False, err_pos, err_rot
 
-    def measure_error(self, q, target_pos, target_R):
+    def measure_error(self, q, target_pos, target_R,
+                      projection_plane_normal=None,
+                      projection_plane_normals=None,
+                      projection_plane_direction=None,
+                      projection_plane_directions=None):
         """Measure this context's enabled task residuals at a configuration."""
         target = mink.SE3.from_rotation_and_translation(
             mink.SO3.from_matrix(np.asarray(target_R, dtype=float)),
             np.asarray(target_pos, dtype=float),
         )
         self.ee_task.set_target(target)
+        if self.projection_tasks:
+            normals = (projection_plane_normals
+                       if projection_plane_normals is not None else
+                       [projection_plane_normal])
+            if normals is None or len(normals) != len(self.projection_tasks):
+                raise ValueError("one projection plane normal is required per task")
+            directions = (projection_plane_directions
+                          if projection_plane_directions is not None else
+                          ([projection_plane_direction]
+                           if projection_plane_direction is not None else
+                           [None] * len(self.projection_tasks)))
+            if len(directions) != len(self.projection_tasks):
+                raise ValueError("projection plane directions must match tasks")
+            for task, normal, direction in zip(
+                    self.projection_tasks, normals, directions):
+                if normal is None:
+                    raise ValueError("projection plane normal is required")
+                task.set_target(normal, direction)
         self.configuration.update(_project_qpos_to_limits(self.model, q))
         error = self.ee_task.compute_error(self.configuration)
         err_pos = float(np.linalg.norm(error[:3]))
-        err_rot = float(np.linalg.norm(error[3:][self.orientation_mask]))
+        frame_rot_error = float(np.linalg.norm(
+            error[3:][self.orientation_mask]))
+        projection_error = max([
+            abs(float(task.compute_error(self.configuration)[0]))
+            for task in self.projection_tasks
+        ], default=0.0)
+        err_rot = max(frame_rot_error, projection_error)
         return err_pos, err_rot
 
 
@@ -278,7 +437,9 @@ def refine_arm_ik_pose(
         target_pos_base, target_R_base, position_result, previous_q=None,
         max_iter=POSE_REFINEMENT_MAX_ITER, tol_pos=POSITION_FIRST_TOL,
         tol_rot=0.25,
-        mink_context=None, continuity_max_step=MINK_CONTINUITY_MAX_STEP):
+        mink_context=None, continuity_max_step=MINK_CONTINUITY_MAX_STEP,
+        projection_plane_normal=None, projection_plane_normals=None,
+        projection_plane_direction=None, projection_plane_directions=None):
     """Improve orientation without losing position or temporal continuity.
 
     The position-first pass is always the safe baseline. This second pass is
@@ -288,11 +449,36 @@ def refine_arm_ik_pose(
     del arm_vadr
     q_position, _, err_pos, err_rot = position_result
     context = mink_context or MinkIKContext(model, arm_ids, ee_ref)
+    # A position-only context reports zero rotational residual by design. The
+    # full-pose refinement must compare against the actual orientation error of
+    # that position solution, otherwise every refinement is rejected because
+    # it cannot improve the artificial zero baseline.
+    if getattr(context, "orientation_enabled", True) is False:
+        raise ValueError("pose refinement requires orientation-enabled Mink context")
+    if hasattr(context, "measure_error"):
+        measured_pos, measured_rot = context.measure_error(
+            q_position, target_pos_base, target_R_base,
+            projection_plane_normal=projection_plane_normal,
+            projection_plane_normals=projection_plane_normals,
+            projection_plane_direction=projection_plane_direction,
+            projection_plane_directions=projection_plane_directions)
+        err_pos = measured_pos
+        err_rot = measured_rot
+    solve_kwargs = {}
+    if projection_plane_normal is not None:
+        solve_kwargs["projection_plane_normal"] = projection_plane_normal
+    if projection_plane_normals is not None:
+        solve_kwargs["projection_plane_normals"] = projection_plane_normals
+    if projection_plane_direction is not None:
+        solve_kwargs["projection_plane_direction"] = projection_plane_direction
+    if projection_plane_directions is not None:
+        solve_kwargs["projection_plane_directions"] = projection_plane_directions
     q_refined, _, refined_pos, refined_rot = context.solve(
         target_pos_base, target_R_base, q_init=q_position,
         max_iterations=max_iter, dt=0.01, tol_pos=tol_pos,
         tol_rot=tol_rot, continuity_q=previous_q,
-        continuity_max_step=continuity_max_step, position_first=False)
+        continuity_max_step=continuity_max_step, position_first=False,
+        **solve_kwargs)
     continuous = (
         previous_q is None or continuity_max_step <= 0.0 or
         np.max(np.abs(

@@ -37,7 +37,7 @@ if __package__:
         _quality_collision_metrics,
         _snap_base_to_support,
     )
-    from .retarget.cli import main
+    from .retarget.cli import build_arg_parser, main, run  # noqa: F401
     from .retarget.episode import *  # noqa: F401,F403
     from .retarget.ik import *  # noqa: F401,F403
     from .retarget.ik import (  # noqa: F401
@@ -85,7 +85,7 @@ else:
         _quality_collision_metrics,
         _snap_base_to_support,
     )
-    from retarget.cli import main
+    from retarget.cli import build_arg_parser, main, run  # noqa: F401
     from retarget.episode import *  # noqa: F401,F403
     from retarget.ik import *  # noqa: F401,F403
     from retarget.ik import (  # noqa: F401

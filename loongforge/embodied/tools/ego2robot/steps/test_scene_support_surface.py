@@ -7,8 +7,10 @@ from unittest.mock import patch
 import numpy as np
 
 from steps.retarget import base_search as retarget_base_search
+from steps.retarget.targets import _quat_to_mat
 from steps.robot_registry import ROBOT_SPECS, get_robot_spec
 from steps.robot_retarget import (
+    _is_known_baseline_self_contact,
     _base_visual_min_z,
     _snap_base_to_support,
     base_frame,
@@ -119,7 +121,7 @@ def _check_base_search_snaps_every_candidate_to_support_surface():
         assert abs(z - (0.1 * x + 0.21)) < 1e-9
 
 
-def _check_balanced_base_orientation_search_is_opt_in():
+def _check_balanced_base_orientation_search_modes():
     target_p = np.array([[0.0, 0.0, 0.5], [0.02, 0.01, 0.5]])
     target_R = np.repeat(np.eye(3)[None], len(target_p), axis=0)
 
@@ -129,7 +131,7 @@ def _check_balanced_base_orientation_search_is_opt_in():
     def pose_solver(*args, **kwargs):
         return np.zeros(1), True, 0.0, 0.0
 
-    def run(enabled):
+    def run(trajectory_enabled, exhaustive=False):
         with patch.object(retarget_base_search, "solve_arm_ik_position_only_dls",
                           position_solver), patch.object(
                               retarget_base_search, "solve_arm_ik_dls", pose_solver):
@@ -139,15 +141,19 @@ def _check_balanced_base_orientation_search_is_opt_in():
                 camera_pos=np.array([0.0, 0.0, 2.0]),
                 search_mode="balanced", ik_solver="dls",
                 max_target_distance=3.0,
-                enable_base_orientation_search=enabled)[0]
+                trajectory_orientation_search=trajectory_enabled,
+                enable_base_orientation_search=exhaustive)[0]
 
     fixed = run(False)
     searched = run(True)
+    exhaustive = run(True, exhaustive=True)
     assert fixed
     assert all(candidate["orientation"] == (0.0, 0.0, 0.0)
                for candidate in fixed)
     assert any(candidate["orientation"] != (0.0, 0.0, 0.0)
                for candidate in searched)
+    assert len({candidate["orientation"] for candidate in exhaustive}) >= len(
+        {candidate["orientation"] for candidate in searched})
 
 
 def _check_interpolation_uses_position_success_not_pose_success():
@@ -283,8 +289,8 @@ class SceneSupportSurfaceTest(unittest.TestCase):
     def test_base_search_snaps_every_candidate_to_support_surface(self):
         _check_base_search_snaps_every_candidate_to_support_surface()
 
-    def test_balanced_base_orientation_search_is_opt_in(self):
-        _check_balanced_base_orientation_search_is_opt_in()
+    def test_balanced_base_orientation_search_modes(self):
+        _check_balanced_base_orientation_search_modes()
 
     def test_interpolation_uses_position_success_not_pose_success(self):
         _check_interpolation_uses_position_success_not_pose_success()
@@ -300,8 +306,20 @@ class SceneSupportSurfaceTest(unittest.TestCase):
 
     def test_aloha_duplicated_arms_use_identical_tcp_axes(self):
         spec = get_robot_spec("aloha_agilex")
-        np.testing.assert_allclose(
-            spec.tcp_rot_site_left, spec.tcp_rot_site_right)
+        self.assertIsNone(spec.tcp_rot_site_left)
+        self.assertIsNone(spec.tcp_rot_site_right)
+        R = _quat_to_mat(spec.tcp_rot_site)
+        # Common TCP z is approach (site +x); signed TCP y selects site -y.
+        np.testing.assert_allclose(R[:, 2], [1.0, 0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(R[:, 1], [0.0, -1.0, 0.0], atol=1e-6)
+
+    def test_aloha_nested_base_shoulder_contact_is_baseline(self):
+        assert _is_known_baseline_self_contact(
+            "left_left/base_link", "left_left/shoulder_link")
+        assert _is_known_baseline_self_contact(
+            "right_left/shoulder_link", "right_left/base_link")
+        assert not _is_known_baseline_self_contact(
+            "left_left/gripper_base", "left_left/upper_forearm_link")
 
 
 if __name__ == "__main__":

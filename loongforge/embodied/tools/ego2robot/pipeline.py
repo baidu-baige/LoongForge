@@ -62,8 +62,13 @@ def build_arg_parser():
                     help="Base-pose search mode (default: balanced)")
     ap.add_argument(
         "--enable_base_orientation_search", action="store_true",
-        help=("Enable balanced base pitch/yaw/roll search; disabled by "
-              "default."),
+        help="Use the exhaustive paper pitch/yaw/roll grid.",
+    )
+    ap.add_argument(
+        "--trajectory_orientation_base_search",
+        action=argparse.BooleanOptionalAction, default=False,
+        help=("Search six bounded base orientations using whole-trajectory "
+              "pose reachability (default: disabled)."),
     )
     ap.add_argument("--base_pullback", type=float, default=0.0,
                     help="Move both arm mounts backward from the head gaze direction, in meters (default: disabled)")
@@ -86,6 +91,29 @@ def build_arg_parser():
                     help="Savitzky-Golay polynomial order for retarget targets")
     ap.add_argument("--target_orientation_sigma", type=float, default=6.0,
                     help="Gaussian quaternion smoothing sigma in frames (0 disables it)")
+    ap.add_argument("--no_trajectory_refine", action="store_true",
+                    help="Disable whole-episode refinement after frame-wise Mink IK")
+    ap.add_argument("--trajectory_refine_position_weight", type=float, default=1.0)
+    ap.add_argument("--trajectory_refine_orientation_weight", type=float, default=0.05)
+    ap.add_argument("--trajectory_refine_velocity_weight", type=float, default=0.2)
+    ap.add_argument("--trajectory_refine_acceleration_weight", type=float, default=1.0)
+    ap.add_argument("--trajectory_refine_home_weight", type=float, default=0.002)
+    ap.add_argument("--trajectory_refine_joint_margin_weight", type=float, default=0.05)
+    ap.add_argument("--trajectory_refine_joint_margin_fraction", type=float, default=0.10)
+    ap.add_argument("--trajectory_refine_collision_weight", type=float, default=4.0)
+    ap.add_argument("--trajectory_refine_collision_safe_distance", type=float, default=0.015)
+    ap.add_argument("--trajectory_refine_position_tolerance", type=float, default=0.005,
+                    help="Hard per-frame TCP position tolerance in meters")
+    ap.add_argument("--trajectory_refine_max_nfev", type=int, default=20)
+    ap.add_argument(
+        "--primary_trajectory_opt", action="store_true",
+        help=("Gray-scale switch (Scope C): make whole-trajectory optimization "
+              "the primary producer of the retarget trajectory (analytic "
+              "Jacobian; frame-wise Mink pass becomes a branch initializer). "
+              "Disabled by default."))
+    ap.add_argument(
+        "--trajectory_refine_primary_max_nfev", type=int, default=100,
+        help="least_squares max_nfev used when --primary_trajectory_opt is set")
 
     # Expose the few required downstream options that cannot use convenient
     # defaults at the run-all level. Other tunable options retain each step's
@@ -115,8 +143,21 @@ def build_arg_parser():
         default=0.02,
         help="Depth occlusion margin in meters; the robot must be closer than the background by this amount",
     )
+    ap.add_argument("--depth_temporal_window", type=int, default=5,
+                    help="Positive odd temporal median window for depth compositing")
+    ap.add_argument("--depth_transition_width", type=float, default=0.04,
+                    help="Smooth depth-occlusion transition half-width in meters")
+    ap.add_argument(
+        "--depth_align", action="store_true",
+        help="Experimental hand-keypoint alignment for DA3 depth (off by default)")
     ap.add_argument("--skip_depth", action="store_true",
                     help="Skip depth estimation and force alpha compositing (fallback for --with_depth)")
+    ap.add_argument(
+        "--no_scene_support", action="store_true",
+        help=("Keep depth-aware compositing but stop base search from snapping "
+              "the mount to the estimated scene support surface. Use this when "
+              "the metric depth and the hand-target reconstruction are on "
+              "inconsistent scales (e.g. the monocular Path B pipeline)."))
     return ap
 
 
@@ -229,15 +270,22 @@ def run(args):
     robot_retarget.run(SimpleNamespace(
         zarr_dir=args.input_dir,
         bg_dir=str(dir_inpaint),
+        mask_dir=str(dir_mask),
         state_dir=str(dir_align),
         output_dir=str(dir_retarget),
         scene_depth_dir=str(dir_depth) if with_depth else None,
         depth_mode=effective_depth_mode,
         depth_epsilon=float(getattr(args, "depth_epsilon", 0.02)),
+        depth_temporal_window=int(getattr(args, "depth_temporal_window", 5)),
+        depth_transition_width=float(getattr(args, "depth_transition_width", 0.04)),
+        human_hand_mask_dilation=8,
+        depth_align=getattr(args, "depth_align", False),
         robot_type=args.robot_type,
         base_search_mode=args.base_search_mode,
         enable_base_orientation_search=getattr(
             args, "enable_base_orientation_search", False),
+        trajectory_orientation_base_search=getattr(
+            args, "trajectory_orientation_base_search", False),
         ik_solver=getattr(args, "ik_solver", "mink"),
         base_pullback=getattr(args, "base_pullback", 0.0),
         max_jump_rad=getattr(args, "max_jump_rad", 0.0),
@@ -246,6 +294,34 @@ def run(args):
         target_smooth_window=getattr(args, "target_smooth_window", 11),
         target_smooth_polyorder=getattr(args, "target_smooth_polyorder", 3),
         target_orientation_sigma=getattr(args, "target_orientation_sigma", 6.0),
+        no_trajectory_refine=getattr(args, "no_trajectory_refine", False),
+        trajectory_refine_position_weight=getattr(
+            args, "trajectory_refine_position_weight", 1.0),
+        trajectory_refine_orientation_weight=getattr(
+            args, "trajectory_refine_orientation_weight", 0.05),
+        trajectory_refine_velocity_weight=getattr(
+            args, "trajectory_refine_velocity_weight", 0.2),
+        trajectory_refine_acceleration_weight=getattr(
+            args, "trajectory_refine_acceleration_weight", 1.0),
+        trajectory_refine_home_weight=getattr(
+            args, "trajectory_refine_home_weight", 0.002),
+        trajectory_refine_joint_margin_weight=getattr(
+            args, "trajectory_refine_joint_margin_weight", 0.05),
+        trajectory_refine_joint_margin_fraction=getattr(
+            args, "trajectory_refine_joint_margin_fraction", 0.10),
+        trajectory_refine_collision_weight=getattr(
+            args, "trajectory_refine_collision_weight", 4.0),
+        trajectory_refine_collision_safe_distance=getattr(
+            args, "trajectory_refine_collision_safe_distance", 0.015),
+        trajectory_refine_position_tolerance=getattr(
+            args, "trajectory_refine_position_tolerance", 0.005),
+        trajectory_refine_max_nfev=getattr(
+            args, "trajectory_refine_max_nfev", 20),
+        primary_trajectory_opt=getattr(
+            args, "primary_trajectory_opt", False),
+        trajectory_refine_primary_max_nfev=getattr(
+            args, "trajectory_refine_primary_max_nfev", 100),
+        no_scene_support=getattr(args, "no_scene_support", False),
         fps=pipeline_fps,
         feather=5,
         fy=None,  # Derive from each episode's intrinsics; fall back to 490.1961.

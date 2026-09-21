@@ -24,6 +24,15 @@ from pathlib import Path
 import numpy as np
 
 
+# smplx/MANO's native joint order differs from the OpenPose hand order used by
+# Dyn-HaMR tracks and Path B. Values are native MANO indices at OpenPose slots.
+MANO_TO_OPENPOSE = np.asarray(
+    [0, 13, 14, 15, 16, 1, 2, 3, 17, 4, 5, 6, 18, 10, 11, 12, 19, 7, 8, 9, 20],
+    dtype=np.int64,
+)
+OPENPOSE_TO_MANO = np.argsort(MANO_TO_OPENPOSE)
+
+
 def _compat_numpy_chumpy():
     if not hasattr(inspect, "getargspec"):
         inspect.getargspec = inspect.getfullargspec
@@ -193,9 +202,21 @@ def _mano_joints(result, mano_dir: Path):
     extras = out.vertices[:, [vertex_ids["mano"][k] for k in vertex_ids["mano"]]]
     # smplx's MANO order is rearranged to OpenPose order by this fixed map.
     joints = torch.cat([base, extras], dim=1)
-    order = [0, 13, 14, 15, 16, 1, 2, 3, 17, 4, 5, 6, 18, 10, 11, 12,
-             19, 7, 8, 9, 20]
-    joints = joints[:, order].reshape(b, t, 21, 3).detach().cpu().numpy()
+    joints = joints[:, MANO_TO_OPENPOSE].reshape(b, t, 21, 3)
+    # The bridge protocol is OpenPose order, matching WiLoR and Path B.
+    return joints.detach().cpu().numpy()
+
+
+def _restore_camera_handedness(joints, is_right):
+    """Undo Dyn-HaMR's right-hand MANO canonicalization for left tracks."""
+    joints = np.asarray(joints, dtype=np.float32).copy()
+    right = np.asarray(is_right, dtype=np.float32)
+    while right.ndim < joints.ndim - 1:
+        right = right[..., None]
+    if right.shape[-1:] == (1,):
+        right = right[..., 0]
+    sign = np.where(right > 0.5, 1.0, -1.0).astype(np.float32)
+    joints[..., 0] *= sign[..., None]
     return joints
 
 
@@ -254,6 +275,7 @@ def run(args):
         right = np.asarray(result.get("is_right", np.ones(joints.shape[:2])), dtype=np.float32)
         if right.ndim == 1:
             right = right[:, None]
+        joints = _restore_camera_handedness(joints, right)
         frame = np.arange(joints.shape[1], dtype=np.int64)[None].repeat(joints.shape[0], 0)
         np.savez_compressed(output / "dynhamr_predictions.npz",
                             pred_keypoints_3d=joints.reshape(-1, 21, 3),

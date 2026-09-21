@@ -94,9 +94,15 @@ python cli.py run-all --input_dir out_path_b --output_dir out_demo \
 ```
 
 For an offline protocol check, `--predictions` accepts a directory of NPZ/JSON
-files containing `pred_keypoints_3d` (or `keypoints_3d`/`joints_3d`). Each file
-may also contain `frame`, `right`, and `score` fields. A custom DynHaMR command
+files containing `pred_keypoints_3d` (or `keypoints_3d`/`joints_3d`) in the
+OpenPose-compatible 21-point hand order used by WiLoR (wrist, thumb, index,
+middle, ring, pinky). Each file may also contain `frame`, `right`, and `score`
+fields. A custom DynHaMR command
 can be supplied with `{input}` and `{output}` placeholders.
+
+Single-hand videos are supported. The missing hand remains invalid in the
+episode and is skipped by hand-target IK; no synthetic mirrored hand track is
+created.
 
 The official Dyn-HaMR repository can be connected with `--dynhamr_repo`:
 

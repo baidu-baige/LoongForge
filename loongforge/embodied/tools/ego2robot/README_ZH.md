@@ -94,8 +94,12 @@ python cli.py run-all --input_dir out_path_b --output_dir out_demo \
 ```
 
 离线验收可用 `--predictions` 指向 WiLoR/DynHaMR 输出目录。NPZ/JSON 至少要包含
-`pred_keypoints_3d`（或 `keypoints_3d`/`joints_3d`），也可提供 `frame`、`right`、
-`score` 字段。DynHaMR 可通过带 `{input}`、`{output}` 占位符的命令接入。
+`pred_keypoints_3d`（或 `keypoints_3d`/`joints_3d`），顺序需使用 WiLoR 采用的
+OpenPose 兼容 21 点手部顺序（wrist、thumb、index、middle、ring、pinky），也可提供
+`frame`、`right`、`score` 字段。DynHaMR 可通过带 `{input}`、`{output}` 占位符的命令接入。
+
+支持只有一只手的视频。缺失侧在 episode 中保持无效，retarget 时跳过该侧的手部目标
+IK，不再生成镜像关键点轨迹。
 
 也可以直接接入官方 Dyn-HaMR 仓库。官方入口是
 `dyn-hamr/run_opt.py`，不是 `infer.py`：
@@ -210,6 +214,12 @@ python cli.py run-all --robot_type xarm7 --base_pullback 0.05 \
   --input_dir <egoverse_zarr_dir> --output_dir <output_root> \
   --sam3_checkpoint /path/sam3.pt
 ```
+
+逐帧 Mink IK 后默认还会执行整段轨迹 refinement。它保留 TCP 跟踪目标，并联合优化
+关节速度、加速度、home pose 偏差和关节限位余量；如果平均或 P95 TCP 位置误差明显
+变差，会自动保留原始 Mink 轨迹。可用 `--no_trajectory_refine` 关闭，或用
+`--trajectory_refine_velocity_weight`、`--trajectory_refine_acceleration_weight`、
+`--trajectory_refine_home_weight` 和 `--trajectory_refine_joint_margin_weight` 调整权重。
 
 `--robot_type` 可选：`panda`、`xarm7`、`arx_l5`、`piper`、`yam`、`fr3`、`ur5e`、`ur10e`、`kinova_gen3`、`sawyer`、`iiwa`、`jaco`、`viperx`、`widowx`、`aloha_agilex`、`so_arm101`。SO-ARM101 使用仓库内置的官方 `new_calib` MuJoCo 模型和 5-DOF 位置优先 IK 配置。每种 morphology 建议使用独立的 `--output_dir`，避免混合不同状态维度。输出目录始终保留步骤编号：`01_load/ ... 04_inpaint/ [05_depth/] 06_retarget/ 07_lerobot/ 08_demo/`。未启用深度时仅省略 `05_depth/`，后续目录名保持不变。
 

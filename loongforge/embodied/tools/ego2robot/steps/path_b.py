@@ -40,6 +40,8 @@ except ImportError:  # pragma: no cover - zarr 2 compatibility
     VariableLengthBytes = None
 
 
+# The Path B protocol uses the OpenPose-compatible 21-point MANO layout used
+# by WiLoR and Dyn-HaMR (wrist, thumb, index, middle, ring, pinky chains).
 MANO_JOINTS = 21
 WRIST, THUMB_TIP, INDEX_TIP, MIDDLE_TIP = 0, 4, 8, 12
 
@@ -241,9 +243,34 @@ def apply_dynhamr(predictions, command: str | None, work_dir: Path, video: str |
     return collect_predictions(output)
 
 
+def _align_3d_tcp_to_2d(kp, keypoints_2d, width, height):
+    """Translate refined 3D points so their pinch center matches the 2D track."""
+    xyz_raw = np.asarray(kp, dtype=np.float32)
+    obs_raw = np.asarray(keypoints_2d, dtype=np.float32)
+    if xyz_raw.size != MANO_JOINTS * 3 or obs_raw.size != MANO_JOINTS * 2:
+        return xyz_raw.reshape(-1, 3)
+    xyz = xyz_raw.reshape(MANO_JOINTS, 3).copy()
+    obs = obs_raw.reshape(MANO_JOINTS, 2)
+    if not np.isfinite(xyz).all() or not np.isfinite(obs).all():
+        return xyz
+    focal = float(max(width, height))
+    center = np.asarray([width * 0.5, height * 0.5], dtype=np.float32)
+    observed_vf = 0.7 * obs[INDEX_TIP] + 0.3 * obs[MIDDLE_TIP]
+    observed_tcp = 0.5 * (obs[THUMB_TIP] + observed_vf)
+    virtual_finger = 0.7 * xyz[INDEX_TIP] + 0.3 * xyz[MIDDLE_TIP]
+    tcp = 0.5 * (xyz[THUMB_TIP] + virtual_finger)
+    if tcp[2] <= 1e-4:
+        return xyz
+    shift = np.zeros(3, dtype=np.float32)
+    # Project the actual Eq.1 TCP, not the mean of projected fingertips:
+    # perspective projection and averaging do not commute at unequal depths.
+    shift[:2] = (observed_tcp - center) * (float(tcp[2]) / focal) - tcp[:2]
+    return xyz + shift
+
+
 def apply_official_dynhamr(predictions, video: str, repo: str, mano_dir: str,
                            work_dir: Path, gpu: str, is_static: bool,
-                           mean_params: str | None = None):
+                           mean_params: str | None = None, image_size=None):
     """Run the official Dyn-HaMR bridge and keep the unrefined other hand."""
     extras = [x.get("_wilor_extra") for x in predictions]
     if not extras or any(x is None for x in extras):
@@ -271,11 +298,19 @@ def apply_official_dynhamr(predictions, video: str, repo: str, mano_dir: str,
         raise RuntimeError("official Dyn-HaMR failed (last output):\n" +
                            (proc.stdout + "\n" + proc.stderr)[-10000:])
     refined = collect_predictions(work_dir / "dynhamr_output")
+    if image_size is None:
+        cap = cv2.VideoCapture(str(video))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        cap.release()
+    else:
+        width, height = int(image_size[0]), int(image_size[1])
+    if width <= 0 or height <= 0:
+        width, height = 640, 368
     # Dyn-HaMR optimizes in a world frame whose origin/translation can differ
     # from WiLoR's camera-relative MANO coordinates (especially with a static
-    # synthetic camera). Align the refined single-hand track by its wrist so
-    # the robot projection remains in the source camera frame. This removes a
-    # global offset while preserving Dyn-HaMR's pose and temporal smoothing.
+    # synthetic camera). Align each refined hand by its wrist, then anchor its
+    # pinch center to WiLoR's 2D observation so the IK target and demo agree.
     if refined:
         refined_side = bool(float(refined[0]["right"]) > 0.5)
         source_track = [x for x in predictions
@@ -294,8 +329,46 @@ def apply_official_dynhamr(predictions, video: str, repo: str, mano_dir: str,
             refined_kp = np.asarray(item["keypoints"], dtype=np.float32).reshape(21, 3)
             refined_kp = refined_kp + (source_kp[WRIST] - refined_kp[WRIST])
             item["keypoints"] = refined_kp
+            # Keep WiLoR's original full-image 2D observations for the demo.
+            # Dyn-HaMR refines 3D MANO, but its exported 3D->2D projection can
+            # drift because the synthetic camera has different intrinsics.
+            source_2d = source.get("_wilor_extra", {}).get("keypoints_2d")
+            if source_2d is not None:
+                source_2d = np.asarray(source_2d, dtype=np.float32).reshape(21, 2)
+                refined_kp = _align_3d_tcp_to_2d(
+                    refined_kp, source_2d, width, height)
+                item["keypoints_2d"] = source_2d
+            item["keypoints"] = refined_kp
     refined_side = bool(refined[0]["right"]) if refined else True
     return refined + [x for x in predictions if bool(float(x["right"]) > 0.5) != refined_side]
+
+
+def detections_to_2d_tracks(detections, n_frames, width):
+    """Collect optional full-image 2D observations in left/right tracks."""
+    tracks = {side: np.full((n_frames, MANO_JOINTS, 2), np.nan, np.float32)
+              for side in ("left", "right")}
+    for det in sorted(detections, key=lambda d: (d["frame"], -d["score"])):
+        t = int(det["frame"])
+        value = det.get("keypoints_2d")
+        if value is None:
+            value = det.get("_wilor_extra", {}).get("keypoints_2d")
+        if t < 0 or t >= n_frames or value is None:
+            continue
+        kp = np.asarray(value, dtype=np.float32).reshape(-1, 2)
+        if kp.shape != (MANO_JOINTS, 2) or not np.isfinite(kp).all():
+            continue
+        side = "right" if _side(det["right"], np.pad(kp, ((0, 0), (0, 1))), width) else "left"
+        if not np.isfinite(tracks[side][t]).all():
+            tracks[side][t] = kp
+    for side, arr in tracks.items():
+        valid = np.isfinite(arr).all(axis=(1, 2))
+        if not valid.any():
+            continue
+        idx, good = np.arange(n_frames), np.flatnonzero(valid)
+        for j in range(MANO_JOINTS):
+            for d in range(2):
+                arr[:, j, d] = np.interp(idx, good, arr[good, j, d])
+    return tracks
 
 
 def _side(value, kp, width):
@@ -307,7 +380,11 @@ def _side(value, kp, width):
 
 
 def detections_to_tracks(detections, n_frames, width):
-    """Assign unordered hand detections to stable left/right tracks."""
+    """Assign detections to stable tracks, accepting single-hand videos.
+
+    Missing sides remain invalid. Downstream retargeting uses the confidence
+    arrays to skip IK for a hand that was not observed.
+    """
     tracks = {"left": np.full((n_frames, MANO_JOINTS, 3), np.nan, np.float32),
               "right": np.full((n_frames, MANO_JOINTS, 3), np.nan, np.float32)}
     scores = {"left": np.zeros(n_frames, np.float32), "right": np.zeros(n_frames, np.float32)}
@@ -325,25 +402,29 @@ def detections_to_tracks(detections, n_frames, width):
             tracks[side][t] = kp
             scores[side][t] = det["score"]
 
+    valid_sides = []
     for side in tracks:
         arr = tracks[side]
         valid = np.isfinite(arr).all(axis=(1, 2))
-        if not valid.any():
-            raise RuntimeError(f"WiLoR produced no {side}-hand detections")
-        # Interpolate short gaps and hold the edge. Long gaps still become a
-        # held pose so the downstream dual-arm solver receives a continuous
-        # trajectory; confidence records which frames were inferred.
-        idx = np.arange(n_frames)
-        good = np.flatnonzero(valid)
-        for j in range(MANO_JOINTS):
-            for d in range(3):
-                arr[:, j, d] = np.interp(idx, good, arr[good, j, d])
-        tracks[side] = arr
+        if valid.any():
+            valid_sides.append(side)
+            # Interpolate short gaps and hold the edge. Long gaps still become a
+            # held pose so the downstream dual-arm solver receives a continuous
+            # trajectory; confidence records which frames were inferred.
+            idx = np.arange(n_frames)
+            good = np.flatnonzero(valid)
+            for j in range(MANO_JOINTS):
+                for d in range(3):
+                    arr[:, j, d] = np.interp(idx, good, arr[good, j, d])
+            tracks[side] = arr
+
+    if not valid_sides:
+        raise RuntimeError("WiLoR produced no hand detections")
     return tracks, scores
 
 
 def smooth_tracks(tracks, window=11, polyorder=3):
-    """Savitzky-Golay smooth positions while preserving the MANO layout."""
+    """Smooth finite tracks, preserving invalid/missing tracks unchanged."""
     if window <= polyorder + 1 or window % 2 == 0:
         raise ValueError("smooth window must be odd and greater than polyorder")
     try:
@@ -353,7 +434,9 @@ def smooth_tracks(tracks, window=11, polyorder=3):
     out = {}
     for side, arr in tracks.items():
         out[side] = arr.copy()
-        if len(arr) >= window:
+        # Missing hands deliberately contain NaNs. Savitzky-Golay's edge
+        # fitting requires finite input; never invent coordinates to fill them.
+        if len(arr) >= window and np.isfinite(arr).all():
             out[side] = savgol_filter(arr, window, polyorder, axis=0).astype(np.float32)
     return out
 
@@ -412,7 +495,7 @@ def _vlen_array(group, name, values):
 
 
 def write_episode(output_dir: Path, episode: str, frames, fps, tracks, scores,
-                  metadata=None):
+                  tracks_2d=None, metadata=None):
     """Write the canonical Zarr episode consumed by the existing pipeline."""
     ep_dir = output_dir / episode
     ep_dir.mkdir(parents=True, exist_ok=True)
@@ -425,8 +508,11 @@ def write_episode(output_dir: Path, episode: str, frames, fps, tracks, scores,
                         np.asarray(tracks[side], dtype=np.float32))
         for side in ("left", "right")
     }
-    left_kp = world_tracks["left"].reshape(n, -1).astype(np.float32)
-    right_kp = world_tracks["right"].reshape(n, -1).astype(np.float32)
+    observed_tracks = {side: world_tracks[side].copy() for side in world_tracks}
+    for side in observed_tracks:
+        observed_tracks[side][scores[side] <= 0.0] = np.nan
+    left_kp = observed_tracks["left"].reshape(n, -1).astype(np.float32)
+    right_kp = observed_tracks["right"].reshape(n, -1).astype(np.float32)
     left_ee, _ = _tcp_pose(world_tracks["left"], -1.0)
     right_ee, _ = _tcp_pose(world_tracks["right"], +1.0)
     head = np.zeros((n, 7), np.float32)
@@ -442,13 +528,16 @@ def write_episode(output_dir: Path, episode: str, frames, fps, tracks, scores,
     group.attrs.update(attrs)
     arrays = {
         "left.obs_keypoints": left_kp, "right.obs_keypoints": right_kp,
-        "left.obs_wrist_pose": np.concatenate([world_tracks["left"][:, WRIST], _quat_identity(n)], 1),
-        "right.obs_wrist_pose": np.concatenate([world_tracks["right"][:, WRIST], _quat_identity(n)], 1),
+        "left.obs_wrist_pose": np.concatenate([observed_tracks["left"][:, WRIST], _quat_identity(n)], 1),
+        "right.obs_wrist_pose": np.concatenate([observed_tracks["right"][:, WRIST], _quat_identity(n)], 1),
         "left.obs_ee_pose": left_ee, "right.obs_ee_pose": right_ee,
         "obs_head_pose": head,
         "obs_rgb_timestamps_ns": (np.arange(n) * (1e9 / fps)).astype(np.int64),
         "path_b_left_confidence": scores["left"], "path_b_right_confidence": scores["right"],
     }
+    if tracks_2d is not None:
+        arrays["left.obs_keypoints_2d"] = np.asarray(tracks_2d["left"], dtype=np.float32).reshape(n, -1)
+        arrays["right.obs_keypoints_2d"] = np.asarray(tracks_2d["right"], dtype=np.float32).reshape(n, -1)
     for name, value in arrays.items():
         group.create_array(name, data=value, chunks="auto")
     encoded = []
@@ -479,21 +568,39 @@ def process_video(args):
                 predictions, args.video, args.dynhamr_repo,
                 args.dynhamr_mano_dir or args.mano_dir, work,
                 args.dynhamr_gpu, args.dynhamr_is_static,
-                args.dynhamr_mean_params)
+                args.dynhamr_mean_params,
+                image_size=(frames[0].shape[1], frames[0].shape[0]))
         else:
             predictions = apply_dynhamr(predictions, args.dynhamr_command, work, args.video)
+        tracks_2d = detections_to_2d_tracks(predictions, len(frames), frames[0].shape[1])
         tracks, scores = detections_to_tracks(predictions, len(frames), frames[0].shape[1])
         tracks = smooth_tracks(tracks, args.smooth_window, args.smooth_polyorder)
+        # Smoothing can move the pinch center by a few pixels. Re-anchor the
+        # final 3D tracks after smoothing so IK and the 2D diagnostic agree.
+        for side in ("left", "right"):
+            for t in range(len(frames)):
+                if (scores[side][t] > 0.0 and
+                        np.isfinite(tracks[side][t]).all() and
+                        np.isfinite(tracks_2d[side][t]).all()):
+                    tracks[side][t] = _align_3d_tcp_to_2d(
+                        tracks[side][t], tracks_2d[side][t],
+                        frames[0].shape[1], frames[0].shape[0])
     output = write_episode(Path(args.output_dir), args.episode, frames, fps, tracks, scores,
-                           {"wilor_checkpoint": str(args.checkpoint),
-                            "temporal_refiner": "DynHaMR" if args.dynhamr_command else "savgol"})
+                           tracks_2d=tracks_2d,
+                           metadata={"wilor_checkpoint": str(args.checkpoint),
+                            "temporal_refiner": "DynHaMR" if args.dynhamr_command else "savgol",
+                            "detected_hands": [side for side in ("left", "right")
+                                               if float(np.max(scores[side])) > 0.0]})
     world_tracks = {
         side: np.einsum("ij,nkj->nki", CAMERA_TO_WORLD,
                         np.asarray(tracks[side], dtype=np.float32))
         for side in ("left", "right")
     }
+    observed_tracks = {side: world_tracks[side].copy() for side in world_tracks}
+    for side in observed_tracks:
+        observed_tracks[side][scores[side] <= 0.0] = np.nan
     pred_out = Path(args.output_dir) / f"{args.episode}_predictions.npz"
-    np.savez_compressed(pred_out, left_keypoints=world_tracks["left"], right_keypoints=world_tracks["right"],
+    np.savez_compressed(pred_out, left_keypoints=observed_tracks["left"], right_keypoints=observed_tracks["right"],
                         left_confidence=scores["left"], right_confidence=scores["right"],
                         fps=np.asarray(fps))
     print(f"Path B complete: {output}")

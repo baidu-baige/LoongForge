@@ -118,6 +118,65 @@ def feather_mask(mask, ksize=5):
     return np.clip(m, 0.0, 1.0)[..., None]
 
 
+def temporal_median_depth_frame(depth_sequence, frame_index, window=5):
+    """Return one scene-depth frame after a short centered median.
+
+    Monocular depth is inferred independently for every video frame. A median
+    suppresses isolated jumps without averaging depth across object edges.
+    """
+    depth_sequence = np.asarray(depth_sequence)
+    if depth_sequence.ndim != 3:
+        raise ValueError(
+            f"depth_sequence must have shape (N,H,W), got {depth_sequence.shape}")
+    window = int(window)
+    if window < 1 or window % 2 == 0:
+        raise ValueError("depth temporal window must be a positive odd integer")
+    frame_index = int(frame_index)
+    if frame_index < 0 or frame_index >= len(depth_sequence):
+        raise IndexError(f"depth frame index out of range: {frame_index}")
+    if window == 1:
+        return depth_sequence[frame_index]
+    radius = window // 2
+    start = max(0, frame_index - radius)
+    stop = min(len(depth_sequence), frame_index + radius + 1)
+    return np.median(depth_sequence[start:stop], axis=0).astype(
+        np.float32, copy=False)
+
+
+def depth_visibility_alpha(mask, robot_depth, scene_depth, margin=0.02,
+                           transition_width=0.04):
+    """Compute robot visibility with a soft monocular-depth tolerance.
+
+    The transition band prevents centimeter-scale scene-depth noise from
+    toggling complete links between visible and hidden in adjacent frames.
+    Invalid scene depth is unknown and must not be treated as an occluder.
+    """
+    mask = np.asarray(mask, dtype=bool)
+    robot_depth = np.asarray(robot_depth, dtype=np.float32)
+    scene_depth = np.asarray(scene_depth, dtype=np.float32)
+    if robot_depth.shape != mask.shape or scene_depth.shape != mask.shape:
+        raise ValueError(
+            "mask, robot_depth, and scene_depth must have matching shapes")
+    transition_width = float(transition_width)
+    if not np.isfinite(transition_width) or transition_width < 0:
+        raise ValueError("depth transition width must be finite and non-negative")
+
+    alpha = np.zeros(mask.shape, dtype=np.float32)
+    robot_valid = mask & np.isfinite(robot_depth) & (robot_depth > 0.0)
+    scene_valid = np.isfinite(scene_depth) & (scene_depth > 0.0)
+    alpha[robot_valid & ~scene_valid] = 1.0
+    compare = robot_valid & scene_valid
+    clearance = scene_depth[compare] - robot_depth[compare]
+    if transition_width == 0.0:
+        alpha[compare] = clearance > float(margin)
+        return alpha
+
+    lower = float(margin) - transition_width
+    x = np.clip((clearance - lower) / (2.0 * transition_width), 0.0, 1.0)
+    alpha[compare] = x * x * (3.0 - 2.0 * x)
+    return alpha
+
+
 def read_video_frames(path):
     """Read all MP4 frames into a list of BGR ndarrays."""
     cap = cv2.VideoCapture(str(path))
@@ -172,12 +231,15 @@ def build_dual_model(left_pos, left_quat, right_pos, right_quat, fovy_deg,
         rq=" ".join(f"{v:.6f}" for v in right_quat),
         fovy=fovy_deg,
     )
-    wp = Path("/tmp") / f"ego2robot_dual_wrapper_{spec.name}.xml"
-    wp.write_text(xml)
-    return mujoco.MjModel.from_xml_path(str(wp))
+    # Base-pair screening runs concurrently in the multi-GPU launcher. A shared
+    # morphology-named file in /tmp can be truncated by one worker while another
+    # worker is parsing it, producing intermittent "ParseXML: empty file"
+    # failures. The referenced robot asset path is absolute, so parsing this
+    # small wrapper directly from memory is both sufficient and race-free.
+    return mujoco.MjModel.from_xml_string(xml)
 
 
-def hide_non_arm_geoms(model, spec=None):
+def hide_non_arm_geoms(model, spec=None, active_sides=None):
     """Hide base, bed, decorative, and all group-3 collision geometry.
 
     Keep bodies related to the arm and hand. The general policy retains link0 through
@@ -185,6 +247,8 @@ def hide_non_arm_geoms(model, spec=None):
     """
     # Keep link1..link7, hand, and fingers; hide the bulky and visually distracting link0 base.
     spec = spec or get_robot_spec("panda")
+    if active_sides is not None:
+        active_sides = {str(side).lower() for side in active_sides}
     keep_kw = spec.visual_keywords
     hide_kw = spec.visual_hide_keywords
     hidden = 0
@@ -193,10 +257,79 @@ def hide_non_arm_geoms(model, spec=None):
         bname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, bid) or ""
         keep = any(kw in bname for kw in keep_kw)
         force_hide = any(kw in bname for kw in hide_kw)
+        if active_sides is not None:
+            if bname.startswith("left_") and "left" not in active_sides:
+                force_hide = True
+            elif bname.startswith("right_") and "right" not in active_sides:
+                force_hide = True
         if not keep or force_hide or model.geom_group[gid] == 3:
             model.geom_rgba[gid, 3] = 0.0
             hidden += 1
     return hidden
+
+
+def gripper_geom_ids(model, spec=None, active_sides=None):
+    """Return visible geom IDs belonging to the end-effector/gripper.
+
+    The boundary is inferred from the kinematic tree: each finger joint's body
+    and descendants are included, together with the resolved end-effector body
+    (the palm or gripper base) and its descendants. This avoids morphology-
+    specific body-name heuristics and keeps the proximal arm out of the depth
+    comparison.
+    """
+    spec = spec or get_robot_spec("panda")
+    active = ({"left", "right"} if active_sides is None else
+              {str(side).lower() for side in active_sides})
+    gripper_bodies = set()
+
+    for side in active:
+        prefix = f"{side}_"
+        roots = set()
+        for joint_name in spec.finger_joints:
+            joint_id = mujoco.mj_name2id(
+                model, mujoco.mjtObj.mjOBJ_JOINT, prefix + joint_name)
+            if joint_id >= 0:
+                roots.add(int(model.jnt_bodyid[joint_id]))
+        try:
+            ref_kind, ref_id = resolve_prefixed_ee_ref(model, spec, prefix)
+            roots.add(int(model.site_bodyid[ref_id])
+                      if ref_kind == "site" else int(ref_id))
+        except ValueError:
+            pass
+        for body_id in range(model.nbody):
+            current = body_id
+            while current > 0:
+                if current in roots:
+                    gripper_bodies.add(body_id)
+                    break
+                current = int(model.body_parentid[current])
+
+    return np.asarray([
+        geom_id for geom_id in range(model.ngeom)
+        if int(model.geom_bodyid[geom_id]) in gripper_bodies and
+        model.geom_rgba[geom_id, 3] > 0.0
+    ], dtype=np.int32)
+
+
+def render_geom_subset_mask(model, data, renderer, cam_id, geom_ids):
+    """Render a binary mask for an explicit subset of visible geoms."""
+    geom_ids = np.asarray(geom_ids, dtype=np.int32).reshape(-1)
+    if geom_ids.size == 0:
+        return np.zeros((renderer.height, renderer.width), dtype=bool)
+    original_alpha = model.geom_rgba[:, 3].copy()
+    try:
+        keep = np.zeros(model.ngeom, dtype=bool)
+        keep[geom_ids] = True
+        model.geom_rgba[~keep, 3] = 0.0
+        renderer.disable_segmentation_rendering()
+        renderer.enable_depth_rendering()
+        renderer.update_scene(data, camera=cam_id)
+        depth = renderer.render().copy().astype(np.float32)
+        far = float(model.vis.map.zfar * model.stat.extent)
+        return np.isfinite(depth) & (depth > 0.0) & (depth < far * 0.999)
+    finally:
+        renderer.disable_depth_rendering()
+        model.geom_rgba[:, 3] = original_alpha
 
 
 def set_ego_camera(data, head_pose7):

@@ -178,7 +178,15 @@ def episode_inpaint(ep_hash: str, zarr_dir: Path, mask_dir: Path, output_dir: Pa
     for start in range(0, n, chunk_frames):
         end = min(start + chunk_frames, n)
         chunk_dir = work_dir / f"chunk_{start:06d}"
-        fdir, mdir = stage_inputs(frames[start:end], masks[start:end], chunk_dir)
+        chunk_rgb = frames[start:end]
+        chunk_masks = masks[start:end]
+        # ProPainter's RAFT path computes frame-to-frame flow and crashes when
+        # a final chunk contains only one frame. Duplicate that frame for the
+        # inference call, then keep only the original frame below.
+        if len(chunk_rgb) == 1:
+            chunk_rgb = chunk_rgb + chunk_rgb
+            chunk_masks = np.concatenate((chunk_masks, chunk_masks), axis=0)
+        fdir, mdir = stage_inputs(chunk_rgb, chunk_masks, chunk_dir)
         pp_out = chunk_dir / "pp_out"
         run_propainter(
             fdir,
@@ -203,10 +211,16 @@ def episode_inpaint(ep_hash: str, zarr_dir: Path, mask_dir: Path, output_dir: Pa
             # ProPainter restarts zero-padded frame names for each chunk.
             p = frames_out_dir / f"{t - start:04d}.png"
             bgr = cv2.imread(str(p))
+            if bgr is None:
+                raise RuntimeError(f"ProPainter frame output missing or unreadable: {p}")
             bg_frames.append(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
         elapsed = time.time() - t0
         chunk_times.append((start, end, round(elapsed, 1)))
         print(f"    chunk [{start}:{end}] done in {elapsed:.1f}s")
+        # The merged RGB frames are already held in ``bg_frames``. Remove all
+        # per-chunk PNG/MP4 intermediates before starting the next chunk to
+        # keep peak disk usage bounded for multi-GPU runs.
+        shutil.rmtree(chunk_dir, ignore_errors=True)
 
     # Chunking produces no single ProPainter MP4, so encode bg.mp4 from the merged frames.
     writer = cv2.VideoWriter(str(ep_out / "bg.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), fps, (W, H))
@@ -307,6 +321,10 @@ def run(args):
             print(f"  done: {meta['n_frames']}f, mask_area={meta['mean_mask_area']:.3f}, "
                   f"{meta['elapsed_sec']}s")
         except Exception as e:
+            # A failed ProPainter invocation otherwise leaves hundreds of PNGs
+            # in the staging tree, which can make the next worker fail with
+            # ENOSPC even after the original process has exited.
+            shutil.rmtree(Path(config.PROPAINTER_STAGE_ROOT) / ep, ignore_errors=True)
             print(f"  FAILED: {e}")
 
 

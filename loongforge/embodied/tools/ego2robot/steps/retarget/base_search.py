@@ -38,6 +38,20 @@ BASE_VERTICAL = (0.3, 0.2, 0.0, -0.2, -0.3)
 BASE_PITCH_DEG = (30.0, 45.0, 60.0)
 BASE_YAW_DEG = (-45.0, -20.0, 0.0, 20.0, 45.0)
 BASE_ROLL_DEG = (-15.0, 0.0, 15.0)
+# Bounded orientation set for the default balanced search. It covers the base
+# rotations that most strongly affect wrist reachability without evaluating the
+# full 45-orientation paper grid.
+BASE_TRAJECTORY_ORIENTATIONS_DEG = (
+    (0.0, -20.0, 0.0),
+    (0.0, 0.0, 0.0),
+    (0.0, 20.0, 0.0),
+    (30.0, -20.0, 0.0),
+    (30.0, 0.0, 0.0),
+    (30.0, 20.0, 0.0),
+)
+# A tabletop mount must stay upright, but its yaw is a real installation
+# degree of freedom and materially changes wrist feasibility on a 5-DoF arm.
+BASE_UPRIGHT_YAW_DEG = (-90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0)
 BASE_MAX_KEYFRAMES = 20
 BASE_POSITION_SHORTLIST_FAST = 8
 BASE_POSITION_SHORTLIST_BALANCED = 16
@@ -412,6 +426,11 @@ def _base_orientation_candidates(R_nominal):
                 yield R_nominal @ delta, (pitch, yaw, roll)
 
 
+def _upright_orientation_candidates(R_nominal):
+    for yaw in BASE_UPRIGHT_YAW_DEG:
+        yield R_nominal @ _rot_z(np.deg2rad(yaw)), (0.0, yaw, 0.0)
+
+
 def _screen_orientation_candidates(R_nominal):
     """Return a small orientation cover for the balanced position screen."""
     wanted = {
@@ -427,7 +446,33 @@ def _screen_orientation_candidates(R_nominal):
     ]
 
 
+def _trajectory_orientation_candidates(R_nominal):
+    """Return the bounded six-orientation balanced search set."""
+    return [
+        (R_nominal @ _rot_z(np.deg2rad(yaw)) @
+         _rot_y(np.deg2rad(pitch)) @ _rot_x(np.deg2rad(roll)),
+         (pitch, yaw, roll))
+        for pitch, yaw, roll in BASE_TRAJECTORY_ORIENTATIONS_DEG
+    ]
+
+
 def _candidate_score(record):
+    if record.get("projection_search", False):
+        return (2.0 * record["feasibility_rate"] +
+                0.25 * record["position_rate"] -
+                0.5 * record["mean_rot_error"] -
+                0.75 * abs(record["reach_ratio"] - BASE_REACH_TARGET) +
+                0.1 * record.get("mean_joint_margin", 0.0))
+    if record.get("trajectory_orientation_search", False):
+        # Position is a feasibility requirement. Inside that set, prefer low
+        # mean/P95 orientation error and retain joint-limit/reach robustness.
+        return (2.0 * record["position_rate"] +
+                1.5 * record["feasibility_rate"] -
+                0.75 * record["mean_rot_error"] -
+                0.25 * record.get("p95_rot_error",
+                                  record["mean_rot_error"]) -
+                0.75 * abs(record["reach_ratio"] - BASE_REACH_TARGET) +
+                0.2 * record.get("mean_joint_margin", 0.0))
     return record["feasibility_rate"] - 5.0 * abs(
         record["reach_ratio"] - BASE_REACH_TARGET)
 
@@ -435,8 +480,25 @@ def _candidate_score(record):
 def _sort_base_records(records):
     return sorted(records, key=lambda r: (
         r["score"], r["feasibility_rate"], r["position_rate"],
-        -r["mean_pos_error"],
+        r.get("mean_joint_margin", 0.0), -r["mean_pos_error"],
     ), reverse=True)
+
+
+def _joint_limit_margin(model, q, arm_ids):
+    """Return the smallest normalized arm-joint distance from a hard limit."""
+    if arm_ids is None:
+        return 1.0
+    margins = []
+    for jid in arm_ids:
+        if not model.jnt_limited[jid]:
+            continue
+        lo, hi = model.jnt_range[jid]
+        span = float(hi - lo)
+        if span <= 1e-8:
+            continue
+        value = float(q[int(model.jnt_qposadr[jid])])
+        margins.append(2.0 * min(value - lo, hi - value) / span)
+    return float(np.clip(min(margins), 0.0, 1.0)) if margins else 1.0
 
 
 def search_base_pose_original(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
@@ -579,14 +641,17 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
                      enable_base_orientation_search=False,
                      base_height_anchor=None,
                      base_forward_anchor=None, base_forward_offsets=None,
-                     max_target_distance=None, support_surface=None):
+                     max_target_distance=None, support_surface=None,
+                     trajectory_orientation_search=False,
+                     mink_projection_context=None,
+                     projection_planes_world=None,
+                     projection_directions_world=None):
     """Search base poses using the Ego2Robot candidate grid and scoring.
 
     ``slow`` evaluates every surviving translation/orientation combination.
-    With ``enable_base_orientation_search``, ``balanced`` preserves the
-    paper's full orientation grid but uses five representative orientations
-    to screen translations before full IK. It is disabled by default so the
-    base remains at the nominal camera-facing orientation. ``fast`` is the
+    ``balanced`` searches a bounded six-orientation set by default. Setting
+    ``trajectory_orientation_search=False`` keeps the nominal orientation;
+    ``enable_base_orientation_search`` expands to the paper's full grid. ``fast`` is the
     previous single-orientation screen with a smaller shortlist. ``original``
     always restores the hand-anchored fixed-orientation search. The IK backend
     is selected independently.
@@ -608,8 +673,21 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
             support_surface=support_surface)
     targets_p_world = np.asarray(targets_p_world, dtype=float)
     targets_R_world = np.asarray(targets_R_world, dtype=float)
+    if projection_planes_world is not None:
+        projection_planes_world = np.asarray(
+            projection_planes_world, dtype=float).reshape(
+                len(targets_p_world), -1, 3)
+    if projection_directions_world is not None:
+        projection_directions_world = np.asarray(
+            projection_directions_world, dtype=float).reshape(
+                len(targets_p_world), -1, 3)
+        if (projection_planes_world is None or
+                projection_directions_world.shape !=
+                projection_planes_world.shape):
+            raise ValueError(
+                "projection plane directions must match plane normals")
     idx = select_base_keyframes(targets_p_world, targets_R_world, max_keyframes)
-    kf_p, kf_R = targets_p_world[idx], targets_R_world[idx]
+    kf_p = targets_p_world[idx]
     anchor = targets_p_world.mean(axis=0)
     if base_height_anchor is not None:
         anchor[2] = float(base_height_anchor)
@@ -630,13 +708,18 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
     camera_pos = anchor if camera_pos is None else np.asarray(camera_pos, dtype=float)
 
     fixed_base_orientation = (
-        base_orientation_mode == "upright" or
-        (search_mode == "balanced" and
-         not bool(enable_base_orientation_search))
-    )
-    all_orientations = ([(R_nominal, (0.0, 0.0, 0.0))]
-                        if fixed_base_orientation else
-                        list(_base_orientation_candidates(R_nominal)))
+        base_orientation_mode != "upright" and
+        search_mode == "balanced" and
+        not bool(trajectory_orientation_search) and
+        not bool(enable_base_orientation_search))
+    if base_orientation_mode == "upright":
+        all_orientations = list(_upright_orientation_candidates(R_nominal))
+    elif fixed_base_orientation:
+        all_orientations = [(R_nominal, (0.0, 0.0, 0.0))]
+    elif search_mode == "balanced" and not enable_base_orientation_search:
+        all_orientations = _trajectory_orientation_candidates(R_nominal)
+    else:
+        all_orientations = list(_base_orientation_candidates(R_nominal))
     if search_mode == "slow":
         # The paper grid is still enumerated below.  Its expensive evaluation
         # is coarse-to-fine; doing another all-orientation position QP here
@@ -648,8 +731,12 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
         eval_idx = coarse_idx
         eval_max_iter = BASE_SLOW_COARSE_MAX_ITER
     elif search_mode == "balanced":
-        screen_orientations = (all_orientations if fixed_base_orientation else
-                               _screen_orientation_candidates(R_nominal))
+        screen_orientations = (
+            all_orientations if (fixed_base_orientation or
+                                 base_orientation_mode == "upright" or
+                                 (trajectory_orientation_search and
+                                  not enable_base_orientation_search)) else
+            _screen_orientation_candidates(R_nominal))
         position_shortlist = BASE_POSITION_SHORTLIST_BALANCED
         eval_idx = idx
         eval_max_iter = 100
@@ -662,6 +749,33 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
     position_solver = (solve_arm_ik_position_only if use_mink
                        else solve_arm_ik_position_only_dls)
     pose_solver = solve_arm_ik if use_mink else solve_arm_ik_dls
+    projection_search = bool(
+        use_mink and mink_projection_context is not None and
+        projection_planes_world is not None)
+
+    def solve_pose(frame_idx, base_pos, base_R, warm, max_iter):
+        p_world = targets_p_world[frame_idx]
+        R_world = targets_R_world[frame_idx]
+        p_base = base_R.T @ (p_world - base_pos)
+        R_base_target = base_R.T @ R_world
+        if projection_search:
+            normals_world = projection_planes_world[frame_idx]
+            if np.isfinite(normals_world).all():
+                normals_base = normals_world @ base_R
+                directions_base = (
+                    projection_directions_world[frame_idx] @ base_R
+                    if projection_directions_world is not None else None)
+                return mink_projection_context.solve(
+                    p_base, R_base_target, q_init=warm,
+                    max_iterations=max_iter, tol_pos=BASE_FEAS_POS_TOL,
+                    tol_rot=BASE_FEAS_ROT_TOL,
+                    projection_plane_normals=normals_base,
+                    projection_plane_directions=directions_base)
+        return pose_solver(
+            model, arm_qadr, arm_vadr, arm_ids, ee_ref,
+            p_base, R_base_target, q_init=warm,
+            max_iter=max_iter, tol_pos=BASE_FEAS_POS_TOL,
+            tol_rot=BASE_FEAS_ROT_TOL, mink_context=mink_context)
     screen_idx = select_base_keyframes(
         targets_p_world, targets_R_world, BASE_POSITION_SCREEN_KEYFRAMES)
     screen_p = targets_p_world[screen_idx]
@@ -771,20 +885,15 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
         base_pos = position["base_pos"]
         for base_R, euler in all_orientations:
             warm = None
-            errors_pos, errors_rot = [], []
+            errors_pos, errors_rot, joint_margins = [], [], []
             successes = 0
             for frame_idx in eval_idx:
-                p_world, R_world = targets_p_world[frame_idx], targets_R_world[frame_idx]
-                p_base = base_R.T @ (p_world - base_pos)
-                R_base_target = base_R.T @ R_world
-                q, _, err_pos, err_rot = pose_solver(
-                    model, arm_qadr, arm_vadr, arm_ids, ee_ref,
-                    p_base, R_base_target, q_init=warm,
-                    max_iter=eval_max_iter, tol_pos=BASE_FEAS_POS_TOL,
-                    tol_rot=BASE_FEAS_ROT_TOL, mink_context=mink_context)
+                q, _, err_pos, err_rot = solve_pose(
+                    frame_idx, base_pos, base_R, warm, eval_max_iter)
                 warm = q
                 errors_pos.append(err_pos)
                 errors_rot.append(err_rot)
+                joint_margins.append(_joint_limit_margin(model, q, arm_ids))
                 successes += int(err_pos < BASE_FEAS_POS_TOL and
                                  err_rot < BASE_FEAS_ROT_TOL)
             record = {
@@ -796,7 +905,13 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
                 "feasibility_rate": successes / len(eval_idx),
                 "mean_pos_error": float(np.mean(errors_pos)),
                 "mean_rot_error": float(np.mean(errors_rot)),
+                "p95_rot_error": float(np.quantile(errors_rot, 0.95)),
+                "mean_joint_margin": float(np.mean(joint_margins)),
                 "reach_ratio": position["reach_ratio"],
+                "projection_search": projection_search,
+                "trajectory_orientation_search": bool(
+                    trajectory_orientation_search and
+                    search_mode == "balanced"),
             }
             record["score"] = _candidate_score(record)
             records.append(record)
@@ -821,25 +936,23 @@ def search_base_pose(model, arm_qadr, arm_vadr, arm_ids, ee_ref,
             base_pos = coarse["base_pos"]
             base_R = coarse["base_R"]
             warm = None
-            errors_pos, errors_rot = [], []
+            errors_pos, errors_rot, joint_margins = [], [], []
             successes = 0
-            for p_world, R_world in zip(kf_p, kf_R):
-                p_base = base_R.T @ (p_world - base_pos)
-                R_base_target = base_R.T @ R_world
-                q, _, err_pos, err_rot = pose_solver(
-                    model, arm_qadr, arm_vadr, arm_ids, ee_ref,
-                    p_base, R_base_target, q_init=warm,
-                    max_iter=100, tol_pos=BASE_FEAS_POS_TOL,
-                    tol_rot=BASE_FEAS_ROT_TOL, mink_context=mink_context)
+            for frame_idx in idx:
+                q, _, err_pos, err_rot = solve_pose(
+                    frame_idx, base_pos, base_R, warm, 100)
                 warm = q
                 errors_pos.append(err_pos)
                 errors_rot.append(err_rot)
+                joint_margins.append(_joint_limit_margin(model, q, arm_ids))
                 successes += int(err_pos < BASE_FEAS_POS_TOL and
                                  err_rot < BASE_FEAS_ROT_TOL)
             record = dict(coarse)
             record["feasibility_rate"] = successes / len(kf_p)
             record["mean_pos_error"] = float(np.mean(errors_pos))
             record["mean_rot_error"] = float(np.mean(errors_rot))
+            record["p95_rot_error"] = float(np.quantile(errors_rot, 0.95))
+            record["mean_joint_margin"] = float(np.mean(joint_margins))
             record["score"] = _candidate_score(record)
             refined.append(record)
             refine_last_print = _print_progress(
@@ -859,18 +972,24 @@ def _is_cross_arm_pair(body1, body2):
 
 
 def _is_known_baseline_self_contact(body1, body2):
-    """Ignore fixed mesh overlap present in the Kinova Gen3 XML.
+    """Ignore fixed base/shoulder mesh overlap in supported source XMLs.
 
-    The menagerie model has a persistent -0.012 m overlap between each
-    ``base_link`` and its child ``shoulder_link``. It is present at every
-    joint configuration and therefore is a model-geometry artifact rather
-    than a trajectory collision. The names are checked after the arm prefix,
-    so this applies independently to the left and right copy.
+    Kinova Gen3 and Aloha have a persistent overlap between ``base_link`` and
+    its child ``shoulder_link``. It is present at every joint configuration
+    and therefore is a model-geometry artifact rather than a trajectory
+    collision. Aloha's source bodies already carry a ``left/`` namespace, so
+    attaching two copies produces names such as ``left_left/base_link``.
     """
-    names = {
-        body1.removeprefix("left_").removeprefix("right_"),
-        body2.removeprefix("left_").removeprefix("right_"),
-    }
+    def canonical_name(name):
+        while True:
+            for prefix in ("left_", "right_", "left/", "right/"):
+                if name.startswith(prefix):
+                    name = name[len(prefix):]
+                    break
+            else:
+                return name
+
+    names = {canonical_name(body1), canonical_name(body2)}
     return names == {"base_link", "shoulder_link"}
 
 
