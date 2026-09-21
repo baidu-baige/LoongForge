@@ -196,7 +196,7 @@ class LingbotVlaV2Recipe:
             args,
             lr=trainer.training_args.lr_base,
             weight_decay=trainer.training_args.weight_decay,
-            parameter_policy=trainer._parameter_policy,
+            parameter_policy=trainer._dist_optimizer.registry,
         )
         if cfg.use_moe:
             optimizer.register_step_pre_hook(
@@ -234,7 +234,7 @@ class LingbotVlaV2Recipe:
             extra_adamw_name_patterns=list(
                 trainer.model_cfg.muon_exclude_name_patterns or []
             ),
-            parameter_policy=trainer._parameter_policy,
+            parameter_policy=trainer._dist_optimizer.registry,
         )
         trainer._dist_optimizer.set_in_step_updated_names(muon_names)
         muon.param_update_callback = trainer._dist_optimizer.on_master_updated

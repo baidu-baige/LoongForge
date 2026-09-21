@@ -23,7 +23,7 @@ parameter belongs to.
 
 from __future__ import annotations
 
-from loongforge.embodied.model.precision_policy import MarkerParameterPolicy
+from loongforge.embodied.model.precision_policy import MarkerParameterPolicy, build_parameter_policy
 
 # Action-expert tensors train in fp32; everything else in bf16.
 _ACTION_FP32_MARKERS = (
@@ -61,7 +61,7 @@ class LingbotVlaV2ParameterPolicy(MarkerParameterPolicy):
 
     def __init__(self, model_cfg=None):
         extra_markers = (
-            () if model_cfg is None else tuple(model_cfg.muon_exclude_name_patterns or ())
+            () if model_cfg is None else tuple(getattr(model_cfg, "muon_exclude_name_patterns", ()) or ())
         )
         super().__init__(
             compute_fp32_markers=_ACTION_FP32_MARKERS,
@@ -69,6 +69,12 @@ class LingbotVlaV2ParameterPolicy(MarkerParameterPolicy):
             labels=_LABELS,
             force_comm_critical_below_ndim=2,
             adamw_markers=_DEFAULT_ADAMW_MARKERS + extra_markers,
+        )
+
+    def as_parameter_policy(self, runtime_config=None):
+        """Expose the public protocol while retaining the historical label API."""
+        return build_parameter_policy(
+            runtime_config=runtime_config, legacy_policy=self,
         )
 
 

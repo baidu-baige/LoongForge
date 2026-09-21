@@ -59,7 +59,7 @@ class OptimizerStateShardManager:
         param_sync_fp8_block: int = 256,
         param_sync_fp8_reprime_interval: int = 0,
         param_sync_fp8_include=None,
-        param_sync_bf16_with_fp8: bool = False,
+        param_sync_bf16_with_fp8: bool | None = None,
         grad_overlap: bool = True,
         param_overlap: bool = True,
         bucket_mb: int | None = None,
@@ -73,6 +73,8 @@ class OptimizerStateShardManager:
         if parameter_policy is None:
             raise ValueError("parameter_policy is required")
         self.parameter_policy = parameter_policy
+        # Keep param_sync_bf16_with_fp8=None until registry reconciliation:
+        # omission inherits the adapter; the legacy fallback remains False.
 
         # Collective precision is configured from the model YAML
         # (``model.grad_reduce_dtype`` / ``model.param_sync_precision``); override
@@ -173,6 +175,10 @@ class OptimizerStateShardManager:
         """Return the per-class resolved-precision rows for startup logging."""
         return self.registry.precision_summary()
 
+    def parameter_manifest(self):
+        """Return the validated parameter capability/checkpoint manifest."""
+        return self.registry.manifest()
+
     def optimizer_view(self):
         """Return a module-like view over the fp32 master parameters."""
         return self.adapter.optimizer_view()
@@ -257,6 +263,7 @@ class OptimizerStateShardManager:
         return {
             "world_size": self.world_size,
             "ownership": [item.__dict__ for item in self.ownership],
+            "manifest": self.parameter_manifest(),
             "master": {
                 name: value.detach().cpu().clone() for name, value in self.master.items()
             },
@@ -268,6 +275,11 @@ class OptimizerStateShardManager:
     @torch.no_grad()
     def load_state_dict(self, state):
         """Restore the fp32 masters, rejecting any ownership-schema mismatch."""
+        self.registry.validate_manifest(
+            state.get("manifest"),
+            allow_reshard=False,
+            saved_world_size=state.get("world_size"),
+        )
         if state["world_size"] != self.world_size:
             raise RuntimeError(
                 f"optimizer-state-shard checkpoint world_size={state['world_size']} does not match "
@@ -289,6 +301,8 @@ class OptimizerStateShardManager:
             target = self.master[name]
             if value.shape != target.shape or value.dtype != torch.float32:
                 raise RuntimeError(f"invalid FP32 master tensor for {name}")
+        for name, value in state["master"].items():
+            target = self.master[name]
             target.copy_(value.to(target.device))
         self.parameter_synchronizer.load_compensation_state_dict(
             state.get("param_sync_residuals")
@@ -311,7 +325,16 @@ class OptimizerStateShardManager:
             value = tensors[name]
             if value.shape != target.shape or value.dtype != torch.float32:
                 raise RuntimeError(f"invalid FP32 master tensor for {name}")
+        for name, target in self.master.items():
+            value = tensors[name]
             target.copy_(value.to(target.device))
+
+    def validate_checkpoint_manifest(self, manifest, *, allow_reshard=False):
+        """Validate shared checkpoint metadata before rank-local state loading."""
+        self.registry.validate_manifest(
+            manifest, allow_reshard=allow_reshard,
+            saved_world_size=manifest.get("world_size") if manifest else None,
+        )
 
 
 __all__ = ["OptimizerStateShardManager"]

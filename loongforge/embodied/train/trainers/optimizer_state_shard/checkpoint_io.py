@@ -33,14 +33,21 @@ class OptimizerStateShardCheckpointIO:
 
     def save_local_state(self, state_dir, metadata_path, ctx) -> None:
         """Write this rank's masters and optimizer state, then the shared metadata."""
+        if (ctx.rank, ctx.world_size) != (self._manager.rank, self._manager.world_size):
+            raise RuntimeError("checkpoint context does not match parameter registry")
+        manager_state = self._manager.state_dict()
+        local_state = {
+            "format_version": FORMAT_VERSION,
+            "backend": BACKEND,
+            "manager": manager_state,
+            "optimizer": self._optimizer.state_dict(),
+            "optimizer_param_names": self._optimizer_param_names(),
+        }
+        self._saved_manifest = manager_state["manifest"]
+        self._saved_world_size = ctx.world_size
+        self._validate_rank_state(local_state, ctx.rank)
         torch.save(
-            {
-                "format_version": FORMAT_VERSION,
-                "backend": BACKEND,
-                "manager": self._manager.state_dict(),
-                "optimizer": self._optimizer.state_dict(),
-                "optimizer_param_names": self._optimizer_param_names(),
-            },
+            local_state,
             os.path.join(state_dir, f"rank_{ctx.rank}.pt"),
         )
         ctx.barrier()
@@ -51,6 +58,7 @@ class OptimizerStateShardCheckpointIO:
                         "format_version": FORMAT_VERSION,
                         "backend": BACKEND,
                         "world_size": ctx.world_size,
+                        "manifest": self._manager.parameter_manifest(),
                     },
                     file,
                     indent=2,
@@ -62,6 +70,17 @@ class OptimizerStateShardCheckpointIO:
     def load_local_state(self, state_dir, metadata, ctx) -> None:
         """Restore this rank's share, re-partitioning when the layout changed."""
         saved_world_size = int(metadata["world_size"])
+        if (ctx.rank, ctx.world_size) != (self._manager.rank, self._manager.world_size):
+            raise RuntimeError("checkpoint context does not match parameter registry")
+        if saved_world_size < 1:
+            raise RuntimeError("invalid checkpoint world_size")
+        self._manager.registry.validate_manifest(
+            metadata.get("manifest"),
+            allow_reshard=saved_world_size != ctx.world_size,
+            saved_world_size=saved_world_size,
+        )
+        self._saved_manifest = metadata.get("manifest")
+        self._saved_world_size = saved_world_size
         if saved_world_size == ctx.world_size:
             self._load_same_layout(state_dir, ctx)
         else:
@@ -75,6 +94,10 @@ class OptimizerStateShardCheckpointIO:
     def _load_same_layout(self, state_dir, ctx) -> None:
         """Load this rank's file as-is; ownership is asserted to be unchanged."""
         local_state = self._read_rank_file(state_dir, ctx.rank)
+        self._validate_rank_state(local_state, ctx.rank)
+        names = local_state.get("optimizer_param_names")
+        if names is not None and names != self._optimizer_param_names():
+            raise RuntimeError("checkpoint optimizer parameter order mismatch")
         self._manager.load_state_dict(local_state["manager"])
         self._optimizer.load_state_dict(local_state["optimizer"])
 
@@ -98,6 +121,7 @@ class OptimizerStateShardCheckpointIO:
 
         for saved_rank in range(saved_world_size):
             saved = self._read_rank_file(state_dir, saved_rank)
+            self._validate_rank_state(saved, saved_rank)
             names_per_optimizer = saved.get("optimizer_param_names")
             if names_per_optimizer is None:
                 raise RuntimeError(
@@ -134,6 +158,32 @@ class OptimizerStateShardCheckpointIO:
 
     # -- helpers --------------------------------------------------------------
 
+    def _validate_rank_state(self, saved, rank):
+        """Check all rank-local contracts before any master/optimizer mutation."""
+        state = saved["manager"]
+        if state.get("world_size") != self._saved_world_size:
+            raise RuntimeError("rank-local checkpoint world_size mismatch")
+        manifest = state.get("manifest")
+        if manifest != self._saved_manifest:
+            raise RuntimeError("rank-local/shared parameter manifest mismatch")
+        self._manager.registry.validate_manifest(
+            manifest, allow_reshard=True, saved_world_size=self._saved_world_size,
+        )
+        if manifest is None:
+            return
+        rows = {row["name"]: row for row in manifest["parameters"]}
+        expected = {name for name, row in rows.items() if row["owner_rank"] == rank}
+        if set(state["master"]) != expected:
+            raise RuntimeError("saved master keys do not match manifest owners")
+        for name, tensor in state["master"].items():
+            if list(tensor.shape) != rows[name]["shape"] or tensor.dtype != torch.float32:
+                raise RuntimeError(f"invalid saved FP32 master: {name}")
+        names = saved.get("optimizer_param_names")
+        if names is not None:
+            flattened = [name for group in names for name in group]
+            if len(flattened) != len(set(flattened)) or set(flattened) != expected:
+                raise RuntimeError("saved optimizer names do not match manifest owners")
+
     @staticmethod
     def _read_rank_file(state_dir, rank):
         """Load and validate one saved rank file."""
@@ -145,6 +195,8 @@ class OptimizerStateShardCheckpointIO:
         saved = torch.load(rank_path, map_location="cpu", weights_only=False)
         if saved.get("backend") != BACKEND:
             raise RuntimeError(f"Unsupported rank-local ZeRO state in {rank_path}.")
+        if saved.get("format_version") != FORMAT_VERSION:
+            raise RuntimeError(f"Unsupported rank-local ZeRO format in {rank_path}.")
         return saved
 
     @staticmethod

@@ -41,7 +41,7 @@ class LingbotVlaV2OptimizerStateShardTrainer(OptimizerStateShardTrainerMixin):
     # -- optimizer-state-shard hooks ------------------------------------------
 
     def _build_parameter_policy(self):
-        return LingbotVlaV2ParameterPolicy(self.model_cfg)
+        return LingbotVlaV2ParameterPolicy(self.model_cfg).as_parameter_policy()
 
     def _prepare_shard_module(self):
         self._recipe.setup_parallel_state(self)
@@ -147,4 +147,3 @@ class LingbotVlaV2OptimizerStateShardTrainer(OptimizerStateShardTrainerMixin):
 
 
 __all__ = ["LingbotVlaV2OptimizerStateShardTrainer"]
-

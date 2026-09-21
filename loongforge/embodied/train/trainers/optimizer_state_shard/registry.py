@@ -12,7 +12,7 @@ were resolved later from whatever dtype the compute parameter happened to hold.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import torch
 from torch import nn
@@ -20,6 +20,14 @@ from torch import nn
 from loongforge.embodied.train.trainers.optimizer_state_shard.ownership import (
     OwnershipPlanner,
     ParameterOwnership,
+)
+from loongforge.embodied.model.precision_policy import (
+    POLICY_VERSION,
+    PARAM_SYNC_DECOMPOSITION,
+    DTYPES,
+    build_parameter_policy,
+    LegacyParameterPolicyAdapter,
+    resolve_parameter_capabilities,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,15 +38,9 @@ _PARAM_SYNC_PRECISIONS = ("fp32", "bf16", "bf16_ef", "bf16_ef_delta", "fp8_e4m3_
 # collective paths consume: the fp32-master publish dtype, the bf16 error-feedback
 # variant, and the delta quantization. Restricting the public surface to these five
 # named combinations makes conflicting settings (bf16 and fp8 at once) unrepresentable.
-_PARAM_SYNC_DECOMPOSITION = {
-    "fp32": ("compute", "none", "none"),
-    "bf16": ("bf16", "none", "none"),
-    "bf16_ef": ("bf16", "error_feedback", "none"),
-    "bf16_ef_delta": ("bf16", "error_feedback_delta", "none"),
-    "fp8_e4m3_delta": ("compute", "none", "fp8_e4m3_delta"),
-}
+_PARAM_SYNC_DECOMPOSITION = PARAM_SYNC_DECOMPOSITION
 # Human-readable labels for the resolved wire dtypes, used by precision_summary.
-# uint8 only ever carries the fp8 E4M3 delta payload (see _resolve_param_wire_dtype).
+# uint8 only carries the fp8 E4M3 delta payload resolved by WirePrecisionResolver.
 _DTYPE_LABEL = {
     torch.float32: "fp32",
     torch.bfloat16: "bf16",
@@ -93,14 +95,62 @@ class ParameterRegistry:
         param_sync_fp8_block=256,
         param_sync_fp8_reprime_interval=0,
         param_sync_fp8_include=None,
-        param_sync_bf16_with_fp8=False,
+        param_sync_bf16_with_fp8=None,
     ):
-        """Enumerate, plan, cast, create masters and resolve dtypes, in that order."""
+        """Resolve, plan, create masters from original values, then cast replicas."""
         if parameter_policy is None:
             raise ValueError("parameter_policy is required")
         self.rank = int(rank)
         self.world_size = int(world_size)
+        if self.world_size < 1 or not 0 <= self.rank < self.world_size:
+            raise ValueError("rank must be within a positive world_size")
+        if isinstance(parameter_policy, LegacyParameterPolicyAdapter):
+            wire = parameter_policy.wire
+            def reconcile(key, supplied, configured, normalize=lambda value: value):
+                if (
+                    supplied is not None and key in wire.explicit_fields
+                    and normalize(supplied) != configured
+                ):
+                    raise ValueError(f"conflicting policy/registry {key}")
+                return configured if supplied is None else supplied
+
+            grad_reduce_dtype = reconcile(
+                "grad_reduce_dtype", grad_reduce_dtype, wire.grad_reduce_mode,
+                lambda value: str(value).lower(),
+            )
+            param_sync_precision = reconcile(
+                "param_sync_precision", param_sync_precision, wire.param_sync_precision,
+                lambda value: str(value).lower(),
+            )
+            param_sync_fp8_include = reconcile(
+                "param_sync_fp8_include", param_sync_fp8_include,
+                wire.param_sync_fp8_include, tuple,
+            )
+            param_sync_bf16_with_fp8 = reconcile(
+                "param_sync_bf16_with_fp8", param_sync_bf16_with_fp8,
+                wire.param_sync_bf16_with_fp8,
+            )
+        runtime_config = dict(
+            grad_reduce_dtype=grad_reduce_dtype, param_sync_precision=param_sync_precision,
+            param_sync_fp8_include=param_sync_fp8_include,
+            param_sync_bf16_with_fp8=param_sync_bf16_with_fp8,
+        )
+        if hasattr(parameter_policy, "compute_dtype"):
+            parameter_policy = build_parameter_policy(
+                runtime_config=runtime_config, legacy_policy=parameter_policy,
+            )
+        elif isinstance(parameter_policy, LegacyParameterPolicyAdapter):
+            # Resolve once with the reconciled model/runtime configuration.
+            parameter_policy = LegacyParameterPolicyAdapter(
+                parameter_policy.legacy, runtime_config, parameter_policy.explicit_rules,
+            )
         self.policy = parameter_policy
+        self._module = module
+        self.capabilities = resolve_parameter_capabilities(
+            module,
+            parameter_policy,
+        )
+        self._capability_by_name = {item.name: item for item in self.capabilities}
         self.grad_reduce_mode = self._validate(
             "grad_reduce_dtype", grad_reduce_dtype or "fp32", _GRAD_REDUCE_MODES
         )
@@ -117,6 +167,17 @@ class ParameterRegistry:
             self.param_sync_compensation,
             self.param_sync_quantization,
         ) = _PARAM_SYNC_DECOMPOSITION[self.param_sync_precision]
+        # Public policies can supply capabilities directly, bypassing the legacy
+        # wire resolver. Reject an unsupported payload before creating any master.
+        # The converse is valid: FP8 mode also carries non-FP8/critical records.
+        for cap in self.capabilities:
+            if (
+                cap.parameter_sync_dtype == "fp8_e4m3_delta"
+                and self.param_sync_quantization != "fp8_e4m3_delta"
+            ):
+                raise ValueError(
+                    f"FP8 capability for {cap.name} requires FP8 parameter-sync quantization"
+                )
         self.param_sync_fp8_block = int(param_sync_fp8_block)
         if (
             self.param_sync_fp8_block <= 0
@@ -169,11 +230,9 @@ class ParameterRegistry:
                     compute=compute,
                     ownership=item,
                     numel=compute.numel(),
-                    optimizer_kind=parameter_policy.optimizer_kind(item.name, compute),
-                    is_comm_critical=parameter_policy.is_comm_precision_critical(
-                        item.name, compute
-                    ),
-                    parameter_class=parameter_policy.classify(item.name, compute),
+                    optimizer_kind=self._capability_by_name[item.name].optimizer_kind,
+                    is_comm_critical=self._capability_by_name[item.name].communication_critical,
+                    parameter_class=self._capability_by_name[item.name].parameter_class,
                     # named_parameters() follows the forward pass, so its reverse
                     # order approximates the order gradients become ready in backward.
                     reverse_position=-index,
@@ -189,10 +248,11 @@ class ParameterRegistry:
             self._create_master(record)
             self._apply_compute_dtype(record)
 
-        # Phase 5: resolve wire dtypes now that every compute dtype is final.
+        # Phase 5: collectives consume the same validated capability as compute.
         for record in self.records:
-            record.grad_wire_dtype = self._resolve_grad_wire_dtype(record)
-            record.param_wire_dtype = self._resolve_param_wire_dtype(record)
+            cap = self._capability_by_name[record.name]
+            record.grad_wire_dtype = DTYPES[cap.grad_reduce_dtype]
+            record.param_wire_dtype = DTYPES[cap.parameter_sync_dtype]
 
     @staticmethod
     def _validate(name, value, allowed):
@@ -216,78 +276,100 @@ class ParameterRegistry:
 
     def _apply_compute_dtype(self, record):
         """Cast the compute replica to the dtype the policy asks for."""
-        compute_dtype = self.policy.compute_dtype(record.name, record.compute)
+        compute_dtype = {
+            "fp32": torch.float32,
+            "bf16": torch.bfloat16,
+            "fp16": torch.float16,
+        }[self._capability_by_name[record.name].compute_dtype]
         if record.compute.dtype != compute_dtype:
             record.compute.data = record.compute.data.to(compute_dtype)
 
-    def _resolve_grad_wire_dtype(self, record):
-        """Pick the wire dtype for one parameter's gradient reduction.
+    def manifest(self):
+        """Return the checkpoint contract for all parameters, including owner."""
+        parameters = dict(self._module.named_parameters())
+        if set(parameters) != set(self._capability_by_name):
+            raise RuntimeError("model parameter names changed after setup")
+        for name, parameter in parameters.items():
+            cap = self._capability_by_name[name]
+            if (
+                tuple(parameter.shape) != cap.shape
+                or parameter.dtype != DTYPES[cap.compute_dtype]
+                or parameter.requires_grad != cap.requires_grad
+                or (cap.requires_grad and parameter is not self.compute[name])
+            ):
+                raise RuntimeError(f"model parameter contract changed: {name}")
+        for record in self.records:
+            cap = self._capability_by_name[record.name]
+            if (
+                tuple(record.compute.shape) != cap.shape
+                or record.compute.dtype != DTYPES[cap.compute_dtype]
+                or record.grad_wire_dtype != DTYPES[cap.grad_reduce_dtype]
+                or record.param_wire_dtype != DTYPES[cap.parameter_sync_dtype]
+                or record.optimizer_kind != cap.optimizer_kind
+            ):
+                raise RuntimeError(f"parameter contract changed after setup: {record.name}")
+            if record.master is not None and (
+                record.master.dtype != torch.float32 or tuple(record.master.shape) != cap.shape
+            ):
+                raise RuntimeError(f"invalid FP32 master: {record.name}")
+        return {
+            "policy_version": POLICY_VERSION,
+            "world_size": self.world_size,
+            "wire_config": {
+                "grad_reduce_dtype": self.grad_reduce_mode,
+                "param_sync_precision": self.param_sync_precision,
+                "fp8_block": self.param_sync_fp8_block,
+                "fp8_reprime_interval": self.param_sync_fp8_reprime_interval,
+            },
+            "parameters": [
+                {
+                    **asdict(cap),
+                    "shape": list(cap.shape),
+                    "owner_rank": self.specs[cap.name].owner if cap.requires_grad else None,
+                }
+                for cap in self.capabilities
+            ],
+        }
 
-        Parameters the policy marks precision-critical (MoE router/gate, 1-D
-        tensors) always travel at full precision, and buckets are split by dtype
-        so a critical parameter can never be dragged into a downcast payload.
-        """
-        mode = self.grad_reduce_mode
-        if mode == "fp32" or record.is_comm_critical:
-            return torch.float32
-        if mode in ("bf16", "mixed"):
-            return torch.bfloat16
-        if mode == "compute":
-            return (
-                torch.bfloat16
-                if record.compute.dtype == torch.bfloat16
-                else torch.float32
-            )
-        return torch.float32
+    def optimizer_kind(self, name, parameter):
+        """Legacy optimizer routing adapter backed only by resolved capabilities."""
+        return self._capability_by_name[name].optimizer_kind
 
-    def _resolve_param_wire_dtype(self, record):
-        """Pick the wire dtype for publishing one updated parameter to replicas."""
-        if record.is_comm_critical:
-            return torch.float32
-        compute_dtype = record.compute.dtype
-        # Single fp8 assignment site: uint8 is produced here and nowhere else, so
-        # param_wire_dtype==uint8 is the authoritative "publishes as fp8" marker
-        # every collective path keys off. It is reached only by non-critical
-        # parameters in the configured FP8 scope, and only when the
-        # param_sync_precision knob selected the fp8 quantization lever. An
-        # fp32-compute action-expert weight uses its fp32 replica as the delta
-        # reconstruction directly; a bf16-compute VLM weight has no fp32 anchor on
-        # the wire, so it qualifies only under the opt-in bf16 shadow (the collective
-        # keeps a per-rank fp32 shadow to accumulate the delta -- see
-        # ParameterSynchronizer). This check precedes the bf16/fp16 early return so
-        # the tower can reach it; fp32-compute behaviour is unchanged either way.
-        if (
-            self.param_sync_quantization == "fp8_e4m3_delta"
-            and self._fp8_in_scope(record.name)
-            and (
-                compute_dtype == torch.float32
-                or (
-                    compute_dtype == torch.bfloat16
-                    and self.param_sync_bf16_with_fp8
-                )
-            )
-        ):
-            return torch.uint8
-        if compute_dtype in (torch.float16, torch.bfloat16):
-            return compute_dtype
-        # An fp32 compute parameter can still be published in bf16: the fp32
-        # master keeps the update precision, replicas just receive a rounded
-        # copy -- and all ranks, owner included, read the same rounded bytes
-        # back, so the replicas stay bit-identical.
-        if self.param_sync_mode == "bf16":
-            return torch.bfloat16
-        return torch.float32
-
-    def _fp8_in_scope(self, name):
-        """True when ``name`` is on the FP8 whitelist.
-
-        ``param_sync_fp8_include`` is the sole scope and a pure opt-in: FP8 applies
-        only to eligible parameters whose name contains one of its substrings. An
-        empty whitelist means no parameter is quantized -- you must name them.
-        Anything not whitelisted (or not eligible) keeps its normal publish (bf16
-        or fp32).
-        """
-        return any(token in name for token in self.param_sync_fp8_include)
+    def validate_manifest(self, saved, *, allow_reshard=False, saved_world_size=None):
+        """Validate before loading tensors; only owners may change on reshard."""
+        if saved is None:
+            logger.warning("Legacy checkpoint has no parameter manifest; precision validation unavailable")
+            return
+        current = self.manifest()
+        if not isinstance(saved, dict) or saved.get("policy_version") != POLICY_VERSION:
+            raise RuntimeError("checkpoint parameter policy version mismatch")
+        if saved.get("wire_config") != current["wire_config"]:
+            raise RuntimeError("checkpoint wire configuration mismatch")
+        world = saved.get("world_size")
+        if type(world) is not int or world < 1:
+            raise RuntimeError("invalid manifest world_size")
+        if saved_world_size is not None and world != saved_world_size:
+            raise RuntimeError("manifest/checkpoint world_size mismatch")
+        if world != self.world_size and not allow_reshard:
+            raise RuntimeError("manifest world_size mismatch")
+        rows = saved.get("parameters")
+        if not isinstance(rows, list) or len(rows) != len(current["parameters"]):
+            raise RuntimeError("manifest parameter count mismatch")
+        # Registration order is part of the greedy owner and optimizer contract.
+        for row, expected in zip(rows, current["parameters"]):
+            if not isinstance(row, dict):
+                raise RuntimeError("invalid manifest parameter entry")
+            owner = row.get("owner_rank")
+            if expected["requires_grad"]:
+                if type(owner) is not int or not 0 <= owner < world:
+                    raise RuntimeError(f"invalid saved owner for {expected['name']}")
+            elif owner is not None:
+                raise RuntimeError(f"frozen parameter has owner: {expected['name']}")
+            normalized = dict(row)
+            if world != self.world_size and allow_reshard:
+                normalized["owner_rank"] = expected["owner_rank"]
+            if normalized != expected:
+                raise RuntimeError(f"parameter manifest mismatch for {expected['name']}")
 
     def _warn_unmatched_markers(self, names):
         """Warn about configured substrings that match no parameter name.
