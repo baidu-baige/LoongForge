@@ -14,7 +14,7 @@ from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from .wan_transformer_block import WanTransformerBlock
 
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,

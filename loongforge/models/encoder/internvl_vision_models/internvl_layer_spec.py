@@ -21,7 +21,7 @@ from .intern_vision_transformer_layer import (
 )
 from .internvl_config import InternVisionConfig
 from loongforge.models.dispatch import multiacc_modules
-from loongforge.utils import is_te_min_version
+from loongforge.engines.mcore.utils import is_te_min_version
 from loongforge.models.common.local_layers.local_norm import LocalNorm
 from dataclasses import dataclass
 

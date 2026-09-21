@@ -127,7 +127,7 @@ def test_multimodal_argument_defaults_and_overrides():
             return ["llama"]
 
     namespace = _load_functions(
-        "loongforge/train/arguments.py",
+        "loongforge/engines/mcore/arguments.py",
         {"_add_extra_multimodal_args"},
         {
             "get_support_model_archs": lambda values: values,

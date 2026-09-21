@@ -3,7 +3,7 @@
 # GR00T-N1.6 x LIBERO libero_goal task-success -- internal one-click.
 #
 # Full suite (max_tasks: 0 = all 10 tasks) x 10 episodes/task = 100 episodes.
-# max_steps mirrors SUITE_MAX_STEPS in loongforge/embodied/eval/adapters/libero.py
+# max_steps mirrors SUITE_MAX_STEPS in loongforge/evaluation/embodied/adapters/libero.py
 # (libero_goal = 300); a smaller value would judge in-progress episodes as failures.
 #
 
@@ -42,7 +42,7 @@ server:
   loongforge_root: /path/to/LoongForge-VLA
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa

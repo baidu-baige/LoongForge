@@ -9,9 +9,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from loongforge.embodied.distributed.fsdp_utils.builders import build_ignored_params
-from loongforge.embodied.distributed.fsdp_utils.units import resolve_wrap_runs
-from loongforge.embodied.train.validators import _validate_fsdp_ignored_frozen_args
+from loongforge.engines.torch.distributed.fsdp_utils.builders import build_ignored_params
+from loongforge.engines.torch.distributed.fsdp_utils.units import resolve_wrap_runs
+from loongforge.engines.torch.validators import _validate_fsdp_ignored_frozen_args
 
 
 class FrozenBlock(nn.Module):

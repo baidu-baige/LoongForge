@@ -18,7 +18,7 @@ from megatron.core.utils import log_single_rank
 from megatron.core.datasets.utils import Split
 from transformers import ProcessorMixin
 
-from loongforge.utils.constants import (
+from loongforge.engines.mcore.constants import (
     SFTDataFormats,
     DEFAULT_DATASET_NAME,
     SFT_SUPPORT_DATA_TYPE,

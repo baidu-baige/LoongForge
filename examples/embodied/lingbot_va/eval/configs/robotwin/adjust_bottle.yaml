@@ -76,7 +76,7 @@ server:
   port: 12299
   health_port: 12300
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/robotwin/adjust_bottle/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/lingbot_va/robotwin/adjust_bottle/policy_server.log
   start_timeout_sec: 1800
   random_init: false
   ckpt_path: /path/to/lingbot-va-posttrain-robotwin
@@ -84,12 +84,12 @@ server:
   use_bf16: true
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   robotwin_root: /path/to/RoboTwin
   robotwin_python: /path/to/robotwin/bin/python
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/robotwin/adjust_bottle
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/lingbot_va/robotwin/adjust_bottle
   seed: 0
   ckpt_setting: loongforge_lingbot_va_robotwin
   worker_local_files: true

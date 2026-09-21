@@ -15,7 +15,7 @@
 # Qwen3-VL backbone and drops the six-task WidowX total from 85/120 to 35/120 on
 # 5.3.0 (the version our own pyproject.toml installs). For the per-task
 # comparison and where the divergence comes from, see
-# loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_7.md.
+# loongforge/evaluation/embodied/docs/patches/simplerenv/groot_n1_7.md.
 
 set -euo pipefail
 
@@ -34,4 +34,4 @@ export LD_LIBRARY_PATH=${NVIDIA_LIB_DIR:-/path/to/nvidia_lib}:/usr/lib64:${LD_LI
 # SAPIEN renders through Vulkan; point it at the driver ICD.
 export VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/path/to/nvidia_lib/10_nvidia.json}
 
-${BENCHMARK_PYTHON:-/path/to/conda/envs/simplerenv/bin/python} -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+${BENCHMARK_PYTHON:-/path/to/conda/envs/simplerenv/bin/python} -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

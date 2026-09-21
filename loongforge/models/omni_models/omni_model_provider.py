@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from .omni_combination_model import OmniCombinationModel
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 from megatron.core import mpu
 import torch
-from loongforge.utils import build_transformer_config, get_model_config
+from loongforge.engines.mcore import build_transformer_config, get_model_config
 from loongforge.models.common import BaseModelConfig
 
 

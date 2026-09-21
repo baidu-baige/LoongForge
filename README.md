@@ -80,7 +80,7 @@ Since optimal training strategies differ across model families and scales, Loong
 </p>
 
 - **Megatron Stack** — For LLMs, VLMs, and diffusion models. Powered by a [patched Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) and extended with MoE parallelism, per-component heterogeneous parallelism, long-sequence optimizations, etc.
-- **Torch-Native Stack** — For embodied models (VLA and WAM). A standalone [torch-native subsystem](./loongforge/embodied) featuring **DDP / ZeRO-1 / FSDP / HSDP**, with deep optimizations for representative models across I/O, communication strategy, kernel efficiency, etc.
+- **Torch-Native Stack** — For embodied models (VLA and WAM). The Torch runtime is under [`loongforge/engines/torch`](./loongforge/engines/torch), while embodied models, data, and evaluation remain under [`models/embodied`](./loongforge/models/embodied), [`data/embodied`](./loongforge/data/embodied), and [`evaluation/embodied`](./loongforge/evaluation/embodied).
 
 ## 🔥 Latest News
 
@@ -90,9 +90,9 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
-- **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
+- **[2026/08]** 🧪 Introduced the embodied [**evaluation module**](./loongforge/evaluation/embodied/), currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
-- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 Released the Torch-native DDP/FSDP training stack for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 
@@ -129,7 +129,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 **🤖 Embodied Models**
 
-* **VLA & WAM Training** — A dedicated **torch-native DDP/FSDP** subsystem for **VLA and world-action (WAM)** models, decoupled from the Megatron core, with flexible **DDP / ZeRO-1 / FSDP / HSDP** strategies. [[README](./loongforge/embodied)]
+* **VLA & WAM Training** — A dedicated **torch-native DDP/FSDP** engine for **VLA and world-action (WAM)** models, decoupled from the Megatron core, with flexible **DDP / ZeRO-1 / FSDP / HSDP** strategies. [[Training guide](./docs/source/embodied_tutorial/overview.md)]
 * **Delta-FP8 FSDP Communication** — Optionally compresses BF16 FSDP2 AllGather deltas into blockwise FP8 on supported NVIDIA GPUs while keeping model computation in BF16. [[Usage](./docs/source/features/delta_fp8_allgather.md)]
 * **Per-Model Deep Optimization** — Training code deeply customized for each supported model across I/O, communication strategy, and kernel efficiency — **1.79×–4.38×** over official baselines in our [benchmarks](#performance).
 * **Unified Evaluation** — Evaluate trained policies on **LIBERO / CALVIN / SimplerEnv / RoboTwin**, with coverage expanding continuously.
@@ -266,21 +266,22 @@ Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM:
 ```
 LoongForge/
 ├── loongforge/                   # Core training framework
-│   ├── train/                    # Training entry points & trainers
-│   │   ├── pretrain/             #   Pretrain (LLM, VLM)
-│   │   ├── sft/                  #   SFT (LLM, VLM, InternVL, ERNIE)
-│   │   └── diffusion/            #   Diffusion (WAN, Qwen-Image)
+│   ├── train.py                  # Unified training dispatcher
+│   ├── engines/                  # Training runtimes selected by train.py
+│   │   ├── mcore/                #   LLM/VLM/Diffusion runtime
+│   │   │   └── tokenizer/        #   MCore tokenizer implementation
+│   │   └── torch/                #   Embodied Torch-native runtime
 │   ├── models/                   # Unified model abstractions
+│   │   ├── catalog.py            # Model names, engines, default YAMLs
 │   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
 │   │   ├── omni_models/          #   Multi-modal composition
 │   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
-│   │   └── common/               #   Shared layers and utilities
-│   ├── embodied/                 # LoongForge-Embodied: standalone torch-native (DDP/FSDP)
-│   │                             #   embodied (VLA + world-action) subsystem — see loongforge/embodied/README.md
+│   │   ├── common/               #   Shared layers and utilities
+│   │   └── embodied/             #   Embodied model implementations
 │   ├── data/                     # Data pipelines (multi-modal, video, DP balance)
-│   ├── tokenizer/                # Tokenizers
-│   └── utils/                    # Config map, constants, etc.
+│   │   └── embodied/             #   Embodied data pipelines
+│   └── evaluation/embodied/      # Embodied evaluation
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM (git submodule)
 ├── configs/                      # Hydra YAML configs (models, data)
 ├── examples/                     # GPU launch scripts

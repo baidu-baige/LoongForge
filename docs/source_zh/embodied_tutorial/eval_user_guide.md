@@ -1,6 +1,6 @@
 # 离线评测
 
-LoongForge 在 `loongforge/embodied/eval` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
+LoongForge 在 `loongforge.evaluation.embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
 
 ---
 
@@ -52,7 +52,7 @@ X-VLA + SimplerEnv 达成任务成功需要上游 SimplerEnv 的一次性补丁 
 
 GPU 要求：模型推理需要至少 1 张 NVIDIA GPU（显存 ≥16 GB，推荐 A100/A800）。基准测试侧渲染（SimplerEnv、RoboTwin、ManiSkill）同样要求 GPU 支持 Vulkan。
 
-各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/benchmark_envs.md) 中。
+各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/benchmark_envs.md) 中。
 
 ### 2.2 运行 pi0.5 + LIBERO
 
@@ -68,7 +68,7 @@ examples/embodied/pi05/eval/run_libero_eval.sh
 启动脚本封装了单一 Python 入口：
 
 ```bash
-"${BENCHMARK_PYTHON}" -m loongforge.embodied.eval.orchestrator.run \
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run \
   --config "${CONFIG}"
 ```
 
@@ -184,7 +184,7 @@ examples/embodied/<model>/eval/
 
 ### 4.2 RoboTwin
 
-RoboTwin 通过官方 `script/eval_policy.py` 启动；桥接代码位于 `loongforge/embodied/eval/bridges/robotwin_policy.py`。使用的协议在 YAML 中通过 `benchmark.action_bridge` 设置；当模型指定了 `model.robotwin_action_bridge` 时，该值覆盖 `benchmark.action_bridge`。
+RoboTwin 通过官方 `script/eval_policy.py` 启动；桥接代码位于 `loongforge/evaluation/embodied/bridges/robotwin_policy.py`。使用的协议在 YAML 中通过 `benchmark.action_bridge` 设置；当模型指定了 `model.robotwin_action_bridge` 时，该值覆盖 `benchmark.action_bridge`。
 
 | `action_bridge` | 角色 | 控制方式 | 备注 |
 |---|---|---|---|
@@ -325,7 +325,7 @@ RoboTwin 使用官方评测器，并额外收集部署配置、`_result.txt`、�
 ### 5.2 目录约定
 
 ```text
-loongforge/embodied/eval/reports/
+loongforge/evaluation/embodied/reports/
   <model>/
     <benchmark>/
       <run_name>/
@@ -384,5 +384,5 @@ vulkaninfo
 
 本节面向需要集成新模型的开发者。如需集成 pi0.5 / X-VLA 之外的模型，核心思路是：复用共享的 `predict_action` 接口和 `GenericPredictActionPolicy`，保持基准测试协议和适配器不变，将模型差异放在一个轻量工厂中。不要 fork 基准测试运行器或直接修改 LoongForge 训练代码。详细的集成步骤、模型语义对比（动作空间、归一化归属、chunk 长度等）和最小检查清单，请参见：
 
-- [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
-- [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）
+- [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
+- [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）

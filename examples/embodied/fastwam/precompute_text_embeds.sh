@@ -67,7 +67,7 @@ echo "  Tokenizer: $TOKENIZER_MODEL_ID"
 echo "════════════════════════════════════════════════════════════"
 
 PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-  python "$LOONGFORGE_PATH/loongforge/embodied/data/datasets/fastwam/transforms/precompute_text_embeds.py" \
+  python "$LOONGFORGE_PATH/loongforge/data/embodied/datasets/fastwam/transforms/precompute_text_embeds.py" \
     --dataset-root "$DATASET_PATH" \
     --output-dir "$TEXT_EMBEDDING_CACHE_DIR" \
     --model-id "$MODEL_ID" \

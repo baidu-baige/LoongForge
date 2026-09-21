@@ -78,7 +78,7 @@ server:
   port: 12290
   health_port: 12291
   python: /path/to/loongforge_vla/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/robotwin/adjust_bottle/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/fastwam/robotwin/adjust_bottle/policy_server.log
   start_timeout_sec: 1800
   ckpt_path: /path/to/robotwin_uncond_3cam_384.pt
   dataset_statistics_path: /path/to/robotwin_uncond_3cam_384_dataset_stats.json
@@ -88,12 +88,12 @@ server:
   chunk_execute_steps: 0    # 0 -> official robotwin 24
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   robotwin_root: /path/to/RoboTwin
   robotwin_python: /path/to/robotwin/bin/python
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/robotwin/adjust_bottle
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/fastwam/robotwin/adjust_bottle
   seed: 0
   ckpt_setting: loongforge_fastwam_robotwin
   worker_local_files: true

@@ -20,8 +20,8 @@ from loongforge.data.dp_balance.rebalance.balance import (
     get_reverse_reorder_plan,
     get_dp_group_by_device,
 )
-from loongforge.train.initialize import change_parallel_state
-from loongforge.utils import get_args
+from loongforge.engines.mcore.initialize import change_parallel_state
+from loongforge.engines.mcore import get_args
 
 
 def dp_balance_vit_encoder(vit_module, pixel_values, image_grid_thw):

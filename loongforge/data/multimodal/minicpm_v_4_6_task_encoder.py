@@ -12,7 +12,7 @@ from loongforge.data.multimodal.vlm_task_encoder import (
     IGNORE_INDEX,
     VLMTaskEncoder,
 )
-from loongforge.utils.constants import Placeholder
+from loongforge.engines.mcore.constants import Placeholder
 
 
 class MiniCPMV46TaskEncoder(VLMTaskEncoder):

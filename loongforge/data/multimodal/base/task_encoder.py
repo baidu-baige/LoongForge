@@ -42,7 +42,7 @@ from megatron.energon import (
     Cooker,
 )
 from megatron.energon.task_encoder.base import stateless
-from loongforge.utils import get_args, get_tokenizer
+from loongforge.engines.mcore import get_args, get_tokenizer
 from .packer import Packer
 
 IGNORE_INDEX = -100  # ID for labels that should be ignored.

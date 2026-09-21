@@ -80,7 +80,7 @@ torch_compile_mode: default
 **模型与分布式：**
 
 ```bash
---model-name xvla                    # 通过 config_map 映射到 XVLA 配置
+--model-name xvla                    # 通过 models/catalog.py 映射到引擎和 XVLA 配置
 --distributed-strategy ddp           # DDP 分布式策略
 --dtype bfloat16                     # 训练精度
 # GPUS_PER_NODE=8                    # 单机 GPU 数（脚本变量）

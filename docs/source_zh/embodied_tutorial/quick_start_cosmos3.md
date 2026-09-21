@@ -83,7 +83,7 @@ bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh
 **模型与分布式：**
 
 ```bash
---model-name cosmos3_nano            # 通过 config_map 映射到 Cosmos3-Nano DROID 配方
+--model-name cosmos3_nano            # 通过 models/catalog.py 映射到引擎和 Cosmos3-Nano YAML
 --distributed-strategy fsdp          # 分布式策略：FSDP2 全分片
 --dtype bfloat16                     # 训练精度：bf16
 --fsdp-reduce-dtype bf16             # 梯度 reduce-scatter 用 bf16

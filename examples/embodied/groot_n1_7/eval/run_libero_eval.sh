@@ -10,7 +10,7 @@
 # Qwen3-VL backbone and takes libero_10 from 46/50 down to 11/50 on 5.3.0 (the
 # version our own pyproject.toml installs). For the per-task comparison
 # and where the divergence comes from, see
-# loongforge/embodied/eval/docs/patches/libero/groot_n1_7.md.
+# loongforge/evaluation/embodied/docs/patches/libero/groot_n1_7.md.
 
 set -euo pipefail
 
@@ -35,4 +35,4 @@ export COSMOS_LOCAL_PATH=${COSMOS_LOCAL_PATH:-/path/to/Cosmos-Reason2-2B}
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 export TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
 
-${BENCHMARK_PYTHON:-/path/to/conda/envs/libero/bin/python} -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+${BENCHMARK_PYTHON:-/path/to/conda/envs/libero/bin/python} -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

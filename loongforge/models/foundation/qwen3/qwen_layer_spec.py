@@ -23,7 +23,7 @@ from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.transformer.moe.experts import SequentialMLP, TEGroupedMLP
 
-from loongforge.utils import is_te_min_version
+from loongforge.engines.mcore.utils import is_te_min_version
 from loongforge.models.dispatch import multiacc_modules
 
 

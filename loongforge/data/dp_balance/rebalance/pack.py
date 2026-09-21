@@ -7,7 +7,7 @@ from typing import Dict, Tuple, List, Any
 
 import torch
 
-from loongforge.utils import get_args, get_tokenizer
+from loongforge.engines.mcore import get_args, get_tokenizer
 
 # Special token for image context and its token id
 IMG_CONTEXT_TOKEN = "<IMG_CONTEXT>"

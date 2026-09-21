@@ -42,7 +42,7 @@ from megatron.core.transformer.transformer_config import MLATransformerConfig
 from megatron.core.utils import deprecate_inference_params
 from megatron.core.fp8_utils import is_float8tensor
 
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 from loongforge.models.common.experimental_attention_variant.dsa_fused_utils import (
     shard_packed_cu_seqlens_for_sp_rank,
 )

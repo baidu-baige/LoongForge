@@ -47,7 +47,7 @@ The example below runs LIBERO with pi05:
       loongforge_root: /path/to/LoongForge-VLA
       log: /path/to/.../policy_server.log
     env:
-      eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+      eval_root: /path/to/LoongForge/loongforge/evaluation/embodied
       libero_config_path: /path/to/libero_config
       ld_library_path: /path/to/nvidia_lib
     run:
@@ -68,7 +68,7 @@ The LIBERO simulator runs in the benchmark environment; the policy server is lau
 The run scripts also accept environment overrides (`CONFIG`, `REPO_ROOT`, `BENCHMARK_PYTHON`, `CUDA_VISIBLE_DEVICES`, and for SAPIEN benchmarks `LD_LIBRARY_PATH` / `VK_ICD_FILENAMES`), or you can invoke the orchestrator directly:
 
 ```bash
-python -m loongforge.embodied.eval.orchestrator.run --config /path/to/config.yaml
+python -m loongforge.evaluation.embodied.orchestrator.run --config /path/to/config.yaml
 ```
 
 Run the orchestrator command inside the **benchmark** environment; the config's `server.python` points at the **model server** environment. Other models/benchmarks: the [benchmark pages](benchmarks/index.md).

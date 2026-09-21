@@ -5,8 +5,8 @@
 # Public open-source entry: X-VLA SimplerEnv WidowX (task-success template).
 # Fill /path/to/... in configs/simplerenv/widowx_stack_cube_smoke.yaml first.
 # Open weight: 2toINF/X-VLA-WidowX. Requires the SimplerEnv absolute EE controller:
-# check/apply per loongforge/embodied/eval/docs/benchmarks/simplerenv.md (Step 1)
-# (details in loongforge/embodied/eval/docs/patches/simplerenv/xvla.md).
+# check/apply per loongforge/evaluation/embodied/docs/benchmarks/simplerenv.md (Step 1)
+# (details in loongforge/evaluation/embodied/docs/patches/simplerenv/xvla.md).
 
 set -euo pipefail
 
@@ -23,4 +23,4 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/path/to/nvidia_lib:/usr/lib64}
 export VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/path/to/nvidia_icd.json}
 
 BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-/path/to/simplerenv/bin/python}
-"${BENCHMARK_PYTHON}" -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

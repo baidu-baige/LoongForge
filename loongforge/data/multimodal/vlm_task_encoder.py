@@ -23,7 +23,7 @@ else:
 from megatron.energon.task_encoder.base import stateless
 from transformers import AutoProcessor
 from transformers.processing_utils import ProcessorMixin
-from loongforge.utils import constants, get_chat_template
+from loongforge.engines.mcore import constants, get_chat_template
 from qwen_vl_utils.vision_process import smart_nframes, smart_resize
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode

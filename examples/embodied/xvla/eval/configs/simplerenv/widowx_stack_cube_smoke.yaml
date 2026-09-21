@@ -6,8 +6,8 @@
 #   control_mode=arm_pd_ee_target_base_pose_gripper_pd_joint_pos
 # REQUIRED: this config needs the SimplerEnv absolute EE controller, which upstream
 #   does not ship — use the 255isWhite fork or apply the two manual patches
-#   (see loongforge/embodied/eval/docs/benchmarks/simplerenv.md Step 1 and
-#   loongforge/embodied/eval/docs/patches/simplerenv/xvla.md).
+#   (see loongforge/evaluation/embodied/docs/benchmarks/simplerenv.md Step 1 and
+#   loongforge/evaluation/embodied/docs/patches/simplerenv/xvla.md).
 #
 # Optional overrides (edit this file):
 #   task_name / robot_setup / scene_name — other Bridge tasks:
@@ -52,7 +52,7 @@ server:
   port: 13213
   health_port: 13214
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/simplerenv/widowx_stack_cube_smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/simplerenv/widowx_stack_cube_smoke/policy_server.log
   start_timeout_sec: 2400
   random_init: false
   ckpt_path: /path/to/X-VLA-WidowX
@@ -63,14 +63,14 @@ server:
   loongforge_root: /path/to/LoongForge-VLA
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib
   nvidia_icd_json: /path/to/nvidia_icd.json
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/simplerenv/widowx_stack_cube_smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/simplerenv/widowx_stack_cube_smoke
   seed: 7
   episode_idx: 0
   obj_episode_id: 0

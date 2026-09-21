@@ -257,7 +257,7 @@ class KimiPlugin(MMPlugin):
         Returns:
             Tuple of (processed_messages, mm_inputs)
         """
-        from loongforge.utils.constants import Placeholder
+        from loongforge.engines.mcore.constants import Placeholder
 
         self._validate_input(images, videos)
 

@@ -26,4 +26,4 @@ export PYOPENGL_PLATFORM=${PYOPENGL_PLATFORM:-osmesa}
 export CUDA_GRAPH_IMPL=${CUDA_GRAPH_IMPL:-local}
 export CUDA_GRAPH_SCOPE=${CUDA_GRAPH_SCOPE:-full_iteration}
 
-${BENCHMARK_PYTHON:-/path/to/conda/envs/libero/bin/python} -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+${BENCHMARK_PYTHON:-/path/to/conda/envs/libero/bin/python} -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

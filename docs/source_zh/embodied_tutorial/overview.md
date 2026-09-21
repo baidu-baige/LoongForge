@@ -12,18 +12,18 @@
 | --- | --- |
 | `examples/embodied/` | 模型级启动脚本目录，可通过脚本末尾的透传参数覆盖默认配置 |
 | `configs/models/embodied/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
-| `loongforge/embodied/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
-| `loongforge/embodied/train/training_args.py` | 通用训练参数定义文件，负责生成 shell CLI |
-| `loongforge/embodied/train/config_map.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
-| `loongforge/embodied/model/` | 模型组网、模型注册 |
-| `loongforge/embodied/data/datasets/` | 数据处理相关功能 |
+| `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
+| `loongforge/engines/torch/training_args.py` | 通用训练参数定义文件，负责生成 shell CLI |
+| `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
+| `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
+| `loongforge/data/embodied/datasets/` | 具身数据处理相关功能 |
 
 训练链路如下：
 
 ```text
 examples/embodied/<model>/run_*.sh
     ↓
-loongforge/embodied/train.py
+loongforge/train.py
     ↓
 parse_train_args()
     ↓
@@ -39,7 +39,7 @@ trainer.train()
 ```bash
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
 torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
@@ -143,7 +143,7 @@ model.forward(batch)
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 选择模型 | `--model-name` | `None` | `config_map.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
+| 选择模型 | `--model-name` | `None` | `loongforge/models/catalog.py` 中注册的模型名 | 选择训练引擎、模型 schema、默认 YAML，以及 Torch 的 `ModelConfig` 与 `DataConfig` |
 | 指定 YAML | `--config-file` | `None` | YAML 文件路径 | 覆盖 `--model-name` 对应的默认 YAML |
 | 指定 tokenizer | `--tokenizer-path` | `None` | 本地路径或 HF repo id | 设置 tokenizer 路径，并同步到 `TOKENIZER_PATH` 环境变量 |
 

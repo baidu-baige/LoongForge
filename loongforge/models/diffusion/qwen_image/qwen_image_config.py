@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from loongforge.models.common import BaseModelStditConfig
 from loongforge.models.factory import register_model_config
-from loongforge.utils.constants import CustomModelFamilies
+from loongforge.engines.mcore.constants import CustomModelFamilies
 
 
 @dataclass

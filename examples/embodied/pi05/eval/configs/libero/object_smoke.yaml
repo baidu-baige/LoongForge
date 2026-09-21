@@ -36,7 +36,7 @@ server:
   port: 12093
   health_port: 12094
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/pi05/libero/object_smoke/policy_server.log
   start_timeout_sec: 900
   ckpt_path: /path/to/pi05_libero_finetuned
   dataset_statistics_path: /path/to/pi05_libero_finetuned/dataset_statistics.json
@@ -45,14 +45,14 @@ server:
   use_bf16: false
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa
   ld_library_path: /path/to/nvidia_lib
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/libero/object_smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/pi05/libero/object_smoke
   seed: 7
   save_trace: true
   save_replay: true

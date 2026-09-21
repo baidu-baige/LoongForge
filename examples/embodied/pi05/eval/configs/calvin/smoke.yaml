@@ -32,7 +32,7 @@ server:
   port: 12113
   health_port: 12114
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/calvin/smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/pi05/calvin/smoke/policy_server.log
   start_timeout_sec: 900
   random_init: true
   ckpt_path: ""
@@ -42,13 +42,13 @@ server:
   use_bf16: false
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   mujoco_gl: osmesa
   pyopengl_platform: osmesa
   ld_library_path: /path/to/nvidia_lib
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/calvin/smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/pi05/calvin/smoke
   seed: 7
   save_trace: true
   save_replay: false

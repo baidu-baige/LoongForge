@@ -36,7 +36,7 @@ server:
   port: 13223
   health_port: 13224
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/robotwin/adjust_bottle_smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/robotwin/adjust_bottle_smoke/policy_server.log
   start_timeout_sec: 2400
   random_init: false
   # random_init: true   # optional: link smoke without ckpt (pair with max_steps: 5)
@@ -48,12 +48,12 @@ server:
   loongforge_root: /path/to/LoongForge-VLA
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   robotwin_root: /path/to/RoboTwin
   robotwin_python: /path/to/robotwin/bin/python
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/robotwin/adjust_bottle_smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/robotwin/adjust_bottle_smoke
   seed: 0
   ckpt_setting: loongforge_xvla_robotwin2
   worker_local_files: true

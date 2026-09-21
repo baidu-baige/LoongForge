@@ -19,4 +19,4 @@ export PYTHONPATH=${REPO_ROOT}:${PYTHONPATH:-}
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-/path/to/robotwin/bin/python}
-"${BENCHMARK_PYTHON}" -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

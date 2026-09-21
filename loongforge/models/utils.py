@@ -8,13 +8,13 @@ import torch
 from megatron.core.transformer import MLATransformerConfig, TransformerConfig
 from megatron.core.activations import squared_relu
 import torch.nn.functional as F
-from loongforge.utils import constants
+from loongforge.engines.mcore import constants
 from copy import deepcopy
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 from loongforge.models.common.vlm_model_config import VLMModelConfig
 from collections.abc import Iterable
-from loongforge.utils.global_vars import get_args_dict
+from loongforge.engines.mcore.global_vars import get_args_dict
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):

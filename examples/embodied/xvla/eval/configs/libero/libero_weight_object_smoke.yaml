@@ -43,7 +43,7 @@ server:
   port: 13183
   health_port: 13184
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/libero/libero_weight_object_smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/libero/libero_weight_object_smoke/policy_server.log
   start_timeout_sec: 2400
   ckpt_path: /path/to/X-VLA-LIBERO
   processor_path: /path/to/X-VLA-LIBERO
@@ -54,14 +54,14 @@ server:
   chunk_execute_steps: 10  # official X-VLA open-loop; 0=default 10; -1=no truncate
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa
   ld_library_path: /path/to/nvidia_lib
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/libero/libero_weight_object_smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/libero/libero_weight_object_smoke
   seed: 7
   save_trace: true
   save_replay: true

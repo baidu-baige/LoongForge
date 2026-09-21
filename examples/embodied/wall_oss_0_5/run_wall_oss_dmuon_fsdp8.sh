@@ -145,7 +145,7 @@ cd "$REPO"
 
 PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$REPO/loongforge/embodied/train.py" \
+    "$REPO/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \

@@ -80,7 +80,7 @@
 </p>
 
 - **Megatron 栈** —— 面向 LLM、VLM 与 Diffusion 模型。基于 [patch 过的 Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) 构建，并扩展了 MoE 并行、组件级异构并行、长序列优化等能力。
-- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。独立的 [torch-native 子系统](./loongforge/embodied)，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
+- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。Torch 运行时位于 [`loongforge/engines/torch`](./loongforge/engines/torch)，具身模型、数据和评测分别位于 [`models/embodied`](./loongforge/models/embodied)、[`data/embodied`](./loongforge/data/embodied) 和 [`evaluation/embodied`](./loongforge/evaluation/embodied)。
 
 ## 🔥 最新动态
 
@@ -90,9 +90,9 @@
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
-- **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
+- **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/evaluation/embodied/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / VLA / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 发布具身模型的 torch-native DDP/FSDP 训练栈（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3），实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 
@@ -129,7 +129,7 @@
 
 **🤖 具身模型**
 
-* **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 子系统，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[README](./loongforge/embodied)]
+* **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 引擎，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[训练说明](./docs/source_zh/embodied_tutorial/overview.md)]
 * **Delta-FP8 FSDP 通信** —— 在支持的 NVIDIA GPU 上，可选将 BF16 FSDP2 AllGather 的参数差值按 block 压缩为 FP8，模型计算仍保持 BF16。[[使用方法](./docs/source_zh/features/delta_fp8_allgather.md)]
 * **逐模型深度定制优化** —— 针对当前覆盖的每个模型深度优化训练代码，涵盖 I/O、通信策略、算子效率等维度，实测相对官方基线 **1.79×–4.38× 加速**（见[性能表现](#performance)）。
 * **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。
@@ -266,21 +266,22 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 ```
 LoongForge/
 ├── loongforge/                   # 核心训练框架
-│   ├── train/                    # 训练入口与训练器
-│   │   ├── pretrain/             #   预训练（LLM、VLM）
-│   │   ├── sft/                  #   SFT（LLM、VLM、InternVL、ERNIE）
-│   │   └── diffusion/            #   Diffusion（WAN、Qwen-Image）
+│   ├── train.py                  # 统一训练分发入口
+│   ├── engines/                  # train.py 选择的训练运行时
+│   │   ├── mcore/                #   LLM/VLM/Diffusion 运行时
+│   │   │   └── tokenizer/        #   MCore Tokenizer 实现
+│   │   └── torch/                #   具身 Torch-native 运行时
 │   ├── models/                   # 统一的模型抽象层
+│   │   ├── catalog.py            # Model names, engines, default YAMLs
 │   │   ├── foundation/           #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
 │   │   ├── encoder/              #   视觉编码器（ViT、Qwen-VL、InternVL、...）
 │   │   ├── omni_models/          #   多模态组合
 │   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
-│   │   └── common/               #   公共 Layer 与工具
-│   ├── embodied/                 # LoongForge-Embodied：独立的 torch-native（DDP/FSDP）具身
-│   │                             #   （VLA + 世界-动作）训练子系统，详见 loongforge/embodied/README_zh.md
+│   │   ├── common/               #   公共 Layer 与工具
+│   │   └── embodied/             #   具身模型实现
 │   ├── data/                     # 数据流水线（多模态、视频、DP 负载均衡）
-│   ├── tokenizer/                # Tokenizer
-│   └── utils/                    # 配置映射、常量等
+│   │   └── embodied/             #   具身数据流水线
+│   └── evaluation/embodied/      # 具身评测
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）
 ├── configs/                      # Hydra YAML 配置（模型、数据）
 ├── examples/                     # GPU 启动脚本

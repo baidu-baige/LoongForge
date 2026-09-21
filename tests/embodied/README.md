@@ -1,6 +1,6 @@
 # Embodied Regression Test Framework
 
-Manual regression tests for the `loongforge/embodied` subframework: **serially execute the training scripts under
+Manual regression tests for the embodied Torch stack: **serially execute the training scripts under
 `examples/embodied` directly** -> parse metrics -> compare against the baseline within tolerance -> write `results.json`.
 
 This suite lives under [tests/embodied/](.) and is fully self-contained (own config, executor, and

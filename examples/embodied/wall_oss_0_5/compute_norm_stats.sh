@@ -50,7 +50,7 @@ echo "  Keys:     $STATE_KEY / $ACTION_KEY"
 echo "════════════════════════════════════════════════════════════"
 
 PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-  "$PYTHON_BIN" "$LOONGFORGE_PATH/loongforge/embodied/data/datasets/wall_oss_0_5/compute_norm_stats.py" \
+  "$PYTHON_BIN" "$LOONGFORGE_PATH/loongforge/data/embodied/datasets/wall_oss_0_5/compute_norm_stats.py" \
     --data-root "$DATASET_PATH" \
     --output-path "$OUTPUT_PATH" \
     --state-key "$STATE_KEY" \

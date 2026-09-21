@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Un
 from typing_extensions import override
 
 from loongforge.data.mm_plugin import MMPlugin
-from loongforge.utils.constants import Placeholder
+from loongforge.engines.mcore.constants import Placeholder
 
 if TYPE_CHECKING:
     import torch

@@ -5,14 +5,14 @@
 
 import torch
 from megatron.core import mpu
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 from einops import rearrange
 from megatron.core.parallel_state import get_context_parallel_group
 from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )
-from loongforge.utils import print_rank_0
+from loongforge.engines.mcore.utils import print_rank_0
 
 
 # ---------------------------------------------------------------------------

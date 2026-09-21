@@ -40,7 +40,7 @@ server:
   # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 -- the
   # version our own pyproject.toml installs -- the six-task WidowX total
   # drops from 85/120 to 35/120, and nothing in the run warns about it. See
-  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_7.md.
+  # loongforge/evaluation/embodied/docs/patches/simplerenv/groot_n1_7.md.
   python: /path/to/conda/envs/loongforge/bin/python
   log: /path/to/reports/groot_n1_7/simplerenv/widowx_open_drawer/policy_server.log
   start_timeout_sec: 2400
@@ -53,12 +53,12 @@ server:
   loongforge_root: /path/to/LoongForge-VLA
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   # SimplerEnv checkout: use the fork that NVIDIA/Isaac-GR00T pins as its
   # `external_dependencies/SimplerEnv` submodule (github.com/squarefk/SimplerEnv,
   # see that repo's .gitmodules). Upstream simpler-env/SimplerEnv registers
   # neither widowx drawer task and does not expose `agent.eef_pos`. Details:
-  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_6.md.
+  # loongforge/evaluation/embodied/docs/patches/simplerenv/groot_n1_6.md.
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib

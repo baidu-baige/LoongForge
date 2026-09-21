@@ -22,4 +22,4 @@ export VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/path/to/nvidia_lib/10_nvidia.json}
 export CUDA_GRAPH_IMPL=${CUDA_GRAPH_IMPL:-local}
 export CUDA_GRAPH_SCOPE=${CUDA_GRAPH_SCOPE:-full_iteration}
 
-${BENCHMARK_PYTHON:-/path/to/conda/envs/simplerenv/bin/python} -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+${BENCHMARK_PYTHON:-/path/to/conda/envs/simplerenv/bin/python} -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

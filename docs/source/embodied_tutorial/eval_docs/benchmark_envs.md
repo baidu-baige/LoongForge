@@ -1,6 +1,6 @@
 # Benchmark Environments
 
-This document records the benchmark runtime environments used by the LoongForge-VLA eval module under `loongforge/embodied/eval`.
+This document records the benchmark runtime environments used by the LoongForge embodied evaluation module under `loongforge/evaluation/embodied`.
 
 **For installation, follow the official benchmark homepages** — each benchmark page links to its official repository. This document is not an install guide; it records the dependency versions of the environments currently used by the eval module, so they can be compared / reproduced when debugging.
 
@@ -205,4 +205,3 @@ Used by:
 ```text
 examples/embodied/pi05/eval/configs/maniskill/*.yaml
 ```
-

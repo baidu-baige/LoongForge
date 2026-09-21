@@ -299,7 +299,7 @@ def exec_adaptation():
 
     Intended to be executed once during program initialization.
     """
-    from loongforge.utils import get_args
+    from loongforge.engines.mcore import get_args
 
     args = get_args()
     if args.use_vlm_dp_balance:

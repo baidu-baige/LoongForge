@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-import loongforge.train  # noqa: F401 - initialize package imports in training order
+import loongforge.engines.mcore  # noqa: F401 - initialize package imports in training order
 import torch
 from PIL import Image
 from transformers import AutoImageProcessor, AutoTokenizer
@@ -24,7 +24,7 @@ from loongforge.data.multimodal.base.task_encoder import BaseTaskEncoder
 from loongforge.data.multimodal.kimi_task_encoder import KimiTaskEncoder
 from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
 from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
-from loongforge.utils import constants
+from loongforge.engines.mcore import constants
 
 
 class Glm52KimiVitPluginTest(unittest.TestCase):

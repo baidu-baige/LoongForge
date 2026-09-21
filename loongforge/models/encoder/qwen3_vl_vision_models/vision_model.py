@@ -35,7 +35,7 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 
 from loongforge.models.common import BaseMegatronVisionModule
 from loongforge.models.utils import import_module
-from loongforge.utils import get_model_config
+from loongforge.engines.mcore import get_model_config
 
 from loongforge.models.encoder.base_vision_models.base_vision_model import (
     BaseVisionModel,

@@ -36,7 +36,7 @@ server:
   # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 --
   # the version our own pyproject.toml installs -- libero_10 scores 11/50
   # against 46/50 on 4.57.3, and nothing in the run warns about it. See
-  # loongforge/embodied/eval/docs/patches/libero/groot_n1_7.md.
+  # loongforge/evaluation/embodied/docs/patches/libero/groot_n1_7.md.
   python: /path/to/conda/envs/loongforge/bin/python
   log: /path/to/reports/groot_n1_7/libero/libero_goal/policy_server.log
   start_timeout_sec: 2400
@@ -49,7 +49,7 @@ server:
   loongforge_root: /path/to/LoongForge-VLA
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa

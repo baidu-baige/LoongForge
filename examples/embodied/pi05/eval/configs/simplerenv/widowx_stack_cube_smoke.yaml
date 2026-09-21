@@ -40,7 +40,7 @@ server:
   port: 12193
   health_port: 12194
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/simplerenv/widowx_stack_cube_smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/pi05/simplerenv/widowx_stack_cube_smoke/policy_server.log
   start_timeout_sec: 900
   random_init: true
   ckpt_path: ""
@@ -50,14 +50,14 @@ server:
   use_bf16: false
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib
   nvidia_icd_json: /path/to/nvidia_icd.json
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/pi05/simplerenv/widowx_stack_cube_smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/pi05/simplerenv/widowx_stack_cube_smoke
   seed: 7
   episode_idx: 0
   obj_episode_id: 0

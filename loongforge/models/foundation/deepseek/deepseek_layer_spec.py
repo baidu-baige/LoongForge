@@ -35,7 +35,7 @@ from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.enums import Fp8Recipe
 
 from loongforge.models.dispatch import multiacc_modules
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 
 def _get_deepseek_layer_with_te_spec(
     num_experts: Optional[int] = None,

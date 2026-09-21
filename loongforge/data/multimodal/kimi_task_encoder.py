@@ -12,7 +12,7 @@ from megatron.energon import (
     CaptioningSample,
     VQASample,
 )
-from loongforge.utils import constants, get_chat_template
+from loongforge.engines.mcore import constants, get_chat_template
 from loongforge.data.chat_template import HFChatTemplate
 from megatron.energon.task_encoder.base import stateless
 from loongforge.data.multimodal import (

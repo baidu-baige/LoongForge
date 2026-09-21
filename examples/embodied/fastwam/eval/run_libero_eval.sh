@@ -29,4 +29,4 @@ export PYOPENGL_PLATFORM=${PYOPENGL_PLATFORM:-osmesa}
 export DIFFSYNTH_MODEL_BASE_PATH=${DIFFSYNTH_MODEL_BASE_PATH:-/path/to/models_root}
 
 BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-/path/to/libero/bin/python}
-"${BENCHMARK_PYTHON}" -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

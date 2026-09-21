@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Union, Dict, List, Any, Sequence
 
 from datasets import Features, Value
 
-from loongforge.utils.constants import SFTDataFormats, DataRoles
+from loongforge.engines.mcore.constants import SFTDataFormats, DataRoles
 
 
 if TYPE_CHECKING:

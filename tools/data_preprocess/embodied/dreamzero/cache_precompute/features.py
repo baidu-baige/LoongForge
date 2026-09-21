@@ -16,44 +16,44 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import v2
 
-from loongforge.embodied.data.datasets.dreamzero.dataset.datasets import (
+from loongforge.data.embodied.datasets.dreamzero.dataset.datasets import (
     DreamZeroLeRobotDataset,
 )
-from loongforge.embodied.data.datasets.dreamzero.dataset.modality_configs import (
+from loongforge.data.embodied.datasets.dreamzero.dataset.modality_configs import (
     EMBODIMENT_BUILDERS,
     EMBODIMENT_TAG_TO_ID,
 )
-from loongforge.embodied.data.datasets.dreamzero.transforms.base import (
+from loongforge.data.embodied.datasets.dreamzero.transforms.base import (
     ComposedModalityTransform,
 )
-from loongforge.embodied.data.datasets.dreamzero.transforms.concat import (
+from loongforge.data.embodied.datasets.dreamzero.transforms.concat import (
     ConcatTransform,
 )
-from loongforge.embodied.data.datasets.dreamzero.transforms.state_action import (
+from loongforge.data.embodied.datasets.dreamzero.transforms.state_action import (
     StateActionToTensor,
     StateActionTransform,
 )
-from loongforge.embodied.data.datasets.dreamzero.transforms.video import (
+from loongforge.data.embodied.datasets.dreamzero.transforms.video import (
     VideoColorJitter,
     VideoCrop,
     VideoResize,
     VideoToNumpy,
     VideoToTensor,
 )
-from loongforge.embodied.data.datasets.dreamzero.transforms.dreamzero_collator import (
+from loongforge.data.embodied.datasets.dreamzero.transforms.dreamzero_collator import (
     DreamTransform,
     HuggingfaceTokenizer,
 )
-from loongforge.embodied.data.datasets.dreamzero.transforms.dreamzero_collator import (
+from loongforge.data.embodied.datasets.dreamzero.transforms.dreamzero_collator import (
     collate as dreamzero_collate,
 )
-from loongforge.embodied.model.dreamzero.dreamzero_provider import _build_text_encoder
+from loongforge.models.embodied.dreamzero.dreamzero_provider import _build_text_encoder
 
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 def _load_vae_module():
-    path = _REPO_ROOT / "loongforge/embodied/model/dreamzero/modules/wan_video_vae.py"
+    path = _REPO_ROOT / "loongforge/models/embodied/dreamzero/modules/wan_video_vae.py"
     spec = importlib.util.spec_from_file_location("_dreamzero_wan_video_vae", path)
     if spec is None or spec.loader is None:
         raise ImportError(f"failed to load VAE module from {path}")

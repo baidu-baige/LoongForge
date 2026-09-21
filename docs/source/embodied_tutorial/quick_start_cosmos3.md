@@ -83,7 +83,7 @@ Arguments in the script are grouped by purpose as follows:
 **Model and Distributed:**
 
 ```bash
---model-name cosmos3_nano            # Mapped to the Cosmos3-Nano DROID recipe via config_map
+--model-name cosmos3_nano            # Mapped to the engine and Cosmos3-Nano YAML via models/catalog.py
 --distributed-strategy fsdp          # Distributed strategy: FSDP2 full shard
 --dtype bfloat16                     # Training precision: bf16
 --fsdp-reduce-dtype bf16             # Reduce-scatter gradients in bf16

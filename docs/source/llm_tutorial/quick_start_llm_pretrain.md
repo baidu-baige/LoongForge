@@ -146,7 +146,7 @@ See [llm_ckpt_convert.md](https://github.com/baidu-baige/LoongForge/tree/master/
 ## 3. Launch pre-training
 
 ### 3.1 Extra arguments provided by LoongForge
-Besides the native Megatron flags, the framework adds convenient options (defined in `loongforge/train/arguments.py`):
+Besides the native Megatron flags, the framework adds convenient options (defined in `loongforge/engines/mcore/arguments.py`):
 
 * `--config-file` – path to a YAML file that contains all model hyper-params, e.g. `configs/models/deepseek3/deepseek_v3.yaml`.  
 * `--model-name` – short name such as `deepseek-v3`; the system looks up the YAML automatically.  

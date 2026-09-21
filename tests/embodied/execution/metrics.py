@@ -9,7 +9,7 @@ Two sources (the execution layer prefers JSONL, falling back to the stdout log w
    {"step_time": 15.098, "step": 1, "action_loss": 0.4337, "lr": 5e-08,
     "samples_per_sec": 0.53, "grad_norm": 4.1888, ...}
 
-2. stdout training log (aligned with the Megatron format, loongforge/embodied/train/utils/logging.py):
+2. stdout training log (aligned with the Megatron format, loongforge/engines/torch/utils/logging.py):
    iteration        1/      20 | consumed samples: 8 | elapsed time per iteration (ms): 15098.4 |
    throughput (samples/sec/per_device): 0.530 | learning rate: 5.000000E-08 |
    global batch size: 64 | action loss: 4.337645E-01 | loss scale: 1.0 | grad norm: 4.188855 | ...

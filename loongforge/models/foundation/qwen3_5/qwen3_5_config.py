@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 
 from loongforge.models.common.base_model_config import BaseModelConfig
-from loongforge.utils.constants import VisionLanguageModelFamilies
+from loongforge.engines.mcore.constants import VisionLanguageModelFamilies
 
 
 @dataclass

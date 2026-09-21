@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple, Union
 
 from megatron.training import get_args
 from megatron.core import mpu
-from loongforge.utils import constants
+from loongforge.engines.mcore import constants
 
 # Warm-up profiling buffers
 WARMUP_VAR_GROUPS = []  # variables used for fitting load model

@@ -21,4 +21,4 @@ export MUJOCO_GL=${MUJOCO_GL:-osmesa}
 export PYOPENGL_PLATFORM=${PYOPENGL_PLATFORM:-osmesa}
 
 BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-/path/to/libero/bin/python}
-"${BENCHMARK_PYTHON}" -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

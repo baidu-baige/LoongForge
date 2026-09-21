@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass, fields
 from loongforge.models.common.base_model_config import BaseModelConfig
-from loongforge.utils.constants import LanguageModelFamilies
+from loongforge.engines.mcore.constants import LanguageModelFamilies
 
 
 @dataclass

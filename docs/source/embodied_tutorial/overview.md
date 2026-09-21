@@ -12,18 +12,18 @@ This chapter describes the directory layout and launch script convention under e
 | --- | --- |
 | `examples/embodied/` | Model-level launch scripts; default configs can be overridden via the trailing pass-through arguments at the end of each script |
 | `configs/models/embodied/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
-| `loongforge/embodied/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
-| `loongforge/embodied/train/training_args.py` | Definition file for common training arguments; generates the shell CLI |
-| `loongforge/embodied/train/config_map.py` | Model config routing table; binds `--model-name` to a YAML, `ModelConfig`, and `DataConfig` |
-| `loongforge/embodied/model/` | Model architecture and model registration |
-| `loongforge/embodied/data/datasets/` | Data processing components |
+| `loongforge/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
+| `loongforge/engines/torch/training_args.py` | Definition file for common training arguments; generates the shell CLI |
+| `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
+| `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
+| `loongforge/data/embodied/datasets/` | Embodied data processing components |
 
 The training pipeline is:
 
 ```text
 examples/embodied/<model>/run_*.sh
     ↓
-loongforge/embodied/train.py
+loongforge/train.py
     ↓
 parse_train_args()
     ↓
@@ -39,7 +39,7 @@ Launch scripts typically set environment variables, paths, distributed arguments
 ```bash
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
 torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
@@ -144,7 +144,7 @@ Supported capabilities:
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
-| Select model | `--model-name` | `None` | Model name registered in `config_map.py` | Selects the model schema, default YAML, `ModelConfig`, and `DataConfig` |
+| Select model | `--model-name` | `None` | Model name registered in `loongforge/models/catalog.py` | Selects the engine, schema, default YAML, and (for Torch) `ModelConfig` / `DataConfig` |
 | Specify YAML | `--config-file` | `None` | YAML file path | Overrides the default YAML bound to `--model-name` |
 | Specify tokenizer | `--tokenizer-path` | `None` | Local path or HF repo id | Sets the tokenizer path and syncs it to the `TOKENIZER_PATH` environment variable |
 

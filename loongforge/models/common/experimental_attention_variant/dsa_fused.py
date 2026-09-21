@@ -50,7 +50,7 @@ from megatron.core.transformer.experimental_attention_variant.dsa import (
     source_dsa_compute_layer,
 )
 
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 
 try:
     from fast_hadamard_transform import hadamard_transform

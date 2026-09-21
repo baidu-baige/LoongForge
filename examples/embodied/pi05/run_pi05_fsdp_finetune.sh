@@ -134,7 +134,7 @@ echo "════════════════════════�
 
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \

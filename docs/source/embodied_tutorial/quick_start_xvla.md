@@ -80,7 +80,7 @@ The main arguments in the script are grouped as follows.
 **Model and Distributed:**
 
 ```bash
---model-name xvla                    # Mapped to XVLA config via config_map
+--model-name xvla                    # Mapped to the engine and XVLA config via models/catalog.py
 --distributed-strategy ddp           # DDP distributed strategy
 --dtype bfloat16                     # Training precision
 # GPUS_PER_NODE=8                    # Number of GPUs per node (script variable)

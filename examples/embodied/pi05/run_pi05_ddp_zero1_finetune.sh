@@ -6,7 +6,7 @@
 # run_pi05_ddp_zero1_finetune.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
 #
 # Mirrors the config from examples/pi05/finetuning/sft_pi05.sh
-# but uses the embodied training framework (loongforge/embodied/train.py).
+# but uses the embodied training framework (loongforge/train.py).
 #
 # Usage:
 #   bash run_pi05_ddp_zero1_finetune.sh
@@ -122,7 +122,7 @@ echo "════════════════════════�
 
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \

@@ -22,12 +22,13 @@ num_attention_heads: 64
 ```
 
 ### 1.2 注册模型名称
-在 loongforge/utils/config_map.py 的 MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
+在 loongforge/models/catalog.py 的 MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
 
 ```python
 MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "llama3-70b": {
+            "engine": "mcore",
             "config_path": "configs/models/llama3",
             "config_name": "llama3_70b",
         },
@@ -39,7 +40,7 @@ VLM 可以看作 **ViT + 投影层 + LLM**。添加新 VLM 模型时，LLM 部�
 
     1. **准备组件配置**：定义 LLM 基座、视觉编码器和投影层配置。
     2. **创建组合配置**：编写 VLM 的顶层 YAML 配置文件。
-    3. **注册模型名称**：在 config_map.py 中注册新模型。
+    3. **注册模型名称**：在 loongforge/models/catalog.py 中注册新模型。
 
 ### 2.1 视觉编码器（ViT）配置
 定义 Vision Transformer 参数。
@@ -112,7 +113,7 @@ model:
 ```
 
 ### 2.4 模型注册
-你需要在 loongforge/utils/config_map.py 中注册。打开 loongforge/utils/config_map.py 并向 MODEL_CONFIG_REGISTRY 字典中添加条目：
+你需要在 loongforge/models/catalog.py 中注册。打开 loongforge/models/catalog.py 并向 MODEL_CONFIG_REGISTRY 字典中添加条目：
 
 ```python
 MODEL_CONFIG_REGISTRY = {
@@ -120,6 +121,7 @@ MODEL_CONFIG_REGISTRY = {
 
     # === 添加你的新模型 ===
     "my-custom-vlm-8b": {
+        "engine": "mcore",
         "config_path": "configs/models/<vlm_family>",       # 组合配置文件所在目录
         "config_name": "my_new_vlm",                        # 组合配置文件名（不含 .yaml）
     },
@@ -145,6 +147,7 @@ configs/models/wan/<your_wan_variant>.yaml
 MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "my-wan-variant": {
+        "engine": "mcore",
         "config_path": "configs/models/wan",
         "config_name": "<your_wan_variant>",
     },

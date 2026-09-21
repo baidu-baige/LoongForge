@@ -8,7 +8,7 @@ from runpy import run_path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-CONSTANTS = run_path(str(ROOT / "loongforge/utils/constants.py"))
+CONSTANTS = run_path(str(ROOT / "loongforge/engines/mcore/constants.py"))
 
 
 def test_kimi_k3_llm_example_uses_the_llm_training_path():

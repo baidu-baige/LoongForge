@@ -17,10 +17,10 @@ from loongforge.data import (
     get_support_templates,
     load_chat_template_kwargs,
 )
-from loongforge.tokenizer import build_tokenizer
-from loongforge.utils import constants
-from loongforge.utils.utils import get_default_sft_dataset_config
-from loongforge.train.sft.utils import get_dataset_blend_from_list
+from loongforge.engines.mcore.tokenizer import build_tokenizer
+from loongforge.engines.mcore import constants
+from loongforge.engines.mcore.utils import get_default_sft_dataset_config
+from loongforge.engines.mcore.sft.utils import get_dataset_blend_from_list
 
 
 def build_sft_dataset(args):

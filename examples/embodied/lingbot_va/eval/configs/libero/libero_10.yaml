@@ -64,7 +64,7 @@ model:
   obs_cam_keys: [primary, wrist]
   # The shared LIBERO adapter emits raw[::-1, ::-1] (180 deg) while the official
   # client emits raw[::-1] (vertical only); this undoes the extra horizontal
-  # flip. See loongforge/embodied/eval/adapters/libero.py:80.
+  # flip. See loongforge/evaluation/embodied/adapters/libero.py:80.
   image_hflip: true
   # Action space + dataset quantiles (official norm_stat; unused channels are 0).
   used_action_channel_ids: [0, 1, 2, 3, 4, 5, 6]
@@ -76,21 +76,21 @@ server:
   port: 12099
   health_port: 12100
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/libero/libero_10/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/lingbot_va/libero/libero_10/policy_server.log
   start_timeout_sec: 1800
   ckpt_path: /path/to/lingbot-va-posttrain-libero-long
   loongforge_root: /path/to/LoongForge-VLA
   use_bf16: true
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa
   ld_library_path: /path/to/nvidia_lib
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/lingbot_va/libero/libero_10
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/lingbot_va/libero/libero_10
   seed: 7
   save_trace: true
   save_replay: true

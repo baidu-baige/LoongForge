@@ -38,7 +38,7 @@ import numpy as np
 from transformers.image_utils import get_image_size, to_numpy_array
 from typing_extensions import override
 
-from loongforge.utils.constants import Placeholder
+from loongforge.engines.mcore.constants import Placeholder
 
 from PIL import Image
 

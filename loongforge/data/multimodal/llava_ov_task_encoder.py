@@ -29,7 +29,7 @@ from typing_extensions import override
 
 from loongforge.data.multimodal import MultiMixQASample
 from loongforge.data.multimodal.length_sort_dataset import LengthPoolSortDataset
-from loongforge.utils import constants, get_chat_template
+from loongforge.engines.mcore import constants, get_chat_template
 
 from .base.task_encoder import (
     BaseTaskBatchPacked,

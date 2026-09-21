@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Union, Dict, List, Any, Sequence, Optional, Tu
 import datasets
 from datasets import Dataset, IterableDataset
 
-from loongforge.utils import constants
+from loongforge.engines.mcore import constants
 from .chat_template import HFChatTemplate
 
 if TYPE_CHECKING:

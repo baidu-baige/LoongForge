@@ -71,7 +71,7 @@ Test configs: `tests/llm_vlm/configs/` (CI suite) and `tests/llm_vlm/optional_co
 ### Embodied/VLA Regression Tests
 
 `tests/embodied/` is the end-to-end regression suite for training scripts under
-`loongforge/embodied/` and `examples/embodied/`. Its entry point is
+`loongforge/engines/torch/`, `loongforge/models/embodied/`, and `examples/embodied/`. Its entry point is
 `tests/embodied/run.sh`; execution, metric parsing, and baseline comparison are owned by
 `tests/embodied/cli.py`. Regression targets are registered in
 `tests/embodied/config/scripts.yaml` and run serially in manifest order.
@@ -129,24 +129,25 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
     ...
 ```
 
-Key arguments: `--model-name` (maps to config via `config_map.py`) or `--config-file` (direct YAML path), `--training-phase` (pretrain/sft).
+Key arguments: `--model-name` (maps to an engine and config via `loongforge/models/catalog.py`) or `--config-file` (direct YAML path), `--training-phase` (pretrain/sft).
 
 ## Architecture
 
 ### Core Package: `loongforge/`
 
-- **`train.py`** — Entry point. Calls `parse_train_args()` then `build_model_trainer(args).train()`.
-- **`train/parser.py`** — Argument parsing: merges Megatron CLI args with Hydra YAML configs (OmegaConf). Supports `--model-name` (looked up in `config_map.py`) or `--config-file`.
-- **`train/trainer_builder.py`** — Registry-based trainer dispatch. `register_model_trainer(model_family, training_phase)` decorator registers training functions per model family and phase.
-- **`train/megatron_trainer.py`** — `MegatronTrainer` wraps model_provider, dataset_provider, and forward_step into Megatron's `pretrain()` loop.
-- **`train/training_utils.py`** — Extended Megatron pretrain loop (heavily customized).
-- **`train/arguments.py`** — LoongForge-specific extra CLI arguments added on top of Megatron's.
-- **`train/validators.py`** — Validation logic for Megatron and LoongForge args.
-- **`train/pretrain/`** — Pretrain implementations for LLM and VLM.
-- **`train/sft/`** — SFT implementations for LLM, VLM, InternVL, ERNIE.
-- **`train/custom/`** — Custom model trainers (e.g., WAN diffusion, Pi0.5 VLA).
-- **`embodied/`** — Embodied/VLA training framework, including robot datasets, model
-  implementations, preprocessing, and DDP/FSDP/ZeRO launch integrations.
+- **`train.py`** — Unified entry point. Selects `engines/mcore` or `engines/torch` from `models/catalog.py` and forwards the original arguments.
+- **`engines/mcore/parser.py`** — MCore argument parsing: merges Megatron CLI args with Hydra YAML configs.
+- **`engines/torch/parser.py`** — Torch argument parsing: merges typed configs with the selected embodied YAML.
+- **`engines/mcore/trainer_builder.py`** — Registry-based trainer dispatch. `register_model_trainer(model_family, training_phase)` decorator registers training functions per model family and phase.
+- **`engines/mcore/megatron_trainer.py`** — `MegatronTrainer` wraps model_provider, dataset_provider, and forward_step into Megatron's `pretrain()` loop.
+- **`engines/mcore/training_utils.py`** — Extended Megatron pretrain loop (heavily customized).
+- **`engines/mcore/arguments.py`** — LoongForge-specific extra CLI arguments added on top of Megatron's.
+- **`engines/mcore/validators.py`** — Validation logic for Megatron and LoongForge args.
+- **`engines/mcore/pretrain/`** — Pretrain implementations for LLM and VLM.
+- **`engines/mcore/sft/`** — SFT implementations for LLM, VLM, InternVL, ERNIE.
+- **`engines/mcore/diffusion/`** — WAN and Qwen-Image trainers.
+- **`engines/torch/`** — Embodied Torch-native DDP/FSDP/ZeRO training runtime.
+- **`models/embodied/`** and **`data/embodied/`** — Embodied model and data implementations.
 
 ### Model System: `loongforge/models/`
 
@@ -163,7 +164,7 @@ Key arguments: `--model-name` (maps to config via `config_map.py`) or `--config-
 
 - **`configs/models/<family>/<model>.yaml`** — Hydra/OmegaConf YAML configs defining model architecture params. The `_target_` field maps to a Python config dataclass (e.g., `loongforge.models.foundation.LLaMAConfig`).
 - **`configs/data/`** — Data configuration templates.
-- **`loongforge/utils/config_map.py`** — `MODEL_CONFIG_REGISTRY` maps `--model-name` strings to `{"config_path": ..., "config_name": ...}` dicts. Contains 80+ model entries.
+- **`loongforge/models/catalog.py`** — `MODEL_CONFIG_REGISTRY` maps `--model-name` strings to the owning engine, YAML, and (for Torch) typed config classes.
 
 ### Data Pipeline: `loongforge/data/`
 
@@ -208,7 +209,7 @@ Kunlun XPU training scripts, mirroring `examples/` structure.
 2. Create a model provider function decorated with `@register_model_provider(family)`.
 3. Register a trainer function with `@register_model_trainer(family, training_phase)`.
 4. Add YAML config under `configs/models/<family>/`.
-5. Add entry in `loongforge/utils/config_map.py` `MODEL_CONFIG_REGISTRY`.
+5. Add one entry in `loongforge/models/catalog.py` with the owning engine, YAML, and Torch config types when needed.
 6. Add example launch scripts under `examples/<model>/`.
 
 ### Configuration Flow
@@ -217,7 +218,7 @@ CLI args + Hydra YAML config -> `parse_train_args()` -> merged `args` namespace 
 
 ### Model Family Constants
 
-Defined in `loongforge/utils/constants.py`. These classes (inheriting `_BaseFamilies`) drive dispatch logic throughout the codebase:
+Defined in `loongforge/engines/mcore/constants.py`. These classes (inheriting `_BaseFamilies`) drive dispatch logic throughout the codebase:
 - **`LanguageModelFamilies`**: llama, llama2, llama3, llama3.1, qwen, qwen1.5, qwen2, qwen2.5, qwen3, qwen3_next, deepseek, internlm2.5, minimax, mimo, glm
 - **`VisionLanguageModelFamilies`**: qwen2_vl, qwen2_5_vl, qwen3_vl, llava_ov_1_5, vlm, intern_vl, ernie4_5_vl, qwen3_5, kimi_k2_5
 - **`CustomModelFamilies`**: wan2_2_i2v

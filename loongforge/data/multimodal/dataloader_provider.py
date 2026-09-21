@@ -20,9 +20,9 @@ from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.models.multimodal import context_parallel
 from megatron.training import get_args
 from megatron.training.checkpointing import get_checkpoint_name
-from loongforge.utils import constants, get_model_config, print_rank_0
+from loongforge.engines.mcore import constants, get_model_config, print_rank_0
 from .base.task_encoder import print_error_handler
-from loongforge.train.get_position_idx_func import get_position_ids
+from loongforge.engines.mcore.get_position_idx_func import get_position_ids
 
 IGNORE_INDEX = constants.IGNORE_INDEX
 PAD_TOKEN_ID = 151643
@@ -545,7 +545,7 @@ def build_full_hetero_encoder_energon_iterator(
     to this PP rank.
     """
     from loongforge.data.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
-    from loongforge.train.initialize import get_num_micro_batches_per_decoder_dp
+    from loongforge.engines.mcore.initialize import get_num_micro_batches_per_decoder_dp
 
     encoder_dataset = get_train_dataset(task_encoder)
     encoder_dataloader = get_train_loader(encoder_dataset, collator)

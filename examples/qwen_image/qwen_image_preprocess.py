@@ -6,7 +6,7 @@ Qwen-Image-Edit-2511 offline preprocessing script.
 
 Encodes each (image, edit_image, prompt) sample into training tensors and
 saves them as .pth files in the LoongForge flat-dict format consumed by
-``loongforge/train/diffusion/pretrain_qwen_image.py``.
+``loongforge/engines/mcore/diffusion/pretrain_qwen_image.py``.
 
 Only the DiffSynth text encoder (Qwen2.5-VL) + VAE + tokenizer/processor are
 loaded; the DiT itself is not required for this stage.

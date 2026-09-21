@@ -79,7 +79,7 @@ server:
   port: 12160
   health_port: 12161
   python: /path/to/loongforge_vla/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/libero/libero_goal/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/fastwam/libero/libero_goal/policy_server.log
   start_timeout_sec: 1800   # 5B video DiT + 1B action DiT + UMT5 + VAE load
   ckpt_path: /path/to/libero_optional_idm_2cam224.pt
   dataset_statistics_path: /path/to/libero_optional_idm_2cam224_dataset_stats.json
@@ -89,14 +89,14 @@ server:
   chunk_execute_steps: 0    # 0 -> official 10; N>0 -> N; -1 -> full 32
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
   libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa
   ld_library_path: /path/to/nvidia_lib
 
 run:
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/libero/libero_goal
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/fastwam/libero/libero_goal
   seed: 7
   save_trace: true
   save_replay: true

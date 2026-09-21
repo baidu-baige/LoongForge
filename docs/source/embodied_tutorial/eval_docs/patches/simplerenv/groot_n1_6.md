@@ -62,7 +62,7 @@ curl -sL "$R/data/real_inpainting/bridge_small_drawer.png" \
 Then register + map:
 - Add `from . import open_small_drawer_in_scene` to
   `$MS/mani_skill2_real2sim/envs/custom_scenes/__init__.py`.
-- Add to `loongforge/embodied/eval/adapters/simplerenv.py` `TASK_TO_ENV_NAME`:
+- Add to `loongforge/evaluation/embodied/adapters/simplerenv.py` `TASK_TO_ENV_NAME`:
   ```python
   "widowx_open_drawer":  "OpenSmallDrawerCustomInScene-v0",
   "widowx_close_drawer": "CloseSmallDrawerCustomInScene-v0",

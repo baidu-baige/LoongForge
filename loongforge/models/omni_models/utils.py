@@ -15,7 +15,7 @@ from megatron.core.models.common.embeddings.rope_utils import (
     get_pos_emb_on_this_cp_rank as mcore_get_pos_emb_on_this_cp_rank
 )
 
-from loongforge.utils import get_args
+from loongforge.engines.mcore import get_args
 
 try:
     import transformer_engine_torch as tex

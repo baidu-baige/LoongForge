@@ -47,7 +47,7 @@ server:
   health_port: 13234
   start_timeout_sec: 900
   python: /path/to/loongforge/bin/python
-  log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/maniskill/pick_cube_smoke/policy_server.log
+  log: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/maniskill/pick_cube_smoke/policy_server.log
   random_init: true
   ckpt_path: ""
   processor_path: /path/to/X-VLA-LIBERO  # tokenizer/processor only under random_init
@@ -64,7 +64,7 @@ timeouts:
 run:
   seed: 7
   episode_idx: 0
-  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/xvla/maniskill/pick_cube_smoke
+  output_dir: /path/to/LoongForge-VLA/loongforge/evaluation/embodied/reports/xvla/maniskill/pick_cube_smoke
   save_replay: true
   save_trace: true
   timestamped_output: true
@@ -72,4 +72,4 @@ run:
   cfg_scale: 1.5
 
 env:
-  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied

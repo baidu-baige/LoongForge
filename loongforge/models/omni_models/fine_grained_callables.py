@@ -29,7 +29,7 @@ from megatron.core.transformer.multi_token_prediction import (
 )
 from megatron.core.transformer.transformer_layer import TransformerLayer, make_viewless_tensor
 from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
-from loongforge.train.initialize import mpu
+from loongforge.engines.mcore.initialize import mpu
 
 def maybe_set_offload_tag(tensor_name: str, tensor: torch.Tensor, config):
     """
@@ -175,7 +175,7 @@ class PreProcessNode(ScheduleNode):
                 vision_embeddings = None
 
             if model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_encoder_hetero_dp:
-                from loongforge.train.initialize import (
+                from loongforge.engines.mcore.initialize import (
                     get_encoder_dp_size,
                 )
                 _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
@@ -335,9 +335,9 @@ class PreProcessNode(ScheduleNode):
                             deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
             elif model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_full_hetero_dp:
-                from loongforge.train.initialize import get_model_size
+                from loongforge.engines.mcore.initialize import get_model_size
                 if mpu.is_pipeline_first_stage():
-                    from loongforge.train.pretrain.pretrain_vlm import (
+                    from loongforge.engines.mcore.pretrain.pretrain_vlm import (
                         get_grad_list, get_embedding_list,
                         get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
                         get_deepstack_grad_list, get_cpu_offload_manager,
@@ -359,7 +359,7 @@ class PreProcessNode(ScheduleNode):
 
                     # Reload embedding from CPU if offloaded
                     if _offload_mgr.enabled and local_rank == src_rank:
-                        from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                        from loongforge.engines.mcore.full_hetero_cpu_offload import reload_list_item
                         reload_list_item(
                             _offload_mgr, embedding_list[round_num], inner_num,
                             f"emb_r{round_num}"
@@ -401,7 +401,7 @@ class PreProcessNode(ScheduleNode):
                     if model.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                         # Reload visual_pos_masks from CPU if offloaded
                         if _offload_mgr.enabled and local_rank == src_rank:
-                            from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                            from loongforge.engines.mcore.full_hetero_cpu_offload import reload_list_item
                             reload_list_item(
                                 _offload_mgr, visual_pos_masks_list[round_num], inner_num,
                                 f"vpm_r{round_num}"
@@ -434,7 +434,7 @@ class PreProcessNode(ScheduleNode):
                         for i in range(len(ref_embeds)):
                             # Reload deepstack embed from CPU if offloaded
                             if _offload_mgr.enabled and local_rank == src_rank:
-                                from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                                from loongforge.engines.mcore.full_hetero_cpu_offload import reload_list_item
                                 reload_list_item(
                                     _offload_mgr, deepstack_visual_embeds_list[round_num][i],
                                     inner_num, f"ds_r{round_num}_l{i}"

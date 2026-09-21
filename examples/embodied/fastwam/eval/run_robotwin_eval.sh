@@ -42,4 +42,4 @@ export VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-}
 export DIFFSYNTH_MODEL_BASE_PATH=${DIFFSYNTH_MODEL_BASE_PATH:-$(dirname "${REPO_ROOT}")}
 
 MODEL_PYTHON=${MODEL_PYTHON:-$(command -v python3)}
-"${MODEL_PYTHON}" -m loongforge.embodied.eval.orchestrator.run --config "${CONFIG}"
+"${MODEL_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run --config "${CONFIG}"

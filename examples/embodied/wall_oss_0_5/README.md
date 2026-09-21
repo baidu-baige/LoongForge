@@ -75,6 +75,6 @@ NORM_STATS_PATH=/path/to/libero_norm_stats.json \
 
 Common overrides (all optional): `GPUS_PER_NODE` (default 8), `CUDA_ID`,
 `RUN_NAME`, `OUTPUT_ROOT`, `MASTER_ADDR` / `MASTER_PORT`. Any extra flags are
-forwarded to `loongforge/embodied/train.py`, so schedule/optimizer settings such
+forwarded to `loongforge/train.py`, so schedule/optimizer settings such
 as `--train-iters`, `--per-device-batch-size`, or the `--dmuon-*` group can be
 tuned from the command line.

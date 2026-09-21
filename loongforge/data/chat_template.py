@@ -39,7 +39,7 @@ from typing import (
     Union,
 )
 
-from loongforge.utils.constants import DataRoles
+from loongforge.engines.mcore.constants import DataRoles
 from .mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
 from .kimi_plugin import KimiPlugin
 from .minicpm_v_4_6_plugin import MiniCPMV46Plugin
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
-    from loongforge.tokenizer import AutoTokenizerFromHF
+    from loongforge.engines.mcore.tokenizer import AutoTokenizerFromHF
 
 
 SlotsType = Sequence[Union[str, Set[str], Dict[str, str]]]
