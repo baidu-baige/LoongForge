@@ -49,9 +49,17 @@ DISTRIBUTED_ARGS=(
 # ── Paths ─────────────────────────────────────────────────────
 # Reference GB0_PRETRAINED / GB0_DATA_PATH_V30 / GB0_NORM_STATS_V30 (see
 # giga-brain-0/scripts/run_train.sh + configs/giga_brain_0_agibot_a2d_finetune_v30.py).
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/ssd2/pxy/ckpt/open-gigaai/GigaBrain-0.1-3.5B-Base"}
-DATA_PATH=${DATA_PATH:-"/ssd2/pxy/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/open-gigaai/GigaBrain-0.1-3.5B-Base"}
+DATA_PATH=${DATA_PATH:-"/workspace/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327"}
 OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/giga_brain_ddp"}
+
+# Reference GB0_NORM_STATS_V30 / GB0_TOKENIZER / GB0_FAST_TOKENIZER — moved out of
+# configs/models/embodied/giga_brain.yaml (data.norm_cfg / data.prompt_cfg) so all
+# machine-specific paths live in this launch script. Fed to train.py as data.*
+# dotlist overrides (parser.py step 4: OmegaConf.from_dotlist on positional args).
+NORM_STATS_PATH=${NORM_STATS_PATH:-"/workspace/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibot_a2d_norm_stats.json"}
+TOKENIZER_MODEL_PATH=${TOKENIZER_MODEL_PATH:-"/workspace/ckpt/paligemma-3b-pt-224"}
+FAST_TOKENIZER_PATH=${FAST_TOKENIZER_PATH:-"/workspace/ckpt/physical-intelligence/fast"}
 
 # ── Model config ──────────────────────────────────────────────
 MODEL_NAME=${MODEL_NAME:-"giga_brain"}
@@ -60,7 +68,7 @@ MODEL_CONFIG_ARGS=(
 )
 
 # ── Data params ───────────────────────────────────────────────
-# Reference: batch_size_per_gpu=32, num_workers=16 (dataloaders.train in
+# Reference: batch_size_per_gpu=72, num_workers=16 (dataloaders.train in
 # giga_brain_0_agibot_a2d_finetune.py).
 NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
@@ -72,7 +80,7 @@ DATA_ARGS=(
 # ── Training params ───────────────────────────────────────────
 # Reference train.max_steps=1000 (finetune_v30 inherits finetune.py's default).
 TRAIN_ITERS=${TRAIN_ITERS:-1000}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-32}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-72}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-1000}
 SEED=${SEED:-6666}
@@ -143,6 +151,17 @@ LOGGING_ARGS=(
     --wandb-mode disabled
 )
 
+# ── Data-config path overrides (formerly in giga_brain.yaml) ──
+# Positional dotlist overrides consumed by parser.py (keys must be prefixed
+# data.* — see parser.py step 4). norm_stats_path is keyed by embodiment id "1"
+# (AgiBot G1, which robot_type=a2d maps to) to match data.norm_cfg.norm_stats_path
+# in the YAML schema. Placed before "$@" so a user's own dotlist still wins.
+DATA_PATH_OVERRIDES=(
+    "data.norm_cfg.norm_stats_path.1=$NORM_STATS_PATH"
+    "data.prompt_cfg.tokenizer_model_path=$TOKENIZER_MODEL_PATH"
+    "data.prompt_cfg.fast_tokenizer_path=$FAST_TOKENIZER_PATH"
+)
+
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
 echo "  LoongForge GigaBrain-0 Training (DDP/FSDP)"
@@ -151,6 +170,9 @@ echo "  Strategy:   $DISTRIBUTED_STRATEGY"
 echo "  Model:      $MODEL_NAME"
 echo "  Checkpoint: $CHECKPOINT_PATH"
 echo "  Data:       $DATA_PATH"
+echo "  NormStats:  $NORM_STATS_PATH"
+echo "  Tokenizer:  $TOKENIZER_MODEL_PATH"
+echo "  FastTok:    $FAST_TOKENIZER_PATH"
 echo "  Output:     $OUTPUT_DIR"
 echo "════════════════════════════════════════════════════════════"
 
@@ -163,4 +185,5 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${ACTIVATION_CHECKPOINT_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
+    "${DATA_PATH_OVERRIDES[@]}" \
     "$@"

@@ -35,13 +35,15 @@ model:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # data: — everything under this block maps 1:1 to GigaBrainDataConfig(**data).
-# Mirrors configs/giga_brain_0_agibot_a2d_finetune_v30.py exactly (v3.0
-# dataset path + norm_stats path), so training numerics match the reference.
-# Override data_path / norm_stats_path via --data.data_path=... /
-# --data.norm_cfg.norm_stats_path.1=... dotlist flags for a different dataset.
+# Machine-specific paths (data_path / norm_stats_path / tokenizer paths) live in
+# the launch script run_giga_brain_ddp_finetune.sh, not here, so it stays the
+# single source of truth. data_path is supplied via --dataset-path (DATA_PATH env
+# var), which takes precedence over data.data_path (see giga_brain_dataset.py).
 # ─────────────────────────────────────────────────────────────────────────────
 data:
-  data_path: /ssd2/pxy/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327
+  # data_path supplied by run_giga_brain_ddp_finetune.sh via --dataset-path
+  # (training_args.dataset_path takes precedence over this field).
+  data_path: agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327
 
   delta_action_cfg:
     use_delta_joint_actions: true
@@ -72,8 +74,7 @@ data:
         - true
 
   norm_cfg:
-    norm_stats_path:
-      "1": /ssd2/pxy/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibot_a2d_norm_stats.json
+    norm_stats_path: {}
     use_quantiles: true
     enable_clamp: false
 
@@ -87,8 +88,8 @@ data:
     enable_depth_img: false
 
   prompt_cfg:
-    tokenizer_model_path: /ssd2/pxy/ckpt/paligemma-3b-pt-224
-    fast_tokenizer_path: /ssd2/pxy/ckpt/physical-intelligence/fast
+    tokenizer_model_path: paligemma-3b-pt-224
+    fast_tokenizer_path: physical-intelligence/fast
     max_length: 200
     discrete_state_input: true
     encode_action_input: false

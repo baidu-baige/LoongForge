@@ -4,6 +4,7 @@
 """Per-module LR groups + scheduler factory."""
 
 import logging
+import math
 from collections.abc import Iterable
 from typing import Dict, List
 
@@ -297,6 +298,31 @@ def build_param_groups(model: nn.Module, training_args) -> List[Dict]:
     return groups
 
 
+def _gb0_warmup_cosine_factor(step: int, warmup: int, decay: int, min_ratio: float) -> float:
+    """LR multiplier reproducing giga-train ``WarmupCosineScheduler`` *exactly*.
+
+    LoongForge steps the scheduler *after* the optimizer, so at optimizer-step m
+    the applied factor is ``lambda(last_epoch = m-1)``. giga-train indexes
+    num_update from 0 on the first optimizer step with a special first value
+    ``base/(warmup+1)``. Using n = step (the LambdaLR counter) reproduces it:
+
+      n == 0            -> 1/(warmup+1)                (first update)
+      1 <= n <= warmup  -> n/warmup                    (linear warmup)
+      warmup < n <= decay -> min_ratio + (1-min_ratio)*0.5*(1+cos(pi*alpha))
+      n > decay         -> min_ratio
+    """
+    n = step
+    if n <= 0:
+        return 1.0 / (warmup + 1)
+    if n <= warmup:
+        return n / warmup
+    if n <= decay:
+        alpha = (n - warmup) / (decay - warmup)
+        cosf = 0.5 * (1.0 + math.cos(math.pi * alpha))
+        return min_ratio + (1.0 - min_ratio) * cosf
+    return min_ratio
+
+
 def build_scheduler(optimizer, training_args):
     """Build LR scheduler from CLI training_args."""
 
@@ -317,8 +343,26 @@ def build_scheduler(optimizer, training_args):
 
         return LambdaLR(optimizer, _scheduler.schedule)
     else:
-        kwargs = {}
         style = training_args.lr_decay_style
+        # giga-brain-0 reference-exact warmup: keep the standard
+        # "cosine_with_min_lr" style, but for the giga_brain model build a
+        # LambdaLR that reproduces giga-train WarmupCosineScheduler step-for-step
+        # (first step base/(warmup+1), then base*n/warmup with n 0-indexed)
+        # instead of HF's off-by-one warmup. Other models keep default HF behavior.
+        if style == "cosine_with_min_lr" and training_args.model_name == "giga_brain":
+            warmup = int(training_args.lr_warmup_iters)
+            decay = int(training_args.lr_decay_iters or training_args.train_iters)
+            min_ratio = float(training_args.min_lr) / float(training_args.lr_base)
+            logger.info(
+                f"cosine_with_min_lr (giga_brain reference-exact): warmup={warmup}, "
+                f"decay={decay}, min_ratio={min_ratio:.4g}"
+            )
+            return LambdaLR(
+                optimizer,
+                lambda step: _gb0_warmup_cosine_factor(step, warmup, decay, min_ratio),
+            )
+
+        kwargs = {}
         if style in {"cosine_with_min_lr", "cosine_warmup_with_min_lr"}:
             kwargs["min_lr"] = training_args.min_lr
         elif style == "polynomial":
