@@ -55,7 +55,7 @@ Or for breaking changes:
 2. Map changed paths to modules:
    - `loongforge/models/foundation/` → `llm`
    - `loongforge/models/encoder/`, `loongforge/models/omni_models/` → `vlm`
-   - `loongforge/train/` → `train`
+   - `loongforge/engines/` → `train`
    - `loongforge/data/` → `data`
    - `tools/convert_checkpoint/` → `ckpt`
    - `loongforge/models/peft/` → `peft`
@@ -153,7 +153,7 @@ After PR is created:
 | vlm | `loongforge/models/encoder/`, `loongforge/models/omni_models/` |
 | vla | `loongforge/models/custom/` (VLA models) |
 | diffusion | `loongforge/models/custom/` (diffusion models) |
-| train | `loongforge/train/` |
+| train | `loongforge/engines/` |
 | data | `loongforge/data/` |
 | ops | `ops/` |
 | ckpt | `tools/convert_checkpoint/` |

@@ -21,24 +21,24 @@ Benchmark env (client)                          Policy server
                            PolicyRequest / Response
 ```
 
-Every benchmark drives the same four-stage chain: `Adapter.obs_to_canonical` → `PayloadBuilder.build` → `model.predict_action` (over RPC) → `ActionDecoder`. Details for code contributors: the [evaluation protocol](docs/eval_protocol.md) and the [model integration guide](docs/model_integration.md).
+Every benchmark drives the same four-stage chain: `Adapter.obs_to_canonical` → `PayloadBuilder.build` → `model.predict_action` (over RPC) → `ActionDecoder`. Details for code contributors: the [evaluation protocol](../../../docs/source/embodied_tutorial/eval_docs/eval_protocol.md) and the [model integration guide](../../../docs/source/embodied_tutorial/eval_docs/model_integration.md).
 
 ## Docs
 
 | Doc | Audience | Content |
 |---|---|---|
-| [User guide](docs/user_guide_en.md) | eval users | Supported models/benchmarks, quick start, config reference, outputs, troubleshooting |
-| [Benchmark pages](docs/benchmarks/libero.md) | eval users | Per-benchmark reproduction guides (env setup, run, verification) |
-| [Model integration](docs/model_integration.md) | code contributors | New-model integration checklist + `predict_action` contract + development notes |
-| [Evaluation protocol](docs/eval_protocol.md) | code contributors | Architecture, components, data protocol, PolicyClient interface |
-| [Benchmark environments](docs/benchmark_envs.md) | eval users | Verified per-benchmark env version records (install per the official benchmark homepages) |
+| [User guide](../../../docs/source/embodied_tutorial/eval_docs/user_guide.md) | eval users | Supported models/benchmarks, quick start, config reference, outputs, troubleshooting |
+| [Benchmark pages](../../../docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md) | eval users | Per-benchmark reproduction guides (env setup, run, verification) |
+| [Model integration](../../../docs/source/embodied_tutorial/eval_docs/model_integration.md) | code contributors | New-model integration checklist + `predict_action` contract + development notes |
+| [Evaluation protocol](../../../docs/source/embodied_tutorial/eval_docs/eval_protocol.md) | code contributors | Architecture, components, data protocol, PolicyClient interface |
+| [Benchmark environments](../../../docs/source/embodied_tutorial/eval_docs/benchmark_envs.md) | eval users | Verified per-benchmark env version records (install per the official benchmark homepages) |
 
 ## Quick Start
 
 The example below runs LIBERO with pi05:
 
-1. **Set up the LIBERO environment** — please refer to the official [LIBERO repository](https://github.com/Lifelong-Robot-Learning/LIBERO) for installation; for the eval client deps and common issues, check the [LIBERO guide](docs/benchmarks/libero.md#step-1-environment-setup); the verified environment version lists are in [benchmark_envs.md](docs/benchmark_envs.md).
-2. **Get the weights and edit the config** — download [lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044), then fill the `/path/to/...` placeholders in `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml`. A field-by-field example: the [user guide](docs/user_guide_en.md#2-quick-start); the config layout: [user guide §3](docs/user_guide_en.md#3-configuration-reference).
+1. **Set up the LIBERO environment** — please refer to the official [LIBERO repository](https://github.com/Lifelong-Robot-Learning/LIBERO) for installation; for the eval client deps and common issues, check the [LIBERO guide](../../../docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md#step-1-environment-setup); the verified environment version lists are in [benchmark_envs.md](../../../docs/source/embodied_tutorial/eval_docs/benchmark_envs.md).
+2. **Get the weights and edit the config** — download [lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044), then fill the `/path/to/...` placeholders in `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml`. A field-by-field example: the [user guide](../../../docs/source/embodied_tutorial/eval_docs/user_guide.md#2-quick-start); the config layout: [user guide §3](../../../docs/source/embodied_tutorial/eval_docs/user_guide.md#3-configuration-reference).
 
 3. **Run** — execute the script inside the **benchmark** environment:
 
@@ -47,7 +47,7 @@ The example below runs LIBERO with pi05:
     examples/embodied/pi05/eval/run_libero_eval.sh
     ```
 
-The LIBERO simulator runs in the benchmark environment; the policy server is launched from the YAML `server.python` field, pointing at the LoongForge environment. Other models/benchmarks: the [user guide](docs/user_guide_en.md) and the [benchmark pages](docs/benchmarks/libero.md).
+The LIBERO simulator runs in the benchmark environment; the policy server is launched from the YAML `server.python` field, pointing at the LoongForge environment. Other models/benchmarks: the [user guide](../../../docs/source/embodied_tutorial/eval_docs/user_guide.md) and the [benchmark pages](../../../docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md).
 
 ## Supported Matrix
 
@@ -62,9 +62,9 @@ The LIBERO simulator runs in the benchmark environment; the policy server is lau
 - **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run.
 - **Connectivity only**: the pipeline runs with `random_init: true` and no score — either no domain weights are released, or the benchmark assets block a full run (e.g. xvla CALVIN: the weights are public, but the official online rollout needs the original-format validation dataset).
 - **—**: not supported yet — coming soon.
-- **GR00T-N1.7** additionally needs `transformers 4.57.3` in the policy env, the version Isaac-GR00T declares. The 5.3.0 our own `pyproject.toml` installs silently degrades every benchmark (`libero_10` 46/50 → 11/50, WidowX 85/120 → 35/120). See the [LIBERO](docs/patches/libero/groot_n1_7.md) / [SimplerEnv](docs/patches/simplerenv/groot_n1_7.md) guides.
-- **Detailed results**: see the per-benchmark [benchmark pages](docs/benchmarks/libero.md).
+- **GR00T-N1.7** additionally needs `transformers 4.57.3` in the policy env, the version Isaac-GR00T declares. The 5.3.0 our own `pyproject.toml` installs silently degrades every benchmark (`libero_10` 46/50 → 11/50, WidowX 85/120 → 35/120).
+- **Detailed results**: see the per-benchmark [benchmark pages](../../../docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md).
 
 ## Model Interface
 
-LoongForge model servers share a `predict_action(images, instructions, state=None, dataset_stats=None)` interface instead of a bespoke policy adapter per model. Client-side payload assembly lives in the per-model `PayloadBuilder`; env-side action decoding lives in the `ActionDecoder`; normalization stays inside the model's `predict_action()`. Architecture and protocol: the [evaluation protocol](docs/eval_protocol.md). Step-by-step integration checklist: the [model integration guide](docs/model_integration.md).
+LoongForge model servers share a `predict_action(images, instructions, state=None, dataset_stats=None)` interface instead of a bespoke policy adapter per model. Client-side payload assembly lives in the per-model `PayloadBuilder`; env-side action decoding lives in the `ActionDecoder`; normalization stays inside the model's `predict_action()`. Architecture and protocol: the [evaluation protocol](../../../docs/source/embodied_tutorial/eval_docs/eval_protocol.md). Step-by-step integration checklist: the [model integration guide](../../../docs/source/embodied_tutorial/eval_docs/model_integration.md).
