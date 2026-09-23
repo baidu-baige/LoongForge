@@ -589,8 +589,11 @@ class _OptimizerArgs:
         default="AdamW",
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
-                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon. TEFusedAdamW "
-                    "requires TransformerEngine; ApexFusedAdamW requires Apex."
+                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
+                    "replicated_muon. TEFusedAdamW requires TransformerEngine; "
+                    "ApexFusedAdamW requires Apex. Dmuon is the third-party "
+                    "package's FSDP2 Muon; replicated_muon is LoongForge's own "
+                    "Muon for --distributed-strategy replicated_sharded."
         },
     )
     clip_grad: float = field(
@@ -1138,9 +1141,13 @@ class _DistributedArgs:
     distributed_strategy: str = field(
         default="fsdp",
         metadata={
-            "choices": ["ddp", "fsdp"],
-            "help": "Parallelism strategy: DDP (replicate) or FSDP2 "
-                    "(fully sharded).",
+            "choices": ["ddp", "fsdp", "replicated_sharded"],
+            "help": "Parallelism strategy: DDP (replicate), FSDP2 (fully "
+                    "sharded), or replicated_sharded. With 'replicated_sharded', "
+                    "LoongForge applies neither DDP nor FSDP: the trainer owns "
+                    "model wrapping and parallelism itself. Use only with a "
+                    "trainer that implements that ownership "
+                    "(e.g. --trainer-type LingbotVlaV2ReplicatedShardedTrainer).",
         },
     )
     hsdp_shard_size: Optional[int] = field(

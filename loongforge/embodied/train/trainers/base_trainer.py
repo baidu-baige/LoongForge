@@ -449,7 +449,10 @@ class BaseTrainer(ABC):
             if grad_clip > 0:
                 grad_norm = self._clip_gradients(grad_clip)
             else:
-                grad_norm = get_grad_norm(self.model)
+                # No clipping requested, but the norm is still reported -- and a
+                # subclass whose parameters are not the model's own (e.g. the
+                # replicated-sharded masters) has to supply it.
+                grad_norm = self._compute_grad_norm()
 
         # ── Optimizer step ──
         with st("optimizer"):
@@ -585,6 +588,15 @@ class BaseTrainer(ABC):
     def _clean_nan_gradients(self):
         """Replace NaN/Inf gradients with 0."""
         ...
+
+    def _compute_grad_norm(self) -> float:
+        """Return the pre-clip global gradient norm when ``--clip-grad`` is off.
+
+        Default: the model's own gradients. Subclasses that keep their gradients
+        somewhere other than ``self.model`` (e.g. on fp32 masters) override this,
+        because ``self.model``'s gradients may already have been consumed.
+        """
+        return get_grad_norm(self.model)
 
     @abstractmethod
     def _load_pretrained(self, path: str):
