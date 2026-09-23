@@ -9,8 +9,9 @@ MODEL_SCHEMA is the single place that binds a model name to:
 """
 
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import Type
+from typing import Optional, Type
 
 from loongforge.embodied.model.pi05.model_configuration_pi05 import Pi05ModelConfig
 from loongforge.embodied.data.datasets.pi05.transforms.data_configuration_pi05 import Pi05DataConfig
@@ -34,6 +35,12 @@ from loongforge.embodied.model.wall_oss_0_5.model_configuration_wall_oss_0_5 imp
 from loongforge.embodied.data.datasets.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
     WallOss05DataConfig,
 )
+from loongforge.embodied.model.lingbot_vla_v2.model_configuration_lingbot_vla_v2 import (
+    LingbotVLAV2ModelConfig,
+)
+from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configuration_lingbot_vla_v2 import (
+    LingbotVLAV2DataConfig,
+)
 
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -48,20 +55,57 @@ class ModelSchema:
     yaml_file: str
     model_config_cls: Type
     data_config_cls: Type
+    # "module:ClassName" of a schema-pinned trainer, resolved lazily. Kept as a
+    # string so that importing config_map does not pull in every custom trainer
+    # (and their heavy upstream deps); only the trained model's trainer is loaded.
+    trainer_ref: Optional[str] = None
+
+    @property
+    def trainer_cls(self) -> Optional[Type]:
+        """Import and return the pinned trainer class, or ``None`` if unset."""
+        if self.trainer_ref is None:
+            return None
+        module_path, _, class_name = self.trainer_ref.partition(":")
+        return getattr(import_module(module_path), class_name)
 
 
 MODEL_SCHEMA = {
     "lingbot_va_robotwin": ModelSchema(
-        "lingbot_va_robotwin.yaml", LingBotVAModelConfig, LingBotVADataConfig
+        "lingbot_va_robotwin.yaml",
+        LingBotVAModelConfig,
+        LingBotVADataConfig,
+        trainer_ref="loongforge.embodied.train.trainers.custom.lingbot_va:LingBotFinetuneTrainer",
     ),
     "lingbot_va_libero": ModelSchema(
-        "lingbot_va_libero.yaml", LingBotVAModelConfig, LingBotVADataConfig
+        "lingbot_va_libero.yaml",
+        LingBotVAModelConfig,
+        LingBotVADataConfig,
+        trainer_ref="loongforge.embodied.train.trainers.custom.lingbot_va:LingBotFinetuneTrainer",
+    ),
+    "lingbot_vla_v2": ModelSchema(
+        "lingbot_vla_v2.yaml",
+        LingbotVLAV2ModelConfig,
+        LingbotVLAV2DataConfig,
+        trainer_ref=(
+            "loongforge.embodied.train.trainers.custom.lingbot_vla_v2"
+            ":LingbotVlaV2ReplicatedShardedTrainer"
+        ),
     ),
     "pi05": ModelSchema("pi05.yaml", Pi05ModelConfig, Pi05DataConfig),
-    "groot_n1_6": ModelSchema("groot_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
+    "groot_n1_6": ModelSchema(
+        "groot_n1_6.yaml",
+        GrootN1d6ModelConfig,
+        GrootN1d6DataConfig,
+        trainer_ref="loongforge.embodied.train.trainers.custom.groot_n1_6:GrootN1d6Trainer",
+    ),
     "xvla": ModelSchema("xvla.yaml", XvlaModelConfig, XvlaDataConfig),
     "fastwam": ModelSchema("fastwam.yaml", FastWAMModelConfig, FastWAMDataConfig),
-    "groot_n1_7": ModelSchema("groot_n1_7.yaml", GrootN1d7Config, GrootN1d7DataConfig),
+    "groot_n1_7": ModelSchema(
+        "groot_n1_7.yaml",
+        GrootN1d7Config,
+        GrootN1d7DataConfig,
+        trainer_ref="loongforge.embodied.train.trainers.custom.groot_n1_7:GrootN1d7Trainer",
+    ),
     "cosmos3_nano": ModelSchema("cosmos3/nano.yaml", Cosmos3ModelConfig, Cosmos3DroidConfig),
     "dreamzero_lora_wan22_5b": ModelSchema(
         "dreamzero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig

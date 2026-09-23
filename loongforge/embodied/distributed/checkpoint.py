@@ -720,6 +720,26 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
 
     rng_local = _load_rank_rng(checkpoint_path, ctx)
     rng_per_rank = None
+
+    meta_path = os.path.join(checkpoint_path, "resume_meta.json")
+    saved_epoch = None
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            saved_epoch = json.load(f).get("epoch")
+        saved_epoch = int(saved_epoch) if saved_epoch is not None else None
+
+    if has_local_zero_optim and _saved_zero_world_size(checkpoint_path) != ctx.world_size:
+        # Per-rank RNG streams and dataloader positions are defined against the
+        # saved rank layout: rank N of a 4-rank run reads a different data shard
+        # than rank N of an 8-rank run, so replaying either would be wrong rather
+        # than merely approximate. Both restart instead.
+        if ctx.is_main:
+            logger.warning(
+                "Resuming into a different world size: RNG and dataloader position "
+                "are not restored, so the data stream restarts from the sampler's "
+                "first batch for this layout."
+            )
+        return saved_epoch, {}, None
     if restore_rng:
         if rng_local is not None:
             _set_rank_rng(rng_local, ctx)
@@ -735,13 +755,6 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
         rng_per_rank = _gather_rng_for_deferred(rng_local, ctx)
 
     dl_state = _load_rank_dataloader(checkpoint_path, ctx)
-
-    meta_path = os.path.join(checkpoint_path, "resume_meta.json")
-    saved_epoch = None
-    if os.path.exists(meta_path):
-        with open(meta_path) as f:
-            saved_epoch = json.load(f).get("epoch")
-        saved_epoch = int(saved_epoch) if saved_epoch is not None else None
 
     return saved_epoch, dl_state, rng_per_rank
 
@@ -829,6 +842,13 @@ def _load_rank_rng(checkpoint_path, ctx) -> Optional[dict]:
     return torch.load(f, map_location="cpu", weights_only=False)
 
 
+def _saved_zero_world_size(checkpoint_path) -> int:
+    """Return the world size a rank-local ZeRO checkpoint was written with."""
+    metadata_path = os.path.join(checkpoint_path, _ZERO_OPTIMIZER_METADATA_FILE)
+    with open(metadata_path, encoding="utf-8") as f:
+        return int(json.load(f)["world_size"])
+
+
 def _load_rank_dataloader(checkpoint_path, ctx) -> dict:
     f = os.path.join(checkpoint_path, "dataloader", f"dl_rank{ctx.rank}.pt")
     if not os.path.exists(f):
@@ -875,6 +895,8 @@ def _get_full_state_dict(
 
 def _is_zero_optimizer(optimizer) -> bool:
     """Check if optimizer is a ZeroRedundancyOptimizer."""
+    if _zero_checkpoint_io(optimizer) is not None:
+        return True
     from torch.distributed.optim import ZeroRedundancyOptimizer
     return isinstance(optimizer, ZeroRedundancyOptimizer) or getattr(
         optimizer, "_is_multi_dtype_zero_optimizer", False
@@ -909,12 +931,28 @@ def _load_local_optimizer_state_dict(optimizer, state_dict: dict) -> None:
         optimizer.load_state_dict(state_dict)
 
 
+def _zero_checkpoint_io(optimizer):
+    """Return the optimizer's own rank-local checkpoint backend, if it has one.
+
+    This module keeps the file layout and the aux files; the backend owns the
+    payload of ``zero_optimizer/rank_*.pt``.
+    """
+    return getattr(optimizer, "zero_checkpoint_io", None)
+
+
 def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
     """Save each ZeRO rank's local optimizer shard without consolidation."""
     state_dir = os.path.join(path, _ZERO_OPTIMIZER_DIR)
     if ctx.is_main:
         os.makedirs(state_dir, exist_ok=True)
     ctx.barrier()
+
+    own_io = _zero_checkpoint_io(optimizer)
+    if own_io is not None:
+        own_io.save_local_state(
+            state_dir, os.path.join(path, _ZERO_OPTIMIZER_METADATA_FILE), ctx
+        )
+        return
 
     children = _zero_optimizer_children(optimizer)
     local_state = []
@@ -960,6 +998,17 @@ def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
         raise RuntimeError(
             f"Unsupported rank-local ZeRO checkpoint version: {format_version}."
         )
+    own_io = _zero_checkpoint_io(optimizer)
+    if own_io is not None:
+        own_io.load_local_state(
+            os.path.join(checkpoint_path, _ZERO_OPTIMIZER_DIR), metadata, ctx
+        )
+        return
+    if metadata.get("backend") is not None:
+        raise RuntimeError(
+            f"Checkpoint holds {metadata['backend']!r} ZeRO state, but the current "
+            "optimizer does not provide the matching checkpoint backend."
+        )
     saved_world_size = int(metadata["world_size"])
     if saved_world_size != ctx.world_size:
         raise RuntimeError(
@@ -1002,6 +1051,10 @@ def _restore_zero_optimizer_lrs(optimizer, last_lrs) -> None:
         )
     for param_group, lr in zip(optimizer.param_groups, last_lrs):
         param_group["lr"] = lr
+    if _zero_checkpoint_io(optimizer) is not None:
+        # CombinedOptimizer exposes the child param-group dictionaries directly,
+        # so updating its public groups already updates the rank-local optimizers.
+        return
     for child in _zero_optimizer_children(optimizer):
         _copy_param_group_options(child.param_groups, child.optim.param_groups)
 
