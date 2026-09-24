@@ -58,8 +58,11 @@ def wrap_model(model: nn.Module, training_args, ctx: DistributedContext) -> nn.M
     strategy = training_args.distributed_strategy
     if strategy == "fsdp":
         return _wrap_fsdp(model, training_args, ctx, dtype)
-    else:
+    if strategy == "ddp":
         return _wrap_ddp(model, training_args, ctx, dtype)
+    raise ValueError(
+        f"unsupported distributed strategy {strategy!r}; expected ddp or fsdp"
+    )
 
 
 def _wrap_fsdp(

@@ -230,7 +230,9 @@ class _ModelRoutingArgs:
         default="FinetuneTrainer",
         metadata={
             "help": "Trainer class to instantiate (e.g. FinetuneTrainer, "
-                    "GrootN1d6Trainer); resolved by the trainer builder registry."
+                    "GrootN1d6Trainer); resolved by the trainer builder registry. "
+                    "Ignored for models whose schema pins a trainer_cls "
+                    "(see config_map.MODEL_SCHEMA)."
         },
     )
 
@@ -1320,9 +1322,12 @@ class _DistributedArgs:
     distributed_strategy: str = field(
         default="fsdp",
         metadata={
-            "choices": ["ddp", "fsdp"],
-            "help": "Parallelism strategy: DDP (replicate) or FSDP2 "
-                    "(fully sharded).",
+            "choices": ["ddp", "fsdp", "custom"],
+            "help": "Parallelism strategy: DDP (replicate), FSDP2 (fully "
+                    "sharded), or custom. With 'custom', LoongForge applies "
+                    "neither DDP nor FSDP: the trainer owns model wrapping and "
+                    "parallelism itself (e.g. the replicated-sharded trainer). "
+                    "Use only with a schema-pinned custom trainer_cls.",
         },
     )
     hsdp_shard_size: Optional[int] = field(

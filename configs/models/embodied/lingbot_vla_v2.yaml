@@ -1,0 +1,189 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# lingbot_vla_v2 (Qwen3-VL-4B + Token-MoE action expert) — robotwin finetune defaults.
+model:
+  model_type: lingbot_vla_v2
+  model_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/
+  tokenizer_path: /ssd1/dataset/lingbot-vla/Qwen3-VL-4B-Instruct
+  moe_implementation: fused
+
+  action_dim: 55
+  max_action_dim: 55
+  max_state_dim: 55
+  chunk_size: 50
+
+  post_training: true
+  adanorm_time: true
+  vlm_causal: true
+  tokenizer_max_length: 72
+  loss_type: L1_fm
+  attention_implementation: flex_cached
+  precompute_grid_thw: true
+
+  use_moe: true
+  token_moe_layers: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35]
+  token_num_experts: 32
+  token_top_k: 4
+  token_moe_intermediate_size: 512
+  token_shared_intermediate_size: 704
+  bias_update_speed: 0.0
+  sequence_wise_mode: per_sequence
+  sequence_wise_loss_coeff: 1.0e-3
+  router_z_loss_coeff: 1.0e-4
+  router_activation: sigmoid
+  routed_scaling_factor: 4.0
+  use_shared_expert_gate: false
+  use_moe_expert_lr: true
+
+  gradient_checkpointing: true
+  use_compile: false
+  enable_mixed_precision: true
+  enable_fp32: true
+  enable_full_shard: false
+  module_fsdp_enable: true
+  vlm_fsdp: true
+  # Run the frozen depth/video teachers on a side stream + worker thread.
+  async_teacher: true
+  # Start each step's teachers one step early, in the previous step's optimizer
+  # window. That read moves the dataloader ahead of the training position, so the
+  # trainer checkpoints the position captured before it and a resumed run replays
+  # the same batches.
+  pipeline_teacher: true
+  # Compile flex_attention instead of running its eager reference path.
+  flex_compile: true
+  # Regional torch.compile, per transformer block. Valid entries: vision,
+  # vlm_decoder, action_expert. Off by default: it is not bitwise, so opt in per
+  # run only when throughput matters.
+  regional_compile: []
+
+  # Replicated-sharded collective precision. Router/gate weights and 1-D tensors always stay
+  # fp32 on the wire (expert selection is decided by fp32 gate logits); downcasting
+  # is per parameter, never per collective.
+  #   grad_reduce_dtype: fp32 | bf16 | mixed | compute
+  grad_reduce_dtype: bf16
+  #   param_sync_precision: how the fp32 action-expert masters reach the replicas,
+  #   one mutually exclusive enum (VLM bf16 tower and critical fp32 tensors are
+  #   unaffected):
+  #     fp32           publish fp32 masters verbatim (no downcast).
+  #     bf16           round to bf16. Not the default: it rounds the state.
+  #     bf16_ef        bf16 + owner-local fp32 residual (zero-mean dither).
+  #     bf16_ef_delta  broadcast the bf16 delta, accumulate into the fp32 replica.
+  #     fp8_e4m3_delta E4M3 (master - replica) deltas, one fp32 scale per block;
+  #                    replicas add the reconstructed delta. The default. The delta
+  #                    re-derives against the true fp32 master each step, so its error
+  #                    does not accumulate, but it still perturbs the forward; drop to
+  #                    fp32 when bisecting numerics.
+  param_sync_precision: fp8_e4m3_delta
+  # Read only when param_sync_precision=fp8_e4m3_delta:
+  #   param_sync_fp8_block: elements per fp32 scale (power of two).
+  #   param_sync_fp8_reprime_interval: 0 keeps a pure delta stream; >0 re-anchors
+  #     replicas to a full BF16 copy every N publishes to bound drift.
+  #   param_sync_fp8_include: FP8 whitelist -- the sole scope, pure opt-in. Substrings
+  #     selecting which eligible parameters publish as an FP8 delta ([] = NO FP8; you
+  #     must name them). Names left out keep their normal publish (bf16 for the VLM,
+  #     fp32 for the action expert). Default ["layers.", "blocks."] covers the stacked
+  #     internal 2-D weights -- the action-expert layers (always fp8) plus, when
+  #     param_sync_bf16_with_fp8 is on, the VLM decoder layers and vision blocks --
+  #     while top-level projections (embed_tokens/merger/action_*_proj/state_proj),
+  #     router/gate and 1-D norms/biases are left out and keep their normal precision.
+  #   param_sync_bf16_with_fp8: also FP8 the bf16 VLM tower via a per-rank fp32
+  #     shadow (+4 bytes/param resident). Off by default; scope it with
+  #     param_sync_fp8_include when measuring its loss/memory tradeoff.
+  param_sync_fp8_block: 256
+  param_sync_fp8_reprime_interval: 0
+  param_sync_fp8_include: ["layers.", "blocks."]
+  param_sync_bf16_with_fp8: true
+
+  # Replicated-sharded collective overlap. grad_overlap reduces each gradient bucket as backward
+  # produces it; param_overlap broadcasts each owner's parameters as its master is
+  # updated. comm_bucket_mb sizes both; 0 means pick by grad_overlap (256 when
+  # on, 1024 when off). grad_inflight_mb caps
+  # the bytes of gradient collectives in flight during backward -- a memory bound,
+  # lower it on cards with less memory than the validated configuration.
+  grad_overlap: true
+  param_overlap: true
+  comm_bucket_mb: 256
+  grad_inflight_mb: 3072
+
+  align_params:
+    mode: query
+    num_task_tokens: 8
+    depth_loss_weight: 0.004
+    future_depth_loss_weight: 0.004
+    use_future_video: true
+    llm:
+      dim_out: 2560
+      image_token_size: 8
+      image_input_size: 224
+    depth:
+      model_type: MoRGBD
+      moge_path: /ssd1/dataset/lingbot-vla/moge-2-vitb-normal/model.pt
+      morgbd_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/depth/model.pt
+      num_layers: 1
+      num_heads: 4
+      dim_head: 32
+      ff_mult: 1
+      num_backbone_tokens: 256
+      token_size: 16
+      dim_out: 1024
+      input_size: 224
+      use_future_depth: true
+      block_future_depth_to_action: true
+      detach_future_image_feats: true
+    video:
+      ckpt_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/dino_video/teacher_step_10000.pth
+      config_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/dino_video/config.yaml
+      attention_mode: flex_block_causal
+      input_size: 256
+      block_suffix_to_future_video: true
+      share_future_depth_query: true
+      use_shared_future_task_proj: true
+      use_current_shared_task_proj: true
+      num_future_frames: 1
+      use_warmup_frame: true
+      effective_fps: 1.0
+      n_blocks: 1
+      cls_pool: last
+      detach_image_feats: true
+      num_layers: 1
+      num_heads: 4
+      dim_head: 32
+      ff_mult: 1
+      num_backbone_tokens: 256
+      dim_out: 1024
+      future_video_loss_weight: 0.004
+      use_smooth_l1_loss: false
+      use_mse_loss: true
+      mse_loss_weight: 1.0
+      use_patch_loss: true
+      use_current_patch_loss: true
+      use_cosine_loss: false
+      cosine_loss_weight: 0.2
+      use_cls_loss: false
+      cls_loss_type: mse
+      cls_loss_weight: 0.2
+      log_max_samples: 32
+      log_scale: 16
+    visual_steps: 5000
+
+data:
+  data_name: multi
+  robot_config_root: /workspace/lingbot_vla_v2/lingbot-vla-v2/configs/robot_configs
+  prompt_type: global
+  joints:
+    - "{'arm.position': 14}"
+    - "{'end.position': 14}"
+    - "{'effector.position': 2}"
+  cameras:
+    - camera_top
+    - camera_wrist_left
+    - camera_wrist_right
+  norm_type:
+    - "{'arm.position': 'bounds_99_woclip'}"
+    - "{'end.position': 'bounds_99_woclip'}"
+    - "{'effector.position': 'bounds_99_woclip'}"
+  img_size: 256
+  image_augment: false
+  use_future_image: true
+  video_backend: torchcodec
