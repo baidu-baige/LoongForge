@@ -18,6 +18,7 @@
   <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?logo=github&logoColor=white" alt="欢迎 PR"></a>
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/WeChat-Group-07C160?logo=wechat&logoColor=white" alt="加入微信群"></a>
   <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Discord-Join_Us-5865F2?logo=discord&logoColor=white" alt="加入 Discord 社区"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?logo=x&logoColor=white" alt="在 X 上关注我们"></a>
 </p>
 
 <p align="center">

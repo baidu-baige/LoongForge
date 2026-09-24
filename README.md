@@ -18,6 +18,7 @@
   <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?logo=github&logoColor=white" alt="PRs welcome"></a>
   <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Discord-Join_Us-5865F2?logo=discord&logoColor=white" alt="Join our Discord"></a>
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/WeChat-Group-07C160?logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?logo=x&logoColor=white" alt="Follow us on X"></a>
 </p>
 
 <p align="center">
