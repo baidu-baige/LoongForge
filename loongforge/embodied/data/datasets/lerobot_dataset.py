@@ -489,6 +489,17 @@ class LeRobotV2Dataset(Dataset):
             else:
                 sample[out_key] = self._decode_video_frame(vkey, episode_index, step_idx)
 
+        # Image padding mask: mark observation frames whose requested index fell
+        # outside the episode. In the multi-frame branch above such indices are
+        # clamped to the last valid frame (i.e. duplicated), so they must be
+        # excluded from the video loss.
+        if self._observation_delta_indices:
+            sample["image_is_pad"] = torch.tensor(
+                [(step_idx + d) < 0 or (step_idx + d) > (ep_len - 1)
+                 for d in self._observation_delta_indices],
+                dtype=torch.bool,
+            )
+
         # State
         if self._state_key in ep_data.columns:
             state = ep_data.iloc[step_idx][self._state_key]
