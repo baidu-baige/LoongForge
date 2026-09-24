@@ -6,12 +6,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from functools import partial
 
 import torch
-import torch.distributed as dist
-from torch import nn
 
 from loongforge.embodied.distributed.parallel import wrap_model
 from loongforge.embodied.train.trainers.custom.groot_n1_7.groot_optimizer import (
@@ -26,114 +22,6 @@ from loongforge.embodied.train.trainers.supervised.finetune_trainer import Finet
 from loongforge.embodied.train.utils.utils import set_seed
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class _StaticGraphBucketWarmup:
-    """Capture the first backward's ready order for static DDP buckets."""
-
-    parameters: list[nn.Parameter]
-    expect_sparse_gradients: list[bool]
-    ready_order: list[int] = field(default_factory=list)
-    recorded_indices: set[int] = field(default_factory=set)
-    hook_handles: list = field(default_factory=list)
-
-    def record_ready(self, parameter_index: int, _parameter: nn.Parameter) -> None:
-        """Append a parameter index the first time its gradient becomes ready.
-
-        Gradient accumulation runs one backward per micro-batch, so the hook
-        fires several times per optimizer step; only the first backward defines
-        the bucket order.
-        """
-        if parameter_index in self.recorded_indices:
-            return
-        self.recorded_indices.add(parameter_index)
-        self.ready_order.append(parameter_index)
-
-    def remove_hooks(self) -> None:
-        """Detach all registered gradient-ready hooks."""
-        for handle in self.hook_handles:
-            handle.remove()
-        self.hook_handles.clear()
-
-
-def _arm_static_graph_bucket_warmup(model) -> None:
-    """Record normal DDP's first-backward parameter ready order."""
-    if not isinstance(model, torch.nn.parallel.DistributedDataParallel):
-        return
-    raw_model = model.module
-    ignored_names = set(getattr(raw_model, "_ddp_params_and_buffers_to_ignore", ()))
-    entries = [
-        (module_name, module, parameter_name, parameter)
-        for module_name, module in raw_model.named_modules()
-        for parameter_name, parameter in module.named_parameters(recurse=False)
-        if parameter.requires_grad
-        and f"{module_name}.{parameter_name}" not in ignored_names
-    ]
-    parameters = []
-    sparse = []
-    seen = set()
-    for _module_name, module, _parameter_name, parameter in entries:
-        if id(parameter) in seen:
-            continue
-        seen.add(id(parameter))
-        parameters.append(parameter)
-        sparse.append(isinstance(module, (nn.Embedding, nn.EmbeddingBag)) and module.sparse)
-    state = _StaticGraphBucketWarmup(parameters, sparse)
-    state.hook_handles = [
-        parameter.register_post_accumulate_grad_hook(
-            partial(state.record_ready, index)
-        )
-        for index, parameter in enumerate(parameters)
-    ]
-    model._loong_static_graph_bucket_warmup = state
-
-
-def _align_static_graph_buckets_after_warmup(model) -> bool:
-    """Rebuild static DDP buckets in the observed first-backward order."""
-    if not isinstance(model, torch.nn.parallel.DistributedDataParallel):
-        return False
-    state = getattr(model, "_loong_static_graph_bucket_warmup", None)
-    if state is None:
-        return False
-    try:
-        ready_order = list(state.ready_order)
-        if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
-            payload = [ready_order if dist.get_rank() == 0 else None]
-            dist.broadcast_object_list(payload, src=0)
-            ready_order = payload[0]
-        if (
-            len(ready_order) != len(state.parameters)
-            or len(set(ready_order)) != len(state.parameters)
-            or min(ready_order, default=-1) != 0
-            or max(ready_order, default=-1) != len(state.parameters) - 1
-        ):
-            raise RuntimeError(
-                "Static DDP bucket warmup did not observe every trainable parameter exactly once: "
-                f"observed={len(ready_order)} expected={len(state.parameters)}"
-            )
-        config = model._bucket_config
-        limits = (
-            list(config.per_bucket_bytes_caps)
-            if config.per_bucket_bytes_caps
-            else [config.first_bucket_bytes_cap, config.bucket_bytes_cap]
-        )
-        ordered = [state.parameters[index] for index in ready_order]
-        sparse = [state.expect_sparse_gradients[index] for index in ready_order]
-        bucket_indices, _ = dist._compute_bucket_assignment_by_size(
-            ordered, limits, sparse, ready_order
-        )
-        from loongforge.embodied.train.trainers.custom.groot_n1_7.groot_ddp_reducer_bucket_control import (
-            initialize_buckets,
-        )
-
-        initialize_buckets(model.reducer, bucket_indices)
-        model._has_rebuilt_buckets = True
-        logger.info("Initialized %d GR00T DDP buckets from first-backward ready order.", len(bucket_indices))
-        return True
-    finally:
-        state.remove_hooks()
-        delattr(model, "_loong_static_graph_bucket_warmup")
 
 
 def _full_iteration_graph_stream_priority(backbone_pipeline: bool) -> int:
@@ -194,7 +82,6 @@ class GrootN1d7Trainer(FinetuneTrainer):
             graph_stream.wait_stream(default_stream)
             with torch.cuda.stream(graph_stream):
                 self.model = wrap_model(self.model, self.training_args, self.ctx)
-            _arm_static_graph_bucket_warmup(self.model)
             default_stream.wait_stream(graph_stream)
             torch.cuda.synchronize(self.ctx.device)
             self._full_iteration_graph_stream = graph_stream
@@ -214,7 +101,7 @@ class GrootN1d7Trainer(FinetuneTrainer):
             return
 
     def _build_optimizer(self):
-        """Keep eager on the reference optimizer; graph owns its capturable path."""
+        """Keep eager on reference AdamW; graph owns its capturable path."""
         if self._full_iteration_graph_stream is None:
             return build_groot_optimizer(
                 self.model,
@@ -241,11 +128,6 @@ class GrootN1d7Trainer(FinetuneTrainer):
                 metrics[key] = value.detach().cpu().item()
             elif hasattr(value, "item") and value.__class__.__module__.split(".")[0] == "numpy":
                 metrics[key] = value.item()
-        if (
-            isinstance(self._train_step_runner, GrootN1d7FullIterationCudaGraphRunner)
-            and self.completed_steps == 1
-        ):
-            _align_static_graph_buckets_after_warmup(self.model)
 
     def _train_step(self):
         """Let the full-iteration runner own the complete optimizer step."""

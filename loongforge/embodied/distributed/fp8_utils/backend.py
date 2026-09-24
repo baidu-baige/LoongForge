@@ -95,7 +95,7 @@ def convert_linear_for_fp8(
     )
 
 
-def resolve_fp8_forward_ctx(training_args, fp8_group=None):
+def resolve_fp8_forward_ctx(training_args, fp8_group=None, recipe=None):
     """Return the backend's forward context; TorchAO needs no outer context."""
     if not getattr(training_args, "fp8", False):
         return nullcontext()
@@ -107,5 +107,6 @@ def resolve_fp8_forward_ctx(training_args, fp8_group=None):
         return resolve_fp8_autocast_ctx(
             training_args,
             fp8_group=fp8_group,
+            recipe=recipe,
         )
     raise ValueError(f"Unknown FP8 backend {training_args.fp8_backend!r}.")

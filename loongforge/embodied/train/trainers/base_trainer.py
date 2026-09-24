@@ -8,7 +8,7 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any, Dict, Optional, Tuple
 
 import torch
@@ -665,9 +665,49 @@ class BaseTrainer(ABC):
         standard finetune path and the CUDA-graph runner each wrap their own
         forward, and ``te.fp8_autocast`` has to enclose the whole model call.
         """
-        from loongforge.embodied.distributed.fp8_utils import resolve_fp8_forward_ctx
+        from loongforge.embodied.distributed.fp8_utils import (
+            resolve_fp8_forward_ctx,
+        )
+        from loongforge.embodied.distributed.fp8_utils.te_fp8.recipe import (
+            build_fp8_recipe,
+        )
 
-        return resolve_fp8_forward_ctx(self.training_args)
+        if getattr(self.training_args, "fp8", False) and getattr(
+            self.training_args, "fp8_backend", None
+        ) == "te":
+            if not hasattr(self, "_fp8_recipe"):
+                self._fp8_recipe = build_fp8_recipe(
+                    self.training_args.fp8_te_recipe,
+                    recipe_args=self.training_args,
+                )
+            recipe = self._fp8_recipe
+        else:
+            recipe = None
+
+        return resolve_fp8_forward_ctx(self.training_args, recipe=recipe)
+
+    def _fp8_graph_capture_ctx(self):
+        """Return TE's graph-aware context for custom model graph capture."""
+        if not getattr(self.training_args, "fp8", False):
+            return nullcontext()
+        if getattr(self.training_args, "fp8_backend", None) != "te":
+            raise RuntimeError("Custom GR00T CUDA graphs currently require TE FP8.")
+        if not hasattr(self, "_fp8_recipe"):
+            # Keep this path usable for a runner created before the first eager
+            # forward, while still ensuring one recipe object owns the run.
+            from loongforge.embodied.distributed.fp8_utils.te_fp8.recipe import (
+                build_fp8_recipe,
+            )
+
+            self._fp8_recipe = build_fp8_recipe(
+                self.training_args.fp8_te_recipe,
+                recipe_args=self.training_args,
+            )
+        from loongforge.embodied.distributed.fp8_utils.te_fp8.recipe import (
+            fp8_graph_capture_ctx,
+        )
+
+        return fp8_graph_capture_ctx(self._fp8_recipe)
 
     def _apply_lora_before_wrap(self, model: nn.Module) -> nn.Module:
         """Apply generic LoRA injection before distributed wrapping."""

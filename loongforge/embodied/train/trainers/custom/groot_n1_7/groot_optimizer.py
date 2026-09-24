@@ -136,17 +136,113 @@ else:  # pragma: no cover
     GrootCapturableAdamW = None
 
 
-def build_groot_optimizer(model, training_args, *, capturable: bool = True):
-    """Build the GR00T optimizer for the full-iteration graph path.
+class GrootTorchCapturableAdamW(torch.optim.Optimizer):
+    """Graph-safe AdamW matching torch's non-capturable update semantics.
 
-    The precision-compatible optimizer is reserved for the full-iteration
-    graph path.  Eager training delegates to the generic registry so it does
-    not require the optional GR00T AOT operators.
+    PyTorch's stock capturable AdamW folds the step size into the denominator.
+    When the warmup LR is zero and a gradient element is also zero, that path
+    evaluates ``0 / 0`` and writes NaN.  The reference non-capturable path uses
+    ``addcdiv_(..., value=-step_size)`` and leaves those parameters unchanged.
+    Precomputed host-precision bias-correction tables keep that exact arithmetic
+    capturable without reading the device step on the host.
     """
-    if training_args.optimizer != "TEFusedAdamW" or not capturable:
+
+    def __init__(self, params, *, lr, betas, eps, weight_decay, max_steps):
+        super().__init__(
+            params,
+            dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay),
+        )
+        self.capturable = True
+        self._max_steps = int(max_steps)
+        self._tables = {}
+
+    def _bias_tables(self, device, beta1, beta2):
+        key = (device, beta1, beta2)
+        tables = self._tables.get(key)
+        if tables is None:
+            tables = (
+                torch.tensor(
+                    [0.0] + [1.0 - beta1**step for step in range(1, self._max_steps + 1)],
+                    dtype=torch.float64,
+                    device=device,
+                ),
+                torch.tensor(
+                    [0.0] + [math.sqrt(1.0 - beta2**step) for step in range(1, self._max_steps + 1)],
+                    dtype=torch.float64,
+                    device=device,
+                ),
+            )
+            self._tables[key] = tables
+        return tables
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        if closure is not None:
+            raise RuntimeError("GrootTorchCapturableAdamW does not support closures.")
+        for group in self.param_groups:
+            beta1, beta2 = group["betas"]
+            for parameter in group["params"]:
+                gradient = parameter.grad
+                if gradient is None:
+                    continue
+                if gradient.is_sparse:
+                    raise RuntimeError("Sparse gradients are not supported.")
+                state = self.state[parameter]
+                if not state:
+                    state["step"] = torch.zeros((), dtype=torch.int64, device=parameter.device)
+                    state["exp_avg"] = torch.zeros_like(parameter)
+                    state["exp_avg_sq"] = torch.zeros_like(parameter)
+                state["step"].add_(1)
+                correction1, correction2 = self._bias_tables(parameter.device, beta1, beta2)
+                from loongforge.embodied.train.trainers.custom.groot_n1_7.groot_fused_adamw import (
+                    capturable_step,
+                )
+
+                capturable_step(
+                    [parameter],
+                    [gradient],
+                    [state["exp_avg"]],
+                    [state["exp_avg_sq"]],
+                    lr=group["lr"],
+                    step=state["step"],
+                    bias_correction1=correction1,
+                    bias_correction2_sqrt=correction2,
+                    beta2=beta2,
+                    first_moment_weight=1.0 - beta1,
+                    second_moment_weight=1.0 - beta2,
+                    eps=group["eps"],
+                    weight_decay=group["weight_decay"],
+                )
+        return None
+
+
+def build_groot_optimizer(model, training_args, *, capturable: bool = True):
+    """Build GR00T's precision-compatible eager or capturable optimizer."""
+    if training_args.optimizer == "AdamW" and capturable:
+        groups = build_param_groups(model, training_args)
+        lr_tensor = torch.tensor(
+            float(training_args.lr_base),
+            dtype=torch.float64,
+            device=groups[0]["params"][0].device,
+        )
+        for group in groups:
+            if group.get("params"):
+                group["lr"] = lr_tensor.clone()
+        optimizer = GrootTorchCapturableAdamW(
+            groups,
+            lr=lr_tensor,
+            betas=(training_args.adam_beta1, training_args.adam_beta2),
+            eps=training_args.adam_eps,
+            weight_decay=training_args.weight_decay,
+            max_steps=training_args.train_iters + 2,
+        )
+        return optimizer
+    if training_args.optimizer != "TEFusedAdamW":
         return build_generic_optimizer(model, training_args)
     if GrootCapturableAdamW is None:
-        raise ImportError("TransformerEngine FusedAdam is required for GR00T full-iteration Graph")
+        raise ImportError(
+            "TransformerEngine FusedAdam is required for the GR00T precision-compatible optimizer"
+        )
     groups = build_param_groups(model, training_args)
     if capturable:
         for group in groups:
@@ -162,8 +258,6 @@ def build_groot_optimizer(model, training_args, *, capturable: bool = True):
         betas=(training_args.adam_beta1, training_args.adam_beta2),
         eps=training_args.adam_eps,
         adam_w_mode=True,
-        # The graph path schedules the capturable kernel directly; its static
-        # LR buffers preserve the precision required by graph replay.
         capturable=capturable,
         alignment_max_steps=training_args.train_iters + 2,
     )

@@ -29,7 +29,103 @@ import torch
 import transformers
 from transformers.feature_extraction_utils import BatchFeature
 
+from loongforge.embodied.model.groot_n1_7.modules import cuda_graph_flash_attention as _graph_safe_fa2
+
 logger = logging.getLogger(__name__)
+
+
+# CUDA graph capture cannot execute the Python scalar reductions used by
+# Transformers' generic FlashAttention mask helper.  Entries are populated from
+# a prepared static batch before capture and are keyed by the stable tensor
+# address used by graph replay.
+_CUDA_GRAPH_ATTENTION_MASK_METADATA: dict[int, tuple[bool, object | None]] = {}
+_CUDA_GRAPH_ATTENTION_MASK_PATCHED = False
+
+
+def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
+    """Make Transformers FlashAttention mask handling graph-safe.
+
+    The stock helper calls ``attention_mask.all()`` and the FlashAttention
+    unpadding helper calls ``seqlens.max().item()``.  Both are host scalar
+    synchronizations during capture.  Static-batch metadata lets us return the
+    same result without changing the numerical mask semantics.
+    """
+    global _CUDA_GRAPH_ATTENTION_MASK_PATCHED
+    if _CUDA_GRAPH_ATTENTION_MASK_PATCHED:
+        return
+    try:
+        import transformers.masking_utils as masking_utils
+        import transformers.modeling_flash_attention_utils as flash_utils
+    except ImportError:
+        return
+
+    original_mask = masking_utils.flash_attention_mask
+    original_sdpa_mask = masking_utils.sdpa_mask
+    original_unpad = flash_utils._get_unpad_data
+
+    def graph_flash_attention_mask(batch_size, cache_position, kv_length, kv_offset=0,
+                                   mask_function=None, attention_mask=None, **kwargs):
+        if isinstance(attention_mask, torch.Tensor):
+            metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
+            if metadata is not None:
+                all_valid, _unpad = metadata
+                if all_valid:
+                    return None
+                # Keep the stable mask address whenever possible.  Returning a
+                # sliced view is equivalent to the stock implementation and
+                # preserves the unpadding metadata pointer for static shapes.
+                if attention_mask.shape[-1] == kv_length:
+                    return attention_mask
+                return attention_mask[:, -kv_length:]
+        return original_mask(
+            batch_size=batch_size,
+            cache_position=cache_position,
+            kv_length=kv_length,
+            kv_offset=kv_offset,
+            mask_function=mask_function,
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+
+    def graph_get_unpad_data(attention_mask):
+        if isinstance(attention_mask, torch.Tensor):
+            metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
+            if metadata is not None and metadata[1] is not None:
+                return metadata[1]
+        return original_unpad(attention_mask)
+
+    def graph_sdpa_mask(batch_size, cache_position, kv_length, kv_offset=0,
+                        mask_function=None, attention_mask=None, **kwargs):
+        if isinstance(attention_mask, torch.Tensor):
+            metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
+            if metadata is not None:
+                all_valid, _unpad = metadata
+                # Avoid the stock helper's padding_mask.all() host sync;
+                # materialize a fixed-shape mask instead.  This is required
+                # even for an all-valid mask because the reduction itself is
+                # not legal while a CUDA stream is capturing.
+                kwargs["allow_is_causal_skip"] = False
+        return original_sdpa_mask(
+            batch_size=batch_size,
+            cache_position=cache_position,
+            kv_length=kv_length,
+            kv_offset=kv_offset,
+            mask_function=mask_function,
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+
+    graph_flash_attention_mask._loongforge_original = original_mask
+    graph_sdpa_mask._loongforge_original = original_sdpa_mask
+    graph_get_unpad_data._loongforge_original = original_unpad
+    masking_utils.flash_attention_mask = graph_flash_attention_mask
+    for name in ("flash_attention_2", "flash_attention_3"):
+        masking_utils.ALL_MASK_ATTENTION_FUNCTIONS._global_mapping[name] = (
+            graph_flash_attention_mask
+        )
+    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS._global_mapping["sdpa"] = graph_sdpa_mask
+    flash_utils._get_unpad_data = graph_get_unpad_data
+    _CUDA_GRAPH_ATTENTION_MASK_PATCHED = True
 
 
 def _transformers_major_version() -> int:
@@ -441,6 +537,7 @@ def _lookup_qwen3vl_vision_graph_metadata(module, grid_thw):
 
 def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
     """Use precomputed grid metadata while retaining vision tensor work in the graph."""
+    _patch_qwen3vl_cuda_graph_attention_mask()
     try:
         from transformers.models.qwen3_vl import modeling_qwen3_vl as qwen_mod
     except ImportError:
@@ -535,7 +632,12 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
                 merger_index = self.deepstack_visual_indexes.index(layer_number)
                 deepstack_features.append(self.deepstack_merger_list[merger_index](hidden_states))
 
-        return qwen_mod.BaseModelOutputWithDeepstackFeatures(
+        output_type = getattr(qwen_mod, "BaseModelOutputWithDeepstackFeatures", None)
+        if output_type is None:
+            # transformers 4.57 returns the merged vision tensor and deep-stack
+            # list directly; 5.x wraps the same values in a ModelOutput.
+            return self.merger(hidden_states), deepstack_features
+        return output_type(
             last_hidden_state=hidden_states,
             pooler_output=self.merger(hidden_states),
             deepstack_features=deepstack_features,
@@ -559,7 +661,16 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
                 position_embeddings=position_embeddings,
                 **kwargs,
             )
-        if not qwen_mod.is_flash_attention_requested(self.config):
+        flash_requested = getattr(qwen_mod, "is_flash_attention_requested", None)
+        if flash_requested is not None:
+            uses_flash_attention = bool(flash_requested(self.config))
+        else:
+            # transformers 4.57 exposes the selected backend directly on the
+            # config and has no is_flash_attention_requested helper.
+            uses_flash_attention = getattr(
+                self.config, "_attn_implementation", None
+            ) in {"flash_attention_2", "flash_attention_3"}
+        if not uses_flash_attention:
             raise RuntimeError(
                 "Cached Qwen3-VL vision metadata currently requires flash attention."
             )
@@ -581,10 +692,20 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
         query_states = query_states.transpose(0, 1).unsqueeze(0)
         key_states = key_states.transpose(0, 1).unsqueeze(0)
         value_states = value_states.transpose(0, 1).unsqueeze(0)
-        attention_interface = qwen_mod.ALL_ATTENTION_FUNCTIONS.get_interface(
-            self.config._attn_implementation,
-            qwen_mod.eager_attention_forward,
+        get_interface = getattr(
+            qwen_mod.ALL_ATTENTION_FUNCTIONS, "get_interface", None
         )
+        if get_interface is not None:
+            attention_interface = get_interface(
+                self.config._attn_implementation,
+                qwen_mod.eager_attention_forward,
+            )
+        else:
+            # transformers 4.57 exposes AttentionInterface as a mapping.
+            attention_interface = qwen_mod.ALL_ATTENTION_FUNCTIONS.get(
+                self.config._attn_implementation,
+                qwen_mod.eager_attention_forward,
+            )
         attention_output, _ = attention_interface(
             self,
             query_states,
@@ -620,6 +741,10 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
             return_dict=True,
             **kwargs,
         )
+        if isinstance(vision_output, tuple):
+            pooled, deepstack = vision_output
+            pooled = torch.split(pooled, metadata.image_split_sizes)
+            return pooled, deepstack
         vision_output.pooler_output = torch.split(
             vision_output.pooler_output,
             metadata.image_split_sizes,
@@ -716,7 +841,6 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
             or pixel_values is None
             or pixel_values_videos is not None
             or inputs_embeds is not None
-            or position_ids is None
         ):
             return original_model_forward(
                 self,
@@ -740,7 +864,12 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
             image_grid_thw,
             return_dict=True,
         )
-        image_embeds = torch.cat(image_outputs.pooler_output, dim=0).to(
+        if isinstance(image_outputs, tuple):
+            pooled_output, deepstack_features = image_outputs
+        else:
+            pooled_output = image_outputs.pooler_output
+            deepstack_features = image_outputs.deepstack_features
+        image_embeds = torch.cat(pooled_output, dim=0).to(
             inputs_embeds.device,
             inputs_embeds.dtype,
         )
@@ -755,7 +884,7 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
             inputs_embeds=inputs_embeds,
             cache_position=cache_position,
             visual_pos_masks=visual_pos_mask,
-            deepstack_visual_embeds=image_outputs.deepstack_features,
+            deepstack_visual_embeds=deepstack_features,
             **kwargs,
         )
         return qwen_mod.Qwen3VLModelOutputWithPast(
@@ -1032,7 +1161,16 @@ def _build_qwen3vl_compat_position_ids(
             attention_mask=attention_mask,
         )
     except TypeError:
-        return None
+        try:
+            # transformers 4.57 has no mm_token_type_ids argument, but its
+            # get_rope_index still provides the same pre-capture position IDs.
+            position_ids, rope_deltas = get_rope_index(
+                input_ids=input_ids,
+                image_grid_thw=image_grid_thw,
+                attention_mask=attention_mask,
+            )
+        except TypeError:
+            return None
 
     if "rope_deltas" in qwen_model.__dict__:
         qwen_model.rope_deltas = rope_deltas
@@ -1527,6 +1665,133 @@ class Qwen3Backbone(torch.nn.Module):
                     "_loongforge_cuda_graph_attention_mask_all_by_pointer", {}
                 )
                 mask_by_pointer[attention_mask.data_ptr()] = mask_is_all_valid
+                unpad_metadata = None
+                if (
+                    not mask_is_all_valid
+                    and getattr(self.language_model.config, "_attn_implementation", None)
+                    in {"flash_attention_2", "flash_attention_3"}
+                ):
+                    # Compute the exact FlashAttention unpadding tuple while
+                    # still outside capture.  Replay is valid only when the
+                    # static mask content remains unchanged (checked by the
+                    # graph runner's batch validator).
+                    mask_bool = attention_mask.to(dtype=torch.bool)
+                    seqlens = mask_bool.sum(dim=-1, dtype=torch.int32)
+                    indices = torch.nonzero(mask_bool.flatten(), as_tuple=False).flatten()
+                    # Keep this Python launch argument invariant across replay;
+                    # the actual per-example lengths are carried by the
+                    # graph-owned cu_seqlens buffer below.
+                    max_seqlen = int(attention_mask.shape[-1])
+                    cu_seqlens = torch.nn.functional.pad(
+                        torch.cumsum(seqlens, dim=0, dtype=torch.int32), (1, 0)
+                    )
+                    unpad_metadata = (indices, cu_seqlens, max_seqlen)
+                _CUDA_GRAPH_ATTENTION_MASK_METADATA[attention_mask.data_ptr()] = (
+                    mask_is_all_valid,
+                    unpad_metadata,
+                )
+                self.__dict__["_loongforge_cuda_graph_attention_mask_shape"] = tuple(
+                    attention_mask.shape
+                )
+                self.__dict__["_loongforge_cuda_graph_attention_mask_all_valid"] = bool(
+                    mask_is_all_valid
+                )
+
+    def update_cuda_graph_batch_metadata(self, static_batch, host_batch) -> None:
+        """Update graph-owned visual indices/masks for the next static batch.
+
+        Image token locations may move when the instruction text has a different
+        length, while the number and geometry of image patches stay fixed.  The
+        captured kernels therefore read these values through persistent CUDA
+        tensors which are updated before the backbone graph is launched.
+        """
+        input_ids = getattr(static_batch, "input_ids", None)
+        if input_ids is None:
+            return
+        host_indices = getattr(host_batch, "_loongforge_host_visual_indices", None)
+        if host_indices is None:
+            host_input_ids = getattr(host_batch, "input_ids", None)
+            if host_input_ids is None:
+                raise RuntimeError("Qwen3-VL graph batch has no input_ids metadata.")
+            host_indices = torch.nonzero(
+                (host_input_ids == self.model.config.image_token_id).reshape(-1),
+                as_tuple=False,
+            ).flatten()
+        index_buffer = getattr(
+            self.language_model,
+            "_loongforge_cuda_graph_visual_token_indices",
+            None,
+        )
+        if index_buffer is None:
+            raise RuntimeError("Qwen3-VL visual index buffer was not initialized before replay.")
+        if host_indices.numel() != index_buffer.numel():
+            raise RuntimeError(
+                "Qwen3-VL image token count changed after CUDA graph capture: "
+                f"expected {index_buffer.numel()}, got {host_indices.numel()}."
+            )
+        index_buffer.copy_(host_indices.to(device=input_ids.device, dtype=index_buffer.dtype))
+
+        qwen_model = _unwrap_qwen_backbone(self.model)
+        mask_by_pointer = qwen_model.__dict__.get(
+            "_loongforge_cuda_graph_visual_pos_masks_by_pointer", {}
+        )
+        mask_buffer = mask_by_pointer.get(input_ids.data_ptr())
+        if mask_buffer is None:
+            raise RuntimeError("Qwen3-VL visual mask buffer was not initialized before replay.")
+        host_mask = getattr(host_batch, "_loongforge_host_visual_mask", None)
+        if host_mask is None:
+            host_input_ids = getattr(host_batch, "input_ids", None)
+            host_mask = host_input_ids == self.model.config.image_token_id
+        mask_buffer.copy_(host_mask.to(device=input_ids.device, dtype=mask_buffer.dtype))
+
+        attention_mask = getattr(static_batch, "attention_mask", None)
+        host_attention_mask = getattr(host_batch, "attention_mask", None)
+        if attention_mask is not None and host_attention_mask is not None:
+            expected_shape = self.__dict__.get("_loongforge_cuda_graph_attention_mask_shape")
+            if expected_shape is not None and tuple(attention_mask.shape) != expected_shape:
+                raise RuntimeError(
+                    "Qwen3-VL attention_mask shape changed after CUDA graph capture: "
+                    f"expected {expected_shape}, got {tuple(attention_mask.shape)}."
+                )
+            initial_all_valid = self.__dict__.get(
+                "_loongforge_cuda_graph_attention_mask_all_valid"
+            )
+            current_all_valid = bool(host_attention_mask.bool().all().item())
+            if (
+                not _graph_safe_fa2._FA2_PATCHES_INSTALLED
+                and initial_all_valid is not None
+                and current_all_valid != initial_all_valid
+            ):
+                raise RuntimeError(
+                    "Qwen3-VL attention_mask all-valid status changed after CUDA graph capture."
+                )
+            if not current_all_valid:
+                metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
+                if metadata is None or metadata[1] is None:
+                    # The graph text backend is SDPA, which consumes the
+                    # fixed-shape boolean mask directly and needs no varlen
+                    # unpadding metadata.
+                    return
+                index_buffer, cu_buffer, _max_seqlen = metadata[1]
+                host_mask = host_attention_mask.to(dtype=torch.bool).contiguous()
+                host_seqlens = host_mask.sum(dim=-1, dtype=torch.int32)
+                host_indices = torch.nonzero(host_mask.flatten(), as_tuple=False).flatten()
+                host_cu = torch.nn.functional.pad(
+                    torch.cumsum(host_seqlens, dim=0, dtype=torch.int32), (1, 0)
+                )
+                if host_indices.numel() != index_buffer.numel():
+                    if _graph_safe_fa2._FA2_PATCHES_INSTALLED:
+                        # The padded FA2 adapter computes its own fixed-shape
+                        # permutation and cu_seqlens on every replay.  Its
+                        # buffers are sized by the padded sequence, so a
+                        # different valid-token count is legal.
+                        return
+                    raise RuntimeError(
+                        "Qwen3-VL valid-token count changed after CUDA graph capture; "
+                        "the static FlashAttention index buffer cannot be resized."
+                    )
+                index_buffer.copy_(host_indices.to(device=attention_mask.device))
+                cu_buffer.copy_(host_cu.to(device=attention_mask.device))
 
 
     def validate_cuda_graph_batch(self, expected_batch, actual_batch) -> None:
@@ -1551,9 +1816,27 @@ class Qwen3Backbone(torch.nn.Module):
         image_token_id = self.model.config.image_token_id
         expected_visual_mask = expected_input_ids == image_token_id
         actual_visual_mask = actual_input_ids == image_token_id
-        if not torch.equal(expected_visual_mask, actual_visual_mask):
+        if expected_visual_mask.sum().item() != actual_visual_mask.sum().item():
             raise RuntimeError(
-                "Qwen3-VL visual token positions changed after CUDA graph capture."
+                "Qwen3-VL visual token count changed after CUDA graph capture."
+            )
+        expected_attention_mask = getattr(expected_batch, "attention_mask", None)
+        actual_attention_mask = getattr(actual_batch, "attention_mask", None)
+        if expected_attention_mask is None and actual_attention_mask is None:
+            return
+        if expected_attention_mask is None or actual_attention_mask is None:
+            raise RuntimeError("Qwen3-VL attention_mask disappeared after CUDA graph capture.")
+        if tuple(expected_attention_mask.shape) != tuple(actual_attention_mask.shape):
+            raise RuntimeError(
+                "Qwen3-VL attention_mask shape changed after CUDA graph capture: "
+                f"expected {tuple(expected_attention_mask.shape)}, "
+                f"got {tuple(actual_attention_mask.shape)}."
+            )
+        if not _graph_safe_fa2._FA2_PATCHES_INSTALLED and bool(
+            expected_attention_mask.bool().all().item()
+        ) != bool(actual_attention_mask.bool().all().item()):
+            raise RuntimeError(
+                "Qwen3-VL attention_mask all-valid status changed after CUDA graph capture."
             )
 
     def forward(self, vl_input: BatchFeature) -> BatchFeature:
@@ -1602,7 +1885,10 @@ class Qwen3Backbone(torch.nn.Module):
         mask_by_pointer = self.__dict__.get(
             "_loongforge_cuda_graph_attention_mask_all_by_pointer", {}
         )
-        if mask_by_pointer.get(attention_mask.data_ptr(), False):
+        if (
+            mask_by_pointer.get(attention_mask.data_ptr(), False)
+            and not _graph_safe_fa2._FA2_PATCHES_INSTALLED
+        ):
             model_input = dict(vl_input)
             model_input["attention_mask"] = None
         self._selected_layer_features = None

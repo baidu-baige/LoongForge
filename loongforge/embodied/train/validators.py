@@ -276,11 +276,36 @@ def validate(training_args, model_cfg, data_cfg):
                 "this combination has not been validated for either backend."
             )
         if training_args.cuda_graph_impl == "local":
-            raise ValueError(
-                "--fp8 and --cuda-graph-impl=local are mutually exclusive; "
-                "the model-managed graph runners do not capture FP8 scaling "
-                "and conversion state."
-            )
+            if training_args.cuda_graph_scope != "full_iteration":
+                raise ValueError(
+                    "GR00T-N1.7 FP8 CUDA graph support currently requires "
+                    "--cuda-graph-scope=full_iteration."
+                )
+            if training_args.fp8_backend != "te":
+                raise ValueError(
+                    "GR00T-N1.7 FP8 CUDA graph support currently requires "
+                    "--fp8-backend=te."
+                )
+            if training_args.fp8_te_recipe != "blockwise":
+                raise ValueError(
+                    "GR00T-N1.7 FP8 CUDA graph support currently requires "
+                    "--fp8-te-recipe=blockwise."
+                )
+            if training_args.gradient_accumulation_steps != 1:
+                raise ValueError(
+                    "GR00T-N1.7 FP8 full-iteration CUDA graph requires "
+                    "--gradient-accumulation-steps=1."
+                )
+            if not training_args.cuda_graph_ddp_sync_in_graph:
+                raise ValueError(
+                    "GR00T-N1.7 FP8 full-iteration CUDA graph requires "
+                    "--cuda-graph-ddp-sync-in-graph."
+                )
+            if training_args.check_for_nan_in_loss_and_grad:
+                raise ValueError(
+                    "GR00T-N1.7 FP8 full-iteration CUDA graph requires "
+                    "--no-check-for-nan-in-loss-and-grad."
+                )
         if training_args.fp8_skip_modules and not training_args.fp8_module_patterns:
             logger.warning(
                 "--fp8-skip-modules is set without --fp8-module-patterns; it "
@@ -306,6 +331,9 @@ def validate(training_args, model_cfg, data_cfg):
                 or training_args.fp8_te_current_use_power_2_scales
                 or training_args.fp8_te_block_use_f32_scales
                 or training_args.fp8_te_block_backward_override is not None
+                or training_args.fp8_te_block_x_scaling_dim != 1
+                or training_args.fp8_te_block_w_scaling_dim != 2
+                or training_args.fp8_te_block_grad_scaling_dim != 1
             )
             if te_overrides:
                 raise ValueError(
