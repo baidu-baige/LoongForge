@@ -35,7 +35,7 @@ WM_FONT, WM_SIZE, WM_TRACK = "InterDisplay-ExtraBold.otf", 86, -2.5
 PAD = 21          # left/right padding, matches the icon's own left inset
 GAP = 52          # optical gap between the mark and the wordmark
 TOP = 15.0        # top of the mark
-BOTTOM_PAD = 14.4
+BOTTOM_PAD = 2.0
 # Squircle scale carried over from the original lockup, where it keyed the
 # mark to the (now removed) tagline baseline; the wordmark is centred on it.
 ICON_SCALE = 1.7365
