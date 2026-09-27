@@ -34,7 +34,7 @@
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/"><img src="https://img.shields.io/badge/🌐_Visit_Website-7C3AED?style=for-the-badge" alt="Visit our website"></a>
   <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Join_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord"></a>
-  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_WeChat-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_WeChat_Group-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_RedNote-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="Find us on RedNote"></a>
   <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow_Us-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow us on X"></a>
 </p>
