@@ -6,7 +6,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="500">
+    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="520">
   </picture>
 </p>
 
@@ -53,7 +53,7 @@
 
 ---
 
-示例：具身模型 DreamZero 吞吐达基线的 4.38 倍，loss 曲线保持对齐
+**示例：**具身模型 DreamZero 吞吐达基线的 4.38 倍，loss 曲线保持对齐
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
