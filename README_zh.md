@@ -25,10 +25,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img height="22" src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
-  <a href="./LICENSE"><img height="22" src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 开源协议"></a>
-  <a href="https://hub.docker.com/u/loongforge"><img height="22" src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub 镜像"></a>
-  <a href="./CONTRIBUTING.md"><img height="22" src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="欢迎 PR"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img height="26" src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img height="26" src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 开源协议"></a>
+  <a href="https://hub.docker.com/u/loongforge"><img height="26" src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub 镜像"></a>
+  <a href="./CONTRIBUTING.md"><img height="26" src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="欢迎 PR"></a>
 </p>
 
 <p align="center">
@@ -45,15 +45,15 @@
 
 ## 🐉 LoongForge
 
-**LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，面向主流 **LLM、VLM、Diffusion 与具身模型**，提供[更快的训练速度](#performance)。
+**LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，面向主流 **LLM、VLM、Diffusion 与具身模型**，提供更快的训练速度。
 
 - **易用** —— 为每个支持的模型提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，覆盖**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练范式。
-- **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），在并行策略、显存占用、通信隐藏、算子效率等维度做**深度优化**，同时保证**训练 loss 曲线与基线对齐**。
+- **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[**深度优化训练速度**](#performance)，同时保证**训练 loss 与基线对齐**。
 - **源自生产** —— 由 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr) 开源而来，既服务于企业客户的闭源模型，也支撑了[开源模型的训练与发布](#powered-by-loongforge)，生产规模最大达 **5,000+ XPU**。
 
 ---
 
-<h6 align="left">性能对比举例：具身模型 DreamZero 吞吐达基线的 4.38 倍，loss 曲线保持对齐</h6>
+示例：具身模型 DreamZero 吞吐达基线的 4.38 倍，loss 曲线保持对齐
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">

@@ -25,10 +25,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img height="22" src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
-  <a href="./LICENSE"><img height="22" src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 license"></a>
-  <a href="https://hub.docker.com/u/loongforge"><img height="22" src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
-  <a href="./CONTRIBUTING.md"><img height="22" src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img height="26" src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img height="26" src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 license"></a>
+  <a href="https://hub.docker.com/u/loongforge"><img height="26" src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
+  <a href="./CONTRIBUTING.md"><img height="26" src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
 </p>
 
 <p align="center">
@@ -45,15 +45,15 @@
 
 ## 🐉 LoongForge
 
-**LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver [faster training](#performance) for mainstream LLMs, VLMs, diffusion, and embodied models.
+**LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver faster training for mainstream LLMs, VLMs, diffusion, and embodied models.
 
 - **Easy to Use** — [Ready-to-run configs](./configs/models/) and [launch examples](./examples) for every supported model, spanning **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
-- **High Performance** — Built on multiple backends (Megatron-LM and torch-native), with **deep optimizations** across parallelism strategy, memory footprint, communication overlap, and kernel efficiency — while keeping **training loss curves aligned with the baseline**.
+- **High Performance** — Built on multiple backends (Megatron-LM and torch-native) with [**deep training-speed optimizations**](#performance) that keep **training loss aligned with the baseline**.
 - **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and powers [open-source model releases](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
 
 ---
 
-<h6 align="left">Performance comparison example: embodied-model DreamZero at 4.38× baseline throughput, loss curves aligned</h6>
+Example: embodied-model DreamZero at 4.38× baseline throughput, loss curves aligned
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
