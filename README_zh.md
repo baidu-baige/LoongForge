@@ -6,47 +6,54 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="682">
+    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="600">
   </picture>
 </p>
 
 <h3 align="center">更快地训练 LLM、VLM、Diffusion 与具身模型</h3>
 
 <p align="center">
-  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat&logo=github&color=4F46E5" alt="GitHub stars"></a>
-  <a href="https://hub.docker.com/u/loongforge"><img src="https://img.shields.io/badge/Docker-loongforge-2496ED?logo=docker&logoColor=white" alt="Docker Hub 镜像"></a>
-  <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?logo=github&logoColor=white" alt="欢迎 PR"></a>
-  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/WeChat-Group-07C160?logo=wechat&logoColor=white" alt="加入微信群"></a>
-  <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Discord-Join_Us-5865F2?logo=discord&logoColor=white" alt="加入 Discord 社区"></a>
-  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?logo=x&logoColor=white" alt="在 X 上关注我们"></a>
+  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b></a>
+  &nbsp;·&nbsp;
+  <a href="#quickstart"><b>快速开始</b></a>
+  &nbsp;·&nbsp;
+  <a href="#performance"><b>性能表现</b></a>
+  &nbsp;·&nbsp;
+  <a href="#models"><b>支持模型</b></a>
 </p>
 
 <p align="center">
-  <a href="#performance"><img src="https://img.shields.io/badge/⚡_Speedup-up_to_5.04x-3B4FD8" alt="训练吞吐相比开源基线最高提升 5.04 倍"></a>
-  <a href="#models"><img src="https://img.shields.io/badge/📦_Models-40%2B_ready_to_run-7C3AED" alt="40+ 开箱即用的模型示例"></a>
-  <img src="https://img.shields.io/badge/🖥_Hardware-NVIDIA%2BKunlun-EC4899" alt="同时支持 NVIDIA GPU 与昆仑芯 XPU">
-  <img src="https://img.shields.io/badge/🏭_Production-5000%2B_XPUs-DB2777" alt="生产验证，最大规模 5,000+ XPU">
+  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 开源协议"></a>
+  <a href="https://hub.docker.com/u/loongforge"><img src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub 镜像"></a>
+  <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="欢迎 PR"></a>
 </p>
 
 <p align="center">
-  <a href="https://baidu-baige.github.io/LoongForge/"><b>🌐 官网</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>📖 文档</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>✍️ 博客</b></a>
-  &nbsp;·&nbsp;
-  <a href="#quickstart"><b>⚡ 快速开始</b></a>
-  &nbsp;·&nbsp;
-  <a href="#performance"><b>📊 性能表现</b></a>
-  &nbsp;·&nbsp;
-  <a href="#models"><b>🏛️ 支持模型</b></a>
-  &nbsp;·&nbsp;
-  <a href="#contact"><b>💬 联系我们</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/"><img src="https://img.shields.io/badge/🌐_Visit_Website-7C3AED?style=for-the-badge" alt="访问官网"></a>
+  <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Join_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="加入 Discord 社区"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_WeChat-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="加入微信群"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/RedNote-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="小红书"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?style=for-the-badge&logo=x&logoColor=white" alt="在 X 上关注我们"></a>
 </p>
+
+<p align="center"><i>⭐ 点个 Star，帮助更多人发现 LoongForge，也让社区不断壮大。</i></p>
+
+</div>
+
+## 🐉 LoongForge
+
+**LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，面向主流 **LLM、VLM、Diffusion 与具身模型**，提供[更快的训练速度](#performance)。
+
+- **易用** —— 为每个支持的模型提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，覆盖**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练范式。
+- **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），在并行策略、显存占用、通信隐藏、算子效率等维度做**深度优化**，同时保证**训练 loss 曲线与基线对齐**。
+- **源自生产** —— 由 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr) 开源而来，既服务于企业客户的闭源模型，也支撑了[开源模型的训练与发布](#powered-by-loongforge)，生产规模最大达 **5,000+ XPU**。
 
 ---
 
-<h6 align="left">示例：LoongForge 加速具身模型训练，DreamZero 吞吐达基线的 4.38 倍，loss 曲线保持对齐</h6>
+<h6 align="left">性能对比举例：具身模型 DreamZero 吞吐达基线的 4.38 倍，loss 曲线保持对齐</h6>
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
@@ -56,18 +63,6 @@
     </picture>
   </a>
 </p>
-
-</div>
-
-## 💡 为什么选择 LoongForge？
-
-**LoongForge** 是一款开源训练框架，由百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 开发，旨在为主流 **LLM、VLM、Diffusion 与具身模型** 提供[更快的训练速度](#performance)，从而显著降低成本。
-
-- **易用** —— 为支持的每个模型提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，整体覆盖预训练、持续预训练、SFT 与 LoRA 等训练范式。
-- **高性能** —— 采用多后端架构（Megatron-LM 与 torch-native）构建，并针对不同类别的模型，从并行策略、显存优化、通信隐藏、算子效率等维度做**深度优化**，同时保证**训练 loss 曲线与基线对齐**。
-- **源自生产** —— 由 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr) 开源而来，一套服务于教育、计算机视觉与具身智能等领域企业客户的训练加速套件，**最大生产规模达 5,000+ XPU**。
-
-> 🐉 LoongForge 名字源于中国传统 **龙舟**，象征协同发力与破浪前行。
 
 ## 🏗️ 架构
 
@@ -96,12 +91,12 @@
 - **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / VLA / Diffusion 全部模型家族共用同一镜像。
 - **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
-- **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 
 <details>
 <summary><b>📅 更多</b></summary>
 
+- **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/05]** ⚡ **Wan 2.2** 训练 **加速 116%**，并新增 CP（上下文并行）与数据 packing 策略支持。
 - **[2026/05]** ✨ 新增 **Kimi K2.5 / K2.6** 训练支持，并支持 **INT4 / NVFP4** PTQ 量化能力。
@@ -109,7 +104,7 @@
 - **[2026/05]** 🌟 支持 **LLaVA-OneVision-2.0** 模型训练并协助其公开发布。
 - **[2026/04]** 🧩 新增 **MiniMax-M2.7** 在 NVIDIA GPU 与昆仑芯 XPU 上的训练支持。
 - **[2026/04]** 🚀 LoongForge 源码在 GitHub 上正式公开。[[blog](https://zhuanlan.zhihu.com/p/2031006068797600446)]
-- **[2025/10]** 🌟 基于AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。[[blog](https://mp.weixin.qq.com/s/1y7Br15pBpUZ-90j5OGncA)]
+- **[2025/10]** 🌟 基于 AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。[[blog](https://mp.weixin.qq.com/s/1y7Br15pBpUZ-90j5OGncA)]
 
 </details>
 
@@ -117,30 +112,31 @@
 
 **🚀 基座模型**
 
-* **MoE EP 通信优化** —— All2All / 激活卸载 / 计算全链路重叠，在 DeepSeek-V3、Qwen3-MoE 等模型上相对上游 Megatron-LM 实现**进一步显存降低**。
+* **MoE EP 通信优化** —— All2All / 激活卸载 / 计算全链路重叠，相对上游 Megatron-LM 实现**进一步显存降低**。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/moe_all2all_overlap.html)]
 * **MoE 专家负载均衡** —— 基于拓扑感知算法动态复制热点专家，均衡专家并行（EP）负载，开销相较业界方案最大可降低 **74%**。[[TAOT 论文](https://arxiv.org/pdf/2608.03676)]
-* **自适应 FP8 训练** —— 面向 LLM 和 VLM 的端到端 FP8，支持标准 **blockwise FP8**；可选**自适应**模式根据 GEMM 形状与效率逐算子选择最佳精度。
-* **自定义融合算子** —— 为 DSA 类模型设计的 **FusedDSA** 等融合 Kernel —— TileLang 版本已开源，高性能 CUDA 版本在百度百舸平台提供。
-* **长序列训练** —— 基于**上下文并行（CP）**与**分块流水线调度**，将 LLM 训练扩展至长序列场景。
+* **自适应 FP8 训练** —— 面向 LLM 和 VLM 的端到端 FP8，支持标准 **blockwise FP8**；可选**自适应**模式根据 GEMM 形状与效率逐算子选择最佳精度。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/adaptive_fp8.html)]
+* **自定义融合算子** —— 为 DSA 类模型设计的 **FusedDSA** 等融合 kernel —— TileLang 版本已开源，高性能 CUDA 版本在百度百舸平台提供。
+* **长序列训练** —— 将 LLM 训练扩展至长序列场景，依托**上下文并行（CP）**与**分块流水线调度**。
 
 **🧩 多模态模型**
 
-* **灵活的多模态组合** —— 通过配置即可将可互换的 ViT 与 LLM 组件自由组装为 VLM（如 **GLM-5.2 + MoonViT**），无需编写模型代码。
-* **异构并行** —— 针对模型不同组件（如 ViT vs LLM）独立配置 TP / DP / 重计算 / 冻结策略，获得最优吞吐与显存占用。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)]
-* **Encoder-Decoder 解耦训练** —— 将 ViT 与 LLM 拆分为独立任务，消除 Encoder 带来的流水线气泡。
-* **DP 负载均衡** —— 基于负载感知的数据重分发，缓解序列打包不均衡问题，显著提升多节点扩展效率。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html)]
+* **灵活组合** —— 通过配置即可将可互换的 ViT 与 LLM 组件自由组装为 VLM（如 **GLM-5.2 + MoonViT**），无需编写模型代码。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/model_combination.html)]
+* **异构并行** —— 针对模型不同组件（如 ViT vs LLM）独立配置 TP / DP / 重计算 / 冻结策略，获得最优吞吐与显存占用。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)] [[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/heterogeneous_parallel.html)]
+* **Encoder-Decoder 解耦训练** —— 消除 Encoder 引入的流水线气泡，将 ViT 与 LLM 拆分为独立任务。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/heterogeneous_parallel.html#full-heterogeneous-dp-parallel)]
+* **DP 负载均衡** —— 显著提升多节点扩展效率，基于负载感知的数据重分发缓解序列打包不均衡问题。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html)] [[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/data_parallel_balancing.html)]
+* **灵活的数据流水线** —— 多模态数据基于 Energon **WebDataset** 输入，支持**在线**与**离线**两种序列 packing。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/dataset_conversion.html)]
 
 **🤖 具身模型**
 
 * **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 子系统，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[README](./loongforge/embodied)]
-* **FP8 通信优化** —— 在支持的 NVIDIA GPU 上，用 FP8 压缩跨卡通信量的可选优化，覆盖两种并行策略：**FSDP2** 场景对参数 AllGather 做按 block 的 FP8 delta 压缩，**DDP** 场景做 FP8 梯度 all-reduce。[[使用方法](./docs/source_zh/features/fp8_communication.md)]
-* **逐模型深度定制优化** —— 针对当前覆盖的每个模型深度优化训练代码，涵盖 I/O、通信策略、算子效率等维度，实测相对官方基线 **1.79×–4.38× 加速**（见[性能表现](#performance)）。
-* **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。
+* **逐模型深度定制优化** —— 实测相对官方基线 **1.79×–4.38× 加速**（见[性能表现](#performance)），针对每个模型在 I/O、通信策略、算子效率等维度深度优化训练代码。
+* **FP8 通信优化** —— 在支持的 NVIDIA GPU 上压缩跨卡通信量，覆盖两种并行策略：**FSDP2** 场景对参数 AllGather 做按 block 的 FP8 delta 压缩，**DDP** 场景做 FP8 梯度 all-reduce。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/fp8_communication.html)]
+* **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。[[README](./loongforge/embodied/eval)]
+* **Ego2Robot 数据转换** —— 将第一人称人类操作视频转换为覆盖 **16 种双臂机器人形态**的 **LeRobot v3.0** 训练数据。[[README](./loongforge/embodied/tools/ego2robot)]
 
-**🧰 工作流与兼容性**
+**🔌 兼容性**
 
-* **丰富的流水线与数据工具** —— 开箱即用的 **Pretrain / MidTrain / SFT / LoRA** 流水线，内置数据集格式转换与序列打包能力。
-* **灵活的 Checkpoint 机制** —— 支持离线 **Megatron ↔ HuggingFace** 双向转换，以及在线原生 HF 加载/保存，全流程无格式壁垒。
+* **Mcore Bridge** —— 同时支持**离线** **Megatron ↔ HuggingFace** 双向转换与**在线**原生 HF 加载/保存。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/mcore_bridge.html)]
 * **异构硬件** —— 通过轻侵入式插件设计，原生支持 **NVIDIA GPU** 与**昆仑芯 XPU**。
 
 > 📖 深入阅读：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/features_index.html) · [具身模型](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/overview.html)
@@ -208,7 +204,7 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 <a id="models"></a>
 ## 🏛️ 支持的模型
 
-LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型家族。点击模型名称可查看对应的训练示例；完整的使用说明请参阅[用户手册](https://loongforge.readthedocs.io/zh-cn/latest/index.html)，模型变体请参阅[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
+点击任意模型查看训练示例；完整使用说明见[用户手册](https://loongforge.readthedocs.io/zh-cn/latest/index.html)，全部变体见[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
 
 <table width="100%">
 <colgroup>
@@ -286,9 +282,10 @@ LoongForge 已支持 LLM、VLM、Diffusion 与 Embodied 等类别的广泛模型
 </tbody>
 </table>
 
+<a id="powered-by-loongforge"></a>
 ## 🌟 基于 LoongForge 训练
 
-基于 LoongForge 或其前身 AIAK-Training-LLM 训练的开源模型：
+基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 训练的开源模型：
 
 | 模型 | 亮点 |
 |------|------|
@@ -371,15 +368,17 @@ LoongForge/
 
 ## 🙏 致谢
 
-LoongForge 的构建离不开 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM)，并从 [HuggingFace Transformers](https://github.com/huggingface/transformers)、[LLaMA-Factory](https://github.com/hiyouga/LlamaFactory)、[Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge)、[LeRobot](https://github.com/huggingface/lerobot) 等优秀开源项目，以及所支持模型的官方实现（如 [OpenPI](https://github.com/Physical-Intelligence/openpi)、[NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)）中汲取了灵感。衷心感谢这些社区所做的杰出贡献；同时也特别感谢 [LINUX DO](https://linux.do/) 社区，为技术交流提供了友善的空间，并对开源分享给予支持。
+LoongForge 的成长离不开开源社区。其 Megatron 栈以 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 为基础，项目也从 [HuggingFace Transformers](https://github.com/huggingface/transformers)、[LLaMA-Factory](https://github.com/hiyouga/LlamaFactory)、[Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge)、[LeRobot](https://github.com/huggingface/lerobot) 以及所支持模型的官方实现（如 [OpenPI](https://github.com/Physical-Intelligence/openpi)、[NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)）中汲取了经验。同时也特别感谢 [LINUX DO](https://linux.do/) 社区，为技术交流提供了友善的空间，并对开源分享给予支持。
 
 <a id="contact"></a>
 ## 💬 联系我们
 
-- **GitHub Issue** —— 问题反馈、使用疑问与功能建议。[提交 Issue](https://github.com/baidu-baige/LoongForge/issues/new/choose)。
-- **开发者社区** —— **微信群**、**小红书**等。[点此加入](https://github.com/baidu-baige/LoongForge/issues/80)。
-- **邮件** —— 企业落地、大规模部署、商务合作，以及任何其他话题。[loongforge@baidu.com](mailto:loongforge@baidu.com)。
+| 渠道 | 适用场景 |
+|------|----------|
+| [**GitHub Issue**](https://github.com/baidu-baige/LoongForge/issues/new/choose) | 问题反馈、使用疑问与功能建议 |
+| [**开发者社区**](https://github.com/baidu-baige/LoongForge/issues/80) | 微信群、小红书等 |
+| [**邮件**](mailto:loongforge@baidu.com) | 企业落地、大规模部署、商务合作，以及任何其他话题 |
 
 ## 📄 开源协议
 
-LoongForge 基于 [Apache License 2.0](./LICENSE) 发布。部分源文件改编自第三方开源项目，请以各文件头部标注的版权与署名信息为准。
+LoongForge 基于 [Apache License 2.0](./LICENSE) 发布；部分文件改编自第三方项目，详见各文件头部。

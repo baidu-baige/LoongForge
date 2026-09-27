@@ -39,10 +39,10 @@ Training speedups over mainstream open-source baselines. Performance is still un
 |---|---|---|
 | DreamZero (DROID Wan2.2-5B Full) | WAM | **4.38×** |
 | Pi0.5 | VLA | **2.80×** |
+| FastWAM | WAM | **2.61×** |
 | GR00T-N1.6 | VLA | **2.31×** |
-| FastWAM | WAM | **2.25×** |
 | LingBot-VA | WAM | **2.20×** |
-| GR00T-N1.7 | VLA | **1.79×** |
+| GR00T-N1.7 | VLA | **1.85×** |
 | xVLA | VLA | **1.79×** |
 
 Numbers reflect the baseline and LoongForge versions at measurement time and may evolve as implementations change. See the [root README](../../README.md#-performance) for the full benchmark chart across all model families.

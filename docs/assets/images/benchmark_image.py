@@ -21,6 +21,14 @@ To update the chart:
 
 import os
 
+import matplotlib
+
+# Force a non-interactive backend: on macOS the default (Retina) backend reports
+# text extents at 2x, which inflates the auto-measured label column and offsets
+# the whole layout. Agg keeps measurements at 1x so the chart lays out identically
+# across machines.
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import font_manager as fm
@@ -36,11 +44,11 @@ ROWS = [
     # VLA
     ("Pi0.5",              "VLA", 2.80),
     ("GR00T N1.6",         "VLA", 2.31),
-    ("GR00T N1.7",         "VLA", 1.79),
+    ("GR00T N1.7",         "VLA", 1.85),
     ("X-VLA",              "VLA", 1.79),
     # WAM
     ("DreamZero",          "WAM", 4.38),
-    ("FastWAM",            "WAM", 2.25),
+    ("FastWAM",            "WAM", 2.61),
     ("LingBot VA",         "WAM", 2.20),
     # VLM
     ("Qwen3-VL-30B-A3B",   "VLM", 1.45),

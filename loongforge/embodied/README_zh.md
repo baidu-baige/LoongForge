@@ -35,13 +35,15 @@
 
 相较主流开源 baseline 的训练加速比（性能仍在积极优化中，这些数字后续还会持续提升）：
 
-| 模型 | 类型 | Baseline | 加速比 |
-|---|---|---|---|
-| DreamZero (DROID Wan2.2-5B Full) | WAM | DreamZero | **2.67×** |
-| GR00T-N1.6 | VLA | LeRobot | **2.31×** |
-| π0.5 | VLA | OpenPI | **2.23×** |
-| Lingbot-VA | WAM | LingBot-VA | **1.80×** |
-| xVLA | VLA | X-VLA | **1.69×** |
+| 模型 | 类型 | 加速比 |
+|---|---|---|
+| DreamZero (DROID Wan2.2-5B Full) | WAM | **4.38×** |
+| Pi0.5 | VLA | **2.80×** |
+| FastWAM | WAM | **2.61×** |
+| GR00T-N1.6 | VLA | **2.31×** |
+| LingBot-VA | WAM | **2.20×** |
+| GR00T-N1.7 | VLA | **1.85×** |
+| xVLA | VLA | **1.79×** |
 
 数据反映测量时刻的 baseline 与 LoongForge 版本，可能随实现演进而变化。跨所有模型族的完整基准图表见 [根 README](../../README_zh.md#-性能表现)。
 

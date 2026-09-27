@@ -6,47 +6,54 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="682">
+    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="600">
   </picture>
 </p>
 
-<h3 align="center">Train LLMs, VLMs, diffusion and embodied models, faster.</h3>
+<h3 align="center">Train LLMs, VLMs, diffusion, and embodied models — faster.</h3>
 
 <p align="center">
-  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat&logo=github&color=4F46E5" alt="GitHub stars"></a>
-  <a href="https://hub.docker.com/u/loongforge"><img src="https://img.shields.io/badge/Docker-loongforge-2496ED?logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
-  <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?logo=github&logoColor=white" alt="PRs welcome"></a>
-  <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Discord-Join_Us-5865F2?logo=discord&logoColor=white" alt="Join our Discord"></a>
-  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/WeChat-Group-07C160?logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
-  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?logo=x&logoColor=white" alt="Follow us on X"></a>
+  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Documentation</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog</b></a>
+  &nbsp;·&nbsp;
+  <a href="#quickstart"><b>Quick Start</b></a>
+  &nbsp;·&nbsp;
+  <a href="#performance"><b>Performance</b></a>
+  &nbsp;·&nbsp;
+  <a href="#models"><b>Supported Models</b></a>
 </p>
 
 <p align="center">
-  <a href="#performance"><img src="https://img.shields.io/badge/⚡_Speedup-up_to_5.04x-3B4FD8" alt="Training throughput speedup up to 5.04x over open-source baselines"></a>
-  <a href="#models"><img src="https://img.shields.io/badge/📦_Models-40%2B_ready_to_run-7C3AED" alt="40+ ready-to-run model examples"></a>
-  <img src="https://img.shields.io/badge/🖥_Hardware-NVIDIA%2BKunlun-EC4899" alt="Runs on NVIDIA GPUs and Kunlun XPUs">
-  <img src="https://img.shields.io/badge/🏭_Production-5000%2B_XPUs-DB2777" alt="Proven in production with runs up to 5,000+ XPUs">
+  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 license"></a>
+  <a href="https://hub.docker.com/u/loongforge"><img src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
+  <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
 </p>
 
 <p align="center">
-  <a href="https://baidu-baige.github.io/LoongForge/"><b>🌐 Website</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>📖 Docs</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>✍️ Blog</b></a>
-  &nbsp;·&nbsp;
-  <a href="#quickstart"><b>⚡ Quick Start</b></a>
-  &nbsp;·&nbsp;
-  <a href="#performance"><b>📊 Performance</b></a>
-  &nbsp;·&nbsp;
-  <a href="#models"><b>🏛️ Supported Models</b></a>
-  &nbsp;·&nbsp;
-  <a href="#contact"><b>💬 Contact Us</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/"><img src="https://img.shields.io/badge/🌐_Visit_Website-7C3AED?style=for-the-badge" alt="Visit our website"></a>
+  <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Join_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_WeChat-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/RedNote-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="Find us on RedNote"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow us on X"></a>
 </p>
+
+<p align="center"><i>⭐ Star LoongForge to help more people discover it and grow the community.</i></p>
+
+</div>
+
+## 🐉 LoongForge
+
+**LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver [faster training](#performance) for mainstream LLMs, VLMs, diffusion, and embodied models.
+
+- **Easy to Use** — [Ready-to-run configs](./configs/models/) and [launch examples](./examples) for every supported model, spanning **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
+- **High Performance** — Built on multiple backends (Megatron-LM and torch-native), with **deep optimizations** across parallelism strategy, memory footprint, communication overlap, and kernel efficiency — while keeping **training loss curves aligned with the baseline**.
+- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and powers [open-source model releases](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
 
 ---
 
-<h6 align="left">Example: embodied-model training on LoongForge — DreamZero at 4.38× baseline throughput, loss curves aligned</h6>
+<h6 align="left">Performance comparison example: embodied-model DreamZero at 4.38× baseline throughput, loss curves aligned</h6>
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
@@ -56,18 +63,6 @@
     </picture>
   </a>
 </p>
-
-</div>
-
-## 💡 Why LoongForge?
-
-**LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver [faster training](#performance) for mainstream LLMs, VLMs, diffusion, and embodied models, thereby significantly reducing costs.
-
-- **Easy to Use** — [Ready-to-run configs](./configs/models/) and [launch examples](./examples) for supported models, covering pre-training, continued pre-training, SFT, and LoRA.
-- **High Performance** — Built on multiple training backends (Megatron-LM and torch-native), with **deep optimizations** for each model family across parallelism strategy, memory footprint, communication overlap, and kernel efficiency, while keeping **training loss curves aligned with the baseline**.
-- **Proven at Scale** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training acceleration suite serving enterprise customers in Education, Computer Vision, and Embodied AI, **with the largest production runs reaching 5,000+ XPUs**.
-
-> 🐉 LoongForge is named after the traditional Chinese **loong boat (龙舟)**, a symbol of coordinated power and forward momentum.
 
 ## 🏗️ Architecture
 
@@ -96,12 +91,12 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
 - **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
-- **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 
 <details>
 <summary><b>📅 More</b></summary>
 
+- **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/06]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **2.3× speedup** on GR00T training. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/05]** ⚡ Accelerated **Wan 2.2** training by **116%**, and added CP and data packing support.
 - **[2026/05]** ✨ Added training support for **Kimi K2.5 / K2.6**, and introduced **INT4 / NVFP4** PTQ.
@@ -117,30 +112,31 @@ Since optimal training strategies differ across model families and scales, Loong
 
 **🚀 Foundation Models**
 
-* **MoE EP Communication Optimization** — Overlapped All2All / activation offload / compute, with **further memory reduction** beyond upstream Megatron-LM on DeepSeek-V3, Qwen3-MoE, etc.
+* **MoE EP Communication Optimization** — Overlapped All2All / activation offload / compute, with **further memory reduction** beyond upstream Megatron-LM. [[Usage](https://loongforge.readthedocs.io/en/latest/features/moe_all2all_overlap.html)]
 * **MoE Expert Load Balancing** — Topology-aware dynamic replication of hot experts to balance EP workloads, with up to **74%** lower overhead than industry solutions. [[TAOT Paper](https://arxiv.org/pdf/2608.03676)]
-* **Adaptive FP8 Training** — End-to-end FP8 for LLMs and VLMs with standard **blockwise FP8**; optional **adaptive** mode picks per-operator precision by GEMM shape and efficiency.
+* **Adaptive FP8 Training** — End-to-end FP8 for LLMs and VLMs with standard **blockwise FP8**; an optional **adaptive** mode picks per-operator precision by GEMM shape and efficiency. [[Usage](https://loongforge.readthedocs.io/en/latest/features/adaptive_fp8.html)]
 * **Custom Fused Operators** — Fused kernels like **FusedDSA** for DSA-style models — TileLang version open-sourced, high-performance CUDA version available on Baidu Baige platform.
-* **Long-Sequence Training** — **Context Parallel (CP)** with **chunked-pipeline scheduling** scales LLM training to long sequence lengths.
+* **Long-Sequence Training** — Scales LLM training to long sequences via **Context Parallel (CP)** and **chunked-pipeline scheduling**.
 
 **🧩 Multi-Modal Models**
 
-* **Flexible Multi-Modal Composition** — Assemble VLMs from interchangeable ViT and LLM components (e.g. **GLM-5.2 + MoonViT**) straight from config — no custom model code.
-* **Heterogeneous Parallelism** — Independent TP / DP / recompute / freeze per model component (e.g., ViT vs. LLM) for optimal throughput and memory. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)]
-* **Decoupled Encoder-Decoder Training** — Separates ViT and LLM into independent tasks, eliminating encoder-induced pipeline bubbles.
-* **DP Load Balancing** — Load-aware data redistribution mitigates sequence-packing imbalance, improving multi-node scaling efficiency. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html)]
+* **Flexible Composition** — Assemble VLMs from interchangeable ViT and LLM components (e.g. **GLM-5.2 + MoonViT**) straight from config — no custom model code. [[Usage](https://loongforge.readthedocs.io/en/latest/features/model_combination.html)]
+* **Heterogeneous Parallelism** — Independent TP / DP / recompute / freeze per model component (e.g. ViT vs. LLM) for optimal throughput and memory. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-heterogeneous-parallel-training.html)] [[Usage](https://loongforge.readthedocs.io/en/latest/features/heterogeneous_parallel.html)]
+* **Decoupled Encoder-Decoder Training** — Eliminates encoder-induced pipeline bubbles by separating ViT and LLM into independent tasks. [[Usage](https://loongforge.readthedocs.io/en/latest/features/heterogeneous_parallel.html#full-heterogeneous-dp-parallel)]
+* **DP Load Balancing** — Improves multi-node scaling efficiency with load-aware data redistribution that mitigates sequence-packing imbalance. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-05-loongforge-dp-load-balancing.html)] [[Usage](https://loongforge.readthedocs.io/en/latest/features/data_parallel_balancing.html)]
+* **Flexible Data Pipeline** — Energon **WebDataset** input for multimodal data, with both **online** and **offline** sequence packing. [[Usage](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/dataset_conversion.html)]
 
 **🤖 Embodied Models**
 
 * **VLA & WAM Training** — A dedicated **torch-native DDP/FSDP** subsystem for **VLA and world-action (WAM)** models, decoupled from the Megatron core, with flexible **DDP / ZeRO-1 / FSDP / HSDP** strategies. [[README](./loongforge/embodied)]
-* **FP8 Communication Optimization** — Optional FP8 optimizations that cut cross-rank traffic on supported NVIDIA GPUs, covering both parallel strategies: blockwise FP8 delta AllGather for **FSDP2** parameters, and FP8 grad all-reduce for **DDP** gradients. [[Usage](./docs/source/features/fp8_communication.md)]
-* **Per-Model Deep Optimization** — Training code deeply customized for each supported model across I/O, communication strategy, and kernel efficiency — **1.79×–4.38×** over official baselines in our [benchmarks](#performance).
-* **Unified Evaluation** — Evaluate trained policies on **LIBERO / CALVIN / SimplerEnv / RoboTwin**, with coverage expanding continuously.
+* **Per-Model Deep Optimization** — **1.79×–4.38×** over official baselines in our [benchmarks](#performance), from training code customized per model across I/O, communication strategy, and kernel efficiency.
+* **FP8 Communication Optimization** — Cuts cross-rank traffic on supported NVIDIA GPUs across both parallel strategies: blockwise FP8 delta AllGather for **FSDP2** parameters, and FP8 grad all-reduce for **DDP** gradients. [[Usage](https://loongforge.readthedocs.io/en/latest/features/fp8_communication.html)]
+* **Unified Evaluation** — Evaluate trained policies on **LIBERO / CALVIN / SimplerEnv / RoboTwin**, with coverage expanding continuously. [[README](./loongforge/embodied/eval)]
+* **Ego2Robot Data Conversion** — Turn first-person videos of human manipulation into **LeRobot v3.0** training data across **16 dual-arm robot morphologies**. [[README](./loongforge/embodied/tools/ego2robot)]
 
-**🧰 Workflow & Compatibility**
+**🔌 Compatibility**
 
-* **Versatile Pipelines & Data Tools** — Out-of-the-box **Pretrain / MidTrain / SFT / LoRA**, with built-in dataset format conversion and sequence packing.
-* **Flexible Checkpointing** — Offline bidirectional **Megatron ↔ HuggingFace** conversion plus native online HF load/save — no format barriers across your workflow.
+* **Mcore Bridge** — Supports both **offline** bidirectional **Megatron ↔ HuggingFace** conversion and **online** native HF load/save. [[Usage](https://loongforge.readthedocs.io/en/latest/features/mcore_bridge.html)]
 * **Heterogeneous Hardware** — Native support for **NVIDIA GPUs** and **Kunlun XPUs** via a minimally-intrusive plugin design.
 
 > 📖 Deep-dive: [LLM](https://loongforge.readthedocs.io/en/latest/llm_tutorial/features_index.html) · [VLM](https://loongforge.readthedocs.io/en/latest/vlm_tutorial/features_index.html) · [Embodied Model](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/overview.html)
@@ -208,7 +204,7 @@ The example runs 20 steps and saves outputs under `OUTPUT_DIR`.
 <a id="models"></a>
 ## 🏛️ Supported Models
 
-LoongForge supports a broad range of model families across LLM, VLM, diffusion, and embodied. Select a model below to open its training examples. For complete usage instructions, see the [User Guide](https://loongforge.readthedocs.io/en/latest/index.html) and the full [model support matrix](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html).
+Click any model for its training examples. See the [User Guide](https://loongforge.readthedocs.io/en/latest/index.html) for full instructions and the [model support matrix](https://loongforge.readthedocs.io/en/latest/get_started/support_model.html) for all variants.
 
 <table width="100%">
 <colgroup>
@@ -286,9 +282,10 @@ LoongForge supports a broad range of model families across LLM, VLM, diffusion, 
 </tbody>
 </table>
 
+<a id="powered-by-loongforge"></a>
 ## 🌟 Powered by LoongForge
 
-Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM:
+Open-source models trained with **LoongForge** or its predecessor **AIAK-Training-LLM**:
 
 | Model | Highlights |
 |-------|-------------|
@@ -371,15 +368,17 @@ Thanks to all our contributors:
 
 ## 🙏 Acknowledgments
 
-LoongForge builds on NVIDIA's [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) and draws inspiration from many excellent open-source projects, including [HuggingFace Transformers](https://github.com/huggingface/transformers), [LLaMA-Factory](https://github.com/hiyouga/LlamaFactory), [Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge), and [LeRobot](https://github.com/huggingface/lerobot), as well as the official implementations of the models it supports (e.g. [OpenPI](https://github.com/Physical-Intelligence/openpi), [NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)). We sincerely thank these communities for their outstanding contributions, and would also like to extend our gratitude to the [LINUX DO](https://linux.do/) community for its welcoming space for technical discussion and support for open-source sharing.
+LoongForge stands on the shoulders of the open-source community. Its Megatron stack builds on NVIDIA's [Megatron-LM](https://github.com/NVIDIA/Megatron-LM), and the project also draws on [HuggingFace Transformers](https://github.com/huggingface/transformers), [LLaMA-Factory](https://github.com/hiyouga/LlamaFactory), [Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge), [LeRobot](https://github.com/huggingface/lerobot), and the official implementations of the models we support (e.g. [OpenPI](https://github.com/Physical-Intelligence/openpi), [NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)). We also thank the [LINUX DO](https://linux.do/) community for its welcoming space for technical discussion and its support of open-source sharing.
 
 <a id="contact"></a>
 ## 💬 Contact Us
 
-- **GitHub Issues** — Bug reports, usage questions, and feature requests. [Open an issue](https://github.com/baidu-baige/LoongForge/issues/new/choose).
-- **Developer Communities** — **WeChat group**, **Xiaohongshu**, and more. [Join here](https://github.com/baidu-baige/LoongForge/issues/80).
-- **Email** — Enterprise adoption, large-scale deployment, partnership, or any other topic. [loongforge@baidu.com](mailto:loongforge@baidu.com).
+| Channel | What it's for |
+|---------|---------------|
+| [**GitHub Issues**](https://github.com/baidu-baige/LoongForge/issues/new/choose) | Bug reports, usage questions, and feature requests |
+| [**Developer Communities**](https://github.com/baidu-baige/LoongForge/issues/80) | WeChat group, Xiaohongshu, and more |
+| [**Email**](mailto:loongforge@baidu.com) | Enterprise adoption, large-scale deployment, partnership, or any other topic |
 
 ## 📄 License
 
-LoongForge is released under the [Apache License 2.0](./LICENSE). Some files are derived from third-party open-source projects; please refer to the specific file headers for their respective copyright and attribution.
+LoongForge is released under the [Apache License 2.0](./LICENSE); some files derive from third-party projects — see their file headers.
