@@ -6,14 +6,14 @@
   <picture>
     <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/logo/banner-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/logo/banner.svg">
-    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="600">
+    <img alt="LoongForge" src="./docs/assets/images/logo/banner.svg" width="500">
   </picture>
 </p>
 
 <h3 align="center">Train LLMs, VLMs, diffusion, and embodied models — faster.</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Documentation</b></a>
+  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs</b></a>
   &nbsp;·&nbsp;
   <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog</b></a>
   &nbsp;·&nbsp;
@@ -25,18 +25,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 license"></a>
-  <a href="https://hub.docker.com/u/loongforge"><img src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
-  <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img height="22" src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img height="22" src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 license"></a>
+  <a href="https://hub.docker.com/u/loongforge"><img height="22" src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
+  <a href="./CONTRIBUTING.md"><img height="22" src="https://img.shields.io/badge/Pull_Requests-welcome-brightgreen?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
 </p>
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/"><img src="https://img.shields.io/badge/🌐_Visit_Website-7C3AED?style=for-the-badge" alt="Visit our website"></a>
   <a href="https://discord.gg/RnY39D6CM"><img src="https://img.shields.io/badge/Join_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord"></a>
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_WeChat-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
-  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/RedNote-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="Find us on RedNote"></a>
-  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow us on X"></a>
+  <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/Join_RedNote-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="Find us on RedNote"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow_Us-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow us on X"></a>
 </p>
 
 <p align="center"><i>⭐ Star LoongForge to help more people discover it and grow the community.</i></p>
