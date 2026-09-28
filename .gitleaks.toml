@@ -12,6 +12,6 @@ useDefault = true
 [[allowlists]]
 description = "Known ego2robot prediction schema field"
 targetRules = ["generic-api-key"]
-paths = ['^loongforge/embodied/tools/ego2robot/steps/path_b\.py$']
+paths = ['^tools/ego2robot/steps/path_b\.py$']
 regexTarget = "secret"
 regexes = ['^keypoints_3d$']

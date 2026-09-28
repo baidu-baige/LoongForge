@@ -136,7 +136,7 @@
 * **逐模型深度定制优化** —— 实测相对官方基线 **1.79×–4.38× 加速**（见[性能表现](#performance)），针对每个模型在 I/O、通信策略、算子效率等维度深度优化训练代码。
 * **FP8 通信优化** —— 在支持的 NVIDIA GPU 上压缩跨卡通信量，覆盖两种并行策略：**FSDP2** 场景对参数 AllGather 做按 block 的 FP8 delta 压缩，**DDP** 场景做 FP8 梯度 all-reduce。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/fp8_communication.html)]
 * **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。[[README](./loongforge/embodied/eval)]
-* **Ego2Robot 数据转换** —— 将第一人称人类操作视频转换为覆盖 **16 种双臂机器人形态**的 **LeRobot v3.0** 训练数据。[[README](./loongforge/embodied/tools/ego2robot)]
+* **Ego2Robot 数据转换** —— 将第一人称人类操作视频转换为覆盖 **16 种双臂机器人形态**的 **LeRobot v3.0** 训练数据。[[README](./tools/ego2robot)]
 
 **🔌 兼容性**
 

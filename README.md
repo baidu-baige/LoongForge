@@ -136,7 +136,7 @@ Since optimal training strategies differ across model families and scales, Loong
 * **Per-Model Deep Optimization** — **1.79×–4.38×** over official baselines in our [benchmarks](#performance), from training code customized per model across I/O, communication strategy, and kernel efficiency.
 * **FP8 Communication Optimization** — Cuts cross-rank traffic on supported NVIDIA GPUs across both parallel strategies: blockwise FP8 delta AllGather for **FSDP2** parameters, and FP8 grad all-reduce for **DDP** gradients. [[Usage](https://loongforge.readthedocs.io/en/latest/features/fp8_communication.html)]
 * **Unified Evaluation** — Evaluate trained policies on **LIBERO / CALVIN / SimplerEnv / RoboTwin**, with coverage expanding continuously. [[README](./loongforge/embodied/eval)]
-* **Ego2Robot Data Conversion** — Turn first-person videos of human manipulation into **LeRobot v3.0** training data across **16 dual-arm robot morphologies**. [[README](./loongforge/embodied/tools/ego2robot)]
+* **Ego2Robot Data Conversion** — Turn first-person videos of human manipulation into **LeRobot v3.0** training data across **16 dual-arm robot morphologies**. [[README](./tools/ego2robot)]
 
 **🔌 Compatibility**
 
