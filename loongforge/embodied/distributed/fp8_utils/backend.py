@@ -25,6 +25,9 @@ def apply_fp8_linear_conversion(model: nn.Module, training_args, device) -> int:
         type(module) is nn.Linear for module in model.modules()
     )
     module_patterns, skip_modules = resolve_fp8_targets(model, training_args)
+    configure_fp8 = getattr(model, "configure_fp8", None)
+    if callable(configure_fp8):
+        configure_fp8(training_args)
     fp8_linear_count = convert_linear_for_fp8(
         model,
         module_patterns,
