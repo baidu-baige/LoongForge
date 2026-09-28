@@ -16,10 +16,10 @@ Usage
    qwen3_vl_llm_235b, each with its own shape sweep)::
 
     # via pytest
-    pytest tools/benchmark_te_parallel_layers.py -s
+    pytest tools/te_parallel_benchmark/benchmark_te_parallel_layers.py -s
 
     # direct execution
-    python tools/benchmark_te_parallel_layers.py
+    python tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 
 2. Run a specific model subset (vision / llm / llm_235b)::
 
@@ -62,11 +62,11 @@ Usage
 
     # TP=2 (needs 2 GPUs)
     TE_LAYER_PERF_TP_SIZE=2 torchrun --nproc_per_node 2 \
-        tools/benchmark_te_parallel_layers.py
+        tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 
     # TP=2 + EP=4 (needs 8 GPUs, since world_size must be divisible by tp*ep)
     TE_LAYER_PERF_TP_SIZE=2 TE_LAYER_PERF_EP_SIZE=4 \
-        torchrun --nproc_per_node 8 tools/benchmark_te_parallel_layers.py
+        torchrun --nproc_per_node 8 tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 
 Environment Variables
 ---------------------
@@ -1373,7 +1373,7 @@ def merge_fp8_policy_reports(
 
     Usage::
 
-        python benchmark_te_parallel_layers.py merge-policy \\
+        python tools/te_parallel_benchmark/benchmark_te_parallel_layers.py merge-policy \\
             --reports tp1_report.json tp2_report.json tp4_report.json \\
             --output merged_policy.json \\
             --speedup-threshold 1.0
@@ -1582,7 +1582,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1 and sys.argv[1] == "merge-policy":
         # CLI: merge multiple report JSONs into a single policy.
-        #   python benchmark_te_parallel_layers.py merge-policy \
+        #   python tools/te_parallel_benchmark/benchmark_te_parallel_layers.py merge-policy \
         #       --reports r1.json r2.json r3.json \
         #       --output merged_policy.json \
         #       --speedup-threshold 1.0
