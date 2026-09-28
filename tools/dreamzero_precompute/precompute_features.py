@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) in sys.path:
     sys.path.remove(str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT))

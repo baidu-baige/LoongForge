@@ -49,7 +49,7 @@ from loongforge.embodied.data.datasets.dreamzero.transforms.dreamzero_collator i
 )
 from loongforge.embodied.model.dreamzero.dreamzero_provider import _build_text_encoder
 
-_REPO_ROOT = Path(__file__).resolve().parents[5]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load_vae_module():

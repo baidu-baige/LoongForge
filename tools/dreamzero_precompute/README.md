@@ -13,18 +13,20 @@ embeddings) so training does not re-run the frozen encoders every step.
 
 ## Prerequisites
 
-The scripts import `loongforge.embodied` (and, for precompute, `megatron`), so
-put both on `PYTHONPATH`:
+`prepare_dataset.py` is self-contained — it only needs `numpy`, `pandas`, and
+`tqdm`; nothing from LoongForge has to be on the path.
+
+`precompute_features.py` and `validate_precomputed_feature_artifact.py` import
+`loongforge.embodied`, so the LoongForge repo root must be importable:
 
 ```bash
-export MEGATRON_PATH=${MEGATRON_PATH:-/workspace/Loong-Megatron}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-/workspace/LoongForge}
-export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH
+export PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH
 ```
 
-Feature precompute additionally needs a DreamZero model config
-(`configs/models/embodied/dreamzero_*.yaml`) and the frozen backbone
-checkpoints / text tokenizer (e.g. Wan2.1-I2V-14B or Wan2.2-TI2V-5B + UMT5).
+Feature precompute additionally loads the frozen DreamZero backbone (VAE + text
+encoder) named by the model config, so the corresponding checkpoints and
+tokenizer must be available (e.g. Wan2.2-TI2V-5B or Wan2.1-I2V-14B + UMT5).
 
 Ready-to-run wrappers live at
 `examples/embodied/dreamzero/prepare_dreamzero_dataset.sh` and
@@ -38,10 +40,9 @@ under `meta/`. It does **not** copy, transcode, or modify parquet or
 image/video payloads.
 
 ```bash
-PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
-    python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/prepare_dataset.py \
-        --dataset-path   /path/to/droid_lerobot \
-        --embodiment-tag oxe_droid
+python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/prepare_dataset.py \
+    --dataset-path   /path/to/droid_lerobot \
+    --embodiment-tag oxe_droid
 ```
 
 **Key arguments:**
