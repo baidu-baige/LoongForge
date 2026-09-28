@@ -102,7 +102,7 @@ print(f'Converted {count} samples -> ${converted_jsonl}')
 
 # ---- Step 2: Convert sharegpt JSONL to WebDataset ----
 echo "Converting sharegpt JSONL -> WebDataset ..."
-python $omni/tools/data_preprocess/vlm/convert_to_webdataset.py \
+python $omni/tools/vlm_data_prepare/convert_to_webdataset.py \
   --output_dir $output_wds \
   --json_file $converted_jsonl \
   --image_dir $image_dir \

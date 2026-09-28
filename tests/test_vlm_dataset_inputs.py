@@ -102,7 +102,7 @@ class VlmDatasetInputTest(unittest.TestCase):
     @staticmethod
     def _load_converter_functions():
         return _load_functions(
-            "tools/data_preprocess/vlm/convert_to_webdataset.py",
+            "tools/vlm_data_prepare/convert_to_webdataset.py",
             {"_read_media", "_build_content", "construct_sample"},
             {
                 "base64": base64,

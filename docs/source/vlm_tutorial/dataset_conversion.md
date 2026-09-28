@@ -9,7 +9,7 @@ Reference Documentation:
 * Energon: [https://nvidia.github.io/Megatron-Energon/](https://nvidia.github.io/Megatron-Energon/)
 * WebDataset: [https://huggingface.co/docs/hub/datasets-webdataset](https://huggingface.co/docs/hub/datasets-webdataset)
 
-This directory provides `tools/data_preprocess/vlm/convert_to_webdataset.py` for converting `.json/.jsonl` annotation files + original media files (images/videos) into WebDataset directories that Energon can directly read (while generating Energon-required indexes and `dataset.yaml`).
+This directory provides `tools/vlm_data_prepare/convert_to_webdataset.py` for converting `.json/.jsonl` annotation files + original media files (images/videos) into WebDataset directories that Energon can directly read (while generating Energon-required indexes and `dataset.yaml`).
 
 ## 2. Supported Data Types (`--sample_type`)
 
@@ -39,7 +39,7 @@ Supported input files:
 * `--image_dir` / `--video_dir`: Original media file root directory (relative paths stored in entries)
 
 ```bash
-python tools/data_preprocess/vlm/convert_to_webdataset.py \
+python tools/vlm_data_prepare/convert_to_webdataset.py \
   --output_dir /workspace/wds_data/ \
   --json_file tests/datasets/vlm/mllm_demo.json \
   --image_dir tests/datasets/vlm/ \

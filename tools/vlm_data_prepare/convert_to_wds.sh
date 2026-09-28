@@ -11,7 +11,7 @@ LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
 MAXCOUNT="${MAXCOUNT:-10000}"
 MAXSIZE="${MAXSIZE:-3000000000}"
 
-CONVERT_SCRIPT="$LOONGFORGE_PATH/tools/data_preprocess/vlm/convert_to_webdataset.py"
+CONVERT_SCRIPT="$LOONGFORGE_PATH/tools/vlm_data_prepare/convert_to_webdataset.py"
 mkdir -p "$OUTPUT_DIR"
 
 python3 "$CONVERT_SCRIPT" \
