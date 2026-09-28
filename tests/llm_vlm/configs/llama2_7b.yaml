@@ -92,7 +92,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       llm_sft:
-        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/llm_data_prepare/preprocess_sft_data.py
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/llm_data_preprocess/preprocess_sft_data.py
         output_prefix: ${pfs_path}/pile_test_sft/$model_name
         train_json_file_name: '${DATA_PATH}/llm/sft_aplaca_zh_data.json'
         PREPROCESS_DATA_ARGS: '

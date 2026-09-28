@@ -18,7 +18,7 @@ Two multimodal data formats are primarily supported: VQA and Captioning. The spe
 Samples from https://huggingface.co/datasets/THUDM/CogVLM-SFT-311K
 
 ```sh
-python /workspace/LoongForge/tools/vlm_data_prepare/convert_to_webdataset.py \
+python /workspace/LoongForge/tools/vlm_data_preprocess/convert_to_webdataset.py \
     --output_dir /tmp/mllm/wds \
     --json_file /tmp/mllm/mllm_demo.json \
     --image_dir /tmp/mllm/ \

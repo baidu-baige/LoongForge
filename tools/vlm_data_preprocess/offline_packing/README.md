@@ -15,7 +15,7 @@ Supported dataset types
 
 
 ```sh
-cd LoongForge/tools/vlm_data_prepare
+cd LoongForge/tools/vlm_data_preprocess
 
 python convert_to_webdataset.py \
     --json_file /mnt/cluster/data/mmdu-45k.jsonl \
@@ -59,7 +59,7 @@ Supported V1 scenario:
 
 
 ```sh
-cd LoongForge/tools/vlm_data_prepare/offline_packing
+cd LoongForge/tools/vlm_data_preprocess/offline_packing
 ```
 
 Configure `configs/config.yaml`

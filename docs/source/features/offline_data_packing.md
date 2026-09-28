@@ -3,7 +3,7 @@ This module provides an “offline sequence-packing” pipeline: it reads source
 By concatenating variable-length sequences up to the target length we reduce padding and increase training throughput.
 
 Entry script:  
-`tools/vlm_data_prepare/offline_packing/scripts/pack_wds.sh` (4 steps, see below).
+`tools/vlm_data_preprocess/offline_packing/scripts/pack_wds.sh` (4 steps, see below).
 
 ## 1. Supported packing scenarios (`sample.sample_type`)
 
@@ -20,13 +20,13 @@ It does not unpack source shards into a flat directory.
 Notes:
 
 * `scan_wds_manifest.py` reads the message list from the field specified by `data.template_text_key`; it also accepts the common keys `messages` and `texts`.
-* If the JSON files come from `tools/vlm_data_prepare/convert_to_webdataset.py` (multi-scenario writes `texts` by default) you usually need to set `data.template_text_key` to `texts`.  
+* If the JSON files come from `tools/vlm_data_preprocess/convert_to_webdataset.py` (multi-scenario writes `texts` by default) you usually need to set `data.template_text_key` to `texts`.  
 * `packed_multi_mix_qa`: JSON must declare `media`/`media_type` (`text`, `image`, or `video`). Image/video samples should supply `name`/`media_files`; if absent, media members are inferred from WDS parts by extension.
 * `.tgz` input is not supported in V1 because efficient byte-range reads require uncompressed tar.
 
 ## 3. Quick start
 ```bash
-cd tools/vlm_data_prepare/offline_packing
+cd tools/vlm_data_preprocess/offline_packing
 
 # 1) Edit config.yaml (or copy packed_vqa_demo.yaml)
 # 2) Run the 4-step pipeline (reads config.yaml by default)
@@ -114,8 +114,8 @@ Step 1’s token counts depend on the actual `AutoProcessor` logic, so you can c
 
 * Change model: set `model.processor_kwargs.pretrained_model_name_or_path` to the desired HF model/processor; update `model.model_type` accordingly.  
 * Adjust image-token budget / resolution: add processor-supported arguments under `model.processor_kwargs` (e.g. Qwen-VL’s `min_pixels`/`max_pixels`).  
-* Template alignment: if you add a new `model.model_type`, make sure `tools/vlm_data_prepare/offline_packing/utils.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template found for model_type ...”.  
-* Media pre-processing: under `media_preprocess` you can assign pre-processing function names per modality (implementations in `tools/vlm_data_prepare/offline_packing/media_preprocess_utils.py`) to control resize/crop/frame-reading behaviour.
+* Template alignment: if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/utils.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template found for model_type ...”.  
+* Media pre-processing: under `media_preprocess` you can assign pre-processing function names per modality (implementations in `tools/vlm_data_preprocess/offline_packing/media_preprocess_utils.py`) to control resize/crop/frame-reading behaviour.
 
 ## Acknowledgements
 

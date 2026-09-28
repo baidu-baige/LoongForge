@@ -80,7 +80,7 @@ hf download axolotl-ai-co/llava-instruct-mix-vsft-small --repo-type dataset --lo
 将数据转换为 **WebDataset 并适配 Energon 加载格式**的脚本如下：
 
 ```bash
-python /workspace/LoongForge/tools/vlm_data_prepare/convert_to_webdataset.py \
+python /workspace/LoongForge/tools/vlm_data_preprocess/convert_to_webdataset.py \
     --output_dir /tmp/mllm/wds \
     --json_file /tmp/mllm/mllm_demo.json \
     --image_dir /tmp/mllm/ \

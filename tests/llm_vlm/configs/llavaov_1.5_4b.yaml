@@ -150,7 +150,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       vlm:
-        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/vlm_data_prepare/convert_to_webdataset.py
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/vlm_data_preprocess/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mix.json'
         video_dir: '$scripts_root_path/datasets/vlm/'

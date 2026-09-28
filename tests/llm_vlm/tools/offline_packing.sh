@@ -12,7 +12,7 @@ CONFIG="$1"
 # fi
 
 # Locate original python tool scripts directory
-TOOLS_DIR="/workspace/LoongForge/tools/vlm_data_prepare/offline_packing"
+TOOLS_DIR="/workspace/LoongForge/tools/vlm_data_preprocess/offline_packing"
 
 if [ ! -d "$TOOLS_DIR" ]; then
     echo "Error: Python scripts directory not found at $TOOLS_DIR"

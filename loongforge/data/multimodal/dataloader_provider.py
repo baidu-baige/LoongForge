@@ -331,7 +331,7 @@ def _validate_energon_data_paths(paths):
             raise ValueError(
                 "VLM training requires an Energon WebDataset directory, not raw "
                 f"JSON/JSONL: {path}. Convert it first with "
-                "tools/vlm_data_prepare/convert_to_webdataset.py."
+                "tools/vlm_data_preprocess/convert_to_webdataset.py."
             )
 
 

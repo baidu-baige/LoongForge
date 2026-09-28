@@ -3,7 +3,7 @@
 通过将变长序列拼接至目标长度，减少填充并提高训练吞吐量。
 
 入口脚本：
-`tools/vlm_data_prepare/offline_packing/scripts/pack_wds.sh`（4 个步骤，见下文）。
+`tools/vlm_data_preprocess/offline_packing/scripts/pack_wds.sh`（4 个步骤，见下文）。
 
 ## 1. 支持的打包场景（`sample.sample_type`）
 
@@ -31,13 +31,13 @@ for t in /path/to/wds/pretrain-*.tar; do tar -xf "$t" -C /path/to/wds_flat; done
 注意事项：
 
 * `get_sample_len.py` 从 `data.template_text_key` 指定的字段读取消息列表；它也接受常用键 `messages` 和 `texts`。
-* 如果 JSON 文件来自 `tools/vlm_data_prepare/convert_to_webdataset.py`（多场景默认写入 `texts`），通常需要将 `data.template_text_key` 设置为 `texts`。
+* 如果 JSON 文件来自 `tools/vlm_data_preprocess/convert_to_webdataset.py`（多场景默认写入 `texts`），通常需要将 `data.template_text_key` 设置为 `texts`。
 * `packed_vqa` / `packed_captioning`：如果 JSON 不包含显式的 `media_files/name` 字段，代码会尝试查找具有相同主干名称的媒体文件（例如 `0001.json` → `0001.jpg`）。
 * `packed_multi_mix_qa`：JSON 必须声明 `media`/`media_type`（`image` 或 `video`）并提供 `name`/`media_files` 列表（允许嵌套列表）。
 
 ## 3. 快速开始
 ```bash
-cd tools/vlm_data_prepare/offline_packing
+cd tools/vlm_data_preprocess/offline_packing
 
 # 1) 编辑 config.yaml（或复制 packed_vqa_demo.yaml）
 # 2) 运行 4 步流水线（默认读取 config.yaml）
@@ -122,5 +122,5 @@ sample:
 
 * 更换模型：将 `model.processor_kwargs.pretrained_model_name_or_path` 设置为所需的 HF 模型/处理器；相应更新 `model.model_type`。
 * 调整图像 Token 预算 / 分辨率：在 `model.processor_kwargs` 下添加处理器支持的参数（例如 Qwen-VL 的 `min_pixels`/`max_pixels`）。
-* 模板对齐：如果添加了新的 `model.model_type`，确保 `tools/vlm_data_prepare/offline_packing/utils.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template found for model_type ..."。
-* 媒体预处理：在 `media_preprocess` 下可以为每种模态指定预处理函数名（实现在 `tools/vlm_data_prepare/offline_packing/media_preprocess_utils.py`），以控制缩放/裁剪/帧读取行为。
+* 模板对齐：如果添加了新的 `model.model_type`，确保 `tools/vlm_data_preprocess/offline_packing/utils.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template found for model_type ..."。
+* 媒体预处理：在 `media_preprocess` 下可以为每种模态指定预处理函数名（实现在 `tools/vlm_data_preprocess/offline_packing/media_preprocess_utils.py`），以控制缩放/裁剪/帧读取行为。
