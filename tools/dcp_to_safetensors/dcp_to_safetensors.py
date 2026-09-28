@@ -11,7 +11,7 @@ Single-process, no distributed init required. Use this to:
 * Export a release artifact for downstream inference.
 
 Usage:
-    python -m loongforge.embodied.tools.dcp_to_safetensors \\
+    python tools/dcp_to_safetensors/dcp_to_safetensors.py \\
         --ckpt outputs/run/checkpoints/steps_10000 \\
         --out  outputs/run/release/steps_10000.safetensors \\
         --format safetensors
