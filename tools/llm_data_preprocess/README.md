@@ -22,8 +22,18 @@ export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH
 A HuggingFace tokenizer (local directory or hub model id) is required via
 `--hf-tokenizer-path` with `--tokenizer-type HFTokenizer` (recommended).
 
-Ready-to-run wrappers live at `examples/<model>/pretrain/preprocess_data.sh` and
-`examples/<model>/finetuning/preprocess_data.sh`.
+## Example scripts
+
+Each model family under `examples/` ships ready-to-run wrappers you can copy and
+adapt — just point the paths at your data and tokenizer:
+
+- `examples/<model>/pretrain/preprocess_data.sh` — pretrain tokenization
+- `examples/<model>/finetuning/preprocess_data.sh` — SFT tokenization
+
+Both are provided for `deepseek_v2`, `deepseek_v3`, `llama2`, `llama3`,
+`llama3.1`, `qwen`, `qwen1.5`, `qwen2`, `qwen2.5`, and `qwen3`. They differ only
+in tokenizer path, `--seq-length`, and `--chat-template`, so any one is a good
+starting point for a new model.
 
 ## 1. Pretrain data
 
