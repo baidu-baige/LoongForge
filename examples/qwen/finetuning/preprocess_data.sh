@@ -9,7 +9,7 @@ input_data=/mnt/cluster/LoongForge/dataset/sft_aplaca_zh_data.json
 output_path=/mnt/cluster/LoongForge/qwen/sft_aplaca_zh_tokenized
 
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
-    python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
+    python ${LOONGFORGE_PATH}/tools/llm_data_prepare/preprocess_sft_data.py \
         --input ${input_data} \
         --output ${output_path} \
         --seq-length 2048 \
