@@ -10,8 +10,8 @@ LoongForge/Megatron LLM training loop consumes. Two entry points:
 
 ## Prerequisites
 
-Both scripts import the `loongforge` and `megatron` packages, so put both on
-`PYTHONPATH` when launching (as the `examples/` scripts do):
+Put Megatron and LoongForge on `PYTHONPATH` before launching (the `examples/`
+scripts do this for you):
 
 ```bash
 export MEGATRON_PATH=${MEGATRON_PATH:-/workspace/Loong-Megatron}

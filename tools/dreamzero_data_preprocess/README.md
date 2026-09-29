@@ -1,9 +1,9 @@
 # DreamZero Data Preprocess
 
-Data-side tooling for DreamZero (world-action model) training: validate a
-LeRobot dataset and write the DreamZero/GEAR metadata the trainer needs, then
-optionally precompute frozen-condition feature caches (VAE latents, prompt
-embeddings) so training does not re-run the frozen encoders every step.
+Get a LeRobot dataset ready for DreamZero (world-action model) training: write
+the DreamZero/GEAR metadata the trainer needs, then optionally precompute
+frozen-feature caches (VAE latents, prompt embeddings) so training doesn't
+re-run the frozen encoders every step.
 
 | Script | Stage | Output |
 |--------|-------|--------|
@@ -61,10 +61,10 @@ The per-embodiment field layout is defined by `PRESETS` in
 
 ## 2. Precompute frozen-feature cache (optional)
 
-Writes per-sample tensors consumed by DreamZero's structured
-`precomputed_cache` config overrides: main-video VAE latents, optional
-first-frame latents (I2V), and optional frozen text-encoder prompt embeddings.
-Runs distributed under `torchrun`. On completion it prints the
+Precompute the frozen encoders' outputs once so training reads them from disk
+instead of recomputing every step: main-video VAE latents, optional first-frame
+latents (I2V), and optional frozen text-encoder prompt embeddings. Runs
+distributed under `torchrun`. On completion it prints the
 `model.precomputed_cache.*` overrides to add to your training command.
 
 ```bash
