@@ -1,4 +1,4 @@
-# DreamZero Precompute
+# DreamZero Data Preprocess
 
 Data-side tooling for DreamZero (world-action model) training: validate a
 LeRobot dataset and write the DreamZero/GEAR metadata the trainer needs, then
@@ -40,7 +40,7 @@ under `meta/`. It does **not** copy, transcode, or modify parquet or
 image/video payloads.
 
 ```bash
-python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/prepare_dataset.py \
+python ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/prepare_dataset.py \
     --dataset-path   /path/to/droid_lerobot \
     --embodiment-tag oxe_droid
 ```
@@ -70,7 +70,7 @@ Runs distributed under `torchrun`. On completion it prints the
 ```bash
 PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun --nproc_per_node 8 \
-        ${LOONGFORGE_PATH}/tools/dreamzero_precompute/precompute_features.py \
+        ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/precompute_features.py \
             --config-file    configs/models/embodied/dreamzero_wan22_5b.yaml \
             --data-path      /path/to/droid_lerobot \
             --output-dir     /path/to/dreamzero_cache \
@@ -108,7 +108,7 @@ Smoke-validates a generated cache artifact against its manifest.
 
 ```bash
 PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
-    python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/validate_precomputed_feature_artifact.py \
+    python ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/validate_precomputed_feature_artifact.py \
         --manifest  /path/to/dreamzero_cache/manifest.json \
         --cache-dir /path/to/dreamzero_cache
 ```
@@ -127,9 +127,9 @@ PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
 ## Full option reference & tutorial
 
 ```bash
-python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/prepare_dataset.py --help
-python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/precompute_features.py --help
-python ${LOONGFORGE_PATH}/tools/dreamzero_precompute/validate_precomputed_feature_artifact.py --help
+python ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/prepare_dataset.py --help
+python ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/precompute_features.py --help
+python ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/validate_precomputed_feature_artifact.py --help
 ```
 
 For the end-to-end DreamZero workflow (data → cache → training → eval) see the

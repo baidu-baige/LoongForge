@@ -163,7 +163,7 @@ fi
 # ── Launch ──────────────────────────────────
 CMD=(
     torchrun "${DISTRIBUTED_ARGS[@]}"
-    "$LOONGFORGE_PATH/tools/dreamzero_precompute/precompute_features.py"
+    "$LOONGFORGE_PATH/tools/dreamzero_data_preprocess/precompute_features.py"
     "${PRECOMPUTE_ARGS[@]}"
     "$@"
 )
@@ -202,7 +202,7 @@ if is_enabled "$VALIDATE_CACHE" && [[ "$NODE_RANK" == "0" ]]; then
     fi
 
     PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-        python "$LOONGFORGE_PATH/tools/dreamzero_precompute/validate_precomputed_feature_artifact.py" \
+        python "$LOONGFORGE_PATH/tools/dreamzero_data_preprocess/validate_precomputed_feature_artifact.py" \
         "${VALIDATION_ARGS[@]}"
 fi
 

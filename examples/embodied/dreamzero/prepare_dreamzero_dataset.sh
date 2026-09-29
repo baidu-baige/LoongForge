@@ -60,6 +60,6 @@ echo "  Dataset:     $DATA_PATH"
 echo "  Embodiment:  $EMBODIMENT_TAG"
 echo "============================================================"
 
-python "$LOONGFORGE_PATH/tools/dreamzero_precompute/prepare_dataset.py" \
+python "$LOONGFORGE_PATH/tools/dreamzero_data_preprocess/prepare_dataset.py" \
     "${PREPARE_ARGS[@]}" \
     "$@"

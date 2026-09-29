@@ -27,5 +27,5 @@ further subdivided**.
 | [`te_parallel_benchmark/`](./te_parallel_benchmark) | Benchmark TransformerEngine parallel layers under TP/EP and emit an adaptive-FP8 policy | `benchmark_te_parallel_layers.py` |
 | [`llm_data_preprocess/`](./llm_data_preprocess) | Tokenize/pack LLM pretrain & SFT corpora into Megatron-indexed data | `preprocess_pretrain_data.py`, `preprocess_sft_data.py` |
 | [`vlm_data_preprocess/`](./vlm_data_preprocess) | Convert VLM annotations + media to WebDataset, plus offline sequence packing | `convert_to_webdataset.py`, `offline_packing/` |
-| [`dreamzero_precompute/`](./dreamzero_precompute) | Prepare DreamZero datasets and precompute/validate feature caches | `prepare_dataset.py`, `precompute_features.py` |
+| [`dreamzero_data_preprocess/`](./dreamzero_data_preprocess) | Prepare DreamZero datasets and precompute/validate feature caches | `prepare_dataset.py`, `precompute_features.py` |
 | [`ego2robot/`](./ego2robot) | Convert first-person human manipulation video into LeRobot v3.0 training data across dual-arm robot morphologies | `cli.py` (see its `README.md`) |
