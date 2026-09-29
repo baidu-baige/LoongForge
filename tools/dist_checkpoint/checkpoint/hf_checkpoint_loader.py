@@ -22,8 +22,8 @@ from tools.dist_checkpoint.core.parser import Parser
 from tools.dist_checkpoint.core.topo_sharder import TopoSharder
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from tools.dist_checkpoint.utils import time_checkpoint_operation
-from tools.convert_checkpoint.utils.utils import get_etp_map
-from tools.convert_checkpoint.utils.config_utils import get_yaml_config
+from tools.mcore_checkpoint_convert.utils.utils import get_etp_map
+from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config
 
 
 def _is_hf_checkpoint(checkpoint_path: str) -> bool:

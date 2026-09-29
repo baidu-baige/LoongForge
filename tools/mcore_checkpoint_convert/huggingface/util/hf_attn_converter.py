@@ -8,7 +8,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-from convert_checkpoint.utils.utils import (
+from mcore_checkpoint_convert.utils.utils import (
     transpose_shape0
 )
 

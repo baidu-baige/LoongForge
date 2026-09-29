@@ -8,7 +8,7 @@ import json
 from omegaconf import OmegaConf
 from omegaconf.dictconfig import DictConfig
 
-from convert_checkpoint.common.abstact_config import AbstractConfig
+from mcore_checkpoint_convert.common.abstact_config import AbstractConfig
 
 
 class CommonConfig(AbstractConfig):

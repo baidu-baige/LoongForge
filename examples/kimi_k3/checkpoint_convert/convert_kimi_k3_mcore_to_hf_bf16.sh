@@ -5,7 +5,7 @@ set -euo pipefail
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-/workspace/LoongForge}
 MEGATRON_PATH=${MEGATRON_PATH:-/workspace/Loong-Megatron}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 TORCHRUN=${TORCHRUN:-torchrun}
 
 OFFICIAL_HF_PATH=${OFFICIAL_HF_PATH:?Set OFFICIAL_HF_PATH to Kimi K3 metadata and tokenizer files}

@@ -4,7 +4,7 @@ _target_: loongforge.models.foundation.glm5_next.Glm5NextConfig
 vocab_size: 154880
 hidden_size: 4096
 intermediate_size: 12288
-# num_layers / ffn_hidden_size are consumed by tools/convert_checkpoint via
+# num_layers / ffn_hidden_size are consumed by tools/mcore_checkpoint_convert via
 # OmegaConf interpolation (${module.num_layers} / ${module.ffn_hidden_size})
 # before Glm5NextConfig maps them; they must exist as literal keys here.
 num_layers: 45

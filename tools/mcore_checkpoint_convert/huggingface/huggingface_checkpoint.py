@@ -10,20 +10,20 @@ import re
 import logging
 
 import concurrent.futures
-from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
-from convert_checkpoint.common.common_checkpoint import (
+from mcore_checkpoint_convert.common.abstact_checkpoint import AbstractCheckpoint
+from mcore_checkpoint_convert.common.common_checkpoint import (
     VISION_MAP,
     VISION_WORD_EMBEDDINGS,
     CommonCheckpoint,
     is_glm5_next_config,
 )
 
-from convert_checkpoint.utils.utils import (
+from mcore_checkpoint_convert.utils.utils import (
     get_done_keys,
     touch_file
 )
 
-from convert_checkpoint.common.common_checkpoint import (
+from mcore_checkpoint_convert.common.common_checkpoint import (
     TRANSFORMER, MTP_TRANSFORMER, MTP_LAYER_PREFIX, LAYER_PREFIX, MOE_EXPERT,
     MOE_SHARED_EXPERT, LAYER_IS_DICT_FOR_EXPERT,
     FIRST_LAYER_NAMES, BASE_NAMES, MOE_EXPERT_PROJS, LAST_LAYER_NAMES, MTP_NAMES,
@@ -31,21 +31,21 @@ from convert_checkpoint.common.common_checkpoint import (
     MTP_MOE_EXPERT_H_TO_4H, MTP_MOE_EXPERT_4H_TO_H, MTP_MOE_SHARED_EXPERT_H_TO_4H, MTP_MOE_SHARED_EXPERT_4H_TO_H
 )
 
-from convert_checkpoint.huggingface.huggingface_base import HuggingfaceBase, is_dsv4_hybrid_config
-from convert_checkpoint.huggingface.huggingface_moe import HuggingfaceMoe
-from convert_checkpoint.huggingface.compressed_tensors_dequant import (
+from mcore_checkpoint_convert.huggingface.huggingface_base import HuggingfaceBase, is_dsv4_hybrid_config
+from mcore_checkpoint_convert.huggingface.huggingface_moe import HuggingfaceMoe
+from mcore_checkpoint_convert.huggingface.compressed_tensors_dequant import (
     DTYPE_MAP as HF_DEQUANT_DTYPE_MAP,
     dequantize_state_dict,
     get_packed_weight_keys,
 )
-from convert_checkpoint.huggingface.compressed_tensors_quant import (
+from mcore_checkpoint_convert.huggingface.compressed_tensors_quant import (
     pack_state_dict_from_official_config,
 )
-from convert_checkpoint.huggingface.mxfp4_dequant import (
+from mcore_checkpoint_convert.huggingface.mxfp4_dequant import (
     dequantize_mxfp4_state_dict,
     progress_print,
 )
-from convert_checkpoint.kimi_k3 import normalize_kimi_k3_state_dict
+from mcore_checkpoint_convert.kimi_k3 import normalize_kimi_k3_state_dict
 
 logging.basicConfig(level=logging.INFO)
 

@@ -19,15 +19,15 @@ from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
 sys.path.append(dirname(dirname(SCRIPT_DIR)))
 
-from convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
-from convert_checkpoint.huggingface.huggingface_config import HuggingFaceConfig
-from convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
-from convert_checkpoint.mcore.mcore_config import McoreConfig
-from convert_checkpoint.common.common_config import CommonConfig
-from convert_checkpoint.arguments import parse_args, set_args
-from convert_checkpoint.utils import utils
+from mcore_checkpoint_convert.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
+from mcore_checkpoint_convert.huggingface.huggingface_config import HuggingFaceConfig
+from mcore_checkpoint_convert.mcore.mcore_checkpoint import McoreCheckpoint
+from mcore_checkpoint_convert.mcore.mcore_config import McoreConfig
+from mcore_checkpoint_convert.common.common_config import CommonConfig
+from mcore_checkpoint_convert.arguments import parse_args, set_args
+from mcore_checkpoint_convert.utils import utils
 
-from convert_checkpoint.utils.utils import(
+from mcore_checkpoint_convert.utils.utils import(
     _flatten_expert_ids,
     get_pipeline_by_rank_id,
     get_layer_ids,
@@ -36,7 +36,7 @@ from convert_checkpoint.utils.utils import(
     convert_layout_to_custom_pipeline_layers
 )
 
-from convert_checkpoint.utils.config_utils import get_yaml_config
+from mcore_checkpoint_convert.utils.config_utils import get_yaml_config
 
 
 BIG_MODEL_LIST = ['llama2-70b', 'qwen-72b', 'codellama-70b', 'codellama-34b']
@@ -411,7 +411,7 @@ def test():
     args.save_platform = "huggingface"
     args.load_ckpt_path = None
     args.save_ckpt_path = "/mnt/cluster/deepseek-ai/DeepSeek_V3_Lite_hf"
-    args.common_config_path = "./convert_checkpoint/config/deepseek-v3-lite.json"
+    args.common_config_path = "./mcore_checkpoint_convert/config/deepseek-v3-lite.json"
     args.megatron_path = None
     args.model_type_custom = None
     args.vpp_scheduler = None
@@ -443,7 +443,7 @@ def test():
             v3_params[p][e] = torch.load(f'/mnt/cluster/deepseek-ai/DeepSeek_V3_tp1pp2ep4/release/mp_rank_00_{p:03d}_{e:03d}/model_optim_rng.pt')
     verl_convert_mcore_to_hf_v3(v3_params, args)
 
-from convert_checkpoint.utils.utils import make_hf_sub_checkpoints
+from mcore_checkpoint_convert.utils.utils import make_hf_sub_checkpoints
 
 def test_merge_hf_ckpt():
     make_hf_sub_checkpoints('/mnt/cluster/deepseek-ai/DeepSeek_V3_Lite_hf')

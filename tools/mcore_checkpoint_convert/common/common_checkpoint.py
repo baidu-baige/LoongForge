@@ -3,7 +3,7 @@
 
 """Common checkpoint structures and shared checkpoint key definitions."""
 
-from convert_checkpoint.common.abstact_checkpoint import AbstractCheckpoint
+from mcore_checkpoint_convert.common.abstact_checkpoint import AbstractCheckpoint
 
 import logging
 

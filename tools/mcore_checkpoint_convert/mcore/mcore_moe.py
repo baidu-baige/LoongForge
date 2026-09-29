@@ -7,11 +7,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-from convert_checkpoint.common.common_checkpoint import CommonCheckpoint
+from mcore_checkpoint_convert.common.common_checkpoint import CommonCheckpoint
 
-from convert_checkpoint.mcore.mcore_base import McoreBase, McorePathInfo
+from mcore_checkpoint_convert.mcore.mcore_base import McoreBase, McorePathInfo
 
-from convert_checkpoint.common.common_checkpoint import (
+from mcore_checkpoint_convert.common.common_checkpoint import (
     WEIGHT,
     BIAS,
     EXTRA_DATA,

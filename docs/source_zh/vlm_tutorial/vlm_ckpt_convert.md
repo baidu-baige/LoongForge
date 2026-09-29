@@ -88,7 +88,7 @@ model:
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"} # 指定 LoongForge 路径
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"} # 指定 Megatron 后端路径
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint" # convert_checkpoint 模块路径，无需修改
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert" # convert_checkpoint 模块路径，无需修改
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/ # 指定目标模型 HF 权重路径
 SAVE=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12 # 指定目标模型转换后的 Mcore 权重路径
@@ -195,7 +195,7 @@ rm -rf $SAVE_PATCH
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 SAVE=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22 # 最终保存的 HF 路径
 LOAD=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release # 键映射的中间临时结果，用于 LoongForge 训练，不需要时可删除
@@ -329,7 +329,7 @@ rm -rf $SAVE_PATCH
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/mnt/cluster/models/InternVL3_5-30B-A3B
 SAVE=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15
@@ -450,7 +450,7 @@ rm -rf $SAVE_PATCH
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 SAVE=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-30b-a3b-hf-Dec23
 LOAD=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Original/release

@@ -21,7 +21,7 @@ further subdivided**.
 
 | Tool | Purpose | Entry point |
 |------|---------|-------------|
-| [`convert_checkpoint/`](./convert_checkpoint) | HuggingFace ↔ Mcore checkpoint conversion (LLM/VLM, MoE expert merge, FP8) | `module_convertor/model.py` |
+| [`mcore_checkpoint_convert/`](./mcore_checkpoint_convert) | HuggingFace ↔ Mcore checkpoint conversion (LLM/VLM, MoE expert merge, FP8) | `module_convertor/model.py` |
 | [`dist_checkpoint/`](./dist_checkpoint) | Distributed checkpoint save/load and HF bridge | package |
 | [`torch_dcp_convert/`](./torch_dcp_convert) | Consolidate a Torch DCP (distributed checkpoint) into a single-file `.safetensors`/`.pt` | `dcp_to_safetensors.py` |
 | [`te_parallel_benchmark/`](./te_parallel_benchmark) | Benchmark TransformerEngine parallel layers under TP/EP and emit an adaptive-FP8 policy | `benchmark_te_parallel_layers.py` |

@@ -2,7 +2,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 # required to use BF16 format weights
 LOAD=/workspace/loongforge_ci/mini_max/MiniMax-M2.5-BF16/
 SAVE=/workspace/loongforge_ci/mini_max/MiniMax_m2_5_mcore_tp8pp4ep8etp1/

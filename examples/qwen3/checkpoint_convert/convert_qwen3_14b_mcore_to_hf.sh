@@ -2,7 +2,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/mnt/cluster/LoongForge/qwen3/qwen3-14b-tp2-pp4-Dec15/release/
 SAVE=/mnt/cluster/LoongForge/qwen3/qwen3-14b-hf-Dec24

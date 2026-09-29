@@ -10,7 +10,7 @@ the same pipeline stage and returns them as a list to TP rank 0.
 import os
 from typing import Dict, List, Optional
 
-from tools.convert_checkpoint.common.common_checkpoint import EXTRA_DATA, LAYER_PREFIX, MOE_EXPERT, MOE_GROUPED_GEMM_EXPERT, MTP_LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER
+from tools.mcore_checkpoint_convert.common.common_checkpoint import EXTRA_DATA, LAYER_PREFIX, MOE_EXPERT, MOE_GROUPED_GEMM_EXPERT, MTP_LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER
 import torch
 import torch.distributed as dist
 

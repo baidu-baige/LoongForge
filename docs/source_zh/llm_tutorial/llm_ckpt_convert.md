@@ -39,7 +39,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint  # 原始 DeepSeek-V3 权重为 FP8 格式
 SAVE=/path/to/your/save  # 转换后的权重将为 MCore FP8 格式
@@ -77,7 +77,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/mcore_checkpoint  # MCore FP8 格式的权重
 SAVE=/path/to/your/save  # 转换后的 HuggingFace FP8 格式权重

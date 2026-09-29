@@ -8,10 +8,10 @@ import shutil
 
 from dist_checkpoint.config.parallel_config import ParallelConfig
 from dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
-from convert_checkpoint.utils.config_utils import get_yaml_config
+from mcore_checkpoint_convert.utils.config_utils import get_yaml_config
 
 
-from convert_checkpoint.utils.utils import(
+from mcore_checkpoint_convert.utils.utils import(
     check_all_done,
     make_hf_sub_checkpoints
 )

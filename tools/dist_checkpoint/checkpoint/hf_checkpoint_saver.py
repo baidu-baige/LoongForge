@@ -24,8 +24,8 @@ from tools.dist_checkpoint.core.tp_gather import TPGather
 from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from tools.dist_checkpoint.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
-from tools.convert_checkpoint.utils.utils import make_hf_sub_checkpoints, get_etp_map
-from tools.convert_checkpoint.utils.config_utils import get_yaml_config
+from tools.mcore_checkpoint_convert.utils.utils import make_hf_sub_checkpoints, get_etp_map
+from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config
 
 
 def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_path: Optional[str] = None) -> None:

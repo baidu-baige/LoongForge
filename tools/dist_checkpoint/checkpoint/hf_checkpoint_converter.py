@@ -6,16 +6,16 @@
 import argparse
 
 from tools.dist_checkpoint.config.parallel_config import ParallelConfig
-from tools.convert_checkpoint.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
-from tools.convert_checkpoint.mcore.mcore_checkpoint import McoreCheckpoint
-from tools.convert_checkpoint.common.common_config import CommonConfig
-from tools.convert_checkpoint.utils.utils import(
+from tools.mcore_checkpoint_convert.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
+from tools.mcore_checkpoint_convert.mcore.mcore_checkpoint import McoreCheckpoint
+from tools.mcore_checkpoint_convert.common.common_config import CommonConfig
+from tools.mcore_checkpoint_convert.utils.utils import(
     _flatten_expert_ids,
     get_ep_map,
     get_layer_ids
 )
 
-from tools.convert_checkpoint.module_convertor.model import Model
+from tools.mcore_checkpoint_convert.module_convertor.model import Model
 
 class HfCheckpointConverter:
     """Converter for Huggingface checkpoint."""

@@ -98,14 +98,14 @@ Take DeepSeek-V3.1 as an example:
 https://huggingface.co/deepseek-ai/DeepSeek-V3.1
 
 ### 2.2 Convert the checkpoint
-LoongForge provides a unified converter `tools/convert_checkpoint`.  
+LoongForge provides a unified converter `tools/mcore_checkpoint_convert`.  
 Below we convert the original FP8 HF checkpoint to MCore FP8:
 
 ```bash
 #!/bin/bash
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint          # FP8 HF checkpoint
 SAVE=/path/to/your/save              # will be MCore FP8

@@ -4,7 +4,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/mnt/cluster/huggingface.co/GLM/GLM-5.2  # the GLM-5.2 BF16 checkpoint
 SAVE=/mnt/cluster/loongforge-omni-ckpt/GLM/GLM-5.2-bf16-tp8pp8ep8etp1/  # the converted checkpoint will be in MCore BF16 format

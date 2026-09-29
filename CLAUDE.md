@@ -171,20 +171,20 @@ Key arguments: `--model-name` (maps to config via `config_map.py`) or `--config-
 - `mm_plugin.py` — Multi-modal data plugin for processing images/video.
 - `dp_balance/` — Data-parallel load balancing for packed sequences.
 
-### Checkpoint Conversion: `tools/convert_checkpoint/`
+### Checkpoint Conversion: `tools/mcore_checkpoint_convert/`
 
-Primary entry point: `tools/convert_checkpoint/module_convertor/model.py`.
+Primary entry point: `tools/mcore_checkpoint_convert/module_convertor/model.py`.
 
 For LLM models (single step):
 ```bash
-python tools/convert_checkpoint/module_convertor/model.py \
+python tools/mcore_checkpoint_convert/module_convertor/model.py \
     --load_platform=huggingface --save_platform=mcore \
     --config_file=<yaml> --convert_file=<json> \
     --tensor_model_parallel_size=N --pipeline_model_parallel_size=M \
     --load_ckpt_path=<hf_path> --save_ckpt_path=<mcore_path>
 ```
 
-For VLM models (multi-step pipeline): convert language model, vision encoder, adapter/projector separately, then merge via `tools/convert_checkpoint/mcore/merge_megatron.py`.
+For VLM models (multi-step pipeline): convert language model, vision encoder, adapter/projector separately, then merge via `tools/mcore_checkpoint_convert/mcore/merge_megatron.py`.
 
 Additional tools: `merge_megatron_expert.py` (MoE expert merging), FP8 conversion support (bf16↔fp8). Example scripts in `examples/<model>/checkpoint_convert/`.
 

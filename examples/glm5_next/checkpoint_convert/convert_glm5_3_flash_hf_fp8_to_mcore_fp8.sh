@@ -4,7 +4,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/mnt/cluster/huggingface.co/zai-org/GLM-5.3-Flash  # the released zai-org checkpoint is FP8 e4m3 (128x128 block-wise scales)
 SAVE=/mnt/cluster/loongforge-omni-ckpt/GLM/GLM-5.3-Flash-FP8-tp8pp5ep8etp1/  # the converted checkpoint will be in MCore FP8 format

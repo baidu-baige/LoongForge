@@ -11,17 +11,17 @@ from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
 sys.path.append(dirname(dirname(SCRIPT_DIR)))
 
-from convert_checkpoint.utils.ckpt_util import (
+from mcore_checkpoint_convert.utils.ckpt_util import (
     load_megatron_checkpoint,
     save_megatron_checkpoint,
 )
 
 
-from convert_checkpoint.key_mappings.to_vanilla_key import (
+from mcore_checkpoint_convert.key_mappings.to_vanilla_key import (
     transform_key_reverse
 )
 
-from convert_checkpoint.utils.config_utils import load_config, parallel_param_parser
+from mcore_checkpoint_convert.utils.config_utils import load_config, parallel_param_parser
 
 
 def reverse_map_checkpoint_keys(reverse_mappings, shard_data, pipeline_parallel_size=1, tensor_parallel_size=1, num_virtual_stages_per_pipeline_rank=None):

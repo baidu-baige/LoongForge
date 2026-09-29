@@ -88,7 +88,7 @@ Below are conversion scripts for Dense and MoE models with parameter explanation
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"} # Specify LoongForge path
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"} # Specify Megatron backend path
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint" # convert_checkpoint module path, no modification needed
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert" # convert_checkpoint module path, no modification needed
 
 LOAD=/mnt/cluster/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/ # Specify target model HF weights path
 SAVE=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Dec12 # Specify target model converted Mcore weights path
@@ -195,7 +195,7 @@ rm -rf $SAVE_PATCH
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 SAVE=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-7b-hf-Dec22 # Final saved HF path
 LOAD=/mnt/cluster/LoongForge/qwen2_5-vl/qwen2_5-vl-7b-tp4-pp2-vpp2-custom-Original/release # Intermediate temporary result of key mapping, used for LoongForge training, can be deleted if not needed
@@ -329,7 +329,7 @@ rm -rf $SAVE_PATCH
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/mnt/cluster/models/InternVL3_5-30B-A3B
 SAVE=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Dec15
@@ -450,7 +450,7 @@ rm -rf $SAVE_PATCH
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 SAVE=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-30b-a3b-hf-Dec23
 LOAD=/mnt/cluster/LoongForge/internvl3.5/internvl3.5-30b-a3b-tp2-pp2-ep4-etp1-Original/release

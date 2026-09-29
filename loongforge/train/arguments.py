@@ -235,7 +235,7 @@ def _add_extra_bridge_args(parser):
 
     # Arguments for online dequantization of compressed-tensors INT4 HF checkpoints
     # during Bridge online loading (load_hf_checkpoint_online). Mirrors the offline
-    # convert-tool flags in tools/convert_checkpoint/arguments.py so that INT4-quantized
+    # convert-tool flags in tools/mcore_checkpoint_convert/arguments.py so that INT4-quantized
     # HF weights (e.g. Kimi K2.6) can be loaded directly without offline conversion.
     group.add_argument('--hf-dequantize-int4', '--hf_dequantize_int4', dest='hf_dequantize_int4',
                        action='store_true',
@@ -260,7 +260,7 @@ def _add_extra_bridge_args(parser):
                              "used to locate the INT4-packed weight keys. Default: None")
     )
     # fp8 conversion args used by the mcore converter during Bridge online loading
-    # (bf16->fp8 when training is fp8). Mirrors tools/convert_checkpoint/arguments.py.
+    # (bf16->fp8 when training is fp8). Mirrors tools/mcore_checkpoint_convert/arguments.py.
     # Defaults match TransformerEngine-based training; no need to pass explicitly.
     group.add_argument('--quant-method', '--quant_method', dest='quant_method',
                        default='te', choices=['te', 'pt'],

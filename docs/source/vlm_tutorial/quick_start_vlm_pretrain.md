@@ -125,14 +125,14 @@ Take Qwen3-VL-30B-A3B as an example, please download model weights from Hugging 
 
 ### 2.2 Convert Weight Format
 
-LoongForge provides a unified weight conversion tool `tools/convert_checkpoint` for supported models, which can conveniently convert between Huggingface and Mcore formats. Taking Qwen3-VL-30B-A3B as an example, if you need to convert Huggingface weights to MegatronCore format supported by LoongForge, you can refer to the following example:
+LoongForge provides a unified weight conversion tool `tools/mcore_checkpoint_convert` for supported models, which can conveniently convert between Huggingface and Mcore formats. Taking Qwen3-VL-30B-A3B as an example, if you need to convert Huggingface weights to MegatronCore format supported by LoongForge, you can refer to the following example:
 
 ```bash
 #!/bin/bash
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint  # the original Qwen3-VL-30B-A3B checkpoint path
 SAVE=/path/to/your/save  # the converted checkpoint save path

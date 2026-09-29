@@ -11,7 +11,7 @@ from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
 sys.path.append(dirname(dirname(SCRIPT_DIR)))
 
-from convert_checkpoint.utils.ckpt_util import (
+from mcore_checkpoint_convert.utils.ckpt_util import (
     load_huggingface_checkpoint,
     save_huggingface_checkpoint,
 )

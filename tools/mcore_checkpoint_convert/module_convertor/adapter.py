@@ -1,25 +1,26 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""adapter for internvl"""
+"""Convert adapter checkpoints between Megatron Core and HuggingFace formats."""
 
 import os
 import sys
+from os.path import dirname
 from copy import deepcopy
 
-from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
 sys.path.append(dirname(dirname(SCRIPT_DIR)))
 
-from convert_checkpoint.arguments import parse_args
-from convert_checkpoint.utils.ckpt_util import (
+from mcore_checkpoint_convert.arguments import parse_args
+from mcore_checkpoint_convert.utils.ckpt_util import (
     load_megatron_checkpoint,
     save_megatron_checkpoint,
     load_huggingface_checkpoint,
     save_huggingface_checkpoint,
 )
 
-from convert_checkpoint.utils.config_utils import parse_at_configs, load_config, parallel_param_parser
+
+from mcore_checkpoint_convert.utils.config_utils import parse_at_configs, load_config, parallel_param_parser
 
 args = parse_args()
 with open(args.config_file, 'r') as f:
@@ -61,6 +62,8 @@ elif (args.load_platform, args.save_platform) == ('huggingface', 'mcore'):
         if k1 != 'name_map' and k1 != 'module':
             target[k1] = source[k2]
             print(f" > {k1}")
+    for k in ['adapter.layernorm._extra_state', 'adapter.linear_fc1._extra_state', 'adapter.linear_fc2._extra_state']:
+        target[k] = None
     state_dict = [{'model': deepcopy(target)} for i in range(tp)]
     save_megatron_checkpoint(state_dict, os.path.join(args.save_ckpt_path, 'release'))
 

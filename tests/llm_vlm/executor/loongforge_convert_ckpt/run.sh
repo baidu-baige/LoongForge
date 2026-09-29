@@ -6,7 +6,7 @@ set -eo pipefail
 
 MEGATRON_PATH=${megatron_path:-"/workspace/Loong-Megatron"}
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
-CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$LOONGFORGE_PATH/tools/convert_checkpoint"}
+CONVERT_CHECKPOINT_PATH=${convert_checkpoint_path:-"$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"}
 
 export LOONGFORGE_PATH
 export PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH

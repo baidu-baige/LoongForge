@@ -14,11 +14,11 @@ sys.path.append(dirname(dirname(SCRIPT_DIR)))
 
 
 
-from convert_checkpoint.key_mappings.to_vanilla_key import (
+from mcore_checkpoint_convert.key_mappings.to_vanilla_key import (
     transform_key_reverse
 )
 
-from convert_checkpoint.utils.config_utils import load_config, parallel_param_parser
+from mcore_checkpoint_convert.utils.config_utils import load_config, parallel_param_parser
 
 
 def reverse_map_single_checkpoint_keys(

@@ -98,14 +98,14 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 https://huggingface.co/deepseek-ai/DeepSeek-V3.1
 
 ### 2.2 转换权重格式
-LoongForge 提供了统一的转换工具 `tools/convert_checkpoint`。
+LoongForge 提供了统一的转换工具 `tools/mcore_checkpoint_convert`。
 以下将原始 FP8 HuggingFace 权重转换为 MCore FP8 格式：
 
 ```bash
 #!/bin/bash
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint          # FP8 HuggingFace 权重
 SAVE=/path/to/your/save              # 转换后的 MCore FP8 权重

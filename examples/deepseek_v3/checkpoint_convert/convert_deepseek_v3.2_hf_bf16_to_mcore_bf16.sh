@@ -2,7 +2,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3.2-bf16  # the BF16 format checkpoint, converted via fp8_to_bf16 casting script
 SAVE=/mnt/cluster/loongforge-ckpt/deepseek3/DeepSeek-V3.2-bf16-tp8pp8ep32etp1/  # the converted checkpoint will be in MCore BF16 format
