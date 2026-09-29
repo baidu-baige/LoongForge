@@ -7,11 +7,12 @@ Entry script:
 
 ## 1. Supported packing scenarios (`sample.sample_type`)
 
-We currently support packing for single-sample captioning, VQA, and multi-modal mixed-QA formats.
+The WDS-native V1 path (`wds_pack.cli.scan_manifest`) accepts exactly two `sample.sample_type` values; any other value is rejected at scan time.
 
 |Scenario|`sample_type`|Description|
 |---|---|---|
-|Offline packed image/video/text mixed QA|`packed_multi_mix_qa`|Input WDS JSON must declare `media`/`media_type`; packs are homogeneous by media type.|
+|Offline packed image/video/text mixed QA|`packed_multi_mix_qa`|Input WDS JSON must declare `media`/`media_type`; packs are homogeneous by media type. Uses the handwritten `TEMPLATES[sample_type][model_type]`.|
+|Offline packed chat (HF chat template)|`packed_chat_mix`|Renders samples with the model's released HF chat template instead of `TEMPLATES`; requires `model.use_hf_chat_template: true` or `model.chat_template_path`.|
 
 ## 2. Input requirements (`data.wds_dir`)
 The implementation reads uncompressed `*.tar` shards directly from `data.wds_dir`.
@@ -19,7 +20,7 @@ It does not unpack source shards into a flat directory.
 
 Notes:
 
-* `scan_wds_manifest.py` reads the message list from the field specified by `data.template_text_key`; it also accepts the common keys `messages` and `texts`.
+* `wds_pack.cli.scan_manifest` reads the message list from the field specified by `data.template_text_key`; it also accepts the common keys `messages` and `texts`.
 * If the JSON files come from `tools/vlm_data_preprocess/convert_to_webdataset.py` (multi-scenario writes `texts` by default) you usually need to set `data.template_text_key` to `texts`.  
 * `packed_multi_mix_qa`: JSON must declare `media`/`media_type` (`text`, `image`, or `video`). Image/video samples should supply `name`/`media_files`; if absent, media members are inferred from WDS parts by extension.
 * `.tgz` input is not supported in V1 because efficient byte-range reads require uncompressed tar.
@@ -40,43 +41,43 @@ To switch to another config:
 
 ## 4. Pipeline details (mirrors `pack_wds.sh`)
 
-### Step 1: Scan WDS manifest and compute per-sample token length (`scan_wds_manifest.py`)
+### Step 1: Scan WDS manifest and compute per-sample token length (`wds_pack.cli.scan_manifest`)
 * Input: `*.tar` shards under `data.wds_dir`
-* Process: read WDS samples directly from tar, pick the template (`utils.TEMPLATES`) according to `sample.sample_type` + `model.model_type`, tokenise text+vision inputs with `AutoProcessor` or `AutoTokenizer`, and record tar byte locators
-* Output: `{data.work_dir}/sample_manifest.sqlite`, `{data.work_dir}/sample_manifest.jsonl`, and per-media token reports
+* Process: read WDS samples directly from tar, pick the template (`wds_pack.core.constants.TEMPLATES`) according to `sample.sample_type` + `model.model_type`, tokenise text+vision inputs with `AutoProcessor` or `AutoTokenizer`, and record tar byte locators
+* Output: `{data.work_dir}/sample_manifest.sqlite` (authoritative manifest), per-media token reports under `token_len/`, and `skipped_overlong.jsonl` (samples whose `token_len > max_token_len`, always written); `sample_manifest.jsonl`, the combined `sample_len_report.txt`, and `skipped_samples.jsonl` are kept only when `artifacts.debug_artifacts: true`
 
 Manual run:
 ```bash
-python scan_wds_manifest.py --config config.yaml
+python -m wds_pack.cli.scan_manifest --config config.yaml
 ```
 
-### Step 2: Length bucketing & packing groups by media type (`do_hashbacket.py`)
-* Input: `token_len/sample_len_report_{text,image,video}.txt`
-* Process: build hash buckets separately for text/image/video, pack samples into “boxes” under `sample.max_token_len`
-* Output: `{data.work_dir}/bins/bins_boxs_{text,image,video}.pkl`
+### Step 2: Length bucketing & packing groups by media type (`wds_pack.cli.pack_bins`)
+* Input: `sample_manifest.sqlite` (per-media token lengths)
+* Process: pack samples into "boxes" separately for text/image/video under `sample.max_token_len`. The production algorithm is `packing.algorithm: best_fit_decreasing` (BFD); `hashbucket` is still available for the old exact-fill behaviour
+* Output: `{data.work_dir}/bins/bins_plan_{text,image,video}.jsonl` (the intermediate `bins/bins_boxs_{text,image,video}.pkl` is kept only when `artifacts.keep_intermediate: true`)
 
 Manual run:
 ```bash
-python do_hashbacket.py --config config.yaml
+python -m wds_pack.cli.pack_bins --config config.yaml
 ```
 
-### Step 3: Generate pack plan (`build_pack_plan.py`)
-* Input: per-media `bins_boxs_*.pkl` + `sample_manifest.sqlite`
-* Process: convert hashbucket boxes into stable packed sample plans
-* Output: `{data.work_dir}/pack_plan.jsonl`
+### Step 3: Build pack plan (`wds_pack.cli.build_plan`)
+* Input: per-media `bins/bins_plan_*.jsonl` + `sample_manifest.sqlite`
+* Process: convert the per-media bins into stable packed sample plans
+* Output: `{data.work_dir}/pack_plan.jsonl` (the `unpacked_samples.jsonl` diagnostic is kept only when `artifacts.debug_artifacts: true`)
 
 Manual run:
 ```bash
-python build_pack_plan.py --config config.yaml
+python -m wds_pack.cli.build_plan --config config.yaml
 ```
 
-### Step 4: Write packed samples back to WebDataset (`packed_to_wds.py`)
+### Step 4: Write packed samples back to WebDataset (`wds_pack.cli.write_wds`)
 * Input: `pack_plan.jsonl` + `sample_manifest.sqlite`; media bytes are read from source tar byte offsets
 * Output: `data.packed_wds_dir/pretrain-*.tar` plus Energon meta (`.nv-meta/dataset.yaml` + tar indexes)
 
 Manual run:
 ```bash
-python packed_to_wds.py --config config.yaml
+python -m wds_pack.cli.write_wds --config config.yaml
 ```
 
 ## 5. Configuration (`config.yaml`)
@@ -88,7 +89,7 @@ Key fields:
 * `data.work_dir` – working directory for manifest, token reports, bins and pack plan
 * `data.packed_wds_dir` – final packed WDS output directory  
 * `sample.max_token_len` – target packing length (e.g. 8192 / 16384)  
-* `sample.sample_type` – V1 supports `packed_multi_mix_qa`
+* `sample.sample_type` – V1 supports `packed_multi_mix_qa` or `packed_chat_mix`
 * `model.model_type` – model identifier used to pick the template  
 * `model.processor_loader` – `auto_processor` for VLM processors, or `auto_tokenizer` for text-only smoke tests
 * `model.processor_kwargs.*` – HF processor arguments passed to `transformers.AutoProcessor.from_pretrained`  
@@ -114,8 +115,8 @@ Step 1’s token counts depend on the actual `AutoProcessor` logic, so you can c
 
 * Change model: set `model.processor_kwargs.pretrained_model_name_or_path` to the desired HF model/processor; update `model.model_type` accordingly.  
 * Adjust image-token budget / resolution: add processor-supported arguments under `model.processor_kwargs` (e.g. Qwen-VL’s `min_pixels`/`max_pixels`).  
-* Template alignment: if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/utils.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template found for model_type ...”.  
-* Media pre-processing: under `media_preprocess` you can assign pre-processing function names per modality (implementations in `tools/vlm_data_preprocess/offline_packing/media_preprocess_utils.py`) to control resize/crop/frame-reading behaviour.
+* Template alignment: if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template for sample_type=..., model_type=...”.  
+* Media pre-processing: under `media_preprocess` you can assign pre-processing function names per modality (implementations in `tools/vlm_data_preprocess/offline_packing/wds_pack/media/preprocess.py`) to control resize/crop/frame-reading behaviour.
 
 ## Acknowledgements
 

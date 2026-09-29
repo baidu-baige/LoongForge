@@ -20,13 +20,12 @@ cd LoongForge/tools/vlm_data_preprocess
 python convert_to_webdataset.py \
     --json_file /mnt/cluster/data/mmdu-45k.jsonl \
     --image_dir /mnt/cluster/data/images/ \
-    #--video_dir /mnt/cluster/data/videos/
-    --media_type image \
-    --output_dir  /mnt/cluster/data/wds/ \
+    --media image \
+    --output_dir /mnt/cluster/data/wds/ \
     --maxcount 10000 \
     --maxsize 100000 \
-    --message_key conversations \
-    --sample_type multi_mix_qa 
+    --columns_messages conversations \
+    --sample_type multi_mix_qa
 ```
 
 | Parameter            | Type | Default        | Description                   |
@@ -39,7 +38,7 @@ python convert_to_webdataset.py \
 | `--columns_messages` | str  | `messages`     | Message key in the JSON file  |
 | `--maxcount`         | int  | 10000          | Maximum number of samples per shard |
 | `--maxsize`          | int  | 3000000000     | Maximum size per shard        |
-| `--max_workers`      | int  | CPU cores // 2 | Parallelism                   |
+| `--sample_type`      | str  | (required)     | Energon sample type, e.g. `vqa`, `caption`, `multi_mix_qa` |
 
 
 
@@ -50,11 +49,12 @@ WebDataset shards directly, builds a small manifest/pack plan, and writes packed
 WebDataset shards. It does not require unpacking the source WDS into millions of
 loose JSON/media files.
 
-Supported V1 scenario:
+Supported V1 scenarios (`wds_pack.cli.scan_manifest` accepts exactly these two `sample_type` values):
 
 | Data Scenario                              | sample_type         | Sample Class Name |
 |--------------------------------------------|---------------------|-------------------|
 | Offline packed mixed image/video, multi-image QA | packed_multi_mix_qa | CrudeSample |
+| Offline packed chat (HF chat template; needs `model.use_hf_chat_template` or `model.chat_template_path`) | packed_chat_mix | CrudeSample |
 
 
 
