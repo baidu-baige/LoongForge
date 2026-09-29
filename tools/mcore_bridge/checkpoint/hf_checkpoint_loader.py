@@ -3,7 +3,7 @@
 
 """
 HF Checkpoint Online Loading for Training
-Implements online loading of HF checkpoints based on tools/dist_checkpoint modules
+Implements online loading of HF checkpoints based on tools/mcore_bridge modules
 """
 import os
 import sys
@@ -17,11 +17,11 @@ import torch.distributed as dist
 from megatron.training import print_rank_0
 from megatron.training.utils import unwrap_model
 
-# Import existing dist_checkpoint modules
-from tools.dist_checkpoint.core.parser import Parser
-from tools.dist_checkpoint.core.topo_sharder import TopoSharder
-from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
-from tools.dist_checkpoint.utils import time_checkpoint_operation
+# Import existing mcore_bridge modules
+from tools.mcore_bridge.core.parser import Parser
+from tools.mcore_bridge.core.topo_sharder import TopoSharder
+from tools.mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from tools.mcore_bridge.utils import time_checkpoint_operation
 from tools.mcore_checkpoint_convert.utils.utils import get_etp_map
 from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config
 
@@ -102,7 +102,7 @@ def load_hf_checkpoint_online(
     """
     Load HF checkpoint online and shard to distributed model
 
-    Uses tools/dist_checkpoint modules:
+    Uses tools/mcore_bridge modules:
     1. Parser to parse config
     2. TopoSharder to initialize parallel topology
     3. HfCheckpointConverter to convert and shard

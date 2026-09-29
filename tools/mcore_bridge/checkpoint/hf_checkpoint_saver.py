@@ -3,7 +3,7 @@
 
 """
 HF Checkpoint Online Saving for Training
-Implements online saving of model to HF checkpoint format based on tools/dist_checkpoint modules
+Implements online saving of model to HF checkpoint format based on tools/mcore_bridge modules
 """
 import os
 import sys
@@ -17,12 +17,12 @@ import torch
 import torch.distributed as dist
 from megatron.training import print_rank_0
 
-# Import existing dist_checkpoint modules
-from tools.dist_checkpoint.core.parser import Parser
-from tools.dist_checkpoint.core.topo_sharder import TopoSharder
-from tools.dist_checkpoint.core.tp_gather import TPGather
-from tools.dist_checkpoint.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
-from tools.dist_checkpoint.utils import time_checkpoint_operation
+# Import existing mcore_bridge modules
+from tools.mcore_bridge.core.parser import Parser
+from tools.mcore_bridge.core.topo_sharder import TopoSharder
+from tools.mcore_bridge.core.tp_gather import TPGather
+from tools.mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from tools.mcore_bridge.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
 from tools.mcore_checkpoint_convert.utils.utils import make_hf_sub_checkpoints, get_etp_map
 from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config
@@ -120,7 +120,7 @@ def save_hf_checkpoint_online(
     """
     Save model to HF checkpoint online with distributed gathering
 
-    Uses tools/dist_checkpoint modules:
+    Uses tools/mcore_bridge modules:
     1. Parser to parse config
     2. TopoSharder to initialize parallel topology
     3. TPGather to gather TP shards to TP rank 0 (NCCL backend with CPU offload)

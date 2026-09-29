@@ -29,7 +29,7 @@ except ImportError:
     parallel_state = None
     print_rank_0 = None
 
-from tools.dist_checkpoint.core.topo_sharder import TopoSharder
+from tools.mcore_bridge.core.topo_sharder import TopoSharder
 
 
 class TPGather:

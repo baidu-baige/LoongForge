@@ -13,7 +13,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(o
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'tools'))
 
-from tools.dist_checkpoint.config.parallel_config import ParallelConfig
+from tools.mcore_bridge.config.parallel_config import ParallelConfig
 from loongforge.utils.config_map import get_config_from_model_name
 
 

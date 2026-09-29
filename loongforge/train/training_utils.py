@@ -145,8 +145,8 @@ tools_path = os.path.join(project_root, "tools")
 if tools_path not in sys.path:
     sys.path.insert(0, tools_path)
 
-from dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
-from dist_checkpoint.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
+from mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+from mcore_bridge.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
 
 try:
     from inspector.hooks import register_hooks
@@ -792,7 +792,7 @@ def get_model(
             # HF checkpoint: use online loading
             print_rank_0(f"Loading base model weights from HF chekckpoint: {args.pretrained_checkpoint}")
 
-            from tools.dist_checkpoint.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+            from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 
             # Temporarily set args.load for load_hf_checkpoint_online
             orig_load = args.load

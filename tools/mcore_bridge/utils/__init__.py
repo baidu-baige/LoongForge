@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 """
-Utilities for dist_checkpoint module.
+Utilities for mcore_bridge module.
 
 Includes profiling, timing, and memory monitoring utilities.
 """
