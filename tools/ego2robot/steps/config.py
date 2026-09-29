@@ -15,13 +15,14 @@ import os
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# ego2robot tool root (this file lives at <tool root>/steps/config.py).
+TOOL_ROOT = Path(__file__).resolve().parents[1]
 
 # Location of the standalone ProPainter repository (inpaint.py invokes
 # inference_propainter.py there via subprocess).
 PROPAINTER_DIR = os.environ.get(
     "EGO2ROBOT_PROPAINTER_DIR",
-    str(PROJECT_ROOT / "third_party" / "ProPainter"),
+    str(TOOL_ROOT / "third_party" / "ProPainter"),
 )
 
 # Staging root for ProPainter's intermediate PNG sequences (tmpfs is recommended
