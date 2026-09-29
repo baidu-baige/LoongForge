@@ -23,7 +23,7 @@ further subdivided**.
 |------|---------|-------------|
 | [`convert_checkpoint/`](./convert_checkpoint) | HuggingFace ↔ Mcore checkpoint conversion (LLM/VLM, MoE expert merge, FP8) | `module_convertor/model.py` |
 | [`dist_checkpoint/`](./dist_checkpoint) | Distributed checkpoint save/load and HF bridge | package |
-| [`dcp_to_safetensors/`](./dcp_to_safetensors) | Consolidate a Torch DCP checkpoint into a single `.safetensors` file | `dcp_to_safetensors.py` |
+| [`torch_dcp_convert/`](./torch_dcp_convert) | Consolidate a Torch DCP (distributed checkpoint) into a single-file `.safetensors`/`.pt` | `dcp_to_safetensors.py` |
 | [`te_parallel_benchmark/`](./te_parallel_benchmark) | Benchmark TransformerEngine parallel layers under TP/EP and emit an adaptive-FP8 policy | `benchmark_te_parallel_layers.py` |
 | [`llm_data_preprocess/`](./llm_data_preprocess) | Tokenize/pack LLM pretrain & SFT corpora into Megatron-indexed data | `preprocess_pretrain_data.py`, `preprocess_sft_data.py` |
 | [`vlm_data_preprocess/`](./vlm_data_preprocess) | Convert VLM annotations + media to WebDataset, plus offline sequence packing | `convert_to_webdataset.py`, `offline_packing/` |

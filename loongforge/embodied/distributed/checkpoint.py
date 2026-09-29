@@ -231,7 +231,7 @@ def load_pretrained(model: nn.Module, checkpoint_path: str, ctx: DistributedCont
 
     Only consumes consolidated single-file weights (``model.safetensors`` /
     ``pytorch_model.pt``). To use a DCP checkpoint as pretrained source, run
-    ``tools/dcp_to_safetensors/dcp_to_safetensors.py`` first to produce a single-file version.
+    ``tools/torch_dcp_convert/dcp_to_safetensors.py`` first to produce a single-file version.
     """
     if not checkpoint_path:
         return model
@@ -1119,7 +1119,7 @@ def _resolve_file(checkpoint_path: str) -> str:
                 return f
         raise FileNotFoundError(
             f"No single-file model in {checkpoint_path} "
-            f"(if this is a DCP checkpoint, run tools/dcp_to_safetensors/dcp_to_safetensors.py first)."
+            f"(if this is a DCP checkpoint, run tools/torch_dcp_convert/dcp_to_safetensors.py first)."
         )
     return checkpoint_path
 
