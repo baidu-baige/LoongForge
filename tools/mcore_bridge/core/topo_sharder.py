@@ -25,7 +25,7 @@ except ImportError:
     parallel_state = None
     print_rank_0 = None
 
-from tools.mcore_bridge.config.parallel_config import ParallelConfig
+from mcore_bridge.config.parallel_config import ParallelConfig
 
 # Type definitions
 RankTopoTuple = Tuple[Optional[int], Optional[int], Optional[int], Optional[int], Optional[int]]

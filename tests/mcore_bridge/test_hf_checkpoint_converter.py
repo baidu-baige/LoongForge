@@ -6,9 +6,8 @@
 import os
 import shutil
 
-# `mcore_bridge` and `mcore_checkpoint_convert` are the packages under tools/
-# (i.e. tools/mcore_bridge, tools/mcore_checkpoint_convert), put on PYTHONPATH
-# by the launcher test_hf_checkpoint_converter.sh.
+# mcore_bridge -> tools/mcore_bridge, mcore_checkpoint_convert -> tools/mcore_checkpoint_convert.
+# Run via test_hf_checkpoint_converter.sh, which sets PYTHONPATH for both.
 from mcore_bridge.config.parallel_config import ParallelConfig
 from mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from mcore_checkpoint_convert.utils.config_utils import get_yaml_config

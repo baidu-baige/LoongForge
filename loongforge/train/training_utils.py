@@ -792,8 +792,6 @@ def get_model(
             # HF checkpoint: use online loading
             print_rank_0(f"Loading base model weights from HF chekckpoint: {args.pretrained_checkpoint}")
 
-            from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
-
             # Temporarily set args.load for load_hf_checkpoint_online
             orig_load = args.load
             args.load = args.pretrained_checkpoint

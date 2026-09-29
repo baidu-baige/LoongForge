@@ -18,11 +18,11 @@ import torch.distributed as dist
 from megatron.training import print_rank_0
 
 # Import existing mcore_bridge modules
-from tools.mcore_bridge.core.parser import Parser
-from tools.mcore_bridge.core.topo_sharder import TopoSharder
-from tools.mcore_bridge.core.tp_gather import TPGather
-from tools.mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
-from tools.mcore_bridge.utils import time_checkpoint_operation
+from mcore_bridge.core.parser import Parser
+from mcore_bridge.core.topo_sharder import TopoSharder
+from mcore_bridge.core.tp_gather import TPGather
+from mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from mcore_bridge.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
 from tools.mcore_checkpoint_convert.utils.utils import make_hf_sub_checkpoints, get_etp_map
 from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config

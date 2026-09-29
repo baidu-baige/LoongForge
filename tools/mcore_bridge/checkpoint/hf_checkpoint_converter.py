@@ -5,7 +5,7 @@
 
 import argparse
 
-from tools.mcore_bridge.config.parallel_config import ParallelConfig
+from mcore_bridge.config.parallel_config import ParallelConfig
 from tools.mcore_checkpoint_convert.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
 from tools.mcore_checkpoint_convert.mcore.mcore_checkpoint import McoreCheckpoint
 from tools.mcore_checkpoint_convert.common.common_config import CommonConfig

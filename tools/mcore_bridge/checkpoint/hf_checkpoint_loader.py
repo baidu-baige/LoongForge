@@ -18,10 +18,10 @@ from megatron.training import print_rank_0
 from megatron.training.utils import unwrap_model
 
 # Import existing mcore_bridge modules
-from tools.mcore_bridge.core.parser import Parser
-from tools.mcore_bridge.core.topo_sharder import TopoSharder
-from tools.mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
-from tools.mcore_bridge.utils import time_checkpoint_operation
+from mcore_bridge.core.parser import Parser
+from mcore_bridge.core.topo_sharder import TopoSharder
+from mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
+from mcore_bridge.utils import time_checkpoint_operation
 from tools.mcore_checkpoint_convert.utils.utils import get_etp_map
 from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config
 
