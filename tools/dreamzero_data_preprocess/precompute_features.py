@@ -23,19 +23,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) in sys.path:
-    sys.path.remove(str(_REPO_ROOT))
-sys.path.insert(0, str(_REPO_ROOT))
+# loongforge is imported from PYTHONPATH (set by the launch wrapper / documented
+# in the README); only the tool's own directory is added here so the internal
+# cache_precompute subpackage is importable when run as a script or under torchrun.
 _TOOL_DIR = Path(__file__).resolve().parent
 if str(_TOOL_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOL_DIR))
 os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
 os.environ.setdefault("ALBUMENTATIONS_DISABLE_VERSION_CHECK", "1")
-_DEFAULT_MEGATRON_ROOT = _REPO_ROOT.parent / "Loong-Megatron"
-_MEGATRON_ROOT = Path(os.getenv("MEGATRON_PATH", str(_DEFAULT_MEGATRON_ROOT)))
-if _MEGATRON_ROOT.exists() and str(_MEGATRON_ROOT) not in sys.path:
-    sys.path.insert(0, str(_MEGATRON_ROOT))
 
 import torch
 from cache_precompute.config import _load_config
