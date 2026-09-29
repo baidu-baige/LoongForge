@@ -19,7 +19,7 @@ model:
     trust_remote_code: True
     use_fast: False
 
-# Media file preprocessing configuration, optional preprocessing functions defined in media_preprocess_utils.py
+# Media file preprocessing configuration, optional preprocessing functions defined in wds_pack/media/preprocess.py
 media_preprocess:
   image: custom_image_preprocess
 
