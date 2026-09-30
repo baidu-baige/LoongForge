@@ -824,8 +824,9 @@ def _add_extra_video_args(parser):
     group.add_argument(
         "--max-packed-tokens",
         type=int,
-        default=8192,
-        help="Target token length per packed sample. Default: 8192"
+        default=None,
+        help="[DEPRECATED] Ignored; defaults to and is forced equal to "
+             "--seq-length. In LoongForge seq_length is the packed-sequence length."
     )
 
     group.add_argument(
