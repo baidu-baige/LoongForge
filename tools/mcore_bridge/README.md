@@ -5,8 +5,6 @@ read HF safetensors directly at startup (converting to Mcore format on the fly)
 and optionally export Mcore weights back to HF format after training — no
 separate offline conversion step, and no need to keep both copies on disk.
 
-Inspired by [NVIDIA Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge).
-
 ## How it's used
 
 This is a **runtime-integrated** tool, not a standalone CLI. `loongforge/train.py`
@@ -30,10 +28,9 @@ Example training scripts: `examples/qwen2.5/pretrain/pretrain_qwen2.5_7b_bridge.
 
 ## Roundtrip test
 
-`tests/mcore_bridge/hf_roundtrip_test.py` runs a zero-step `HF → Mcore → HF`
-round-trip and compares weights, using the exact same build/load/save path as
-training. The driver and its per-model launch scripts live outside this package,
-under `tests/mcore_bridge/<family>/`:
+Want to confirm a conversion is loss-less? Run a zero-step `HF → Mcore → HF`
+round-trip — it reuses the exact same load/save path as training and diffs the
+weights. Launch a per-model script from `tests/mcore_bridge/<family>/`:
 
 ```bash
 bash tests/mcore_bridge/qwen2.5/0.5b_bridge_roundtrip.sh   # one model
@@ -42,20 +39,3 @@ bash tests/mcore_bridge/qwen3/all.sh                       # a whole family
 
 A `roundtrip_comparison.json` is written to `--save-hf-path`; it passes when
 `num_different == 0` with no missing/extra keys or shape mismatches.
-
-## Layout
-
-```text
-mcore_bridge/
-  checkpoint/   # HF converter + online loader/saver
-  core/         # parser, topology sharder, TP gather
-  config/       # parallel config
-  utils/        # timing/comparison helpers
-```
-
-Roundtrip tests (driver + per-model launch scripts) live in the repo test
-suite at `tests/mcore_bridge/`, not inside this package.
-
-Modules import as `tools.mcore_bridge.*` (repo root on `sys.path`) or bare
-`mcore_bridge.*` (with `tools/` on `sys.path`); both are set up by the entry
-scripts and by `loongforge/train.py`.
