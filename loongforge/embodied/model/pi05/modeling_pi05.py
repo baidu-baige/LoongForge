@@ -284,13 +284,37 @@ def _get_gemma_config(variant: str) -> _GemmaConfig:
 # compute_layer_complete (gradient checkpointing helper)
 # ═══════════════════════════════════════════════════════════════
 
-def _joint_attention_flex(query_states, key_states, value_states, block_mask, scaling):
-    """FlexAttention joint attention.  enable_gqa broadcasts the single kv head to the
-    8 query heads inside the kernel, so repeat_kv never materializes."""
-    att_output = flex_attention(
-        query_states, key_states, value_states,
-        block_mask=block_mask, scale=scaling, enable_gqa=True,
-    )
+_FLEX_FP8_SAFE_KERNEL_OPTIONS = {
+    "fwd_BLOCK_M": 64,
+    "fwd_BLOCK_N": 64,
+    "fwd_num_warps": 4,
+    "fwd_num_stages": 1,
+    "bwd_BLOCK_M1": 32,
+    "bwd_BLOCK_N1": 64,
+    "bwd_BLOCK_M2": 64,
+    "bwd_BLOCK_N2": 32,
+    "bwd_num_warps": 4,
+    "bwd_num_stages": 1,
+}
+
+
+def _joint_attention_flex(
+    query_states,
+    key_states,
+    value_states,
+    block_mask,
+    scaling,
+    kernel_options=None,
+):
+    """FlexAttention joint attention with optional backend-specific kernel options."""
+    kwargs = {
+        "block_mask": block_mask,
+        "scale": scaling,
+        "enable_gqa": True,
+    }
+    if kernel_options is not None:
+        kwargs["kernel_options"] = kernel_options
+    att_output = flex_attention(query_states, key_states, value_states, **kwargs)
     return att_output.transpose(1, 2).contiguous()
 
 
@@ -337,7 +361,12 @@ def _compute_layer_complete(
     scaling = paligemma.model.language_model.layers[layer_idx].self_attn.scaling
     # attention_mask is a BlockMask here, not an additive tensor.
     att_output = _joint_attention_flex(
-        query_states, key_states, value_states, attention_mask, scaling,
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        scaling,
+        getattr(paligemma, "_fp8_flex_kernel_options", None),
     )
     head_dim = paligemma.model.language_model.layers[layer_idx].self_attn.head_dim
     att_output = att_output.reshape(query_states.shape[0], -1, 1 * 8 * head_dim)
@@ -642,13 +671,12 @@ class PI05Pytorch(nn.Module):
             )
             return
 
-        # per_layer / multi_group both compile _layer_fn.  fullgraph=True is
-        # forced on these small sub-graphs (their Python control flow is static;
-        # see the plan for justification).
+        # per_layer / multi_group compile _layer_fn.  Keep the original fullgraph
+        # behavior; TE compatibility is handled by the generic framework config.
         self.paligemma_with_expert._layer_fn = torch.compile(
             _compute_layer_complete,
             mode=mode,
-            fullgraph=True,
+            fullgraph=config.compile_fullgraph,
             dynamic=dynamic,
         )
 
@@ -1117,6 +1145,16 @@ class PI05Policy(nn.Module):
                 "model.time_mlp_out",
             ],
         }
+
+    def configure_fp8(self, training_args) -> None:
+        """Install Pi05-only FlexAttention settings for TorchAO FP8."""
+        if not getattr(training_args, "fp8", False):
+            return
+        if getattr(training_args, "fp8_backend", None) != "torchao":
+            return
+        paligemma = getattr(self.model, "paligemma_with_expert", None)
+        if paligemma is not None:
+            paligemma._fp8_flex_kernel_options = _FLEX_FP8_SAFE_KERNEL_OPTIONS
 
     @classmethod
     def from_pretrained(cls, model_cfg) -> "PI05Policy":
