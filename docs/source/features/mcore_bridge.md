@@ -276,7 +276,7 @@ The Roundtrip Test verifies that HF weights remain numerically consistent after 
 Example with Qwen2.5-0.5B:
 
 ```bash
-bash tests/mcore_bridge/qwen2.5/0.5b_bridge_roundtrip.sh
+bash tests/mcore_bridge_roundtrip/qwen2.5/0.5b_bridge_roundtrip.sh
 ```
 
 Key parameters in the test script:
@@ -299,7 +299,7 @@ TRAINING_ARGS=(
 > ```bash
 > PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 >     torchrun --nproc_per_node 4 \
->     $LOONGFORGE_PATH/tests/mcore_bridge/hf_roundtrip_test.py \
+>     $LOONGFORGE_PATH/tests/mcore_bridge_roundtrip/hf_roundtrip_test.py \
 >     ${MODEL_ARGS[@]} ${TOKENIZER_ARGS[@]} ${TRAINING_ARGS[@]} ${MODEL_PARALLEL_ARGS[@]}
 > ```
 
@@ -307,13 +307,13 @@ TRAINING_ARGS=(
 
 ```bash
 # Qwen2.5 (all sizes)
-bash tests/mcore_bridge/qwen2.5/all.sh
+bash tests/mcore_bridge_roundtrip/qwen2.5/all.sh
 
 # Qwen3 (all sizes)
-bash tests/mcore_bridge/qwen3/all.sh
+bash tests/mcore_bridge_roundtrip/qwen3/all.sh
 
 # InternVL 2.5 (all sizes)
-bash tests/mcore_bridge/internvl2.5/all.sh
+bash tests/mcore_bridge_roundtrip/internvl2.5/all.sh
 ```
 
 ### Output Report
@@ -340,7 +340,7 @@ After the test completes, a `roundtrip_comparison.json` is generated in the `--s
 
 ### Available Test Scripts
 
-Tests are organized by model family under `tests/mcore_bridge/`:
+Tests are organized by model family under `tests/mcore_bridge_roundtrip/`:
 
 | Model Family | Path |
 |-------------|------|
@@ -362,7 +362,7 @@ The test code defaults to `omni_model_provider` (compatible with all models). To
 - **Pure LLM** (LLaMA, Qwen2.5, DeepSeek V2, etc.): use `llm_model_provider`
 - **Multimodal** (Qwen2.5-VL, InternVL, etc.): use `omni_model_provider`
 
-Edit the `get_model()` call in `tests/mcore_bridge/hf_roundtrip_test.py`:
+Edit the `get_model()` call in `tests/mcore_bridge_roundtrip/hf_roundtrip_test.py`:
 
 ```python
 # For pure LLM:

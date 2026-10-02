@@ -7,7 +7,7 @@ scripts, configs, and baselines — they share nothing except being rooted under
 |---|---|---|---|---|
 | **LLM/VLM E2E** (config-driven) | [tests/llm_vlm/](llm_vlm/) | `tests/llm_vlm/main_start.sh` | YAML scenarios under `configs/` + `optional_configs/` | `tests/llm_vlm/baseline/{default,optional}/<chip>/` |
 | **Embodied VLA regression** (manifest-driven) | [tests/embodied/](embodied/) | `tests/embodied/run.sh` | `examples/embodied/*.sh` via `tests/embodied/config/scripts.yaml` | `tests/embodied/baseline/<chip>/` |
-| **Mcore-Bridge roundtrip** (checkpoint correctness) | [tests/mcore_bridge/](mcore_bridge/) | `tests/mcore_bridge/<family>/*_bridge_roundtrip.sh` (driver: `hf_roundtrip_test.py`) | per-model roundtrip scripts by family | `roundtrip_comparison.json` (no stored baseline) |
+| **Mcore-Bridge roundtrip** (checkpoint correctness) | [tests/mcore_bridge_roundtrip/](mcore_bridge_roundtrip/) | `tests/mcore_bridge_roundtrip/<family>/*_bridge_roundtrip.sh` (driver: `hf_roundtrip_test.py`) | per-model roundtrip scripts by family | `roundtrip_comparison.json` (no stored baseline) |
 
 See each suite's own README for usage:
 - [tests/llm_vlm/README.md](llm_vlm/README.md)

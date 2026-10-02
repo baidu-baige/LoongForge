@@ -30,11 +30,11 @@ Example training scripts: `examples/qwen2.5/pretrain/pretrain_qwen2.5_7b_bridge.
 
 Want to confirm a conversion is loss-less? Run a zero-step `HF → Mcore → HF`
 round-trip — it reuses the exact same load/save path as training and diffs the
-weights. Launch a per-model script from `tests/mcore_bridge/<family>/`:
+weights. Launch a per-model script from `tests/mcore_bridge_roundtrip/<family>/`:
 
 ```bash
-bash tests/mcore_bridge/qwen2.5/0.5b_bridge_roundtrip.sh   # one model
-bash tests/mcore_bridge/qwen3/all.sh                       # a whole family
+bash tests/mcore_bridge_roundtrip/qwen2.5/0.5b_bridge_roundtrip.sh   # one model
+bash tests/mcore_bridge_roundtrip/qwen3/all.sh                       # a whole family
 ```
 
 A `roundtrip_comparison.json` is written to `--save-hf-path`; it passes when
