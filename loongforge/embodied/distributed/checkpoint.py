@@ -745,7 +745,14 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
     options = StateDictOptions(full_state_dict=False, cpu_offload=False)
     model_sd, optim_sd = get_state_dict(model, optimizers=optimizers, options=options)
 
-    # 1) Model — strict.
+    # 1) Model — strict. Load the DCP tensors into the UNWRAPPED module directly.
+    # set_state_dict() mis-handles the DDP "module." prefix for this model's
+    # nesting: torch's _load_model_state_dict feeds the unprefixed DCP keys
+    # straight into DistributedDataParallel.load_state_dict, raising
+    #   "Missing key(s): module.core.* / Unexpected key(s): core.*".
+    # get_state_dict() already returns clean (unwrapped) FQNs, which match the
+    # raw module 1:1, so load there and skip the buggy re-wrap. (DDP replicates
+    # params — full_state_dict=False still yields full tensors per rank.)
     model_state = {"model": model_sd}
     try:
         dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
@@ -761,14 +768,9 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
                 "--pretrained-checkpoint instead of --resume."
             ) from exc
         raise
-    set_state_dict(
-        model, optimizers=[],
-        model_state_dict=model_state["model"],
-        optim_state_dict={},
-        options=options,
-    )
+    unwrap_model(model).load_state_dict(model_state["model"], strict=True)
     if ctx.is_main:
-        logger.info("model resumed via DCP (strict)")
+        logger.info("model resumed via DCP (strict, into unwrapped module)")
 
     # 2) Optimizer — lenient. Missing keys are expected; full failure is not.
     if has_optim:
