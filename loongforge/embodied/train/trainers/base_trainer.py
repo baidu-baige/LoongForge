@@ -19,6 +19,7 @@ from loongforge.embodied.distributed import DistributedContext
 from loongforge.embodied.distributed.checkpoint import (
     flush_pending_save,
     get_latest_checkpoint,
+    maybe_finalize_pending_save,
     restore_rank_rng_state,
     resume_training_state,
 )
@@ -380,6 +381,12 @@ class BaseTrainer(ABC):
                 )
                 self._stage_timers.reset()
 
+            # ── Async checkpoint finalization ──
+            # Commit the availability marker of an in-flight async save as soon
+            # as its write lands, instead of waiting for the next save to start
+            # (which would make resume fall back a whole save interval).
+            maybe_finalize_pending_save(self.ctx, self.completed_steps)
+
             # ── Checkpoint ──
             if save_interval and self.completed_steps % save_interval == 0:
                 self._save_checkpoint()
@@ -505,7 +512,7 @@ class BaseTrainer(ABC):
     # ═══════════════════════════════════════════════
     # Abstract methods — subclass must implement
     # ═══════════════════════════════════════════════
-    
+
     @abstractmethod
     def _build_model(self) -> nn.Module:
         """Build model from self.model_cfg. Return unwrapped model."""
