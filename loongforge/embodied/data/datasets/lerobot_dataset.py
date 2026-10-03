@@ -454,10 +454,22 @@ class LeRobotV2Dataset(Dataset):
         return torch.from_numpy(frame).permute(2, 0, 1).float() / 255.0
 
     def _decode_video_frames(self, video_key: str, episode_index: int, frame_indices: List[int]) -> torch.Tensor:
-        """Decode multiple video frames. Returns tensor [T, C, H, W] float32 in [0, 1]."""
-        frames = [self._decode_video_frame(video_key, episode_index, fi) for fi in frame_indices]
-        result = torch.stack(frames, dim=0)  # [T, C, H, W]
-        return result
+        """Decode multiple video frames. Returns tensor [T, C, H, W] float32 in [0, 1].
+
+        Decodes all requested frames in a single container open via the batched
+        backend API (one seek + one sequential pass), instead of re-opening the
+        container once per frame.
+        """
+        episode_chunk = episode_index // self.chunks_size
+        video_path = self.root / self._video_path_tpl.format(
+            episode_chunk=episode_chunk, video_key=video_key, episode_index=episode_index,
+        )
+
+        from loongforge.embodied.data.datasets.video_backends import decode_video_frames_by_timestamps
+        frames = decode_video_frames_by_timestamps(  # [T, H, W, C] uint8
+            str(video_path), [fi / self.fps for fi in frame_indices], backend=self.video_backend,
+        )
+        return torch.from_numpy(frames).permute(0, 3, 1, 2).float() / 255.0  # -> [T, C, H, W]
 
     def __len__(self) -> int:
         return len(self._step_index)
