@@ -103,3 +103,6 @@ nsight_*/
 
 # Local AI coding assistant rules
 /.comate/
+
+# Embodied-atlas website CI (local only, not part of this repo)
+/.github/workflows/embodied-atlas-*.yml

@@ -300,7 +300,7 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 
 ## 📂 代码结构
 
-<details>
+<details open>
 <summary><b>📁 目录树</b></summary>
 
 ```

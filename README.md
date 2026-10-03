@@ -300,7 +300,7 @@ Open-source models trained with **LoongForge** or its predecessor **AIAK-Trainin
 
 ## 📂 Repository Layout
 
-<details>
+<details open>
 <summary><b>📁 Directory tree</b></summary>
 
 ```
