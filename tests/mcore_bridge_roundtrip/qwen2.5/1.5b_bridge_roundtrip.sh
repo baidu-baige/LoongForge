@@ -1,4 +1,6 @@
 #! /bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 # HF Checkpoint Roundtrip Test for Qwen2.5-1.5B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1

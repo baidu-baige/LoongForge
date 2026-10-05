@@ -1,4 +1,6 @@
 #! /bin/bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 # HF Checkpoint Roundtrip Test — Mimo-7B
 
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1

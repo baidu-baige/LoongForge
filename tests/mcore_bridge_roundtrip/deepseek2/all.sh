@@ -1,3 +1,5 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 mkdir -p /workspace/bridge_test_log/deepseek2/
 
 sh tests/mcore_bridge_roundtrip/deepseek2/v2_bridge_roundtrip.sh 2>&1 | tee -a /workspace/bridge_test_log/deepseek2/v2_log
