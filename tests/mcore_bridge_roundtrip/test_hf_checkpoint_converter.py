@@ -17,6 +17,10 @@ from mcore_checkpoint_convert.utils.utils import(
     make_hf_sub_checkpoints
 )
 
+# This module is a script, not a pytest suite: the test_* helpers below are
+# driven by the __main__ block, which test_hf_checkpoint_converter.sh invokes.
+__test__ = False
+
 
 def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encoder_tp_size=None):
     parallel_config = ParallelConfig()
