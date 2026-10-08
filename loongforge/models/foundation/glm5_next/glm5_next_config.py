@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 import torch.nn.functional as F
@@ -94,7 +94,14 @@ class Glm5NextConfig(BaseModelMLAConfig):
     image_end_token_id: int = 154831
     video_start_token_id: int = 154832
     video_end_token_id: int = 154833
-    vision_config: Glm5NextVisionConfig = field(default_factory=Glm5NextVisionConfig)
+    # NOTE: ``vision_config``/``moe_layer_freq`` default to ``None`` instead of using
+    # ``field(default_factory=...)``. Under transformers>=5.6 ``PretrainedConfig`` is a
+    # dataclass, and a subclass field declared with ``default_factory`` is mishandled: at
+    # class-definition it raises "non-default argument follows default argument", and even
+    # past that the transformers ctor reports it as a missing required field. A plain
+    # ``None`` default avoids both pitfalls; ``vision_config`` is materialized in
+    # ``__post_init__`` and ``moe_layer_freq`` is derived from ``mlp_layer_types`` there.
+    vision_config: Glm5NextVisionConfig | None = None
     layer_types: list[str] | None = None
     mlp_layer_types: list[str] | None = None
     indexer_types: list[str] | None = None
@@ -131,7 +138,7 @@ class Glm5NextConfig(BaseModelMLAConfig):
     moe_router_dtype: str | None = "fp32"
     moe_token_dispatcher_type: str = "allgather"
     moe_grouped_gemm: bool = False
-    moe_layer_freq: list[int] | int = field(default_factory=list)
+    moe_layer_freq: list[int] | int | None = None
     enable_hyper_connections: bool = True
     num_residual_streams: int = 4
     mhc_sinkhorn_iterations: int = 20
@@ -150,7 +157,9 @@ class Glm5NextConfig(BaseModelMLAConfig):
     vocab_size_in_config_file: int | None = None
 
     def __post_init__(self) -> None:
-        if isinstance(self.vision_config, dict):
+        if self.vision_config is None:
+            self.vision_config = Glm5NextVisionConfig()
+        elif isinstance(self.vision_config, dict):
             self.vision_config = Glm5NextVisionConfig(**self.vision_config)
         if self.num_hidden_layers is None:
             self.num_hidden_layers = self.num_layers
