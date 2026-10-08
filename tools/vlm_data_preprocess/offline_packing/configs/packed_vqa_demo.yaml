@@ -1,6 +1,11 @@
 
 # Data path configuration
 data:
+  # Legacy packing path (NOT WDS-native). Any value other than "wds" selects the
+  # legacy branch in pack_bins/write_wds. The legacy flow is driven by 4 MANUAL steps
+  # (python -m wds_pack.legacy.get_sample_len / wds_pack.cli.pack_bins /
+  # wds_pack.legacy.prepare_raw_samples / wds_pack.cli.write_wds), NOT scripts/pack_wds.sh.
+  input_format: "legacy"
   # Webdataset data sample directory
   wds_dir: "/workspace/dataset/filter_4w_CC3M/images"
   # Text field name
