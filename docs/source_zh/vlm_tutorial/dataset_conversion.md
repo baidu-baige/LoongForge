@@ -23,7 +23,7 @@
 | `caption` | 单图描述 | 生成 `CaptioningSample` 映射，图像字段为 `jpg`，文本从 `json[...]` 中提取 |
 | `multi_mix_qa` | 多图/视频混合 QA | 使用 `CrudeWebdataset`，通过 `subflavors.sample_type` 传递给下游 cooker 进行解析 |
 | `multi_vid_vqa` | 多视频 VQA | 同上 |
-| `packed_captioning` / `packed_vqa` / `packed_multi_mix_qa` | 离线打包后的数据 | 通常由 `offline_packing` 工作流生成（见第 2 节） |
+| `packed_multi_mix_qa` / `packed_chat_mix` / `packed_captioning` / `packed_vqa` | 离线打包后的数据 | 由 `offline_packing` 工作流写入的 `subflavors.sample_type`；当前 WDS-native 流水线产出 `packed_multi_mix_qa` / `packed_chat_mix`，`packed_captioning` / `packed_vqa` 为旧版打包路径的遗留类型（见第 5 节） |
 | 其他字符串 | 自定义场景 | 仍写入 `CrudeWebdataset`，但需确保下游实现了对应的 `sample_type` 解析逻辑 |
 
 注意事项：
