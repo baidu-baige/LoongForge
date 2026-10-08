@@ -11,7 +11,7 @@ WDS-native V1 路径（`wds_pack.cli.scan_manifest`）仅接受以下两种 `sam
 
 |场景|`sample_type`|说明|
 |---|---|---|
-|离线打包图像/视频/文本混合 QA|`packed_multi_mix_qa`|输入 WDS JSON 必须声明 `media`/`media_type`；打包按媒体类型同质进行。使用手写模板 `TEMPLATES[sample_type][model_type]`。|
+|离线打包图像/视频/文本混合 QA|`packed_multi_mix_qa`|输入 WDS JSON 必须声明 `media`/`media_type`；打包按媒体类型同质进行。默认使用手写模板 `TEMPLATES[sample_type][model_type]`；若设置 `model.use_hf_chat_template: true` 或 `model.chat_template_path`，同样会改用 HF chat 模板渲染（手写模板仅为未启用 HF 渲染时的回退）。|
 |离线打包对话（HF chat 模板）|`packed_chat_mix`|使用模型自带的 HF chat 模板渲染样本，而非 `TEMPLATES`；需要设置 `model.use_hf_chat_template: true` 或 `model.chat_template_path`。|
 
 ## 2. 输入要求（`data.wds_dir`）
@@ -29,26 +29,26 @@ WDS-native V1 路径（`wds_pack.cli.scan_manifest`）仅接受以下两种 `sam
 ```bash
 cd tools/vlm_data_preprocess/offline_packing
 
-# 1) 编辑 config.yaml（或复制 packed_vqa_demo.yaml）
-# 2) 运行 4 步流水线（默认读取 config.yaml）
+# 1) 编辑 configs/config.yaml（256k 场景可参考 configs/config_256k.yaml）
+# 2) 运行 4 步流水线（默认读取 configs/config.yaml）
 bash scripts/pack_wds.sh
 ```
 
 切换到其他配置：
 
-* 方式 1：将其覆盖/复制到 `config.yaml`
+* 方式 1：将其覆盖/复制到 `configs/config.yaml`
 * 方式 2：使用 `--config your.yaml` 手动运行每个步骤（见下一节）
 
 ## 4. 流水线详情（对应 `pack_wds.sh`）
 
 ### 步骤 1：扫描 WDS manifest 并计算每个样本的 Token 长度（`wds_pack.cli.scan_manifest`）
 * 输入：`data.wds_dir` 下的 `*.tar` 分片
-* 处理：直接从 tar 读取 WDS 样本，根据 `sample.sample_type` + `model.model_type` 选择模板（`wds_pack.core.constants.TEMPLATES`），使用 `AutoProcessor` 或 `AutoTokenizer` 对文本+视觉输入进行分词，并记录 tar 字节定位信息
-* 输出：`{data.work_dir}/sample_manifest.sqlite`（权威 manifest）、`token_len/` 下各媒体的 Token 报告，以及 `skipped_overlong.jsonl`（`token_len > max_token_len` 被跳过的样本，始终写出）；`sample_manifest.jsonl`、合并报告 `sample_len_report.txt` 和 `skipped_samples.jsonl` 仅在 `artifacts.debug_artifacts: true` 时保留
+* 处理：直接从 tar 读取 WDS 样本，渲染对话文本（启用 HF 渲染时使用模型自带的 HF chat 模板；否则按 `sample.sample_type` + `model.model_type` 回退到手写模板 `wds_pack.core.constants.TEMPLATES`），使用 `AutoProcessor` 或 `AutoTokenizer` 对文本+视觉输入进行分词，并记录 tar 字节定位信息
+* 输出：`{data.work_dir}/sample_manifest.sqlite`（权威 manifest）和 `skipped_overlong.jsonl`（`token_len > max_token_len` 被跳过的样本，始终写出）；`sample_manifest.jsonl`、合并报告 `sample_len_report.txt`、`token_len/` 下各媒体的 Token 报告，以及 `skipped_samples.jsonl` 仅在 `artifacts.debug_artifacts: true` 时保留
 
 手动运行：
 ```bash
-python -m wds_pack.cli.scan_manifest --config config.yaml
+python -m wds_pack.cli.scan_manifest --config configs/config.yaml
 ```
 
 ### 步骤 2：按媒体类型进行长度分桶与打包分组（`wds_pack.cli.pack_bins`）
@@ -58,7 +58,7 @@ python -m wds_pack.cli.scan_manifest --config config.yaml
 
 手动运行：
 ```bash
-python -m wds_pack.cli.pack_bins --config config.yaml
+python -m wds_pack.cli.pack_bins --config configs/config.yaml
 ```
 
 ### 步骤 3：生成打包计划（`wds_pack.cli.build_plan`）
@@ -68,7 +68,7 @@ python -m wds_pack.cli.pack_bins --config config.yaml
 
 手动运行：
 ```bash
-python -m wds_pack.cli.build_plan --config config.yaml
+python -m wds_pack.cli.build_plan --config configs/config.yaml
 ```
 
 ### 步骤 4：将打包样本写回 WebDataset（`wds_pack.cli.write_wds`）
@@ -77,10 +77,10 @@ python -m wds_pack.cli.build_plan --config config.yaml
 
 手动运行：
 ```bash
-python -m wds_pack.cli.write_wds --config config.yaml
+python -m wds_pack.cli.write_wds --config configs/config.yaml
 ```
 
-## 5. 配置（`config.yaml`）
+## 5. 配置（`configs/config.yaml`）
 关键字段：
 
 * `data.input_format` — WDS-native 打包设为 `wds`
@@ -95,7 +95,7 @@ python -m wds_pack.cli.write_wds --config config.yaml
 * `model.processor_kwargs.*` — 传递给 `transformers.AutoProcessor.from_pretrained` 的 HF 处理器参数
 * `packed_wds.maxcount` / `maxsize` — tar 分片拆分策略
 
-示例（摘录，完整字段见 `config.yaml`）：
+示例（摘录，完整字段见 `configs/config.yaml`）：
 
 ```yaml
 data:
@@ -117,3 +117,26 @@ sample:
 * 调整图像 Token 预算 / 分辨率：在 `model.processor_kwargs` 下添加处理器支持的参数（例如 Qwen-VL 的 `min_pixels`/`max_pixels`）。
 * 模板对齐：如果添加了新的 `model.model_type`，确保 `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template for sample_type=..., model_type=..."。
 * 媒体预处理：在 `media_preprocess` 下可以为每种模态指定预处理函数名（实现在 `tools/vlm_data_preprocess/offline_packing/wds_pack/media/preprocess.py`），以控制缩放/裁剪/帧读取行为。
+
+## 致谢
+
+LoongForge 的 WDS-native 离线打包流程基于最初为 LLaVA-OneVision-1.5 开发、
+随后迁移并升级到 LLaVA-OneVision-2 的多模态离线打包框架。
+
+LoongForge 此前与 LLaVA-OneVision 工作有过合作，并迁移、适配了部分
+LLaVA-OneVision 离线打包能力。
+
+上游参考：
+
+- LLaVA-OneVision-1.5 离线打包：
+  https://github.com/fdcp/LLaVA-OneVision-1.5/tree/main/tools/data_preprocess/offline_packing
+- LLaVA-OneVision-1.5 离线打包示例：
+  https://github.com/fdcp/LLaVA-OneVision-1.5/tree/main/examples_offline_packing
+- LLaVA-OneVision-2 离线打包：
+  https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/main/offline_packing
+- LLaVA-OneVision-2 样本打包脚本：
+  https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/main/examples/llava_onevision1_5/sample_packing
+
+LoongForge 针对原生 WebDataset tar 分片输入、基于 manifest/SQLite 的样本索引、
+按媒体类型分组的打包、打包计划生成、基于 tar 字节偏移的 WebDataset 写回，
+以及打包后 text/image/video 样本的运行时处理，对该流程进行了重构。

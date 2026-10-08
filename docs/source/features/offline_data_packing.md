@@ -11,7 +11,7 @@ The WDS-native V1 path (`wds_pack.cli.scan_manifest`) accepts exactly two `sampl
 
 |Scenario|`sample_type`|Description|
 |---|---|---|
-|Offline packed image/video/text mixed QA|`packed_multi_mix_qa`|Input WDS JSON must declare `media`/`media_type`; packs are homogeneous by media type. Uses the handwritten `TEMPLATES[sample_type][model_type]`.|
+|Offline packed image/video/text mixed QA|`packed_multi_mix_qa`|Input WDS JSON must declare `media`/`media_type`; packs are homogeneous by media type. Uses the handwritten `TEMPLATES[sample_type][model_type]` by default; if `model.use_hf_chat_template: true` or `model.chat_template_path` is set it renders with the HF chat template instead (the handwritten template is only the fallback when HF rendering is disabled).|
 |Offline packed chat (HF chat template)|`packed_chat_mix`|Renders samples with the model's released HF chat template instead of `TEMPLATES`; requires `model.use_hf_chat_template: true` or `model.chat_template_path`.|
 
 ## 2. Input requirements (`data.wds_dir`)
@@ -29,26 +29,26 @@ Notes:
 ```bash
 cd tools/vlm_data_preprocess/offline_packing
 
-# 1) Edit config.yaml (or copy packed_vqa_demo.yaml)
-# 2) Run the 4-step pipeline (reads config.yaml by default)
+# 1) Edit configs/config.yaml (or configs/config_256k.yaml for the 256k case)
+# 2) Run the 4-step pipeline (reads configs/config.yaml by default)
 bash scripts/pack_wds.sh
 ```
 
 To switch to another config:
 
-* Option 1: overwrite/copy it to `config.yaml`  
+* Option 1: overwrite/copy it to `configs/config.yaml`
 * Option 2: run each script manually with `--config your.yaml` (see next section)
 
 ## 4. Pipeline details (mirrors `pack_wds.sh`)
 
 ### Step 1: Scan WDS manifest and compute per-sample token length (`wds_pack.cli.scan_manifest`)
 * Input: `*.tar` shards under `data.wds_dir`
-* Process: read WDS samples directly from tar, pick the template (`wds_pack.core.constants.TEMPLATES`) according to `sample.sample_type` + `model.model_type`, tokenise text+vision inputs with `AutoProcessor` or `AutoTokenizer`, and record tar byte locators
-* Output: `{data.work_dir}/sample_manifest.sqlite` (authoritative manifest), per-media token reports under `token_len/`, and `skipped_overlong.jsonl` (samples whose `token_len > max_token_len`, always written); `sample_manifest.jsonl`, the combined `sample_len_report.txt`, and `skipped_samples.jsonl` are kept only when `artifacts.debug_artifacts: true`
+* Process: read WDS samples directly from tar, render the chat text (the HF chat template when HF rendering is enabled; otherwise fall back to the handwritten `wds_pack.core.constants.TEMPLATES` picked by `sample.sample_type` + `model.model_type`), tokenise text+vision inputs with `AutoProcessor` or `AutoTokenizer`, and record tar byte locators
+* Output: `{data.work_dir}/sample_manifest.sqlite` (authoritative manifest) and `skipped_overlong.jsonl` (samples whose `token_len > max_token_len`, always written); `sample_manifest.jsonl`, the combined `sample_len_report.txt`, the per-media token reports under `token_len/`, and `skipped_samples.jsonl` are kept only when `artifacts.debug_artifacts: true`
 
 Manual run:
 ```bash
-python -m wds_pack.cli.scan_manifest --config config.yaml
+python -m wds_pack.cli.scan_manifest --config configs/config.yaml
 ```
 
 ### Step 2: Length bucketing & packing groups by media type (`wds_pack.cli.pack_bins`)
@@ -58,7 +58,7 @@ python -m wds_pack.cli.scan_manifest --config config.yaml
 
 Manual run:
 ```bash
-python -m wds_pack.cli.pack_bins --config config.yaml
+python -m wds_pack.cli.pack_bins --config configs/config.yaml
 ```
 
 ### Step 3: Build pack plan (`wds_pack.cli.build_plan`)
@@ -68,7 +68,7 @@ python -m wds_pack.cli.pack_bins --config config.yaml
 
 Manual run:
 ```bash
-python -m wds_pack.cli.build_plan --config config.yaml
+python -m wds_pack.cli.build_plan --config configs/config.yaml
 ```
 
 ### Step 4: Write packed samples back to WebDataset (`wds_pack.cli.write_wds`)
@@ -77,10 +77,10 @@ python -m wds_pack.cli.build_plan --config config.yaml
 
 Manual run:
 ```bash
-python -m wds_pack.cli.write_wds --config config.yaml
+python -m wds_pack.cli.write_wds --config configs/config.yaml
 ```
 
-## 5. Configuration (`config.yaml`)
+## 5. Configuration (`configs/config.yaml`)
 Key fields:
 
 * `data.input_format` – set to `wds` for WDS-native packing
@@ -95,7 +95,7 @@ Key fields:
 * `model.processor_kwargs.*` – HF processor arguments passed to `transformers.AutoProcessor.from_pretrained`  
 * `packed_wds.maxcount` / `maxsize` – tar-shard splitting strategy
 
-Example (excerpt, full fields see `config.yaml`):
+Example (excerpt, full fields see `configs/config.yaml`):
 
 ```yaml
 data:
