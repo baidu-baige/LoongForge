@@ -79,6 +79,5 @@ if [ $TEST_MODEL == "qwen3_vl_30b_a3b" ]; then
     export SAVE=/models/ckpt/Qwen3-VL-30B-A3B-Instruct-HF
 fi
 
-#PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH/tools:$PYTHONPATH \
-PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$LOONGFORGE_PATH/tools:$PYTHONPATH \
+PYTHONPATH=$LOONGFORGE_PATH:$LOONGFORGE_PATH/tools:$MEGATRON_PATH:$PYTHONPATH \
     python $LOONGFORGE_PATH/tests/mcore_bridge_roundtrip/test_hf_checkpoint_converter.py
