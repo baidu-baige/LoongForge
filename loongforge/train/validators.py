@@ -1029,6 +1029,16 @@ def _validate_custom_model_args(name, args, defaults={}):
                           "ignoring them.")
         args.recompute_modules = non_a2a_modules
 
+    # Filter out MLA-only recompute modules from non-MLA components.
+    if args.recompute_modules and not getattr(args, 'multi_latent_attention', False):
+        non_mla_modules = [m for m in args.recompute_modules if m != 'mla_up_proj']
+        if len(non_mla_modules) < len(args.recompute_modules):
+            warn_rank_0(
+                f"WARNING: Now for {name} model, mla_up_proj recompute is not supported, ignoring it.",
+                args.rank,
+            )
+        args.recompute_modules = non_mla_modules
+
     # When foundation uses selective recompute for MoE a2a overlap,
     # VIT inherits 'selective' but doesn't participate in MoE overlap.
     # Restore VIT to 'full' recompute by default — avoid requiring users to
