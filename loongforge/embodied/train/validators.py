@@ -230,6 +230,19 @@ def validate(training_args, model_cfg, data_cfg):
                 "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
             )
 
+    # ── Replicated-sharded Muon ──
+    # The optimizer is built by the model recipe, not by OPTIMIZER_REGISTRY, so
+    # without this check a wrong strategy surfaces as "Unknown optimizer
+    # 'replicated_muon'" from build_optimizer, which points nowhere useful.
+    if (
+        training_args.optimizer.lower() == "replicated_muon"
+        and training_args.distributed_strategy != "replicated_sharded"
+    ):
+        raise ValueError(
+            "--optimizer=replicated_muon requires "
+            "--distributed-strategy=replicated_sharded."
+        )
+
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
         raise ValueError(

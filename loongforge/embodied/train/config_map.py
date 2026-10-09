@@ -34,6 +34,12 @@ from loongforge.embodied.model.wall_oss_0_5.model_configuration_wall_oss_0_5 imp
 from loongforge.embodied.data.datasets.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
     WallOss05DataConfig,
 )
+from loongforge.embodied.model.lingbot_vla_v2.model_configuration_lingbot_vla_v2 import (
+    LingbotVLAV2ModelConfig,
+)
+from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configuration_lingbot_vla_v2 import (
+    LingbotVLAV2DataConfig,
+)
 
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -56,6 +62,9 @@ MODEL_SCHEMA = {
     ),
     "lingbot_va_libero": ModelSchema(
         "lingbot_va_libero.yaml", LingBotVAModelConfig, LingBotVADataConfig
+    ),
+    "lingbot_vla_v2": ModelSchema(
+        "lingbot_vla_v2.yaml", LingbotVLAV2ModelConfig, LingbotVLAV2DataConfig
     ),
     "pi05": ModelSchema("pi05.yaml", Pi05ModelConfig, Pi05DataConfig),
     "groot_n1_6": ModelSchema("groot_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
