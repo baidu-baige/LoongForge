@@ -12,7 +12,7 @@ fi
 
 # Locate the offline_packing tool package (contains wds_pack/).
 # `python -m wds_pack.cli.*` requires this dir to be the working directory.
-TOOLS_DIR="/workspace/LoongForge/tools/vlm_data_preprocess/offline_packing"
+TOOLS_DIR="${LOONGFORGE_PATH:-/workspace/LoongForge}/tools/vlm_data_preprocess/offline_packing"
 
 if [ ! -d "$TOOLS_DIR" ]; then
     echo "Error: offline_packing tool directory not found at $TOOLS_DIR"

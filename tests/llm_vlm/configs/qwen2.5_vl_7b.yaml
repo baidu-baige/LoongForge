@@ -322,10 +322,11 @@ scenarios:
           --maxsize 10000000
           --sample_type vqa'
       offline_packing:
-        # Disabled: offline_packing.sh/.yaml still target the old flat-script
-        # pipeline (get_sample_len.py/do_hashbacket.py/...), which was replaced by
-        # the WDS-native `python -m wds_pack.cli.*` flow. Re-enable only after the
-        # test harness is migrated to the WDS-native config schema.
+        # offline_packing.sh/.yaml are already migrated to the WDS-native
+        # `python -m wds_pack.cli.*` flow (scan_manifest/pack_bins/build_plan/
+        # write_wds). Kept disabled because the migrated path has not yet been
+        # run-verified in CI (needs the packing dataset + runtime). Re-enable
+        # after validating it once in an environment that has both.
         RUNNABLE_FLAG: false
         PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tests/llm_vlm/tools/offline_packing.sh
         packing_config_path: '${LOONGFORGE_PATH}/tests/llm_vlm/tools/offline_packing.yaml'
