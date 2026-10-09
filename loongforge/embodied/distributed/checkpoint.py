@@ -159,12 +159,19 @@ def save_checkpoint(
     ctx.barrier()
 
 
-def flush_pending_save(ctx: Optional[DistributedContext] = None):
+def flush_pending_save(
+    ctx: Optional[DistributedContext] = None,
+    step: Optional[int] = None,
+):
     """Wait on any in-flight async DCP save and finalize its ``resume_meta.json``.
 
     Safe to call repeatedly. Should be invoked before the process exits and
     before launching another save (the latter is handled internally by
     ``save_checkpoint``).
+
+    ``step`` is informational only: pass the current optimizer step to record
+    *when* the marker was committed, which is the whole point of the fix. The
+    save-entry and exit callers leave it None.
     """
     global _pending_async_save
     if _pending_async_save is None:
@@ -175,7 +182,7 @@ def flush_pending_save(ctx: Optional[DistributedContext] = None):
     local_ok = True
     local_err: Optional[Exception] = None
     try:
-        pending["future"].result()
+        _async_save_completion(pending).result()
         if pending["is_main"]:
             _write_resume_meta(pending["path"], pending["meta"])
     except Exception as e:  # noqa: BLE001 - propagated below after global vote
@@ -213,13 +220,80 @@ def flush_pending_save(ctx: Optional[DistributedContext] = None):
         raise RuntimeError(
             f"Aborting training because async checkpoint commit failed for "
             f"{pending['path']} (see per-rank logs for the original save error)."
-        ) from local_err     
+        ) from local_err
 
     if pending["is_main"]:
+        at_step = "" if step is None else f" at step {step}"
         logger.info(
-            f"Async checkpoint finalized ({pending['save_format']}): {pending['path']}"
+            f"Async checkpoint finalized ({pending['save_format']}): "
+            f"{pending['path']}{at_step}"
         )
-        
+
+
+def _async_save_completion(pending: dict):
+    """Return the future that signals the async save is durable.
+
+    ``dcp.async_save`` returns a plain ``Future`` in the configuration used
+    here. Torch may instead return an ``AsyncSaveResponse`` once a stager
+    stages asynchronously; ``upload_completion`` is the side that means
+    "written", so unwrap it rather than watching the staging future.
+    """
+    handle = pending["future"]
+    upload = getattr(handle, "upload_completion", None)
+    return handle if upload is None else upload
+
+
+def maybe_finalize_pending_save(
+    ctx: Optional[DistributedContext] = None,
+    step: Optional[int] = None,
+) -> bool:
+    """Commit an in-flight async DCP save as soon as its write finishes.
+
+    ``flush_pending_save`` otherwise runs only when the *next* save starts or
+    when training exits, so ``resume_meta.json`` — the marker
+    ``get_latest_checkpoint`` requires before a checkpoint counts as resumable —
+    lags a full ``--save-interval`` behind the data. A crash in that window
+    loses the whole interval even though the checkpoint is complete on disk.
+
+    Call this once per optimizer step (K=1, the granularity Megatron uses for
+    ``maybe_finalize_async_save(blocking=False)``). With no save in flight it
+    returns after one attribute read, so steady state costs nothing; while a
+    save is writing it costs a single-int ``all_reduce`` per step (tens of
+    microseconds against a ~1.5 s step), which is what buys a marker latency of
+    "write done + 1 step" instead of a whole save interval. There is
+    deliberately no "steps since launch" gate: it would shave only a few
+    milliseconds per interval while adding a threshold that has to be matched to
+    the write time, and a threshold set too high delays the marker.
+
+    ``Future.done()`` is rank-local, so it cannot gate the collective: entering
+    ``flush_pending_save`` — which runs collectives of its own — on a subset of
+    ranks would deadlock. The ``all_reduce`` below is therefore unconditional
+    once a save is pending, and MIN (logical AND over {0, 1}) decides.
+
+    ``step`` is informational only — it is forwarded to ``flush_pending_save``
+    so the "finalized" log records which step committed the marker. It does not
+    affect the decision.
+
+    Returns whether this call finalized the pending save.
+    """
+    pending = _pending_async_save
+    if pending is None:
+        return False
+
+    device = ctx.device if ctx is not None else torch.device("cpu")
+    flag = torch.tensor(
+        [1 if _async_save_completion(pending).done() else 0],
+        dtype=torch.int,
+        device=device,
+    )
+    if ctx is not None and ctx.is_distributed:
+        dist.all_reduce(flag, op=dist.ReduceOp.MIN)
+    if flag.item() != 1:
+        return False
+
+    flush_pending_save(ctx, step)
+    return True
+
 
 def _write_resume_meta(path: str, meta: dict):
     with open(os.path.join(path, "resume_meta.json"), "w") as f:
@@ -671,7 +745,14 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
     options = StateDictOptions(full_state_dict=False, cpu_offload=False)
     model_sd, optim_sd = get_state_dict(model, optimizers=optimizers, options=options)
 
-    # 1) Model — strict.
+    # 1) Model — strict. Load the DCP tensors into the UNWRAPPED module directly.
+    # set_state_dict() mis-handles the DDP "module." prefix for this model's
+    # nesting: torch's _load_model_state_dict feeds the unprefixed DCP keys
+    # straight into DistributedDataParallel.load_state_dict, raising
+    #   "Missing key(s): module.core.* / Unexpected key(s): core.*".
+    # get_state_dict() already returns clean (unwrapped) FQNs, which match the
+    # raw module 1:1, so load there and skip the buggy re-wrap. (DDP replicates
+    # params — full_state_dict=False still yields full tensors per rank.)
     model_state = {"model": model_sd}
     try:
         dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
@@ -687,14 +768,9 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
                 "--pretrained-checkpoint instead of --resume."
             ) from exc
         raise
-    set_state_dict(
-        model, optimizers=[],
-        model_state_dict=model_state["model"],
-        optim_state_dict={},
-        options=options,
-    )
+    unwrap_model(model).load_state_dict(model_state["model"], strict=True)
     if ctx.is_main:
-        logger.info("model resumed via DCP (strict)")
+        logger.info("model resumed via DCP (strict, into unwrapped module)")
 
     # 2) Optimizer — lenient. Missing keys are expected; full failure is not.
     if has_optim:
