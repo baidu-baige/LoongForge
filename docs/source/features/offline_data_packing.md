@@ -115,7 +115,7 @@ Step 1’s token counts depend on the actual `AutoProcessor` logic, so you can c
 
 * Change model: set `model.processor_kwargs.pretrained_model_name_or_path` to the desired HF model/processor; update `model.model_type` accordingly.  
 * Adjust image-token budget / resolution: add processor-supported arguments under `model.processor_kwargs` (e.g. Qwen-VL’s `min_pixels`/`max_pixels`).  
-* Template alignment: if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template for sample_type=..., model_type=...”.  
+* Template alignment: this is only needed when HF chat-template rendering is disabled (neither `model.use_hf_chat_template` nor `model.chat_template_path` is set) and the handwritten template is used as the fallback — if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template for sample_type=..., model_type=...”. When HF rendering is enabled this lookup is skipped and no `TEMPLATES` entry is required.
 * Media pre-processing: under `media_preprocess` you can assign pre-processing function names per modality (implementations in `tools/vlm_data_preprocess/offline_packing/wds_pack/media/preprocess.py`) to control resize/crop/frame-reading behaviour.
 
 ## Acknowledgements

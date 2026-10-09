@@ -44,7 +44,7 @@ bash scripts/pack_wds.sh
 ### 步骤 1：扫描 WDS manifest 并计算每个样本的 Token 长度（`wds_pack.cli.scan_manifest`）
 * 输入：`data.wds_dir` 下的 `*.tar` 分片
 * 处理：直接从 tar 读取 WDS 样本，渲染对话文本（启用 HF 渲染时使用模型自带的 HF chat 模板；否则按 `sample.sample_type` + `model.model_type` 回退到手写模板 `wds_pack.core.constants.TEMPLATES`），使用 `AutoProcessor` 或 `AutoTokenizer` 对文本+视觉输入进行分词，并记录 tar 字节定位信息
-* 输出：`{data.work_dir}/sample_manifest.sqlite`（权威 manifest）和 `skipped_overlong.jsonl`（`token_len > max_token_len` 被跳过的样本，始终写出）；`sample_manifest.jsonl`、合并报告 `sample_len_report.txt`、`token_len/` 下各媒体的 Token 报告，以及 `skipped_samples.jsonl` 仅在 `artifacts.debug_artifacts: true` 时保留
+* 输出：`{data.work_dir}/sample_manifest.sqlite`（权威 manifest）和 `skipped_overlong.jsonl`（`token_len > max_token_len` 被跳过的样本，始终写出）；`sample_manifest.jsonl`、合并报告 `sample_len_report.txt`、`token_len/` 下各媒体类型的 Token 报告，以及 `skipped_samples.jsonl` 仅在 `artifacts.debug_artifacts: true` 时保留
 
 手动运行：
 ```bash
@@ -52,7 +52,7 @@ python -m wds_pack.cli.scan_manifest --config configs/config.yaml
 ```
 
 ### 步骤 2：按媒体类型进行长度分桶与打包分组（`wds_pack.cli.pack_bins`）
-* 输入：`sample_manifest.sqlite`（各媒体的 Token 长度）
+* 输入：`sample_manifest.sqlite`（各媒体类型的 Token 长度）
 * 处理：在 `sample.max_token_len` 约束下，为 text/image/video 分别将样本打包入"箱子"。生产算法为 `packing.algorithm: best_fit_decreasing`（BFD）；`hashbucket` 仍可用于旧的精确填充行为
 * 输出：`{data.work_dir}/bins/bins_plan_{text,image,video}.jsonl`（中间文件 `bins/bins_boxs_{text,image,video}.pkl` 仅在 `artifacts.keep_intermediate: true` 时保留）
 
@@ -62,8 +62,8 @@ python -m wds_pack.cli.pack_bins --config configs/config.yaml
 ```
 
 ### 步骤 3：生成打包计划（`wds_pack.cli.build_plan`）
-* 输入：各媒体的 `bins/bins_plan_*.jsonl` + `sample_manifest.sqlite`
-* 处理：将各媒体的 bins 转换为稳定的打包样本计划
+* 输入：各媒体类型的 `bins/bins_plan_*.jsonl` + `sample_manifest.sqlite`
+* 处理：将各媒体类型的 bins 转换为稳定的打包样本计划
 * 输出：`{data.work_dir}/pack_plan.jsonl`（诊断文件 `unpacked_samples.jsonl` 仅在 `artifacts.debug_artifacts: true` 时保留）
 
 手动运行：
@@ -115,7 +115,7 @@ sample:
 
 * 更换模型：将 `model.processor_kwargs.pretrained_model_name_or_path` 设置为所需的 HF 模型/处理器；相应更新 `model.model_type`。
 * 调整图像 Token 预算 / 分辨率：在 `model.processor_kwargs` 下添加处理器支持的参数（例如 Qwen-VL 的 `min_pixels`/`max_pixels`）。
-* 模板对齐：如果添加了新的 `model.model_type`，确保 `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template for sample_type=..., model_type=..."。
+* 模板对齐：仅在未启用 HF chat 模板渲染（即 `model.use_hf_chat_template` 与 `model.chat_template_path` 均未设置）而回退到手写模板时，才需要此项——如果添加了新的 `model.model_type`，确保 `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template for sample_type=..., model_type=..."。启用 HF 渲染时则不走该查找，也不要求 `TEMPLATES` 条目。
 * 媒体预处理：在 `media_preprocess` 下可以为每种模态指定预处理函数名（实现在 `tools/vlm_data_preprocess/offline_packing/wds_pack/media/preprocess.py`），以控制缩放/裁剪/帧读取行为。
 
 ## 致谢
