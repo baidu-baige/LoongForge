@@ -17,6 +17,10 @@ directory:
 --save-hf true          # optional: export HF weights when training finishes
 ```
 
+For LoRA/PEFT fine-tuning, `--load`/`--save` point at the adapter (LoRA) Mcore
+checkpoint dir, and the HF **base** model is supplied via
+`--pretrained-checkpoint <HF dir>`; the bridge loads that base online the same way.
+
 On the first run (no `latest_checkpointed_iteration.txt` in `--save`) it loads HF
 and converts online; on later runs it resumes from the saved Mcore shards. See the
 full feature guide for loading/saving/resume semantics and VLM heterogeneous TP:
