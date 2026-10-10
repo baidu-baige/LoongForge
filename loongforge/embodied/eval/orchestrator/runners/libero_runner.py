@@ -290,13 +290,15 @@ def run_episode(
             # therefore *removes* the refresh the first num_steps_wait dummy step
             # would otherwise do, changing the torques applied during those dummy
             # steps -- i.e. the arm pose and both camera images at the first policy
-            # call. The official FastWAM eval does not force it: measured 2026-09-20
-            # with the same weights/input, the first call's `input_image` was
+            # call. The default is therefore ON: that is the legacy LoongForge
+            # behaviour every other model's recorded LIBERO numbers were taken with.
+            # The official FastWAM eval does NOT force it: measured 2026-09-20 with
+            # the same weights/input, the first call's `input_image` was
             # bit-identical to the official harness with the forced update disabled,
-            # and differed by max|d|=1.77 (1.3% of pixels) with it enabled.
-            # Default is therefore OFF (= official semantics); the flag restores the
-            # legacy behaviour and LIBERO_CONTROLLER_FORCE_UPDATE=1 forces it on.
-            force_controller_update = bool(getattr(args, "controller_force_update", False))
+            # and differed by max|d|=1.77 (1.3% of pixels) with it enabled -- so the
+            # FastWAM eval configs set `benchmark.controller_force_update: false`.
+            # LIBERO_CONTROLLER_FORCE_UPDATE=1 forces it on regardless.
+            force_controller_update = bool(getattr(args, "controller_force_update", True))
             if os.environ.get("LIBERO_CONTROLLER_FORCE_UPDATE") == "1":
                 force_controller_update = True
             if force_controller_update:
@@ -527,7 +529,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
         adapter.action_space,
         action_decoder_key or "<identity>",
         adapter.prefer_controller_ee,
-        bool(getattr(args, "controller_force_update", False)),
+        bool(getattr(args, "controller_force_update", True)),
     )
     server_manager = getattr(args, "server_manager", None)
     if server_manager is not None:
@@ -668,12 +670,14 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--controller-force-update",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=(
             "Force a robosuite OSC cache refresh (ee_pos/ee_ori_mat/Jacobians/mass "
-            "matrix) right after set_init_state. Default OFF = official FastWAM eval "
-            "semantics (see the comment in run_episode: enabling it changes the arm "
-            "motion during num_steps_wait and hence the first observation)."
+            "matrix) right after set_init_state. Default ON = legacy LoongForge "
+            "behaviour; the official FastWAM eval does not force it, so its configs "
+            "set benchmark.controller_force_update=false (see the comment in "
+            "run_episode: disabling it changes the arm motion during num_steps_wait "
+            "and hence the first observation)."
         ),
     )
     parser.add_argument("--unnorm-key", default="franka")

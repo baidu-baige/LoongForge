@@ -177,10 +177,11 @@ CONFIG_MAPPING = {
     # convention); True -> prefer the OSC controller's ee_pos/ee_ori_mat
     # (X-VLA client convention).
     "benchmark.prefer_controller_ee": "prefer_controller_ee",
-    # Force an OSC cache refresh right after set_init_state (legacy LoongForge
-    # behaviour). Default False = official FastWAM eval semantics; enabling it
-    # changes the arm motion during num_steps_wait and hence the first
-    # observation (see libero_runner.run_episode for the measurement).
+    # Force an OSC cache refresh right after set_init_state. Default True = legacy
+    # LoongForge behaviour; the official FastWAM eval does not force it, so its
+    # configs set this false. Disabling it changes the arm motion during
+    # num_steps_wait and hence the first observation (see libero_runner.run_episode
+    # for the measurement).
     "benchmark.controller_force_update": "controller_force_update",
     # Camera render resolution passed to robosuite. Omit to keep the shared
     # default (LIBERO_ENV_RESOLUTION); set it when the official eval client of

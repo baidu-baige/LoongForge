@@ -19,8 +19,9 @@
 #   prefer_controller_ee: false) are the official eval settings; changing
 #   either costs tens of points. Official FastWAM reads obs['robot0_eef_pos'],
 #   not the OSC controller pose.
-# - controller_force_update: false (the runner default) skips the OSC cache
-#   refresh after set_init_state, matching the official eval. Measured
+# - controller_force_update: false (set explicitly here; the runner default is
+#   true, the legacy LoongForge behaviour other models still use) skips the OSC
+#   cache refresh after set_init_state, matching the official eval. Measured
 #   2026-09-20 on identical weights+input: with the refresh the first call's
 #   input_image differed from the official harness by max|d|=1.77 (~1.3% of
 #   pixels); without it the two input images were bit-identical.
@@ -60,6 +61,10 @@ benchmark:
   # Official FastWAM reads obs['robot0_eef_pos'], not the OSC controller's cached
   # ee_pos; the runner argparse defaults this to True, so declare it explicitly.
   prefer_controller_ee: false
+  # Official FastWAM eval does not force the OSC cache refresh after
+  # set_init_state; the runner default (true) is the legacy LoongForge
+  # behaviour, so declare false here.
+  controller_force_update: false
 
 model:
   backend: loongforge
