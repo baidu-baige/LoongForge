@@ -26,6 +26,7 @@
 
 <p align="center">
   <a href="https://hellogithub.com/repository/baidu-baige/LoongForge" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=2eafb075947e41a4be4d157a6f0382ae&claim_uid=PjNLOfBMoxlaTEq&theme=neutral" alt="Featured｜HelloGitHub" width="250" height="54" /></a>
+  <a href="https://atomgit.com/baidu-baige/LoongForge" target="_blank"><img src="https://atomgit.com/baidu-baige/LoongForge/star/new_badge.svg" alt="AtomGit star" width="250" height="54" /></a>
 </p>
 
 <p align="center">
@@ -306,30 +307,30 @@ Open-source models trained with **LoongForge** or its predecessor **AIAK-Trainin
 ```
 LoongForge/
 ├── loongforge/                   # Core training framework
-│   ├── train/                    # Training entry points & trainers
-│   │   ├── pretrain/             #   Pretrain (LLM, VLM)
-│   │   ├── sft/                  #   SFT (LLM, VLM, InternVL, ERNIE)
-│   │   └── diffusion/            #   Diffusion (WAN, Qwen-Image)
+│   ├── train/                    # Training entry points and trainers
+│   │   ├── pretrain/             #   Pretraining
+│   │   ├── sft/                  #   Supervised fine-tuning
+│   │   └── diffusion/            #   Diffusion training
 │   ├── models/                   # Unified model abstractions
-│   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
-│   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
-│   │   ├── omni_models/          #   Multi-modal composition
-│   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
-│   │   └── common/               #   Shared layers and utilities
-│   ├── embodied/                 # LoongForge-Embodied: standalone torch-native (DDP/FSDP)
-│   │                             #   embodied (VLA + world-action) subsystem — see loongforge/embodied/README.md
-│   ├── data/                     # Data pipelines (multi-modal, video, DP balance)
+│   │   ├── foundation/           #   LLM backbones
+│   │   ├── encoder/              #   Vision encoders
+│   │   ├── omni_models/          #   Multimodal composition (encoder + projector + decoder)
+│   │   ├── diffusion/            #   Diffusion models
+│   │   └── common/               #   Shared base configs, layers and utilities
+│   ├── embodied/                 # LoongForge-Embodied: standalone torch-native
+│                                 #   embodied (VLA + world-action) training subsystem, see loongforge/embodied/README.md
+│   ├── data/                     # Data loading and processing pipelines
 │   ├── tokenizer/                # Tokenizers
-│   └── utils/                    # Config map, constants, etc.
+│   └── utils/                    # Config registry, constants and shared helpers
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM (git submodule)
 ├── configs/                      # Hydra YAML configs (models, data)
-├── examples/                     # GPU launch scripts
-├── examples_xpu/                 # Kunlun XPU launch scripts
-├── tools/                        # Checkpoint conversion, data preprocessing
+├── examples/                     # Launch scripts for NVIDIA GPUs
+├── examples_xpu/                 # Launch scripts for Kunlun XPUs
+├── tools/                        # Standalone dev tools: checkpoint conversion, data preprocessing, etc. (see tools/README.md)
 ├── ops/                          # Custom fused operators (incl. open-sourced TileLang)
 ├── patches/                      # TransformerEngine patches
 ├── docker/                       # Dockerfiles (GPU & XPU)
-├── tests/                        # E2E test suite (YAML-driven)
+├── tests/                        # Test suites (E2E, regression, unit)
 └── docs/                         # Documentation
 ```
 
@@ -372,7 +373,9 @@ Thanks to all our contributors:
 
 ## 🙏 Acknowledgments
 
-LoongForge stands on the shoulders of the open-source community. Its Megatron stack builds on NVIDIA's [Megatron-LM](https://github.com/NVIDIA/Megatron-LM), and the project also draws on [HuggingFace Transformers](https://github.com/huggingface/transformers), [LLaMA-Factory](https://github.com/hiyouga/LlamaFactory), [Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge), [LeRobot](https://github.com/huggingface/lerobot), and the official implementations of the models we support (e.g. [OpenPI](https://github.com/Physical-Intelligence/openpi), [NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)). We also thank the [LINUX DO](https://linux.do/) community for providing a welcoming space for technical discussion and supporting open-source sharing, and [AtomGit](https://atomgit.com/baidu-baige/LoongForge) for hosting LoongForge's official mirror.
+LoongForge stands on the shoulders of the open-source community. Its Megatron stack builds on NVIDIA's [Megatron-LM](https://github.com/NVIDIA/Megatron-LM), and the project also draws on [HuggingFace Transformers](https://github.com/huggingface/transformers), [LLaMA-Factory](https://github.com/hiyouga/LlamaFactory), [Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge), [LeRobot](https://github.com/huggingface/lerobot), and the official implementations of the models we support (e.g. [OpenPI](https://github.com/Physical-Intelligence/openpi), [NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)).
+
+We also thank the [LINUX DO](https://linux.do/) community for providing a welcoming space for technical discussion, and [AtomGit](https://atomgit.com/baidu-baige/LoongForge) for hosting LoongForge's official mirror.
 
 <a id="contact"></a>
 ## 💬 Contact Us

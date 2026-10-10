@@ -26,6 +26,7 @@
 
 <p align="center">
   <a href="https://hellogithub.com/repository/baidu-baige/LoongForge" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=2eafb075947e41a4be4d157a6f0382ae&claim_uid=PjNLOfBMoxlaTEq&theme=neutral" alt="Featured｜HelloGitHub" width="250" height="54" /></a>
+  <a href="https://atomgit.com/baidu-baige/LoongForge" target="_blank"><img src="https://atomgit.com/baidu-baige/LoongForge/star/new_badge.svg" alt="AtomGit 星标" width="250" height="54" /></a>
 </p>
 
 <p align="center">
@@ -307,29 +308,29 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 LoongForge/
 ├── loongforge/                   # 核心训练框架
 │   ├── train/                    # 训练入口与训练器
-│   │   ├── pretrain/             #   预训练（LLM、VLM）
-│   │   ├── sft/                  #   SFT（LLM、VLM、InternVL、ERNIE）
-│   │   └── diffusion/            #   Diffusion（WAN、Qwen-Image）
+│   │   ├── pretrain/             #   预训练
+│   │   ├── sft/                  #   监督微调（SFT）
+│   │   └── diffusion/            #   Diffusion 训练
 │   ├── models/                   # 统一的模型抽象层
-│   │   ├── foundation/           #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
-│   │   ├── encoder/              #   视觉编码器（ViT、Qwen-VL、InternVL、...）
-│   │   ├── omni_models/          #   多模态组合
-│   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
-│   │   └── common/               #   公共 Layer 与工具
-│   ├── embodied/                 # LoongForge-Embodied：独立的 torch-native（DDP/FSDP）具身
-│   │                             #   （VLA + 世界-动作）训练子系统，详见 loongforge/embodied/README_zh.md
-│   ├── data/                     # 数据流水线（多模态、视频、DP 负载均衡）
+│   │   ├── foundation/           #   LLM 主干
+│   │   ├── encoder/              #   视觉编码器
+│   │   ├── omni_models/          #   多模态组合（编码器 + 投影层 + 解码器）
+│   │   ├── diffusion/            #   Diffusion 模型
+│   │   └── common/               #   公共基类配置、Layer 与工具
+│   ├── embodied/                 # LoongForge-Embodied：独立的 torch-native 具身
+│                                 #   （VLA + 世界-动作）训练子系统，详见 loongforge/embodied/README_zh.md
+│   ├── data/                     # 数据加载与处理流水线
 │   ├── tokenizer/                # Tokenizer
-│   └── utils/                    # 配置映射、常量等
+│   └── utils/                    # 配置映射、常量与公共工具
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）
 ├── configs/                      # Hydra YAML 配置（模型、数据）
-├── examples/                     # GPU 启动脚本
+├── examples/                     # NVIDIA GPU 启动脚本
 ├── examples_xpu/                 # 昆仑芯 XPU 启动脚本
-├── tools/                        # Checkpoint 转换、数据预处理
+├── tools/                        # 独立开发工具：Checkpoint 转换、数据预处理等（详见 tools/README.md）
 ├── ops/                          # 自定义融合算子（含开源的 TileLang 版本）
 ├── patches/                      # TransformerEngine 补丁
 ├── docker/                       # Dockerfile（GPU & XPU）
-├── tests/                        # 端到端测试（YAML 驱动）
+├── tests/                        # 测试套件（端到端、回归、单元）
 └── docs/                         # 文档
 ```
 
@@ -372,7 +373,9 @@ LoongForge/
 
 ## 🙏 致谢
 
-LoongForge 的成长离不开开源社区。其 Megatron 栈以 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 为基础，项目也从 [HuggingFace Transformers](https://github.com/huggingface/transformers)、[LLaMA-Factory](https://github.com/hiyouga/LlamaFactory)、[Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge)、[LeRobot](https://github.com/huggingface/lerobot) 以及所支持模型的官方实现（如 [OpenPI](https://github.com/Physical-Intelligence/openpi)、[NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)）中汲取了经验。同时也特别感谢 [LINUX DO](https://linux.do/) 社区为技术交流提供友善的空间并支持开源分享，以及 [AtomGit](https://atomgit.com/baidu-baige/LoongForge) 为 LoongForge 提供官方镜像托管。
+LoongForge 的成长离不开开源社区。其 Megatron 栈以 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 为基础，项目也从 [HuggingFace Transformers](https://github.com/huggingface/transformers)、[LLaMA-Factory](https://github.com/hiyouga/LlamaFactory)、[Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge)、[LeRobot](https://github.com/huggingface/lerobot) 以及所支持模型的官方实现（如 [OpenPI](https://github.com/Physical-Intelligence/openpi)、[NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)）中汲取了经验。
+
+同时也特别感谢 [LINUX DO](https://linux.do/) 社区为技术交流提供友善的空间，以及 [AtomGit](https://atomgit.com/baidu-baige/LoongForge) 为 LoongForge 提供官方镜像托管。
 
 <a id="contact"></a>
 ## 💬 联系我们
