@@ -88,7 +88,7 @@ This section is the same as the pre-training section, see section 2 in [Quick St
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting open-source Megatron parameters, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/train/arguments.py file. Main parameter descriptions are as follows:
+Based on supporting open-source Megatron parameters, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/engines/mcore/arguments.py file. Main parameter descriptions are as follows:
 
 * `--training-phase sft`: Explicitly enable SFT training phase.
 * `--chat-template qwen2-vl`: Specify SFT conversation template as qwen2-vl for concatenating multi-round dialogue samples into model input

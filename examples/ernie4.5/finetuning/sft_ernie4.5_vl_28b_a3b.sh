@@ -30,7 +30,7 @@ MODEL_ARGS=(
     --position-embedding-type rope
 )
 
-MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/ernie4_5_vl/ernie4_5_vl_28b_a3b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/ernie4.5/ernie4_5_vl_28b_a3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer

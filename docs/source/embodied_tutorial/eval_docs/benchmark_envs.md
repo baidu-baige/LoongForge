@@ -1,6 +1,6 @@
 # Benchmark Environments
 
-This document records the benchmark runtime environments used by the LoongForge-VLA eval module under `loongforge/embodied/eval`.
+This document records the benchmark runtime environments used by the LoongForge embodied evaluation module under `loongforge/evaluation/embodied`.
 
 **For installation, follow the official benchmark homepages** — each benchmark page links to its official repository. This document is not an install guide; it records the dependency versions of the environments currently used by the eval module, so they can be compared / reproduced when debugging.
 
@@ -43,7 +43,7 @@ pyyaml          6.0.3
 Used by:
 
 ```text
-examples/embodied/pi05/eval/configs/libero/*.yaml
+examples/pi05/eval/configs/libero/*.yaml
 ```
 
 ## CALVIN
@@ -71,7 +71,7 @@ model score status:  need CALVIN-domain weights + dataset_statistics.json
 Used by:
 
 ```text
-examples/embodied/pi05/eval/configs/calvin/smoke.yaml
+examples/pi05/eval/configs/calvin/smoke.yaml
 ```
 
 ## SimplerEnv
@@ -105,12 +105,12 @@ Current SimplerEnv status:
 ```text
 X-VLA WidowX status:   task success after absolute EE controller patch
                        (see patches/simplerenv/xvla.md)
-                       configs: examples/embodied/xvla/eval/configs/simplerenv/*
+                       configs: examples/xvla/eval/configs/simplerenv/*
 GR00T-N1.6 status:     task success (open_drawer 10/10, close_drawer 9/10,
                        spoon 7/10, eggplant 6/10, carrot 16/30, stack_cube 2/10;
                        official prepackaged_config)
                        uses the stock upstream delta controller, no env change
-                       configs: examples/embodied/groot_n1_6/eval/configs/simplerenv/*
+                       configs: examples/groot_n1_6/eval/configs/simplerenv/*
 pi05 configs:          only widowx_stack_cube_smoke.yaml
                        server.random_init: true (connectivity only, not task success)
                        other Bridge tasks: edit task_name in-file comments
@@ -121,8 +121,8 @@ Upstream SimplerEnv without the 255isWhite-style absolute EE registration will m
 Used by:
 
 ```text
-examples/embodied/pi05/eval/configs/simplerenv/*.yaml
-examples/embodied/xvla/eval/configs/simplerenv/*.yaml
+examples/pi05/eval/configs/simplerenv/*.yaml
+examples/xvla/eval/configs/simplerenv/*.yaml
 ```
 
 ## RoboTwin
@@ -166,7 +166,7 @@ action_bridge modes:   pi05_aloha_14d | ee6d_dual
 pi05 RoboTwin2:        task success (adjust_bottle demo_clean)
                        action_bridge=pi05_aloha_14d, action_dim=14, action_horizon=32
                        weight example: /path/to/pi0.5_robotwin2
-                       stats: examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json
+                       stats: examples/pi05/eval/assets/pi05_robotwin2_dataset_stats.json
                        (from the weight's assets/.../norm_stats.json: state→observation.state, actions→action)
 xvla RoboTwin2:        task success (adjust_bottle demo_clean)
                        action_bridge=ee6d_dual, domain_id=6
@@ -177,8 +177,8 @@ Connectivity only:      edit adjust_bottle_smoke*.yaml (random_init); no separat
 Used by:
 
 ```text
-examples/embodied/pi05/eval/configs/robotwin/*.yaml
-examples/embodied/xvla/eval/configs/robotwin/*.yaml
+examples/pi05/eval/configs/robotwin/*.yaml
+examples/xvla/eval/configs/robotwin/*.yaml
 ```
 
 ## ManiSkill
@@ -203,6 +203,5 @@ Visual smoke needs the SAPIEN Vulkan runtime (see the [SimplerEnv page](benchmar
 Used by:
 
 ```text
-examples/embodied/pi05/eval/configs/maniskill/*.yaml
+examples/pi05/eval/configs/maniskill/*.yaml
 ```
-

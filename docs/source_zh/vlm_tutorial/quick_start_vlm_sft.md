@@ -88,7 +88,7 @@ multimodal:
 
 ### 3.1 参数配置说明
 
-在开源 Megatron 提供的参数基础上，LoongForge 添加了更便捷的训练启动参数。详细配置可在 loongforge/train/arguments.py 文件中找到。主要参数说明如下：
+在开源 Megatron 提供的参数基础上，LoongForge 添加了更便捷的训练启动参数。详细配置可在 loongforge/engines/mcore/arguments.py 文件中找到。主要参数说明如下：
 
 * `--training-phase sft`：显式启用 SFT 训练阶段。
 * `--chat-template qwen2-vl`：指定 SFT 对话模板为 qwen2-vl，用于将多轮对话样本拼接为模型输入

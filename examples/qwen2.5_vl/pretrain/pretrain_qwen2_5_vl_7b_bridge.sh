@@ -23,7 +23,7 @@ NNODES=${WORLD_SIZE:-"1"}
 NODE_RANK=${RANK:-"0"}
 
 # To specify the model config file
-MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_7b.yaml
 
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE

@@ -34,13 +34,13 @@ Run from inside the **benchmark** environment. The run scripts and eval YAMLs sh
 
 ```bash
 cd /path/to/LoongForge-VLA
-examples/embodied/pi05/eval/run_calvin_eval.sh    # pi05 (connectivity only)
-examples/embodied/xvla/eval/run_calvin_eval.sh    # xvla (connectivity only)
+examples/pi05/eval/run_calvin_eval.sh    # pi05 (connectivity only)
+examples/xvla/eval/run_calvin_eval.sh    # xvla (connectivity only)
 ```
 
 Environment variables: `CONFIG`, `BENCHMARK_PYTHON` (CALVIN env interpreter), `CUDA_VISIBLE_DEVICES`.
 
-Key config fields (see `examples/embodied/<model>/eval/configs/calvin/smoke.yaml`):
+Key config fields (see `examples/<model>/eval/configs/calvin/smoke.yaml`):
 
 - `benchmark.dataset_path` — path to a tree containing `validation/`
 - `server.random_init` — `true` in shipped configs (connectivity check). With CALVIN-domain weights set `false`, fill `ckpt_path` / `dataset_statistics_path`; for xvla set `model.domain_id: 2`

@@ -29,7 +29,7 @@ export CHECKPOINT_PATH=/workspace/models/lingbot-va-posttrain-robotwin
 export DATA_PATH=/workspace/datasets/robotwin-clean-and-aug-lerobot
 export OUTPUT_DIR=/workspace/outputs/lingbot_va_robotwin
 
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
+bash examples/lingbot_va/finetune_lingbot_va_robotwin_fsdp.sh
 ```
 LIBERO-Long：
 
@@ -38,7 +38,7 @@ export CHECKPOINT_PATH=/workspace/models/lingbot-va-posttrain-libero-long
 export DATA_PATH=/workspace/datasets/libero-long-lerobot
 export OUTPUT_DIR=/workspace/outputs/lingbot_va_libero
 
-bash examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh
+bash examples/lingbot_va/finetune_lingbot_va_libero_fsdp.sh
 ```
 ## 2. 性能优化项
 ### 2.1 固化项
@@ -77,7 +77,7 @@ bash examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh
 LINGBOT_BALANCED_SAMPLER=0 \
 LINGBOT_FSDP_RESHARD=1 \
 LINGBOT_FSDP_BF16_REDUCE=0 \
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
+bash examples/lingbot_va/finetune_lingbot_va_robotwin_fsdp.sh
 ```
 
 ### 2.3 功能性开关

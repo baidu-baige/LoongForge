@@ -7,8 +7,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=/mnt/cluster/huggingface.co/deepseek-ai/DeepSeek-V3.2-bf16  # the BF16 format checkpoint, converted via fp8_to_bf16 casting script
 SAVE=/mnt/cluster/loongforge-ckpt/deepseek3/DeepSeek-V3.2-bf16-tp8pp8ep32etp1/  # the converted checkpoint will be in MCore BF16 format
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/deepseek_v3_2_sparse.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_2_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/deepseek_v3_2_sparse.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/ckpt_convert/deepseek_v3_2_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

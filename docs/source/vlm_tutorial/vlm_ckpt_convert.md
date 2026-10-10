@@ -26,7 +26,7 @@ model:
   mix_used_vision_projector: true
   foundation: 
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["loongforge.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["loongforge.models.language.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
     tensor_model_parallel_size: 2
@@ -99,7 +99,7 @@ SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-mcore # Temporary pat
 SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-mcore # Temporary path for saving adapter, will be deleted after conversion
 SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-mcore # Temporary path for saving vision patch, will be deleted after conversion
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml # Specify model configuration file path after model construction
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_7b.yaml # Specify model configuration file path after model construction
 
 # Specify checkpoint conversion configuration file paths for each module
 FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml # Specify foundation model checkpoint conversion configuration file path
@@ -206,7 +206,7 @@ SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-hf
 SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-hf
 SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_7b.yaml
 
 FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
 IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml

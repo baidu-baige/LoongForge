@@ -14,7 +14,7 @@ LoongForge 支持编码器和解码器的异构张量并行（TP）配置，即�
 在对应模型的 vit.yaml 中设置 `tensor-model-parallel-size` 来指定 ViT TP 大小。例如，在 qwen3_vit 中添加 `tensor_model_parallel_size: 2` 来指定 ViT 的 TP 大小：
 
 ```yaml
-_target_: loongforge.models.encoder.Qwen3VisionModelConfig
+_target_: loongforge.models.vision.Qwen3VisionModelConfig
 
 num_layers: 27
 hidden_size: 1152
@@ -86,7 +86,7 @@ MODEL_PARALLEL_ARGS=(
 
 在对应模型的 `vit.yaml` 中添加 `tensor_model_parallel_size: 1`。目前启用异构 DP 时，仅支持编码器 TP 大小为 1。
 ```yaml
-_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.vision.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280
@@ -146,7 +146,7 @@ model_type: "qwen2_5_vit"
 全量异构 DP 要求编码器的 `tensor_model_parallel_size: 1`。在对应模型的 vit.yaml 中添加或设置此项：
 
 ```yaml
-_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.vision.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280

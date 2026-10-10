@@ -1,4 +1,4 @@
-_target_: loongforge.models.encoder.InternVisionConfig
+_target_: loongforge.models.vision.InternVisionConfig
 
 num_layers: 45
 hidden_size: 3200

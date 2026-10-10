@@ -10,7 +10,7 @@ DATA_PATH: $pfs_path/omni_datasets/LoongForge/llavaov_1.5_4b/test_packed_wds_4k/
 TOKENIZER_PATH: $pfs_path/huggingface.co/LLaVA-OneVision-1.5-4B-stage0/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/llava_onevision_1.5_1.5/llava_onevision_1_5_4b.yaml
 
 FOUNDATION_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
 IMAGE_ENCODER_CONVERT_FILE: $LOONGFORGE_PATH/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml

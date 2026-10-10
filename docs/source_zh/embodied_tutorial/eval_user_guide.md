@@ -1,6 +1,6 @@
 # 离线评测
 
-LoongForge 在 `loongforge/embodied/eval` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
+LoongForge 在 `loongforge.evaluation.embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
 
 ---
 
@@ -21,11 +21,11 @@ LoongForge 在 `loongforge/embodied/eval` 下提供了离线评测模块，通�
 
 | 组合 | 公开权重 | 配置文件 |
 |---|---|---|
-| pi0.5 + LIBERO | pi0.5 LIBERO 微调（openpi `pi05_libero` 系列或本地 `model.safetensors` + `dataset_statistics.json`） | `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml` |
-| pi0.5 + RoboTwin | pi0.5 RoboTwin-2.0 联合微调 + 统计信息（见 *4.2 章节*） | `examples/embodied/pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml` |
-| X-VLA + LIBERO | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) | `examples/embodied/xvla/eval/configs/libero/libero_weight_object_smoke.yaml` |
-| X-VLA + RoboTwin | [2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2) | `examples/embodied/xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml` |
-| X-VLA + SimplerEnv | [2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX) | `examples/embodied/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml` |
+| pi0.5 + LIBERO | pi0.5 LIBERO 微调（openpi `pi05_libero` 系列或本地 `model.safetensors` + `dataset_statistics.json`） | `examples/pi05/eval/configs/libero/object_smoke.yaml` |
+| pi0.5 + RoboTwin | pi0.5 RoboTwin-2.0 联合微调 + 统计信息（见 *4.2 章节*） | `examples/pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml` |
+| X-VLA + LIBERO | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) | `examples/xvla/eval/configs/libero/libero_weight_object_smoke.yaml` |
+| X-VLA + RoboTwin | [2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2) | `examples/xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml` |
+| X-VLA + SimplerEnv | [2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX) | `examples/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml` |
 
 X-VLA + SimplerEnv 达成任务成功需要上游 SimplerEnv 的一次性补丁 — 参见 *6.3 章节*。
 
@@ -52,7 +52,7 @@ X-VLA + SimplerEnv 达成任务成功需要上游 SimplerEnv 的一次性补丁 
 
 GPU 要求：模型推理需要至少 1 张 NVIDIA GPU（显存 ≥16 GB，推荐 A100/A800）。基准测试侧渲染（SimplerEnv、RoboTwin、ManiSkill）同样要求 GPU 支持 Vulkan。
 
-各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/benchmark_envs.md) 中。
+各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/benchmark_envs.md) 中。
 
 ### 2.2 运行 pi0.5 + LIBERO
 
@@ -60,15 +60,15 @@ GPU 要求：模型推理需要至少 1 张 NVIDIA GPU（显存 ≥16 GB，推�
 cd /path/to/LoongForge
 
 # 1. 编辑 YAML 中的 /path/to/...：
-#    examples/embodied/pi05/eval/configs/libero/object_smoke.yaml
+#    examples/pi05/eval/configs/libero/object_smoke.yaml
 # 2. 启动：
-examples/embodied/pi05/eval/run_libero_eval.sh
+examples/pi05/eval/run_libero_eval.sh
 ```
 
 启动脚本封装了单一 Python 入口：
 
 ```bash
-"${BENCHMARK_PYTHON}" -m loongforge.embodied.eval.orchestrator.run \
+"${BENCHMARK_PYTHON}" -m loongforge.evaluation.embodied.orchestrator.run \
   --config "${CONFIG}"
 ```
 
@@ -79,7 +79,7 @@ examples/embodied/pi05/eval/run_libero_eval.sh
 ```bash
 cd /path/to/LoongForge
 # 编辑 configs/libero/libero_weight_object_smoke.yaml 中的 /path/to/...
-examples/embodied/xvla/eval/run_libero_eval.sh
+examples/xvla/eval/run_libero_eval.sh
 ```
 
 默认 YAML 运行一个任务 × 一个 episode。若要运行完整 object suite，在同一 YAML 中增大 `max_tasks` 和 `episodes_per_task` — 文件头注释列出了可选项。
@@ -159,7 +159,7 @@ timeouts:
 ### 3.3 配置文件位置
 
 ```text
-examples/embodied/<model>/eval/
+examples/<model>/eval/
   configs/
     <benchmark>/*.yaml     # 每个基准测试一个发布的 YAML
   run_<benchmark>_eval.sh  # 启动脚本
@@ -177,14 +177,14 @@ examples/embodied/<model>/eval/
 
 发布的 YAML：
 
-- pi0.5（任务成功）：`examples/embodied/pi05/eval/configs/libero/object_smoke.yaml`
-- X-VLA（任务成功）：`examples/embodied/xvla/eval/configs/libero/libero_weight_object_smoke.yaml`
+- pi0.5（任务成功）：`examples/pi05/eval/configs/libero/object_smoke.yaml`
+- X-VLA（任务成功）：`examples/xvla/eval/configs/libero/libero_weight_object_smoke.yaml`
 
 默认 suite 为 `libero_object`。在同一 YAML 中修改 `suite`（`libero_object`、`libero_spatial`、`libero_goal`、`libero_10`）、`max_tasks` 和 `episodes_per_task` 即可进行完整扫描。X-VLA 通常需要 `max_steps: 800` 和 `chunk_execute_steps: 10`。
 
 ### 4.2 RoboTwin
 
-RoboTwin 通过官方 `script/eval_policy.py` 启动；桥接代码位于 `loongforge/embodied/eval/bridges/robotwin_policy.py`。使用的协议在 YAML 中通过 `benchmark.action_bridge` 设置；当模型指定了 `model.robotwin_action_bridge` 时，该值覆盖 `benchmark.action_bridge`。
+RoboTwin 通过官方 `script/eval_policy.py` 启动；桥接代码位于 `loongforge/evaluation/embodied/bridges/robotwin_policy.py`。使用的协议在 YAML 中通过 `benchmark.action_bridge` 设置；当模型指定了 `model.robotwin_action_bridge` 时，该值覆盖 `benchmark.action_bridge`。
 
 | `action_bridge` | 角色 | 控制方式 | 备注 |
 |---|---|---|---|
@@ -213,7 +213,7 @@ model:
   action_horizon: 32
 server:
   ckpt_path: /path/to/pi0.5_robotwin2
-  dataset_statistics_path: examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json
+  dataset_statistics_path: examples/pi05/eval/assets/pi05_robotwin2_dataset_stats.json
 ```
 
 统计文件 `pi05_robotwin2_dataset_stats.json` 来源于 pi0.5 RoboTwin-2.0 权重包中的 openpi `norm_stats.json`，仅将顶层键名重命名以适配 LoongForge 的 q99 反归一化：
@@ -224,7 +224,7 @@ server:
 | 源结构 | `{"norm_stats": {"state": {mean,std,q01,q99}, "actions": {...}}}` |
 | LoongForge 结构 | `{"observation.state": {...}, "action": {...}}` |
 | 数值 | 与源文件完全相同；仅键名重命名。 |
-| 仓库内副本 | `examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json` |
+| 仓库内副本 | `examples/pi05/eval/assets/pi05_robotwin2_dataset_stats.json` |
 
 生成脚本（openpi 格式统计文件 → LoongForge 统计信息）：
 
@@ -242,16 +242,16 @@ Path("pi05_robotwin2_dataset_stats.json").write_text(json.dumps(out, indent=2))
 
 ```bash
 cd /path/to/LoongForge
-CONFIG=examples/embodied/pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml \
-  examples/embodied/pi05/eval/run_robotwin_eval.sh
+CONFIG=examples/pi05/eval/configs/robotwin/adjust_bottle_smoke.yaml \
+  examples/pi05/eval/run_robotwin_eval.sh
 ```
 
 #### X-VLA + RoboTwin — 任务成功
 
 ```bash
 cd /path/to/LoongForge
-CONFIG=examples/embodied/xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml \
-  examples/embodied/xvla/eval/run_robotwin_eval.sh
+CONFIG=examples/xvla/eval/configs/robotwin/adjust_bottle_smoke.yaml \
+  examples/xvla/eval/run_robotwin_eval.sh
 ```
 
 与官方 `evaluation/robotwin-2.0` 协议对齐：`domain_id: 6`、`action_bridge: ee6d_dual`，权重如 `/path/to/X-VLA-RoboTwin2`。
@@ -270,8 +270,8 @@ X-VLA + SimplerEnv 是任务成功组合。pi0.5 无匹配的开放权重，因�
 
 发布的 YAML：
 
-- pi0.5（仅连通性）：`examples/embodied/pi05/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`
-- X-VLA（任务成功）：`examples/embodied/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`
+- pi0.5（仅连通性）：`examples/pi05/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`
+- X-VLA（任务成功）：`examples/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`
 
 通过同一 YAML 中的 `task_name`、`robot_setup` 和 `scene_name` 切换 Bridge 任务（eggplant、carrot、spoon 等）。
 
@@ -283,8 +283,8 @@ CALVIN 是一个长 horizon Franka 语言操作基准测试（每个序列 5 个
 
 pi0.5 和 X-VLA 目前均无匹配的开放权重，因此发布的 YAML 使用 `server.random_init: true` 仅用于连通性验证：
 
-- `examples/embodied/pi05/eval/configs/calvin/smoke.yaml`
-- `examples/embodied/xvla/eval/configs/calvin/smoke.yaml`
+- `examples/pi05/eval/configs/calvin/smoke.yaml`
+- `examples/xvla/eval/configs/calvin/smoke.yaml`
 
 有匹配的 CALVIN 领域开放权重时，设置 `server.random_init: false` 并填写 `server.ckpt_path` / `server.dataset_statistics_path`。对于 X-VLA，正式协议为 `domain_id: 2`、`action_postprocess: ee6d_to_calvin_abs`。
 
@@ -292,8 +292,8 @@ pi0.5 和 X-VLA 目前均无匹配的开放权重，因此发布的 YAML 使用 
 
 ManiSkill 是基于 SAPIEN 的 GPU 友好操作套件。pi0.5 和 X-VLA 目前均无匹配的开放权重，因此发布的 YAML 以 `server.random_init: true` 运行 PickCube：
 
-- `examples/embodied/pi05/eval/configs/maniskill/pick_cube_smoke.yaml`
-- `examples/embodied/xvla/eval/configs/maniskill/pick_cube_smoke.yaml`
+- `examples/pi05/eval/configs/maniskill/pick_cube_smoke.yaml`
+- `examples/xvla/eval/configs/maniskill/pick_cube_smoke.yaml`
 
 默认值：`PickCube-v1`、`pd_ee_delta_pose`、7D 动作。在 YAML 中修改 `task_name` 和 `obs_mode`（rgbd 或 state）。
 
@@ -325,7 +325,7 @@ RoboTwin 使用官方评测器，并额外收集部署配置、`_result.txt`、�
 ### 5.2 目录约定
 
 ```text
-loongforge/embodied/eval/reports/
+loongforge/evaluation/embodied/reports/
   <model>/
     <benchmark>/
       <run_name>/
@@ -374,7 +374,7 @@ vulkaninfo
 上游 `simpler-env/SimplerEnv` 默认不提供绝对 EE 控制，但 X-VLA 输出绝对 EE 位姿。两种解决方案：
 
 - 使用 [`255isWhite/SimplerEnv`](https://github.com/255isWhite/SimplerEnv) fork（官方 X-VLA SIMPLER 评测使用的 fork），或
-- 应用 `examples/embodied/xvla/eval/SIMPLERENV_PATCH_en.md` 中记录的两个本地补丁。
+- 应用 `examples/xvla/eval/SIMPLERENV_PATCH_en.md` 中记录的两个本地补丁。
 
 若两者都未应用，环境要么在构造时因缺少控制模式报错，要么静默地将绝对动作当作增量动作应用从而永远无法成功。
 
@@ -384,5 +384,5 @@ vulkaninfo
 
 本节面向需要集成新模型的开发者。如需集成 pi0.5 / X-VLA 之外的模型，核心思路是：复用共享的 `predict_action` 接口和 `GenericPredictActionPolicy`，保持基准测试协议和适配器不变，将模型差异放在一个轻量工厂中。不要 fork 基准测试运行器或直接修改 LoongForge 训练代码。详细的集成步骤、模型语义对比（动作空间、归一化归属、chunk 长度等）和最小检查清单，请参见：
 
-- [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
-- [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）
+- [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
+- [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）
