@@ -1,22 +1,26 @@
 # fastwam_aligned_accel.yaml
-# = 分支 fastwam.yaml（PR240 训练侧对齐：FastWAM min/max 归一化 + LR parity + action shift 1.0）
-#   只改两处：
-#     model.mot_compile_blocks : both -> none   （实测 both 慢 1%，负收益，故【故意不开】）
+# = the branch's fastwam.yaml plus PR240 training-side alignment (FastWAM min/max
+#   normalization + LR parity + action shift 1.0). Two changes only:
+#     model.mot_compile_blocks : both -> none   (measured: "both" is ~1% slower, a net
+#                                                 loss, so it is intentionally left off)
 #     data.norm_stats_path     : null -> <eval dataset_stats.json>
-#                                 （激活 PR240 的 FastWAM 风格归一化；normalization_mode 被忽略）
-# 其余保持分支默认：accel 已默认开（disable_train_autocast / drop_all_true_cross_attn_mask /
-# compile_vae_encode），image=siglip/center_crop，normalization_mode=q99。
+#                                 (activates PR240's FastWAM-style normalization;
+#                                  normalization_mode is then ignored)
+# Everything else keeps the branch defaults: accel is on by default
+# (disable_train_autocast / drop_all_true_cross_attn_mask / compile_vae_encode),
+# image=siglip/center_crop, normalization_mode=q99.
 #
-# 这份 = PR240 两版 20k 训练（lf_sft_pr240_accel_20k / lf_sft_pr240_fp32master_20k）实际用的配置。
+# This is the exact config used by the two PR240 20k runs
+# (lf_sft_pr240_accel_20k / lf_sft_pr240_fp32master_20k).
 #
-# 一键复现「训练侧对齐 + 加速」：
+# One-shot reproduction of "training-side alignment + acceleration":
 #   bash examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finetune.sh \
 #       --config-file configs/models/embodied/fastwam_aligned_accel.yaml \
 #       --optimizer TorchFusedAdamW \
 #       --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6 \
 #       --lr-decay-style linear_warmup_cosine_annealing \
 #       --save-format dcp --async-save
-#   （fp32 master 版再加 --zero-master-param-dtype fp32）
+#   (for the fp32-master variant, add --zero-master-param-dtype fp32)
 model:
   model_type: fastwam
   variant: uncond

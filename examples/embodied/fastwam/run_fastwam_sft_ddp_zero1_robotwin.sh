@@ -6,16 +6,16 @@
 # run_fastwam_sft_ddp_zero1_robotwin.sh
 # FastWAM SFT — RoboTwin 2.0, official-aligned (first-frame/uncond, 30k).
 #
-# 对齐 standalone（FastWAM repo，RoboTwin 复现）：
-#   - data      : RoboTwin 2.0 单数据集（3cam 240x320），T 布局（camera_layout=robotwin_t）
-#   - 归一化     : z-score（data.norm_stats_path=官方 dataset_stats.json，data.fastwam_norm_mode=z-score）
-#   - action    : 14D；proprio 14D
-#   - video DiT : 预训练（skip_dit_load_from_pretrain=false）
-#   - action DiT: null（随机初始化，照 standalone）
-#   - 文本条件   : 预计算 cache（load_text_encoder=false）
-#   - lr        : 1e-4，warmup 1500（30k 步 × 5%），min-lr 1e-6（standalone 5% warmup + eta_min=1e-6）
-#   - 显存       : per-device-batch 4 + grad-accum 4（GBS 128，同 standalone bs4+ga4）
-#   - 步数       : 30000
+# Aligned with standalone (the FastWAM repo, RoboTwin reproduction):
+#   - data       : RoboTwin 2.0 single dataset (3-cam 240x320), T layout (camera_layout=robotwin_t)
+#   - norm       : z-score (data.norm_stats_path = official dataset_stats.json, data.fastwam_norm_mode=z-score)
+#   - action     : 14D; proprio 14D
+#   - video DiT  : pretrained (skip_dit_load_from_pretrain=false)
+#   - action DiT : null (random init, same as standalone)
+#   - text cond  : precomputed cache (load_text_encoder=false)
+#   - lr         : 1e-4, warmup 1500 (5% of 30k steps), min-lr 1e-6 (standalone: 5% warmup + eta_min=1e-6)
+#   - memory     : per-device-batch 4 + grad-accum 4 (GBS 128, same as standalone bs4+ga4)
+#   - steps      : 30000
 #
 # Usage:
 #   bash run_fastwam_sft_ddp_zero1_robotwin.sh [extra args passed to train.py]
@@ -40,7 +40,7 @@ export PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
 export GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-4}
 export SAVE_INTERVAL=${SAVE_INTERVAL:-2500}
 export SEED=${SEED:-42}
-# RoboTwin standalone 用随机 action expert（action_dit_pretrained_path=null）
+# RoboTwin standalone uses a random action expert (action_dit_pretrained_path=null)
 export ACTION_DIT_PRETRAINED_PATH=""
 
 echo "════════════════════════════════════════════════════════════"
