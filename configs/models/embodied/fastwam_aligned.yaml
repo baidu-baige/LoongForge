@@ -85,8 +85,6 @@ data:
   # UNCHANGED
   num_video_frames: 9
   image_size: 224
-  # UNCHANGED: already the default; stated explicitly because LIBERO is 2-cam.
-  camera_layout: horizontal2
   # ALIGNED: was siglip ([-1,1]). Official does ToTensor only -> output stays in [0,1].
   image_normalize_mode: identity
   # ALIGNED: was center_crop. Official does a plain Resize(224,224).

@@ -17,7 +17,6 @@
 #     data.normalization_mode          q99         -> min_max      (official: min/max)
 #     data.image_normalize_mode        siglip      -> identity     (official: ToTensor, stays [0,1])
 #     data.image_resize_strategy       center_crop -> resize_only  (official: Resize(224,224))
-#     data.camera_layout               (unchanged)   horizontal2   (LIBERO 2-cam; already the default)
 #     model.action_scheduler.*_shift   5.0         -> 1.0          (official action scheduler 1.0/1.0)
 #
 #   *** ACCELERATION SWITCHES TURNED OFF ***  — the training-side speed optimizations

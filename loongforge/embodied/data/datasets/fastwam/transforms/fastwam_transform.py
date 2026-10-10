@@ -24,41 +24,14 @@ class FastWAMKeyMappingTransform(BaseTransform):
 
     DEFAULT_PROMPT = "A video recorded from a robot's point of view executing the following instruction: {task}"
 
-    def __init__(self, image_size: int = 224, camera_layout: str = "horizontal2", training: bool = True):
+    def __init__(self, image_size: int = 224, training: bool = True):
         super().__init__(apply_to=[], training=training)
         self.image_size = image_size
-        if camera_layout not in ("horizontal2", "robotwin_t"):
-            raise ValueError(
-                f"Unsupported fastwam camera_layout: {camera_layout!r} (horizontal2 | robotwin_t)"
-            )
-        self.camera_layout = camera_layout
 
     def _build_prompt(self, data: Dict[str, Any]) -> str:
         """Build the text prompt string from sample data."""
         task = str(data.get("prompt", data.get("task", "")))
         return task if task.startswith("A video recorded") else self.DEFAULT_PROMPT.format(task=task)
-
-    def _pack_robotwin_t(self, images: list) -> torch.Tensor:
-        """Pack RoboTwin 3 cams into the T layout (matches standalone
-        ``robot_video_dataset.py`` concat_multi_camera='robotwin'):
-        head -> (256, 320) top row; each wrist -> (128, 160); bottom = [left|right]
-        horizontally; video = [head; bottom] vertically -> [T, C, 384, 320].
-        ``images`` must be [head, left_wrist, right_wrist], each [T, C, H, W].
-        """
-        cam_top = TF.resize(
-            images[0], [256, 320],
-            interpolation=TF.InterpolationMode.BILINEAR, antialias=True,
-        )  # [T, C, 256, 320]
-        cam_left = TF.resize(
-            images[1], [128, 160],
-            interpolation=TF.InterpolationMode.BILINEAR, antialias=True,
-        )  # [T, C, 128, 160]
-        cam_right = TF.resize(
-            images[2], [128, 160],
-            interpolation=TF.InterpolationMode.BILINEAR, antialias=True,
-        )  # [T, C, 128, 160]
-        bottom = torch.cat([cam_left, cam_right], dim=-1)  # [T, C, 128, 320]
-        return torch.cat([cam_top, bottom], dim=-2)  # [T, C, 384, 320]
 
     def apply(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply key mapping and preprocessing to a single sample."""
@@ -80,30 +53,16 @@ class FastWAMKeyMappingTransform(BaseTransform):
 
         if images and images[0].ndim == 4:
             # Multi-frame path: each image is [T, C, H, W], values in [0, 1].
-            # Match FastWAM reference (robot_video_dataset.py):
-            #   - horizontal2 (LIBERO): per-camera square resize + horizontal concat
-            #   - robotwin_t (RoboTwin): T layout 384x320
-            # then normalize(0.5, 0.5) -> [-1, 1]
-            if self.camera_layout == "robotwin_t":
-                if len(images) != 3:
-                    raise ValueError(
-                        f"camera_layout='robotwin_t' requires exactly 3 cameras, got {len(images)}"
-                    )
-                video = self._pack_robotwin_t(images)  # [T, C, 384, 320]
-            else:
-                # horizontal2 (LIBERO): per-camera BILINEAR+antialias resize, then
-                # horizontal concat. Measured bit-identical to the official pipeline
-                # (max|d| = 0.0 on real frames). Result stays in [-1, 1].
-                images = [
-                    TF.resize(
-                        img,
-                        [self.image_size, self.image_size],
-                        interpolation=TF.InterpolationMode.BILINEAR,
-                        antialias=True,
-                    )
-                    for img in images
-                ]
-                video = torch.cat(images, dim=-1)  # [T, C, image_size, n_cam*image_size]
+            # Match FastWAM reference (robot_video_dataset.py + libero_2cam.yaml):
+            #   1. per-camera bilinear resize to [image_size, image_size]
+            #   2. horizontal concat → [T, C, image_size, image_size*n_cam]
+            #   3. normalize(0.5, 0.5) → [-1, 1]
+            resized = [
+                TF.resize(img, [self.image_size, self.image_size],
+                          interpolation=TF.InterpolationMode.BILINEAR, antialias=True)
+                for img in images
+            ]  # each [T, C, image_size, image_size]
+            video = torch.cat(resized, dim=-1)  # [T, C, image_size, image_size*n_cam]
             video = TF.normalize(video, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             video = video.permute(1, 0, 2, 3)  # [C, T, H, W]
             out = {"video": video, "action": action, "proprio": proprio, "prompt": prompt}
@@ -243,8 +202,5 @@ def build_fastwam_transforms(ctx: TransformBuilderContext):
         padding_strategy="none",
     ))
 
-    transforms.append(FastWAMKeyMappingTransform(
-        image_size=ctx.data_cfg.image_size,
-        camera_layout=ctx.data_cfg.camera_layout,
-    ))
+    transforms.append(FastWAMKeyMappingTransform(image_size=ctx.data_cfg.image_size))
     return transforms

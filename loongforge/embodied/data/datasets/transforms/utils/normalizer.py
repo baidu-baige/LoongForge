@@ -27,7 +27,7 @@ import torch
 class Normalizer:
     """General normalizer, supports forward/inverse."""
 
-    VALID_MODES = ["q99", "min_max", "mean_std", "z-score", "binary", "scale", "identity"]
+    VALID_MODES = ["q99", "min_max", "mean_std", "binary", "scale", "identity"]
 
     def __init__(self, mode: str, statistics: Dict[str, np.ndarray], binary_threshold: float = 0.5, eps: float = 1e-8):
         """
@@ -76,7 +76,7 @@ class Normalizer:
             denom = torch.where(denom == 0, torch.tensor(self.eps, dtype=x.dtype), denom)
             return 2.0 * (x - mn) / denom - 1.0
 
-        elif self.mode in ("mean_std", "z-score"):
+        elif self.mode == "mean_std":
             mean = self.statistics["mean"].to(x.dtype)
             std = self.statistics["std"].to(x.dtype)
             std = torch.where(std == 0, torch.tensor(self.eps, dtype=x.dtype), std)
@@ -112,7 +112,7 @@ class Normalizer:
             mx = self.statistics["max"].to(x.dtype)
             return (x + 1) / 2 * (mx - mn) + mn
 
-        elif self.mode in ("mean_std", "z-score"):
+        elif self.mode == "mean_std":
             mean = self.statistics["mean"].to(x.dtype)
             std = self.statistics["std"].to(x.dtype)
             return x * std + mean

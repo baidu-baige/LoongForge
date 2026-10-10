@@ -49,7 +49,6 @@ model:
 data:
   num_video_frames: 9
   image_size: 224
-  camera_layout: horizontal2
   image_normalize_mode: siglip
   image_resize_strategy: center_crop
   text_embedding_cache_dir: data/text_embeds_cache/libero
