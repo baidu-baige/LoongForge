@@ -57,7 +57,7 @@ Or for breaking changes:
    - `loongforge/models/encoder/`, `loongforge/models/omni_models/` → `vlm`
    - `loongforge/train/` → `train`
    - `loongforge/data/` → `data`
-   - `tools/convert_checkpoint/` → `ckpt`
+   - `tools/mcore_checkpoint_convert/` → `ckpt`
    - `loongforge/models/peft/` → `peft`
    - `ops/` → `ops`
    - `configs/` → relevant model type (`llm`/`vlm`)
@@ -156,7 +156,7 @@ After PR is created:
 | train | `loongforge/train/` |
 | data | `loongforge/data/` |
 | ops | `ops/` |
-| ckpt | `tools/convert_checkpoint/` |
+| ckpt | `tools/mcore_checkpoint_convert/` |
 | peft | `loongforge/models/peft/` |
 | docker | `docker/` |
 | xpu | `examples_xpu/` |

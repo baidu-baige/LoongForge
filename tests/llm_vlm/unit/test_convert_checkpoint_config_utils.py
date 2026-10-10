@@ -10,8 +10,8 @@ from pathlib import Path
 # tests/llm_vlm/unit -> tests/llm_vlm -> tests -> repo root, then repo-root tools/
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
-from convert_checkpoint.common.common_config import CommonConfig
-from convert_checkpoint.utils.config_utils import convert_vlm_config
+from mcore_checkpoint_convert.common.common_config import CommonConfig
+from mcore_checkpoint_convert.utils.config_utils import convert_vlm_config
 
 
 def test_vlm_conversion_accepts_root_relative_paths():

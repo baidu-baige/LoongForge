@@ -113,7 +113,7 @@ dataset_root/
 | `agibot` | `observation.state` ≥20 dims; `action` ≥22 dims | `top_head`, `hand_left`, `hand_right` | `task_index` |
 | `yam` | packed `observation.state` / `action` ≥46 dims | top/left/right three `*-camera-images-rgb` fields | `task_index` |
 
-Refer to `PRESETS` in `tools/data_preprocess/embodied/dreamzero/prepare_dataset.py` for the full field spec.
+Refer to `PRESETS` in `tools/dreamzero_data_preprocess/prepare_dataset.py` for the full field spec.
 
 ### 1.2 Generate DreamZero Metadata
 ```bash

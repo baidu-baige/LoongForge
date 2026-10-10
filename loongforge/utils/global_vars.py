@@ -12,17 +12,14 @@ from megatron.training.global_vars import (
 )
 
 from loongforge.tokenizer import build_tokenizer
-from loongforge.data import (
-    ChatTemplate,
-    HFChatTemplate,
-    load_chat_template_kwargs,
-)
 
 from .constants import TrainingPhase
 
 
 if TYPE_CHECKING:
     from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
+
+    from loongforge.data import ChatTemplate
 
 
 _GLOBAL_CHAT_TEMPLATE: Optional["ChatTemplate"] = None
@@ -91,6 +88,14 @@ def set_loongforge_extra_global_vars(args, build_tokenizer=True) -> None:
 
 def _build_chat_template(args) -> Optional["ChatTemplate"]:
     """Build the chat template."""
+    # Lazy import to avoid a circular import when loongforge.data is imported before
+    # loongforge.utils (mirrors the TYPE_CHECKING convention in loongforge/tokenizer).
+    from loongforge.data import (
+        ChatTemplate,
+        HFChatTemplate,
+        load_chat_template_kwargs,
+    )
+
     if args.training_phase == TrainingPhase.SFT and args.chat_template is not None:
         global _GLOBAL_CHAT_TEMPLATE
         _ensure_var_is_not_initialized(_GLOBAL_CHAT_TEMPLATE, "loongforge-chat-template")

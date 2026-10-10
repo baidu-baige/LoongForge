@@ -2,7 +2,7 @@
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 SAVE=/mnt/cluster/LoongForge/llava_onevision/LLaVA-OneVision-1.5-4B-hf-Dec22
 LOAD=/mnt/cluster/LoongForge/llava_onevision/LLaVA-OneVision-1.5-4B-tp2-pp2-Original/release

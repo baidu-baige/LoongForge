@@ -17,14 +17,14 @@ from loongforge.models.foundation.kimi_k3.kimi_k3_pipeline import (
     pack_stage_boundary,
     unpack_stage_boundary,
 )
-from tools.convert_checkpoint.common.common_checkpoint import (
+from tools.mcore_checkpoint_convert.common.common_checkpoint import (
     K3_OUTPUT_ATTN_RES_NORM,
     LAYER_LOCAL_LAST_NAMES,
     LAYER_PREFIX,
 )
-from tools.convert_checkpoint.mcore.mcore_base import McoreBase
-from tools.convert_checkpoint.kimi_k3.transforms import normalize_kimi_k3_state_dict
-from tools.convert_checkpoint.utils.config_utils import convert_vlm_config
+from tools.mcore_checkpoint_convert.mcore.mcore_base import McoreBase
+from tools.mcore_checkpoint_convert.kimi_k3.transforms import normalize_kimi_k3_state_dict
+from tools.mcore_checkpoint_convert.utils.config_utils import convert_vlm_config
 
 A_LOG = "language_model.model.layers.0.self_attn.A_log"
 GATE = "language_model.model.layers.0.block_sparse_moe.gate"

@@ -32,7 +32,7 @@
 
 ### 2.1 阶段 1 — 基准测试以生成 FP8 策略
 
-使用 `tools/benchmark_te_parallel_layers.py` 对目标模型在不同 TP/EP 配置下的 TE 并行层进行基准测试，并生成策略文件。
+使用 `tools/te_parallel_benchmark/benchmark_te_parallel_layers.py` 对目标模型在不同 TP/EP 配置下的 TE 并行层进行基准测试，并生成策略文件。
 
 #### 2.1.1 Dense 模型
 
@@ -46,11 +46,11 @@ for tp in 1 2 4; do
     TE_LAYER_PERF_REPORT_PATH="outputs/report_tp${tp}.json" \
     TE_LAYER_PERF_WARMUP=5 \
     TE_LAYER_PERF_ITERS=5 \
-        torchrun --nproc_per_node $tp tools/benchmark_te_parallel_layers.py
+        torchrun --nproc_per_node $tp tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 done
 
 # 步骤 2：将多个 TP 的报告合并为统一策略
-python tools/benchmark_te_parallel_layers.py merge-policy \
+python tools/te_parallel_benchmark/benchmark_te_parallel_layers.py merge-policy \
     --reports outputs/report_tp1.json outputs/report_tp2.json outputs/report_tp4.json \
     --output configs/models/qwen2.5/fp8_policy_qwen2_5_72b.json \
     --speedup-threshold 1.0
@@ -70,15 +70,15 @@ TE_LAYER_PERF_FP8_RECIPE="blockwise" \
 TE_LAYER_PERF_REPORT_PATH="outputs/report_tp1_ep4.json" \
 TE_LAYER_PERF_WARMUP=5 \
 TE_LAYER_PERF_ITERS=5 \
-    torchrun --nproc_per_node 4 tools/benchmark_te_parallel_layers.py
+    torchrun --nproc_per_node 4 tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 
 # TP=2, EP=4（需要 8 块 GPU，world_size = tp * ep）
 TE_LAYER_PERF_TP_SIZE=2 TE_LAYER_PERF_EP_SIZE=4 \
 TE_LAYER_PERF_REPORT_PATH="outputs/report_tp2_ep4.json" \
-    torchrun --nproc_per_node 8 tools/benchmark_te_parallel_layers.py
+    torchrun --nproc_per_node 8 tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 
 # 合并
-python tools/benchmark_te_parallel_layers.py merge-policy \
+python tools/te_parallel_benchmark/benchmark_te_parallel_layers.py merge-policy \
     --reports outputs/report_tp1_ep4.json outputs/report_tp2_ep4.json \
     --output configs/models/deepseek3/fp8_policy_deepseek_v3.json \
     --speedup-threshold 1.0
@@ -94,7 +94,7 @@ TE_LAYER_PERF_TP_SIZE=1 \
 TE_LAYER_PERF_PRECISIONS="bf16,fp8" \
 TE_LAYER_PERF_FP8_RECIPE="blockwise" \
 TE_LAYER_PERF_REPORT_PATH="outputs/report_qwen3_vl_tp1.json" \
-    torchrun --nproc_per_node 1 tools/benchmark_te_parallel_layers.py
+    torchrun --nproc_per_node 1 tools/te_parallel_benchmark/benchmark_te_parallel_layers.py
 ```
 
 #### 2.1.4 基准测试环境变量参考

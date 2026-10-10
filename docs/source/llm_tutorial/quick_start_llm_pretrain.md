@@ -74,7 +74,7 @@ input_data=/path/to/your/json
 output_prefix=/path/to/your/output_prefix
 
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
-  python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
+  python ${LOONGFORGE_PATH}/tools/llm_data_preprocess/preprocess_pretrain_data.py \
       --input ${input_data} \
       --output-prefix ${output_prefix} \
       --tokenizer-type HFTokenizer \
@@ -98,14 +98,14 @@ Take DeepSeek-V3.1 as an example:
 https://huggingface.co/deepseek-ai/DeepSeek-V3.1
 
 ### 2.2 Convert the checkpoint
-LoongForge provides a unified converter `tools/convert_checkpoint`.  
+LoongForge provides a unified converter `tools/mcore_checkpoint_convert`.  
 Below we convert the original FP8 HF checkpoint to MCore FP8:
 
 ```bash
 #!/bin/bash
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint          # FP8 HF checkpoint
 SAVE=/path/to/your/save              # will be MCore FP8

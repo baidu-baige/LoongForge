@@ -9,7 +9,7 @@ input_data=/mnt/cluster/LoongForge/dataset/pile_test/train.jsonl
 output_prefix=/mnt/cluster/LoongForge/llama3/pile_test/pile-llama
 
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
-    python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py \
+    python ${LOONGFORGE_PATH}/tools/llm_data_preprocess/preprocess_pretrain_data.py \
         --input ${input_data} \
         --output-prefix ${output_prefix} \
         --tokenizer-type HFTokenizer \

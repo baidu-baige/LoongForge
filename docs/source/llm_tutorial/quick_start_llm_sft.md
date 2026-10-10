@@ -147,7 +147,7 @@ input_data=/path/to/custom_dataset_name.json
 output_path=/path/to/save_dir
 
 PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
-  python ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_sft_data.py \
+  python ${LOONGFORGE_PATH}/tools/llm_data_preprocess/preprocess_sft_data.py \
       --input ${input_data} \
       --output ${output_path} \
       --seq-length 2048 \

@@ -9,7 +9,7 @@ scripts_root_path: $LOONGFORGE_PATH/tests/llm_vlm
 # In the pipeline, the logs path will be replaced by appending a suffix of name + pipeline ID
 training_log_path: $pfs_path/logs
 
-convert_checkpoint_path: $LOONGFORGE_PATH/tools/convert_checkpoint
+convert_checkpoint_path: $LOONGFORGE_PATH/tools/mcore_checkpoint_convert
 
 # Determine the status of each stage of the training task
 model_lock_file_path: $save_mcore_ckpt_path_pre/lock_file/$model_name

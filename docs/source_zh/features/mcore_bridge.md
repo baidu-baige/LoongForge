@@ -276,7 +276,7 @@ HF 模型 (safetensors)
 以 Qwen2.5-0.5B 为例：
 
 ```bash
-bash tools/dist_checkpoint/test/qwen2.5/0.5b_bridge_roundtrip.sh
+bash tests/mcore_bridge_roundtrip/qwen2.5/0.5b_bridge_roundtrip.sh
 ```
 
 测试脚本中的关键参数：
@@ -299,7 +299,7 @@ TRAINING_ARGS=(
 > ```bash
 > PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 >     torchrun --nproc_per_node 4 \
->     $LOONGFORGE_PATH/tools/dist_checkpoint/checkpoint/hf_roundtrip_test.py \
+>     $LOONGFORGE_PATH/tests/mcore_bridge_roundtrip/hf_roundtrip_test.py \
 >     ${MODEL_ARGS[@]} ${TOKENIZER_ARGS[@]} ${TRAINING_ARGS[@]} ${MODEL_PARALLEL_ARGS[@]}
 > ```
 
@@ -307,13 +307,13 @@ TRAINING_ARGS=(
 
 ```bash
 # Qwen2.5（所有尺寸）
-bash tools/dist_checkpoint/test/qwen2.5/all.sh
+bash tests/mcore_bridge_roundtrip/qwen2.5/all.sh
 
 # Qwen3（所有尺寸）
-bash tools/dist_checkpoint/test/qwen3/all.sh
+bash tests/mcore_bridge_roundtrip/qwen3/all.sh
 
 # InternVL 2.5（所有尺寸）
-bash tools/dist_checkpoint/test/internvl2.5/all.sh
+bash tests/mcore_bridge_roundtrip/internvl2.5/all.sh
 ```
 
 ### 输出报告
@@ -340,7 +340,7 @@ bash tools/dist_checkpoint/test/internvl2.5/all.sh
 
 ### 可用的测试脚本
 
-测试按模型系列组织在 `tools/dist_checkpoint/test/` 下：
+测试按模型系列组织在 `tests/mcore_bridge_roundtrip/` 下：
 
 | 模型系列 | 路径 |
 |-------------|------|
@@ -362,7 +362,7 @@ bash tools/dist_checkpoint/test/internvl2.5/all.sh
 - **纯 LLM**（LLaMA、Qwen2.5、DeepSeek V2 等）：使用 `llm_model_provider`
 - **多模态**（Qwen2.5-VL、InternVL 等）：使用 `omni_model_provider`
 
-编辑 `tools/dist_checkpoint/checkpoint/hf_roundtrip_test.py` 中的 `get_model()` 调用：
+编辑 `tests/mcore_bridge_roundtrip/hf_roundtrip_test.py` 中的 `get_model()` 调用：
 
 ```python
 # 纯 LLM：

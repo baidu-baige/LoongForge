@@ -93,7 +93,7 @@ scenarios:
             --log-timers-to-tensorboard'
   - preprocess_data:
       llm_pretrain:
-        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/data_preprocess/llm/preprocess_pretrain_data.py
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/llm_data_preprocess/preprocess_pretrain_data.py
         output_prefix: /workspace/pile_test_pretrain/$model_name/pile-test
         train_json_file_name: '$scripts_root_path/datasets/llm/pretrain_train.jsonl'
         PREPROCESS_DATA_ARGS: '

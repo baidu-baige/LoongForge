@@ -388,8 +388,26 @@ def _validate_extra_multimodal_args(args):
         return
 
     args.variable_seq_lengths = True
+
     if not (args.packing_pretrain_data or args.packing_sft_data):
         args.packing_buffer_size = None
+
+    # [DEPRECATED] --max-packed-tokens is redundant with --seq-length. In
+    # LoongForge seq_length IS the post-concatenation packed-sequence window: it
+    # drives every downstream shape / position-embedding / parallel init, so the
+    # packed length can never diverge from it. The flag defaults to None and is
+    # always resolved to seq_length; only warn when the user passes a value that
+    # differs. Guard on seq_length being set (it always is for VLM) to avoid
+    # assigning None before Megatron finalizes seq_length.
+    if args.seq_length is not None:
+        if args.max_packed_tokens is not None and args.max_packed_tokens != args.seq_length:
+            print_rank_0(
+                "WARNING: --max-packed-tokens is deprecated and ignored; using "
+                f"--seq-length ({args.seq_length}) instead "
+                f"(you passed {args.max_packed_tokens}).",
+                args.rank,
+            )
+        args.max_packed_tokens = args.seq_length
 
 
 def _validata_extra_custom_args(args):

@@ -395,8 +395,6 @@ def _maybe_load_action_state_from_checkpoint(
     return loaded_targets
 
 # DiT key rename table: diffusers (HF Wan release) -> CausalWanModel naming.
-# Kept in sync with
-# tools/convert_checkpoint/dreamzero/convert_hf_to_torch.py::_DIT_RENAME_TEMPLATE.
 _DIT_RENAME_TEMPLATE = {
     "blocks.0.attn1.norm_k.weight": "blocks.0.self_attn.norm_k.weight",
     "blocks.0.attn1.norm_q.weight": "blocks.0.self_attn.norm_q.weight",

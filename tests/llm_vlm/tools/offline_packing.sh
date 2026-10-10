@@ -4,41 +4,43 @@ set -eo pipefail
 # Accept config file path as argument
 CONFIG="$1"
 
-# Ensure LOONGFORGE_PATH environment variable exists
-# if [ -z "${LOONGFORGE_PATH}" ]; then
-#     echo "Error: LOONGFORGE_PATH is not set."
-#     echo "It should process by run.sh"
-#     exit 1
-# fi
+# Resolve CONFIG to an absolute path before we cd into the tool dir, so a
+# relative config path passed by the harness keeps resolving.
+if [ -n "${CONFIG}" ] && [ -f "${CONFIG}" ]; then
+    CONFIG="$(cd "$(dirname "${CONFIG}")" && pwd)/$(basename "${CONFIG}")"
+fi
 
-# Locate original python tool scripts directory
-TOOLS_DIR="/workspace/LoongForge/tools/data_preprocess/vlm/offline_packing"
+# Locate the offline_packing tool package (contains wds_pack/).
+# `python -m wds_pack.cli.*` requires this dir to be the working directory.
+TOOLS_DIR="${LOONGFORGE_PATH:-/workspace/LoongForge}/tools/vlm_data_preprocess/offline_packing"
 
 if [ ! -d "$TOOLS_DIR" ]; then
-    echo "Error: Python scripts directory not found at $TOOLS_DIR"
+    echo "Error: offline_packing tool directory not found at $TOOLS_DIR"
     exit 1
 fi
 
+cd "${TOOLS_DIR}"
+
 echo "============================================================"
-echo "Running Offline Packing Pipeline (Test Custom Implementation)"
+echo "Running Offline Packing Pipeline (WDS-native wds_pack CLI)"
 echo "Config File: $CONFIG"
 echo "Tools Dir:   $TOOLS_DIR"
 echo "============================================================"
 
-# Execute 4 steps in order
-# This decouples dependency on original shell script and allows flexible checkpoints in testing
+# Execute the 4 WDS-native steps in order (mirrors scripts/pack_wds.sh).
+# Kept as explicit per-step invocations so testing can checkpoint between them.
 
-echo ">>> [Step 1] Running get_sample_len.py..."
-python "${TOOLS_DIR}/get_sample_len.py" --config "${CONFIG}"
+echo ">>> [Step 1] wds_pack.cli.scan_manifest (scan WDS + compute sample length)..."
+python -m wds_pack.cli.scan_manifest --config "${CONFIG}"
 
-echo ">>> [Step 2] Running do_hashbacket.py..."
-python "${TOOLS_DIR}/do_hashbacket.py" --config "${CONFIG}"
+echo ">>> [Step 2] wds_pack.cli.pack_bins (hash-bucket split by media type)..."
+python -m wds_pack.cli.pack_bins --config "${CONFIG}"
 
-echo ">>> [Step 3] Running prepare_raw_samples.py..."
-python "${TOOLS_DIR}/prepare_raw_samples.py" --config "${CONFIG}"
+echo ">>> [Step 3] wds_pack.cli.build_plan (build pack plan)..."
+python -m wds_pack.cli.build_plan --config "${CONFIG}"
 
-echo ">>> [Step 4] Running packed_to_wds.py..."
-python "${TOOLS_DIR}/packed_to_wds.py" --config "${CONFIG}"
+echo ">>> [Step 4] wds_pack.cli.write_wds (pack to WDS format)..."
+python -m wds_pack.cli.write_wds --config "${CONFIG}"
 
 echo "============================================================"
 echo "Offline packing pipeline finished successfully."

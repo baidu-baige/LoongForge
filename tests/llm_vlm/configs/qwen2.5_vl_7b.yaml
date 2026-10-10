@@ -308,7 +308,7 @@ scenarios:
 
   - preprocess_data:
       vlm:
-        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/data_preprocess/vlm/convert_to_webdataset.py
+        PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tools/vlm_data_preprocess/convert_to_webdataset.py
         output_prefix: /workspace/vlm_dataset_demo/$model_name
         train_json_file_name: '$scripts_root_path/datasets/vlm/mllm_demo.json'
         video_dir: '$scripts_root_path/datasets/vlm/'
@@ -321,8 +321,13 @@ scenarios:
           --columns_messages messages
           --maxsize 10000000
           --sample_type vqa'
-      offline_packing: 
-        # RUNNABLE_FLAG: false
+      offline_packing:
+        # offline_packing.sh/.yaml are already migrated to the WDS-native
+        # `python -m wds_pack.cli.*` flow (scan_manifest/pack_bins/build_plan/
+        # write_wds). Kept disabled because the migrated path has not yet been
+        # run-verified in CI (needs the packing dataset + runtime). Re-enable
+        # after validating it once in an environment that has both.
+        RUNNABLE_FLAG: false
         PREPROCESS_DATA_PATH: ${LOONGFORGE_PATH}/tests/llm_vlm/tools/offline_packing.sh
         packing_config_path: '${LOONGFORGE_PATH}/tests/llm_vlm/tools/offline_packing.yaml'
         PREPROCESS_DATA_ARGS: '${packing_config_path}'

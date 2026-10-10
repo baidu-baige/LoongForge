@@ -113,7 +113,7 @@ dataset_root/
 | `agibot` | `observation.state` ≥20 维；`action` ≥22 维 | `top_head`、`hand_left`、`hand_right` | `task_index` |
 | `yam` | packed `observation.state` / `action` ≥46 维 | top/left/right 三个 `*-camera-images-rgb` 字段 | `task_index` |
 
-完整字段以 `tools/data_preprocess/embodied/dreamzero/prepare_dataset.py` 中的 `PRESETS` 为准。
+完整字段以 `tools/dreamzero_data_preprocess/prepare_dataset.py` 中的 `PRESETS` 为准。
 
 ### 1.2 生成 DreamZero metadata
 ```bash

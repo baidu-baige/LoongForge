@@ -18,7 +18,7 @@ EP=${EP:-8}
 ETP=${ETP:-1}
 
 PYTHONPATH="$MEGATRON_PATH:$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-  python "$LOONGFORGE_PATH/tools/convert_checkpoint/module_convertor/model.py" \
+  python "$LOONGFORGE_PATH/tools/mcore_checkpoint_convert/module_convertor/model.py" \
   --load_platform=huggingface \
   --save_platform=mcore \
   --config_file "$LOONGFORGE_PATH/configs/models/kimi_k3/kimi_k3.yaml" \

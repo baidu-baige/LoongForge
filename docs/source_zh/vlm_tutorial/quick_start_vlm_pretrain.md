@@ -80,7 +80,7 @@ hf download axolotl-ai-co/llava-instruct-mix-vsft-small --repo-type dataset --lo
 将数据转换为 **WebDataset 并适配 Energon 加载格式**的脚本如下：
 
 ```bash
-python /workspace/LoongForge/tools/data_preprocess/vlm/convert_to_webdataset.py \
+python /workspace/LoongForge/tools/vlm_data_preprocess/convert_to_webdataset.py \
     --output_dir /tmp/mllm/wds \
     --json_file /tmp/mllm/mllm_demo.json \
     --image_dir /tmp/mllm/ \
@@ -125,14 +125,14 @@ python /workspace/LoongForge/tools/data_preprocess/vlm/convert_to_webdataset.py 
 
 ### 2.2 转换权重格式
 
-LoongForge 为支持的模型提供了统一的权重转换工具 `tools/convert_checkpoint`，可以方便地在 HuggingFace 和 MCore 格式之间进行转换。以 Qwen3-VL-30B-A3B 为例，如需将 HuggingFace 权重转换为 LoongForge 支持的 MegatronCore 格式，可参考以下示例：
+LoongForge 为支持的模型提供了统一的权重转换工具 `tools/mcore_checkpoint_convert`，可以方便地在 HuggingFace 和 MCore 格式之间进行转换。以 Qwen3-VL-30B-A3B 为例，如需将 HuggingFace 权重转换为 LoongForge 支持的 MegatronCore 格式，可参考以下示例：
 
 ```bash
 #!/bin/bash
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="${LOONGFORGE_PATH}/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint  # 原始 Qwen3-VL-30B-A3B 权重路径
 SAVE=/path/to/your/save  # 转换后的权重保存路径

@@ -25,6 +25,10 @@
 </p>
 
 <p align="center">
+  <a href="https://hellogithub.com/repository/baidu-baige/LoongForge" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=2eafb075947e41a4be4d157a6f0382ae&claim_uid=PjNLOfBMoxlaTEq&theme=neutral" alt="Featured｜HelloGitHub" width="250" height="54" /></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/baidu-baige/LoongForge/stargazers"><img src="https://img.shields.io/github/stars/baidu-baige/LoongForge?style=flat-square&color=FFD700&logo=github&logoColor=white&label=Stars" alt="GitHub stars"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-8250DF?style=flat-square" alt="Apache 2.0 license"></a>
   <a href="https://hub.docker.com/u/loongforge"><img src="https://img.shields.io/badge/Docker_Image-loongforge-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker images on Docker Hub"></a>
@@ -132,7 +136,7 @@ Since optimal training strategies differ across model families and scales, Loong
 * **Per-Model Deep Optimization** — **1.79×–4.38×** over official baselines in our [benchmarks](#performance), from training code customized per model across I/O, communication strategy, and kernel efficiency.
 * **FP8 Communication Optimization** — Cuts cross-rank traffic on supported NVIDIA GPUs across both parallel strategies: blockwise FP8 delta AllGather for **FSDP2** parameters, and FP8 grad all-reduce for **DDP** gradients. [[Usage](https://loongforge.readthedocs.io/en/latest/features/fp8_communication.html)]
 * **Unified Evaluation** — Evaluate trained policies on **LIBERO / CALVIN / SimplerEnv / RoboTwin**, with coverage expanding continuously. [[README](./loongforge/embodied/eval)]
-* **Ego2Robot Data Conversion** — Turn first-person videos of human manipulation into **LeRobot v3.0** training data across **16 dual-arm robot morphologies**. [[README](./loongforge/embodied/tools/ego2robot)]
+* **Ego2Robot Data Conversion** — Turn first-person videos of human manipulation into **LeRobot v3.0** training data across **16 dual-arm robot morphologies**. [[README](./tools/ego2robot)]
 
 **🔌 Compatibility**
 
@@ -296,7 +300,7 @@ Open-source models trained with **LoongForge** or its predecessor **AIAK-Trainin
 
 ## 📂 Repository Layout
 
-<details>
+<details open>
 <summary><b>📁 Directory tree</b></summary>
 
 ```

@@ -39,7 +39,7 @@ If the user is using the **Nvidia B-series GPUs**, the `--quant_method pt` param
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/hf_checkpoint  # the original DeepSeek-V3 checkpoint is FP8 format
 SAVE=/path/to/your/save  # the converted checkpoint will be in MCore FP8 format
@@ -77,7 +77,7 @@ Below is an example script for converting **DeepSeek V3.1** model weights from *
 
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/LoongForge"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/Loong-Megatron"}
-CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/convert_checkpoint"
+CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 
 LOAD=/path/to/mcore_checkpoint  # the converted checkpoint will be in MCore FP8 format
 SAVE=/path/to/your/save  # the original DeepSeek-V3 checkpoint is FP8 format

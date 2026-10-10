@@ -19,15 +19,17 @@ model:
     trust_remote_code: True
     use_fast: False
 
-# Media file preprocessing configuration, optional preprocessing functions defined in media_preprocess_utils.py
+# Media file preprocessing configuration, optional preprocessing functions defined in wds_pack/media/preprocess.py
 media_preprocess:
   image: custom_image_preprocess
 
 sample:
   # Max token length for training data
   max_token_len: 8192
-  # Determine parsing method
-  sample_type: packed_vqa
+  # Parsing method. WDS-native scan_manifest (V1) only accepts
+  # packed_multi_mix_qa or packed_chat_mix; packed_multi_mix_qa is the
+  # image/video multi-image QA scenario (replaces the legacy packed_vqa).
+  sample_type: packed_multi_mix_qa
 
 packed_wds:
   maxsize: 2000000000

@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "${SCRIPT_DIR}/../../.." && pwd)"}
 MEGATRON_PATH=${MEGATRON_PATH:-"${LOONGFORGE_PATH}/third_party/Loong-Megatron"}
-CONVERTER_PATH="${LOONGFORGE_PATH}/tools/convert_checkpoint"
+CONVERTER_PATH="${LOONGFORGE_PATH}/tools/mcore_checkpoint_convert"
 
 LOAD=${LOAD:?Set LOAD to the merged MCore release directory}
 SAVE=${SAVE:?Set SAVE to the destination Hugging Face directory}

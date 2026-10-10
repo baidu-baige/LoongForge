@@ -78,8 +78,7 @@ loongforge/embodied/
 │   ├── parallel.py                         # wrap_model()：DDP / FSDP
 │   └── checkpoint.py                       # safetensors / pt / dcp 保存与加载
 ├── optimizer/                              # AdamW、LR 调度、梯度裁剪 / NaN 清理
-├── eval/                                   # 离线 benchmark 评测（见 eval/README.md）
-└── tools/                                  # 辅助工具，例如 dcp_to_safetensors.py
+└── eval/                                   # 离线 benchmark 评测（见 eval/README.md）
 ```
 
 ---
