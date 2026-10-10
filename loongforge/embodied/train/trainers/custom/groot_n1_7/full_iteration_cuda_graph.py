@@ -8,13 +8,18 @@ from __future__ import annotations
 import dataclasses
 import ctypes
 import logging
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from typing import Any
 
 import torch
+import torch.distributed as dist
 from transformers.feature_extraction_utils import BatchFeature
 
 from loongforge.embodied.distributed.utils import unwrap_model
+from loongforge.embodied.model.groot_n1_7.modules.cuda_graph_flash_attention import (
+    maybe_install_graph_safe_fa2_patches,
+    prime_graph_safe_fa2_buffers,
+)
 from loongforge.embodied.train.utils.utils import resolve_dtype
 logger = logging.getLogger(__name__)
 
@@ -91,6 +96,7 @@ class _GraphOutputs:
 class _GraphValidationBatch:
     image_grid_thw: torch.Tensor | None
     input_ids: torch.Tensor | None
+    attention_mask: torch.Tensor | None
 
 
 @dataclasses.dataclass
@@ -119,6 +125,7 @@ def _clone_validation_batch(batch: Any) -> _GraphValidationBatch:
     return _GraphValidationBatch(
         image_grid_thw=clone_cpu("image_grid_thw"),
         input_ids=clone_cpu("input_ids"),
+        attention_mask=clone_cpu("attention_mask"),
     )
 
 
@@ -174,10 +181,14 @@ def _clone_static(
         )
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         kwargs = {
-            field.name: _clone_static(
-                getattr(value, field.name),
-                tensor_memo,
-                storage_memo,
+            field.name: (
+                None
+                if field.name.startswith("_loongforge_host_")
+                else _clone_static(
+                    getattr(value, field.name),
+                    tensor_memo,
+                    storage_memo,
+                )
             )
             for field in dataclasses.fields(value)
         }
@@ -284,6 +295,10 @@ def _copy_static(
                 f"{type(dst).__name__} != {type(src).__name__}"
             )
         for field in dataclasses.fields(dst):
+            if field.name.startswith("_loongforge_host_"):
+                # Host-only metadata is refreshed by the model helper before
+                # each replay and is intentionally not part of graph inputs.
+                continue
             _copy_static(
                 getattr(dst, field.name),
                 getattr(src, field.name),
@@ -336,6 +351,10 @@ class GrootN1d7FullIterationCudaGraphRunner:
         self.time_buffer: torch.Tensor | None = None
         self.lr_buffers: list[torch.Tensor] | None = None
         self.replay_count = 0
+        self.capture_count = 0
+        self.fallback_count = 0
+        self._eager_fallback = False
+        self._fallback_cpu_batch: Any = None
         self._optimizer_validated = False
         self._noop_ddp_logger = _NoopDdpLogger()
         self._copy_stream: torch.cuda.Stream | None = None
@@ -357,7 +376,10 @@ class GrootN1d7FullIterationCudaGraphRunner:
         # campaign shell variables cannot silently change graph semantics.
         self._input_prefetch_enabled = True
         self._time_prefetch_enabled = False
-        self._fused_optimizer_grad_clip = True
+        # Use the same in-place gradient clipping as eager. The optimizer's
+        # capturable step consumes those clipped buffers directly, which keeps
+        # Graph-on and Graph-off TEFusedAdamW numerically identical.
+        self._fused_optimizer_grad_clip = False
         self._direct_grad_write = True
         self._backbone_pipeline_enabled = True
         self._prefetched_cpu_batch: Any = None
@@ -375,6 +397,17 @@ class GrootN1d7FullIterationCudaGraphRunner:
         self._backbone_pending = False
         self._saved_ddp_broadcast_buffers: bool | None = None
         self._backbone_progress_layer = 8
+        self._fp8_enabled = bool(getattr(self.training_args, "fp8", False))
+        self._fp8_recipe = None
+        self._fp8_group = None
+        self._fp8_tensor_pointers: dict[str, int] | None = None
+        self._fp8_skip_weight_update_ptr: int | None = None
+        # CUDA stream capture records work without executing it.  The first
+        # graph replay must therefore consume the timestep sampled immediately
+        # before capture instead of sampling a second value.
+        self._capture_replay_pending = False
+        self._graph_pool = torch.cuda.graph_pool_handle()
+        self._configure_graph_attention_backend()
         self._validate_configuration()
         if self._input_prefetch_enabled and self.ctx.is_main:
             logger.info(
@@ -412,6 +445,86 @@ class GrootN1d7FullIterationCudaGraphRunner:
             and args.cuda_graph_scope == "full_iteration"
         )
 
+    def _configure_graph_attention_backend(self) -> None:
+        """Keep eager and graph text attention on the same graph-safe FA2 path.
+
+        The graph-safe padded FA2 adapter owns the fixed-shape unpadding buffers
+        and computes ``cu_seqlens`` on device.  Falling back to SDPA here would
+        make G0 numerically incomparable with the user-specified eager/B0
+        FlashAttention path, so only genuinely non-FlashAttention models retain
+        their configured backend.
+        """
+        try:
+            language_model = self._backbone().language_model
+            config = language_model.config
+        except AttributeError:
+            return
+        if getattr(config, "_attn_implementation", None) in {
+            "flash_attention_2",
+            "flash_attention_3",
+        }:
+            logger.info(
+                "CUDA graph Qwen text attention uses graph-safe FlashAttention; "
+                "vision attention remains FlashAttention."
+            )
+
+    def _prime_graph_safe_fa2(self, static_input: Any) -> None:
+        """Install the padded-FA2 adapter and allocate its fixed-shape buffers.
+
+        The stock varlen path cannot be replayed: ``_get_unpad_data`` returns an
+        ``indices`` tensor whose length is the *valid*-token count, and capture
+        bakes that length into the recorded kernels.  Text length varies per
+        batch, so the first replay with a different valid-token count is
+        rejected (see ``update_cuda_graph_batch_metadata``).  The padded adapter
+        instead packs to the fixed padded length with dummy tail sequences and
+        recomputes ``cu_seqlens`` on device every replay, which is what makes a
+        full-iteration graph possible at all.  It is mathematically equivalent
+        to varlen FA2 but not bit-identical, and it also disables the
+        ``attention_mask=None`` dense shortcut in ``Qwen3Backbone``.
+        """
+        input_ids = getattr(static_input, "input_ids", None)
+        if input_ids is None:
+            return
+        backbone = self._backbone()
+        language_model = backbone.language_model
+        layers = getattr(language_model, "layers", None)
+        if not layers:
+            return
+        config = language_model.config
+        num_q_heads = int(getattr(config, "num_attention_heads"))
+        num_kv_heads = int(
+            getattr(config, "num_key_value_heads", num_q_heads)
+        )
+        head_dim = int(
+            getattr(
+                config,
+                "head_dim",
+                int(getattr(config, "hidden_size")) // num_q_heads,
+            )
+        )
+        # Qwen attention projections may be stored in FP32 after the
+        # compatibility patch, while the forward Q/K/V tensors are produced in
+        # the trainer compute dtype.  The latter is the key used by FA2's
+        # runtime buffer lookup.
+        dtype = getattr(self.trainer, "_compute_dtype", None)
+        if dtype is None:
+            dtype = resolve_dtype(self.training_args.dtype)
+        from loongforge.embodied.model.groot_n1_7.modules.cuda_graph_flash_attention import (
+            _get_fa2_buffers,
+        )
+
+        _get_fa2_buffers(
+            int(input_ids.shape[0]),
+            int(input_ids.shape[-1]),
+            num_q_heads,
+            num_kv_heads,
+            head_dim,
+            dtype,
+            self.ctx.device,
+        )
+        if maybe_install_graph_safe_fa2_patches(force=True):
+            logger.info("Installed graph-safe padded FlashAttention before capture.")
+
     def _validate_configuration(self) -> None:
         if self.training_args.gradient_accumulation_steps != 1:
             raise RuntimeError(
@@ -441,6 +554,203 @@ class GrootN1d7FullIterationCudaGraphRunner:
                 raise RuntimeError(
                     "Fused optimizer gradient clipping requires --clip-grad > 0."
                 )
+        if self._fp8_enabled:
+            if getattr(self.training_args, "fp8_backend", None) != "te":
+                raise RuntimeError(
+                    "GR00T-N1.7 CUDA graph FP8 support requires the TE backend."
+                )
+            if getattr(self.training_args, "fp8_te_recipe", None) != "blockwise":
+                raise RuntimeError(
+                    "GR00T-N1.7 CUDA graph FP8 support requires the blockwise TE recipe."
+                )
+            if getattr(self.training_args, "cuda_graph_scope", None) != "full_iteration":
+                raise RuntimeError(
+                    "GR00T-N1.7 CUDA graph FP8 support requires full_iteration scope."
+                )
+            from loongforge.embodied.distributed.fp8_utils.te_fp8.recipe import (
+                build_fp8_recipe,
+            )
+
+            self._fp8_recipe = getattr(self.trainer, "_fp8_recipe", None)
+            if self._fp8_recipe is None:
+                self._fp8_recipe = build_fp8_recipe(
+                    self.training_args.fp8_te_recipe,
+                    recipe_args=self.training_args,
+                )
+                self.trainer._fp8_recipe = self._fp8_recipe
+            if self._fp8_recipe.__class__.__name__ != "Float8BlockScaling":
+                raise RuntimeError(
+                    "Expected TransformerEngine Float8BlockScaling for the GR00T graph path."
+                )
+
+            try:
+                from transformer_engine.pytorch import Linear as TELinear
+            except ImportError as exc:
+                raise RuntimeError("FP8 graph mode requires TransformerEngine PyTorch.") from exc
+            fp8_linear_count = sum(isinstance(m, TELinear) for m in self._backbone().modules())
+            if fp8_linear_count <= 0:
+                raise RuntimeError(
+                    "GR00T-N1.7 FP8 graph path requires at least one TE Linear "
+                    "module in the frozen backbone."
+                )
+            logger.info(
+                "GR00T-N1.7 FP8 graph coverage: te_linear=%d bf16_skip_modules=%s",
+                fp8_linear_count,
+                getattr(self.training_args, "fp8_skip_modules", None) or [],
+            )
+
+    def _iter_cuda_generators(self):
+        """Return graph-safe default and parallel RNG generators without duplicates."""
+        generators = []
+        seen = set()
+
+        def add(generator):
+            if generator is None or id(generator) in seen:
+                return
+            if not hasattr(generator, "graphsafe_get_state"):
+                raise RuntimeError(
+                    "CUDA graph FP8 path requires graph-safe torch.Generator state APIs."
+                )
+            seen.add(id(generator))
+            generators.append(generator)
+
+        add(torch.cuda.default_generators[torch.cuda.current_device()])
+        try:
+            from megatron.core.tensor_parallel.random import get_all_rng_states
+
+            try:
+                for generator in get_all_rng_states().values():
+                    add(generator)
+            except AssertionError:
+                # The embodied path may not initialize the optional parallel RNG
+                # tracker on a single-GPU run; the default generator remains enough.
+                pass
+        except ImportError:
+            pass
+        return tuple(generators)
+
+    def _register_graph_generators(self, graph: torch.cuda.CUDAGraph) -> None:
+        """Register all RNG streams consumed by a captured graph."""
+        for generator in self._iter_cuda_generators():
+            graph.register_generator_state(generator)
+
+    def _snapshot_cuda_generators(self):
+        """Snapshot graph-safe RNG states before warmup/capture mutates them."""
+        return tuple(
+            (generator, generator.graphsafe_get_state())
+            for generator in self._iter_cuda_generators()
+        )
+
+    @staticmethod
+    def _restore_cuda_generators(states) -> None:
+        for generator, state in states:
+            generator.graphsafe_set_state(state)
+
+    @staticmethod
+    def _walk_tensor_pointers(value: Any, path: str, output: dict[str, int], seen: set[int]) -> None:
+        if isinstance(value, torch.Tensor):
+            if id(value) in seen:
+                return
+            seen.add(id(value))
+            output[path] = value.data_ptr()
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                GrootN1d7FullIterationCudaGraphRunner._walk_tensor_pointers(
+                    item, f"{path}.{key}", output, seen
+                )
+        elif isinstance(value, (tuple, list)):
+            for index, item in enumerate(value):
+                GrootN1d7FullIterationCudaGraphRunner._walk_tensor_pointers(
+                    item, f"{path}[{index}]", output, seen
+                )
+
+    def _fp8_pointer_signature(self, module: torch.nn.Module) -> dict[str, int]:
+        pointers: dict[str, int] = {}
+        seen: set[int] = set()
+        for name, buffer in module.named_buffers():
+            pointers[f"buffer:{name}"] = buffer.data_ptr()
+        for module_name, child in module.named_modules():
+            meta = getattr(child, "fp8_meta", None)
+            if meta is not None:
+                self._walk_tensor_pointers(meta, f"meta:{module_name}", pointers, seen)
+        return pointers
+
+    def _remember_fp8_pointers(self, module: torch.nn.Module) -> None:
+        self._fp8_tensor_pointers = self._fp8_pointer_signature(module)
+
+    def _assert_fp8_pointers_stable(self, module: torch.nn.Module) -> None:
+        if self._fp8_tensor_pointers is None:
+            return
+        current = self._fp8_pointer_signature(module)
+        if current != self._fp8_tensor_pointers:
+            changed = sorted(
+                set(current) | set(self._fp8_tensor_pointers),
+                key=str,
+            )
+            changed = [
+                key
+                for key in changed
+                if current.get(key) != self._fp8_tensor_pointers.get(key)
+            ]
+            raise RuntimeError(
+                "FP8 tensor/scale storage changed after CUDA graph capture; "
+                f"first changed entries: {changed[:5]}"
+            )
+
+    def _prepare_fp8_graph_state(self, module: torch.nn.Module) -> None:
+        if not self._fp8_enabled:
+            return
+        from transformer_engine.pytorch.fp8 import FP8GlobalStateManager
+
+        FP8GlobalStateManager.set_skip_fp8_weight_update_tensor(False)
+        skip_tensor = FP8GlobalStateManager.get_skip_fp8_weight_update_tensor()
+        if skip_tensor is None or not skip_tensor.is_cuda:
+            raise RuntimeError("TE did not create a CUDA FP8 weight-cache scalar.")
+        pointer = skip_tensor.data_ptr()
+        if self._fp8_skip_weight_update_ptr is None:
+            self._fp8_skip_weight_update_ptr = pointer
+        elif pointer != self._fp8_skip_weight_update_ptr:
+            raise RuntimeError("TE FP8 weight-cache scalar was reallocated.")
+
+        # Blockwise TE does not use delayed global amax reduction, but assigning
+        # the cached recipe/group makes the module metadata explicit and mirrors
+        # Megatron's graph wrapper for future recipe extensions.
+        for child in module.modules():
+            fp8_meta = getattr(child, "fp8_meta", None)
+            if isinstance(fp8_meta, dict):
+                fp8_meta["recipe"] = self._fp8_recipe
+                if self._fp8_group is not None:
+                    fp8_meta["fp8_group"] = self._fp8_group
+
+    @contextmanager
+    def _fp8_capture_context(self, module: torch.nn.Module):
+        """Protect TE global state while recording a custom graph."""
+        if not self._fp8_enabled:
+            yield
+            return
+
+        from transformer_engine.pytorch.fp8 import FP8GlobalStateManager
+        from transformer_engine.pytorch.graph import (
+            restore_fp8_tensors,
+            save_fp8_tensors,
+            set_capture_end,
+            set_capture_start,
+        )
+
+        self._prepare_fp8_graph_state(module)
+        saved_state = FP8GlobalStateManager.get_autocast_state()
+        saved_fp8_tensors = save_fp8_tensors([module], self._fp8_recipe)
+        set_capture_start()
+        try:
+            with self.trainer._fp8_graph_capture_ctx():
+                yield
+        finally:
+            try:
+                set_capture_end()
+            finally:
+                restore_fp8_tensors([module], saved_fp8_tensors)
+                FP8GlobalStateManager.set_autocast_state(saved_state)
 
     def _validate_optimizer(self) -> None:
         if self._optimizer_validated:
@@ -540,7 +850,13 @@ class GrootN1d7FullIterationCudaGraphRunner:
             )
         backbone_input = BatchFeature(
             data={
-                key: self._convert_pipeline_value(inputs[key], backbone_dtype)
+                key: (
+                    self._convert_pipeline_value(inputs[key], backbone_dtype).to(dtype=torch.bool)
+                    if key == "attention_mask"
+                    and isinstance(inputs[key], torch.Tensor)
+                    and inputs[key].dtype != torch.bool
+                    else self._convert_pipeline_value(inputs[key], backbone_dtype)
+                )
                 for key in backbone_keys
                 if key in inputs and inputs[key] is not None
             }
@@ -678,19 +994,38 @@ class GrootN1d7FullIterationCudaGraphRunner:
         if callable(prepare_action_head):
             prepare_action_head(batch, backbone.model.config.image_token_id)
 
-    def _validate_graph_batch(self, batch: Any) -> None:
-        validate = getattr(self._backbone(), "validate_cuda_graph_batch", None)
-        if callable(validate):
-            if self.validation_batch is None:
-                raise RuntimeError("Full-iteration CUDA graph validation batch is missing.")
-            validate(self.validation_batch, batch)
-        validate_action = getattr(
-            self._action_head(),
-            "validate_cuda_graph_action_batch",
-            None,
+    def _graph_batch_incompatibility(self, batch: Any) -> str | None:
+        try:
+            validate = getattr(self._backbone(), "validate_cuda_graph_batch", None)
+            if callable(validate):
+                if self.validation_batch is None:
+                    raise RuntimeError("Full-iteration CUDA graph validation batch is missing.")
+                validate(self.validation_batch, batch)
+            validate_action = getattr(
+                self._action_head(),
+                "validate_cuda_graph_action_batch",
+                None,
+            )
+            if callable(validate_action):
+                validate_action(batch)
+        except RuntimeError as error:
+            return str(error)
+        return None
+
+    def _synchronize_fallback(self, local_reason: str | None) -> bool:
+        flag = torch.tensor(
+            int(local_reason is not None), dtype=torch.int32, device=self.ctx.device
         )
-        if callable(validate_action):
-            validate_action(batch)
+        if self.ctx.is_distributed:
+            dist.all_reduce(flag, op=dist.ReduceOp.MAX)
+        fallback = bool(flag.item())
+        if fallback and self.ctx.is_main:
+            logger.warning(
+                "Full-iteration CUDA graph input became incompatible%s; "
+                "all ranks are switching permanently to eager execution.",
+                f": {local_reason}" if local_reason else " on another rank",
+            )
+        return fallback
 
     def _ensure_copy_resources(self) -> None:
         if self._copy_stream is None:
@@ -712,7 +1047,11 @@ class GrootN1d7FullIterationCudaGraphRunner:
         return cpu_batch
 
     def _prefetch_next_batch(self) -> None:
-        if not self._input_prefetch_enabled or self.graph is None:
+        if (
+            not self._input_prefetch_enabled
+            or self.graph is None
+            or self._eager_fallback
+        ):
             return
         completed_steps = self.warmup_count + self.replay_count
         if completed_steps >= int(self.training_args.train_iters):
@@ -722,7 +1061,12 @@ class GrootN1d7FullIterationCudaGraphRunner:
 
         with self.trainer._stage_timers("batch-generator"):
             cpu_batch = self._fetch_cpu_batch()
-            self._validate_graph_batch(cpu_batch)
+            local_reason = self._graph_batch_incompatibility(cpu_batch)
+            if self._synchronize_fallback(local_reason):
+                self._fallback_cpu_batch = cpu_batch
+                self._eager_fallback = True
+                self._wait_default_stream()
+                return
             self._ensure_copy_resources()
             assert self._copy_stream is not None
             with torch.cuda.stream(self._copy_stream):
@@ -770,6 +1114,11 @@ class GrootN1d7FullIterationCudaGraphRunner:
                 self._prefetched_gpu_batch
             )
             _copy_static(self._backbone_static_input, backbone_input)
+            update_metadata = getattr(
+                self._backbone(), "update_cuda_graph_batch_metadata", None
+            )
+            if callable(update_metadata):
+                update_metadata(self._backbone_static_input, self._prefetched_cpu_batch)
             self._backbone_input_event.record(self._copy_stream)
         self._prefetched_action_input = action_input
 
@@ -809,7 +1158,13 @@ class GrootN1d7FullIterationCudaGraphRunner:
 
     def _fetch_batch(self) -> Any:
         with self.trainer._stage_timers("batch-generator"):
-            if self.graph is not None and self._input_prefetch_enabled:
+            if self._eager_fallback:
+                cpu_batch = self._fallback_cpu_batch
+                self._fallback_cpu_batch = None
+                if cpu_batch is None:
+                    cpu_batch = self._fetch_cpu_batch()
+                batch = self.trainer._move_batch_to_device(cpu_batch)
+            elif self.graph is not None and self._input_prefetch_enabled:
                 batch = self._consume_prefetched_batch()
             else:
                 cpu_batch = self._fetch_cpu_batch()
@@ -821,13 +1176,25 @@ class GrootN1d7FullIterationCudaGraphRunner:
                 if self.graph is not None:
                     if self.static_batch is None:
                         raise RuntimeError("Full-iteration CUDA graph static batch is missing.")
-                    self._validate_graph_batch(cpu_batch)
-                    self._copy_stream.wait_stream(default_stream)
-                    with torch.cuda.stream(self._copy_stream):
-                        _copy_static(self.static_batch, cpu_batch)
-                        self._copy_event.record(self._copy_stream)
-                    default_stream.wait_event(self._copy_event)
-                    batch = self.static_batch
+                    local_reason = self._graph_batch_incompatibility(cpu_batch)
+                    if self._synchronize_fallback(local_reason):
+                        self._eager_fallback = True
+                        batch = self.trainer._move_batch_to_device(cpu_batch)
+                        cpu_batch = None
+                    if cpu_batch is None:
+                        pass
+                    else:
+                        self._copy_stream.wait_stream(default_stream)
+                        with torch.cuda.stream(self._copy_stream):
+                            _copy_static(self.static_batch, cpu_batch)
+                            update_metadata = getattr(
+                                self._backbone(), "update_cuda_graph_batch_metadata", None
+                            )
+                            if callable(update_metadata):
+                                update_metadata(self.static_batch, cpu_batch)
+                            self._copy_event.record(self._copy_stream)
+                        default_stream.wait_event(self._copy_event)
+                        batch = self.static_batch
                 else:
                     if self.warmup_count >= self.warmup_steps:
                         self.validation_batch = _clone_validation_batch(cpu_batch)
@@ -893,12 +1260,12 @@ class GrootN1d7FullIterationCudaGraphRunner:
                 pin_memory=True,
             )
 
-        # Generate the identical CPU Beta samples as the reference path, but
-        # enqueue only the pinned-host -> device copy.
-        sample_cpu = action_head.sample_time(
-            actions.shape[0],
-            device=torch.device("cpu"),
-            dtype=actions.dtype,
+        # Preserve the exact reference ordering: Beta.sample returns a CPU
+        # fp32 tensor and the eager action head then converts it to the action
+        # dtype/device.  Sampling directly as bf16 changes the Beta values.
+        sample_cpu = action_head.beta_dist.sample([actions.shape[0]])
+        sample_cpu = ((1 - sample_cpu) * action_head.config.noise_s).to(
+            dtype=actions.dtype
         )
         self._time_host_buffer.copy_(sample_cpu)
         with torch.cuda.stream(self._time_stream):
@@ -933,10 +1300,10 @@ class GrootN1d7FullIterationCudaGraphRunner:
                 for _ in range(2)
             ]
         host_buffer = self._time_prefetch_host_buffers[self._time_prefetch_host_index]
-        sample_cpu = self._action_head().sample_time(
-            actions.shape[0],
-            device=torch.device("cpu"),
-            dtype=actions.dtype,
+        action_head = self._action_head()
+        sample_cpu = action_head.beta_dist.sample([actions.shape[0]])
+        sample_cpu = ((1 - sample_cpu) * action_head.config.noise_s).to(
+            dtype=actions.dtype
         )
         host_buffer.copy_(sample_cpu)
         self._ensure_time_resources()
@@ -968,6 +1335,12 @@ class GrootN1d7FullIterationCudaGraphRunner:
 
     def _clear_time_buffer(self) -> None:
         self._action_head()._split_time_buf = None
+
+    def _clear_noise_buffer(self) -> None:
+        self._action_head()._split_noise_buf = None
+
+    def _clear_state_dropout_buffer(self) -> None:
+        self._action_head()._split_state_dropout_buf = None
 
     def _zero_grad(self, *, set_to_none: bool) -> None:
         try:
@@ -1021,10 +1394,13 @@ class GrootN1d7FullIterationCudaGraphRunner:
             )
         self.trainer.optimizer.step()
         return _GraphOutputs(
-            action_loss=loss.detach(),
-            grad_norm=grad_norm.detach(),
-            nan_flag=(~finite).to(dtype=torch.int32),
-            spike_flag=(~valid).to(dtype=torch.int32),
+            # Keep explicit graph-owned scalar outputs.  A bare detach can
+            # alias a temporary reduction allocation whose storage is reused
+            # before the capture call returns.
+            action_loss=loss.detach().clone(),
+            grad_norm=grad_norm.detach().clone(),
+            nan_flag=(~finite).to(dtype=torch.int32).clone(),
+            spike_flag=(~valid).to(dtype=torch.int32).clone(),
         )
 
     def _wait_default_stream(self) -> None:
@@ -1036,6 +1412,8 @@ class GrootN1d7FullIterationCudaGraphRunner:
         self.graph_stream.wait_stream(default_stream)
         with torch.cuda.stream(self.graph_stream):
             self._clear_time_buffer()
+            self._clear_noise_buffer()
+            self._clear_state_dropout_buffer()
             outputs = self._iteration_body(set_to_none=True)
         self._wait_default_stream()
         nan_flag = int(outputs.nan_flag.item())
@@ -1058,6 +1436,10 @@ class GrootN1d7FullIterationCudaGraphRunner:
         backbone_input, action_input = self._prepare_pipeline_inputs(batch)
         self._backbone_static_input = _clone_static(backbone_input)
         self._prepare_pipeline_graph_batch()
+        self._prime_graph_safe_fa2(self._backbone_static_input)
+        input_ids = getattr(self._backbone_static_input, "input_ids", None)
+        if input_ids is not None:
+            prime_graph_safe_fa2_buffers((int(input_ids.shape[-1]),), self.ctx.device)
         self._ensure_backbone_pipeline_resources()
         self._sync_pipeline_ddp_buffers()
         assert self._backbone_stream is not None
@@ -1069,34 +1451,43 @@ class GrootN1d7FullIterationCudaGraphRunner:
         # graph reads a separate static copy.
         torch.cuda.synchronize(self.ctx.device)
         self.ctx.barrier()
-        backbone_rng_state = torch.cuda.get_rng_state(self.ctx.device)
         backbone_graph = torch.cuda.CUDAGraph()
+        self._register_graph_generators(backbone_graph)
+        backbone_rng_states = self._snapshot_cuda_generators()
         progress_hook = self._register_backbone_progress_hook()
         try:
-            with torch.cuda.graph(
-                backbone_graph,
-                stream=self._backbone_stream,
-                capture_error_mode="thread_local",
-            ):
-                with torch.no_grad(), self._train_autocast_context():
-                    backbone_output = self._backbone()(self._backbone_static_input)
+            with self._fp8_capture_context(self._backbone()):
+                with torch.cuda.graph(
+                    backbone_graph,
+                    stream=self._backbone_stream,
+                    pool=self._graph_pool,
+                    capture_error_mode="thread_local",
+                ):
+                    with torch.no_grad(), self._train_autocast_context():
+                        backbone_output = self._backbone()(self._backbone_static_input)
         finally:
             if progress_hook is not None:
                 progress_hook.remove()
         self._backbone_graph = backbone_graph
         self._backbone_output = backbone_output
+        self._remember_fp8_pointers(self._backbone())
 
         # The capture executes on the dedicated backbone stream. The action
         # graph owns a separate copy of these outputs, so establish the
         # producer/consumer dependency before cloning on the current stream.
         torch.cuda.current_stream(self.ctx.device).wait_stream(self._backbone_stream)
         torch.cuda.synchronize(self.ctx.device)
-        torch.cuda.set_rng_state(backbone_rng_state, self.ctx.device)
+        self._restore_cuda_generators(backbone_rng_states)
 
         self.static_batch = _ActionGraphBatch(
             backbone_output=_clone_static(backbone_output),
             action_input=_clone_static(action_input),
         )
+        # Eager draws the CUDA Philox stream in the order state-dropout
+        # (torch.rand) -> action noise (torch.randn) inside the action head
+        # forward.  Both draws stay inside the captured graph so that replay
+        # reproduces that order against the graph-registered generators; only
+        # the CPU Beta timestep, which consumes no device Philox, is prefilled.
         self._fill_time_buffer()
         if not any(parameter.grad is not None for parameter in self.raw_model.parameters()):
             raise RuntimeError(
@@ -1108,6 +1499,8 @@ class GrootN1d7FullIterationCudaGraphRunner:
         torch.cuda.synchronize(self.ctx.device)
         self.ctx.barrier()
         graph = torch.cuda.CUDAGraph()
+        self._register_graph_generators(graph)
+        graph_rng_states = self._snapshot_cuda_generators()
         saved_logger = None
         ddp_model = self.trainer.model
         if hasattr(ddp_model, "reducer"):
@@ -1118,17 +1511,30 @@ class GrootN1d7FullIterationCudaGraphRunner:
             with torch.cuda.graph(
                 graph,
                 stream=self.graph_stream,
+                pool=self._graph_pool,
                 capture_error_mode="thread_local",
             ):
                 outputs = self._iteration_body(set_to_none=False)
         finally:
             if saved_logger is not None:
                 ddp_model.logger = saved_logger
+            self._restore_cuda_generators(graph_rng_states)
 
         torch.cuda.synchronize(self.ctx.device)
         self.ctx.barrier()
         self.graph = graph
         self.outputs = outputs
+        self.capture_count += 1
+        if self.ctx.is_main:
+            logger.info(
+                "Full-iteration CUDA graph capture complete: session=%d, graphs=2, "
+                "fp8_backbone=%s, eager_fallbacks=%d",
+                self.capture_count,
+                self._fp8_enabled,
+                self.fallback_count,
+            )
+        if self._fp8_enabled:
+            self._remember_fp8_pointers(self._backbone())
         if self._direct_grad_write:
             missing_gradients = [
                 name
@@ -1141,46 +1547,27 @@ class GrootN1d7FullIterationCudaGraphRunner:
                     f"during capture; first missing parameters: {missing_gradients[:5]}."
                 )
 
-        # CUDA capture executes the train body once. Match the ordinary full
-        # graph path's immediate replay. The ordinary graph also reruns Qwen
-        # for that replay, so refresh the train-static backbone output before
-        # the second optimizer update instead of reusing capture-time output.
-        self._sync_pipeline_ddp_buffers()
-        assert self._backbone_graph is not None
-        assert self._backbone_stream is not None
-        assert self._backbone_ready_event is not None
-        assert self._buffer_sync_event is not None
-        self._backbone_stream.wait_event(self._buffer_sync_event)
-        with torch.cuda.stream(self._backbone_stream):
-            self._backbone_graph.replay()
-            self._backbone_ready_event.record(self._backbone_stream)
-
-        self._ensure_copy_resources()
-        assert self._copy_stream is not None
-        assert self._copy_event is not None
-        self._copy_stream.wait_event(self._backbone_ready_event)
-        with torch.cuda.stream(self._copy_stream):
-            assert self._backbone_output is not None
-            _copy_static(self.static_batch.backbone_output, self._backbone_output)
-            self._copy_event.record(self._copy_stream)
-        self.graph_stream.wait_event(self._copy_event)
-        with torch.cuda.stream(self.graph_stream):
-            self.graph.replay()
-        self.replay_count += 1
-        self._wait_default_stream()
-        torch.cuda.synchronize(self.ctx.device)
-
-        self._prefetch_next_batch()
-        self._launch_prefetched_backbone()
-        self._prefetch_next_time_buffer()
-        self._wait_pipeline_progress_before_finish()
-        return self._finish_step()
+        # CUDA stream capture records work without executing it.  Replay the
+        # backbone for the captured input first, then replay the action graph;
+        # this is the first real optimizer iteration and the only scheduler
+        # advancement associated with this outer training step.
+        self._replay_captured_backbone()
+        self._capture_replay_pending = True
+        return self._replay(self.static_batch)
 
     def _capture(self, batch: Any) -> tuple[dict[str, torch.Tensor], float]:
         if self._backbone_pipeline_enabled:
             return self._capture_backbone_pipeline(batch)
         self.static_batch = _clone_static(batch)
         self._prepare_graph_batch(self.static_batch)
+        self._prime_graph_safe_fa2(self.static_batch)
+        input_ids = getattr(self.static_batch, "input_ids", None)
+        if input_ids is not None:
+            prime_graph_safe_fa2_buffers(
+                (int(input_ids.shape[-1]),),
+                self.ctx.device,
+            )
+        self._prepare_fp8_graph_state(self.raw_model)
         self._fill_time_buffer()
         if not any(parameter.grad is not None for parameter in self.raw_model.parameters()):
             raise RuntimeError(
@@ -1196,6 +1583,8 @@ class GrootN1d7FullIterationCudaGraphRunner:
         self.ctx.barrier()
 
         graph = torch.cuda.CUDAGraph()
+        self._register_graph_generators(graph)
+        graph_rng_states = self._snapshot_cuda_generators()
         saved_logger = None
         ddp_model = self.trainer.model
         if hasattr(ddp_model, "reducer"):
@@ -1206,18 +1595,32 @@ class GrootN1d7FullIterationCudaGraphRunner:
             with torch.cuda.graph(
                 graph,
                 stream=self.graph_stream,
+                pool=self._graph_pool,
                 capture_error_mode="thread_local",
             ):
-                outputs = self._iteration_body(set_to_none=False)
+                with self._fp8_capture_context(self.raw_model):
+                    outputs = self._iteration_body(set_to_none=False)
         finally:
             if saved_logger is not None:
                 ddp_model.logger = saved_logger
+            self._restore_cuda_generators(graph_rng_states)
 
         torch.cuda.synchronize(self.ctx.device)
         self.ctx.barrier()
 
         self.graph = graph
         self.outputs = outputs
+        self.capture_count += 1
+        if self.ctx.is_main:
+            logger.info(
+                "Full-iteration CUDA graph capture complete: session=%d, graphs=1, "
+                "fp8=%s, eager_fallbacks=%d",
+                self.capture_count,
+                self._fp8_enabled,
+                self.fallback_count,
+            )
+        if self._fp8_enabled:
+            self._remember_fp8_pointers(self._backbone())
         if self._direct_grad_write:
             missing_gradients = [
                 name
@@ -1229,23 +1632,61 @@ class GrootN1d7FullIterationCudaGraphRunner:
                     "Direct gradient write did not materialize every trainable gradient "
                     f"during capture; first missing parameters: {missing_gradients[:5]}."
                 )
-        with torch.cuda.stream(self.graph_stream):
-            self.graph.replay()
-        self.replay_count += 1
-        self._wait_default_stream()
-        torch.cuda.synchronize(self.ctx.device)
-        self._prefetch_next_batch()
-        self._prefetch_next_time_buffer()
-        return self._finish_step()
+        # Capture records kernels but does not execute them.  The first replay
+        # below is therefore the first real optimizer iteration.
+        self._capture_replay_pending = True
+        return self._replay(self.static_batch)
+
+    def _replay_captured_backbone(self) -> None:
+        """Materialize the pipeline backbone output for the capture batch."""
+        if not self._backbone_pipeline_enabled:
+            return
+        if (
+            self._backbone_graph is None
+            or self._backbone_static_input is None
+            or not isinstance(self.static_batch, _ActionGraphBatch)
+            or self._backbone_output is None
+        ):
+            raise RuntimeError("Captured frozen-backbone graph is not ready for its first replay.")
+        self._ensure_copy_resources()
+        self._ensure_backbone_pipeline_resources()
+        assert self._backbone_stream is not None
+        assert self._backbone_ready_event is not None
+        assert self._copy_stream is not None
+        assert self._copy_event is not None
+        default_stream = torch.cuda.current_stream(self.ctx.device)
+        self._backbone_stream.wait_stream(default_stream)
+        with torch.cuda.stream(self._backbone_stream):
+            self._backbone_graph.replay()
+            self._backbone_ready_event.record(self._backbone_stream)
+        self._copy_stream.wait_event(self._backbone_ready_event)
+        with torch.cuda.stream(self._copy_stream):
+            _copy_static(self.static_batch.backbone_output, self._backbone_output)
+            self._copy_event.record(self._copy_stream)
+        default_stream.wait_event(self._copy_event)
 
     def _replay(self, batch: Any) -> tuple[dict[str, torch.Tensor], float]:
         if batch is not self.static_batch:
             raise RuntimeError("Full-iteration CUDA graph replay did not receive its static batch.")
-        if self._time_prefetch_enabled:
+        if self._capture_replay_pending:
+            # _fill_time_buffer() ran immediately before capture.  Reusing
+            # that value preserves the eager RNG sequence for the first real
+            # graph iteration.
+            self._capture_replay_pending = False
+        elif self._time_prefetch_enabled:
             self._consume_prefetched_time_buffer()
         else:
             self._fill_time_buffer()
         assert self.graph is not None
+        if self._fp8_enabled:
+            self._assert_fp8_pointers_stable(self._backbone())
+            skip_ptr = self._fp8_skip_weight_update_ptr
+            if skip_ptr is not None:
+                from transformer_engine.pytorch.fp8 import FP8GlobalStateManager
+
+                skip_tensor = FP8GlobalStateManager.get_skip_fp8_weight_update_tensor()
+                if skip_tensor is None or skip_tensor.data_ptr() != skip_ptr:
+                    raise RuntimeError("TE FP8 weight-cache scalar changed before replay.")
         default_stream = torch.cuda.current_stream(self.ctx.device)
         if self._backbone_pipeline_enabled:
             self._sync_pipeline_ddp_buffers()
@@ -1264,17 +1705,127 @@ class GrootN1d7FullIterationCudaGraphRunner:
 
     def _finish_step(self) -> tuple[dict[str, torch.Tensor], float]:
         assert self.outputs is not None
+        # Clone the scalar before another graph from the shared pool can reuse
+        # the capture output allocation (notably on the first capture step).
+        action_loss = self.outputs.action_loss.detach().clone()
         nan_flag = int(self.outputs.nan_flag.item())
         spike_flag = int(self.outputs.spike_flag.item())
         self.trainer.nan_iterations += nan_flag
         self.trainer.skipped_iterations += spike_flag
         self._advance_scheduler()
-        return {"action_loss": self.outputs.action_loss}, float(self.outputs.grad_norm)
+        return {"action_loss": action_loss}, float(self.outputs.grad_norm)
+
+    def _run_eager_fallback_step(self, batch: Any) -> tuple[dict[str, torch.Tensor], float]:
+        """Continue with native inputs while preserving optimizer and scheduler state."""
+        if self.fallback_count == 0:
+            self.fallback_count = 1
+            # No captured work is pending when fallback is selected: the
+            # preceding replay has completed and the incompatible batch was
+            # only inspected on CPU. Release the private graph pools before
+            # running eager, otherwise the action-head forward cannot allocate
+            # its normal activations on a 96-GiB device.
+            torch.cuda.synchronize(self.ctx.device)
+            if self.graph is not None:
+                self.graph.reset()
+            if self._backbone_graph is not None:
+                self._backbone_graph.reset()
+            self.graph = None
+            self._backbone_graph = None
+            self.outputs = None
+            self.static_batch = None
+            self.validation_batch = None
+            self._backbone_static_input = None
+            self._backbone_output = None
+            self._prefetched_action_input = None
+            self._prefetched_gpu_batch = None
+            self._prefetched_cpu_batch = None
+            self._backbone_pending = False
+            self._clear_time_buffer()
+            self._clear_noise_buffer()
+            self._clear_state_dropout_buffer()
+            self.time_buffer = None
+            self._time_host_buffer = None
+            self._time_prefetch_buffer = None
+            self._time_prefetch_host_buffers = []
+            # Remove pointer-keyed Qwen metadata belonging to the destroyed
+            # static graph tensors. Native eager batches must rebuild their
+            # own visual/attention metadata from their current pointers.
+            backbone = self._backbone()
+            qwen_model = getattr(backbone.model, "model", backbone.model)
+            from loongforge.embodied.model.groot_n1_7.modules import qwen3_backbone
+
+            qwen3_backbone._CUDA_GRAPH_ATTENTION_MASK_METADATA.clear()
+            for owner in (backbone, qwen_model, getattr(backbone, "language_model", None)):
+                if owner is None:
+                    continue
+                for name in tuple(owner.__dict__):
+                    if name.startswith("_loongforge_cuda_graph_"):
+                        owner.__dict__.pop(name, None)
+            torch.cuda.empty_cache()
+            # DDP's reducer/logger was captured with graph-owned CUDA events.
+            # Returning through DDP.forward after replay can make its eager
+            # runtime-stat logger touch those captured events. The model has no
+            # mutable buffers requiring broadcast, so keep the graph-era DDP
+            # buffer policy and bypass only DDP's forward wrapper. Gradients
+            # are reduced explicitly below in a fixed parameter order.
+            if self.ctx.is_main:
+                logger.warning(
+                    "Full-iteration CUDA graph disabled after %d replays; "
+                    "continuing with eager steps and the existing optimizer state.",
+                    self.replay_count,
+                )
+        ddp_model = self.trainer.model
+        saved_logger = getattr(ddp_model, "logger", None)
+        if saved_logger is not None:
+            ddp_model.logger = self._noop_ddp_logger
+        if self._saved_ddp_broadcast_buffers is not None:
+            ddp_model.broadcast_buffers = self._saved_ddp_broadcast_buffers
+        try:
+            prepare = getattr(self._backbone(), "prepare_cuda_graph_batch", None)
+            if callable(prepare):
+                prepare(batch)
+            self._zero_grad(set_to_none=True)
+            loss, _log_losses = self.trainer._train_forward(batch)
+        finally:
+            if saved_logger is not None:
+                ddp_model.logger = saved_logger
+        scaled_loss = loss / self.training_args.gradient_accumulation_steps
+        finite = torch.isfinite(scaled_loss)
+        below_threshold = scaled_loss <= float(self.training_args.loss_spike_threshold)
+        valid = finite & below_threshold
+        torch.where(valid, scaled_loss, torch.zeros_like(scaled_loss)).backward()
+        self._clean_nan_gradients()
+        params = [parameter for parameter in self.raw_model.parameters() if parameter.grad is not None]
+        max_norm = float(self.training_args.clip_grad)
+        if self._fused_optimizer_grad_clip:
+            grad_norm, grad_scale = _compute_grad_norm_and_clip_scale(
+                [parameter.grad for parameter in params], max_norm
+            )
+            self.trainer.optimizer.set_grad_scale(grad_scale)
+        else:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                params, max_norm if max_norm > 0 else float("inf"), error_if_nonfinite=False
+            )
+        self.trainer.optimizer.step()
+        outputs = _GraphOutputs(
+            action_loss=loss.detach().clone(),
+            grad_norm=grad_norm.detach().clone(),
+            nan_flag=(~finite).to(dtype=torch.int32).clone(),
+            spike_flag=(~valid).to(dtype=torch.int32).clone(),
+        )
+        nan_flag = int(outputs.nan_flag.item())
+        spike_flag = int(outputs.spike_flag.item())
+        self.trainer.nan_iterations += nan_flag
+        self.trainer.skipped_iterations += spike_flag
+        self._advance_scheduler()
+        return {"action_loss": outputs.action_loss}, float(outputs.grad_norm)
 
     def step(self) -> tuple[dict[str, torch.Tensor], float]:
         """Run one training iteration via eager warmup, capture, or replay."""
         self._validate_optimizer()
         batch = self._fetch_batch()
+        if self._eager_fallback:
+            return self._run_eager_fallback_step(batch)
         if self.warmup_count < self.warmup_steps:
             return self._run_eager_warmup(batch)
         if self.graph is None:
@@ -1290,6 +1841,15 @@ class GrootN1d7FullIterationCudaGraphRunner:
             return
         self.ctx.barrier()
         torch.cuda.synchronize(self.ctx.device)
+        if self.ctx.is_main:
+            logger.info(
+                "Full-iteration CUDA graph summary: warmup_steps=%d, "
+                "capture_sessions=%d, replays=%d, eager_fallbacks=%d",
+                self.warmup_count,
+                self.capture_count,
+                self.replay_count,
+                self.fallback_count,
+            )
         if self.graph is not None:
             self.graph.reset()
         if self._backbone_graph is not None:
@@ -1324,6 +1884,8 @@ class GrootN1d7FullIterationCudaGraphRunner:
             self.trainer.model.broadcast_buffers = self._saved_ddp_broadcast_buffers
             self._saved_ddp_broadcast_buffers = None
         self._clear_time_buffer()
+        self._clear_noise_buffer()
+        self._clear_state_dropout_buffer()
         self.ctx.barrier()
 
     @property

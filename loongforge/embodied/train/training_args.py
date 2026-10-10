@@ -1279,6 +1279,33 @@ class _FP8Args:
                     "dequantized dequantizes saved operands before backward.",
         },
     )
+    fp8_te_block_x_scaling_dim: int = field(
+        default=1,
+        metadata={
+            "choices": [1, 2],
+            "help": "TransformerEngine Float8BlockScaling only: activation "
+                    "scale granularity (1 selects 1x128 blocks; 2 selects "
+                    "128x128 blocks).",
+        },
+    )
+    fp8_te_block_w_scaling_dim: int = field(
+        default=2,
+        metadata={
+            "choices": [1, 2],
+            "help": "TransformerEngine Float8BlockScaling only: weight scale "
+                    "granularity (1 selects 1x128 blocks; 2 selects "
+                    "128x128 blocks).",
+        },
+    )
+    fp8_te_block_grad_scaling_dim: int = field(
+        default=1,
+        metadata={
+            "choices": [1, 2],
+            "help": "TransformerEngine Float8BlockScaling only: output-gradient "
+                    "scale granularity. Frozen-backbone forward-only FP8 does "
+                    "not consume this setting.",
+        },
+    )
 
     # TorchAO-only recipe and FSDP/shape parameters.
     fp8_torchao_recipe: str = field(

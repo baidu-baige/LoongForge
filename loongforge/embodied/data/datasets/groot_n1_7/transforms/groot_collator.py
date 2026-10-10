@@ -148,10 +148,19 @@ class GrootN1d7Preprocessor(BasePreprocessor):
         """Construct from LoongForge model config."""
         policy_cfg = GrootN1d7Config.from_config(model_cfg)
         data_cfg = GrootN1d7DataConfig() if data_cfg is None else data_cfg
-        max_length = training_args.cuda_graph_pad_length if training_args is not None else None
-        if max_length == 0:
-            max_length = None
-        if max_length is None:
+        max_length = None
+        if training_args is not None:
+            graph_pad_length = training_args.cuda_graph_pad_length
+            graph_requested = training_args.cuda_graph_impl == "local"
+            if graph_requested and graph_pad_length is not None and graph_pad_length > 0:
+                # Padding is opt-in because it changes the attention surface
+                # and can change training numerics. With zero/unset, preserve
+                # native lengths and let the graph runner fall back to eager
+                # if a later batch has an incompatible signature.
+                max_length = graph_pad_length
+            elif not graph_requested:
+                max_length = data_cfg.max_token_len
+        else:
             max_length = data_cfg.max_token_len
         return cls(policy_cfg=policy_cfg, data_cfg=data_cfg, max_length=max_length)
 
