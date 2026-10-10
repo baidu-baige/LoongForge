@@ -11,8 +11,8 @@ WDS-native V1 路径（`wds_pack.cli.scan_manifest`）仅接受以下两种 `sam
 
 |场景|`sample_type`|说明|
 |---|---|---|
-|离线打包图像/视频/文本混合 QA|`packed_multi_mix_qa`|输入 WDS JSON 必须声明 `media`/`media_type`；打包按媒体类型同质进行。默认使用手写模板 `TEMPLATES[sample_type][model_type]`；若设置 `model.use_hf_chat_template: true` 或 `model.chat_template_path`，同样会改用 HF chat 模板渲染（手写模板仅为未启用 HF 渲染时的回退）。|
-|离线打包对话（HF chat 模板）|`packed_chat_mix`|使用模型自带的 HF chat 模板渲染样本，而非 `TEMPLATES`；需要设置 `model.use_hf_chat_template: true` 或 `model.chat_template_path`。|
+|离线打包图像/视频/文本混合 QA|`packed_multi_mix_qa`|为每个样本标注 `media`/`media_type`（`text`/`image`/`video`）；两者都没有时按 `text` 处理。每个 pack 只打包同一媒体类型的样本。默认用内置模板渲染（定义在 `wds_pack/core/constants.py`，按 `sample_type` + `model_type` 选取）；设置 `model.use_hf_chat_template: true` 或 `model.chat_template_path` 则改用模型自带的 HF chat 模板。|
+|离线打包对话（HF chat 模板）|`packed_chat_mix`|始终用模型自带的 HF chat 模板渲染（而非本工具内置模板），因此必须设置 `model.use_hf_chat_template: true` 或 `model.chat_template_path`。|
 
 ## 2. 输入要求（`data.wds_dir`）
 实现**直接读取** `data.wds_dir` 下未压缩的 `*.tar` 分片，
@@ -22,7 +22,7 @@ WDS-native V1 路径（`wds_pack.cli.scan_manifest`）仅接受以下两种 `sam
 
 * `wds_pack.cli.scan_manifest` 从 `data.template_text_key` 指定的字段读取消息列表；它也接受常用键 `messages` 和 `texts`。
 * 如果 JSON 文件来自 `tools/vlm_data_preprocess/convert_to_webdataset.py`（多场景默认写入 `texts`），通常需要将 `data.template_text_key` 设置为 `texts`。
-* `packed_multi_mix_qa`：JSON 必须声明 `media`/`media_type`（`text`、`image` 或 `video`）。图像/视频样本应提供 `name`/`media_files`；如缺失，则按扩展名从 WDS 成员推断媒体文件。
+* `packed_multi_mix_qa`：为每个样本标注 `media`/`media_type`（`text`、`image` 或 `video`）；两者都没有时按 `text` 处理。图像/视频样本应提供 `name`/`media_files`；如缺失，则按扩展名从 WDS 成员推断媒体文件。
 * V1 不支持 `.tgz` 输入，因为高效的字节区间读取需要未压缩的 tar。
 
 ## 3. 快速开始
@@ -43,7 +43,7 @@ bash scripts/pack_wds.sh
 
 ### 步骤 1：扫描 WDS manifest 并计算每个样本的 Token 长度（`wds_pack.cli.scan_manifest`）
 * 输入：`data.wds_dir` 下的 `*.tar` 分片
-* 处理：直接从 tar 读取 WDS 样本，渲染对话文本（启用 HF 渲染时使用模型自带的 HF chat 模板；否则按 `sample.sample_type` + `model.model_type` 回退到手写模板 `wds_pack.core.constants.TEMPLATES`），使用 `AutoProcessor` 或 `AutoTokenizer` 对文本+视觉输入进行分词，并记录 tar 字节定位信息
+* 处理：直接从 tar 读取 WDS 样本，渲染对话文本（启用 HF 渲染时使用模型自带的 HF chat 模板；否则按 `sample.sample_type` + `model.model_type` 回退到内置模板 `wds_pack.core.constants.TEMPLATES`），使用 `AutoProcessor` 或 `AutoTokenizer` 对文本+视觉输入进行分词，并记录 tar 字节定位信息
 * 输出：`{data.work_dir}/sample_manifest.sqlite`（权威 manifest）和 `skipped_overlong.jsonl`（`token_len > max_token_len` 被跳过的样本，始终写出）；`sample_manifest.jsonl`、合并报告 `sample_len_report.txt`、`token_len/` 下各媒体类型的 Token 报告，以及 `skipped_samples.jsonl` 仅在 `artifacts.debug_artifacts: true` 时保留
 
 手动运行：
@@ -115,7 +115,7 @@ sample:
 
 * 更换模型：将 `model.processor_kwargs.pretrained_model_name_or_path` 设置为所需的 HF 模型/处理器；相应更新 `model.model_type`。
 * 调整图像 Token 预算 / 分辨率：在 `model.processor_kwargs` 下添加处理器支持的参数（例如 Qwen-VL 的 `min_pixels`/`max_pixels`）。
-* 模板对齐：仅在未启用 HF chat 模板渲染（即 `model.use_hf_chat_template` 与 `model.chat_template_path` 均未设置）而回退到手写模板时，才需要此项——如果添加了新的 `model.model_type`，确保 `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template for sample_type=..., model_type=..."。启用 HF 渲染时则不走该查找，也不要求 `TEMPLATES` 条目。
+* 模板对齐：仅在未启用 HF chat 模板渲染（即 `model.use_hf_chat_template` 与 `model.chat_template_path` 均未设置）而回退到内置模板时，才需要此项——如果添加了新的 `model.model_type`，确保 `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` 中的 `TEMPLATES[sample_type][model_type]` 包含对应条目；否则步骤 1 将报错"No template for sample_type=..., model_type=..."。启用 HF 渲染时则不走该查找，也不要求 `TEMPLATES` 条目。
 * 媒体预处理：在 `media_preprocess` 下可以为每种模态指定预处理函数名（实现在 `tools/vlm_data_preprocess/offline_packing/wds_pack/media/preprocess.py`），以控制缩放/裁剪/帧读取行为。
 
 ## 致谢

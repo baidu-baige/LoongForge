@@ -11,8 +11,8 @@ The WDS-native V1 path (`wds_pack.cli.scan_manifest`) accepts exactly two `sampl
 
 |Scenario|`sample_type`|Description|
 |---|---|---|
-|Offline packed image/video/text mixed QA|`packed_multi_mix_qa`|Input WDS JSON must declare `media`/`media_type`; packs are homogeneous by media type. Uses the handwritten `TEMPLATES[sample_type][model_type]` by default; if `model.use_hf_chat_template: true` or `model.chat_template_path` is set it renders with the HF chat template instead (the handwritten template is only the fallback when HF rendering is disabled).|
-|Offline packed chat (HF chat template)|`packed_chat_mix`|Renders samples with the model's released HF chat template instead of `TEMPLATES`; requires `model.use_hf_chat_template: true` or `model.chat_template_path`.|
+|Offline packed image/video/text mixed QA|`packed_multi_mix_qa`|Tag each sample with `media`/`media_type` (`text`/`image`/`video`); a sample with neither is treated as `text`. Each pack contains samples of a single media type. Rendering uses a built-in template by default (bundled in `wds_pack/core/constants.py`, selected by `sample_type` + `model_type`); set `model.use_hf_chat_template: true` or `model.chat_template_path` to render with the model's own HF chat template instead.|
+|Offline packed chat (HF chat template)|`packed_chat_mix`|Always renders with the model's own HF chat template (not the tool's built-in template), so `model.use_hf_chat_template: true` or `model.chat_template_path` is required.|
 
 ## 2. Input requirements (`data.wds_dir`)
 The implementation reads uncompressed `*.tar` shards directly from `data.wds_dir`.
@@ -22,7 +22,7 @@ Notes:
 
 * `wds_pack.cli.scan_manifest` reads the message list from the field specified by `data.template_text_key`; it also accepts the common keys `messages` and `texts`.
 * If the JSON files come from `tools/vlm_data_preprocess/convert_to_webdataset.py` (multi-scenario writes `texts` by default) you usually need to set `data.template_text_key` to `texts`.  
-* `packed_multi_mix_qa`: JSON must declare `media`/`media_type` (`text`, `image`, or `video`). Image/video samples should supply `name`/`media_files`; if absent, media members are inferred from WDS parts by extension.
+* `packed_multi_mix_qa`: tag each sample with `media`/`media_type` (`text`, `image`, or `video`); a sample with neither is treated as `text`. For image/video samples, supply `name`/`media_files`; if absent, media members are inferred from WDS parts by extension.
 * `.tgz` input is not supported in V1 because efficient byte-range reads require uncompressed tar.
 
 ## 3. Quick start
@@ -43,7 +43,7 @@ To switch to another config:
 
 ### Step 1: Scan WDS manifest and compute per-sample token length (`wds_pack.cli.scan_manifest`)
 * Input: `*.tar` shards under `data.wds_dir`
-* Process: read WDS samples directly from tar, render the chat text (the HF chat template when HF rendering is enabled; otherwise fall back to the handwritten `wds_pack.core.constants.TEMPLATES` picked by `sample.sample_type` + `model.model_type`), tokenise text+vision inputs with `AutoProcessor` or `AutoTokenizer`, and record tar byte locators
+* Process: read WDS samples directly from tar, render the chat text (the HF chat template when HF rendering is enabled; otherwise fall back to the built-in `wds_pack.core.constants.TEMPLATES` picked by `sample.sample_type` + `model.model_type`), tokenise text+vision inputs with `AutoProcessor` or `AutoTokenizer`, and record tar byte locators
 * Output: `{data.work_dir}/sample_manifest.sqlite` (authoritative manifest) and `skipped_overlong.jsonl` (samples whose `token_len > max_token_len`, always written); `sample_manifest.jsonl`, the combined `sample_len_report.txt`, the per-media token reports under `token_len/`, and `skipped_samples.jsonl` are kept only when `artifacts.debug_artifacts: true`
 
 Manual run:
@@ -115,7 +115,7 @@ Step 1’s token counts depend on the actual `AutoProcessor` logic, so you can c
 
 * Change model: set `model.processor_kwargs.pretrained_model_name_or_path` to the desired HF model/processor; update `model.model_type` accordingly.  
 * Adjust image-token budget / resolution: add processor-supported arguments under `model.processor_kwargs` (e.g. Qwen-VL’s `min_pixels`/`max_pixels`).  
-* Template alignment: this is only needed when HF chat-template rendering is disabled (neither `model.use_hf_chat_template` nor `model.chat_template_path` is set) and the handwritten template is used as the fallback — if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template for sample_type=..., model_type=...”. When HF rendering is enabled this lookup is skipped and no `TEMPLATES` entry is required.
+* Template alignment: this is only needed when HF chat-template rendering is disabled (neither `model.use_hf_chat_template` nor `model.chat_template_path` is set) and the built-in template is used as the fallback — if you add a new `model.model_type`, make sure `tools/vlm_data_preprocess/offline_packing/wds_pack/core/constants.py` contains the corresponding entry in `TEMPLATES[sample_type][model_type]`; otherwise Step 1 will raise “No template for sample_type=..., model_type=...”. When HF rendering is enabled this lookup is skipped and no `TEMPLATES` entry is required.
 * Media pre-processing: under `media_preprocess` you can assign pre-processing function names per modality (implementations in `tools/vlm_data_preprocess/offline_packing/wds_pack/media/preprocess.py`) to control resize/crop/frame-reading behaviour.
 
 ## Acknowledgements
