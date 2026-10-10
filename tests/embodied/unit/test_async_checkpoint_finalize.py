@@ -14,8 +14,8 @@ from concurrent.futures import Future
 
 import pytest
 
-import loongforge.embodied.distributed.checkpoint as ck
-from loongforge.embodied.distributed import DistributedContext
+import loongforge.engines.torch.checkpointing as ck
+from loongforge.engines.torch.distributed import DistributedContext
 
 
 class _StubAsyncSaveResponse:

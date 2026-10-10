@@ -24,13 +24,13 @@ The runtime capability check executes while FSDP groups are registered. Unsuppor
 The DreamZero Wan2.2-5B full FSDP recipe enables Delta-FP8 with its validated settings. No additional Delta-FP8 argument is required:
 
 ```bash
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 ```
 
 To use native BF16 AllGather for an A/B comparison:
 
 ```bash
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh \
     --no-fsdp-delta-fp8-allgather
 ```
 

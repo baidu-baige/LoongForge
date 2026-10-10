@@ -1,4 +1,4 @@
-_target_: loongforge.models.foundation.glm5_next.Glm5NextConfig
+_target_: loongforge.models.language.glm5_next.glm5_next_config.Glm5NextConfig
 
 # Full GLM-5.3-Flash architecture (zai-org/GLM-5.3-Flash).
 vocab_size: 154880

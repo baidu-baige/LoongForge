@@ -1,6 +1,6 @@
 # Kimi K3 vision tower.  The execution path is shared with MoonVisionModel;
 # these values capture the K3 checkpoint contract.
-_target_: loongforge.models.encoder.MoonVisionModelConfig
+_target_: loongforge.models.vision.MoonVisionModelConfig
 
 num_layers: 27
 hidden_size: 1024

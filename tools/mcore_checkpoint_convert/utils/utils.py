@@ -7,11 +7,10 @@ import os
 import re
 import json
 import torch
-from typing import List
 from bisect import bisect_left
 from math import floor, ceil
 
-from typing import Tuple, Literal
+from typing import List, Tuple, Literal
 
 
 import logging
@@ -366,9 +365,7 @@ def make_hf_sub_checkpoints(base_path):
                         if len(parts) == 2:
                             file_base, file_count = parts
                             i_str = file_base.split('-')[-1]
-                            sub_count_str = file_count.split('.')[0]
                             i = int(i_str)
-                            sub_count = int(sub_count_str)
 
                             # Update global counter
                             local_file_count += 1
@@ -481,8 +478,8 @@ def get_layer_ids(c_config, args, p):
     # Get model layer count related parameters
     num_layers = cargs["num_layers"]  # Total number of model layers
     mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)  # MTP additional layers, default 0
-    num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     pp = args.pipeline_model_parallel_size  # Pipeline parallel size
+    num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     # Calculate number of virtual pipeline stages
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage

@@ -1,0 +1,339 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from ERNIE (https://github.com/PaddlePaddle/ERNIE/)
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+utils for data processor
+"""
+
+import base64
+import copy
+import datetime
+import hashlib
+import io
+import os
+import threading
+import uuid
+import torch
+from itertools import groupby
+from pathlib import Path
+import numpy as np
+import requests
+
+import xxhash
+from decord import VideoReader
+from PIL import Image
+from PIL.ExifTags import TAGS
+from transformers import AutoProcessor
+
+RAW_VIDEO_DIR = "./download_tmp/raw_video/"
+RAW_IMAGE_DIR = "./download_tmp/raw_images/"
+EXTRACTED_FRAME_DIR = "./download_tmp/extracted_frames/"
+TMP_DIR = "./download_tmp/upload_tmp/"
+
+
+def get_text_token_num(tokenizer, text: str):
+    """text tokenize and count"""
+    return len(tokenizer.encode(text)["input_ids"])
+
+
+def get_uniq_id(text):
+    """text hash"""
+    return xxhash.xxh32_intdigest(text)
+
+def merge_list(lists):
+    """merge multi list to one list
+
+    Args:
+        lists (list[list]): [[], [], ...]
+
+    Returns:
+        list: one list
+    """
+    new_list = lists[0]
+    for one in lists[1:]:
+        new_list.extend(one)
+    return new_list
+
+
+class ErnieTensorDataset(torch.utils.data.Dataset):
+    """
+    Simple tensor dataset for ERNIE-VL that loads pre-processed .npy files.
+
+    Reads tensor data from numpy files listed in metadata_path and converts
+    them to PyTorch tensors. Uses random sampling with fixed seed for reproducibility.
+
+    Args:
+        args: Config with seed and hf_tokenizer_path
+        metadata_path: Path to file listing all .npy file paths
+        steps_per_epoch: Total number of training steps
+    """
+    def __init__(self, args, metadata_path, steps_per_epoch=0):
+        self.manual_seed = args.seed
+        self.steps_per_epoch = steps_per_epoch
+        self.processor = AutoProcessor.from_pretrained(args.hf_tokenizer_path,  trust_remote_code=True)
+        self.file_names = []
+
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                self.file_names.append(line.strip())
+
+    def __getitem__(self, index):
+        seed = (self.manual_seed + index) % 2**32
+        numpy_random_state = np.random.RandomState(seed=seed)
+        data_id = numpy_random_state.randint(0, self.steps_per_epoch)
+        data_id = data_id % len(self.file_names)
+        data_name = self.file_names[data_id]
+        data = np.load(data_name)
+        data_item = {
+            "images": torch.from_numpy(data["images"]),
+            "input_ids": torch.from_numpy(data["input_ids"]),
+            "token_type_ids": torch.from_numpy(data["token_type_ids"])[:, :-1],
+            "position_ids": torch.from_numpy(data["position_ids"]),
+            "grid_thw": torch.from_numpy(data["grid_thw"]),
+            "image_type_ids": torch.from_numpy(data["image_type_ids"]),
+            "labels": torch.from_numpy(data["labels"])
+        }
+        return data_item
+
+    def __len__(self):
+        return self.steps_per_epoch
+
+
+def file_download(url, download_dir, save_to_disk=False, retry=0, retry_interval=3):
+    """
+    Description: Download url, if url is PIL, return directly
+    Args:
+        url(str, PIL): http/local path/io.Bytes, note that io.Bytes is the image byte stream
+        download_path: when save_to_disk=True, return the saved address
+        save_to_disk: whether to save in the local path
+
+    """
+
+    if isinstance(url, Image.Image):
+        return url
+    elif isinstance(url, VideoReader):
+        return url
+    elif url.startswith("http"):
+        response = requests.get(url)
+        bytes_data = response.content
+    elif os.path.isfile(url):
+        if save_to_disk:
+            return url
+        bytes_data = open(url, "rb").read()
+    else:
+        bytes_data = base64.b64decode(url)
+    if not save_to_disk:
+        return bytes_data
+
+    download_path = os.path.join(download_dir, get_filename(url))
+    Path(download_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(download_path, "wb") as f:
+        f.write(bytes_data)
+    return download_path
+
+
+def get_filename(url=None):
+    """
+    Get Filename
+    """
+    if url is None:
+        return str(uuid.uuid4()).replace("-", "")
+    t = datetime.datetime.now()
+    if not isinstance(url, bytes):
+        url = url.encode("utf-8")
+
+    md5_hash = hashlib.md5(url).hexdigest()
+    pid = os.getpid()
+    tid = threading.get_ident()
+
+    # Remove the suffix to prevent save-jpg from reporting errors
+    image_filname = f"{t.year}-{t.month:02d}-{t.day:02d}-{pid}-{tid}-{md5_hash}"
+    return image_filname
+
+
+def get_downloadable(
+    url, download_dir=RAW_VIDEO_DIR, save_to_disk=False, retry=0, retry_interval=3
+):
+    """download video and store it in the disk
+
+    return downloaded **path** if save_to_disk is set to true
+    return downloaded **bytes** if save_to_disk is set to false
+    """
+
+    if not os.path.exists(download_dir):
+        os.makedirs(download_dir)
+    downloaded_path = file_download(
+        url,
+        download_dir,
+        save_to_disk=save_to_disk,
+        retry=retry,
+        retry_interval=retry_interval,
+    )
+    return downloaded_path
+
+
+def get_downloadable_image(
+    download_path, need_exif_info, retry_max_time=0, retry_interval=3
+):
+    """
+    Get downloadable with exif info and image processing
+    """
+
+    def get_image_exif(image):
+        exif_data = image._getexif()
+        exif_info = {}
+        if exif_data is not None:
+            for tag, value in exif_data.items():
+                tag_name = TAGS.get(tag, tag)
+                exif_info[tag_name] = value.strip()
+        return exif_info
+
+    def has_transparent_background(img):
+        """has_transparent_background"""
+        if img.mode in ("RGBA", "LA") or (
+            img.mode == "P" and "transparency" in img.info
+        ):
+            # Check for any pixel with alpha channel less than 255 (fully opaque)
+            alpha = img.convert("RGBA").split()[-1]
+            if alpha.getextrema()[0] < 255:
+                return True
+        return False
+
+    def add_white_background(img):
+        """
+        Add a white background to a transparent background image
+        """
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        # Create an image with a white background and the same size as the original image
+        img_white_background = Image.new("RGBA", img.size, (255, 255, 255))
+
+        # Paste the original image onto a white background
+        img_white_background.paste(img, (0, 0), img)
+
+        return img_white_background
+
+    def change_I16_to_L(img):
+        """
+        Convert image from I;16 mode to L mode
+        """
+        # Since the point function in I mode only supports addition, subtraction, and
+        # multiplication, the following * (1 / 256) cannot be changed to division.
+        return img.point(lambda i: i * (1 / 256)).convert("L")
+
+    image = get_downloadable(
+        download_path,
+        save_to_disk=False,
+        retry=retry_max_time,
+        retry_interval=retry_interval,
+    )
+    if isinstance(image, Image.Image):
+        pil_image = image
+    else:
+        pil_image = Image.open(io.BytesIO(image))
+    if need_exif_info:
+        try:
+            exif_info = get_image_exif(pil_image)
+        except Exception:
+            exif_info = {}
+    else:
+        exif_info = {}
+
+    try:
+        if pil_image.mode == "I;16":
+            pil_image = change_I16_to_L(pil_image)
+        if has_transparent_background(pil_image):
+            pil_image = add_white_background(pil_image)
+    except Exception:
+        pass
+
+    return pil_image.convert("RGB"), exif_info
+
+
+def str2hash(url):
+    """
+    str2hash
+    """
+    return hashlib.sha256(url.encode()).hexdigest()
+
+
+def pil2hash(pil):
+    """
+    PIL.Image to hash
+    """
+    byte_io = io.BytesIO()
+    pil.save(byte_io, format="PNG")  # avoid compression effects
+    image_bytes = byte_io.getvalue()
+
+    return hashlib.sha256(image_bytes).hexdigest()
+
+
+def get_hashable(to_be_hashed):
+    """get hashable"""
+    if isinstance(to_be_hashed, bytes):
+        return to_be_hashed
+    elif isinstance(to_be_hashed, Image.Image):
+        return to_be_hashed.tobytes()
+    elif isinstance(to_be_hashed, str):
+        return to_be_hashed.encode("utf-8")
+    else:
+        raise ValueError(f"not support type: {type(to_be_hashed)}")
+
+def image_info_2_hash(img_one):
+    """
+    image info to hash
+    """
+    if isinstance(img_one["image_url"], str):
+        return str2hash(img_one["image_url"])
+    elif isinstance(img_one["image_url"], Image.Image):
+        return pil2hash(img_one["image_url"])
+    else:
+        raise ValueError("only support str or PIL.Image now.")
+
+
+def is_gif(data: bytes) -> bool:
+    """
+    check if a bytes is a gif based on the magic head
+    """
+    return data[:6] in (b"GIF87a", b"GIF89a")
+
+
+def group_frame_by_video(schema):
+    """
+    group frame by video
+    """
+    if "image_info" in schema:
+        image_info = copy.deepcopy(schema["image_info"])
+    else:
+        image_info = copy.deepcopy(schema)
+
+    for idx, img in enumerate(image_info):
+        if img["image_type"] != "video":
+            img["video_uid"] = idx
+
+    cnt = 0
+    ret = []
+    keys = []
+    for key, group in groupby(image_info, key=lambda x: x["video_uid"]):
+        keys.append(key)
+        group_len = len(list(group))
+        ret.append(list(range(cnt, group_len + cnt)))
+        cnt += group_len
+
+    assert len(keys) == len(set(keys)), f"found duplicate keys: {keys}"
+    return ret

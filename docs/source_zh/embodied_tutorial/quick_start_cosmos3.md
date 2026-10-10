@@ -47,11 +47,11 @@ DROID 数据不需要额外的离线预处理，训练时通过内建的 `cosmos
 --dataset-strategy cosmos3_droid     # Cosmos3 官方 DROID 数据处理策略
 ```
 
-其余目标分辨率、动作 chunk 长度、CFG dropout 等已经写在 `configs/models/embodied/cosmos3/nano.yaml` 的 `data` 段（默认 `target_h/target_w=480`、`action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。
+其余目标分辨率、动作 chunk 长度、CFG dropout 等已经写在 `configs/models/cosmos3/nano.yaml` 的 `data` 段（默认 `target_h/target_w=480`、`action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。
 
 ## 2. 启动训练
 
-启动脚本：`examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh`。默认为单机 8 卡 FSDP2 + bf16，训练 500 步、每卡 batch=2。
+启动脚本：`examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh`。默认为单机 8 卡 FSDP2 + bf16，训练 500 步、每卡 batch=2。
 
 ### 2.1 环境变量
 
@@ -73,7 +73,7 @@ export OUTPUT_DIR=/workspace/outputs/cosmos3_nano_droid
 单机 8 卡 FSDP2 SFT：
 
 ```bash
-bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh
+bash examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh
 ```
 
 ### 2.3 关键参数说明
@@ -83,7 +83,7 @@ bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh
 **模型与分布式：**
 
 ```bash
---model-name cosmos3_nano            # 通过 config_map 映射到 Cosmos3-Nano DROID 配方
+--model-name cosmos3_nano            # 通过 models/catalog.py 映射到引擎和 Cosmos3-Nano YAML
 --distributed-strategy fsdp          # 分布式策略：FSDP2 全分片
 --dtype bfloat16                     # 训练精度：bf16
 --fsdp-reduce-dtype bf16             # 梯度 reduce-scatter 用 bf16
@@ -144,7 +144,7 @@ Cosmos3-Nano 的动作头（`action2llm` / `llm2action` / `action_modality_embed
 
 ```bash
 # 增强 tail 放到模型 device 上执行，而不是在 dataloader worker 里
-bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh data.colorjitter_on_gpu=true
+bash examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
 ```
 
 - `data.colorjitter_on_gpu`（默认 `false`）—— 打开后 worker 只做视频解码，ColorJitter 及其之后的处理都在 GPU 上执行。

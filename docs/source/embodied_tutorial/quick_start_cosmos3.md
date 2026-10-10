@@ -47,11 +47,11 @@ DROID data requires no extra offline preprocessing. Frame stitching, image augme
 --dataset-strategy cosmos3_droid     # Official Cosmos3 DROID data-processing strategy
 ```
 
-Remaining settings like target resolution, action chunk length, CFG dropout are already set in the data section of `configs/models/embodied/cosmos3/nano.yaml` (defaults: `target_h/target_w=480`, `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding.
+Remaining settings like target resolution, action chunk length, CFG dropout are already set in the data section of `configs/models/cosmos3/nano.yaml` (defaults: `target_h/target_w=480`, `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding.
 
 ## 2. Launch Training
 
-Launch script: `examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
+Launch script: `examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
 
 ### 2.1 Environment Variables
 
@@ -73,7 +73,7 @@ export OUTPUT_DIR=/workspace/outputs/cosmos3_nano_droid
 Single-node 8-GPU FSDP2 SFT:
 
 ```bash
-bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh
+bash examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh
 ```
 
 ### 2.3 Key Arguments
@@ -83,7 +83,7 @@ Arguments in the script are grouped by purpose as follows:
 **Model and Distributed:**
 
 ```bash
---model-name cosmos3_nano            # Mapped to the Cosmos3-Nano DROID recipe via config_map
+--model-name cosmos3_nano            # Mapped to the engine and Cosmos3-Nano YAML via models/catalog.py
 --distributed-strategy fsdp          # Distributed strategy: FSDP2 full shard
 --dtype bfloat16                     # Training precision: bf16
 --fsdp-reduce-dtype bf16             # Reduce-scatter gradients in bf16
@@ -144,7 +144,7 @@ Data switches are set in the launch script, or appended on the command line:
 
 ```bash
 # Run the augmentation tail on the model device instead of the dataloader worker
-bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh data.colorjitter_on_gpu=true
+bash examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
 ```
 
 - `data.colorjitter_on_gpu` (default `false`) — when on, the worker only decodes video and ColorJitter plus everything after it runs on the GPU.

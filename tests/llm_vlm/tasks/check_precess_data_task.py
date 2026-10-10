@@ -6,8 +6,7 @@
 from tasks.base_task import BaseTask, TaskResut
 from tools.color_logger import create_color_logger
 import os
-import json
-import yaml
+import json, yaml
 import sys
 import shutil
 from typing import Dict, List, Any
@@ -168,8 +167,6 @@ class PrecessDataCheckTask(BaseTask):
 
         # Data preprocessing
         model_name = self.model_name
-        node_nums = self.input_cmd_args.node_nums
-        timeout = self.input_cmd_args.timeout
         scripts_root_path = model_config["scripts_root_path"]
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]

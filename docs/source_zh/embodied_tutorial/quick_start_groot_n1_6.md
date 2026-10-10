@@ -58,7 +58,7 @@ export TENSORBOARD_PATH=/workspace/tensorboard-log/groot_n1_6
 用于先验证链路，关闭 CUDA Graph、DDP static graph，并使用普通 `AdamW`：
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/groot_n1_6/run_groot_n1_6_ddp_finetune.sh \
+bash /workspace/LoongForge/examples/groot_n1_6/finetune_groot_n1_6_ddp.sh \
     --optimizer AdamW \
     --cuda-graph-impl none \
     --cuda-graph-pad-length 0 \
@@ -68,7 +68,7 @@ bash /workspace/LoongForge/examples/embodied/groot_n1_6/run_groot_n1_6_ddp_finet
 默认脚本已经打开主要性能优化：
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/groot_n1_6/run_groot_n1_6_ddp_finetune.sh
+bash /workspace/LoongForge/examples/groot_n1_6/finetune_groot_n1_6_ddp.sh
 ```
 关键性能优化项开关：
 

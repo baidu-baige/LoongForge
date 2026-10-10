@@ -74,7 +74,7 @@ def main() -> None:
 
         Glm5NextTextIndexer.forward = indexer_forward_with_long_indices
 
-        target_module = args.target_root / "loongforge/models/foundation/glm5_next"
+        target_module = args.target_root / "loongforge/models/language/glm5_next"
         sys.path.insert(0, str(target_module))
         from glm5_next_model import Glm5NextModel
 

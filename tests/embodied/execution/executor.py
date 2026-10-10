@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Single-script regression execution: directly run a script under examples/embodied -> timeout control -> metric parsing and baseline comparison.
+"""Single-script regression execution: directly run a script under examples/ -> timeout control -> metric parsing and baseline comparison.
 
 Scripts are executed verbatim (bash <script>) without injecting training parameters; only the
 OUTPUT_DIR / TENSORBOARD_DIR environment variables are pointed to this run's log directory (the examples

@@ -10,7 +10,7 @@ import torch
 import torch.distributed as dist
 
 
-MODEL_DIR = Path(__file__).resolve().parents[3] / "loongforge/models/foundation/glm5_next"
+MODEL_DIR = Path(__file__).resolve().parents[3] / "loongforge/models/language/glm5_next"
 sys.path.insert(0, str(MODEL_DIR))
 
 from glm5_next_config import Glm5NextConfig, Glm5NextVisionConfig

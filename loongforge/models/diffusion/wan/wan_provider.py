@@ -4,7 +4,7 @@
 """wan model provider"""
 
 from megatron.core.transformer.spec_utils import import_module
-from loongforge.utils import get_args, build_transformer_config, print_rank_0
+from loongforge.engines.mcore import build_transformer_config, print_rank_0
 
 from .wan_config import WanConfig
 from .wan_model import WanModel
@@ -16,6 +16,7 @@ def wan_i2v_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
+    args=None,
 ) -> WanModel:
     """Builds the Wan model.
 
@@ -27,7 +28,9 @@ def wan_i2v_model_provider(
     Returns:
         WanModel: The returned model
     """
-    args = get_args()
+    if args is None:
+        from loongforge.engines.mcore import get_args
+        args = get_args()
 
     print_rank_0(f"building {args.model_name} model ...")
 

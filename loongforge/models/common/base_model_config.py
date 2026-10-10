@@ -44,8 +44,12 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     When left at 0 (default), auto-computed from ``args.seq_length * args.micro_batch_size``."""
 
     def __post_init__(self, **kwargs):
-        # transformers >= 5.6 moves PretrainedConfig setup to __post_init__.
-        PretrainedConfig.__post_init__(self, **kwargs)
+        # transformers >= 5.6 makes PretrainedConfig a dataclass with __post_init__;
+        # older releases only have __init__. Both accept **kwargs.
+        if hasattr(PretrainedConfig, "__post_init__"):
+            PretrainedConfig.__post_init__(self, **kwargs)
+        else:
+            PretrainedConfig.__init__(self, **kwargs)
         TransformerConfig.__post_init__(self)
 
 
@@ -58,14 +62,20 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     model_spec: Optional[List[str]] = None
     peft_config: Optional[BasePeftModelConfig] = None
     convert_file: str = None
-
+    # DeepSeek/GLM sparse-attention backend: "te" or "torch".
+    absorb_backend: str = "te"
+    # DSA sequence parallel: run SP before the indexer when True.
+    use_dsa_sp_first: bool = False
 
     # --- FP8 dynamic policy (same as BaseModelConfig) ---
     fp8_dynamic_policy_path: Optional[str] = None
     fp8_dynamic_num_tokens: int = 0
 
     def __post_init__(self, **kwargs):
-        PretrainedConfig.__post_init__(self, **kwargs)
+        if hasattr(PretrainedConfig, "__post_init__"):
+            PretrainedConfig.__post_init__(self, **kwargs)
+        else:
+            PretrainedConfig.__init__(self, **kwargs)
         MLATransformerConfig.__post_init__(self)
 
 

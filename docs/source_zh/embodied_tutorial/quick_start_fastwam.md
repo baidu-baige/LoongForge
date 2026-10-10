@@ -10,7 +10,7 @@
 ```bash
 LOCAL_MODEL_PATH=/data/models \
 OUTPUT=$LOONGFORGE_PATH/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt \
-    bash examples/embodied/fastwam/preprocess_action_dit_backbone.sh
+    bash examples/fastwam/preprocess_action_dit_backbone.sh
 ```
 
 #### 0.1.2 Wan-AI/Wan2.2-TI2V-5B 权重
@@ -25,7 +25,7 @@ hf download Wan-AI/Wan2.2-TI2V-5B --local-dir /workspace/huggingface.co/Wan-AI/W
 ```bash
 DATASET_PATH=/data/libero \
 TEXT_EMBEDDING_CACHE_DIR=/data/cache/fastwam_text_embeds \
-    bash examples/embodied/fastwam/precompute_text_embeds.sh
+    bash examples/fastwam/precompute_text_embeds.sh
 ```
 
 ### 0.3 数据集
@@ -66,7 +66,7 @@ export DIFFSYNTH_MODEL_BASE_PATH=/workspace/huggingface.co/Wan-AI/Wan2.2-TI2V-5B
 单机 DDP 训练示例：
 
 ```bash
-bash examples/embodied/fastwam/run_fastwam_sft_ddp_finetune.sh
+bash examples/fastwam/finetune_fastwam_sft_ddp.sh
 ```
 
 ### 2.2 正确性验证

@@ -13,7 +13,7 @@ SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-hf
 SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-hf
 SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/llava_onevision_1.5_1.5/llava_onevision_1_5_4b.yaml
 
 FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert_llava.yaml
 IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml

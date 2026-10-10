@@ -27,7 +27,7 @@ def main() -> None:
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[3]
-    module_dir = root / "loongforge/models/foundation/glm5_next"
+    module_dir = root / "loongforge/models/language/glm5_next"
     sys.path.insert(0, str(module_dir))
     from glm5_next_config import Glm5NextConfig
     from glm5_next_model import Glm5NextModel

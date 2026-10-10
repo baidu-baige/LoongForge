@@ -25,7 +25,7 @@ hf download 2toINF/X-VLA-SoftFold --repo-type dataset --local-dir /workspace/dat
 ## 1. Data Configuration
 X-VLA uses the native HDF5 data pipeline aligned with the reference implementation, with **no extra offline preprocessing required**. X-VLA's per-sample transform (multi-view image encoding, language tokenization, resolving `domain_id` from `robot_type`) and batch collator are performed online during training.
 
-The dataset directory is described by `metadata.json`. Example (`examples/embodied/xvla/xvla_soft_fold/metadata.json`):
+The dataset directory is described by `metadata.json`. Example (`examples/xvla/xvla_soft_fold/metadata.json`):
 
 ```json
 {
@@ -51,7 +51,7 @@ Field descriptions:
 - `language_instruction_key`: language instruction field name.
 
 ## 2. Launch Training
-First set up the paths uniformly (refer to `examples/embodied/xvla/run_xvla_ddp_finetune.sh`):
+First set up the paths uniformly (refer to `examples/xvla/finetune_xvla_ddp.sh`):
 
 ```bash
 cd /workspace/LoongForge
@@ -66,9 +66,9 @@ export OUTPUT_DIR=/workspace/outputs/xvla_ddp
 Single-node 8-GPU DDP fine-tuning:
 
 ```bash
-bash examples/embodied/xvla/run_xvla_ddp_finetune.sh
+bash examples/xvla/finetune_xvla_ddp.sh
 ```
-Optimizations are enabled by default, in `configs/models/embodied/xvla.yaml`:
+Optimizations are enabled by default, in `configs/models/xvla/xvla.yaml`:
 
 ```yaml
 enable_torch_compile: true
@@ -80,7 +80,7 @@ The main arguments in the script are grouped as follows.
 **Model and Distributed:**
 
 ```bash
---model-name xvla                    # Mapped to XVLA config via config_map
+--model-name xvla                    # Mapped to the engine and XVLA config via models/catalog.py
 --distributed-strategy ddp           # DDP distributed strategy
 --dtype bfloat16                     # Training precision
 # GPUS_PER_NODE=8                    # Number of GPUs per node (script variable)

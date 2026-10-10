@@ -12,7 +12,7 @@ SFT_DATA_PATH: $pfs_path/omni_datasets/LoongForge/qwen2.5_vl_7b/sft/test_packing
 TOKENIZER_PATH: $pfs_path/huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/qwen2.5_vl/qwen2_5_vl_7b.yaml
 
 # ckpt convert configuration
 ENCODER_TENSOR_MODEL_PARALLER_SIZE: 2

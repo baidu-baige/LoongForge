@@ -98,7 +98,7 @@ else
     )
 fi
 
-MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/llava_onevision/llava_onevision_1_5_4b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/llava_onevision_1.5_1.5/llava_onevision_1_5_4b.yaml
 DATA_ARGS=(
     --tokenizer-type HFTokenizer
     --hf-tokenizer-path "$TOKENIZER_PATH"

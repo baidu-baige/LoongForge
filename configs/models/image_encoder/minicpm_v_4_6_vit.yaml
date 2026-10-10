@@ -1,4 +1,4 @@
-_target_: loongforge.models.encoder.MiniCPMV46VisionConfig
+_target_: loongforge.models.vision.MiniCPMV46VisionConfig
 
 num_layers: 27
 hidden_size: 1152

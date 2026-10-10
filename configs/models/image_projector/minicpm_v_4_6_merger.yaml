@@ -1,4 +1,4 @@
-_target_: loongforge.models.encoder.MiniCPMV46MergerConfig
+_target_: loongforge.models.vision.MiniCPMV46MergerConfig
 
 num_layers: 1
 hidden_size: 1152

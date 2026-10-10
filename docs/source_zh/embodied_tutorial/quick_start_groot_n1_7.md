@@ -83,7 +83,7 @@ data:
 如果训练自定义 embodiment，可在启动命令末尾覆盖：
 
 ```bash
-bash examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finetune.sh data.embodiment_tag=new_embodiment
+bash examples/groot_n1_7/finetune_groot_n1_7_ddp.sh data.embodiment_tag=new_embodiment
 ```
 
 ## 2. 启动训练
@@ -107,7 +107,7 @@ export TENSORBOARD_PATH=/workspace/tensorboard-log/groot_n1_7
 先用最小配置跑通数据加载、权重加载、DDP 通信和 forward/backward 链路。此模式关闭所有性能优化，使用标准 `AdamW`：
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finetune.sh \
+bash /workspace/LoongForge/examples/groot_n1_7/finetune_groot_n1_7_ddp.sh \
     --optimizer AdamW \
     --cuda-graph-impl none \
     --cuda-graph-pad-length 0 \
@@ -120,7 +120,7 @@ bash /workspace/LoongForge/examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finet
 脚本默认同时开启以下优化项，可直接运行：
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finetune.sh
+bash /workspace/LoongForge/examples/groot_n1_7/finetune_groot_n1_7_ddp.sh
 ```
 
 默认启用的优化包括：

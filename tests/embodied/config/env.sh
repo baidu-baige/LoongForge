@@ -18,7 +18,7 @@ export EMBODIED_CI_ROOT=${EMBODIED_CI_ROOT:-"/workspace/loongforge_embodied_ci"}
 
 # ── Data and artifacts root directory ─────────────────────────
 # Training reads LOCAL_VLA_ARTIFACTS_ROOT following the <family>/{models,datasets,tokenizers} structure,
-# and the default ckpt/data paths of the examples/embodied training scripts are also derived from it.
+# and the default ckpt/data paths of the examples/ training scripts are also derived from it.
 export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"${EMBODIED_CI_ROOT}/vla_artifacts"}
 
 # ── Regression log/result root directory (read by cli.py) ──

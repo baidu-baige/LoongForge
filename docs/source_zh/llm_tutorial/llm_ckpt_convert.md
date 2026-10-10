@@ -44,8 +44,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=/path/to/hf_checkpoint  # 原始 DeepSeek-V3 权重为 FP8 格式
 SAVE=/path/to/your/save  # 转换后的权重将为 MCore FP8 格式
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/deepseek_v3.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
@@ -82,8 +82,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=/path/to/mcore_checkpoint  # MCore FP8 格式的权重
 SAVE=/path/to/your/save  # 转换后的 HuggingFace FP8 格式权重
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/deepseek_v3.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/deepseek_v3.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

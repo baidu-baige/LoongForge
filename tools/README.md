@@ -14,5 +14,5 @@ is one tool; see its own README for usage.
 | [`te_parallel_benchmark/`](./te_parallel_benchmark) | Benchmark TransformerEngine parallel layers under TP/EP and emit an adaptive-FP8 policy |
 | [`llm_data_preprocess/`](./llm_data_preprocess) | Tokenize & pack LLM pretrain / SFT corpora into training-ready datasets (Megatron-indexed for pretrain, tokenized HF dataset for SFT) |
 | [`vlm_data_preprocess/`](./vlm_data_preprocess) | Convert VLM annotations + media to WebDataset, plus offline sequence packing |
-| [`dreamzero_data_preprocess/`](./dreamzero_data_preprocess) | Prepare DreamZero datasets and precompute/validate feature caches |
+| [`embodied_data_preprocess/`](./embodied_data_preprocess) | Prepare embodied datasets: DreamZero feature caches, FastWAM text embeddings, wall-oss-0.5 norm stats |
 | [`ego2robot/`](./ego2robot) | Convert first-person human manipulation video into LeRobot v3.0 training data across dual-arm robot morphologies |

@@ -82,20 +82,21 @@
 </p>
 
 - **Megatron 栈** —— 面向 LLM、VLM 与 Diffusion 模型。基于 [patch 过的 Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) 构建，并扩展了 MoE 并行、组件级异构并行、长序列优化等能力。
-- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。独立的 [torch-native 子系统](./loongforge/embodied)，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
+- **Torch-Native 栈** —— 面向具身模型（VLA 与 WAM）。Torch 运行时位于 [`loongforge/engines/torch`](./loongforge/engines/torch)，具身模型、数据和评测分别位于 [`models/embodied`](./loongforge/models/embodied)、[`data/embodied`](./loongforge/data/embodied) 和 [`evaluation/embodied`](./loongforge/evaluation/embodied)。
 
 ## 🔥 最新动态
 
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
-- **[2026/09]** ⚡ 新增优化后的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
-- **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
+- **[2026/09]** ⚡ 新增优化后的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 Delta-FP8 AllGather。
+- **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
-- **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
+- **[2026/08]** 🧪 Embodied 栈新增统一[**评测模块**](./loongforge/evaluation/embodied/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / VLA / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 发布具身模型的 torch-native DDP/FSDP 训练栈（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3），实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 
 <details>
@@ -133,10 +134,10 @@
 
 **🤖 具身模型**
 
-* **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 子系统，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[README](./loongforge/embodied)]
+* **VLA 与 WAM 训练** —— 面向 **VLA 与世界-动作模型（WAM）** 的独立 **torch 原生 DDP/FSDP** 引擎，与 Megatron 核心解耦，支持 **DDP / ZeRO-1 / FSDP / HSDP** 多种分布式策略。[[训练说明](./docs/source_zh/embodied_tutorial/overview.md)]
 * **逐模型深度定制优化** —— 实测相对官方基线 **1.79×–4.38× 加速**（见[性能表现](#performance)），针对每个模型在 I/O、通信策略、算子效率等维度深度优化训练代码。
 * **FP8 通信优化** —— 在支持的 NVIDIA GPU 上压缩跨卡通信量，覆盖两种并行策略：**FSDP2** 场景对参数 AllGather 做按 block 的 FP8 delta 压缩，**DDP** 场景做 FP8 梯度 all-reduce。[[使用方法](https://loongforge.readthedocs.io/zh-cn/latest/features/fp8_communication.html)]
-* **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。[[README](./loongforge/embodied/eval)]
+* **统一评测** —— 在 **LIBERO / CALVIN / SimplerEnv / RoboTwin** 上评测训练出的策略，覆盖度持续完善。[[README](./loongforge/evaluation/embodied)]
 * **Ego2Robot 数据转换** —— 将第一人称人类操作视频转换为覆盖 **16 种双臂机器人形态**的 **LeRobot v3.0** 训练数据。[[README](./tools/ego2robot)]
 
 **🔌 兼容性**
@@ -197,11 +198,11 @@ export TOKENIZER_PATH="$WAN22_CKPT_DIR/google/umt5-xxl"
 export DATA_PATH=/workspace/data/dreamzero/data/droid_lerobot
 
 EMBODIMENT_TAG=oxe_droid \
-  bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+  bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 GPUS_PER_NODE=8 TRAIN_ITERS=20 SAVE_INTERVAL=20 \
 OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
-  bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
+  bash examples/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
 ```
 
 示例运行 20 步，训练产物保存在 `OUTPUT_DIR` 下。
@@ -251,7 +252,7 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 <li><a href="examples/qwen3.5/">Qwen3.5</a> ✅</li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a> ✅</li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
-<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
+<li><a href="examples/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
@@ -272,15 +273,15 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 </td>
 <td valign="top">
 <ul>
-<li><a href="examples/embodied/pi05/">Pi0.5</a> ✅</li>
-<li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a> ✅</li>
-<li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a> ✅</li>
-<li><a href="examples/embodied/xvla/">xVLA</a> ✅</li>
-<li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a> ✅</li>
-<li><a href="examples/embodied/fastwam/">FastWAM</a> ✅</li>
-<li><a href="examples/embodied/lingbot_va/">LingBot-VA</a> ✅</li>
-<li><a href="examples/embodied/cosmos3/">Cosmos3</a> ✅</li>
-<li><a href="examples/embodied/dreamzero/">DreamZero</a> ✅</li>
+<li><a href="examples/pi05/">Pi0.5</a> ✅</li>
+<li><a href="examples/groot_n1_6/">GR00T-N1.6</a> ✅</li>
+<li><a href="examples/groot_n1_7/">GR00T-N1.7</a> ✅</li>
+<li><a href="examples/xvla/">xVLA</a> ✅</li>
+<li><a href="examples/wall_oss_0_5/">Wall-OSS-0.5</a> ✅</li>
+<li><a href="examples/fastwam/">FastWAM</a> ✅</li>
+<li><a href="examples/lingbot_va/">LingBot-VA</a> ✅</li>
+<li><a href="examples/cosmos3/">Cosmos3</a> ✅</li>
+<li><a href="examples/dreamzero/">DreamZero</a> ✅</li>
 </ul>
 </td>
 </tr>
@@ -307,21 +308,24 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 ```
 LoongForge/
 ├── loongforge/                   # 核心训练框架
-│   ├── train/                    # 训练入口与训练器
-│   │   ├── pretrain/             #   预训练
-│   │   ├── sft/                  #   监督微调（SFT）
-│   │   └── diffusion/            #   Diffusion 训练
+│   ├── train.py                  # 统一训练分发入口
+│   ├── training/                 # 训练运行器与逐模型训练方法
+│   ├── engines/                  # train.py 选择的训练运行时
+│   │   ├── mcore/                #   LLM/VLM/Diffusion 运行时
+│   │   │   └── tokenizer/        #   MCore Tokenizer 实现
+│   │   └── torch/                #   具身 Torch-native 运行时
 │   ├── models/                   # 统一的模型抽象层
-│   │   ├── foundation/           #   LLM 主干
-│   │   ├── encoder/              #   视觉编码器
-│   │   ├── omni_models/          #   多模态组合（编码器 + 投影层 + 解码器）
-│   │   ├── diffusion/            #   Diffusion 模型
-│   │   └── common/               #   公共基类配置、Layer 与工具
-│   ├── embodied/                 # LoongForge-Embodied：独立的 torch-native 具身
-│                                 #   （VLA + 世界-动作）训练子系统，详见 loongforge/embodied/README_zh.md
-│   ├── data/                     # 数据加载与处理流水线
-│   ├── tokenizer/                # Tokenizer
-│   └── utils/                    # 配置映射、常量与公共工具
+│   │   ├── catalog.py            # 模型名、引擎与默认 YAML
+│   │   ├── language/             #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
+│   │   ├── vision/               #   视觉编码器（ViT、Qwen-VL、InternVL、...）
+│   │   ├── multimodal/           #   多模态组合
+│   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
+│   │   ├── common/               #   公共 Layer 与工具
+│   │   └── embodied/             #   具身模型实现
+│   ├── chat_templates/           # 对话模板与 jinja 文件
+│   ├── data/                     # 数据流水线，按模型家族分目录
+│   │   ├── llm/ vlm/ embodied/ diffusion/
+│   └── evaluation/embodied/      # 具身评测
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）
 ├── configs/                      # Hydra YAML 配置（模型、数据）
 ├── examples/                     # NVIDIA GPU 启动脚本

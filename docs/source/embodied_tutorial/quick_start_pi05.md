@@ -56,17 +56,17 @@ The DDP script already enables the main performance optimizations:
 **DDP:**
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
+bash examples/pi05/finetune_pi05_ddp.sh
 ```
 **DDP + ZeRO-1:**
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_zero1_finetune.sh
+bash examples/pi05/finetune_pi05_ddp_zero1.sh
 ```
 **FSDP:**
 
 ```bash
-bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh
+bash examples/pi05/finetune_pi05_fsdp.sh
 ```
 ### 2.2 Correctness Verification
 To ensure training accuracy is not affected by the optimizations, we ran a step-by-step action loss comparison between LoongForge's Pi0.5 implementation and the official one under identical data, weights, and training configuration. The results show that LoongForge's performance optimizations are lossless with respect to training accuracy:
@@ -81,7 +81,7 @@ To ensure training accuracy is not affected by the optimizations, we ran a step-
 ### 3.1 Quick Run LIBERO
 1. Edit the evaluation YAML
 
-(Example: `examples/embodied/pi05/eval/configs/libero/smoke_steps10.yaml`), and fill in:
+(Example: `examples/pi05/eval/configs/libero/smoke_steps10.yaml`), and fill in:
 
     * `server.ckpt_path`: the checkpoint from training (a directory containing `model.safetensors` or the weight file)
     * `server.dataset_statistics_path`: dataset statistics (for action denormalization; Pi0.5 default is q99)
@@ -92,6 +92,6 @@ To ensure training accuracy is not affected by the optimizations, we ran a step-
 ```bash
 cd $LOONGFORGE_PATH
 # Uses smoke_steps10.yaml by default; can be overridden via CONFIG
-CONFIG=examples/embodied/pi05/eval/configs/libero/smoke_steps10.yaml \
-  bash examples/embodied/pi05/eval/run_libero_eval.sh
+CONFIG=examples/pi05/eval/configs/libero/smoke_steps10.yaml \
+  bash examples/pi05/eval/run_libero_eval.sh
 ```

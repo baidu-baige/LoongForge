@@ -956,7 +956,6 @@ class HashBucketProcessor:
         if output_boxes:
             total_items = sum(len(box) for box in output_boxes)
             avg_items_per_box = total_items / len(output_boxes)
-            total_capacity_used = len(output_boxes) * box_capacity
             
             self._logger.info("Multithreaded packing completed:")
             self._logger.info(f"  Total time: {end_time - start_time:.2f} seconds")

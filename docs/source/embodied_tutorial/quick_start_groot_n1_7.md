@@ -83,7 +83,7 @@ data:
 If you are training a custom embodiment, override the tag at the end of the launch command:
 
 ```bash
-bash examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finetune.sh data.embodiment_tag=new_embodiment
+bash examples/groot_n1_7/finetune_groot_n1_7_ddp.sh data.embodiment_tag=new_embodiment
 ```
 
 ## 2. Launch Training
@@ -107,7 +107,7 @@ export TENSORBOARD_PATH=/workspace/tensorboard-log/groot_n1_7
 Start with a minimal configuration to validate data loading, weight loading, DDP communication, and the forward/backward pipeline. This mode disables all performance optimizations and uses the standard `AdamW`:
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finetune.sh \
+bash /workspace/LoongForge/examples/groot_n1_7/finetune_groot_n1_7_ddp.sh \
     --optimizer AdamW \
     --cuda-graph-impl none \
     --cuda-graph-pad-length 0 \
@@ -120,7 +120,7 @@ bash /workspace/LoongForge/examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finet
 The script enables the following optimizations by default and can be run directly:
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/groot_n1_7/run_groot_n1_7_ddp_finetune.sh
+bash /workspace/LoongForge/examples/groot_n1_7/finetune_groot_n1_7_ddp.sh
 ```
 
 Optimizations enabled by default include:
