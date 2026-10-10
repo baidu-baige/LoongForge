@@ -827,6 +827,19 @@ class _DataArgs:
                     "'cyclic' (round-robin) or 'block' (contiguous shards).",
         },
     )
+    sampler_epoch_mode: str = field(
+        default="advance",
+        metadata={
+            "choices": ["advance", "fixed"],
+            "help": "Whether the sampler's epoch advances between epochs. "
+                    "'advance' (default) uses seed+epoch, so every epoch reshuffles. "
+                    "'fixed' pins the epoch to 0, so every epoch reuses the SAME "
+                    "permutation -- this reproduces standalone FastWAM, whose "
+                    "ResumableEpochSampler epoch is never advanced. Only used by "
+                    "model types that register their own sampler builder (currently "
+                    "fastwam); see data/datasets/<model>/samplers.py.",
+        },
+    )
     batch_drop_last: bool = field(
         default=False,
         metadata={

@@ -1,0 +1,100 @@
+# FastWAM video/action world model adapter — OFFICIAL-ALIGNED variant
+#
+# Copy of `fastwam.yaml` with the deviations from standalone FastWAM
+# (`/path/to/FastWAM`) closed. Every change vs. `fastwam.yaml`
+# is marked with an `ALIGNED:` comment; `UNCHANGED:` marks knobs that were
+# checked against the official config and already matched.
+#
+# Usage — this file is NOT reachable via --model-name; point --config-file at it:
+#
+#   bash examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finetune_official_aligned.sh \
+#       --model-name fastwam \
+#       --config-file configs/models/embodied/fastwam_aligned.yaml \
+#       --sampler-epoch-mode fixed \
+#       --zero-master-param-dtype fp32
+#
+# (--model-name is still required: it selects the ModelConfig/DataConfig classes.)
+#
+# ── What this file does NOT cover ────────────────────────────────────────────
+# Only the `model:` / `data:` sections live here. The following alignment items
+# are TrainingArgs and must be passed on the command line:
+#   --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6   (official: 5% warmup, eta_min = lr*0.01)
+#   --sampler-epoch-mode fixed                            (official: ResumableEpochSampler epoch never advances)
+#   --zero-master-param-dtype fp32                        (official: DeepSpeed BF16_Optimizer keeps fp32 masters)
+#
+# ── What CANNOT be aligned from config (structural, verified) ────────────────
+#   1. optimizer impl        — LF TorchFusedAdamW + torch ZeroRedundancyOptimizer vs DeepSpeed BF16_Optimizer
+#   2. gradient reduce order — LF DDP bucket settings vs accelerate/DeepSpeed bucketing
+#   3. VAE encode compile    — official backend="cudagraphs", fullgraph=True; LF default inductor (no knob)
+#   4. RMSNorm rounding      — LF F.rms_norm fused vs official x.float() -> .to(bf16) -> * weight
+#   5. sampler class         — LF StatefulDistributedSampler vs official ResumableEpochSampler
+# Residual after alignment: rel-L2 ~1.4% on actions (measured, report §4.10).
+
+model:
+  model_type: fastwam
+  variant: uncond
+
+  # Model IDs — change when switching pretrained weights
+  model_id: Wan-AI/Wan2.2-TI2V-5B
+  tokenizer_model_id: Wan-AI/Wan2.1-T2V-1.3B
+
+  # Task dimensions — change per robot/task
+  action_dim: 7
+  action_horizon: 32
+  proprio_dim: 8
+  max_action_dim: null
+
+  # Training knobs
+  tokenizer_max_len: 128
+  load_text_encoder: false
+  # UNCHANGED: official configs/task/libero_uncond_2cam224_1e-4.yaml sets the same.
+  mot_checkpoint_mixed_attn: false
+  skip_dit_load_from_pretrain: false
+  action_dit_pretrained_path: checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt
+  redirect_common_files: true
+  # UNCHANGED: official's loader default is also torch_dtype=bfloat16 (models/wan22/fastwam.py:97),
+  # so the model body is bf16 on both sides.
+  dtype: bfloat16
+  # UNCHANGED: "wan" is the upstream Wan RMSNorm. The remaining gap to official is a
+  # fused-kernel rounding difference, not a semantic one (see note 4 above).
+  rmsnorm_impl: wan
+  # ALIGNED: was true. Official trains under `with self.accelerator.autocast()`
+  # (trainer.py:696) and the trainer-level autocast is NOT redundant even with bf16
+  # params -- autocast still promotes softmax/layernorm/rmsnorm-class ops to fp32.
+  disable_train_autocast: false
+  # ALIGNED: was true. Official always passes the cross-attn mask, i.e. it does not
+  # drop all-True masks; report §5.6 records False as the official semantics.
+  drop_all_true_cross_attn_mask: false
+  # UNCHANGED: official also compiles the VAE encode on the TRAINING path --
+  # fastwam.py:252 compiles unconditionally and build_inputs (:340) calls
+  # _encode_video_latents. Do NOT turn this off; only the backend differs.
+  compile_vae_encode: true
+  # ALIGNED: was "both". Official compile_training_denoise=false (configs/model/fastwam.yaml:9)
+  # and mot.py:679 gates compilation on it, so official never compiles the MoT training layers.
+  mot_compile_blocks: none
+
+  # ALIGNED: was left at the dataclass default (5.0/5.0) and overridden per-run via
+  # dotlist. Official configs/model/fastwam.yaml uses 1.0/1.0 for the action scheduler
+  # (video scheduler stays 5.0/5.0, which is the dataclass default and needs no entry).
+  action_scheduler:
+    train_shift: 1.0
+    infer_shift: 1.0
+    num_train_timesteps: 1000
+
+data:
+  # UNCHANGED
+  num_video_frames: 9
+  image_size: 224
+  # UNCHANGED: already the default; stated explicitly because LIBERO is 2-cam.
+  camera_layout: horizontal2
+  # ALIGNED: was siglip ([-1,1]). Official does ToTensor only -> output stays in [0,1].
+  image_normalize_mode: identity
+  # ALIGNED: was center_crop. Official does a plain Resize(224,224).
+  image_resize_strategy: resize_only
+  text_embedding_cache_dir: data/text_embeds_cache/libero
+  use_image_transform: true
+  # ALIGNED: was q99. Official uses min/max over the global_* entries of dataset_stats.json.
+  normalization_mode: min_max
+  # UNCHANGED
+  action_padding_strategy: zero
+  action_video_freq_ratio: 4

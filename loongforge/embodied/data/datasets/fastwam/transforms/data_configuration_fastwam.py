@@ -38,6 +38,10 @@ class FastWAMDataConfig:
     # Image processing
     num_video_frames: int = 5
     image_size: int = 224
+    # Camera packing layout for the multi-frame video tensor:
+    #   "horizontal2"  -> each cam square-resized then horizontally concat (LIBERO 2cam)
+    #   "robotwin_t"   -> head(256x320) on top + [left|right](128x160) bottom = 384x320 (RoboTwin 3cam)
+    camera_layout: str = "horizontal2"
     image_normalize_mode: str = "siglip"
     image_resize_strategy: str = "center_crop"
     text_embedding_cache_dir: str | None = None
