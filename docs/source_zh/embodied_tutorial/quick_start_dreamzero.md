@@ -113,21 +113,21 @@ dataset_root/
 | `agibot` | `observation.state` ≥20 维；`action` ≥22 维 | `top_head`、`hand_left`、`hand_right` | `task_index` |
 | `yam` | packed `observation.state` / `action` ≥46 维 | top/left/right 三个 `*-camera-images-rgb` 字段 | `task_index` |
 
-完整字段以 `tools/dreamzero_data_preprocess/prepare_dataset.py` 中的 `PRESETS` 为准。
+完整字段以 `tools/embodied_data_preprocess/dreamzero/prepare_dataset.py` 中的 `PRESETS` 为准。
 
 ### 1.2 生成 DreamZero metadata
 ```bash
 EMBODIMENT_TAG=oxe_droid DATA_PATH="$DROID_DATA_ROOT" \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=libero_sim DATA_PATH="$LIBERO_DATA_ROOT" \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=agibot DATA_PATH=/path/to/agibot_lerobot \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=yam DATA_PATH=/path/to/yam_lerobot \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 ```
 
 常用选项：
@@ -145,29 +145,29 @@ export DATA_PATH=$DROID_DATA_ROOT
 export WANDB_MODE=disabled
 
 # 5B Full（FSDP + Delta-FP8），默认 200000 步
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 
 # 5B LoRA
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh
 
 # 14B Full
-bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_fsdp_finetune.sh
+bash examples/dreamzero/finetune_dreamzero_wan21_14b_full_fsdp.sh
 
 # 14B LoRA，DROID
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 
 # LIBERO 5B Full
 MODEL_NAME=dreamzero_libero_wan22_5b DATA_PATH="$LIBERO_DATA_ROOT" \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 
 # AgiBot / YAM 14B LoRA（从 DreamZero-AgiBot 初始化）
 MODEL_NAME=dreamzero_agibot_wan21_14b DATA_PATH=/path/to/agibot_lerobot \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 
 MODEL_NAME=dreamzero_yam_wan21_14b DATA_PATH=/path/to/yam_lerobot \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 ```
 
 DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置；仅切换到 LIBERO、AgiBot 或 YAM 时需要按示例覆盖。
@@ -188,7 +188,7 @@ DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置�
 ```bash
 TRAIN_ITERS=20000 SAVE_INTERVAL=1000 \
 OUTPUT_DIR=/workspace/outputs/dreamzero/droid_wan22_5b_lora \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh \
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh \
     --resume
 ```
 
@@ -200,11 +200,11 @@ OUTPUT_DIR=/workspace/outputs/dreamzero/droid_wan22_5b_lora \
 MODEL_NAME=dreamzero_full_wan22_5b DATA_PATH="$DROID_DATA_ROOT" \
 CACHE_OUTPUT_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b \
 GPUS_PER_NODE=8 SAMPLE_TRANSFORM_SEED=0 VALIDATION_REQUIRE_FULL_COVERAGE=1 \
-    bash examples/embodied/dreamzero/precompute_dreamzero_cache.sh
+    bash examples/dreamzero/precompute_dreamzero_cache.sh
 
 # 使用 cache 训练（须与生成时 SAMPLE_TRANSFORM_SEED、分辨率、语言 chunk 配置一致）
 CACHE_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b SAMPLE_TRANSFORM_SEED=0 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 ```
 
 训练脚本会在启动阶段严格校验 cache。manifest、`_SUCCESS` 或 transform 配置不匹配时，训练会在执行首步前终止。
@@ -216,13 +216,13 @@ DROID 5B / 14B 配置已启用经过验证的默认性能优化。5B Full FSDP r
 
 ```bash
 # Wan2.2 5B
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh \
     --no-fsdp-delta-fp8-allgather \
     model.flash_attention_dense=false model.compile_causal_attention_block=false \
     model.batch_vae_encode=false 'model.prompt_emb_cache=""'
 
 # Wan2.1 14B
-bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_fsdp_finetune.sh \
+bash examples/dreamzero/finetune_dreamzero_wan21_14b_full_fsdp.sh \
     model.skip_single_state_attention=false model.compile_causal_cross_attention=false \
     model.compile_cross_attention_emulate_precision_casts=false model.compile_block_norm_modulate=false \
     model.qk_rmsnorm_impl=wan model.manual_self_attn_linear_backward=false model.fused_rope=false \

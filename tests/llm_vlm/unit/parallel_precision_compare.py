@@ -98,7 +98,7 @@ def main() -> None:
     torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl")
 
-    target_module = args.target_root / "loongforge/models/foundation/glm5_next"
+    target_module = args.target_root / "loongforge/models/language/glm5_next"
     sys.path.insert(0, str(target_module))
     sys.path.insert(0, str(args.target_root / "third_party/Loong-Megatron"))
 

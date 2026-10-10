@@ -17,12 +17,13 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from loongforge.data.multimodal.base.task_encoder import (
+from loongforge.data.vlm.base_task_encoder import (
     BaseTaskEncoder,
     BaseTaskSample,
     BaseTaskSamplePacked,
     _format_packed_sample_overflow_error,
 )
+from loongforge.data.vlm.flavors import ENERGON_LT_7
 
 # Energon < 7.0 declares ``__subflavor__`` as a dataclass field on the base
 # ``Sample`` class, so the LoongForge sample constructors accept (and require)
@@ -172,7 +173,7 @@ def test_pack_text_only_samples_have_empty_media_lists():
 
 @pytest.mark.parametrize("needs_subflavor", [False, True])
 def test_pack_energon_subflavor_branch(needs_subflavor):
-    """Both ``_ENERGON_NEEDS_SUBFLAVOR`` branches must produce identical packs."""
+    """Both ``ENERGON_LT_7`` branches must produce identical packs."""
     if needs_subflavor != _ACCEPTS_SUBFLAVOR:
         pytest.skip(
             "installed energon "
@@ -183,7 +184,7 @@ def test_pack_energon_subflavor_branch(needs_subflavor):
     sample = make_sample("s1", [1, 2], [1, 2], [True, True])
 
     with patch(
-        "loongforge.data.multimodal.base.task_encoder._ENERGON_NEEDS_SUBFLAVOR",
+        "loongforge.data.vlm.cookers.ENERGON_LT_7",
         needs_subflavor,
     ):
         packed = encoder.pack_selected_samples([sample])

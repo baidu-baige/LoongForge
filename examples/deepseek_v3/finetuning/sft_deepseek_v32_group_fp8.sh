@@ -51,7 +51,7 @@ DISTRIBUTED_ARGS=(
 )
 
 MODEL_ARGS=(
-  --config-file ${LOONGFORGE_PATH}/configs/models/deepseek3/deepseek_v3_2_sparse.yaml
+  --config-file ${LOONGFORGE_PATH}/configs/models/deepseek_v3/deepseek_v3_2_sparse.yaml
   --multi-latent-attention
   --rotary-base 10000
   --original-max-position-embeddings 4096

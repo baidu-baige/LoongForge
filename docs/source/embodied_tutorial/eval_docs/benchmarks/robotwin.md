@@ -32,13 +32,13 @@ Run from inside the **benchmark** environment. The run scripts and eval YAMLs sh
 
 ```bash
 cd /path/to/LoongForge-VLA
-examples/embodied/pi05/eval/run_robotwin_eval.sh    # pi05, action_bridge: pi05_aloha_14d
-examples/embodied/xvla/eval/run_robotwin_eval.sh    # xvla, action_bridge: ee6d_dual
+examples/pi05/eval/run_robotwin_eval.sh    # pi05, action_bridge: pi05_aloha_14d
+examples/xvla/eval/run_robotwin_eval.sh    # xvla, action_bridge: ee6d_dual
 ```
 
 Environment variables: `CONFIG`, `BENCHMARK_PYTHON`, `CUDA_VISIBLE_DEVICES`, plus the SAPIEN Vulkan variables (`LD_LIBRARY_PATH` / `VK_ICD_FILENAMES`).
 
-Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_bottle_smoke.yaml`):
+Key config fields (see `examples/<model>/eval/configs/robotwin/adjust_bottle_smoke.yaml`):
 
 - `benchmark.action_bridge` — selects the official-evaluator protocol:
 
@@ -47,7 +47,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_b
 | `pi05_aloha_14d` | pi05 | openpi Aloha joint protocol; `model.action_dim: 14`, `action_horizon: 32` |
 | `ee6d_dual` | xvla | X-VLA dual-arm end-effector protocol; `model.domain_id: 6` |
 
-- pi05 + RoboTwin additionally needs `server.dataset_statistics_path` pointing at a stats file derived from the weights' openpi `norm_stats.json`; a ready-made copy ships at `examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json`. To regenerate from another openpi-style weights:
+- pi05 + RoboTwin additionally needs `server.dataset_statistics_path` pointing at a stats file derived from the weights' openpi `norm_stats.json`; a ready-made copy ships at `examples/pi05/eval/assets/pi05_robotwin2_dataset_stats.json`. To regenerate from another openpi-style weights:
 
   ```python
   import json

@@ -12,8 +12,8 @@ DATA_PATH: $pfs_path/omni_datasets/LoongForge/deepseek_v2_lite/pile_test/pile-de
 TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 CHECKPOINT_PATH: $step1_output_path
 TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
-MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/deepseek2/deepseek_v2_lite.yaml
-CONVERT_FILE: $LOONGFORGE_PATH/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
+MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/deepseek_v2/deepseek_v2_lite.yaml
+CONVERT_FILE: $LOONGFORGE_PATH/configs/models/deepseek_v2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
 # Training Parameters
 TENSOR_MODEL_PARALLER_SIZE: 2

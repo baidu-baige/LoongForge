@@ -50,8 +50,6 @@ from megatron.core.transformer.experimental_attention_variant.dsa import (
     source_dsa_compute_layer,
 )
 
-from loongforge.utils import get_args
-
 try:
     from fast_hadamard_transform import hadamard_transform
 except ImportError:
@@ -751,8 +749,7 @@ class DSAttentionFused(MegatronModule):
             # Keep MTP layers off the decoder layers' indexer-loss tracker slots.
             self.layer_number = self.layer_number + self.config.num_layers
         self.pg_collection = pg_collection
-        args = get_args()
-        self.use_dsa_sp_first = getattr(args, "use_dsa_sp_first", False) if args is not None else False
+        self.use_dsa_sp_first = getattr(self.config, "use_dsa_sp_first", False)
 
         # Cross-layer top-k index sharing (IndexShare, GLM-5.2). MTP layers always own an indexer.
         self.index_topk_freq = getattr(self.config, "dsa_indexer_topk_freq", 1)

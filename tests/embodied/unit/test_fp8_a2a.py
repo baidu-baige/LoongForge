@@ -18,9 +18,9 @@ import tempfile
 import pytest
 import torch
 
-from loongforge.embodied.distributed.ddp_utils import fp8_a2a_comm as mod
-from loongforge.embodied.distributed.ddp_utils.ddp_comm_hook import resolve_comm_hook
-from loongforge.embodied.train.training_args import TrainingArgs
+from loongforge.engines.torch.distributed import fp8_a2a_comm as mod
+from loongforge.engines.torch.distributed.ddp_comm_hook import resolve_comm_hook
+from loongforge.engines.torch.arguments import TrainingArgs
 
 requires_cuda = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="fp8 a2a kernels require CUDA"

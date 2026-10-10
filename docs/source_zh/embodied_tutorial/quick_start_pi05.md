@@ -56,17 +56,17 @@ DDP 脚本已经打开主要性能优化：
 **DDP：**
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
+bash examples/pi05/finetune_pi05_ddp.sh
 ```
 **DDP + ZeRO-1：**
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_zero1_finetune.sh
+bash examples/pi05/finetune_pi05_ddp_zero1.sh
 ```
 **FSDP：**
 
 ```bash
-bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh
+bash examples/pi05/finetune_pi05_fsdp.sh
 ```
 ### 2.2 正确性验证
 为保证训练精度不受优化手段影响，我们在相同数据、权重和训练配置下，对 LoongForge 适配的 Pi05 与官方实现进行了逐 step 的 action loss 对比验证。结果表明，LoongForge 的各项性能优化对训练精度无损：
@@ -81,7 +81,7 @@ bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh
 ### 3.1 快速运行 LIBERO
 1. 编辑评测 YAML
 
-（示例：`examples/embodied/pi05/eval/configs/libero/smoke_steps10.yaml`），填写：
+（示例：`examples/pi05/eval/configs/libero/smoke_steps10.yaml`），填写：
 
     * `server.ckpt_path`：训练得到的 checkpoint（目录含 `model.safetensors` 或权重文件）
     * `server.dataset_statistics_path`：数据集统计（action 反归一化，Pi0.5 默认 q99）
@@ -92,6 +92,6 @@ bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh
 ```bash
 cd $LOONGFORGE_PATH
 # 默认使用 smoke_steps10.yaml；可用 CONFIG 覆盖
-CONFIG=examples/embodied/pi05/eval/configs/libero/smoke_steps10.yaml \
-  bash examples/embodied/pi05/eval/run_libero_eval.sh
+CONFIG=examples/pi05/eval/configs/libero/smoke_steps10.yaml \
+  bash examples/pi05/eval/run_libero_eval.sh
 ```

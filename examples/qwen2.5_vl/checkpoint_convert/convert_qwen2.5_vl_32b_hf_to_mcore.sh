@@ -12,7 +12,7 @@ SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-mcore
 SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-mcore
 SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-mcore
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_32b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_32b.yaml
 
 FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
 IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml

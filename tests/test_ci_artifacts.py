@@ -238,7 +238,7 @@ def test_redactor_keeps_suite_results_and_redacts_nested_paths(tmp_path):
         "results": [
             {
                 "model_name": "pi05_ddp",
-                "script": "/workspace/source/examples/embodied/pi05/run.sh",
+                "script": "/workspace/source/examples/pi05/run.sh",
                 "passed": True,
                 "failed_metrics": [],
                 "warnings": ["throughput degraded 10% > 5% (soft check, warning only)"],

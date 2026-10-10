@@ -7,8 +7,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=/mnt/cluster/loongforge-ckpt/deepseek2/DeepSeek_V2_Lite_group_tp1pp1ep8/release
 SAVE=/mnt/cluster/loongforge-ckpt/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek2/deepseek_v2_lite.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v2/deepseek_v2_lite.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
     python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \

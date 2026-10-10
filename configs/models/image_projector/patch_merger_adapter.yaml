@@ -1,4 +1,4 @@
-_target_: loongforge.models.encoder.PatchMergerMLPAdapterConfig
+_target_: loongforge.models.vision.PatchMergerMLPAdapterConfig
 
 activation_func: ${act:gelu}
 normalization: "LayerNorm"

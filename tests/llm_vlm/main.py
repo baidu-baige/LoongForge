@@ -93,7 +93,6 @@ def main() -> None:
 
     logger.info(f"Begin to run test, all model test num is {total_scenarios_num}. \n")
     scenario_result = []
-    error_scenario = []
 
     # Loop through all models
     for index, model in enumerate(model_configer.all_model_configs):

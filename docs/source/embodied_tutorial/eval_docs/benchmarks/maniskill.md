@@ -33,13 +33,13 @@ Run from inside the **benchmark** environment. The run scripts and eval YAMLs sh
 
 ```bash
 cd /path/to/LoongForge-VLA
-examples/embodied/pi05/eval/run_maniskill_eval.sh    # pi05 (connectivity only)
-examples/embodied/xvla/eval/run_maniskill_eval.sh    # xvla (connectivity only)
+examples/pi05/eval/run_maniskill_eval.sh    # pi05 (connectivity only)
+examples/xvla/eval/run_maniskill_eval.sh    # xvla (connectivity only)
 ```
 
 Environment variables: `CONFIG`, `BENCHMARK_PYTHON` (ManiSkill env interpreter), `CUDA_VISIBLE_DEVICES`, plus the SAPIEN Vulkan variables.
 
-Key config fields (see `examples/embodied/<model>/eval/configs/maniskill/pick_cube_smoke.yaml`):
+Key config fields (see `examples/<model>/eval/configs/maniskill/pick_cube_smoke.yaml`):
 
 - `benchmark.task_name` — `PickCube-v1` (default)
 - `benchmark.control_mode` — `pd_ee_delta_pose` (7D action)

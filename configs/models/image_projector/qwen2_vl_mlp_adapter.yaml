@@ -1,4 +1,4 @@
-_target_: loongforge.models.encoder.MLPAdapterConfig
+_target_: loongforge.models.vision.MLPAdapterConfig
 
 # Qwen2-VL uses LayerNorm for visual.merger.ln_q.
 normalization: "LayerNorm"

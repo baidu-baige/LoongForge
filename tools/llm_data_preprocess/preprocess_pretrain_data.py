@@ -20,10 +20,10 @@ try:
 except ImportError:
     nltk_available = False
 
-from loongforge.tokenizer import build_tokenizer
+from loongforge.engines.mcore.tokenizer import build_tokenizer
 from megatron.core.datasets import indexed_dataset
-from loongforge.utils import constants
-from loongforge.utils.constants import get_all_model_families
+from loongforge import constants
+from loongforge.constants import get_all_model_families
 
 
 # https://stackoverflow.com/questions/33139531/preserve-empty-lines-with-nltks-punkt-tokenizer

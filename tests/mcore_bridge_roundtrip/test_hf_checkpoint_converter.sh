@@ -52,7 +52,7 @@ if [ $TEST_MODEL == "qwen2.5_vl_3b" ]; then
     export VPP_SIZE=1
     export TP_RANKS=0,1,2,3
     export PP_RANKS=0,1,2,3
-    export MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml
+    export MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_3b.yaml
     export CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
     export VISION_PATCH_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml
     export ADAPTER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_projector/ckpt_convert/qwen_mlp_adapter_convert.yaml

@@ -177,6 +177,7 @@ LoongForge = "loongforge.train:main"
 test = [
     "pytest",
     "mock",
+    "pyflakes==4.0.3",
 ]
 dev = [
     "pre-commit>=3.2",
@@ -217,20 +218,13 @@ ignore = ["E402", "E501", "E731", "F841"]
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401", "F403"]
 # availability-probe and re-export imports that must not be deleted
-"loongforge/data/multimodal/ernie/utils/image_enhance.py" = ["F401"]
 "loongforge/models/common/base_model_mixins.py" = ["F401"]
 "loongforge/models/common/experimental_attention_variant/dsa_fused_kernels.py" = ["F401"]
 "loongforge/models/diffusion/wan/wan_attention.py" = ["F401"]
-"loongforge/models/encoder/internvl_vision_models/intern_vision_attention.py" = ["F401"]
-"loongforge/models/encoder/vision_transformer_block.py" = ["F401"]
-"loongforge/models/foundation/ernie4_5_vl/ernie_experts.py" = ["F401"]
-"loongforge/models/foundation/language_transformer_block.py" = ["F401"]
-"loongforge/models/foundation/qwen3_5/qwen3_5_layer_spec.py" = ["F401"]
-"loongforge/models/foundation/qwen3_next/gated_attention.py" = ["F401"]
-"loongforge/train/pretrain/pretrain_vlm.py" = ["F401"]
-"loongforge/train/sft/sft_internvl.py" = ["F401"]
-"loongforge/train/training_utils.py" = ["F401"]
-"loongforge/train/validators.py" = ["F401"]
+"loongforge/models/vision/vision_transformer_block.py" = ["F401"]
+"loongforge/models/language/language_transformer_block.py" = ["F401"]
+"loongforge/models/language/qwen3_5/qwen3_5_layer_spec.py" = ["F401"]
+"loongforge/models/language/qwen3_next/gated_attention.py" = ["F401"]
 
 [tool.hatch.build]
 packages = ["loongforge"]

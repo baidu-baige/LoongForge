@@ -3,6 +3,7 @@
 
 import argparse
 import ast
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -55,7 +56,7 @@ def _load_functions(relative_path, names, namespace=None):
 )
 def test_energon_read_order_kwargs(args, expected):
     namespace = _load_functions(
-        "loongforge/data/multimodal/dataloader_provider.py",
+        "loongforge/data/vlm_dataloader.py",
         {"_energon_read_order_kwargs"},
     )
     assert namespace["_energon_read_order_kwargs"](args) == expected
@@ -91,16 +92,18 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
             get_data_parallel_world_size=lambda: 8,
             get_data_parallel_group=lambda: "dp-group",
         ),
-        "get_args": lambda: args,
         "get_blend_from_list": Mock(
             return_value=(["dataset-a", "dataset-b"], [0.25, 0.75])
         ),
         "create_metadataset_yaml": Mock(return_value="/tmp/metadataset.yaml"),
         "print_error_handler": object(),
-        "print_rank_0": Mock(),
+        "log_single_rank": Mock(),
+        "logger": object(),
+        "logging": logging,
+        "ENERGON_LT_7": False,
     }
     namespace = _load_functions(
-        "loongforge/data/multimodal/dataloader_provider.py",
+        "loongforge/data/vlm_dataloader.py",
         {
             "_energon_read_order_kwargs",
             "_validate_energon_data_paths",
@@ -109,7 +112,7 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
         namespace,
     )
 
-    assert namespace["get_train_dataset"]("task-encoder") == "train-dataset"
+    assert namespace["get_train_dataset"]("task-encoder", args) == "train-dataset"
     get_train_dataset.assert_called_once()
     path, = get_train_dataset.call_args.args
     kwargs = get_train_dataset.call_args.kwargs
@@ -127,7 +130,7 @@ def test_multimodal_argument_defaults_and_overrides():
             return ["llama"]
 
     namespace = _load_functions(
-        "loongforge/train/arguments.py",
+        "loongforge/engines/mcore/arguments.py",
         {"_add_extra_multimodal_args"},
         {
             "get_support_model_archs": lambda values: values,

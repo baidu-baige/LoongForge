@@ -56,10 +56,10 @@ Two conda environments: the **SimplerEnv client** env and the **model server** e
 cd /path/to/LoongForge-VLA
 
 # xvla (task success template)
-examples/embodied/xvla/eval/run_simplerenv_eval.sh
+examples/xvla/eval/run_simplerenv_eval.sh
 
 # GR00T-N1.6 (public template)
-bash examples/embodied/groot_n1_6/eval/run_simplerenv_eval.sh
+bash examples/groot_n1_6/eval/run_simplerenv_eval.sh
 ```
 
 Environment variables:
@@ -73,7 +73,7 @@ Environment variables:
 | `VK_ICD_FILENAMES` | NVIDIA Vulkan ICD | `/path/to/nvidia_icd.json` |
 | `XDG_RUNTIME_DIR` | runtime dir for Vulkan | `/tmp/runtime-<uid>` |
 
-Key config fields (xvla, see `examples/embodied/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`):
+Key config fields (xvla, see `examples/xvla/eval/configs/simplerenv/widowx_stack_cube_smoke.yaml`):
 
 - `benchmark.control_mode` — `arm_pd_ee_target_base_pose_gripper_pd_joint_pos` (needs the absolute EE env, see the model-specific environment changes above)
 - `benchmark.max_steps` — `1200` (official horizon)

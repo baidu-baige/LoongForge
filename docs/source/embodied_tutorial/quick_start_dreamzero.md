@@ -113,21 +113,21 @@ dataset_root/
 | `agibot` | `observation.state` ≥20 dims; `action` ≥22 dims | `top_head`, `hand_left`, `hand_right` | `task_index` |
 | `yam` | packed `observation.state` / `action` ≥46 dims | top/left/right three `*-camera-images-rgb` fields | `task_index` |
 
-Refer to `PRESETS` in `tools/dreamzero_data_preprocess/prepare_dataset.py` for the full field spec.
+Refer to `PRESETS` in `tools/embodied_data_preprocess/dreamzero/prepare_dataset.py` for the full field spec.
 
 ### 1.2 Generate DreamZero Metadata
 ```bash
 EMBODIMENT_TAG=oxe_droid DATA_PATH="$DROID_DATA_ROOT" \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=libero_sim DATA_PATH="$LIBERO_DATA_ROOT" \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=agibot DATA_PATH=/path/to/agibot_lerobot \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=yam DATA_PATH=/path/to/yam_lerobot \
-    bash examples/embodied/dreamzero/prepare_dreamzero_dataset.sh
+    bash examples/dreamzero/prepare_dreamzero_dataset.sh
 ```
 
 Common Options:
@@ -145,29 +145,29 @@ export DATA_PATH=$DROID_DATA_ROOT
 export WANDB_MODE=disabled
 
 # 5B Full with FSDP + Delta-FP8, default 200000 steps
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 
 # 5B LoRA
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh
 
 # 14B Full
-bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_fsdp_finetune.sh
+bash examples/dreamzero/finetune_dreamzero_wan21_14b_full_fsdp.sh
 
 # 14B LoRA, DROID
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 
 # LIBERO 5B Full
 MODEL_NAME=dreamzero_libero_wan22_5b DATA_PATH="$LIBERO_DATA_ROOT" \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 
 # AgiBot / YAM 14B LoRA (initialized from DreamZero-AgiBot)
 MODEL_NAME=dreamzero_agibot_wan21_14b DATA_PATH=/path/to/agibot_lerobot \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 
 MODEL_NAME=dreamzero_yam_wan21_14b DATA_PATH=/path/to/yam_lerobot \
-    bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 ```
 
 For the DROID scenario, `MODEL_NAME` does not need to be set; the training script automatically picks the correct config. Only when switching to LIBERO, AgiBot, or YAM do you need to override it as shown.
@@ -188,7 +188,7 @@ Batch sizes can be adjusted via `PER_DEVICE_BATCH_SIZE` and `GLOBAL_BATCH_SIZE`,
 ```bash
 TRAIN_ITERS=20000 SAVE_INTERVAL=1000 \
 OUTPUT_DIR=/workspace/outputs/dreamzero/droid_wan22_5b_lora \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh \
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh \
     --resume
 ```
 
@@ -200,11 +200,11 @@ OUTPUT_DIR=/workspace/outputs/dreamzero/droid_wan22_5b_lora \
 MODEL_NAME=dreamzero_full_wan22_5b DATA_PATH="$DROID_DATA_ROOT" \
 CACHE_OUTPUT_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b \
 GPUS_PER_NODE=8 SAMPLE_TRANSFORM_SEED=0 VALIDATION_REQUIRE_FULL_COVERAGE=1 \
-    bash examples/embodied/dreamzero/precompute_dreamzero_cache.sh
+    bash examples/dreamzero/precompute_dreamzero_cache.sh
 
 # Train with cache (must match SAMPLE_TRANSFORM_SEED, resolution, and language chunk config used at generation time)
 CACHE_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b SAMPLE_TRANSFORM_SEED=0 \
-    bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+    bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh
 ```
 
 The training script strictly validates the cache at startup. When manifest, `_SUCCESS`, or transform config mismatch, training aborts before the first step.
@@ -216,13 +216,13 @@ Control group (disable optional model-side optimizations and Delta-FP8 to isolat
 
 ```bash
 # Wan2.2 5B
-bash examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
+bash examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh \
     --no-fsdp-delta-fp8-allgather \
     model.flash_attention_dense=false model.compile_causal_attention_block=false \
     model.batch_vae_encode=false 'model.prompt_emb_cache=""'
 
 # Wan2.1 14B
-bash examples/embodied/dreamzero/run_dreamzero_wan21_14b_full_fsdp_finetune.sh \
+bash examples/dreamzero/finetune_dreamzero_wan21_14b_full_fsdp.sh \
     model.skip_single_state_attention=false model.compile_causal_cross_attention=false \
     model.compile_cross_attention_emulate_precision_casts=false model.compile_block_norm_modulate=false \
     model.qk_rmsnorm_impl=wan model.manual_self_attn_linear_backward=false model.fused_rope=false \
