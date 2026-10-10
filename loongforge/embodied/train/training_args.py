@@ -507,10 +507,12 @@ class _LearningRateArgs:
                 "cosine_with_min_lr",
                 "cosine_warmup_with_min_lr",
                 "lambda_linear",
+                "linear_warmup_cosine_annealing",
             ],
             "help": "Learning-rate scheduler name. Most values are passed to "
                     "transformers.get_scheduler; lambda_linear uses the custom "
-                    "LambdaLinearScheduler."
+                    "LambdaLinearScheduler; linear_warmup_cosine_annealing is "
+                    "torch LinearLR (1/W -> 1) then CosineAnnealingLR to --min-lr."
         },
     )
     lr_warmup_iters: int = field(

@@ -117,7 +117,7 @@ class FastWAMPreprocessor(BasePreprocessor):
             context_mask=context_mask,
             proprio=proprio_tensor,
             action_is_pad=self._build_action_is_pad(examples, action.shape),
-            image_is_pad=torch.zeros(video.shape[0], video.shape[2], dtype=torch.bool),
+            image_is_pad=self._build_image_is_pad(examples, video.shape),
         )
 
     def _build_video(self, example: Dict[str, Any]) -> torch.Tensor:
@@ -178,6 +178,22 @@ class FastWAMPreprocessor(BasePreprocessor):
                 dim=0,
             )
         return torch.zeros(action_shape[:2], dtype=torch.bool)
+
+    @staticmethod
+    def _build_image_is_pad(examples: List[Dict[str, Any]], video_shape: tuple) -> torch.Tensor:
+        """Build the ``image_is_pad`` boolean mask tensor ``[B, T]`` for the batch.
+
+        Uses the per-sample ``image_is_pad`` produced by the dataset when every
+        example provides it; otherwise falls back to an all-``False`` mask so the
+        video loss treats all frames as valid.
+        """
+        pads = [ex.get("image_is_pad", None) for ex in examples]
+        if all(p is not None for p in pads):
+            return torch.stack(
+                [p.bool() if isinstance(p, torch.Tensor) else torch.tensor(p, dtype=torch.bool) for p in pads],
+                dim=0,
+            )
+        return torch.zeros(video_shape[0], video_shape[2], dtype=torch.bool)
 
     def _build_context(self, prompts: List[str]) -> tuple[torch.Tensor, torch.Tensor]:
         """Build text context tensors from prompt strings or cache files."""

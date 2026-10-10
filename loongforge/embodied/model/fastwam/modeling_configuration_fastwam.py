@@ -108,8 +108,10 @@ class FastWAMModelConfig:
     video_scheduler: dict[str, Any] = field(default_factory=lambda: {
         "train_shift": 5.0, "infer_shift": 5.0, "num_train_timesteps": 1000,
     })
+    # FastWAM's model config (configs/model/fastwam.yaml) uses shift 1.0 for the
+    # action expert (no timestep shift) and 5.0 only for the video expert.
     action_scheduler: dict[str, Any] = field(default_factory=lambda: {
-        "train_shift": 5.0, "infer_shift": 5.0, "num_train_timesteps": 1000,
+        "train_shift": 1.0, "infer_shift": 1.0, "num_train_timesteps": 1000,
     })
     loss: dict[str, Any] = field(default_factory=lambda: {
         "lambda_video": 1.0, "lambda_action": 1.0,
