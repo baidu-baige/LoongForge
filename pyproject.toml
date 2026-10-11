@@ -27,7 +27,7 @@ gpu = [
     # Core
     "packaging>=23.2,<25",
     "wrapt==1.16.0",
-    "hydra-core==1.3.2",
+    "hydra-core==1.3.7",
     "omegaconf==2.3.0",
     "protobuf==3.20.2",
     # LLM / HF ecosystem
@@ -71,7 +71,7 @@ gpu = [
 ]
 xpu = [
     # Core
-    "hydra-core==1.3.2",
+    "hydra-core==1.3.7",
     # LLM / HF ecosystem (XPU-specific versions)
     "transformers==4.57.1",
     "datasets==2.20.0",
