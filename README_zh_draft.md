@@ -26,6 +26,8 @@
   <a href="#quickstart"><b>快速开始</b></a>
   &nbsp;·&nbsp;
   <a href="#models"><b>支持模型</b></a>
+  &nbsp;·&nbsp;
+  <a href="#powered-by-loongforge"><b>项目案例</b></a>
 </p>
 
 <p align="center">
