@@ -94,7 +94,7 @@
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
 - **[2026/09]** ⚡ 新增经过优化的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
 - **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
-- **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
+- **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
 - **[2026/08]** 🧪 新增具身模型统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
@@ -106,14 +106,14 @@
 <summary><b>📅 更多</b></summary>
 
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
-- **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
+- **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。
 - **[2026/05]** ⚡ **Wan 2.2** 训练 **加速 116%**，并新增 CP（上下文并行）与数据 packing 策略支持。
 - **[2026/05]** ✨ 新增 **Kimi K2.5 / K2.6** 训练支持，并支持 **INT4 / NVFP4** PTQ 量化能力。
 - **[2026/05]** 🎉 **v0.1.0** —— LoongForge 首个正式版本发布。
 - **[2026/05]** 🌟 支持 **LLaVA-OneVision-2.0** 模型训练并协助其公开发布。
 - **[2026/04]** 🧩 新增 **MiniMax-M2.7** 在 NVIDIA GPU 与昆仑芯 XPU 上的训练支持。
-- **[2026/04]** 🚀 LoongForge 源码在 GitHub 上正式公开。[[blog](https://zhuanlan.zhihu.com/p/2031006068797600446)]
-- **[2025/10]** 🌟 基于 AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。[[blog](https://mp.weixin.qq.com/s/1y7Br15pBpUZ-90j5OGncA)]
+- **[2026/04]** 🚀 LoongForge 源码在 GitHub 上正式公开。
+- **[2025/10]** 🌟 基于 AIAK-Training-LLM（LoongForge 前身）支持 **LLaVA-OneVision-1.5** 模型训练并协助其公开发布。
 
 </details>
 
@@ -376,14 +376,14 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <!-- TODO(自有案例)：补充"LoongForge 出品"小节，展示自有模型/权重。每条建议包含：名称、简介、链接（代码/权重/blog）、效果（指标或对比图）。 -->
 
 <a id="blogs"></a>
-## 📝 相关博客
+## 📝 社区相关博客
 
-- [多模态模型终于不用「抽帧看世界」？LLaVA-OneVision-2.0 全开源全帧率技术解读](https://mp.weixin.qq.com/s/dechFptcXCvF30mfmC3dWA)
-- [刷新记录！百度百舸助力 LLaVA-OneVision-1.5 高效训练](https://mp.weixin.qq.com/s/mdH3vUStOB13ME4aHx3O8w)
-- [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
 - [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
+- [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
+- [多模态模型终于不用「抽帧看世界」？LLaVA-OneVision-2.0 全开源全帧率技术解读](https://mp.weixin.qq.com/s/dechFptcXCvF30mfmC3dWA)
 - [LoongForge 多模态异构并行训练加速，从问题到方案的全面解析](https://mp.weixin.qq.com/s/ZFWSxNZvDZJ38fyyb8t7vg)
-- [多模态模型训练加速，LoongForge 的 DP 负载均衡优化方案详解](https://mp.weixin.qq.com/s/RFmJwo9C0BYW0IdQRFcXqA)
+- [百度百舸开源全模态训练框架 LoongForge：一套代码跑通 GPU 与昆仑芯，多模态训练提速 45%](https://zhuanlan.zhihu.com/p/2031006068797600446)
+- [刷新记录！百度百舸助力 LLaVA-OneVision-1.5 高效训练](https://mp.weixin.qq.com/s/mdH3vUStOB13ME4aHx3O8w)
 
 ## 📂 代码结构
 
