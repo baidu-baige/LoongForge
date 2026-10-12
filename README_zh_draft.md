@@ -362,16 +362,28 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 > VLM 还可参考[自定义组合示例](./examples/custom/)，用配置将 ViT 与 LLM 自由组装为新模型。
 
 <a id="powered-by-loongforge"></a>
-## 🌟 基于 LoongForge 的训练案例
+## 🌟 基于 LoongForge 的优秀项目案例
+
+### 社区案例
 
 基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 训练的开源模型：
 
-| 模型 | 亮点 |
-|------|------|
-| [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) | 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集 |
-| [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) | 面向高级推理的科学多模态大模型 |
-| [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) | 旨在降低多模态训练门槛的全开源框架 |
-| [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) | 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B |
+- [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) —— 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集
+- [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) —— 面向高级推理的科学多模态大模型
+- [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) —— 旨在降低多模态训练门槛的全开源框架
+- [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B
+
+<!-- TODO(自有案例)：补充"LoongForge 出品"小节，展示自有模型/权重。每条建议包含：名称、简介、链接（代码/权重/blog）、效果（指标或对比图）。 -->
+
+<a id="blogs"></a>
+## 📝 相关博客
+
+- [多模态模型终于不用「抽帧看世界」？LLaVA-OneVision-2.0 全开源全帧率技术解读](https://mp.weixin.qq.com/s/dechFptcXCvF30mfmC3dWA)
+- [刷新记录！百度百舸助力 LLaVA-OneVision-1.5 高效训练](https://mp.weixin.qq.com/s/mdH3vUStOB13ME4aHx3O8w)
+- [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
+- [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
+- [LoongForge 多模态异构并行训练加速，从问题到方案的全面解析](https://mp.weixin.qq.com/s/ZFWSxNZvDZJ38fyyb8t7vg)
+- [多模态模型训练加速，LoongForge 的 DP 负载均衡优化方案详解](https://mp.weixin.qq.com/s/RFmJwo9C0BYW0IdQRFcXqA)
 
 ## 📂 代码结构
 
