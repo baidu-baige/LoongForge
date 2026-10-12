@@ -13,9 +13,9 @@
 <h3 align="center">更快地训练 LLM、VLM、Diffusion 与具身模型</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>中文文档</b></a>
+  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>项目博客</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b></a>
   &nbsp;·&nbsp;
   <a href="#embodied"><b>具身模型</b></a>
   &nbsp;·&nbsp;
@@ -23,9 +23,9 @@
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
-  <a href="#models"><b>支持模型</b></a>
-  &nbsp;·&nbsp;
   <a href="#quickstart"><b>快速开始</b></a>
+  &nbsp;·&nbsp;
+  <a href="#models"><b>支持模型</b></a>
 </p>
 
 <p align="center">
@@ -52,7 +52,7 @@
 
 **LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，旨在加速主流 **LLM、VLM、Diffusion 与具身模型**的训练。
 
-- **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[**深度优化训练速度**](#performance)，同时保证**训练 loss 与基线对齐**。
+- **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[深度优化训练速度](#performance)，同时保证**训练 loss 与基线对齐**。
 - **易用性** —— 每个支持的模型均提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，并配套权重转换、数据预处理等[工具](./tools/)；支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
 - **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[若干开源模型的训练与发布](#powered-by-loongforge)；在大模型训练中，最大验证规模达 **5,000+ XPU**。
 
@@ -89,6 +89,7 @@
 
 ## 🔥 最新动态
 
+- **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
 - **[2026/09]** ⚡ 新增经过优化的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
@@ -149,7 +150,8 @@
 
 * **统一评测** —— 在 LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill 仿真环境中对训练出的策略做闭环评测；覆盖范围持续扩展中。[[README](./loongforge/embodied/eval)]
 
-> 💡 **敬请期待**：基于 LoongForge 训练的模型评测结果即将陆续公布。
+> [!NOTE]
+> 敬请期待：基于 LoongForge 训练的模型评测结果即将陆续公布。
 
 <a id="llm-vlm"></a>
 ## 🚀 LLM · VLM · Diffusion
@@ -196,10 +198,86 @@
 > DeepSeek-V3.2 Lite 为 DSA 算子级优化的结果，受测试环境规模限制，在减层配置下验证。<br>
 > 数据为特定时间点的测试结果，双方实现持续演进，数值可能随之变化。
 
+<a id="quickstart"></a>
+## ⚡ 快速开始
+
+### 1. 安装
+
+以下以 NVIDIA GPU 为例，拉取[预构建镜像](https://hub.docker.com/u/loongforge)并启动容器（需安装 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)）：
+
+```bash
+docker pull loongforge/loongforge:latest
+mkdir -p workspace
+docker run --gpus all --ipc=host -it --rm \
+  -v "$(pwd)/workspace:/workspace/data" \
+  -w /workspace/LoongForge \
+  loongforge/loongforge:latest bash
+```
+
+> 上述示例将 `./workspace` 挂载到容器内 `/workspace/data`，用于存放权重、数据集与训练输出，退出容器后仍会保留。
+
+[GPU 完整安装指南](https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html) · [昆仑芯 XPU 安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
+
+### 2. 按场景选择教程
+
+<table width="100%">
+<colgroup>
+<col width="25%">
+<col width="25%">
+<col width="25%">
+<col width="25%">
+</colgroup>
+<thead align="center" valign="bottom">
+<tr><th width="25%">LLM</th><th width="25%">VLM</th><th width="25%">VLA & WAM（具身）</th><th width="25%">Diffusion</th></tr>
+</thead>
+<tbody valign="top">
+<tr>
+<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html">NVIDIA GPU 教程</a></td>
+<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html">NVIDIA GPU 教程</a></td>
+<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html">NVIDIA GPU 教程</a></td>
+<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html">NVIDIA GPU 教程</a></td>
+</tr>
+</tbody>
+</table>
+
+昆仑芯 XPU 见[统一教程](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html)；启动脚本见 [`examples/`](./examples/)（GPU）/ [`examples_xpu/`](./examples_xpu/)（XPU），模型配置见 [`configs/models/`](./configs/models/)。
+
+### 3. 上手示例：Pi0.5 微调（具身）
+
+以 **Pi0.5 在 LIBERO 上的 DDP 微调（单机 8 GPU）** 为例，以下命令均在上述容器内执行。
+
+**① 获取 `paligemma-3b-pt-224` 的访问权限。** 该仓库为受限仓库：在其 Hugging Face 页面同意许可，创建一个具有读权限的 Access Token，然后在容器内登录：
+
+```bash
+hf auth login
+```
+
+**② 下载权重、tokenizer 与数据集**（`hf` 为 Hugging Face CLI）：
+
+```bash
+hf download lerobot/pi05_base --local-dir /workspace/data/pi05_base
+hf download google/paligemma-3b-pt-224 --local-dir /workspace/data/paligemma-3b-pt-224
+hf download lerobot/libero_10 --repo-type dataset --local-dir /workspace/data/libero_10
+```
+
+**③ 启动训练**（默认跑 20 步，用于验证流程）：
+
+```bash
+export CHECKPOINT_PATH=/workspace/data/pi05_base
+export TOKENIZER_PATH=/workspace/data/paligemma-3b-pt-224
+export DATA_PATH=/workspace/data/libero_10
+export OUTPUT_DIR=/workspace/data/outputs/pi05
+
+bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
+```
+
+日志与 TensorBoard 数据保存在 `OUTPUT_DIR` 下。FSDP / ZeRO-1 启动方式与 LIBERO 评测见 [Pi0.5 教程](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_pi05.html)。
+
 <a id="models"></a>
 ## 🏛️ 支持的模型
 
 点击任意模型查看训练示例；完整使用说明见[用户手册](https://loongforge.readthedocs.io/zh-cn/latest/index.html)，全部变体见[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
+<!--MODELS_PLACEHOLDER-->
 
 <table width="100%">
 <colgroup>
@@ -280,82 +358,20 @@
 </tbody>
 </table>
 
-> 💡 **提示**：VLM 还可参考[自定义组合示例](./examples/custom/)，用配置将 ViT 与 LLM 自由组装为新模型。
+> [!TIP]
+> VLM 还可参考[自定义组合示例](./examples/custom/)，用配置将 ViT 与 LLM 自由组装为新模型。
 
-<a id="quickstart"></a>
-## ⚡ 快速开始
+<a id="powered-by-loongforge"></a>
+## 🌟 基于 LoongForge 的训练案例
 
-### 1. 安装
+基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 训练的开源模型：
 
-以下以 NVIDIA GPU 为例，拉取[预构建镜像](https://hub.docker.com/u/loongforge)并启动容器（需安装 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)）：
-
-```bash
-docker pull loongforge/loongforge:latest
-mkdir -p workspace
-docker run --gpus all --ipc=host -it --rm \
-  -v "$(pwd)/workspace:/workspace/data" \
-  -w /workspace/LoongForge \
-  loongforge/loongforge:latest bash
-```
-
-> 上述示例将宿主机的 `./workspace` 挂载到容器内的 `/workspace/data`，权重、数据集与训练输出存放在此目录中，退出容器后仍会保留。
-
-[GPU 完整安装指南](https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html) · [昆仑芯 XPU 安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
-
-### 2. 按场景选择教程
-
-<table width="100%">
-<colgroup>
-<col width="25%">
-<col width="25%">
-<col width="25%">
-<col width="25%">
-</colgroup>
-<thead align="center" valign="bottom">
-<tr><th width="25%">LLM</th><th width="25%">VLM</th><th width="25%">VLA & WAM（具身）</th><th width="25%">Diffusion</th></tr>
-</thead>
-<tbody valign="top">
-<tr>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html">NVIDIA GPU 教程</a></td>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html">NVIDIA GPU 教程</a></td>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html">NVIDIA GPU 教程</a></td>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html">NVIDIA GPU 教程</a></td>
-</tr>
-</tbody>
-</table>
-
-昆仑芯 XPU 见[统一教程](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html)；启动脚本见 [`examples/`](./examples/)（GPU）/ [`examples_xpu/`](./examples_xpu/)（XPU），模型配置见 [`configs/models/`](./configs/models/)。
-
-### 3. 上手示例：Pi0.5 微调（具身）
-
-以 **Pi0.5 在 LIBERO 上的 DDP 微调（单机 8 GPU）** 为例，以下命令均在上述容器内执行。
-
-**① 获取 `paligemma-3b-pt-224` 的访问权限。** 该仓库为受限仓库：在其 Hugging Face 页面同意许可，创建一个具有读权限的 Access Token，然后在容器内登录：
-
-```bash
-hf auth login
-```
-
-**② 下载权重、tokenizer 与数据集**（`hf` 为 Hugging Face CLI）：
-
-```bash
-hf download lerobot/pi05_base --local-dir /workspace/data/pi05_base
-hf download google/paligemma-3b-pt-224 --local-dir /workspace/data/paligemma-3b-pt-224
-hf download lerobot/libero_10 --repo-type dataset --local-dir /workspace/data/libero_10
-```
-
-**③ 启动训练**（默认跑 20 步，用于验证流程）：
-
-```bash
-export CHECKPOINT_PATH=/workspace/data/pi05_base
-export TOKENIZER_PATH=/workspace/data/paligemma-3b-pt-224
-export DATA_PATH=/workspace/data/libero_10
-export OUTPUT_DIR=/workspace/data/outputs/pi05
-
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
-```
-
-日志与 TensorBoard 数据保存在 `OUTPUT_DIR` 下。FSDP / ZeRO-1 启动方式与 LIBERO 评测见 [Pi0.5 教程](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_pi05.html)。
+| 模型 | 亮点 |
+|------|------|
+| [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) | 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集 |
+| [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) | 面向高级推理的科学多模态大模型 |
+| [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) | 旨在降低多模态训练门槛的全开源框架 |
+| [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) | 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B |
 
 ## 📂 代码结构
 
@@ -393,18 +409,6 @@ LoongForge/
 
 </details>
 
-<a id="powered-by-loongforge"></a>
-## 🌟 基于 LoongForge 的训练案例
-
-基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 训练的开源模型：
-
-| 模型 | 亮点 |
-|------|------|
-| [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) | 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集 |
-| [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) | 面向高级推理的科学多模态大模型 |
-| [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) | 旨在降低多模态训练门槛的全开源框架 |
-| [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) | 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B |
-
 ## 📝 引用
 
 如果您觉得 LoongForge 对您的工作有帮助，请引用本项目：
@@ -440,12 +444,6 @@ LoongForge/
   <img src="https://contrib.rocks/image?repo=baidu-baige/LoongForge&v=2026-09-04" alt="LoongForge contributors" />
 </a>
 
-## 🙏 致谢
-
-LoongForge 的成长离不开开源社区。其 Megatron 后端以 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 为基础，项目也从 [HuggingFace Transformers](https://github.com/huggingface/transformers)、[LLaMA-Factory](https://github.com/hiyouga/LlamaFactory)、[Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge)、[LeRobot](https://github.com/huggingface/lerobot) 以及所支持模型的官方实现（如 [OpenPI](https://github.com/Physical-Intelligence/openpi)、[NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)）中汲取了经验。
-
-同时也特别感谢 [LINUX DO](https://linux.do/) 社区为技术交流提供友善的空间，以及 [AtomGit](https://atomgit.com/baidu-baige/LoongForge) 为 LoongForge 提供官方镜像托管。
-
 <a id="contact"></a>
 ## 💬 联系我们
 
@@ -454,6 +452,12 @@ LoongForge 的成长离不开开源社区。其 Megatron 后端以 NVIDIA 的 [M
 | [**GitHub Issue**](https://github.com/baidu-baige/LoongForge/issues/new/choose) | 问题反馈、使用疑问与功能建议 |
 | [**开发者社区**](https://github.com/baidu-baige/LoongForge/issues/80) | 微信群、小红书等 |
 | [**邮件**](mailto:loongforge@baidu.com) | 企业落地、大规模部署、商务合作，以及任何其他话题 |
+
+## 🙏 致谢
+
+LoongForge 的成长离不开开源社区。其 Megatron 后端以 NVIDIA 的 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 为基础，项目也从 [HuggingFace Transformers](https://github.com/huggingface/transformers)、[LLaMA-Factory](https://github.com/hiyouga/LlamaFactory)、[Megatron-Bridge](https://github.com/NVIDIA-NeMo/Megatron-Bridge)、[LeRobot](https://github.com/huggingface/lerobot) 以及所支持模型的官方实现（如 [OpenPI](https://github.com/Physical-Intelligence/openpi)、[NVIDIA Isaac GR00T](https://github.com/NVIDIA/Isaac-GR00T)）中汲取了经验。
+
+同时也特别感谢 [LINUX DO](https://linux.do/) 社区为技术交流提供友善的空间，以及 [AtomGit](https://atomgit.com/baidu-baige/LoongForge) 为 LoongForge 提供官方镜像托管。
 
 ## 📄 开源协议
 
