@@ -574,6 +574,14 @@ class MultiLeRobotV2Dataset(Dataset):
         transform: Optional[Callable] = None,
         observation_delta_indices: Optional[List[int]] = None,
     ):
+        if not roots:
+            # An empty list would build a zero-length dataset: the sampler yields
+            # nothing and training silently does no work. Fail loudly here so every
+            # caller is protected, rather than relying on each one to validate.
+            raise ValueError(
+                "MultiLeRobotV2Dataset requires at least one dataset root "
+                "(got an empty list)."
+            )
         self._datasets = [
             LeRobotV2Dataset(
                 root=root,
