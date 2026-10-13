@@ -17,7 +17,7 @@
 #     data.normalization_mode          q99         -> min_max      (official: min/max)
 #     data.image_normalize_mode        siglip      -> identity     (official: ToTensor, stays [0,1])
 #     data.image_resize_strategy       center_crop -> resize_only  (official: Resize(224,224))
-#     model.action_scheduler.*_shift   5.0         -> 1.0          (official action scheduler 1.0/1.0)
+#     model.action_scheduler.*_shift   class default                 (1.0/1.0 in modeling_configuration_fastwam.py; official action scheduler)
 #
 #   *** ACCELERATION SWITCHES TURNED OFF ***  — the training-side speed optimizations
 #     model.disable_train_autocast         true -> false
@@ -67,6 +67,18 @@
 #   --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
 #       Official: lr 1e-4, warmup = 5% of steps (=1000 @20k), CosineAnnealingLR
 #       eta_min = lr*0.01 = 1e-6. Seed 42 via $SEED.
+#   --clip-grad 0
+#       Official FastWAM runs WITHOUT gradient clipping even though configs/train.yaml
+#       sets `max_grad_norm: 1.0`:
+#         - under DeepSpeed, `Accelerator.clip_grad_norm_` only returns
+#           `engine.get_global_grad_norm()` and IGNORES `max_norm` (accelerate
+#           accelerator.py), so clipping is delegated to DeepSpeed;
+#         - `scripts/ds_configs/ds_zero1_config.json` has no `gradient_clipping` key
+#           and DeepSpeed's `GRADIENT_CLIPPING_DEFAULT = 0.`
+#           (deepspeed/runtime/constants.py), so nothing is injected either.
+#       The base script's `--clip-grad 1.0` therefore fires on every step (grad norms
+#       here run ~20-130), rescaling the gradients inside the Adam moment estimates.
+#       CLIP_GRAD=1.0 restores the framework default.
 #
 # ── NOT aligned by default — pass explicitly when you want it
 #
@@ -136,6 +148,11 @@ SAMPLER_EPOCH_MODE=${SAMPLER_EPOCH_MODE:-fixed}
 # class with fused=True, which is a different CUDA kernel. See the header note.
 OPTIMIZER=${OPTIMIZER:-AdamW}
 
+# Official FastWAM effectively runs without gradient clipping (see the header note);
+# the base script's default is 1.0, which fires on every step here. CLIP_GRAD=1.0
+# restores the framework default.
+CLIP_GRAD=${CLIP_GRAD:-0}
+
 echo "════════════════════════════════════════════════════════════"
 echo "  LoongForge FastWAM SFT (OFFICIAL-ALIGNED, 4-suite joint)"
 echo "  Config:    $CONFIG_FILE"
@@ -143,7 +160,7 @@ echo "  Data:      $DATASET_PATH"
 echo "  Output:    $OUTPUT_DIR"
 echo "  Iters:     $TRAIN_ITERS   GPUs: $GPUS_PER_NODE   Seed: $SEED"
 echo "  Sampler:   epoch-mode=$SAMPLER_EPOCH_MODE"
-echo "  Optimizer: $OPTIMIZER"
+echo "  Optimizer: $OPTIMIZER   clip-grad: $CLIP_GRAD"
 echo "════════════════════════════════════════════════════════════"
 
 # NOTE: "$@" is appended AFTER the optionals below. Flags are safe there (a repeated
@@ -154,5 +171,6 @@ bash "$LOONGFORGE_PATH/examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finet
     --config-file "$CONFIG_FILE" \
     --optimizer "$OPTIMIZER" \
     --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6 \
+    --clip-grad "$CLIP_GRAD" \
     --sampler-epoch-mode "$SAMPLER_EPOCH_MODE" \
     "$@"
