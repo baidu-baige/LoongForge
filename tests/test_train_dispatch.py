@@ -3,6 +3,7 @@
 
 import ast
 from pathlib import Path
+import re
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -13,6 +14,15 @@ import loongforge.train as train
 from loongforge.models import catalog
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _literal_assignment(path, name):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [getattr(node, "target", None)]
+        if any(isinstance(target, ast.Name) and target.id == name for target in targets):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"{name} not found in {path}")
 
 
 class TrainDispatchTest(unittest.TestCase):
@@ -71,6 +81,19 @@ class TrainDispatchTest(unittest.TestCase):
                     tree = ast.parse((ROOT / (module.replace(".", "/") + ".py")).read_text())
                     self.assertIn(cls, {node.name for node in tree.body if isinstance(node, ast.ClassDef)})
 
+    def test_torch_catalog_model_types_exist_in_both_embodied_registries(self):
+        model_modules = _literal_assignment(ROOT / "loongforge/models/embodied/registry.py", "MODEL_MODULES")
+        data_modules = _literal_assignment(ROOT / "loongforge/data/embodied/registry.py", "MODEL_MODULES")
+        for name, entry in catalog.MODEL_CONFIG_REGISTRY.items():
+            if entry["engine"] != "torch":
+                continue
+            config_text = Path(catalog.get_config_path(name)).read_text(encoding="utf-8")
+            match = re.search(r"^\s*model_type:\s*([^#\s]+)", config_text, re.MULTILINE)
+            self.assertIsNotNone(match, name)
+            model_type = match.group(1).strip("'\\\"")
+            self.assertIn(model_type, model_modules, name)
+            self.assertIn(model_type, data_modules, name)
+
     def test_config_types_are_loaded_only_for_selected_model(self):
         model_cls, data_cls = type("ModelConfig", (), {}), type("DataConfig", (), {})
         modules = [SimpleNamespace(Pi05ModelConfig=model_cls), SimpleNamespace(Pi05DataConfig=data_cls)]
@@ -92,6 +115,7 @@ assert get_model_entry('pi05')['engine'] == 'torch'
 assert get_model_entry('QWEN3-0.6B')['engine'] == 'mcore'
 assert get_config_path('qwen3-0.6b').endswith('/configs/models/qwen3/qwen3_0_6b.yaml')
 assert not any(name.split('.')[0] in {'torch', 'megatron', 'transformers', 'omegaconf'} for name in sys.modules)
+assert not any(name.startswith('loongforge.engines.') or name.startswith('loongforge.training.') for name in sys.modules)
 """], cwd=ROOT, check=True)
 
 

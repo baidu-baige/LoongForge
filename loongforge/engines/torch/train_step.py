@@ -62,7 +62,7 @@ class StepContext:
 
 @dataclass(frozen=True)
 class TorchOptimization:
-    # consulted by torch_runner
+    # consulted by engines/torch/runner.py
     prepare_args: Optional[Callable] = None
     configure_gc: Optional[Callable] = None
     wrap_model: Optional[Callable] = None

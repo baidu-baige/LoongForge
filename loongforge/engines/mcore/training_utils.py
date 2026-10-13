@@ -29,7 +29,7 @@ if tools_path not in sys.path:
     sys.path.insert(0, tools_path)
 
 
-from loongforge.training.mcore_runner import pretrain
+from loongforge.engines.mcore.runner import pretrain
 from loongforge.engines.mcore.train_step import dump_model_input_example_once
 
 __all__ = ["dump_model_input_example_once", "pretrain"]

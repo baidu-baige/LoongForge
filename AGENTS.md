@@ -50,14 +50,15 @@ bash tests/llm_vlm/main_start.sh      # 默认 CI 套件：tests/llm_vlm/configs
 
 ## 架构约束
 
-分层：`train → catalog/parser/training.registry → runner → method + data + models + engine`。
+分层：`train → catalog → engines.<engine>.entrypoint → engine runner → training method + data + models`。
 
-- **models** 不导入 training、runner、DataLoader，不读取 engine 全局训练状态。
-- **data** 第一层只有 4 个家族目录（`llm/ vlm/ embodied/ diffusion/`）、4 个 `<family>_dataloader.py` 和只含 docstring 的 `__init__.py`；DataLoader、sampler 只在入口组装；只可用 `engines.mcore.tokenizer`（`llm_dataloader.py` 另可用 `chunkpipe`），不读 engine 全局状态，不创建进程组。
+- **catalog** 只根据启动模型名选择 engine、配置路径和 typed config，不加载未选中的 engine、权重、训练数据或可选依赖。
+- **engine** 拥有 parser、分布式初始化、模型包装、optimizer、step、checkpoint、profiling 和 runner 生命周期；不按模型名复制训练循环，也不读取具体 method 的私有全局状态。现有 MCore full-hetero 旧路径仍有 method 状态回读，已归档到 `todo.md`，新代码不得继续增加同类依赖。
+- **training method** 表达 workload：model/data provider、forward、loss 和任务 hook。它可以适配所选 engine 的 batch/parallel 协议，但不创建进程组，不管理通用 checkpoint 和 runner 生命周期。
+- **models** 不导入 training、runner、DataLoader，不读取 engine 全局训练状态。MCore 的 language/vision/multimodal/diffusion 与 Torch 的 embodied 保持各自模型注册和配置方式；统一启动入口、配置选择和模型身份检查，不强行统一 registry。
+- **data** 第一层只有 4 个家族目录（`llm/ vlm/ embodied/ diffusion/`）、4 个 `<family>_dataloader.py` 和只含 docstring 的 `__init__.py`；普通 DataLoader、sampler 在 family factory 组装。MCore 上游 callback、VLM full-hetero encoder iterator、ERNIE tensor 路径和上游 Megatron iterator是显式例外，必须有独立的输入输出和生命周期说明。data 只可用 `engines.mcore.tokenizer`（`llm_dataloader.py` 另可用 `chunkpipe`），不读 engine 全局状态，不创建进程组。
 - **`chat_templates/`、`constants.py`** 不导入 data 和 engines；`constants.py` 只用标准库。
-- **engine** 不扫描 method，不按模型名复制训练循环。
-- catalog 和配置在导入阶段不加载未选中的 engine、权重或可选依赖。
-- `engines/mcore/` 与 `engines/torch/` 的同名文件是同一角色的两种实现。
+- `engines/mcore/` 与 `engines/torch/` 的同名文件表示同一职责在两种运行时中的独立实现，不表示两套运行时必须共享实现。
 
 ## 禁止事项
 

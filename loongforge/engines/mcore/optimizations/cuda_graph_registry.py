@@ -4,7 +4,7 @@
 # ---------------------------------------------------------------------------
 # Full-iteration CUDA graph wrapper registry.
 # Models register their wrapper class via register_full_iteration_graph_wrapper()
-# during trainer construction; mcore_runner.train() looks up the wrapper here.
+# during trainer construction; engines/mcore/runner.py looks up the wrapper here.
 # ---------------------------------------------------------------------------
 _FULL_ITER_GRAPH_REGISTRY: dict[str, type] = {}
 
@@ -22,7 +22,7 @@ def get_full_iteration_graph_wrapper(model_name: str):
 # ---------------------------------------------------------------------------
 # Per-microbatch CUDA graph wrapper registry.
 # Models register their wrapper class via register_per_microbatch_graph_wrapper()
-# during trainer construction; mcore_runner.train() looks up the wrapper here.
+# during trainer construction; engines/mcore/runner.py looks up the wrapper here.
 # ---------------------------------------------------------------------------
 _PER_MICROBATCH_GRAPH_REGISTRY: dict[str, type] = {}
 

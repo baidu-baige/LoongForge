@@ -101,8 +101,8 @@ def _ensure_imported(model_type: str) -> None:
     """Import the package that registers builders for ``model_type``."""
     if model_type in _IMPORTED or model_type not in MODEL_MODULES:
         return
-    _IMPORTED.add(model_type)
     importlib.import_module(f"loongforge.data.embodied.{MODEL_MODULES[model_type]}")
+    _IMPORTED.add(model_type)
 
 
 def get_transform_builder(model_type: str) -> TransformBuilder:

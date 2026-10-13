@@ -5,7 +5,7 @@
 
 from loongforge.engines.torch.parser import parse_train_args
 from loongforge.training.registry import resolve_torch_trainer
-from loongforge.training.torch_runner import TorchRunner
+from loongforge.engines.torch.runner import TorchRunner
 
 
 def main():

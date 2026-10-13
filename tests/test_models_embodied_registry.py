@@ -9,6 +9,7 @@ Runs without torch: it only parses files.
 import ast
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 EMBODIED = Path(__file__).resolve().parents[1] / "loongforge" / "models" / "embodied"
 
@@ -45,6 +46,28 @@ class ModelsEmbodiedRegistryTest(unittest.TestCase):
         for path in EMBODIED.rglob("*.py"):
             for model_type in _registered_types(path):
                 self.assertIn(model_type, table, f"{path.relative_to(EMBODIED)} registers {model_type!r}")
+
+    def test_data_registry_can_retry_after_import_failure(self):
+        import loongforge.data.embodied.registry as data_registry
+
+        model_type = "pi05"
+        previous_imported = set(data_registry._IMPORTED)
+        data_registry._IMPORTED.discard(model_type)
+        try:
+            with patch.object(
+                data_registry.importlib,
+                "import_module",
+                side_effect=[ModuleNotFoundError("optional dependency"), None],
+            ) as import_module:
+                with self.assertRaises(ModuleNotFoundError):
+                    data_registry._ensure_imported(model_type)
+                self.assertNotIn(model_type, data_registry._IMPORTED)
+                data_registry._ensure_imported(model_type)
+                self.assertEqual(import_module.call_count, 2)
+                self.assertIn(model_type, data_registry._IMPORTED)
+        finally:
+            data_registry._IMPORTED.clear()
+            data_registry._IMPORTED.update(previous_imported)
 
     def test_pi05_sets_dynamo_cache_limit(self):
         # Per-layer compile needs one cache entry per layer; the torch default is 8.
