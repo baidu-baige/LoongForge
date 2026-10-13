@@ -55,7 +55,7 @@
 **LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，旨在加速主流 **LLM、VLM、Diffusion 与具身模型**的训练。
 
 - **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[深度优化训练速度](#performance)，同时保证**训练 loss 与基线对齐**。
-- **易用性** —— 每个支持的模型均提供[开箱即用的配置](./configs/models/)与[启动示例](./examples)，并配套权重转换、数据预处理等[工具](./tools/)；支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
+- **易用性** —— 每个支持的模型均提供开箱即用的配置与启动示例，并配套权重转换、数据预处理等工具；支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
 - **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[若干开源模型的训练与发布](#powered-by-loongforge)；在大模型训练中，最大验证规模达 **5,000+ XPU**。
 
 ---
@@ -86,8 +86,8 @@
   </picture>
 </p>
 
-- **Megatron 后端** —— 面向 LLM、VLM 与 Diffusion 模型，基于 [patch 过的 Megatron-LM](https://github.com/baidu-baige/Loong-Megatron) 构建，并在 MoE 并行、组件级异构并行、长序列优化等方面做了扩展。
-- **torch-native 后端** —— 面向具身模型（VLA 与 WAM），基于原生 PyTorch，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
+- **Megatron 后端** —— 面向 [LLM、VLM 与 Diffusion 模型](#llm-vlm)，并在 MoE 并行、组件级异构并行、长序列优化等方面做了扩展。
+- **torch-native 后端** —— 面向[具身模型](#embodied)（VLA 与 WAM），基于原生 PyTorch，支持 **DDP / ZeRO-1 / FSDP / HSDP**，并针对典型模型做了深度性能优化，涵盖 I/O、通信策略、kernel 效率等。
 
 ## 🔥 最新动态
 
@@ -158,7 +158,7 @@
 <a id="llm-vlm"></a>
 ## 🚀 LLM · VLM · Diffusion
 
-基于 [Megatron 后端](#architecture)，支持 LLM、VLM 的大规模预训练与 SFT，以及 Diffusion 模型训练。各场景的关键优化特性如下：
+基于 [Megatron 后端](https://github.com/baidu-baige/Loong-Megatron)，支持 LLM、VLM 的大规模预训练与 SFT，以及 Diffusion 模型训练。各场景的关键优化特性如下：
 
 ### LLM
 
