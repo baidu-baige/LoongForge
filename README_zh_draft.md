@@ -19,7 +19,7 @@
   &nbsp;·&nbsp;
   <a href="#embodied"><b>具身模型</b></a>
   &nbsp;·&nbsp;
-  <a href="#llm-vlm"><b>LLM / VLM</b></a>
+  <a href="#llm-vlm"><b>LLM / VLM / Diffusion</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
@@ -122,7 +122,7 @@
 <a id="embodied"></a>
 ## 🤖 具身模型
 
-支持视觉-语言-动作（VLA）与世界-动作（WAM）模型的**数据处理、训练与评测**，训练吞吐相对开源基线提升 **1.79×–4.38×**。[[文档](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/overview.html)]
+支持视觉-语言-动作（VLA）与世界-动作（WAM）模型的**数据处理、训练与评测**，训练吞吐相对开源基线提升 **1.79×–4.38×**。[[文档](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html)]
 
 ### 数据
 
@@ -218,43 +218,20 @@ docker run --gpus all --ipc=host -it --rm \
 
 > 上述示例将 `./workspace` 挂载到容器内 `/workspace/data`，用于存放权重、数据集与训练输出，退出容器后仍会保留。
 
-[GPU 完整安装指南](https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html) · [昆仑芯 XPU 安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
+源码构建等更多安装方式详见：[GPU 完整安装指南](https://loongforge.readthedocs.io/zh-cn/latest/get_started/installation.html) · [昆仑芯 XPU 安装指南](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/install_p800.html)
 
-### 2. 按场景选择教程
+### 2. 按硬件与模态选择教程
 
-<table width="100%">
-<colgroup>
-<col width="25%">
-<col width="25%">
-<col width="25%">
-<col width="25%">
-</colgroup>
-<thead align="center" valign="bottom">
-<tr><th width="25%">LLM</th><th width="25%">VLM</th><th width="25%">VLA & WAM（具身）</th><th width="25%">Diffusion</th></tr>
-</thead>
-<tbody valign="top">
-<tr>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html">NVIDIA GPU 教程</a></td>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html">NVIDIA GPU 教程</a></td>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html">NVIDIA GPU 教程</a></td>
-<td valign="top"><a href="https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html">NVIDIA GPU 教程</a></td>
-</tr>
-</tbody>
-</table>
+- **NVIDIA GPU**：[LLM](https://loongforge.readthedocs.io/zh-cn/latest/llm_tutorial/quick_start_llm_pretrain.html) · [VLM](https://loongforge.readthedocs.io/zh-cn/latest/vlm_tutorial/quick_start_vlm_pretrain.html) · [VLA & WAM（具身）](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html) · [Diffusion](https://loongforge.readthedocs.io/zh-cn/latest/wan_tutorial/quick_start_wan_training.html)
+- **昆仑芯 XPU**：[昆仑芯 XPU 教程](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html)
 
-昆仑芯 XPU 见[统一教程](https://loongforge.readthedocs.io/zh-cn/latest/kunlun_tutorial/README.html)；启动脚本见 [`examples/`](./examples/)（GPU）/ [`examples_xpu/`](./examples_xpu/)（XPU），模型配置见 [`configs/models/`](./configs/models/)。
+### 3. 任务启动示例
 
-### 3. 上手示例：Pi0.5 微调（具身）
+当前仓库已内置了各模型的启动示例脚本：NVIDIA GPU 脚本位于 [`examples/`](./examples/)，昆仑芯 XPU 脚本位于 [`examples_xpu/`](./examples_xpu/)，具体可查看[支持的模型](#models)。
 
-以 **Pi0.5 在 LIBERO 上的 DDP 微调（单机 8 GPU）** 为例，以下命令均在上述容器内执行。
+以下以 **Pi0.5 在 LIBERO 上的 DDP 微调（单机 8 GPU）** 为例说明使用方法，以下命令均在上述容器内执行。
 
-**① 获取 `paligemma-3b-pt-224` 的访问权限。** 该仓库为受限仓库：在其 Hugging Face 页面同意许可，创建一个具有读权限的 Access Token，然后在容器内登录：
-
-```bash
-hf auth login
-```
-
-**② 下载权重、tokenizer 与数据集**（`hf` 为 Hugging Face CLI）：
+**① 准备训练所需的权重、tokenizer 与数据集**（`hf` 为 Hugging Face CLI）：
 
 ```bash
 hf download lerobot/pi05_base --local-dir /workspace/data/pi05_base
@@ -262,7 +239,7 @@ hf download google/paligemma-3b-pt-224 --local-dir /workspace/data/paligemma-3b-
 hf download lerobot/libero_10 --repo-type dataset --local-dir /workspace/data/libero_10
 ```
 
-**③ 启动训练**（默认跑 20 步，用于验证流程）：
+**② 启动训练**（通过环境变量指定路径，默认跑 20 步用于验证流程）：
 
 ```bash
 export CHECKPOINT_PATH=/workspace/data/pi05_base
@@ -278,7 +255,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <a id="models"></a>
 ## 🏛️ 支持的模型
 
-点击任意模型查看训练示例；完整使用说明见[用户手册](https://loongforge.readthedocs.io/zh-cn/latest/index.html)，全部变体见[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
+点击任意模型查看训练示例，对应的模型参数配置详见 [`configs/models/`](./configs/models/)；全部变体见[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
 <!--MODELS_PLACEHOLDER-->
 
 <table width="100%">
@@ -374,8 +351,6 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 - [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) —— 面向高级推理的科学多模态大模型
 - [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) —— 旨在降低多模态训练门槛的全开源框架
 - [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B
-
-<!-- TODO(自有案例)：补充"LoongForge 出品"小节，展示自有模型/权重。每条建议包含：名称、简介、链接（代码/权重/blog）、效果（指标或对比图）。 -->
 
 <a id="blogs"></a>
 ## 📝 社区相关博客
