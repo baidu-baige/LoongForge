@@ -21,7 +21,7 @@ class GigaBrainModelConfig:
     """GigaBrain-0 model-structure config (maps 1:1 to YAML ``model:`` section
     and to ``GigaBrain0Policy.__init__`` kwargs / reference ``config.json``)."""
 
-    model_type: str = "giga_brain"
+    model_type: str = "giga_brain0"
 
     max_state_dim: int = 32
     max_action_dim: int = 32
@@ -41,7 +41,29 @@ class GigaBrainModelConfig:
     num_embodiments: int = 1
 
     # Robot-type -> embodiment id, resolved at data-transform time (see
-    # ``data/datasets/giga_brain/giga_brain_0_transforms.py::robot_type_mapping``).
+    # ``data/datasets/giga_brain0/giga_brain_0_transforms.py::robot_type_mapping``).
     # Kept here (not just on the data side) so eval/inference code that only
     # has the model config can still resolve it if needed.
     robot_type: str = ""
+
+    # Unified switch for coarse NVTX profiling ranges (vision_tower /
+    # paligemma_expert / action_head / diffusion_loss / backward /
+    # optimizer_step). Default off = zero overhead / no behavior change; set
+    # true to emit the labels used for the per-stage operator breakdown. NOT a
+    # GigaBrain0Policy kwarg (excluded from _POLICY_CONFIG_FIELDS); read by the
+    # GigaBrainPolicy wrapper to toggle loongforge.embodied.profiling_nvtx.
+    enable_nvtx_profiling: bool = False
+
+    # Switch for the fused RMSNorm optimization (torch.nn.functional.rms_norm,
+    # single aten::_fused_rms_norm kernel) vs the original manual pow/mean/mul
+    # chain. Default on (verified +~7% throughput, loss-equivalent). NOT a
+    # GigaBrain0Policy kwarg (excluded from _POLICY_CONFIG_FIELDS); read by the
+    # GigaBrainPolicy wrapper to toggle paligemma2_with_expert._USE_FUSED_RMS_NORM.
+    enable_fused_rms_norm: bool = True
+
+    # Switch for the fused RoPE optimization (single torch.cat of the two rotated
+    # halves vs the original empty_like + indexed copy_ scatter in
+    # apply_rotary_pos_emb). Default on; numerically identical. NOT a
+    # GigaBrain0Policy kwarg; read by GigaBrainPolicy to toggle
+    # paligemma2_with_expert._USE_FUSED_ROPE.
+    enable_fused_rope: bool = True

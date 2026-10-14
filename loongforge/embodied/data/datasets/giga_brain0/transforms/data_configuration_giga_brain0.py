@@ -71,6 +71,6 @@ class GigaBrainDataConfig:
     image_cfg: GigaBrainImageConfig = field(default_factory=GigaBrainImageConfig)
     prompt_cfg: GigaBrainPromptConfig = field(default_factory=GigaBrainPromptConfig)
 
-    # LeRobotDataset path for --dataset-format giga_brain_datasets (see
-    # data/datasets/giga_brain_dataset.py). Overridable via --dataset-path.
+    # LeRobotDataset path for --dataset-format giga_brain0_datasets (see
+    # data/datasets/giga_brain0_dataset.py). Overridable via --dataset-path.
     data_path: str = ""

@@ -31,8 +31,11 @@ from safetensors.torch import load_file
 from loongforge.embodied.model.registry import register_model
 
 from .giga_brain_0_loss import GigaBrain0Loss
-from .model_configuration_giga_brain import GigaBrainModelConfig
+from .model_configuration_giga_brain0 import GigaBrainModelConfig
 from .modeling_giga_brain_0 import GigaBrain0Policy
+from loongforge.embodied.profiling_nvtx import nvtx_range, set_enabled as _set_nvtx
+from .paligemma2_with_expert import set_fused_rms_norm as _set_fused_rms_norm
+from .paligemma2_with_expert import set_fused_rope as _set_fused_rope
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,7 @@ _INDEX_FILE = "diffusion_pytorch_model.safetensors.index.json"
 _SINGLE_FILE = "diffusion_pytorch_model.safetensors"
 _CONFIG_FILE = "config.json"
 
-# Fields consumed by GigaBrain0Policy.__init__ (see model_configuration_giga_brain.py).
+# Fields consumed by GigaBrain0Policy.__init__ (see model_configuration_giga_brain0.py).
 # robot_type/model_type are LoongForge-side routing fields, not model kwargs.
 _POLICY_CONFIG_FIELDS = (
     "max_state_dim", "max_action_dim", "proj_width", "vlm_type",
@@ -77,7 +80,7 @@ def _load_sharded_state_dict(path: Path) -> Dict[str, torch.Tensor]:
     )
 
 
-@register_model("giga_brain")
+@register_model("giga_brain0")
 class GigaBrainPolicy(nn.Module):
     """LoongForge policy wrapper around GigaBrain0Policy.
 
@@ -90,6 +93,18 @@ class GigaBrainPolicy(nn.Module):
     def __init__(self, config: GigaBrainModelConfig):
         super().__init__()
         self.config = config
+        # Unified NVTX switch (configs/models/embodied/giga_brain0.yaml:
+        # model.enable_nvtx_profiling). Toggles the coarse profiling ranges in
+        # both this model and the trainer; env LOONGFORGE_NVTX=1 force-on wins.
+        _set_nvtx(getattr(config, "enable_nvtx_profiling", False))
+        # Fused-RMSNorm switch (model.enable_fused_rms_norm, default on). Toggles
+        # Gemma2RMSNorm between torch.nn.functional.rms_norm (fused) and the manual
+        # pow/mean/mul chain. Loss-equivalent (fp32 |delta| ~2e-7).
+        _set_fused_rms_norm(getattr(config, "enable_fused_rms_norm", True))
+        # Fused-RoPE switch (model.enable_fused_rope, default on). Toggles
+        # apply_rotary_pos_emb between a single cat and the empty_like+index-copy
+        # path. Numerically identical.
+        _set_fused_rope(getattr(config, "enable_fused_rope", True))
         policy_kwargs = {k: getattr(config, k) for k in _POLICY_CONFIG_FIELDS}
         self.model = GigaBrain0Policy(**policy_kwargs)
         self.loss_func = GigaBrain0Loss()
@@ -98,7 +113,7 @@ class GigaBrainPolicy(nn.Module):
         """Training forward pass; returns (total_loss, log_loss_dict).
 
         ``batch`` carries the keys produced by the GigaBrain collator
-        (``data/datasets/giga_brain/transforms/giga_brain_collator.py``),
+        (``data/datasets/giga_brain0/transforms/giga_brain0_collator.py``),
         matching the reference ``forward_step``'s ``batch_dict`` keys.
         """
         actions = batch["action"]
@@ -119,14 +134,15 @@ class GigaBrainPolicy(nn.Module):
             fast_action_indicator=batch["fast_action_indicator"],
         )
 
-        loss_dict = self.loss_func(
-            model_pred,
-            batch["lang_tokens"],
-            batch["lang_loss_masks"],
-            batch["action_loss_mask"],
-            traj,
-            traj_loss_mask,
-        )
+        with nvtx_range("gb0/diffusion_loss"):
+            loss_dict = self.loss_func(
+                model_pred,
+                batch["lang_tokens"],
+                batch["lang_loss_masks"],
+                batch["action_loss_mask"],
+                traj,
+                traj_loss_mask,
+            )
 
         total = sum(v for v in loss_dict.values() if torch.is_tensor(v))
         # Per-component losses are averaged over the batch for logging, same
@@ -211,9 +227,9 @@ class GigaBrainPolicy(nn.Module):
 
         missing, unexpected = self.load_state_dict(state_dict, strict=strict)
         if missing:
-            logger.warning("[giga_brain] load_pretrained missing keys (%d): %s", len(missing), missing[:5])
+            logger.warning("[giga_brain0] load_pretrained missing keys (%d): %s", len(missing), missing[:5])
         if unexpected:
-            logger.warning("[giga_brain] load_pretrained unexpected keys (%d): %s", len(unexpected), unexpected[:5])
+            logger.warning("[giga_brain0] load_pretrained unexpected keys (%d): %s", len(unexpected), unexpected[:5])
 
         # Re-tie lm_head <-> embed_tokens after loading (mirrors GigaBrain0Trainer.get_models'
         # assertion that the two share storage post-load).

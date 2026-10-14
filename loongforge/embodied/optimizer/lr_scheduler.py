@@ -345,16 +345,16 @@ def build_scheduler(optimizer, training_args):
     else:
         style = training_args.lr_decay_style
         # giga-brain-0 reference-exact warmup: keep the standard
-        # "cosine_with_min_lr" style, but for the giga_brain model build a
+        # "cosine_with_min_lr" style, but for the giga_brain0 model build a
         # LambdaLR that reproduces giga-train WarmupCosineScheduler step-for-step
         # (first step base/(warmup+1), then base*n/warmup with n 0-indexed)
         # instead of HF's off-by-one warmup. Other models keep default HF behavior.
-        if style == "cosine_with_min_lr" and training_args.model_name == "giga_brain":
+        if style == "cosine_with_min_lr" and training_args.model_name == "giga_brain0":
             warmup = int(training_args.lr_warmup_iters)
             decay = int(training_args.lr_decay_iters or training_args.train_iters)
             min_ratio = float(training_args.min_lr) / float(training_args.lr_base)
             logger.info(
-                f"cosine_with_min_lr (giga_brain reference-exact): warmup={warmup}, "
+                f"cosine_with_min_lr (giga_brain0 reference-exact): warmup={warmup}, "
                 f"decay={decay}, min_ratio={min_ratio:.4g}"
             )
             return LambdaLR(

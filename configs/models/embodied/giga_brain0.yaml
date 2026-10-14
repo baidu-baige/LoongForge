@@ -10,7 +10,7 @@
 # instead of re-implementing the rebuild-and-copy-weights dance.
 # ─────────────────────────────────────────────────────────────────────────────
 model:
-  model_type: giga_brain
+  model_type: giga_brain0
 
   max_state_dim: 32
   max_action_dim: 32
@@ -33,15 +33,32 @@ model:
   # (id=1) in giga_brain_0_transforms.py::robot_type_mapping.
   robot_type: a2d
 
+  # ── 统一开关：粗粒度 NVTX 性能剖析标签 ──────────────────────────────
+  # true 时，为生成"2.1 阶段级汇总"算子级拆解所用的 6 个代码区域打 NVTX 标签
+  # (vision_tower / paligemma_expert / action_head / diffusion_loss /
+  #  backward / optimizer_step)，供 nsys 采集。默认 false = 完全 no-op、零开销、
+  # 不改训练行为。环境变量 LOONGFORGE_NVTX=1 可强制开启（覆盖此项）。
+  enable_nvtx_profiling: false
+
+  # 融合 RMSNorm 优化开关：true = 用 torch.nn.functional.rms_norm 融合 kernel
+  # (单个 aten::_fused_rms_norm，实测吐吞 +~7%、loss 等价)；false = 回退原手写
+  # pow/mean/mul 链。默认 true。
+  enable_fused_rms_norm: true
+
+  # 融合 RoPE 优化开关：true = apply_rotary_pos_emb 用单个 torch.cat 输出两个
+  # 旋转半块（消掉 empty_like + 两次索引 copy_ 散写，归因命中 ~124ms 碎片 copy_）；
+  # false = 回退原 empty_like + res[...]=... 写法。数值完全等价。默认 true。
+  enable_fused_rope: true
+
 # ─────────────────────────────────────────────────────────────────────────────
 # data: — everything under this block maps 1:1 to GigaBrainDataConfig(**data).
 # Machine-specific paths (data_path / norm_stats_path / tokenizer paths) live in
-# the launch script run_giga_brain_ddp_finetune.sh, not here, so it stays the
+# the launch script run_giga_brain0_ddp_finetune.sh, not here, so it stays the
 # single source of truth. data_path is supplied via --dataset-path (DATA_PATH env
-# var), which takes precedence over data.data_path (see giga_brain_dataset.py).
+# var), which takes precedence over data.data_path (see giga_brain0_dataset.py).
 # ─────────────────────────────────────────────────────────────────────────────
 data:
-  # data_path supplied by run_giga_brain_ddp_finetune.sh via --dataset-path
+  # data_path supplied by run_giga_brain0_ddp_finetune.sh via --dataset-path
   # (training_args.dataset_path takes precedence over this field).
   data_path: agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327
 

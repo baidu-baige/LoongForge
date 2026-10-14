@@ -3,11 +3,11 @@
 
 """GigaBrain-0 model-specific data transforms and collator."""
 
-from loongforge.embodied.data.datasets.giga_brain.transforms.giga_brain_collator import (
+from loongforge.embodied.data.datasets.giga_brain0.transforms.giga_brain0_collator import (
     GigaBrainBatch,
     GigaBrainPreprocessor,
 )
-from loongforge.embodied.data.datasets.giga_brain.transforms.giga_brain_transform import (
+from loongforge.embodied.data.datasets.giga_brain0.transforms.giga_brain0_transform import (
     GigaBrainTransform,
 )
 

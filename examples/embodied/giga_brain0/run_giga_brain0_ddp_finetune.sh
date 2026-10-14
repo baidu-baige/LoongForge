@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_giga_brain_ddp_finetune.sh - GigaBrain-0 Training Launch Script (DDP)
+# run_giga_brain0_ddp_finetune.sh - GigaBrain-0 Training Launch Script (DDP)
 #
 # Reproduces the reference `giga-brain-0` run:
 #   bash scripts/run_train.sh agibot_a2d_v30
@@ -13,10 +13,10 @@
 # giga_train.launch_from_config.
 #
 # Usage:
-#   bash run_giga_brain_ddp_finetune.sh
-#   TRAIN_ITERS=50 bash run_giga_brain_ddp_finetune.sh             # override via env
-#   bash run_giga_brain_ddp_finetune.sh --lr-base 1e-4             # override a training param (flag form)
-#   bash run_giga_brain_ddp_finetune.sh data.data_path=/other/path # override YAML fields (dotlist form)
+#   bash run_giga_brain0_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_giga_brain0_ddp_finetune.sh             # override via env
+#   bash run_giga_brain0_ddp_finetune.sh --lr-base 1e-4             # override a training param (flag form)
+#   bash run_giga_brain0_ddp_finetune.sh data.data_path=/other/path # override YAML fields (dotlist form)
 #
 # NOTE ON DISTRIBUTED STRATEGY: the reference run uses FSDP2 (3.5B params
 # don't fit comfortably on one GPU alongside AdamW state). Set
@@ -51,10 +51,10 @@ DISTRIBUTED_ARGS=(
 # giga-brain-0/scripts/run_train.sh + configs/giga_brain_0_agibot_a2d_finetune_v30.py).
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/workspace/ckpt/open-gigaai/GigaBrain-0.1-3.5B-Base"}
 DATA_PATH=${DATA_PATH:-"/workspace/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibotworld/task_327"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/giga_brain_ddp"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/giga_brain0_ddp"}
 
 # Reference GB0_NORM_STATS_V30 / GB0_TOKENIZER / GB0_FAST_TOKENIZER — moved out of
-# configs/models/embodied/giga_brain.yaml (data.norm_cfg / data.prompt_cfg) so all
+# configs/models/embodied/giga_brain0.yaml (data.norm_cfg / data.prompt_cfg) so all
 # machine-specific paths live in this launch script. Fed to train.py as data.*
 # dotlist overrides (parser.py step 4: OmegaConf.from_dotlist on positional args).
 NORM_STATS_PATH=${NORM_STATS_PATH:-"/workspace/data/agibot-world/AgiBotWorldLerobot_v30_direct/agibot_a2d_norm_stats.json"}
@@ -62,7 +62,7 @@ TOKENIZER_MODEL_PATH=${TOKENIZER_MODEL_PATH:-"/workspace/ckpt/paligemma-3b-pt-22
 FAST_TOKENIZER_PATH=${FAST_TOKENIZER_PATH:-"/workspace/ckpt/physical-intelligence/fast"}
 
 # ── Model config ──────────────────────────────────────────────
-MODEL_NAME=${MODEL_NAME:-"giga_brain"}
+MODEL_NAME=${MODEL_NAME:-"giga_brain0"}
 MODEL_CONFIG_ARGS=(
     --model-name "$MODEL_NAME"
 )
@@ -72,7 +72,7 @@ MODEL_CONFIG_ARGS=(
 # giga_brain_0_agibot_a2d_finetune.py).
 NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
-    --dataset-format giga_brain_datasets
+    --dataset-format giga_brain0_datasets
     --dataset-path "$DATA_PATH"
     --num-workers "$NUM_WORKERS"
 )
@@ -120,7 +120,7 @@ TRAINING_ARGS=(
 # "SiglipEncoderLayer,Gemma2DecoderLayerWithExpert", train.mixed_precision='no'
 # (giga_train applies bf16 internally via explicit autocast in the vendored
 # PaliGemma2WithExpertModel/SiglipVisionTransformer forward — see
-# model/giga_brain/paligemma2_with_expert.py — so LoongForge's outer --dtype
+# model/giga_brain0/paligemma2_with_expert.py — so LoongForge's outer --dtype
 # only needs to cover the projection/loss layers that stay fp32 either way;
 # bfloat16 matches the reference's effective compute dtype).
 DISTRIBUTED_STRATEGY=${DISTRIBUTED_STRATEGY:-"fsdp"}
@@ -151,7 +151,7 @@ LOGGING_ARGS=(
     --wandb-mode disabled
 )
 
-# ── Data-config path overrides (formerly in giga_brain.yaml) ──
+# ── Data-config path overrides (formerly in giga_brain0.yaml) ──
 # Positional dotlist overrides consumed by parser.py (keys must be prefixed
 # data.* — see parser.py step 4). norm_stats_path is keyed by embodiment id "1"
 # (AgiBot G1, which robot_type=a2d maps to) to match data.norm_cfg.norm_stats_path

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GigaBrain-0 dataset loader for ``--dataset-format giga_brain_datasets``.
+"""GigaBrain-0 dataset loader for ``--dataset-format giga_brain0_datasets``.
 
 Wraps the pip-installed ``lerobot`` package's ``LeRobotDataset`` (v3.0-capable,
 lerobot==0.5.0 — see environment note below) directly, reproducing the
@@ -85,7 +85,7 @@ class GigaBrainLeRobotDataset(Dataset):
 
 
 def build_giga_brain_dataset(model_cfg, data_cfg, training_args) -> GigaBrainLeRobotDataset:
-    """Build a :class:`GigaBrainLeRobotDataset` for ``--dataset-format giga_brain_datasets``.
+    """Build a :class:`GigaBrainLeRobotDataset` for ``--dataset-format giga_brain0_datasets``.
 
     ``training_args.dataset_path`` (``--dataset-path``) takes precedence over
     ``data_cfg.data_path`` (YAML ``data:`` section), matching the convention
@@ -96,7 +96,7 @@ def build_giga_brain_dataset(model_cfg, data_cfg, training_args) -> GigaBrainLeR
     data_path = training_args.dataset_path or data_cfg.data_path
     if not data_path:
         raise ValueError(
-            "giga_brain_datasets: no dataset path given. Set --dataset-path or "
+            "giga_brain0_datasets: no dataset path given. Set --dataset-path or "
             "data.data_path in the YAML config."
         )
     action_chunk = model_cfg.n_action_steps

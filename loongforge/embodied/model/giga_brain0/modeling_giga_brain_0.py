@@ -23,6 +23,7 @@ from diffusers.models.modeling_utils import ModelMixin
 from torch import Tensor, nn
 
 from .paligemma2_with_expert import PaliGemma2WithExpertModel
+from loongforge.embodied.profiling_nvtx import nvtx_pop, nvtx_push, nvtx_range
 
 
 class GigaBrain0Policy(ModelMixin, ConfigMixin):
@@ -131,9 +132,10 @@ class GigaBrain0Policy(ModelMixin, ConfigMixin):
         """
         lang_length = lang_masks.shape[-1]
 
-        prefix_embs, prefix_pad_masks, prefix_att_masks, fast_action_indicator, traj_token_start_idx = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks, lang_att_masks, fast_action_indicator
-        )
+        with nvtx_range("gb0/vision_tower+embed_prefix"):
+            prefix_embs, prefix_pad_masks, prefix_att_masks, fast_action_indicator, traj_token_start_idx = self.embed_prefix(
+                images, img_masks, lang_tokens, lang_masks, lang_att_masks, fast_action_indicator
+            )
         suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(x_t, timestep, emb_ids=emb_ids)
 
         # Construct 2d attention mask and position ids
@@ -158,6 +160,7 @@ class GigaBrain0Policy(ModelMixin, ConfigMixin):
             suffix_position_ids = suffix_position_ids - fast_action_indicator.sum(dim=-1, keepdim=True)
 
         # VLM forward pass
+        nvtx_push("gb0/paligemma_expert(LLM)")
         if self.enable_knowledge_insulation:
             # Two-stage forward: prefix first, then suffix with cached KV
             prefix_att_2d_masks = full_att_2d[:, :prefix_len, :prefix_len]
@@ -202,9 +205,12 @@ class GigaBrain0Policy(ModelMixin, ConfigMixin):
                 adarms_cond=[None, adarms_cond],
             )
 
+        nvtx_pop()  # gb0/paligemma_expert(LLM)
+
         output = {}
 
         # Compute denoised output
+        nvtx_push("gb0/action_head")
         suffix_out = suffix_out[:, -self.n_action_steps :]
         suffix_out = suffix_out.to(dtype=self.action_out_proj.weight.dtype)
         v_t = self.action_out_proj(suffix_out, emb_ids=emb_ids)
@@ -225,6 +231,7 @@ class GigaBrain0Policy(ModelMixin, ConfigMixin):
             traj_pred = self.traj_out_proj(traj_out)
             output['traj_pred'] = traj_pred
 
+        nvtx_pop()  # gb0/action_head
         return output
 
     def embed_prefix(

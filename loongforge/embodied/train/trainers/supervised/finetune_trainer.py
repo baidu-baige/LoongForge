@@ -28,6 +28,7 @@ from loongforge.embodied.distributed.checkpoint import (
 )
 from loongforge.embodied.distributed.utils import unwrap_model
 from loongforge.embodied.train.utils.utils import resolve_dtype
+from loongforge.embodied.profiling_nvtx import nvtx_range
 from loongforge.embodied.model import build_model
 from loongforge.embodied.optimizer import (
     build_optimizer,
@@ -176,7 +177,8 @@ class FinetuneTrainer(BaseTrainer):
 
             # Gradient sync is gated by the caller's _grad_sync_ctx, so the
             # all-reduce happens once per optimizer step.
-            loss.backward()
+            with nvtx_range("gb0/backward"):
+                loss.backward()
 
         # Print-only losses (summed across micro-steps).
         for key, value in log_loss_dict.items():

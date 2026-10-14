@@ -34,6 +34,34 @@ def get_transformers_siglip_vision_config(vision_in_channels: int = 3):
     )
 
 
+# Runtime toggle for the fused RMSNorm path. Set by the GigaBrainPolicy wrapper
+# from model.enable_fused_rms_norm (configs/models/embodied/giga_brain0.yaml,
+# default on). True  -> torch.nn.functional.rms_norm (single aten::_fused_rms_norm
+# kernel); False -> original manual pow/mean/mul chain. Loss-equivalent
+# (fp32 max |delta| ~2e-7). One model per process, mirrors enable_nvtx_profiling.
+_USE_FUSED_RMS_NORM = True
+
+
+def set_fused_rms_norm(enabled: bool) -> None:
+    """Toggle the fused RMSNorm kernel path (see _USE_FUSED_RMS_NORM)."""
+    global _USE_FUSED_RMS_NORM
+    _USE_FUSED_RMS_NORM = bool(enabled)
+
+
+# Runtime toggle for the fused RoPE path. Set by the GigaBrainPolicy wrapper from
+# model.enable_fused_rope (configs/models/embodied/giga_brain0.yaml, default on).
+# True  -> single torch.cat of the two rotated halves (no empty_like + indexed
+#          copy_ scatter); False -> original empty_like + res[...]=... assignment.
+# Numerically identical (same fp32 math, only the write pattern differs).
+_USE_FUSED_ROPE = True
+
+
+def set_fused_rope(enabled: bool) -> None:
+    """Toggle the fused RoPE path (see _USE_FUSED_ROPE)."""
+    global _USE_FUSED_ROPE
+    _USE_FUSED_ROPE = bool(enabled)
+
+
 class Gemma2RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6, use_ada_rms_norm: bool = False):
         super().__init__()
@@ -46,6 +74,11 @@ class Gemma2RMSNorm(nn.Module):
             self.weight = nn.Parameter(torch.zeros(dim))
 
     def _norm(self, x):
+        if _USE_FUSED_RMS_NORM:
+            # Fused RMS normalization: single aten::_fused_rms_norm kernel replacing
+            # the separate pow/mean/add/rsqrt/mul chain. weight=None here so the
+            # Gemma2 (1.0 + weight) scale is still applied by forward().
+            return torch.nn.functional.rms_norm(x, (x.shape[-1],), weight=None, eps=self.eps)
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
 
     def forward(self, x, cond: torch.Tensor | None = None):
@@ -147,6 +180,12 @@ def apply_rotary_pos_emb(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) 
     x1, x2 = x.split(d_half, dim=-1)
 
     # Rotate: out1 = x1 * cos - x2 * sin, out2 = x2 * cos + x1 * sin
+    if _USE_FUSED_ROPE:
+        # Build the output with a single cat instead of empty_like + two indexed
+        # copy_ scatter writes (the fragmented aten::copy_ hotspot). Same fp32 math.
+        res = torch.cat((x1 * cos - x2 * sin, x2 * cos + x1 * sin), dim=-1)
+        return res.to(dtype)
+
     res = torch.empty_like(x)
     res[..., :d_half] = x1 * cos - x2 * sin
     res[..., d_half:] = x2 * cos + x1 * sin

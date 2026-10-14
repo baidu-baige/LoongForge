@@ -587,7 +587,7 @@ class _DataArgs:
         default="lerobot_datasets",
         metadata={
             "help": "Dataset backend to use "
-                    "(e.g. lerobot_datasets, hdf5_datasets, dummy_datasets, giga_brain_datasets)."
+                    "(e.g. lerobot_datasets, hdf5_datasets, dummy_datasets, giga_brain0_datasets)."
         },
     )
     dataset_path: Optional[str] = field(

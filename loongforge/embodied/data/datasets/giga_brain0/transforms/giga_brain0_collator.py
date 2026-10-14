@@ -59,7 +59,7 @@ class GigaBrainBatch(dict):
         return self
 
 
-@register_preprocessor("giga_brain")
+@register_preprocessor("giga_brain0")
 class GigaBrainPreprocessor(BasePreprocessor):
     """DataLoader collate_fn for GigaBrain-0.
 

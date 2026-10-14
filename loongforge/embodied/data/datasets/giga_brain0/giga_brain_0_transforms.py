@@ -13,7 +13,7 @@
 #      file) instead of the external ``giga_models`` package.
 #   2. Drops the ``@TRANSFORMS.register`` decorator from ``giga_train`` — this
 #      model plugs into LoongForge's own transform-builder registry instead
-#      (see ``transforms/giga_brain_transform.py::build_giga_brain_transforms``).
+#      (see ``transforms/giga_brain0_transform.py::build_giga_brain_transforms``).
 # Licensed under the Apache License, Version 2.0.
 
 import json
@@ -22,7 +22,7 @@ from typing import Any
 
 import torch
 
-from loongforge.embodied.data.datasets.giga_brain.giga_brain_0_utils import (
+from loongforge.embodied.data.datasets.giga_brain0.giga_brain_0_utils import (
     DeltaActions,
     ImageTransform,
     Normalize,

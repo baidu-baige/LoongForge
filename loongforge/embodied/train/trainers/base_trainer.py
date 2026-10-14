@@ -39,6 +39,7 @@ from loongforge.embodied.train.utils.utils import (
     Profiler,
 )
 from loongforge.embodied.optimizer import get_grad_norm
+from loongforge.embodied.profiling_nvtx import nvtx_range
 
 logger = logging.getLogger(__name__)
 
@@ -459,10 +460,11 @@ class BaseTrainer(ABC):
 
         # ── Optimizer step ──
         with st("optimizer"):
-            with st("optimizer-inner-step"):
-                self.optimizer.step()
-            with st("optimizer-scheduler-step"):
-                self.lr_scheduler.step()
+            with nvtx_range("gb0/optimizer_step"):
+                with st("optimizer-inner-step"):
+                    self.optimizer.step()
+                with st("optimizer-scheduler-step"):
+                    self.lr_scheduler.step()
 
         # ── EMA update (once per optimizer step, i.e. after grad sync) ──
         # Mirrors giga_train.Trainer.backward_step's EMA update, which fires

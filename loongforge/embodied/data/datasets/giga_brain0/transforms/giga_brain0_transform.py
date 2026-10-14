@@ -9,7 +9,7 @@ Unlike XVLA's several small composable transforms, GigaBrain-0's reference
 pipeline is a single ``GigaBrain0Transform.__call__`` that runs delta-action,
 normalization, prompt tokenization, image encoding and (optional) trajectory
 transforms in one fixed order — see
-``data/datasets/giga_brain/giga_brain_0_transforms.py``. Wrapping it as one
+``data/datasets/giga_brain0/giga_brain_0_transforms.py``. Wrapping it as one
 :class:`BaseTransform` keeps that order and its numerics byte-for-byte
 identical to the reference instead of re-decomposing it into separate steps.
 """
@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict
 
-from loongforge.embodied.data.datasets.giga_brain.giga_brain_0_transforms import (
+from loongforge.embodied.data.datasets.giga_brain0.giga_brain_0_transforms import (
     GigaBrain0Transform,
 )
 from loongforge.embodied.data.datasets.transforms.base import BaseTransform
@@ -62,7 +62,7 @@ class GigaBrainTransform(BaseTransform):
         return self._impl(data)
 
 
-@register_transform_builder("giga_brain")
+@register_transform_builder("giga_brain0")
 def build_giga_brain_transforms(ctx: TransformBuilderContext):
     """Build the single GigaBrain-0 per-sample transform from ``data_cfg``.
 
@@ -72,7 +72,7 @@ def build_giga_brain_transforms(ctx: TransformBuilderContext):
     dict-config fields 1:1.
     """
     model_cfg = ctx.model_cfg
-    if model_cfg.model_type != "giga_brain":
+    if model_cfg.model_type != "giga_brain0":
         return []
 
     data_cfg = ctx.data_cfg
