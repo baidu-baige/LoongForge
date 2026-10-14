@@ -4,6 +4,30 @@
 
 # ═══════════════════════════════════════════════════════════════
 # run_fastwam_sft_ddp_zero1_finetune.sh - FastWAM SFT Launch Script (DDP + ZeRO-1)
+#
+# Everything is driven by environment variables; the script forwards "$@" to
+# train.py. Config knobs that are not CLI flags must go through the dotlist
+# escape hatches below (EXTRA_MODEL_OVERRIDES / EXTRA_DATA_OVERRIDES) — argparse
+# rejects positional overrides placed after the optionals this script emits.
+#
+# ── Official-aligned recipe (matches standalone FastWAM) ──────────────────────
+# LR/clip/sampler/optimizer alignment:
+#   LR_DECAY_STYLE=linear_warmup_cosine_annealing   (official 5% warmup + cosine, eta_min=lr*0.01)
+#   SAMPLER_EPOCH_MODE=fixed                        (official ResumableEpochSampler never advances its epoch)
+#   ZERO_MASTER_PARAM_DTYPE=fp32                    (official DeepSpeed BF16_Optimizer keeps fp32 masters)
+#   CLIP_GRAD=0                                     (official effectively does not clip; see PR #274)
+# Config knobs (only needed when not already in your --config-file):
+#   EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none"
+#   EXTRA_DATA_OVERRIDES="data.norm_stats_path=/path/to/dataset_stats.json data.normalization_mode=min_max"
+# e.g. the recipe validated for LIBERO (4-suite joint, 20k, fp32 master, accel on):
+#   LR_DECAY_STYLE=linear_warmup_cosine_annealing CLIP_GRAD=0 SAMPLER_EPOCH_MODE=fixed \
+#   ZERO_MASTER_PARAM_DTYPE=fp32 SAVE_FORMAT=dcp ASYNC_SAVE=1 \
+#   EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none" \
+#   EXTRA_DATA_OVERRIDES="data.norm_stats_path=/path/to/dataset_stats.json" \
+#   bash run_fastwam_sft_ddp_zero1_finetune.sh --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
+# The "faithful" variant (acceleration switches off) additionally sets
+#   EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none model.disable_train_autocast=false model.drop_all_true_cross_attn_mask=false"
+#   EXTRA_DATA_OVERRIDES="data.image_normalize_mode=identity data.image_resize_strategy=resize_only data.normalization_mode=min_max"
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -67,6 +91,19 @@ GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-2000}
 SEED=${SEED:-3047}
 
+# ── Alignment knobs ───────────────────────────────────────────
+# Defaults reproduce the previous behaviour exactly; the official-aligned recipe
+# (see the header) sets them via the environment. The three opt-in flags below are
+# only appended to the command line when set, so an unset invocation produces the
+# byte-identical argv it always did.
+LR_DECAY_STYLE=${LR_DECAY_STYLE:-cosine_warmup_with_min_lr}
+OPTIMIZER=${OPTIMIZER:-TorchFusedAdamW}
+CLIP_GRAD=${CLIP_GRAD:-1.0}
+SAMPLER_EPOCH_MODE=${SAMPLER_EPOCH_MODE:-}
+ZERO_MASTER_PARAM_DTYPE=${ZERO_MASTER_PARAM_DTYPE:-}
+SAVE_FORMAT=${SAVE_FORMAT:-}
+ASYNC_SAVE=${ASYNC_SAVE:-0}
+
 TRAINING_ARGS=(
     --trainer-type FinetuneTrainer
     --train-iters "$TRAIN_ITERS"
@@ -76,19 +113,24 @@ TRAINING_ARGS=(
     --output-dir "$OUTPUT_DIR"
     # Learning rate
     --lr-base 1.0e-8
-    --lr-decay-style cosine_warmup_with_min_lr
+    --lr-decay-style "$LR_DECAY_STYLE"
     --lr-warmup-iters 0
     --min-lr 1.0e-9
     # Optimizer
-    --optimizer TorchFusedAdamW
+    --optimizer "$OPTIMIZER"
     --cudnn-benchmark
-    --clip-grad 1.0
+    --clip-grad "$CLIP_GRAD"
     --weight-decay 0.01
     --adam-beta1 0.9
     --adam-beta2 0.95
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
 )
+# Opt-in: appended only when set, so the default argv is unchanged.
+if [[ -n "$SAVE_FORMAT" ]]; then TRAINING_ARGS+=(--save-format "$SAVE_FORMAT"); fi
+if [[ -n "$SAMPLER_EPOCH_MODE" ]]; then TRAINING_ARGS+=(--sampler-epoch-mode "$SAMPLER_EPOCH_MODE"); fi
+if [[ -n "$ZERO_MASTER_PARAM_DTYPE" ]]; then TRAINING_ARGS+=(--zero-master-param-dtype "$ZERO_MASTER_PARAM_DTYPE"); fi
+if [[ "$ASYNC_SAVE" == "1" ]]; then TRAINING_ARGS+=(--async-save); fi
 
 if [[ -n "$PRETRAINED_CHECKPOINT" ]]; then
     TRAINING_ARGS+=(--pretrained-checkpoint "$PRETRAINED_CHECKPOINT")
@@ -121,6 +163,21 @@ if [[ -n "$ACTION_DIT_PRETRAINED_PATH" ]]; then
 fi
 if [[ -n "$TEXT_EMBEDDING_CACHE_DIR" ]]; then
     MODEL_DATA_OVERRIDES+=("data.text_embedding_cache_dir=$TEXT_EMBEDDING_CACHE_DIR")
+fi
+
+# Generic config escape hatches: space-separated dotlist overrides, e.g.
+#   EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none"
+#   EXTRA_DATA_OVERRIDES="data.norm_stats_path=/path/to/dataset_stats.json data.normalization_mode=min_max"
+# They must be injected here rather than passed on the command line: this script
+# appends "$@" after its optionals, and argparse rejects positional `overrides`
+# there ("unrecognized arguments").
+if [[ -n "${EXTRA_MODEL_OVERRIDES:-}" ]]; then
+    read -r -a _extra_model_overrides <<< "$EXTRA_MODEL_OVERRIDES"
+    MODEL_DATA_OVERRIDES+=("${_extra_model_overrides[@]}")
+fi
+if [[ -n "${EXTRA_DATA_OVERRIDES:-}" ]]; then
+    read -r -a _extra_data_overrides <<< "$EXTRA_DATA_OVERRIDES"
+    MODEL_DATA_OVERRIDES+=("${_extra_data_overrides[@]}")
 fi
 
 # ── Launch ────────────────────────────────────────────────────
