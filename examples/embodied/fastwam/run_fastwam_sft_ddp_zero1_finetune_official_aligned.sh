@@ -67,7 +67,7 @@
 #   --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
 #       Official: lr 1e-4, warmup = 5% of steps (=1000 @20k), CosineAnnealingLR
 #       eta_min = lr*0.01 = 1e-6. Seed 42 via $SEED.
-#   --clip-grad 0
+#   --clip-grad 0   (official parity; CLIP_GRAD=1.0 keeps the LoongForge default)
 #       Official FastWAM runs WITHOUT gradient clipping even though configs/train.yaml
 #       sets `max_grad_norm: 1.0`:
 #         - under DeepSpeed, `Accelerator.clip_grad_norm_` only returns
@@ -76,9 +76,16 @@
 #         - `scripts/ds_configs/ds_zero1_config.json` has no `gradient_clipping` key
 #           and DeepSpeed's `GRADIENT_CLIPPING_DEFAULT = 0.`
 #           (deepspeed/runtime/constants.py), so nothing is injected either.
-#       The base script's `--clip-grad 1.0` therefore fires on every step (grad norms
-#       here run ~20-130), rescaling the gradients inside the Adam moment estimates.
-#       CLIP_GRAD=1.0 restores the framework default.
+#       MEASURED on the real FastWAM trainer (8x A800, 4-suite LIBERO, 300 steps,
+#       temporary `[gradnorm]` probe on its `train/grad_norm`): its global grad norm
+#       is ~0.3-7.1 (mean 1.24, median 0.92, >1.0 on 44% of steps). LoongForge's is
+#       the same order -- step 1 is 7.0985 (official) vs 7.0938 (LF). So the base
+#       script's `--clip-grad 1.0` rescales most steps by roughly 1-7x.
+#       MEASURED effect of removing it (20k SFT, aligned protocol, 2000 episodes,
+#       everything else identical): libero_10 94.20% -> 90.80% (-3.40pt, McNemar
+#       p=0.020); TOTAL -0.65pt; the other three suites unchanged (<=0.4pt).
+#       The LoongForge default (1.0) is therefore kept; CLIP_GRAD=0 gives exact
+#       official parity at the cost measured above.
 #
 # ── NOT aligned by default — pass explicitly when you want it
 #
@@ -148,10 +155,11 @@ SAMPLER_EPOCH_MODE=${SAMPLER_EPOCH_MODE:-fixed}
 # class with fused=True, which is a different CUDA kernel. See the header note.
 OPTIMIZER=${OPTIMIZER:-AdamW}
 
-# Official FastWAM effectively runs without gradient clipping (see the header note);
-# the base script's default is 1.0, which fires on every step here. CLIP_GRAD=1.0
-# restores the framework default.
-CLIP_GRAD=${CLIP_GRAD:-0}
+# Official FastWAM effectively runs without gradient clipping (see the header note).
+# Its grad norm is ~0.3-7.1, so `--clip-grad 0` is the exact official parity; but we
+# measured that it costs -3.4pt on libero_10, so the LoongForge default (1.0) is kept.
+# Set CLIP_GRAD=0 for exact official parity.
+CLIP_GRAD=${CLIP_GRAD:-1.0}
 
 echo "════════════════════════════════════════════════════════════"
 echo "  LoongForge FastWAM SFT (OFFICIAL-ALIGNED, 4-suite joint)"
