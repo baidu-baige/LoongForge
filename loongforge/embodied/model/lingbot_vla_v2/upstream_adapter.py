@@ -473,7 +473,7 @@ def _apply_lingbot_fm_seed_shim() -> None:
     (``fm_seed.seed_fm_step`` -> reference ``utils.set_fm_step_seed``) and the
     reference ``FlowMatchingV2.forward`` draws both from a fresh ``torch.Generator``
     seeded with it (``_fm_generator``), so the draw is immune to how much *global*
-    CUDA RNG the surrounding setup consumed (teachers, parameter manager, compile).
+    CUDA RNG the surrounding setup consumed (teachers, custom_dp optimizer, compile).
 
     Upstream has **no** ``_fm_generator`` / ``get_fm_step_seed`` and draws
     ``torch.randn(...)`` / ``sample_time(...)`` straight off the **global** CUDA RNG

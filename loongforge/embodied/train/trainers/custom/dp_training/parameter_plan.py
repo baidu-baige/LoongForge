@@ -133,7 +133,7 @@ class ParameterPlan:
         if self.world_size < 1 or not 0 <= self.rank < self.world_size:
             raise ValueError("rank must be within a positive world_size")
         # The precision plan has a single source: the resolved collective config
-        # the manager passes down as these concrete arguments. The model policy
+        # the optimizer passes down as these concrete arguments. The model policy
         # only describes what each parameter *is* (compute dtype, comm-critical,
         # optimizer kind), so it is wrapped once here with that plan to produce the
         # capability-resolving adapter -- no reconciliation between two configs.

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Reusable trainer integration for the custom_dp manager.
+"""Reusable trainer integration for ``CustomDpOptimizer``.
 
 A model can run on custom_dp with no code at all (``--trainer-type CustomDpTrainer``): the
 two hooks below have neutral defaults, and the collective knobs come from the
@@ -11,17 +11,16 @@ subclasses ``CustomDpTrainer`` and overrides:
     _build_parameter_policy()   the model's precision/ownership policy
     _prepare_module()       the nn.Module whose parameters are managed
 
-The generic manager lifecycle -- gradient-reduction arming, parameter
-publication, gradient clipping, nan scrubbing, Muon wiring and the dcp-only
-training-state guard -- lives here so a new model reuses the wiring instead of
-copying it. The remaining hooks (``_after_manager_built``,
+The strategy itself -- gradient reduction, parameter publication, clipping,
+nan scrubbing and the Muon publish wiring -- lives in ``CustomDpOptimizer``.
+This class builds it and routes the finetune loop's hook points to it, plus the
+dcp-only training-state guard. The remaining hooks (``_after_manager_built``,
 ``_muon_lr_scale_for``, ``_register_optimizer_hooks``, ``_after_grad_norm``) default to no-ops; a model
 overrides only what it needs.
 
-This class builds the manager (and the optional look-ahead pipeline) and drives
-them from the finetune loop's hook points. ``self._parameter_manager`` is the single
-seam: model code reaches the resolved plan, the compute replicas and the
-partial-publish hooks through it and nothing else.
+The optimizer is built in ``_wrap_model_for_training``, not ``_build_optimizer``:
+its parameter plan has to capture the module tree before a model hook (e.g.
+regional compile) touches it.
 """
 
 from __future__ import annotations
@@ -37,13 +36,13 @@ from loongforge.embodied.train.trainers.supervised.finetune_trainer import (
     FinetuneTrainer,
 )
 
-from .parameter_manager import CollectiveConfig, build_parameter_manager
+from .custom_dp_optimizer import CollectiveConfig, CustomDpOptimizer
 
 logger = logging.getLogger(__name__)
 
 
 class CustomDpTrainer(FinetuneTrainer):
-    """Own the custom_dp manager lifecycle inside the finetune loop."""
+    """Drive ``CustomDpOptimizer`` from the finetune loop."""
 
     # True only while ``_train_step`` runs. Evaluation reads the same loader names
     # as training, so a subclass that serves look-ahead batches from
@@ -63,7 +62,7 @@ class CustomDpTrainer(FinetuneTrainer):
         return DefaultParameterPolicy()
 
     def _prepare_module(self):
-        """Return the module the custom_dp manager manages, already on the training device.
+        """Return the module custom_dp manages, already on the training device.
 
         custom_dp replaces ``wrap_model``, so this default repeats the steps of it that
         are not DDP/FSDP specific: activation checkpointing, then the cast to
@@ -91,9 +90,9 @@ class CustomDpTrainer(FinetuneTrainer):
         )
 
     def _after_manager_built(self) -> None:
-        """Run model-specific setup once the manager exists (default: none)."""
+        """Run model-specific setup once the optimizer exists (default: none)."""
 
-    def _create_inner_optimizer(self):
+    def _create_inner_optimizer(self, dp_optimizer):
         """Build the optimizer over the fp32 masters (default: standard build).
 
         The masters are the optimizer's parameters, not the compute replicas:
@@ -102,10 +101,10 @@ class CustomDpTrainer(FinetuneTrainer):
         silently leave the run untrained.
         """
         if self.training_args.optimizer.lower() == "muon":
-            return self._build_muon_optimizer()
-        return build_optimizer(self._optimizer_parameter_model, self.training_args)
+            return self._build_muon_optimizer(dp_optimizer)
+        return build_optimizer(dp_optimizer.optimizer_view(), self.training_args)
 
-    def _build_muon_optimizer(self):
+    def _build_muon_optimizer(self, dp_optimizer):
         """Build Muon over the masters plus its AdamW fallback groups.
 
         Muon belongs to this strategy rather than to the optimizer registry: it
@@ -116,7 +115,7 @@ class CustomDpTrainer(FinetuneTrainer):
 
         args = self.training_args
         muon_parameters, adamw_parameters = (
-            self._parameter_manager.parameter_plan.split_masters_by_optimizer()
+            dp_optimizer.parameter_plan.split_masters_by_optimizer()
         )
         optimizer = build_muon_optimizer(
             muon_parameters,
@@ -143,40 +142,20 @@ class CustomDpTrainer(FinetuneTrainer):
     def _register_optimizer_hooks(self, optimizer) -> None:
         """Register model-specific optimizer hooks (default: none)."""
 
-    def _after_optimizer_built(self) -> None:
-        """Publish the Muon-managed masters through the manager's callback.
-
-        The manager needs the set of parameters Muon updates *inside* the step so
-        it publishes exactly those, and Muon reports each master update through
-        ``param_update_callback``. The name set is rank-independent on purpose:
-        the publish plan is compared across ranks.
-        """
-        from loongforge.embodied.optimizer.muon import DistributedMuon
-
-        inner = getattr(self.optimizer, "optimizers", None)
-        if not inner:
-            return
-        muon = next((opt for opt in inner if isinstance(opt, DistributedMuon)), None)
-        if muon is None:
-            return
-        self._parameter_manager.set_in_step_updated_names(
-            self._parameter_manager.parameter_plan.muon_parameter_names()
-        )
-        muon.param_update_callback = self._parameter_manager.on_master_updated
-
     def _after_grad_norm(self) -> None:
         """Hook fired right after the pre-clip global norm was computed."""
 
-    # -- manager construction -------------------------------------------------
+    # -- optimizer construction -----------------------------------------------
 
     def _shut_down_lookahead(self) -> None:
         """Hook: release whatever a subclass started ahead of the step."""
 
-    def _build_parameter_manager(self, module):
-        """Build the custom_dp manager over ``module``."""
-        return build_parameter_manager(
+    def _build_custom_dp_optimizer(self, module):
+        """Build ``CustomDpOptimizer`` over ``module``; the inner one comes from the hooks."""
+        return CustomDpOptimizer(
             module,
             self._parameter_policy,
+            self._create_inner_optimizer,
             rank=self.ctx.rank,
             world_size=self.ctx.world_size,
             collective_config=CollectiveConfig.from_sources(
@@ -189,10 +168,10 @@ class CustomDpTrainer(FinetuneTrainer):
         logger.info(
             "custom_dp collective precision: grad_reduce=%s "
             "parameter_sync=%s (router/gate and 1-D tensors stay fp32)",
-            self._parameter_manager.grad_reduce_mode,
-            self._parameter_manager.param_sync_precision,
+            self._custom_dp.grad_reduce_mode,
+            self._custom_dp.param_sync_precision,
         )
-        for row in self._parameter_manager.precision_summary():
+        for row in self._custom_dp.precision_summary():
             logger.info(
                 "  %-16s compute=%-4s grad_reduce=%-14s param_sync=%-14s "
                 "params=%d numel=%d (%.1f%%)",
@@ -204,7 +183,7 @@ class CustomDpTrainer(FinetuneTrainer):
                 row["numel"],
                 100.0 * row["numel_ratio"],
             )
-        plan = self._parameter_manager.collective_summary()
+        plan = self._custom_dp.collective_summary()
         logger.info(
             "custom_dp overlap: grad=%s param=%s bucket=%dMiB",
             plan["grad_overlap"],
@@ -218,61 +197,36 @@ class CustomDpTrainer(FinetuneTrainer):
         if getattr(self, "_parameter_policy", None) is None:
             self._parameter_policy = self._build_parameter_policy()
         module = self._prepare_module()
-        self._parameter_manager = self._build_parameter_manager(module)
-        self._optimizer_parameter_model = self._parameter_manager.optimizer_view()
+        self._custom_dp = self._build_custom_dp_optimizer(module)
         if self.ctx.is_main:
             self._log_precision_summary()
         self._after_manager_built()
 
-    def _should_sync_grads(self, micro: int, grad_accum: int) -> bool:
-        sync = super()._should_sync_grads(micro, grad_accum)
-        if micro == grad_accum - 1:
-            self._parameter_manager.begin_gradient_sync()
-        return sync
-
     @contextmanager
     def _grad_sync_ctx(self, sync_grads: bool):
-        """Let accumulation micro-steps run without any wrapper-level gating.
+        """Arm reduce-to-owner on the syncing micro-step; let the others accumulate.
 
-        The base implementation gates through the model wrapper: ``no_sync()`` for
-        DDP, otherwise ``set_requires_gradient_sync`` for FSDP2. The
-        replicated-compute model is neither, so it has no such method. No gating is
-        needed here: backward only accumulates into ``.grad`` and the reduction is
-        armed exactly once per step by ``_should_sync_grads`` on the last
-        micro-step.
+        The base implementation gates through the model wrapper (``no_sync()`` for
+        DDP, ``set_requires_gradient_sync`` for FSDP2); the replicated-compute
+        model has neither. Accumulation micro-steps need no gating at all, since
+        the reduce hooks only launch while armed.
         """
-        del sync_grads
+        if sync_grads:
+            self.optimizer.prepare_for_backward()
         yield
 
-    def _run_forward_backward_block(self):
-        result = super()._run_forward_backward_block()
-        self._parameter_manager.finish_gradient_sync()
-        return result
-
     def _train_step(self):
-        self._parameter_manager.begin_parameter_sync()
         self._in_train_step = True
         try:
-            result = super()._train_step()
+            return super()._train_step()
         finally:
             self._in_train_step = False
-        # Not in a finally: a failed step leaves the publish plan for
-        # ``_shut_down`` to unwind rather than draining half-issued work.
-        self._parameter_manager.finish_parameter_sync()
-        return result
 
     def _build_optimizer(self):
-        optimizer = self._create_inner_optimizer()
-        self.optimizer = optimizer
-        # The shared checkpoint backend owns the file layout and the aux files; the
-        # IO the manager installs owns the rank-local FP32 masters and the
-        # Muon/AdamW state that follows them.
-        self._parameter_manager.attach_optimizer(optimizer)
-        self._after_optimizer_built()
-        return optimizer
+        return self._custom_dp
 
     def _clip_gradients(self, max_norm: float) -> float:
-        norm = self._parameter_manager.clip_grad_norm_(max_norm)
+        norm = self.optimizer.clip_grad_norm_(max_norm)
         self._after_grad_norm()
         return norm
 
@@ -283,12 +237,12 @@ class CustomDpTrainer(FinetuneTrainer):
         reduce-to-owner step already consumed, so the base implementation would
         report a norm of zero whenever ``--clip-grad`` is off.
         """
-        norm = self._parameter_manager.clip_grad_norm_(0.0)
+        norm = self.optimizer.clip_grad_norm_(0.0)
         self._after_grad_norm()
         return norm
 
     def _clean_nan_gradients(self):
-        self._parameter_manager.scrub_nan_gradients()
+        self.optimizer.scrub_nan_gradients()
 
     def _save_checkpoint(self):
         # The fp32 masters and their optimizer state are rank-local, and only the
@@ -315,7 +269,7 @@ class CustomDpTrainer(FinetuneTrainer):
             self._shut_down()
 
     def _shut_down(self) -> None:
-        """Shut the look-ahead and manager down, failures and all.
+        """Shut the look-ahead and the optimizer's collectives down, failures and all.
 
         A partially built or already failed trainer still has to release its
         worker thread and abandon half-issued collectives, so no single failure
@@ -324,8 +278,7 @@ class CustomDpTrainer(FinetuneTrainer):
         errors = []
         for shutdown in (
             self._shut_down_lookahead,
-            lambda: getattr(self, "_parameter_manager", None)
-            and self._parameter_manager.clear_pending_work(),
+            lambda: getattr(self, "_custom_dp", None) and self._custom_dp.close(),
         ):
             try:
                 shutdown()

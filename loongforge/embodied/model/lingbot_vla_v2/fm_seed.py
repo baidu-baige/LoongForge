@@ -36,7 +36,7 @@ def seed_fm_step(seed, completed_steps, local_rank):
     """Seed the flow-matching noise/time draw per step and per rank.
 
     Without this the draw comes off the global CUDA RNG, which makes it a
-    function of how much RNG the setup consumed (teachers, parameter manager,
+    function of how much RNG the setup consumed (teachers, custom_dp optimizer,
     torch.compile) -- so the same batch and the same weights give a different
     fm loss in a different trainer, and every rank draws the *same* noise and
     the same timesteps because all ranks share one seed (base_trainer seeds

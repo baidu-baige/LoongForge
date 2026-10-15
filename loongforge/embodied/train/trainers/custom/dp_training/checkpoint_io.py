@@ -24,18 +24,18 @@ FORMAT_VERSION = 1
 class RankLocalCheckpointIO:
     """Save and restore the owner-distributed half of the custom_dp state."""
 
-    def __init__(self, manager, optimizer):
-        """Bind to the parameter manager and the optimizer over its masters."""
-        self._manager = manager
+    def __init__(self, dp_optimizer, optimizer):
+        """Bind to the ``CustomDpOptimizer`` and the inner optimizer over its masters."""
+        self._dp = dp_optimizer
         self._optimizer = optimizer
 
     # -- save -----------------------------------------------------------------
 
     def save_local_state(self, state_dir, metadata_path, ctx) -> None:
         """Write this rank's masters and optimizer state, then the shared metadata."""
-        if (ctx.rank, ctx.world_size) != (self._manager.rank, self._manager.world_size):
+        if (ctx.rank, ctx.world_size) != (self._dp.rank, self._dp.world_size):
             raise RuntimeError("checkpoint context does not match parameter plan")
-        manager_state = self._manager.state_dict()
+        manager_state = self._dp.master_state_dict()
         local_state = {
             "format_version": FORMAT_VERSION,
             "backend": BACKEND,
@@ -58,7 +58,7 @@ class RankLocalCheckpointIO:
                         "format_version": FORMAT_VERSION,
                         "backend": BACKEND,
                         "world_size": ctx.world_size,
-                        "manifest": self._manager.parameter_manifest(),
+                        "manifest": self._dp.parameter_manifest(),
                     },
                     file,
                     indent=2,
@@ -70,11 +70,11 @@ class RankLocalCheckpointIO:
     def load_local_state(self, state_dir, metadata, ctx) -> None:
         """Restore this rank's share, re-partitioning when the layout changed."""
         saved_world_size = int(metadata["world_size"])
-        if (ctx.rank, ctx.world_size) != (self._manager.rank, self._manager.world_size):
+        if (ctx.rank, ctx.world_size) != (self._dp.rank, self._dp.world_size):
             raise RuntimeError("checkpoint context does not match parameter plan")
         if saved_world_size < 1:
             raise RuntimeError("invalid checkpoint world_size")
-        self._manager.plan.validate_manifest(
+        self._dp.plan.validate_manifest(
             metadata.get("manifest"),
             allow_reshard=saved_world_size != ctx.world_size,
             saved_world_size=saved_world_size,
@@ -88,7 +88,7 @@ class RankLocalCheckpointIO:
         # The checkpoint also carries compute parameters, but the fp32 master is
         # the source of truth here. Publishing it after the load keeps a stale or
         # rounded model shard from surviving the resume.
-        self._manager.publish_serially()
+        self._dp.publish_serially()
 
     def _load_same_layout(self, state_dir, ctx) -> None:
         """Load this rank's file as-is; ownership is asserted to be unchanged."""
@@ -96,7 +96,7 @@ class RankLocalCheckpointIO:
         self._validate_rank_state(local_state, ctx.rank)
         if local_state["optimizer_param_names"] != self._optimizer_param_names():
             raise RuntimeError("checkpoint optimizer parameter order mismatch")
-        self._manager.load_state_dict(local_state["manager"])
+        self._dp.load_master_state_dict(local_state["manager"])
         self._optimizer.load_state_dict(local_state["optimizer"])
 
     def _load_resharded(self, state_dir, ctx, saved_world_size) -> None:
@@ -110,7 +110,7 @@ class RankLocalCheckpointIO:
         RNG and dataloader position are per-rank and cannot be re-partitioned;
         the shared resume path skips them, which restarts the data stream.
         """
-        wanted = set(self._manager.master)
+        wanted = set(self._dp.master)
         template = self._optimizer.state_dict()
         inner_templates = self._inner_states(template)
         inner_count = len(inner_templates)
@@ -137,7 +137,7 @@ class RankLocalCheckpointIO:
                         state_by_name[index][name] = saved_optimizer["state"][position]
             del saved
 
-        self._manager.load_master_tensors(masters)
+        self._dp.load_master_tensors(masters)
 
         for index, names in enumerate(self._optimizer_param_names()):
             state = {}
@@ -158,7 +158,7 @@ class RankLocalCheckpointIO:
         manifest = state.get("manifest")
         if manifest != self._saved_manifest:
             raise RuntimeError("rank-local/shared parameter manifest mismatch")
-        self._manager.plan.validate_manifest(
+        self._dp.plan.validate_manifest(
             manifest, allow_reshard=True, saved_world_size=self._saved_world_size,
         )
         rows = {row["name"]: row for row in manifest["parameters"]}
@@ -208,7 +208,7 @@ class RankLocalCheckpointIO:
         Recording the parameter name per index makes the state re-partitionable.
         """
         name_by_id = {
-            id(value): key for key, value in self._manager.master.items()
+            id(value): key for key, value in self._dp.master.items()
         }
         inner = getattr(self._optimizer, "optimizers", [self._optimizer])
         names_per_optimizer = []

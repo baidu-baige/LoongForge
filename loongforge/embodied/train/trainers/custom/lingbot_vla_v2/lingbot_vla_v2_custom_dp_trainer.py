@@ -3,7 +3,7 @@
 
 """custom_dp trainer for LingBot VLA v2.
 
-Everything generic lives one level up: the manager lifecycle in
+Everything generic lives one level up: the optimizer wiring in
 ``CustomDpTrainer``. This subclass adds only what is specific to
 LingBot -- the model-side batch, optimizer and compile helpers, and the teacher
 look-ahead (the teachers run a step early, and the queue of started batches and
@@ -66,7 +66,7 @@ class LingbotVlaV2CustomDpTrainer(CustomDpTrainer):
 
     def _after_manager_built(self):
         # The executor is built before the compile so the order matches the
-        # previous recipe wiring; regional compile has to run after the manager
+        # previous recipe wiring; regional compile has to run after the optimizer
         # captured the module tree (see ``apply_regional_compile``).
         teacher_executor = self._build_teacher_executor()
         apply_regional_compile(self.model.policy, self.model_cfg.regional_compile)
@@ -131,7 +131,7 @@ class LingbotVlaV2CustomDpTrainer(CustomDpTrainer):
         self._batch_enricher.close()
         # The final checkpoint is written inside ``super()._finalize()``, so the
         # look-ahead bookkeeping has to stay intact until it has been saved; the
-        # mixin shuts the look-ahead and the manager down after that.
+        # mixin shuts the look-ahead and the optimizer down after that.
         return super()._finalize()
 
     def _fetch_batch(self, dl_name: str):

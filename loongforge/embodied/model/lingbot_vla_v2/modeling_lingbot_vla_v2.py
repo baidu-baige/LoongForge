@@ -176,7 +176,7 @@ def apply_regional_compile(policy: nn.Module, targets) -> None:
 
     ``nn.Module.compile`` is used rather than ``torch.compile(module)`` because
     it installs the compiled call on the existing module instead of returning a
-    wrapper. By the time this runs, the custom_dp parameter manager has
+    wrapper. By the time this runs, the custom_dp optimizer has
     already captured this module tree, so replacing submodules would leave it
     holding the uncompiled ones.
 

@@ -1,10 +1,10 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collective-precision and overlap knobs for ``ParameterManager``.
+"""Collective-precision and overlap knobs for ``CustomDpOptimizer``.
 
 Inherit this frozen dataclass in a model's ``ModelConfig`` to get the fields and
-their defaults; the manager reads every field directly:
+their defaults; the optimizer reads every field directly:
 
     @dataclass(frozen=True)
     class MyModelConfig(CustomDpConfig):
@@ -17,7 +17,7 @@ parameters in fp32 regardless of these settings.
 from dataclasses import dataclass, field
 from typing import List
 
-# Single source of the defaults; the manager, parameter plan and synchronizer import
+# Single source of the defaults; the optimizer, parameter plan and synchronizer import
 # these names instead of repeating the literals.
 DEFAULT_GRAD_REDUCE_DTYPE = "bf16"
 DEFAULT_PARAM_SYNC_PRECISION = "fp32"
@@ -28,7 +28,7 @@ FP8_BLOCK = 128
 
 @dataclass(frozen=True)
 class CustomDpConfig:
-    """Collective-precision and overlap knobs read by the manager."""
+    """Collective-precision and overlap knobs read by the optimizer."""
 
     # ── Collective precision ──
     # fp32 | bf16 | mixed | compute. bf16 is faster for a small loss deviation, but
