@@ -210,99 +210,211 @@ header[data-site-header]:empty {
   background: linear-gradient(120deg, #3730A3 0%, #5B21B6 50%, #9D174D 100%);
 }
 
-/* Latest-post strip. Sits between the gradient stat band and the white "Why"
-   section, so it takes a light indigo tint to read as a continuation of the
-   band rather than as a new section. */
-.lf-newsbar {
-  background: #EEF2FF;
-  border-bottom: 1px solid #E0E7FF;
+/* Latest News timeline (rendered by home-news.js from assets/data/news.json).
+   A vertical rail runs down the left; month headers sit on it as filled dots
+   and each entry hangs off it as an emoji chip. The rail is a single
+   pseudo-element on the list so it stays continuous across hidden rows. */
+/* The timeline sits inside a full-width card; give it a little more room than
+   the default card padding on wide screens. */
+@media (min-width: 768px) {
+  .lf-tl-card {
+    padding: 2rem 2.5rem;
+  }
 }
 
-.lf-newsbar-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-height: 3.75rem;
-  font-size: .9375rem;
+.lf-tl {
+  --tl-x: 1.25rem;
+  /* rail centre, measured from the list's left edge */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
 }
 
-.lf-newsbar-tag {
-  flex: none;
+.lf-tl::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--tl-x) - 1px);
+  top: .75rem;
+  bottom: .75rem;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #6366F1 0%, #C7D2FE 70%, rgba(199, 210, 254, 0) 100%);
+}
+
+.lf-tl [hidden] {
+  display: none;
+}
+
+.lf-tl-month {
+  position: relative;
+  padding: 1.5rem 0 .5rem calc(var(--tl-x) + 1.75rem);
+  font-size: .8125rem;
   font-weight: 700;
+  letter-spacing: .04em;
   color: #4338CA;
 }
 
-/* min-width:0 is what lets the title actually shrink and ellipsize inside a
-   flex row — without it the flex item refuses to go below its content width. */
-.lf-newsbar-link {
+.lf-tl-month:first-child {
+  padding-top: 0;
+}
+
+/* Filled dot with a halo, centred on the rail. */
+.lf-tl-month::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--tl-x) - .4375rem);
+  top: calc(1.5rem + .2rem);
+  width: .875rem;
+  height: .875rem;
+  border-radius: 50%;
+  background: #4F46E5;
+  box-shadow: 0 0 0 4px #fff, 0 0 0 5px #C7D2FE;
+}
+
+.lf-tl-month:first-child::before {
+  top: .2rem;
+}
+
+.lf-tl-item {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  gap: .5rem;
-  min-width: 0;
-  flex: 1 1 auto;
-  color: #1f2937;
-  text-decoration: none;
+  align-items: flex-start;
+  gap: .875rem;
+  padding: .5rem 0;
 }
 
-.lf-newsbar-title {
+.lf-tl-item {
+  padding-left: calc(var(--tl-x) - 1.05rem);
+}
+
+/* Emoji chip sits on the rail; the white ring masks the line behind it. */
+.lf-tl-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  box-shadow: 0 0 0 3px #fff;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.lf-tl-text {
+  margin: 0;
   min-width: 0;
-  overflow: hidden;
+  padding-top: .3rem;
+  font-size: .95rem;
+  line-height: 1.6;
+  color: #374151;
+  overflow-wrap: anywhere;
+}
+
+.lf-tl-text b {
+  color: #111827;
+  font-weight: 650;
+}
+
+.lf-tl-link {
+  margin-left: .25rem;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  font-weight: 600;
-}
-
-.lf-newsbar-link:hover .lf-newsbar-title {
-  color: #4F46E5;
-  text-decoration: underline;
-}
-
-.lf-newsbar-date {
-  flex: none;
-  color: #6b7280;
-  font-variant-numeric: tabular-nums;
-}
-
-.lf-newsbar-all {
-  flex: none;
   font-weight: 600;
   color: #4F46E5;
   text-decoration: none;
 }
 
-.lf-newsbar-all:hover {
+.lf-tl-link:hover {
   text-decoration: underline;
 }
 
-.dark .lf-newsbar {
-  background: rgba(49, 46, 129, .28);
-  border-bottom-color: rgba(99, 102, 241, .25);
+.lf-tl-more {
+  display: inline-flex;
+  align-items: center;
+  padding: .5rem 1.25rem;
+  border: 1px solid #C7D2FE;
+  border-radius: 999px;
+  background: transparent;
+  font-size: .875rem;
+  font-weight: 600;
+  color: #4F46E5;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
 }
 
-.dark .lf-newsbar-tag {
+.lf-tl-more:hover {
+  background: #EEF2FF;
+  border-color: #A5B4FC;
+}
+
+.lf-tl-more[hidden] {
+  display: none;
+}
+
+.lf-tl-more:focus-visible,
+.lf-tl-link:focus-visible {
+  outline: 2px solid #6366F1;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.dark .lf-tl::before {
+  background: linear-gradient(180deg, #818CF8 0%, rgba(99, 102, 241, .35) 70%, rgba(99, 102, 241, 0) 100%);
+}
+
+.dark .lf-tl-month {
   color: #A5B4FC;
 }
 
-.dark .lf-newsbar-link {
-  color: #e5e7eb;
+.dark .lf-tl-month::before {
+  background: #818CF8;
+  box-shadow: 0 0 0 4px #0f172a, 0 0 0 5px rgba(129, 140, 248, .5);
 }
 
-.dark .lf-newsbar-link:hover .lf-newsbar-title,
-.dark .lf-newsbar-all {
+.dark .lf-tl-ico {
+  background: rgba(49, 46, 129, .45);
+  border-color: rgba(99, 102, 241, .45);
+  box-shadow: 0 0 0 3px #0f172a;
+}
+
+.dark .lf-tl-text {
+  color: #d1d5db;
+}
+
+.dark .lf-tl-text b {
+  color: #f9fafb;
+}
+
+.dark .lf-tl-link,
+.dark .lf-tl-more {
   color: #A5B4FC;
 }
 
-.dark .lf-newsbar-date {
-  color: #9ca3af;
+.dark .lf-tl-more {
+  border-color: rgba(99, 102, 241, .45);
 }
 
-/* Narrow screens: drop the date and the trailing link so the strip stays on
-   one line instead of wrapping into a two-line block. */
+.dark .lf-tl-more:hover {
+  background: rgba(49, 46, 129, .4);
+}
+
 @media (max-width: 640px) {
+  .lf-tl {
+    --tl-x: 1rem;
+  }
 
-  .lf-newsbar-date,
-  .lf-newsbar-all {
-    display: none;
+  .lf-tl-month {
+    padding-left: calc(var(--tl-x) + 1.5rem);
+  }
+
+  .lf-tl-item {
+    gap: .625rem;
+  }
+
+  .lf-tl-text {
+    font-size: .9rem;
   }
 }
 

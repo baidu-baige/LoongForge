@@ -9,6 +9,7 @@ site/
 ├── index.html              # 首页（Hero / Value Props / Models / Quick Start / Latest News / …）
 ├── docs.html               # 文档跳转（重定向到 ReadTheDocs）
 ├── blog.html               # 博客列表（从 posts.json 动态渲染，支持 EN/ZH）
+├── projects.html           # 项目汇总页（从 projects.json 动态渲染，支持 EN/ZH）
 ├── about.html              # 项目介绍 / Roadmap / License / Citation
 ├── 404.html                # 自定义 404 页
 ├── blog/                   # 单篇博客文章
@@ -25,16 +26,17 @@ site/
 │   ├── 2026-05-loongforge-heterogeneous-parallel-training.zh.html   # Heterogeneous Parallel Training（ZH）
 │   ├── 2026-06-loongforge-groot-n16-acceleration.html               # GR00T N1.6 训练加速（EN）
 │   ├── 2026-06-loongforge-groot-n16-acceleration.zh.html            # GR00T N1.6 训练加速（ZH）
-│   ├── 2026-07-announcing-loongforge-embodied.html                  # Announcing LoongForge-Embodied（EN）
-│   ├── 2026-07-announcing-loongforge-embodied.zh.html               # Announcing LoongForge-Embodied（ZH）
 │   ├── 2026-08-taot-topology-aware-expert-placement.html            # TAOT 拓扑感知专家副本放置（EN）
 │   └── 2026-08-taot-topology-aware-expert-placement.zh.html         # TAOT 拓扑感知专家副本放置（ZH）
 ├── assets/
 │   ├── css/style.css
 │   ├── js/main.js          # 导航/暗黑/复制/Tab/scroll-spy/i18n
 │   ├── js/blog.js          # 博客列表页（blog.html）从 posts.json 动态渲染
-│   ├── js/home-news.js     # 首页 Latest News 从 posts.json 动态渲染（取最新 3 条）
+│   ├── js/home-news.js     # 首页 Latest News 时间线（位于 Why 三张卡片之后、Benchmark 之前），从 news.json 动态渲染（默认展示最新 3 条，每次点击多展开 5 条）
+│   ├── js/projects.js      # 项目页 + 首页 "Powered by" 区块，均从 projects.json 动态渲染
 │   ├── data/posts.json     # ⭐ 博客"单一数据源"，新增博客只需改这一个文件
+│   ├── data/news.json      # ⭐ 首页 Latest News "单一数据源"（短动态，与博客分开）
+│   ├── data/projects.json  # ⭐ 项目"单一数据源"，新增项目只需改这一个文件
 │   └── img/logo.svg
 ├── robots.txt
 ├── sitemap.xml
@@ -99,9 +101,51 @@ GitHub → **Settings → Pages** 将 **Source** 设为 `GitHub Actions`。每�
 
 ## 🔄 后续维护
 
+### 新增一个项目（1 步）
+
+在 `site/assets/data/projects.json` 数组里加一条，项目页和首页 "Powered by" 区块都会自动更新：
+```json
+{
+  "id": "my-project",
+  "category": "loongforge",
+  "icon": "🚀",
+  "badge": "new",
+  "featured": false,
+  "home": false,
+  "org": "Baidu Baige",
+  "url": "blog/2026-08-taot-topology-aware-expert-placement.html",
+  "tags_en": ["MoE"],
+  "tags_zh": ["MoE"],
+  "en": { "title": "…", "summary": "…" },
+  "zh": { "title": "…", "summary": "…" }
+}
+```
+- `category`：`loongforge`（团队自有项目）或 `community`（第三方基于 LoongForge 的开源工作）
+- `url`：`http(s)://` 开头视为外链（新标签页打开，显示 ↗）；相对路径视为站内链接（当前页打开，显示 →）。需要中英文不同链接时，把 `url` 写进 `en` / `zh` 内
+- `icon`：一个 emoji；`badge`：填 `"new"` 显示 NEW 角标（可省略）
+- `featured: true`：在所在分类内置顶并占两列；`home: true`：同时出现在首页 "Powered by" 区块
+- 同一分类内按数组顺序展示
+
+### 新增一条首页动态（1 步）
+
+首页 Latest News 时间线（位于 Why 三张卡片之后、Benchmark 之前）由 `site/assets/data/news.json` 驱动，**与博客无关**（博客是长文，动态是一两句话的更新）。在数组里加一条即可，按 `date`（月份）倒序分组，同月内按数组顺序展示：
+```json
+{
+  "date": "2026-10",
+  "icon": "✨",
+  "url": "https://github.com/baidu-baige/LoongForge/tree/master/examples/xxx",
+  "en": { "text": "Added training support for **Model-X**." },
+  "zh": { "text": "新增 **Model-X** 训练支持。" }
+}
+```
+- `date`：`YYYY-MM`；`icon`：一个 emoji
+- `text`：只支持 `**加粗**`，其余字符会被转义
+- `url`（可选）：`http(s)://` 开头为外链（显示"Details ↗"，新标签页打开）；站内相对路径显示"Read →"。中英文链接不同（如博客 EN/ZH 两个文件）时，把 `url` 写进 `en` / `zh` 内
+- 默认显示最新 3 条；更早的条目折叠在"展开更早动态"按钮后面，每点一次多展开 5 条，全部展开后按钮变为"收起"并回到 3 条
+
 ### 新增一篇博客（3 步，无需改首页）
 
-> 首页 Latest News 和 `blog.html` 列表**都**由 `site/assets/data/posts.json` 驱动，**只改一个文件就会自动同步**。
+> `blog.html` 列表由 `site/assets/data/posts.json` 驱动，**只改一个文件就会自动同步**。首页 Latest News 不再读取博客；如果这篇博客值得上首页，请另在 `news.json` 加一条。
 
 **Step 1 — 复制模板，得到两篇正文文件（EN + ZH）**
 ```bash
@@ -126,7 +170,7 @@ cp site/blog/2026-04-announcing-loongforge.zh.html site/blog/YYYY-MM-slug.zh.htm
 
 **Step 3 — 在 `site/sitemap.xml` 里加两行 URL（EN + ZH）**，提交 PR → 合并 → GH Actions 自动发布。
 
-✅ **不再需要**：改 `index.html` 的 Latest News 卡片、改 `main.js` 里的 `news.*` i18n 键 —— 首页会根据 `posts.json` 按日期倒序自动取最新 3 条渲染。
+✅ **不再需要**：改 `index.html`、改 `main.js` —— 博客列表会根据 `posts.json` 自动渲染。
 
 ### 更新全站样式
 

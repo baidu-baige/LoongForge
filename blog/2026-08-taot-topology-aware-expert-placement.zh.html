@@ -13,7 +13,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css?v=20260901-r13" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261015-r21" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
@@ -184,9 +184,7 @@
         <p>🔗 LoongForge 开源地址：<a href="https://github.com/baidu-baige/LoongForge" target="_blank"
             rel="noopener">https://github.com/baidu-baige/LoongForge</a></p>
       </blockquote>
-      <p>LoongForge 由百度百舸 AIAK-Training-LLM 训练加速套件演进而来。开源之前，它已在大语言模型、计算机视觉和具身智能等方向为企业客户提供生产级训练支持，通常比客户基线提速
-        30%~50%，最大的生产任务规模超过 5000 卡 XPU。我们面向的是更通用的训练工程问题：用一套框架覆盖 LLM、VLM、VLA、Diffusion 等不同场景，贯通预训练到 SFT 的主流流程，同时在 GPU
-        与昆仑芯 XPU 平台、数千卡规模集群和多类真实的业务场景中完成了长期验证。</p>
+      <p>LoongForge 由百度百舸 AIAK-Training-LLM 训练加速套件演进而来。开源之前，它已在大语言模型、计算机视觉和具身智能等方向为企业客户提供生产级训练支持，最大的生产任务规模超过 5000 卡 XPU。我们要解决的是更通用的训练工程问题：用一套框架覆盖 LLM、VLM、VLA、Diffusion 等不同场景，贯通从预训练到 SFT 的主流流程，并在 GPU 与昆仑芯 XPU 平台、数千卡规模集群以及多类真实业务场景中经过了长期验证。</p>
       <p>要同时把这几类模型都跑快，靠单一引擎并不现实。我们的做法是按模态分成两条后端栈：LLM / VLM / Diffusion 跑在深度定制过的 Megatron-LM 上，充分利用其成熟的 TP/PP/EP/CP
         并行体系；而 VLA、世界-动作模型（WAM）这类具身模型则与 Megatron 解耦，走 torch 原生的 DDP / ZeRO-1 / FSDP / HSDP
         栈——这类模型参数量不大、但动作头与多视角输入结构复杂，用原生栈反而更灵活。两条栈各自做了深度优化，目标都是超过各自领域的主流开源基线。TAOT 正是沉淀在前一条栈上的一项优化：你不需要自己复现论文里的三阶段规划器，遇到专家负载倾斜和跨节点通信瓶颈时，在配置里开启即可。</p>
@@ -204,8 +202,8 @@
     </div>
 
     <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
-      <a href="2026-07-announcing-loongforge-embodied.zh.html"
-        class="text-indigo-600 dark:text-indigo-300 hover:underline">← 上一篇：LoongForge-Embodied 正式发布</a>
+      <a href="2026-06-loongforge-groot-n16-acceleration.zh.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← 上一篇：GR00T N1.6 训练加速</a>
       <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">所有文章 →</a>
     </div>
   </article>
@@ -234,7 +232,7 @@
     })();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-  <script src="../assets/js/main.js?v=20260901-r13"></script>
+  <script src="../assets/js/main.js?v=20261015-r21"></script>
 </body>
 
 </html>
