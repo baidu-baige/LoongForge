@@ -170,6 +170,56 @@ SIMPLER_ENV_WIDOWX_MODALITY_CONFIG = {
 }
 
 
+SIMPLER_ENV_GOOGLE_MODALITY_META = {
+    "state": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "rx": {"start": 3, "end": 4},
+        "ry": {"start": 4, "end": 5},
+        "rz": {"start": 5, "end": 6},
+        "rw": {"start": 6, "end": 7},
+        "gripper": {"start": 7, "end": 8},
+    },
+    "action": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        "gripper": {"start": 6, "end": 7},
+    },
+}
+
+
+# Fractal uses an 8D quaternion state and the same 7D absolute Euler action
+# layout as the released GR00T-N1.7 SimplerEnv policy.
+SIMPLER_ENV_GOOGLE_MODALITY_CONFIG = {
+    "video": ModalityConfig(delta_indices=[0], modality_keys=["image"]),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["x", "y", "z", "rx", "ry", "rz", "rw", "gripper"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(8)),
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.ABSOLUTE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            )
+        ]
+        * 7,
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.human.action.task_description"],
+    ),
+}
+
+
 NEW_EMBODIMENT_MODALITY_META = {
     "state": {
         "single_arm": {"start": 0, "end": 5},
@@ -216,6 +266,7 @@ NEW_EMBODIMENT_MODALITY_CONFIG = {
 
 MODALITY_CONFIGS = {
     "libero_sim": LIBERO_SIM_MODALITY_CONFIG,
+    "simpler_env_google": SIMPLER_ENV_GOOGLE_MODALITY_CONFIG,
     "simpler_env_widowx": SIMPLER_ENV_WIDOWX_MODALITY_CONFIG,
     "new_embodiment": NEW_EMBODIMENT_MODALITY_CONFIG,
 }
@@ -225,6 +276,10 @@ EMBODIMENT_STAT_CONFIGS = {
     "libero_sim": {
         "modality_meta": LIBERO_SIM_MODALITY_META,
         "modality_config": LIBERO_SIM_MODALITY_CONFIG,
+    },
+    "simpler_env_google": {
+        "modality_meta": SIMPLER_ENV_GOOGLE_MODALITY_META,
+        "modality_config": SIMPLER_ENV_GOOGLE_MODALITY_CONFIG,
     },
     "simpler_env_widowx": {
         "modality_meta": SIMPLER_ENV_WIDOWX_MODALITY_META,

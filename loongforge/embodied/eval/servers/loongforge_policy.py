@@ -88,17 +88,59 @@ class GenericPredictActionPolicy:
         state: Optional[np.ndarray] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Handle an eval RPC predict_action request with chunk caching.
+        """Handle a single-sample or explicit batched predict_action request.
 
         Payload schema (produced by every per-model ``PayloadBuilder``):
-        ``images`` is a list of views ordered per model expectation and
-        ``instructions`` is a list-of-str batch (batch=1). RPC-control fields
+        For a normal request, ``images`` is a list of views and ``instructions``
+        is a one-item list. With ``batch_request=True``, ``images`` is
+        ``[batch][views]``, ``instructions`` is ``[batch]``, and ``state`` is
+        ``[batch, state_dim]``. RPC-control fields
         (``disable_action_cache`` / ``return_action_chunk``) live at top level.
         The value handed to ``model.predict_action`` is a batch-of-1
         list-of-list of views: ``[[view_primary, view_wrist]]``.
         """
+        batch_request = bool(kwargs.pop("batch_request", False))
         disable_action_cache = bool(kwargs.pop("disable_action_cache", False))
         return_action_chunk = bool(kwargs.pop("return_action_chunk", False))
+        if batch_request and not disable_action_cache:
+            raise ValueError("Batched predict_action requires disable_action_cache=True")
+        if batch_request:
+            batch_size = len(images)
+            if batch_size < 1 or len(instructions) != batch_size:
+                raise ValueError(
+                    f"Invalid batched request: images={batch_size}, instructions={len(instructions)}"
+                )
+            if state is not None and np.asarray(state).shape[0] != batch_size:
+                raise ValueError(
+                    f"Invalid batched state: expected first dimension {batch_size}, "
+                    f"got {np.asarray(state).shape}"
+                )
+            start_time = time.perf_counter()
+            chunk = call_predict_action(
+                self._model,
+                images=images,
+                instructions=instructions,
+                state=state,
+                dataset_stats=self._dataset_stats,
+                action_dim=int(self._metadata["action_dim"]),
+                preserve_batch=True,
+                **kwargs,
+            )
+            if chunk.ndim != 3:
+                raise ValueError(
+                    f"Batched model output must be [B, H, D], got {chunk.shape}"
+                )
+            inference_latency_ms = (time.perf_counter() - start_time) * 1000.0
+            if chunk.shape[0] != batch_size:
+                raise ValueError(
+                    f"Batched model output has batch {chunk.shape[0]}, expected {batch_size}"
+                )
+            return {
+                "actions": chunk if return_action_chunk else chunk[:, 0:1, :],
+                "inference_latency_ms": inference_latency_ms,
+                "request_id": self._request_id("batch", episode_step),
+            }
+
         cache_entry = None if disable_action_cache else self._chunk_cache.get(episode_id)
         if cache_entry is not None:
             chunk_index, chunk = cache_entry

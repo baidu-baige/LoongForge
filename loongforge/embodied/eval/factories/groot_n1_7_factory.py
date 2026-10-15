@@ -77,7 +77,12 @@ def _load_processor_kwargs(ckpt_path: str) -> Dict[str, Any]:
     """
     if not ckpt_path:
         return {}
-    config_path = Path(ckpt_path).expanduser() / "processor_config.json"
+    checkpoint_path = Path(ckpt_path).expanduser()
+    config_path = (
+        checkpoint_path / "processor_config.json"
+        if checkpoint_path.is_dir()
+        else checkpoint_path.parent / "processor_config.json"
+    )
     if not config_path.exists():
         return {}
     with config_path.open("r", encoding="utf-8") as f:

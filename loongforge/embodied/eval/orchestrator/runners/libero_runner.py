@@ -12,9 +12,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import multiprocessing
 import os
 import pathlib
 import time
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -61,7 +63,7 @@ def _render_resolution(args: argparse.Namespace) -> int:
     return value if value > 0 else LIBERO_ENV_RESOLUTION
 
 
-def _get_libero_env(task, resolution: int, seed: int):
+def _get_libero_env(task, resolution: int, seed: Optional[int]):
     """Run _get_libero_env."""
     from libero.libero import get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
@@ -72,7 +74,8 @@ def _get_libero_env(task, resolution: int, seed: int):
         camera_heights=resolution,
         camera_widths=resolution,
     )
-    env.seed(seed)
+    if seed is not None:
+        env.seed(seed)
     return env, task.language
 
 
@@ -171,7 +174,7 @@ def _failure_record(
     episode_idx: int,
     task_description: str,
     episode_id: str,
-    episode_seed: int,
+    episode_seed: Optional[int],
     episode_start: float,
     reset_time_sec: Optional[float],
     steps: int,
@@ -252,13 +255,18 @@ def run_episode(
     env_seed_mode = str(getattr(args, "env_seed_mode", "per_episode"))
     if env_seed_mode == "per_task":
         # Official semantics: seed once per task (process), env reused across trials.
+        if args.seed is None:
+            raise ValueError("--env-seed-mode per_task requires an explicit --seed")
         episode_seed = int(args.seed)
         if not _ENV_CACHE.get("np_seeded"):
             np.random.seed(episode_seed)
             _ENV_CACHE["np_seeded"] = True
     else:
-        episode_seed = int(args.seed) + task_id * 1000 + episode_idx
-        np.random.seed(episode_seed)
+        if args.seed is None:
+            episode_seed = None
+        else:
+            episode_seed = int(args.seed) + task_id * 1000 + episode_idx
+            np.random.seed(episode_seed)
 
     task_description = task.language
     episode_id = f"libero/{task_suite_name}/task={task_id}/episode={episode_idx}"
@@ -488,8 +496,143 @@ def run_episode(
     }
 
 
+def _episode_worker(worker_args: Dict[str, Any], work_q, result_q) -> None:
+    """Child-process loop: pull (task_id, episode_idx) items, run them, return records.
+
+    Each worker owns one PolicyClient connection and creates/destroys one LIBERO
+    env per episode (inside ``run_episode``), so N workers run N episodes at once
+    against the single shared policy server. Every episode keeps a distinct
+    ``episode_id``, so the server's per-episode chunk cache never collides — each
+    rollout is byte-identical to the sequential path, only concurrent.
+    """
+    os.environ.setdefault("MUJOCO_GL", "egl")
+    os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+
+    from libero.libero import benchmark as _benchmark
+
+    args = SimpleNamespace(**worker_args)
+    task_suite = _benchmark.get_benchmark_dict()[args.task_suite_name]()
+    adapter = LiberoAdapter(
+        suite_name=args.task_suite_name,
+        episodes_per_task=args.episodes_per_task,
+        continuous_gripper=getattr(args, "continuous_gripper", False),
+        resolution=_render_resolution(args),
+        prefer_controller_ee=getattr(args, "prefer_controller_ee", True),
+    )
+    payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
+    client = PolicyClient(host=args.host, port=args.port)
+    task_cache: Dict[int, Any] = {}
+    try:
+        while True:
+            item = work_q.get()
+            if item is None:
+                break
+            task_id, episode_idx = item
+            if task_id not in task_cache:
+                task_cache[task_id] = (
+                    task_suite.get_task(task_id),
+                    task_suite.get_task_init_states(task_id),
+                )
+            task, initial_states = task_cache[task_id]
+            try:
+                record = run_episode(
+                    client=client,
+                    adapter=adapter,
+                    payload_builder=payload_builder,
+                    action_decoder=action_decoder,
+                    action_decoder_key=action_decoder_key,
+                    task_suite_name=args.task_suite_name,
+                    task_id=task_id,
+                    episode_idx=episode_idx,
+                    task=task,
+                    initial_state=initial_states[episode_idx],
+                    args=args,
+                )
+                record["attempt"] = 0
+            except Exception as exc:  # pragma: no cover - worker safety net
+                record = {
+                    "benchmark": "libero",
+                    "task_suite": args.task_suite_name,
+                    "task_id": task_id,
+                    "episode_idx": episode_idx,
+                    "episode_id": f"libero/{args.task_suite_name}/task={task_id}/episode={episode_idx}",
+                    "success": 0,
+                    "steps": 0,
+                    "failure_reason": "episode_error",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                    "attempt": 0,
+                }
+            result_q.put(record)
+    finally:
+        client.close()
+
+
+def _run_batch_parallel(
+    args: argparse.Namespace,
+    *,
+    task_suite,
+    selected_task_ids: List[int],
+    completed: set,
+    results_path: pathlib.Path,
+    num_envs: int,
+) -> List[Dict[str, Any]]:
+    """Drive N concurrent env worker processes and collect per-episode records."""
+    worklist: List[tuple] = []
+    for task_id in selected_task_ids:
+        n_episodes = min(args.episodes_per_task, len(task_suite.get_task_init_states(task_id)))
+        for episode_idx in range(n_episodes):
+            if ("libero", args.task_suite_name, task_id, episode_idx) in completed:
+                continue
+            worklist.append((task_id, episode_idx))
+
+    if not worklist:
+        return []
+
+    n_workers = max(1, min(num_envs, len(worklist)))
+    logging.info("libero runner: parallel rollout with %d env workers over %d episodes",
+                 n_workers, len(worklist))
+
+    # server_manager (ManagedServer) is not picklable and is parent-only.
+    worker_args = {k: v for k, v in vars(args).items() if k != "server_manager"}
+
+    ctx = multiprocessing.get_context("spawn")
+    work_q = ctx.Queue()
+    result_q = ctx.Queue()
+    for item in worklist:
+        work_q.put(item)
+    for _ in range(n_workers):
+        work_q.put(None)
+
+    procs = [ctx.Process(target=_episode_worker, args=(worker_args, work_q, result_q), daemon=True)
+             for _ in range(n_workers)]
+    for p in procs:
+        p.start()
+
+    new_records: List[Dict[str, Any]] = []
+    try:
+        for _ in range(len(worklist)):
+            record = result_q.get()
+            append_jsonl(results_path, record)
+            new_records.append(record)
+            print(json.dumps(record, ensure_ascii=False), flush=True)
+    finally:
+        for p in procs:
+            p.join(timeout=30)
+            if p.is_alive():
+                p.terminate()
+    return new_records
+
+
 def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     """Run run_batch."""
+    protocol = getattr(args, "libero_protocol", "legacy")
+    if protocol == "groot_official":
+        from .libero_groot_runner import run_batch as run_official
+
+        return run_official(args)
+    if protocol != "legacy":
+        raise ValueError(f"Unknown LIBERO protocol: {protocol!r}")
     os.environ.setdefault("MUJOCO_GL", "egl")
     os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
@@ -534,9 +677,47 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     server_manager = getattr(args, "server_manager", None)
     if server_manager is not None:
         server_manager.ensure_running()
+    start_time = time.time()
+
+    num_envs = int(getattr(args, "num_envs", 1) or 1)
+    if num_envs > 1:
+        # Parallel path: N worker processes share the one policy server. The
+        # per-model stack is rebuilt inside each worker, so nothing is built here.
+        new_records = _run_batch_parallel(
+            args,
+            task_suite=task_suite,
+            selected_task_ids=selected_task_ids,
+            completed=completed,
+            results_path=results_path,
+            num_envs=num_envs,
+        )
+        all_records = existing_records + new_records
+        write_summary_csv(summary_path, all_records)
+        write_suite_summary_csv(suite_summary_path, all_records, min_episodes=args.min_episodes_per_task)
+        report = None
+        if args.generate_report:
+            report = write_eval_report(
+                results_path,
+                output_dir / "report",
+                title=f"LIBERO Eval Report: {args.task_suite_name}",
+                min_episodes_per_task=args.min_episodes_per_task,
+            )
+        successes = sum(int(record.get("success", 0)) for record in all_records)
+        return {
+            "benchmark": "libero",
+            "task_suite": args.task_suite_name,
+            "n_records": len(all_records),
+            "new_records": len(new_records),
+            "success_rate": successes / len(all_records) if all_records else 0.0,
+            "results_path": str(results_path),
+            "summary_path": str(summary_path),
+            "suite_summary_path": str(suite_summary_path),
+            "report": report,
+            "elapsed_sec": time.time() - start_time,
+        }
+
     client = PolicyClient(host=args.host, port=args.port)
     new_records: List[Dict[str, Any]] = []
-    start_time = time.time()
 
     try:
         for task_id in selected_task_ids:
@@ -640,9 +821,21 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--task-suite-name", default="libero_goal")
     parser.add_argument("--max-tasks", type=int, default=1, help="<=0 means all tasks in suite")
     parser.add_argument("--episodes-per-task", type=int, default=1)
+    parser.add_argument("--libero-protocol", choices=["legacy", "groot_official"], default="legacy")
+    parser.add_argument(
+        "--num-envs",
+        type=int,
+        default=1,
+        help="Concurrent LIBERO env worker processes; 1 = sequential (historical path).",
+    )
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
-    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional global seed; omit to preserve unseeded LIBERO behavior.",
+    )
     parser.add_argument(
         "--env-seed-mode",
         default="per_episode",

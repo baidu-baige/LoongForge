@@ -111,6 +111,34 @@ def _encode_libero_ee_axis_angle(state_raw: Dict[str, Any]) -> Optional[np.ndarr
     )
 
 
+def _encode_simpler_google(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
+    """Build the 8D SimplerEnv Google-robot (Fractal) raw state.
+
+    Mirrors the official Isaac-GR00T ``GoogleFractalEnv._process_observation``
+    (gr00t/eval/sim/SimplerEnv/simpler_env.py): ``proprio = agent.eef_pos`` =
+    ``[x, y, z, quat_wxyz(4), gripper]``; the sent state is
+    ``[x, y, z, quat_xyzw(4), 1 - gripper]`` — i.e. the quaternion rolled from
+    wxyz to xyzw and the gripper flipped to a *closedness* in ``[0, 1]``.
+
+    Unlike WidowX (``simpler_widowx``), Google robot rotation is a raw
+    quaternion (no ``default_rot`` correction, no Euler conversion). The Google
+    agent obs exposes ``agent.eef_pos`` directly, so no base/tcp reconstruction
+    is needed. Returns ``None`` if the adapter did not provide ``eef_pos``.
+    """
+    eef = state_raw.get("eef_pos")
+    if eef is None:
+        return None
+    eef = np.asarray(eef, dtype=np.float64).reshape(-1)
+    if eef.size < 8:
+        return None
+    quat_xyzw = np.roll(eef[3:7], -1)  # wxyz -> xyzw
+    gripper_closedness = 1.0 - eef[7]
+    return np.array(
+        [eef[0], eef[1], eef[2], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2], quat_xyzw[3], gripper_closedness],
+        dtype=np.float32,
+    )
+
+
 @register_payload_builder("gr00tn1d7")
 class GrootN1d7PayloadBuilder(PayloadBuilder):
     """GR00T-N1.7 client-side payload assembly."""
@@ -121,6 +149,8 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
     #   ``libero_ee_axis_angle`` — LIBERO 8D raw state [pos(3), axis_angle(3), grip, grip]
     #   ``simpler_widowx``       — SimplerEnv Bridge 8D raw state
     #                              [pos(3), euler(3), pad=0, gripper_openness]
+    #   ``simpler_google``       — SimplerEnv Google/Fractal 8D raw state
+    #                              [pos(3), quat_xyzw(4), gripper_closedness]
     #   ``""``                   — no state kwarg emitted
     state_encoding: str = "libero_ee_axis_angle"
     action_encoding: str = "axis_angle"  # x,y,z + axis-angle(3) + gripper
@@ -145,6 +175,10 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
             # rather than forking it -- see DRAWER_调查报告 §7.2 for the gripper trap
             # that fork would re-introduce.
             return _encode_simpler_widowx(state_raw)
+        if self.state_encoding == "simpler_google":
+            # SimplerEnv Google/Fractal: raw-quaternion 8D state, read straight
+            # from the Google agent's ``eef_pos`` (see _encode_simpler_google).
+            return _encode_simpler_google(state_raw)
         raise ValueError(f"Unsupported Gr00tN1d7 state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
@@ -154,20 +188,23 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
             raise ValueError(
                 "Gr00tN1d7 state_encoding="
                 f"{self.state_encoding!r} could not be built: canonical state_raw is "
-                "missing the fields it needs (LIBERO: eef_pos/eef_quat; SimplerEnv: "
-                "base_pose/tcp_pose or eef_pos). Sending a zero proprio would "
+                "missing the fields it needs (LIBERO: eef_pos/eef_quat; SimplerEnv "
+                "Bridge: base_pose/tcp_pose or eef_pos; SimplerEnv Google: eef_pos). "
+                "Sending a zero proprio would "
                 "silently degrade the policy, so this is a hard failure."
             )
         images = _pack_images(canonical["images"])
-        if self.state_encoding == "simpler_widowx":
-            # Official WidowXBridgeEnv._process_observation resizes the single
-            # exterior view to 256x256 (cv2, default INTER_LINEAR) before the
-            # model; the letterbox-pad + shortest-edge + 95%-center-crop stage
-            # runs inside predict_action, not here.
+        if self.state_encoding in ("simpler_widowx", "simpler_google"):
+            # Official SimplerEnv wrappers resize the single exterior view with
+            # cv2 before the model: WidowXBridgeEnv -> 256x256, GoogleFractalEnv
+            # -> 320x256 (image_size=(256,320) -> cv2 (W,H)=(320,256)). The
+            # letterbox-pad + shortest-edge + 95%-center-crop stage runs inside
+            # predict_action, not here.
             import cv2
 
+            size = (256, 256) if self.state_encoding == "simpler_widowx" else (320, 256)
             images = [
-                cv2.resize(np.asarray(img), (256, 256)) if img is not None else img
+                cv2.resize(np.asarray(img), size) if img is not None else img
                 for img in images
             ]
         return {

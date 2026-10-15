@@ -42,6 +42,23 @@ _CUDA_GRAPH_ATTENTION_MASK_METADATA: dict[int, tuple[bool, object | None]] = {}
 _CUDA_GRAPH_ATTENTION_MASK_PATCHED = False
 
 
+def _stream_is_capturing() -> bool:
+    """True only while the current CUDA stream is capturing a graph.
+
+    The ``_CUDA_GRAPH_ATTENTION_MASK_METADATA`` cache is keyed by
+    ``attention_mask.data_ptr()``.  Those addresses are recycled by the caching
+    allocator, so outside of capture a fresh mask can alias a stale entry whose
+    unpad ``indices`` were built for a longer padded sequence — flash-attn then
+    gathers rows past the current sequence length and trips a device-side
+    ``index out of bounds`` assert.  The cache is only needed to avoid host
+    syncs *during capture*; in eager we must recompute from the live mask.
+    """
+    try:
+        return torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
+    except Exception:
+        return False
+
+
 def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
     """Make Transformers FlashAttention mask handling graph-safe.
 
@@ -65,7 +82,7 @@ def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
 
     def graph_flash_attention_mask(batch_size, cache_position, kv_length, kv_offset=0,
                                    mask_function=None, attention_mask=None, **kwargs):
-        if isinstance(attention_mask, torch.Tensor):
+        if _stream_is_capturing() and isinstance(attention_mask, torch.Tensor):
             metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
             if metadata is not None:
                 all_valid, _unpad = metadata
@@ -88,7 +105,7 @@ def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
         )
 
     def graph_get_unpad_data(attention_mask):
-        if isinstance(attention_mask, torch.Tensor):
+        if _stream_is_capturing() and isinstance(attention_mask, torch.Tensor):
             metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
             if metadata is not None and metadata[1] is not None:
                 return metadata[1]
@@ -96,7 +113,7 @@ def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
 
     def graph_sdpa_mask(batch_size, cache_position, kv_length, kv_offset=0,
                         mask_function=None, attention_mask=None, **kwargs):
-        if isinstance(attention_mask, torch.Tensor):
+        if _stream_is_capturing() and isinstance(attention_mask, torch.Tensor):
             metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
             if metadata is not None:
                 all_valid, _unpad = metadata
@@ -495,6 +512,16 @@ def _patch_qwen3vl_skip_unused_lm_head() -> bool:
                 **kwargs,
             )
 
+        # Collect the per-layer (pre-final-RMSNorm) hidden states. The GR00T
+        # backbone consumes the last decoder layer's PRE-norm output as
+        # ``backbone_features`` (matching the official Isaac-GR00T backbone,
+        # which reads ``output_hidden_states=True`` -> ``hidden_states[-1]``).
+        # NOTE: this skip-lm-head branch is only used when the caller passes
+        # ``loongforge_skip_lm_head=True``; the eval backbone forward no longer
+        # takes this path (see Qwen3VLBackbone.forward), because in transformers
+        # 4.57.3 ``self.model(...)`` here does not populate ``hidden_states`` and
+        # would leave only the post-norm ``last_hidden_state``.
+        kwargs.pop("output_hidden_states", None)
         outputs = self.model(
             input_ids=input_ids,
             pixel_values=pixel_values,
@@ -511,11 +538,12 @@ def _patch_qwen3vl_skip_unused_lm_head() -> bool:
         )
         hidden_states = outputs[0]
         logits = hidden_states.new_empty((*hidden_states.shape[:-1], 0))
+        hidden_states_seq = getattr(outputs, "hidden_states", None) or (hidden_states,)
         return output_cls(
             loss=None,
             logits=logits,
             past_key_values=getattr(outputs, "past_key_values", None),
-            hidden_states=(hidden_states,),
+            hidden_states=hidden_states_seq,
             attentions=getattr(outputs, "attentions", None),
             rope_deltas=getattr(outputs, "rope_deltas", None),
         )
@@ -1309,13 +1337,13 @@ class Qwen3Backbone(torch.nn.Module):
             _patch_qwen3vl_output_projection_dtypes(self.model)
         if _patch_qwen3vl_cuda_graph_vision_metadata():
             logger.info("Patched Qwen3-VL visual metadata paths for full-iteration CUDA graphs.")
-        if _patch_qwen3_vl_fused_vision_rope():
+        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_vision_rope():
             logger.info("Enabled fused FP32-compatible Qwen3-VL vision RoPE.")
-        if _patch_qwen3_vl_fused_text_rope():
+        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_text_rope():
             logger.info("Enabled dtype-rounding-compatible Qwen3-VL text RoPE.")
-        if _patch_qwen3_vl_fused_text_rms_norm():
+        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_text_rms_norm():
             logger.info("Enabled reduction-order-compatible Qwen3-VL text RMSNorm fusion.")
-        if _patch_qwen3_vl_fused_text_silu_mul():
+        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_text_silu_mul():
             logger.info("Enabled dtype-rounding-compatible Qwen3-VL text MLP pointwise fusion.")
         self._supports_mm_token_type_ids = _forward_has_explicit_arg(self.model, "mm_token_type_ids")
 
@@ -1324,12 +1352,17 @@ class Qwen3Backbone(torch.nn.Module):
             self.language_model.layers.pop(-1)
 
         self._selected_layer_features = None
-        if self._uses_transformers_5_compat:
-            # Transformers 5.x packages the post-norm tensor as the final hidden
-            # state, so capture the configured decoder block output explicitly.
-            self.language_model.layers[-1].register_forward_hook(
-                self._capture_selected_layer_features
-            )
+        # Capture the LAST (post-truncation) decoder layer's PRE-final-RMSNorm
+        # output as backbone_features, for BOTH transformers 4.x and 5.x. This
+        # matches the official Isaac-GR00T backbone (output_hidden_states=True ->
+        # hidden_states[-1], i.e. pre-norm). Relying on the model's own
+        # hidden_states/last_hidden_state is unsafe here: the skip-lm-head path
+        # returns the text model's post-``self.norm`` last_hidden_state, which
+        # applies one extra final RMSNorm to the DiT conditioning (std ~33 -> ~2,
+        # first-token norm-sink erased) and corrupts every predicted action.
+        self.language_model.layers[-1].register_forward_hook(
+            self._capture_selected_layer_features
+        )
 
         self.select_layer = select_layer
         self.set_trainable_parameters(tune_llm, tune_visual, tune_top_llm_layers)
@@ -1904,12 +1937,9 @@ class Qwen3Backbone(torch.nn.Module):
                 **model_input,
                 output_hidden_states=not self._uses_transformers_5_compat,
             )
-        if self._uses_transformers_5_compat:
-            if self._selected_layer_features is None:
-                raise RuntimeError("Qwen3-VL selected decoder layer did not produce features.")
-            outputs = self._selected_layer_features.to(torch.float32)
-        else:
-            outputs = model_outputs.hidden_states[-1].to(torch.float32)
+        if self._selected_layer_features is None:
+            raise RuntimeError("Qwen3-VL selected decoder layer did not produce features.")
+        outputs = self._selected_layer_features.to(torch.float32)
         image_mask = vl_input["input_ids"] == self.model.config.image_token_id
         attention_mask = vl_input["attention_mask"] == 1
         return BatchFeature(

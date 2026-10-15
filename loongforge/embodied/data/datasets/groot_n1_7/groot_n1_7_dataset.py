@@ -293,6 +293,11 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         worker_slot = rank * num_workers + worker_id
         global_worker_count = world_size * num_workers
         epoch = 0
+        # Within-shard shuffle RNG is created ONCE per __iter__ (seeded with the
+        # initial epoch), matching Isaac's ShardedMixtureDataset.__iter__
+        # (gr00t/data/dataset/sharded_mixture_dataset.py:424). Only the shard
+        # sampling schedule below re-seeds per epoch via self._seed + epoch.
+        rng = np.random.default_rng(self._seed + epoch)
         while True:
             shard_schedule = _build_isaac_shard_schedule(
                 num_shards=len(self._sharded_episodes),
@@ -304,7 +309,6 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
                 for schedule_index, shard_index in enumerate(shard_schedule)
                 if schedule_index % global_worker_count == worker_slot
             ]
-            rng = np.random.default_rng(self._seed + epoch)
             shard_iterator = (
                 self._iter_prefetched_shards(worker_schedule)
                 if self._prefetch_shards
