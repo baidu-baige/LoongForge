@@ -1,5 +1,6 @@
 # Public template: replace every /path/to/... placeholder before use.
-# The internal counterpart (same name + _internal) holds the machine-specific paths.
+# Machine-specific paths are filled in by the user or injected at runtime by an
+# external launcher; nothing machine-specific is checked in.
 #
 # GR00T-N1.7 x SimplerEnv WidowX (Bridge) -- widowx_carrot_on_plate, official parity.
 #   --max_episode_steps 300 -> benchmark.max_steps (counts INNER env steps)
@@ -31,6 +32,12 @@ model:
   # fixed by the weights (40). The decoded 8-step chunk comes from the
   # simpler_env_widowx embodiment's action delta_indices.
   use_flash_attention: true
+  # Inference-only: keep the frozen backbone in bf16 and every head frozen,
+  # matching the server config the reported Bridge numbers were measured with.
+  backbone_trainable_params_fp32: false
+  tune_projector: false
+  tune_diffusion_model: false
+  tune_vlln: false
 
 server:
   host: 127.0.0.1

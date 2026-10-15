@@ -1,7 +1,8 @@
 # GR00T-N1.7 x LIBERO libero_10 task-success -- public template.
 #
-# Fill in the /path/to placeholders, or use libero_10_internal.yaml for the
-# one-click internal run.
+# Fill in the /path/to placeholders. Machine-specific paths are filled in by the
+# user or injected at runtime by an external launcher; nothing machine-specific
+# is checked in.
 #
 # Official parity (Isaac-GR00T LIBERO client, examples/LIBERO/README.md):
 #   --max_episode_steps=720  -> benchmark.max_steps: 720

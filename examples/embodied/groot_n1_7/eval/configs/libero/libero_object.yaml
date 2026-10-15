@@ -1,5 +1,6 @@
 # Public template: replace every /path/to/... placeholder before use.
-# The internal counterpart (same name + _internal) holds the machine-specific paths.
+# Machine-specific paths are filled in by the user or injected at runtime by an
+# external launcher; nothing machine-specific is checked in.
 #
 # GR00T-N1.7 x LIBERO libero_object task-success -- official parity.
 #   --max_episode_steps=720  -> benchmark.max_steps: 720

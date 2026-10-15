@@ -106,7 +106,6 @@ def call_predict_action(
     state: Optional[Any],
     dataset_stats: Optional[Dict[str, Any]],
     action_dim: int,
-    preserve_batch: bool = False,
     **kwargs: Any,
 ) -> np.ndarray:
     """Call a compatible predict_action implementation and normalize its output shape."""
@@ -122,9 +121,9 @@ def call_predict_action(
     actions = np.asarray(result, dtype=np.float32)
     if actions.ndim == 1:
         actions = actions.reshape(1, -1)
-    elif actions.ndim == 3 and not preserve_batch:
+    elif actions.ndim == 3:
         actions = actions.reshape(-1, actions.shape[-1])
-    elif actions.ndim not in ((2, 3) if preserve_batch else (2,)):
+    elif actions.ndim != 2:
         raise ValueError(f"model.predict_action returned unsupported action shape: {actions.shape}")
 
     if actions.shape[-1] < action_dim:

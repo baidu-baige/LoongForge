@@ -1,7 +1,8 @@
 # Public template: replace every /path/to/... placeholder before use.
-# The internal counterpart (same name + _internal) holds the machine-specific paths.
+# Machine-specific paths are filled in by the user or injected at runtime by an
+# external launcher; nothing machine-specific is checked in.
 #
-# GR00T-N1.7 x SimplerEnv WidowX (Bridge) -- widowx_stack_cube, official parity.
+# GR00T-N1.7 x SimplerEnv WidowX (Bridge) -- widowx_open_drawer, official parity.
 #   --max_episode_steps 300 -> benchmark.max_steps (counts INNER env steps)
 #   --n_action_steps 4      -> server.chunk_execute_steps
 #   simpler_env.make() forces prepackaged_config=True
@@ -9,7 +10,7 @@
 
 benchmark:
   name: simplerenv
-  task_name: widowx_stack_cube
+  task_name: widowx_open_drawer
   robot_setup: widowx
   prepackaged_config: true
   sim_freq: 500
@@ -31,18 +32,24 @@ model:
   # fixed by the weights (40). The decoded 8-step chunk comes from the
   # simpler_env_widowx embodiment's action delta_indices.
   use_flash_attention: true
+  # Inference-only: keep the frozen backbone in bf16 and every head frozen,
+  # matching the server config the reported Bridge numbers were measured with.
+  backbone_trainable_params_fp32: false
+  tune_projector: false
+  tune_diffusion_model: false
+  tune_vlln: false
 
 server:
   host: 127.0.0.1
-  port: 13777
-  health_port: 13778
+  port: 13781
+  health_port: 13782
   # To reproduce the reported success rates this env must have transformers
   # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 -- the
   # version our own pyproject.toml installs -- the six-task WidowX total
   # drops from 85/120 to 35/120, and nothing in the run warns about it. See
   # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_7.md.
   python: /path/to/conda/envs/loongforge/bin/python
-  log: /path/to/reports/groot_n1_7/simplerenv/widowx_stack_cube/policy_server.log
+  log: /path/to/reports/groot_n1_7/simplerenv/widowx_open_drawer/policy_server.log
   start_timeout_sec: 2400
   random_init: false
   ckpt_path: /path/to/GR00T-N1.7-SimplerEnv-Bridge
@@ -65,7 +72,7 @@ env:
   nvidia_icd_json: /path/to/nvidia_lib/10_nvidia.json
 
 run:
-  output_dir: /path/to/reports/groot_n1_7/simplerenv/widowx_stack_cube
+  output_dir: /path/to/reports/groot_n1_7/simplerenv/widowx_open_drawer
   seed: 0
   episode_idx: 0
   obj_episode_id: 0

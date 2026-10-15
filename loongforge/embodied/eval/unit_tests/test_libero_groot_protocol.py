@@ -11,7 +11,6 @@ import pytest
 
 from loongforge.embodied.eval.adapters.libero import LiberoAdapter
 from loongforge.embodied.eval.orchestrator.config import apply_config
-from loongforge.embodied.eval.orchestrator.runners import libero_groot_runner as official
 from loongforge.embodied.eval.orchestrator.runners import libero_runner as legacy
 from loongforge.embodied.eval.payload_builders.groot_n1_7 import GrootN1d7PayloadBuilder
 
@@ -62,7 +61,7 @@ class FakeEnv:
         return self.steps >= self.task.done_after
 
     def close(self):
-        pass
+        self.closed = True
 
 
 class FakeClient:
@@ -89,7 +88,6 @@ class FakeClient:
 def arguments(**kwargs):
     args = legacy.build_argparser().parse_args([])
     args.libero_protocol = "groot_official"
-    args.num_envs = 5
     args.episodes_per_task = 11
     args.num_steps_wait = 0
     args.max_steps = 17
@@ -104,7 +102,7 @@ def test_adapter_state_gripper_and_legacy_unchanged():
     obs = observation()
     ctx = {"instruction": "test", "ee_pos": np.array([99., 99., 99.]),
            "ee_ori_mat": np.eye(3)}
-    adapter = official.OfficialAdapter()
+    adapter = legacy.GrootOfficialAdapter()
     canonical = adapter.obs_to_canonical(obs, ctx)
     payload = GrootN1d7PayloadBuilder().build(canonical, ctx)
     np.testing.assert_allclose(payload["state"], [1, 2, 3, 0, 0, 0, .02, -.02])
@@ -121,7 +119,7 @@ def test_adapter_state_gripper_and_legacy_unchanged():
 @pytest.mark.parametrize("seed", [None, 42])
 def test_session_seed_once_random_reset_reuses_env_and_interrupts(seed):
     env = FakeEnv()
-    session = official.EnvSession(env, seed, 17)
+    session = legacy.GrootOfficialEnvSession(env, seed, 17)
     for _ in range(3):
         _, completed = session.step([[0] * 7] * 8)
         assert completed["steps"] == 2
@@ -134,7 +132,7 @@ def test_session_seed_once_random_reset_reuses_env_and_interrupts(seed):
 
 def test_macro_eight_actual_steps_and_exact_truncation():
     env = FakeEnv(SimpleNamespace(done_after=100))
-    session = official.EnvSession(env, 42, 17)
+    session = legacy.GrootOfficialEnvSession(env, 42, 17)
     assert session.step([[0] * 7] * 8)[1] is None
     assert session.steps == 8
     assert session.step([[0] * 7] * 8)[1] is None
@@ -150,7 +148,7 @@ def test_autoreset_success_is_merged_into_terminal_episode():
             return self.resets >= 2 and self.steps == 0
 
     env = ResetSuccessEnv(SimpleNamespace(done_after=100))
-    session = official.EnvSession(env, 42, 1)
+    session = legacy.GrootOfficialEnvSession(env, 42, 1)
     _, completed = session.step([[0] * 7] * 8)
     assert completed["steps"] == 1
     assert completed["success"] == 1
@@ -162,32 +160,63 @@ def test_initial_reset_success_does_not_mark_first_episode_successful():
         def check_success(self):
             return self.resets == 1 and self.steps == 0
 
-    session = official.EnvSession(InitialSuccessEnv(SimpleNamespace(done_after=100)), 42, 1)
+    session = legacy.GrootOfficialEnvSession(InitialSuccessEnv(SimpleNamespace(done_after=100)), 42, 1)
     assert session.reset_success is True
     _, completed = session.step([[0] * 7] * 8)
     assert completed["success"] == 0
 
 
-def test_real_spawn_isolates_global_numpy_streams():
-    args = arguments(num_envs=3)
-    pool = official.ProcessEnvs(args, SimpleNamespace(done_after=2), factory=FakeEnv)
-    try:
-        initial = pool.initial()
-        assert len({obs["pid"] for obs in initial}) == 3
-        assert all(obs["pid"] != os.getpid() for obs in initial)
-        streams = [np.random.RandomState(42 + i) for i in range(3)]
-        for i, obs in enumerate(initial):
-            assert obs["rng"] == streams[i].random_sample()
-        for reset_idx in range(2, 5):
-            results = pool.step([[[0] * 7] * 8] * 3)
-            for i, (obs, completed) in enumerate(results):
-                assert obs["seeds"] == [42 + i]
-                assert obs["resets"] == reset_idx
-                assert obs["rng"] == streams[i].random_sample()
-                assert completed["steps"] == 2
-    finally:
-        pool.close()
-    assert all(not proc.is_alive() for proc in pool.processes)
+class EnvFactory:
+    """Record every env collect_task builds; one env per task is expected."""
+
+    def __init__(self, env_cls=FakeEnv, done_after=2):
+        self.env_cls = env_cls
+        self.done_after = done_after
+        self.envs = []
+
+    def __call__(self, task, resolution):
+        assert resolution == 256
+        env = self.env_cls(SimpleNamespace(done_after=self.done_after))
+        self.envs.append(env)
+        return env
+
+
+@pytest.mark.parametrize("requested", [1, 3, 11])
+def test_collection_exact_limit_cache_reset_and_rpc(requested):
+    factory = EnvFactory()
+    records = legacy.collect_groot_official_task(
+        arguments(episodes_per_task=requested), SimpleNamespace(language="test"), 7, "run",
+        env_factory=factory, client_factory=FakeClient)
+    assert len(records) == requested
+    assert [r["episode_idx"] for r in records] == list(range(requested))
+    assert all(r["env_idx"] == 0 and r["env_seed"] == 42 for r in records)
+    assert all(r["success"] == 1 and r["steps"] == 2 for r in records)
+    assert all("episode_seed" not in r and "seed" not in r for r in records)
+    # One env per task, seeded once and reused through random resets.
+    assert len(factory.envs) == 1
+    env = factory.envs[0]
+    assert env.seeds == [42]
+    assert env.resets == requested + 1
+    assert env.closed
+    client = FakeClient.instances[-1]
+    assert len(client.calls) == requested
+    assert client.resets == ["run/task7/env0"] * (requested + 1)
+    assert all(c["disable_action_cache"] and c["return_action_chunk"] for c in client.calls)
+    assert all(c["episode_step"] == 0 for c in client.calls)
+    # Official sign gripper: model 0.5 -> 0.
+    assert all(action[-1] == 0 for action in env.actions)
+    assert client.closed
+
+
+def test_macro_rounds_advance_episode_step_until_completion():
+    factory = EnvFactory(done_after=10)
+    records = legacy.collect_groot_official_task(
+        arguments(episodes_per_task=1), SimpleNamespace(language="test"), 0, "run",
+        env_factory=factory, client_factory=FakeClient)
+    assert [r["steps"] for r in records] == [10]
+    client = FakeClient.instances[-1]
+    assert [c["episode_step"] for c in client.calls] == [0, 8]
+    assert len(factory.envs[0].actions) == 10
 
 
 class BrokenResetEnv(FakeEnv):
@@ -197,105 +226,12 @@ class BrokenResetEnv(FakeEnv):
         return super().reset()
 
 
-def test_spawn_autoreset_exception_invalidates_terminal_result():
-    pool = official.ProcessEnvs(
-        arguments(num_envs=2), SimpleNamespace(done_after=2), factory=BrokenResetEnv)
-    try:
-        pool.initial()
-        with pytest.raises(RuntimeError, match="autoreset failed"):
-            pool.step([[[0] * 7] * 8] * 2)
-    finally:
-        pool.close()
-    assert all(not proc.is_alive() for proc in pool.processes)
-
-
-def test_parent_worker_deadline_and_eof_are_errors():
-    pool = object.__new__(official.ProcessEnvs)
-    conn = Mock()
-    conn.poll.return_value = False
-    pool.connections = [conn]
-    with pytest.raises(TimeoutError, match="timed out"):
-        pool._receive(0.01)
-    conn.recv.assert_not_called()
-    conn.poll.return_value = True
-    conn.recv.side_effect = EOFError("worker died")
-    with pytest.raises(EOFError):
-        pool._receive(0.01)
-
-
-class FakePool:
-    instances = []
-    fail_round = None
-
-    def __init__(self, args, task):
-        self.n = args.num_envs
-        self.round = 0
-        self.closed = False
-        self.__class__.instances.append(self)
-
-    def initial(self):
-        return [observation() for _ in range(self.n)]
-
-    def step(self, chunks):
-        self.round += 1
-        if self.round == self.fail_round:
-            raise RuntimeError("native env failure after partial completion")
-        assert len(chunks) == self.n
-        assert all(len(chunk) == 8 for chunk in chunks)
-        assert all(action[-1] == 0 for chunk in chunks for action in chunk)
-        return [(observation(), {"success": i % 2, "steps": 2, "frames": [], "trace": []})
-                for i in range(self.n)]
-
-    def close(self):
-        self.closed = True
-
-
-@pytest.mark.parametrize("requested,expected,rounds", [(1, 5, 1), (11, 11, 3), (20, 20, 4)])
-def test_collection_exact_limit_cache_reset_and_per_env_rpc(requested, expected, rounds):
-    records = official.collect_task(
-        arguments(episodes_per_task=requested), SimpleNamespace(language="test"), 7, "run",
-        pool_factory=FakePool, client_factory=FakeClient)
-    assert len(records) == expected
-    assert [r["env_idx"] for r in records] == ([0, 1, 2, 3, 4] * rounds)[:expected]
-    assert [r["env_seed"] for r in records] == ([42, 43, 44, 45, 46] * rounds)[:expected]
-    assert all("episode_seed" not in r and "seed" not in r for r in records)
-    client = FakeClient.instances[-1]
-    assert len(client.calls) == rounds * 5
-    assert len(client.resets) == (rounds + 1) * 5
-    assert all(c["disable_action_cache"] and c["return_action_chunk"] for c in client.calls)
-    assert all(c["episode_step"] == 0 for c in client.calls)
-    assert client.closed and FakePool.instances[-1].closed
-
-
-def test_failure_after_partial_completion_raises_and_closes(monkeypatch):
-    monkeypatch.setattr(FakePool, "fail_round", 2)
-    with pytest.raises(RuntimeError, match="partial completion"):
-        official.collect_task(arguments(), SimpleNamespace(language="test"), 0, "run",
-                              pool_factory=FakePool, client_factory=FakeClient)
-    assert FakeClient.instances[-1].closed and FakePool.instances[-1].closed
-
-
-def test_macro_barrier_and_fresh_chunk_after_reset():
-    class MixedPool(FakePool):
-        def step(self, chunks):
-            self.round += 1
-            client = FakeClient.instances[-1]
-            # No env may step before all env RPCs of this round are complete.
-            assert len(client.calls) == self.round * self.n
-            if self.round == 1:
-                return [(observation(), {"success": 1, "steps": 2, "frames": [], "trace": []}),
-                        (observation(), None)]
-            return [(observation(), {"success": 0, "steps": 8, "frames": [], "trace": []}),
-                    (observation(), {"success": 1, "steps": 16, "frames": [], "trace": []})]
-
-    records = official.collect_task(
-        arguments(num_envs=2, episodes_per_task=3), SimpleNamespace(language="test"), 0, "run",
-        pool_factory=MixedPool, client_factory=FakeClient)
-    assert [r["steps"] for r in records] == [2, 8, 16]
-    client = FakeClient.instances[-1]
-    assert [c["episode_step"] for c in client.calls] == [0, 0, 0, 8]
-    assert client.resets[:3] == ["run/task0/env0", "run/task0/env1", "run/task0/env0"]
-    assert all(c["disable_action_cache"] for c in client.calls)
+def test_failure_after_partial_completion_raises_and_closes():
+    factory = EnvFactory(env_cls=BrokenResetEnv)
+    with pytest.raises(RuntimeError, match="autoreset failed"):
+        legacy.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
+                              env_factory=factory, client_factory=FakeClient)
+    assert FakeClient.instances[-1].closed and factory.envs[-1].closed
 
 
 def test_policy_error_and_short_chunk_fail_task():
@@ -308,10 +244,11 @@ def test_policy_error_and_short_chunk_fail_task():
             return {"ok": True, "data": {"actions": np.zeros((7, 7))}}
 
     for client, error in [(ErrorClient, RuntimeError), (ShortClient, ValueError)]:
+        factory = EnvFactory()
         with pytest.raises(error):
-            official.collect_task(arguments(), SimpleNamespace(language="test"), 0, "run",
-                                  pool_factory=FakePool, client_factory=client)
-        assert FakePool.instances[-1].closed
+            legacy.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
+                                  env_factory=factory, client_factory=client)
+        assert factory.envs[-1].closed
 
 
 def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
@@ -329,7 +266,7 @@ def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
         return [{"success": s, "frames": [], "trace": [], "episode_idx": i}
                 for i, s in enumerate([1] if task_id == 0 else [0, 0, 1])]
 
-    monkeypatch.setattr(official, "collect_task", collect)
+    monkeypatch.setattr(legacy, "collect_groot_official_task", collect)
     first = legacy.run_batch(args)
     second = legacy.run_batch(args)
     assert first["success_rate"] == pytest.approx(2 / 3)
@@ -344,7 +281,7 @@ def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
 
 
 def test_all_failed_or_unparsed_has_no_rate():
-    summary = official.summarize_tasks([
+    summary = legacy.summarize_groot_official_tasks([
         {"status": "FAILED", "success_rate": None},
         {"status": "OK", "success_rate": "unparsed"},
         {"status": "OK", "success_rate": float("nan")},
@@ -356,9 +293,9 @@ def test_all_failed_or_unparsed_has_no_rate():
 def test_explicit_config_routing_and_legacy_default(monkeypatch):
     args = legacy.build_argparser().parse_args([])
     assert args.libero_protocol == "legacy"
-    apply_config(args, {"benchmark": {"libero_protocol": "groot_official", "num_envs": 5}})
+    apply_config(args, {"benchmark": {"libero_protocol": "groot_official"}})
     run = Mock(return_value={"official": True})
-    monkeypatch.setattr(official, "run_batch", run)
+    monkeypatch.setattr(legacy, "_run_batch_groot_official", run)
     assert legacy.run_batch(args) == {"official": True}
     run.assert_called_once_with(args)
     args.libero_protocol = "typo"
@@ -367,18 +304,18 @@ def test_explicit_config_routing_and_legacy_default(monkeypatch):
 
 
 @pytest.mark.parametrize("overrides", [
-    {"num_steps_wait": 10}, {"chunk_execute_steps": 4}, {"num_envs": 0},
+    {"num_steps_wait": 10}, {"chunk_execute_steps": 4}, {"episodes_per_task": 0},
     {"continuous_gripper": True}, {"control_mode": "absolute"}, {"render_resolution": 128},
 ])
 def test_protocol_rejects_conflicting_configuration(overrides):
     with pytest.raises(ValueError):
-        official.run_batch(arguments(**overrides))
+        legacy._run_batch_groot_official(arguments(**overrides))
 
 
 def test_other_model_rejected_only_in_opt_in_path():
     args = arguments(raw_config={"model": {"model_type": "pi05"}})
     with pytest.raises(ValueError, match="requires GR00T"):
-        official.collect_task(args, SimpleNamespace(language="test"), 0, "run")
+        legacy.collect_groot_official_task(args, SimpleNamespace(language="test"), 0, "run")
 
 
 def test_legacy_episode_keeps_init_state_and_episode_seed(monkeypatch):
