@@ -272,7 +272,7 @@ class CustomDpOptimizer(Optimizer):
         # The shared checkpoint backend owns the file layout and the aux files;
         # this IO owns the rank-local masters and the per-parameter optimizer
         # state, found through ``zero_checkpoint_io``.
-        self.zero_checkpoint_io = RankLocalCheckpointIO(self, self.optim)
+        self.zero_checkpoint_io = RankLocalCheckpointIO(self)
 
     def _wire_in_step_publish(self):
         """Publish the Muon-managed masters as Muon updates them.
@@ -485,49 +485,21 @@ class CustomDpOptimizer(Optimizer):
     # -- master state (written by RankLocalCheckpointIO) ----------------------
 
     def master_state_dict(self):
-        """Return ownership metadata plus the fp32 master weights on CPU."""
+        """Return the fp32 master weights and error-feedback residuals, on CPU."""
         return {
-            "world_size": self.world_size,
-            "ownership": [item.__dict__ for item in self.plan.ownership],
-            "manifest": self.parameter_manifest(),
             "master": {
                 name: value.detach().cpu().clone() for name, value in self.master.items()
             },
-            "param_sync_compensation": self.plan.param_sync_compensation,
-            "param_sync_quantization": self.plan.param_sync_quantization,
             "param_sync_residuals": self.parameter_synchronizer.compensation_state_dict(),
         }
 
     @torch.no_grad()
-    def load_master_state_dict(self, state):
-        """Restore the fp32 masters, rejecting any ownership-schema mismatch."""
-        self.plan.validate_manifest(state.get("manifest"), allow_reshard=False)
-        if state["world_size"] != self.world_size:
-            raise RuntimeError(
-                f"custom_dp checkpoint world_size={state['world_size']} does not match "
-                f"{self.world_size}"
-            )
-        if state["ownership"] != [item.__dict__ for item in self.plan.ownership]:
-            raise RuntimeError("custom_dp parameter ownership schema does not match checkpoint")
-        if set(state["master"]) != set(self.master):
-            raise RuntimeError("custom_dp FP32 master keys do not match checkpoint")
-        for name, value in state["master"].items():
-            target = self.master[name]
-            if value.shape != target.shape or value.dtype != torch.float32:
-                raise RuntimeError(f"invalid FP32 master tensor for {name}")
-        for name, value in state["master"].items():
-            target = self.master[name]
-            target.copy_(value.to(target.device))
-        self.parameter_synchronizer.load_compensation_state_dict(
-            state.get("param_sync_residuals")
-        )
+    def load_masters(self, tensors, residuals=None):
+        """Copy fp32 masters (and residuals) by name into this rank's share.
 
-    @torch.no_grad()
-    def load_master_tensors(self, tensors):
-        """Copy fp32 masters by name, ignoring the checkpoint's ownership layout.
-
-        Used when resuming into a different world size: ownership is recomputed
-        from the new layout, so only the tensor values carry over.
+        The caller has already validated the checkpoint against the manifest, so
+        ownership is not re-checked here; the names the checkpoint must supply are
+        exactly the masters this rank now owns, whatever layout it was saved under.
         """
         missing = sorted(set(self.master) - set(tensors))
         if missing:
@@ -540,8 +512,8 @@ class CustomDpOptimizer(Optimizer):
             if value.shape != target.shape or value.dtype != torch.float32:
                 raise RuntimeError(f"invalid FP32 master tensor for {name}")
         for name, target in self.master.items():
-            value = tensors[name]
-            target.copy_(value.to(target.device))
+            target.copy_(tensors[name].to(target.device))
+        self.parameter_synchronizer.load_compensation_state_dict(residuals)
 
 
 __all__ = [

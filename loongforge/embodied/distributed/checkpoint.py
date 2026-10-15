@@ -1149,8 +1149,8 @@ def _restore_zero_optimizer_lrs(optimizer, last_lrs) -> None:
     for param_group, lr in zip(optimizer.param_groups, last_lrs):
         param_group["lr"] = lr
     if _zero_checkpoint_io(optimizer) is not None:
-        # CombinedOptimizer exposes the child param-group dictionaries directly,
-        # so updating its public groups already updates the rank-local optimizers.
+        # The custom_dp optimizer's public groups are the inner optimizers' own
+        # dictionaries, so updating them already updates the rank-local state.
         return
     for child in _zero_optimizer_children(optimizer):
         _copy_param_group_options(child.param_groups, child.optim.param_groups)
