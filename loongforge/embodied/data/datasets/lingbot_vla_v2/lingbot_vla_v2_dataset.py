@@ -46,7 +46,7 @@ def build_lingbot_vla_v2_dataset(model_cfg, data_cfg, training_args):
     from loongforge.embodied.model.lingbot_vla_v2.modeling_lingbot_vla_v2 import (
         build_internal_config,
     )
-    from loongforge.embodied.model.lingbot_vla_v2.worker_startup import (
+    from loongforge.embodied.data.datasets.lingbot_vla_v2.worker_startup import (
         arm_spawn_workers,
     )
     from loongforge.embodied.model.lingbot_vla_v2.upstream_adapter import (

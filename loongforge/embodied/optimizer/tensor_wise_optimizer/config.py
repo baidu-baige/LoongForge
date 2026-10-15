@@ -1,14 +1,20 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collective-precision and overlap knobs for ``CustomDpOptimizer``.
+"""Collective-precision and overlap knobs for ``TensorWiseOptimizer``.
 
-Inherit this frozen dataclass in a model's ``ModelConfig`` to get the fields and
-their defaults; the optimizer reads every field directly:
+A model makes them tunable from its YAML by holding one ``tensor_wise`` field:
 
     @dataclass(frozen=True)
-    class MyModelConfig(CustomDpConfig):
+    class MyModelConfig:
         ...
+        tensor_wise: TensorWiseConfig = field(default_factory=TensorWiseConfig)
+
+and then sets ``model.tensor_wise.<knob>`` in the YAML or on the command line. A
+model without the field runs with these defaults.
+
+Not frozen on purpose: OmegaConf marks a nested frozen dataclass read-only, so
+YAML values could not be merged into it. The enclosing model config is frozen.
 
 Downcasting is per parameter: the parameter policy keeps precision-critical
 parameters in fp32 regardless of these settings.
@@ -26,8 +32,8 @@ DEFAULT_PARAM_SYNC_PRECISION = "fp32"
 FP8_BLOCK = 128
 
 
-@dataclass(frozen=True)
-class CustomDpConfig:
+@dataclass
+class TensorWiseConfig:
     """Collective-precision and overlap knobs read by the optimizer."""
 
     # ── Collective precision ──
@@ -46,14 +52,14 @@ class CustomDpConfig:
     #   fp8_e4m3_delta -- broadcast (master - replica) as E4M3 with one fp32 scale
     #                     per block; fastest, needs compute capability >= 8.9, so
     #                     it is opt-in.
-    # Override per run, e.g. model.param_sync_precision=bf16.
+    # Override per run, e.g. model.tensor_wise.param_sync_precision=bf16.
     param_sync_precision: str = DEFAULT_PARAM_SYNC_PRECISION
     # fp8_e4m3_delta only: reprime_interval>0 re-anchors replicas to a full BF16 copy
     # every N publishes (0 = pure delta stream). The scale block is fixed at 128 by
     # TransformerEngine (FP8_BLOCK), so it is not configurable.
     param_sync_fp8_reprime_interval: int = 0
     # fp8_e4m3_delta only: name substrings selecting which eligible parameters are
-    # quantized. Empty means none are, e.g. model.param_sync_fp8_include='[self_attn]'.
+    # quantized. Empty means none are, e.g. model.tensor_wise.param_sync_fp8_include='[self_attn]'.
     param_sync_fp8_include: List[str] = field(default_factory=list)
     # fp8_e4m3_delta only: also quantize bf16-compute (VLM) parameters. A bf16 replica
     # cannot accumulate small deltas, so each rank keeps an fp32 shadow (+4 bytes per
@@ -61,14 +67,12 @@ class CustomDpConfig:
     #
     # Validated on lingbot_vla_v2 (8xA800, 20 steps): loss/grad_norm identical to the
     # baseline, step time 1.64s vs 1.82s. Opt in per run:
-    #   model.param_sync_precision=fp8_e4m3_delta
-    #   model.param_sync_bf16_with_fp8=true
-    #   model.param_sync_fp8_include='[layers.,blocks.]'
+    #   model.tensor_wise.param_sync_precision=fp8_e4m3_delta
+    #   model.tensor_wise.param_sync_bf16_with_fp8=true
+    #   model.tensor_wise.param_sync_fp8_include='[layers.,blocks.]'
     param_sync_bf16_with_fp8: bool = False
 
     # ── Collective overlap ──
-    # Declared here, not read from the environment, so runs outside the launch
-    # script get the same defaults.
     #   grad_overlap:     reduce each gradient bucket as soon as backward produces it.
     #   param_overlap:    broadcast each owner's master as soon as it is updated.
     #   comm_bucket_mb:   bucket size for both; 0 picks by grad_overlap (256 on, 1024 off).
@@ -84,5 +88,5 @@ __all__ = [
     "FP8_BLOCK",
     "DEFAULT_GRAD_REDUCE_DTYPE",
     "DEFAULT_PARAM_SYNC_PRECISION",
-    "CustomDpConfig",
+    "TensorWiseConfig",
 ]

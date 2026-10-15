@@ -46,7 +46,7 @@ this one file, or temporarily override with environment variables before the com
 - `LOCAL_VLA_ARTIFACTS_ROOT` — default `${EMBODIED_CI_ROOT}/vla_artifacts`; data/ckpt root, shared by download and training scripts
 - `EMBODIED_LOG_ROOT` — default `${EMBODIED_CI_ROOT}/logs`; regression log/result root directory
 - `EMBODIED_BASELINE_ROOT` — default **in-repo** at `tests/embodied/baseline` (this suite owns its baselines; the sibling suite owns `tests/llm_vlm/baseline/`). Override to point at a shared out-of-repo collection if multiple checkouts must share baselines.
-- `BOS_VLA_ARTIFACTS_ROOT` — BOS source prefix used by `config/prepare.sh`; the default in `env.sh` is a placeholder, export the real prefix before running it
+- `BOS_VLA_ARTIFACTS_ROOT` — BOS source prefix used by `config/prepare.sh`
 - `BCECMD_DIR` / `BCECMD` — bcecmd tool path, see file
 - `EMBODIED_<MODEL NAME UPPERCASE>_<VAR>` — empty by default; model-specific required paths (e.g. fastwam's TOKENIZER_PATH / DATA_PATH), injected as `<VAR>` before running the corresponding script
 
@@ -71,6 +71,8 @@ The following need to be prepared under `${EMBODIED_CI_ROOT}`:
   chip=a auto_collect_baseline=true bash tests/embodied/run.sh
   ```
 - **Auto-created**: `logs/` is generated automatically at runtime; no manual preparation needed.
+
+> `BOS_VLA_ARTIFACTS_ROOT` in `config/env.sh` is still a `TODO` placeholder; before first onboarding, replace it with the real BOS source prefix.
 
 ## Regression Targets
 

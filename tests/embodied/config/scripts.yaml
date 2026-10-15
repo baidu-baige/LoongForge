@@ -33,4 +33,4 @@ lingbot_va_robotwin_fsdp:          lingbot_va/run_lingbot_va_robotwin_fsdp_finet
 xvla_ddp:                          xvla/run_xvla_ddp_finetune.sh
 
 # --- lingbot_vla_v2 ---
-lingbot_vla_v2_custom_dp:          lingbot_vla_v2/run_lingbot_vla_v2_finetune.sh
+lingbot_vla_v2_tensor_wise:        lingbot_vla_v2/run_lingbot_vla_v2_finetune.sh

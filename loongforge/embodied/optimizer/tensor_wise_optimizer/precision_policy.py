@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Per-parameter precision policy shared by custom_dp model integrations.
+"""Per-parameter precision policy shared by tensor_wise model integrations.
 
 The model declares what each parameter *is*; the strategy decides how it moves on
 the wire. A model supplies marker lists by subclassing ``ParameterClassPolicy``,

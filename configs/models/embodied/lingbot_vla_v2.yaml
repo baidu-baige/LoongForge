@@ -53,51 +53,54 @@ model:
   # run only when throughput matters.
   regional_compile: []
 
-  # custom_dp collective precision. Router/gate weights and 1-D tensors always stay
-  # fp32 on the wire (expert selection is decided by fp32 gate logits); downcasting
-  # is per parameter, never per collective.
-  #   grad_reduce_dtype: fp32 | bf16 | mixed | compute
-  grad_reduce_dtype: bf16
-  #   param_sync_precision: how the fp32 action-expert masters reach the replicas,
-  #   one mutually exclusive enum (VLM bf16 tower and critical fp32 tensors are
-  #   unaffected):
-  #     fp32           publish fp32 masters verbatim (no downcast). The default:
-  #                    exact, and the only mode that needs no extra hardware.
-  #     bf16           round to bf16. Not a good default: it rounds the state.
-  #     bf16_ef        bf16 + owner-local fp32 residual (zero-mean dither).
-  #     bf16_ef_delta  broadcast the bf16 delta, accumulate into the fp32 replica.
-  #     fp8_e4m3_delta E4M3 (master - replica) deltas, one fp32 scale per block;
-  #                    replicas add the reconstructed delta. The delta re-derives
-  #                    against the true fp32 master each step, so its error does not
-  #                    accumulate, but it still perturbs the forward and it requires
-  #                    compute capability >= 8.9 (H100 and later); opt in per run.
-  param_sync_precision: fp32
-  # Read only when param_sync_precision=fp8_e4m3_delta:
-  #   param_sync_fp8_reprime_interval: 0 keeps a pure delta stream; >0 re-anchors
-  #     replicas to a full BF16 copy every N publishes to bound drift.
-  #   param_sync_fp8_include: the sole FP8 scope, and a pure opt-in -- an empty list
-  #     quantizes nothing. ["layers.", "blocks."] covers the stacked internal 2-D
-  #     weights (the action-expert layers, plus the VLM decoder layers and vision
-  #     blocks when param_sync_bf16_with_fp8 is on); top-level projections
-  #     (embed_tokens/merger/action_*_proj/state_proj), router/gate and 1-D
-  #     norms/biases are left out and keep their normal precision.
-  #   param_sync_bf16_with_fp8: also FP8 the bf16 VLM tower via a per-rank fp32
-  #     shadow (+4 bytes/param resident). Off by default; scope it with
-  #     param_sync_fp8_include when measuring its loss/memory tradeoff.
-  param_sync_fp8_reprime_interval: 0
-  param_sync_fp8_include: []
-  param_sync_bf16_with_fp8: false
+  # tensor_wise collectives (TensorWiseConfig). Override per run with
+  # model.tensor_wise.<field>=..., e.g. model.tensor_wise.grad_reduce_dtype=fp32.
+  tensor_wise:
+    # Collective precision. Router/gate weights and 1-D tensors always stay
+    # fp32 on the wire (expert selection is decided by fp32 gate logits); downcasting
+    # is per parameter, never per collective.
+    #   grad_reduce_dtype: fp32 | bf16 | mixed | compute
+    grad_reduce_dtype: bf16
+    #   param_sync_precision: how the fp32 action-expert masters reach the replicas,
+    #   one mutually exclusive enum (VLM bf16 tower and critical fp32 tensors are
+    #   unaffected):
+    #     fp32           publish fp32 masters verbatim (no downcast). The default:
+    #                    exact, and the only mode that needs no extra hardware.
+    #     bf16           round to bf16. Not a good default: it rounds the state.
+    #     bf16_ef        bf16 + owner-local fp32 residual (zero-mean dither).
+    #     bf16_ef_delta  broadcast the bf16 delta, accumulate into the fp32 replica.
+    #     fp8_e4m3_delta E4M3 (master - replica) deltas, one fp32 scale per block;
+    #                    replicas add the reconstructed delta. The delta re-derives
+    #                    against the true fp32 master each step, so its error does not
+    #                    accumulate, but it still perturbs the forward and it requires
+    #                    compute capability >= 8.9 (H100 and later); opt in per run.
+    param_sync_precision: fp32
+    # Read only when param_sync_precision=fp8_e4m3_delta:
+    #   param_sync_fp8_reprime_interval: 0 keeps a pure delta stream; >0 re-anchors
+    #     replicas to a full BF16 copy every N publishes to bound drift.
+    #   param_sync_fp8_include: the sole FP8 scope, and a pure opt-in -- an empty list
+    #     quantizes nothing. ["layers.", "blocks."] covers the stacked internal 2-D
+    #     weights (the action-expert layers, plus the VLM decoder layers and vision
+    #     blocks when param_sync_bf16_with_fp8 is on); top-level projections
+    #     (embed_tokens/merger/action_*_proj/state_proj), router/gate and 1-D
+    #     norms/biases are left out and keep their normal precision.
+    #   param_sync_bf16_with_fp8: also FP8 the bf16 VLM tower via a per-rank fp32
+    #     shadow (+4 bytes/param resident). Off by default; scope it with
+    #     param_sync_fp8_include when measuring its loss/memory tradeoff.
+    param_sync_fp8_reprime_interval: 0
+    param_sync_fp8_include: []
+    param_sync_bf16_with_fp8: false
 
-  # custom_dp collective overlap. grad_overlap reduces each gradient bucket as backward
-  # produces it; param_overlap broadcasts each owner's parameters as its master is
-  # updated. comm_bucket_mb sizes both; 0 means pick by grad_overlap (256 when
-  # on, 1024 when off). grad_inflight_mb caps
-  # the bytes of gradient collectives in flight during backward -- a memory bound,
-  # lower it on cards with less memory than the validated configuration.
-  grad_overlap: true
-  param_overlap: true
-  comm_bucket_mb: 256
-  grad_inflight_mb: 3072
+    # Collective overlap. grad_overlap reduces each gradient bucket as backward
+    # produces it; param_overlap broadcasts each owner's parameters as its master is
+    # updated. comm_bucket_mb sizes both; 0 means pick by grad_overlap (256 when
+    # on, 1024 when off). grad_inflight_mb caps
+    # the bytes of gradient collectives in flight during backward -- a memory bound,
+    # lower it on cards with less memory than the validated configuration.
+    grad_overlap: true
+    param_overlap: true
+    comm_bucket_mb: 256
+    grad_inflight_mb: 3072
 
   align_params:
     mode: query

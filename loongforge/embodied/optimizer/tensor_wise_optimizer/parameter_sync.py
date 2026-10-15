@@ -14,10 +14,10 @@ from dataclasses import dataclass
 import torch
 import torch.distributed as dist
 
-from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.config import (
     FP8_BLOCK,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.gradient_reducer import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.gradient_reducer import (
     WHOLE_TENSOR,
     assert_plan_matches_ranks,
     bucket_by_bytes,
@@ -304,7 +304,7 @@ class ParameterSynchronizer:
             self._group,
             self._world_size,
             self._plan.device,
-            "custom_dp parameter-sync plan differs across ranks; refusing to run "
+            "tensor_wise parameter-sync plan differs across ranks; refusing to run "
             "overlapped parameter sync",
         )
 

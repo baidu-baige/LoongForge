@@ -13,7 +13,7 @@ runs in the *main* process, so the worker dies before it ever runs.
 
 We arrange for :func:`apply` to run at worker interpreter startup, before any
 unpickling, via a ``sitecustomize`` hook (see ``spawn_bootstrap``). All the
-model-specific logic lives here in the model package; the bootstrap directory
+lingbot_vla_v2-specific logic lives here, beside the dataset; the bootstrap directory
 holds only the generic ``sitecustomize`` entry point.
 """
 
@@ -38,7 +38,7 @@ def arm_spawn_workers() -> None:
     ``sitecustomize`` earlier on the path still wins; ours only runs when there is
     none.
     """
-    here = os.path.dirname(os.path.abspath(__file__))  # .../lingbot_vla_v2
+    here = os.path.dirname(os.path.abspath(__file__))  # .../datasets/lingbot_vla_v2
     bootstrap = os.path.join(here, "spawn_bootstrap")
     existing = os.environ.get("PYTHONPATH", "")
     if bootstrap not in existing.split(os.pathsep):

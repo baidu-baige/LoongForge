@@ -370,14 +370,6 @@ def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
                     parameters_as_bucket_view=parameters_as_bucket_view,
                     **kwargs,
                 )
-        elif strategy == "custom_dp":
-            # custom_dp shards the optimizer state itself: the fp32 masters live on
-            # their tensor's owner and the trainer builds this optimizer on that
-            # view, so there is nothing for ZeroRedundancyOptimizer to wrap.
-            logger.info(
-                "ZeroRedundancyOptimizer not used: --distributed-strategy custom_dp "
-                "shards optimizer state through the custom_dp parameter plan."
-            )
         else:
             logger.warning(
                 "--zero-optimizer ignored: only effective with "

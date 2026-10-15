@@ -458,7 +458,7 @@ class BaseTrainer(ABC):
             else:
                 # No clipping requested, but the norm is still reported -- and a
                 # subclass whose parameters are not the model's own (e.g. the
-                # custom_dp masters) has to supply it.
+                # tensor_wise masters) has to supply it.
                 grad_norm = self._compute_grad_norm()
 
         # ── Optimizer step ──

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Stable parameter metadata for custom_dp training.
+"""Stable parameter metadata for tensor_wise training.
 
 The plan runs the setup in five explicitly ordered phases: resolve the
 capabilities, plan ownership, create the fp32 masters from the pre-cast values,
@@ -18,7 +18,7 @@ from typing import Iterable
 import torch
 from torch import nn
 
-from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.precision_policy import (
     DTYPES,
     GRAD_REDUCE_MODES,
     PARAM_SYNC_DECOMPOSITION,
@@ -27,7 +27,7 @@ from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
     dtype_label,
     resolve_parameter_capabilities,
 )
-from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.config import (
     DEFAULT_GRAD_REDUCE_DTYPE,
     DEFAULT_PARAM_SYNC_PRECISION,
     FP8_BLOCK,
@@ -404,14 +404,14 @@ class ParameterPlan:
         )
         for list_name, token in misses:
             logger.warning(
-                "custom_dp: %s marker %r matched no parameter name; a "
+                "tensor_wise: %s marker %r matched no parameter name; a "
                 "renamed submodule may have silently changed precision/routing",
                 list_name,
                 token,
             )
         if self.param_sync_quantization != "none" and not self.param_sync_fp8_include:
             logger.warning(
-                "custom_dp: param_sync_precision selects FP8 but "
+                "tensor_wise: param_sync_precision selects FP8 but "
                 "param_sync_fp8_include is empty, so no parameter will be quantized"
             )
 

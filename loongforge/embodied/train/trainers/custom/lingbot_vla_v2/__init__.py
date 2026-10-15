@@ -3,6 +3,6 @@
 
 """Custom trainers for LingBot VLA v2."""
 
-from .lingbot_vla_v2_custom_dp_trainer import LingbotVlaV2CustomDpTrainer
+from .lingbot_vla_v2_trainer import LingbotVlaV2Trainer
 
-__all__ = ["LingbotVlaV2CustomDpTrainer"]
+__all__ = ["LingbotVlaV2Trainer"]

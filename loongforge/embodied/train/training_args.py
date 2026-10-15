@@ -37,8 +37,6 @@ from typing import Any, List, Optional, get_args, get_origin, Union
 
 import torch
 
-from loongforge.embodied.distributed.custom_dp_utils.custom_dp_args import CustomDpArgs
-
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -610,7 +608,8 @@ class _OptimizerArgs:
                     "muon. TEFusedAdamW requires TransformerEngine; "
                     "ApexFusedAdamW requires Apex. Dmuon is the third-party "
                     "package's FSDP2 Muon; muon is LoongForge's own "
-                    "Muon for --distributed-strategy custom_dp (custom data parallel)."
+                    "Muon, built by a tensor_wise trainer "
+                    "(--trainer-type LingbotVlaV2Trainer)."
         },
     )
     clip_grad: float = field(
@@ -726,7 +725,7 @@ class _OptimizerArgs:
         default=0.95,
         metadata={
             "help": "Muon momentum. Used by --optimizer=muon, which "
-                    "is built by the custom_dp trainer rather than by "
+                    "is built by the tensor_wise trainer rather than by "
                     "the optimizer registry."
         },
     )
@@ -1351,11 +1350,9 @@ class _DistributedArgs:
     distributed_strategy: str = field(
         default="fsdp",
         metadata={
-            "choices": ["ddp", "fsdp", "custom_dp"],
-            "help": "Parallelism strategy: DDP (replicate), FSDP2 (fully "
-                    "sharded), or custom_dp (custom data parallel; requires "
-                    "--zero-optimizer and a custom_dp --trainer-type, see the "
-                    "--custom-dp-* arguments).",
+            "choices": ["ddp", "fsdp"],
+            "help": "Parallelism strategy: DDP (replicate) or FSDP2 "
+                    "(fully sharded).",
         },
     )
     hsdp_shard_size: Optional[int] = field(
@@ -1703,9 +1700,7 @@ class _DistributedArgs:
         default=False,
         metadata={
             "help": "Wrap optimizer with ZeroRedundancyOptimizer (ZeRO Stage-1). "
-                    "Shards optimizer states across ranks. Effective with "
-                    "--distributed-strategy ddp; required when "
-                    "--distributed-strategy custom_dp."
+                    "Shards optimizer states across ranks. Only effective with DDP."
         },
     )
     zero_parameters_as_bucket_view: bool = field(
@@ -1749,7 +1744,6 @@ class TrainingArgs(
     _ActivationCheckpointArgs,
     _FP8Args,
     _DistributedArgs,
-    CustomDpArgs,
 ):
     """Generic training args (single source of truth). Frozen after construction.
 

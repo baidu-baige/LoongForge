@@ -809,26 +809,6 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
 
     rng_local = _load_rank_rng(checkpoint_path, ctx)
     rng_per_rank = None
-
-    meta_path = os.path.join(checkpoint_path, "resume_meta.json")
-    saved_epoch = None
-    if os.path.exists(meta_path):
-        with open(meta_path) as f:
-            saved_epoch = json.load(f).get("epoch")
-        saved_epoch = int(saved_epoch) if saved_epoch is not None else None
-
-    if has_local_zero_optim and _saved_zero_world_size(checkpoint_path) != ctx.world_size:
-        # Per-rank RNG streams and dataloader positions are defined against the
-        # saved rank layout: rank N of a 4-rank run reads a different data shard
-        # than rank N of an 8-rank run, so replaying either would be wrong rather
-        # than merely approximate. Both restart instead.
-        if ctx.is_main:
-            logger.warning(
-                "Resuming into a different world size: RNG and dataloader position "
-                "are not restored, so the data stream restarts from the sampler's "
-                "first batch for this layout."
-            )
-        return saved_epoch, {}, None
     if restore_rng:
         if rng_local is not None:
             _set_rank_rng(rng_local, ctx)
@@ -844,6 +824,13 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
         rng_per_rank = _gather_rng_for_deferred(rng_local, ctx)
 
     dl_state = _load_rank_dataloader(checkpoint_path, ctx)
+
+    meta_path = os.path.join(checkpoint_path, "resume_meta.json")
+    saved_epoch = None
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            saved_epoch = json.load(f).get("epoch")
+        saved_epoch = int(saved_epoch) if saved_epoch is not None else None
 
     return saved_epoch, dl_state, rng_per_rank
 
@@ -931,13 +918,6 @@ def _load_rank_rng(checkpoint_path, ctx) -> Optional[dict]:
     return torch.load(f, map_location="cpu", weights_only=False)
 
 
-def _saved_zero_world_size(checkpoint_path) -> int:
-    """Return the world size a rank-local ZeRO checkpoint was written with."""
-    metadata_path = os.path.join(checkpoint_path, _ZERO_OPTIMIZER_METADATA_FILE)
-    with open(metadata_path, encoding="utf-8") as f:
-        return int(json.load(f)["world_size"])
-
-
 def _load_rank_dataloader(checkpoint_path, ctx) -> dict:
     f = os.path.join(checkpoint_path, "dataloader", f"dl_rank{ctx.rank}.pt")
     if not os.path.exists(f):
@@ -1021,7 +1001,7 @@ def _owns_local_state(optimizer) -> bool:
 def _rank_local_optimizer(child):
     """Return the object that holds a ZeRO child's rank-local state.
 
-    torch's ZeroRedundancyOptimizer keeps it in ``.optim``; the custom_dp
+    torch's ZeroRedundancyOptimizer keeps it in ``.optim``; the tensor_wise
     optimizer owns its masters and optimizer state itself.
     """
     return child if _owns_local_state(child) else child.optim

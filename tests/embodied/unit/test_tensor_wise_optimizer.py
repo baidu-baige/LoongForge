@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CPU (gloo, world_size=2) tests for ``CustomDpOptimizer``."""
+"""CPU (gloo, world_size=2) tests for ``TensorWiseOptimizer``."""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ import torch.multiprocessing as mp
 from torch import nn
 
 from loongforge.embodied.distributed import checkpoint
-from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.precision_policy import (
     DefaultParameterPolicy,
     ParameterClassPolicy,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.custom_dp_optimizer import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.tensor_wise_optimizer import (
     CollectiveConfig,
-    CustomDpOptimizer,
+    TensorWiseOptimizer,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.optimizer_builder import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.optimizer_builder import (
     build_muon_optimizer,
 )
 
@@ -80,7 +80,7 @@ def _muon_factory(dp):
 
 def _build(model, factory, policy=None, **config):
     config.setdefault("gradient_reduce_dtype", "fp32")
-    return CustomDpOptimizer(
+    return TensorWiseOptimizer(
         model,
         policy or DefaultParameterPolicy(),
         factory,

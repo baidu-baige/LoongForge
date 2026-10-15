@@ -20,19 +20,14 @@ typed dataclass into that internal config so the two never diverge.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
-    CustomDpConfig,
+from loongforge.embodied.optimizer.tensor_wise_optimizer.config import (
+    TensorWiseConfig,
 )
 
 
 @dataclass(frozen=True)
-class LingbotVLAV2ModelConfig(CustomDpConfig):
-    """lingbot_vla_v2 model-structure config (maps 1:1 to YAML ``model:`` section).
-
-    The custom_dp collective-precision and overlap knobs
-    (``grad_reduce_dtype``, ``param_sync_precision``, ``grad_overlap`` ...) are
-    inherited from ``CustomDpConfig``; edit their defaults there.
-    """
+class LingbotVLAV2ModelConfig:
+    """lingbot_vla_v2 model-structure config (maps 1:1 to YAML ``model:`` section)."""
 
     model_type: str = "lingbot_vla_v2"
 
@@ -112,6 +107,9 @@ class LingbotVLAV2ModelConfig(CustomDpConfig):
     # policy's AdamW markers. The Muon hyper-parameters themselves are optimizer
     # args (--muon-*), not model structure.
     muon_exclude_name_patterns: Optional[List[str]] = None
+
+    # ── tensor_wise collectives (YAML ``model.tensor_wise``) ──
+    tensor_wise: TensorWiseConfig = field(default_factory=TensorWiseConfig)
 
     # ── Depth / video alignment (teacher distillation) ──
     # Carried verbatim as a nested dict so the reference heads and the in-loop

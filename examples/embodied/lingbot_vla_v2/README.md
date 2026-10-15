@@ -4,7 +4,7 @@ Run these scripts from the repository root.
 
 | Script | Purpose |
 | --- | --- |
-| `run_lingbot_vla_v2_finetune.sh` | Fine-tune LingBot-VLA-v2 on 8 GPUs with `custom_dp` (ZeRO-1 style, Muon). |
+| `run_lingbot_vla_v2_finetune.sh` | Fine-tune LingBot-VLA-v2 on 8 GPUs with `tensor_wise` (ZeRO-1 style, Muon). |
 
 ## Artifacts
 

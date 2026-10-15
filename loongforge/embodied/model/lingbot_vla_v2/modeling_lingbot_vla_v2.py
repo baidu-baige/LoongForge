@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Fields on LingbotVLAV2ModelConfig that are deliberately NOT forwarded to the
 # reference LingbotVLAV2Config: LoongForge routing/checkpoint, the training loop,
-# the custom_dp collective knobs (inherited from CustomDpConfig),
+# the tensor_wise collective knobs (the ``tensor_wise`` field),
 # the Muon optimizer, and the MoE-bias/expert-lr controls that the load-balance
 # hook (moe_load_balance.py) consumes directly. Kept explicit so that adding a new
 # model-structure field without wiring it into build_internal_config fails loudly
@@ -48,11 +48,8 @@ _NON_NETWORK_FIELDS = frozenset({
     "async_teacher", "pipeline_teacher", "flex_compile", "regional_compile",
     # Muon parameter routing
     "muon_exclude_name_patterns",
-    # custom_dp collective knobs (CustomDpConfig)
-    "grad_reduce_dtype", "param_sync_precision",
-    "param_sync_fp8_reprime_interval", "param_sync_fp8_include",
-    "param_sync_bf16_with_fp8", "grad_overlap", "param_overlap",
-    "comm_bucket_mb", "grad_inflight_mb",
+    # tensor_wise collective knobs
+    "tensor_wise",
 })
 
 
@@ -176,7 +173,7 @@ def apply_regional_compile(policy: nn.Module, targets) -> None:
 
     ``nn.Module.compile`` is used rather than ``torch.compile(module)`` because
     it installs the compiled call on the existing module instead of returning a
-    wrapper. By the time this runs, the custom_dp optimizer has
+    wrapper. By the time this runs, the tensor_wise optimizer has
     already captured this module tree, so replacing submodules would leave it
     holding the uncompiled ones.
 

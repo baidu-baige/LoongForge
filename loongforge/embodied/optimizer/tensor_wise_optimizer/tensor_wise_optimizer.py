@@ -1,12 +1,33 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""``CustomDpOptimizer``: the custom_dp strategy as one optimizer object.
+"""``TensorWiseOptimizer``: a distributed optimizer that assigns whole tensors.
 
 Shaped like ``torch.distributed.optim.ZeroRedundancyOptimizer``: it wraps an
 inner optimizer (Muon/AdamW) over the fp32 masters this rank owns, and the
 training loop talks to nothing else. Compute replicas stay complete on every
-rank; the masters and the optimizer state that follows them are distributed.
+rank; each tensor's fp32 master and optimizer state live on exactly one owner
+rank, chosen by fp32-byte load balancing in registration order.
+
+"Tensor-wise" names the unit of assignment, not of communication: collectives
+run on owner-aligned buckets of whole tensors. Against the usual neighbours:
+
+    element-wise ZeRO-1 (DeepSpeed, Megatron ``DistributedOptimizer``)
+        flattens and slices tensors across ranks, so a matrix can straddle two
+        ranks; gradients are reduce-scattered and parameters all-gathered. Muon
+        needs the whole matrix, so it must gather it first. Here no tensor is
+        split and Newton-Schulz runs once, on the owner, with no extra traffic.
+    torch ``ZeroRedundancyOptimizer``
+        also assigns whole parameters, but gradients are all-reduced by DDP so
+        every rank holds every gradient, and parameters are broadcast after the
+        whole step. Here gradients are reduced to the owner only (and released
+        on the other ranks), and a bucket is broadcast as soon as its masters
+        are updated, optionally in bf16 or fp8.
+    Megatron ``LayerWiseDistributedOptimizer``
+        assigns whole layers rather than tensors; gradients are all-reduced and
+        parameters all-gathered (``allgatherv``). Similar placement idea; the
+        communication differs as for ZeRO above.
+
 It assembles and owns:
 
     ParameterPlan          metadata, masters, resolved wire dtypes
@@ -22,6 +43,21 @@ The lifecycle, once per step:
     -> step()                    (inner step, publishing as masters update)
 
 ``close()`` abandons half-issued collectives on shutdown or after a failure.
+
+What the training loop must do around it (a trainer driving this optimizer):
+
+    * build it in the model-wrapping step, before anything (e.g. regional
+      compile) changes the module tree its parameter plan captures;
+    * build the inner optimizer over ``optimizer_view()`` (the masters), never
+      over the model: the replicas' ``.grad`` is consumed by the reduce;
+    * call ``prepare_for_backward()`` on the syncing micro-step only;
+    * take the grad norm from ``clip_grad_norm_()`` (``0.0`` to just measure),
+      since the replicas hold no gradients after the reduce;
+    * call ``scrub_nan_gradients()`` where the loop cleans NaN gradients;
+    * save training state in the dcp layout only (masters are rank-local), and
+      call ``close()`` after the final checkpoint is written.
+
+``LingbotVlaV2Trainer`` is the reference implementation.
 """
 
 from __future__ import annotations
@@ -32,29 +68,29 @@ import torch
 import torch.distributed as dist
 from torch.optim.optimizer import Optimizer
 
-from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.precision_policy import (
     GRAD_REDUCE_MODES,
     PARAM_SYNC_PRECISIONS,
 )
-from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.config import (
     DEFAULT_GRAD_REDUCE_DTYPE,
     DEFAULT_PARAM_SYNC_PRECISION,
-    CustomDpConfig,
+    TensorWiseConfig,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.gradient_reducer import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.gradient_reducer import (
     GradientReducer,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.parameter_sync import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.parameter_sync import (
     ParameterSynchronizer,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.parameter_plan import (
+from loongforge.embodied.optimizer.tensor_wise_optimizer.parameter_plan import (
     MasterParameterView,
     ParameterPlan,
 )
 
 # Tag on the rank-local checkpoint payload, so a ZeRO state written by another
 # optimizer is refused instead of misread.
-BACKEND = "custom_dp"
+BACKEND = "tensor_wise"
 
 # Overlap scheduling constants, deliberately not exposed as configuration:
 # deeper parameter-sync queues measured slower on 8 GPUs at GBS80, so the depth
@@ -84,13 +120,15 @@ class CollectiveConfig:
     fp8_bf16_shadow: bool | None = None
 
     @classmethod
-    def from_model_config(cls, cfg) -> "CollectiveConfig":
-        """Read the plan from the model config, whose field names are the YAML.
+    def from_model_config(cls, model_cfg) -> "CollectiveConfig":
+        """Read the plan from ``model_cfg.tensor_wise`` (YAML ``model.tensor_wise``).
 
-        Every field is required: the model config inherits them from
-        ``CustomDpConfig``, so a missing one is a wiring bug that should
-        surface at startup rather than be papered over with a local default.
+        A model config without that field runs with the ``TensorWiseConfig``
+        defaults.
         """
+        cfg = getattr(model_cfg, "tensor_wise", None)
+        if cfg is None:
+            cfg = TensorWiseConfig()
         return cls(
             gradient_reduce_dtype=cfg.grad_reduce_dtype,
             parameter_sync_precision=cfg.param_sync_precision,
@@ -102,33 +140,6 @@ class CollectiveConfig:
             fp8_include=tuple(cfg.param_sync_fp8_include or ()),
             fp8_bf16_shadow=cfg.param_sync_bf16_with_fp8,
         )
-
-    @classmethod
-    def from_training_args(cls, args) -> "CollectiveConfig":
-        """Read the plan from the ``--custom-dp-*`` command-line knobs."""
-        return cls(
-            gradient_reduce_dtype=args.custom_dp_grad_reduce_dtype,
-            parameter_sync_precision=args.custom_dp_param_sync_precision,
-            grad_overlap=bool(args.custom_dp_grad_overlap),
-            param_overlap=bool(args.custom_dp_param_overlap),
-            bucket_mb=args.custom_dp_comm_bucket_mb,
-            grad_inflight_mb=int(args.custom_dp_grad_inflight_mb),
-            fp8_reprime_interval=int(args.custom_dp_param_sync_fp8_reprime_interval),
-            fp8_include=tuple(args.custom_dp_param_sync_fp8_include or ()),
-            fp8_bf16_shadow=args.custom_dp_param_sync_bf16_with_fp8,
-        )
-
-    @classmethod
-    def from_sources(cls, model_cfg, training_args) -> "CollectiveConfig":
-        """Pick the plan's source: the model config if it carries the knobs.
-
-        A model config that inherits ``CustomDpConfig`` keeps its YAML in charge (and
-        the strict every-field-required check); any other model is tuned through
-        the ``--custom-dp-*`` arguments.
-        """
-        if isinstance(model_cfg, CustomDpConfig):
-            return cls.from_model_config(model_cfg)
-        return cls.from_training_args(training_args)
 
     def validate(self) -> "CollectiveConfig":
         """Reject unsupported plans at startup, and resolve the bucket size.
@@ -181,7 +192,7 @@ class CollectiveConfig:
         }
 
 
-class CustomDpOptimizer(Optimizer):
+class TensorWiseOptimizer(Optimizer):
     """Owner-distributed fp32 masters and optimizer state over complete replicas.
 
     ``optimizer_factory(self)`` builds the inner optimizer over the masters
@@ -224,8 +235,8 @@ class CustomDpOptimizer(Optimizer):
         config = self._collective_config
 
         # Collective precision is configured from the model YAML
-        # (``model.grad_reduce_dtype`` / ``model.param_sync_precision``); override
-        # per run on the command line, e.g. ``model.param_sync_precision=bf16``.
+        # (``model.tensor_wise.grad_reduce_dtype`` / ``.param_sync_precision``);
+        # override per run, e.g. ``model.tensor_wise.param_sync_precision=bf16``.
         # Gradient reduction and parameter publication are downcast per parameter,
         # never per collective.
         self.plan = ParameterPlan(
@@ -505,13 +516,13 @@ class CustomDpOptimizer(Optimizer):
         else before a tensor is touched.
         """
         if state.get("backend") != BACKEND:
-            raise RuntimeError("rank-local ZeRO state was not written by custom_dp")
+            raise RuntimeError("rank-local ZeRO state was not written by tensor_wise")
         self.plan.validate_manifest(state.get("manifest"))
         if state["optimizer_param_names"] != self._optimizer_param_names():
             raise RuntimeError("checkpoint optimizer parameter order mismatch")
         master = state["master"]
         if set(master) != set(self.master):
-            raise RuntimeError("custom_dp FP32 master keys do not match checkpoint")
+            raise RuntimeError("tensor_wise FP32 master keys do not match checkpoint")
         for name, target in self.master.items():
             if master[name].shape != target.shape or master[name].dtype != torch.float32:
                 raise RuntimeError(f"invalid FP32 master tensor for {name}")
@@ -545,6 +556,6 @@ class CustomDpOptimizer(Optimizer):
 
 __all__ = [
     "CollectiveConfig",
-    "CustomDpOptimizer",
+    "TensorWiseOptimizer",
 ]
 

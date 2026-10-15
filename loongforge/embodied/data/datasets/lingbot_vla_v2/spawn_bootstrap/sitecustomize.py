@@ -8,13 +8,13 @@
 # ``PYTHONPATH`` (see ``worker_startup.arm_spawn_workers``) so CPython's
 # ``site`` machinery imports this module at the start of every spawn worker
 # interpreter -- before it unpickles any upstream object. The real work lives in
-# the model package (``worker_startup.apply``); this file is a thin,
+# ``worker_startup.apply`` next to the dataset; this file is a thin,
 # gated dispatcher and a strict no-op in any process that did not set the marker.
 import os
 
 if os.environ.get("LOONGFORGE_SPAWN_WORKER_COMPAT") == "1":
     try:
-        from loongforge.embodied.model.lingbot_vla_v2.worker_startup import (
+        from loongforge.embodied.data.datasets.lingbot_vla_v2.worker_startup import (
             apply,
         )
 

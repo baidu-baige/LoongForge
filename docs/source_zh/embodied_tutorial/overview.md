@@ -317,7 +317,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 分布式策略 | `--distributed-strategy` | `fsdp` | `ddp`, `fsdp`, `custom_dp` | 选择 DDP、FSDP 或 custom_dp（见 4.2.3） |
+| 分布式策略 | `--distributed-strategy` | `fsdp` | `ddp`, `fsdp` | 选择 DDP 或 FSDP |
 | 训练精度 | `--dtype` | `bfloat16` | `bfloat16`, `float16`, `float32` | 模型训练 dtype |
 | DDP ZeRO-1 | `--zero-optimizer` | `False` | 布尔开关 | DDP 下分片 optimizer state |
 | HSDP shard size | `--hsdp-shard-size` | `None` | 正整数 | FSDP 下启用 HSDP |
@@ -412,36 +412,38 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 
 Delta-FP8 只改变 FSDP 参数通信精度，模型计算仍使用 FSDP 混合精度策略选择的 dtype。使用条件、启动方式、参数说明和常见问题详见 [FSDP2 Delta-FP8 Param AllGather](../features/delta_fp8_allgather.md)。
 
-#### 4.2.3 custom_dp（Custom Data Parallel）
+#### 4.2.3 tensor_wise（Tensor-wise Distributed Optimizer）
 
-custom_dp 在每个 rank 上保留完整的计算副本，不切分任何 tensor。每个参数指定一个 owner rank：梯度 reduce 到 owner，owner 更新自己的 fp32 master 和优化器状态，再把更新后的参数 broadcast 回各 rank。相比 `ddp` + `--zero-optimizer`，它用 reduce 代替 all-reduce，参数发布可用 bf16 或 fp8，并且两段通信都与计算重叠。owner 持有整个 tensor，因此也支持 Muon。
+tensor_wise（`TensorWiseOptimizer`）是 DDP 下的一种分布式优化器：每个 rank 上保留完整的计算副本，不切分任何 tensor。每个参数整体指定一个 owner rank：梯度 reduce 到 owner，owner 更新自己的 fp32 master 和优化器状态，再把更新后的参数 broadcast 回各 rank。它接管梯度通信，因此替代 DDP wrapper，与 `--zero-optimizer` 是二选一的关系。相比 `ddp` + `--zero-optimizer`，它用 reduce 代替 all-reduce，参数发布可用 bf16 或 fp8，并且两段通信都与计算重叠。owner 持有整个 tensor，因此 Muon 的 Newton-Schulz 在 owner 上算一次即可，不像按元素切分的 ZeRO-1 那样需要先 gather 矩阵。"Tensor-wise" 指分配单位，与 Megatron `LayerWiseDistributedOptimizer` 中的 "layer-wise" 同义；通信仍按 owner 对齐的 bucket 进行。
 
-模型无需改代码即可使用 custom_dp，只需要这三个参数：
+目前 `lingbot_vla_v2` 使用 tensor_wise。它由 trainer 启用，不需要额外开关：选择 `LingbotVlaV2Trainer` 即构建 `TensorWiseOptimizer`：
 
 ```bash
---trainer-type CustomDpTrainer \
---distributed-strategy custom_dp \
---zero-optimizer
+--trainer-type LingbotVlaV2Trainer \
+--distributed-strategy ddp \
+--optimizer muon
 ```
 
-| 功能 | 参数 | 默认值 | 取值 / 类型 | 说明 |
+通信参数在模型 YAML 的 `model.tensor_wise:` 段设置，或单次运行时用 `model.tensor_wise.<字段>=...` 覆盖：
+
+| 功能 | 字段（`model.tensor_wise.*`） | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 梯度 reduce dtype | `--custom-dp-grad-reduce-dtype` | `bf16` | `fp32`, `bf16`, `mixed`, `compute` | 1-D tensor 始终保持 fp32 |
-| 参数发布精度 | `--custom-dp-param-sync-precision` | `fp32` | `fp32`, `bf16`, `bf16_ef`, `bf16_ef_delta`, `fp8_e4m3_delta` | master 到副本的传输方式 |
-| 梯度通信重叠 | `--custom-dp-grad-overlap` | `True` | 布尔开关 | backward 产出一个 bucket 就 reduce 一个 |
-| 参数发布重叠 | `--custom-dp-param-overlap` | `True` | 布尔开关 | owner 更新完参数就立即 broadcast |
-| bucket 大小 | `--custom-dp-comm-bucket-mb` | `256` | 整数 MB | `0` 表示按梯度重叠开关自动选择 |
-| 在途通信上限 | `--custom-dp-grad-inflight-mb` | `3072` | 整数 MB | 显存上界，小显存卡可调低 |
+| 梯度 reduce dtype | `grad_reduce_dtype` | `bf16` | `fp32`, `bf16`, `mixed`, `compute` | 1-D tensor 始终保持 fp32 |
+| 参数发布精度 | `param_sync_precision` | `fp32` | `fp32`, `bf16`, `bf16_ef`, `bf16_ef_delta`, `fp8_e4m3_delta` | master 到副本的传输方式 |
+| 梯度通信重叠 | `grad_overlap` | `true` | 布尔 | backward 产出一个 bucket 就 reduce 一个 |
+| 参数发布重叠 | `param_overlap` | `true` | 布尔 | owner 更新完参数就立即 broadcast |
+| bucket 大小 | `comm_bucket_mb` | `256` | 整数 MB | `0` 表示按梯度重叠开关自动选择 |
+| 在途通信上限 | `grad_inflight_mb` | `3072` | 整数 MB | 显存上界，小显存卡可调低 |
 
-`--custom-dp-param-sync-fp8-*` 与 `--custom-dp-param-sync-bf16-with-fp8` 只在 `fp8_e4m3_delta` 下生效。若模型 config 继承了 `CustomDpConfig`（如 `lingbot_vla_v2`），这些旋钮改从 YAML 的 `model:` 段读取，`--custom-dp-*` 不生效。
+`param_sync_fp8_*` 与 `param_sync_bf16_with_fp8` 只在 `fp8_e4m3_delta` 下生效。
 
-默认策略保持每个参数原有的 dtype，1-D tensor 的通信保持 fp32，优化器由 `--optimizer` 决定。若需要部分模块 fp32 计算、fp32 通信敏感参数或 Muon（`--optimizer muon`），请继承 `CustomDpTrainer`，在 `_build_parameter_policy` 中返回 `ParameterClassPolicy`。
+要让其他模型使用 tensor_wise：参照 `LingbotVlaV2Trainer` 写一个驱动 `TensorWiseOptimizer` 的 trainer（接入约定见 `TensorWiseOptimizer` 的 docstring），把它的 `--trainer-type` 名加入 `TENSOR_WISE_TRAINERS`（`tensor_wise_optimizer/validation.py`），在模型 config 里加 `tensor_wise: TensorWiseConfig` 字段承载上述参数，并提供参数策略（`ParameterClassPolicy` 或默认的 `DefaultParameterPolicy`）。
 
 约束：
 
-- 必须带 `--zero-optimizer`；`--fp8`、`--ddp-*` 与 `--zero-parameters-as-bucket-view` 会被拒绝。
+- 要求 `--distributed-strategy ddp`；`--zero-optimizer`、`--fp8` 与 `--ddp-*` 会被拒绝；`--optimizer muon` 只能配合 tensor_wise trainer 使用。
 - 训练状态 checkpoint 要求 `--save-format dcp`，且不能与 `--use-lora` 同用；只导出权重时加 `--no-save-training-state`。
-- 模块 buffer（如 BatchNorm 统计量）不会同步，`--init-on-meta` 尚未验证。迁移模型到 custom_dp 前请先确认这两点。
+- 模块 buffer（如 BatchNorm 统计量）不会同步，`--init-on-meta` 尚未验证。迁移模型到 tensor_wise 前请先确认这两点。
 
 ### 4.3 稳定性与运行时控制
 
