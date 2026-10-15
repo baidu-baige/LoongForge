@@ -1,0 +1,152 @@
+[
+  {
+    "date": "2026-09",
+    "icon": "✨",
+    "url": "https://github.com/baidu-baige/LoongForge/tree/master/examples/glm5_next",
+    "en": { "text": "Added training support for **GLM-5.3-flash**." },
+    "zh": { "text": "新增 **GLM-5.3-flash** 训练支持。" }
+  },
+  {
+    "date": "2026-09",
+    "icon": "✨",
+    "url": "https://github.com/baidu-baige/LoongForge/tree/master/examples/kimi_k3",
+    "en": { "text": "Added **Kimi-K3** BF16 training support for both LLMs and VLMs." },
+    "zh": { "text": "新增 **Kimi-K3** BF16 训练支持，覆盖 LLM 与 VLM。" }
+  },
+  {
+    "date": "2026-09",
+    "icon": "⚡",
+    "url": "https://github.com/baidu-baige/LoongForge/blob/master/examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh",
+    "en": { "text": "Added an optimized **DreamZero Wan2.2-5B FSDP recipe** with cache-aware data loading, compiled attention blocks, frozen-module handling, and FSDP2 Delta-FP8 Param AllGather." },
+    "zh": { "text": "新增优化版 **DreamZero Wan2.2-5B FSDP 训练方案**：缓存感知的数据加载、编译加速的 attention 块、冻结模块处理，以及 FSDP2 Delta-FP8 参数 AllGather。" }
+  },
+  {
+    "date": "2026-08",
+    "icon": "🤖",
+    "url": "https://github.com/baidu-baige/LoongForge/tree/master/examples/embodied/wall_oss_0_5",
+    "en": { "text": "Added VLA training support for **Wall-OSS-0.5**, with custom fused operators for higher training throughput." },
+    "zh": { "text": "新增 **Wall-OSS-0.5** VLA 训练支持，并通过自定义融合算子进一步提升训练吞吐。" }
+  },
+  {
+    "date": "2026-08",
+    "icon": "📄",
+    "url": "blog/2026-08-taot-topology-aware-expert-placement.html",
+    "en": { "text": "Released the **TAOT paper** — topology-aware dynamic expert replica placement that tackles EP load imbalance in MoE training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** on a real training case." },
+    "zh": {
+      "text": "发布 **TAOT 论文**：拓扑感知的动态专家副本放置，解决 MoE 训练中的 EP 负载不均衡，开销较业界方案最高降低 **74%**，在真实训练案例中实测 **1.43× 加速**。",
+      "url": "blog/2026-08-taot-topology-aware-expert-placement.zh.html"
+    }
+  },
+  {
+    "date": "2026-08",
+    "icon": "✨",
+    "url": "https://github.com/baidu-baige/LoongForge/tree/master/examples/glm5.2_vit",
+    "en": { "text": "Added training support for **GLM-5.2**, plus a **GLM-5.2 + MoonViT** custom-composition example that extends GLM with multimodal capabilities." },
+    "zh": { "text": "新增 **GLM-5.2** 训练支持，并提供 **GLM-5.2 + MoonViT** 自由组合示例，为 GLM 扩展多模态能力。" }
+  },
+  {
+    "date": "2026-08",
+    "icon": "✨",
+    "en": { "text": "Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**." },
+    "zh": { "text": "新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。" }
+  },
+  {
+    "date": "2026-08",
+    "icon": "🧪",
+    "url": "https://github.com/baidu-baige/LoongForge/tree/master/loongforge/embodied/eval",
+    "en": { "text": "Introduced a unified **evaluation module** for the embodied stack, currently covering Pi0.5 / xVLA / GR00T, with more models on the way." },
+    "zh": { "text": "具身训练栈新增统一的**评测模块**，目前覆盖 Pi0.5 / xVLA / GR00T，更多模型陆续接入。" }
+  },
+  {
+    "date": "2026-07",
+    "icon": "🐳",
+    "url": "https://hub.docker.com/u/loongforge",
+    "en": { "text": "Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image." },
+    "zh": { "text": "统一**预构建 Docker 镜像**：LLM / VLM / VLA / Diffusion 全部模型家族共用同一个镜像。" }
+  },
+  {
+    "date": "2026-07",
+    "icon": "🤖",
+    "en": { "text": "Released **LoongForge-Embodied**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**." },
+    "zh": {
+      "text": "发布 **LoongForge-Embodied**：面向具身模型的 torch-native DDP/FSDP 训练子系统，覆盖 Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero 与 Cosmos3，最高 **4.38× 加速**。"
+    }
+  },
+  {
+    "date": "2026-07",
+    "icon": "✨",
+    "en": { "text": "Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**." },
+    "zh": { "text": "新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。" }
+  },
+  {
+    "date": "2026-07",
+    "icon": "✨",
+    "en": { "text": "Added training support for **Qwen-Image-Edit-2511**." },
+    "zh": { "text": "新增 **Qwen-Image-Edit-2511** 训练支持。" }
+  },
+  {
+    "date": "2026-06",
+    "icon": "🤖",
+    "url": "blog/2026-06-loongforge-groot-n16-acceleration.html",
+    "en": { "text": "Expanded VLA coverage with **GR00T N1.6**; **2.3× speedup** on GR00T training." },
+    "zh": {
+      "text": "VLA 覆盖扩展至 **GR00T N1.6**，GR00T 训练 **2.3× 加速**。",
+      "url": "blog/2026-06-loongforge-groot-n16-acceleration.zh.html"
+    }
+  },
+  {
+    "date": "2026-05",
+    "icon": "⚡",
+    "en": { "text": "Accelerated **Wan 2.2** training by **116%**, and added CP and data packing support." },
+    "zh": { "text": "**Wan 2.2** 训练加速 **116%**，并新增 CP 与数据 packing 支持。" }
+  },
+  {
+    "date": "2026-05",
+    "icon": "✨",
+    "en": { "text": "Added training support for **Kimi K2.5 / K2.6**, and introduced **INT4 / NVFP4** PTQ." },
+    "zh": { "text": "新增 **Kimi K2.5 / K2.6** 训练支持，并引入 **INT4 / NVFP4** PTQ。" }
+  },
+  {
+    "date": "2026-05",
+    "icon": "🎉",
+    "url": "blog/2026-05-loongforge-v0.1.0-release.html",
+    "en": { "text": "**v0.1.0** — the first official tagged release of LoongForge." },
+    "zh": {
+      "text": "**v0.1.0** —— LoongForge 首个正式发布版本。",
+      "url": "blog/2026-05-loongforge-v0.1.0-release.zh.html"
+    }
+  },
+  {
+    "date": "2026-05",
+    "icon": "🌟",
+    "url": "https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2",
+    "en": { "text": "Powered the training and public release of **LLaVA-OneVision-2.0**." },
+    "zh": { "text": "支撑 **LLaVA-OneVision-2.0** 的训练与公开发布。" }
+  },
+  {
+    "date": "2026-04",
+    "icon": "🧩",
+    "en": { "text": "Added training support for **MiniMax-M2.7** on both NVIDIA GPU and Kunlun XPU." },
+    "zh": { "text": "新增 **MiniMax-M2.7** 训练支持，覆盖 NVIDIA GPU 与昆仑芯 XPU。" }
+  },
+  {
+    "date": "2026-04",
+    "icon": "🚀",
+    "url": "blog/2026-04-announcing-loongforge.html",
+    "en": { "text": "LoongForge source code is publicly available on GitHub." },
+    "zh": {
+      "text": "LoongForge 源码在 GitHub 正式开源。",
+      "url": "blog/2026-04-announcing-loongforge.zh.html"
+    }
+  },
+  {
+    "date": "2025-10",
+    "icon": "🌟",
+    "url": "blog/2025-10-llava-onevision-case-study.html",
+    "en": { "text": "Powered the training and public release of **LLaVA-OneVision-1.5** under AIAK-Training-LLM, the predecessor of LoongForge." },
+    "zh": {
+      "text": "在 LoongForge 的前身 AIAK-Training-LLM 上，支撑 **LLaVA-OneVision-1.5** 的训练与公开发布。",
+      "url": "blog/2025-10-llava-onevision-case-study.zh.html"
+    }
+  }
+]

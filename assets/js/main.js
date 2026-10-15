@@ -5,7 +5,7 @@
   // ===== i18n =====
   const I18N = {
     en: {
-      'nav.home': 'Home', 'nav.docs': 'Docs', 'nav.blog': 'Blog', 'nav.about': 'About', 'nav.contact': 'Contact',
+      'nav.home': 'Home', 'nav.docs': 'Docs', 'nav.projects': 'Projects', 'nav.blog': 'Blog', 'nav.about': 'About', 'nav.contact': 'Contact',
       'footer.tagline': 'Modular, scalable training framework for LLM / VLM / VLA / Diffusion.',
       'footer.project': 'Project', 'footer.resources': 'Resources', 'footer.loong': 'Baige Loong Series',
       'footer.copyright': '© 2026 LoongForge Authors · Apache License 2.0 · Built with ♥ by the Baidu Baige Team',
@@ -14,7 +14,7 @@
       'footer.training': 'Training framework', 'footer.workflow': 'Agent framework',
 
       'hero.badge': '🐉 Part of the Baidu-Baige Loong open-source series',
-      'hero.subtitle_html': '<b>Ready-to-run</b> configs for <b>35+</b> model families — built on Megatron-LM and <span class="whitespace-nowrap">torch-native</span> backends.',
+      'hero.subtitle_html': '<b>Ready-to-run</b> configs for <b>40+</b> model families — built on Megatron-LM and <span class="whitespace-nowrap">torch-native</span> backends.',
       'hero.cta.start': '🚀 Quick Start',
       'hero.cta.github': '⭐ View on GitHub',
       'hero.cta.docs': '📚 Read the Docs',
@@ -36,7 +36,8 @@
       'hero.vp.3.t': 'NVIDIA GPU & Kunlun XPU',
       'hero.vp.3.d': 'Native heterogeneous hardware support — one framework, minimal migration between GPU and XPU.',
 
-      'news.title': '🔥 Latest News', 'news.all': 'All posts →',
+      'news.title': '🔥 Latest News',
+      'news.subtitle': 'Releases, new model support and performance work, newest first',
 
       'arch.title': '🏗️ Architecture',
       'arch.subtitle': 'One unified stack — from model composition down to GPU / XPU silicon.',
@@ -47,12 +48,16 @@
       'feat.cat.1.title': 'MoE',
       'feat.cat.1.item.1.t': 'Tri-Stream Overlap',
       'feat.cat.1.item.1.d': 'MoE EP comm × compute × offload in parallel — higher throughput than upstream.',
+      'feat.cat.1.item.2.t': 'Expert Load Balancing (TAOT)',
+      'feat.cat.1.item.2.d': 'Topology-aware replication of hot experts balances EP workloads, with up to 74% lower overhead than industry solutions.',
 
       'feat.cat.2.title': 'Multimodal',
       'feat.cat.2.item.2.t': 'Heterogeneous & Disaggregated',
       'feat.cat.2.item.2.d': 'Independent TP / PP / DP per component + decoupled ViT / LLM scheduling that kills pipeline bubbles.',
       'feat.cat.2.item.4.t': 'DP Load Balancing',
       'feat.cat.2.item.4.d': 'Fixes packing-induced imbalance at cluster scale.',
+      'feat.cat.2.item.5.t': 'Flexible Composition',
+      'feat.cat.2.item.5.d': 'Assemble VLMs from interchangeable ViT and LLM components (e.g. GLM-5.2 + MoonViT) straight from config.',
 
       'feat.cat.3.title': 'Performance',
       'feat.cat.3.item.1.t': 'Adaptive FP8',
@@ -74,6 +79,8 @@
       'feat.cat.7.title': 'Embodied',
       'feat.cat.7.item.1.t': 'Embodied Training',
       'feat.cat.7.item.1.d': 'Dedicated torch-native DDP/FSDP subsystem for VLA & WAM models, with DDP / ZeRO-1 / FSDP / HSDP.',
+      'feat.cat.7.item.2.t': 'Ego2Robot & Unified Eval',
+      'feat.cat.7.item.2.d': 'Turn human first-person videos into LeRobot v3.0 data for 16 dual-arm morphologies; evaluate on LIBERO / CALVIN / SimplerEnv / RoboTwin.',
 
       'models.title': '🏛️ Supported Models',
       'models.subtitle': 'From compact SLMs to large-scale MoE giants — all batteries-included',
@@ -98,17 +105,14 @@
 
       'powered.title': '🌟 Powered by LoongForge',
       'powered.subtitle': 'Open-source models trained with LoongForge or its predecessor AIAK-Training-LLM',
-      'powered.new': 'NEW',
-      'powered.1.t': 'LLaVA-OneVision-2.0',
-      'powered.1.d': 'Next-generation fully open multimodal model — improved data, training recipe, and scaling.',
-      'powered.2.t': 'Innovator-VL',
-      'powered.2.d': 'Scientific multimodal large language model for advanced reasoning.',
-      'powered.3.t': 'LLaVA-OneVision-1.5',
-      'powered.3.d': 'Fully open framework for democratized multimodal training.',
-      'powered.4.t': 'Qianfan-VL',
-      'powered.4.d': 'Domain-enhanced universal vision-language models.',
+      'powered.all': 'View all projects →',
 
       'blog.hero.title': 'Engineering Blog',
+      'projects.hero.title': 'Projects',
+      'projects.hero.desc': 'What gets built on LoongForge — from our own team and the open-source community',
+      'projects.submit.title': 'Built something with LoongForge?',
+      'projects.submit.desc': 'Tell us about it and we will list it here.',
+      'projects.submit.cta': 'Submit your project',
       'blog.hero.desc': 'Releases, performance deep-dives, and stories from the LoongForge team',
 
       'about.hero.title': 'About LoongForge',
@@ -116,9 +120,7 @@
 
       'about.story.title': '🐉 Our Story',
       'about.story.p1_html': '<b>LoongForge</b> is an open-source training framework developed by the <a class="text-indigo-600 underline" href="https://cloud.baidu.com/product/aihc.html" target="_blank" rel="noopener">Baidu AI Cloud Baige team</a>, built to deliver faster training for mainstream <b>LLMs</b>, <b>VLMs</b>, <b>diffusion</b>, and <b>embodied</b> models — and thereby significantly reduce cost.',
-      'about.story.p2_html': 'LoongForge was open-sourced from <a class="text-indigo-600 underline" href="https://cloud.baidu.com/doc/AIHC/s/Alyo476jr" target="_blank" rel="noopener">AIAK-Training-LLM</a>, a training acceleration suite delivered to enterprise customers on Baidu AI Cloud, after years of hardening under real production workloads:',
-      'about.story.li.1_html': 'Serving customers across <b>Education</b>, <b>Computer Vision</b>, and <b>Embodied AI</b>, typically delivering a <b>30%~50% speedup</b> over their baselines',
-      'about.story.li.2_html': 'Largest production runs reaching <b>5,000+ XPUs</b>',
+      'about.story.p2_html': 'LoongForge was open-sourced from <a class="text-indigo-600 underline" href="https://cloud.baidu.com/doc/AIHC/s/Alyo476jr" target="_blank" rel="noopener">AIAK-Training-LLM</a>, a training acceleration suite delivered to enterprise customers across <b>Education</b>, <b>Computer Vision</b>, and <b>Embodied AI</b> on Baidu AI Cloud. After years of hardening under real production workloads, its largest runs reach <b>5,000+ XPUs</b>.',
       'about.story.p3_html': 'It now joins the Baige <b>Loong</b> open-source series — named after the traditional Chinese <b>loong boat (龙舟)</b>, a symbol of coordinated power and forward momentum.',
       'about.story.p4_html': 'Want to see what else we are building? Explore our other open-source projects on the <a class="text-indigo-600 underline" href="https://github.com/baidu-baige" target="_blank" rel="noopener">baidu-baige GitHub organization</a>.',
 
@@ -126,15 +128,18 @@
       'about.license.heading': 'License',
       'about.license.body_html': 'LoongForge is released under the <a href="https://github.com/baidu-baige/LoongForge/blob/master/LICENSE" target="_blank" class="text-indigo-600 underline">Apache License 2.0</a>. Some files are derived from third-party open-source projects — please consult file headers for their specific notices.',
       'about.cite.heading': 'Citation',
+      'about.cite.taot': 'If you use TAOT for MoE training in LoongForge, you can also cite our paper:',
       'about.ack.title': '🙏 Acknowledgments',
-      'about.ack.body': 'LoongForge is built upon NVIDIA\'s Megatron-LM. We also referenced and drew inspiration from excellent open-source projects including Transformers, LLaMA-Factory, and Megatron-Bridge. We sincerely thank these communities for their outstanding contributions.',
+      'about.ack.body': 'LoongForge stands on the shoulders of the open-source community. Its Megatron stack builds on NVIDIA\'s Megatron-LM, and the project also draws on HuggingFace Transformers, LLaMA-Factory, Megatron-Bridge, LeRobot, and the official implementations of the models we support (e.g. OpenPI, NVIDIA Isaac GR00T). We also thank the LINUX DO community for providing a welcoming space for technical discussion, and AtomGit for hosting LoongForge\'s official mirror.',
 
       'about.contact.title': '✉️ Contact Us',
       'about.contact.lead': 'We\'d love to hear from you — reach us through any of these channels',
       'about.contact.wechat.d': 'Join the developer group — scan the QR code posted in our GitHub issue',
       'about.contact.rednote.d': 'Follow us on RedNote (小红书) for release notes and practice sharing',
       'about.contact.email.d': 'loongforge@baidu.com — for collaboration, adoption, and any other enquiries',
-      'about.contact.slack.d': 'Chat with the team and other users in our Slack workspace',
+      'about.contact.discord.d': 'Chat with the team and other users in our Discord server',
+      'about.contact.zhihu.d': 'Follow us on Zhihu (知乎) for technical deep dives',
+      'about.contact.x.d': 'Follow @baidu_baige_lf on X for release news and updates',
 
       'bench.title': '📊 Benchmark',
       'bench.subtitle': 'Training throughput speedup over mainstream open-source baselines — each model benchmarked on the same machine type with the same training hyperparameters',
@@ -161,7 +166,7 @@
 
     },
     zh: {
-      'nav.home': '首页', 'nav.docs': '文档', 'nav.blog': '博客', 'nav.about': '关于', 'nav.contact': '联系',
+      'nav.home': '首页', 'nav.docs': '文档', 'nav.projects': '项目', 'nav.blog': '博客', 'nav.about': '关于', 'nav.contact': '联系',
       'footer.tagline': '面向 LLM / VLM / VLA / Diffusion 的模块化、可扩展训练框架。',
       'footer.project': '项目', 'footer.resources': '资源', 'footer.loong': '百舸 Loong 系列',
       'footer.copyright': '© 2026 LoongForge Authors · Apache License 2.0 · 由百度百舸团队用 ♥ 构建',
@@ -170,7 +175,7 @@
       'footer.training': '训练框架', 'footer.workflow': '智能体框架',
 
       'hero.badge': '🐉 百度百舸 Loong 开源家族成员',
-      'hero.subtitle_html': '<b>35+</b> 模型家族的训练配置<b>开箱可用</b> —— 基于 Megatron-LM 与 <span class="whitespace-nowrap">torch-native</span> 双后端。',
+      'hero.subtitle_html': '<b>40+</b> 模型家族的训练配置<b>开箱可用</b> —— 基于 Megatron-LM 与 <span class="whitespace-nowrap">torch-native</span> 双后端。',
       'hero.cta.start': '🚀 快速上手',
       'hero.cta.github': '⭐ 访问 GitHub',
       'hero.cta.docs': '📚 阅读文档',
@@ -192,7 +197,8 @@
       'hero.vp.3.t': 'NVIDIA GPU 与昆仑芯 XPU',
       'hero.vp.3.d': '原生异构硬件支持 —— 同一套框架，GPU 与 XPU 之间迁移成本极低。',
 
-      'news.title': '🔥 最新动态', 'news.all': '查看全部 →',
+      'news.title': '🔥 最新动态',
+      'news.subtitle': '版本发布、新模型支持与性能优化，按时间倒序',
 
       'arch.title': '🏗️ 架构',
       'arch.subtitle': '一套统一架构 —— 从模型组装贯通到 GPU / XPU 芯片。',
@@ -203,12 +209,16 @@
       'feat.cat.1.title': 'MoE',
       'feat.cat.1.item.1.t': '通信/计算/Offload 三流并行',
       'feat.cat.1.item.1.d': 'MoE EP 通信 × 计算 × Offload 三流并行，吞吐优于上游。',
+      'feat.cat.1.item.2.t': '专家负载均衡（TAOT）',
+      'feat.cat.1.item.2.d': '拓扑感知地动态复制热点专家，均衡 EP 负载，开销较业界方案最高降低 74%。',
 
       'feat.cat.2.title': '多模态',
       'feat.cat.2.item.2.t': '异构并行 & 分离训练',
       'feat.cat.2.item.2.d': '不同组件独立设置 TP / PP / DP，并通过 ViT / LLM 解耦调度消除流水气泡。',
       'feat.cat.2.item.4.t': 'DP 负载均衡',
       'feat.cat.2.item.4.d': '修复 packing 带来的 DP 倾斜。',
+      'feat.cat.2.item.5.t': '灵活组合',
+      'feat.cat.2.item.5.d': '通过配置即可自由拼装 ViT 与 LLM 组件（如 GLM-5.2 + MoonViT），无需自定义模型代码。',
 
       'feat.cat.3.title': '性能',
       'feat.cat.3.item.1.t': '自适应 FP8',
@@ -230,6 +240,8 @@
       'feat.cat.7.title': '具身智能',
       'feat.cat.7.item.1.t': '具身模型训练',
       'feat.cat.7.item.1.d': '面向 VLA 与 WAM 模型的独立 torch-native DDP/FSDP 子系统，支持 DDP / ZeRO-1 / FSDP / HSDP。',
+      'feat.cat.7.item.2.t': 'Ego2Robot 与统一评测',
+      'feat.cat.7.item.2.d': '将人类第一视角视频转为 16 种双臂构型的 LeRobot v3.0 训练数据；支持 LIBERO / CALVIN / SimplerEnv / RoboTwin 评测。',
 
       'models.title': '🏛️ 支持的模型',
       'models.subtitle': '从紧凑的小模型到大规模 MoE 巨兽 —— 开箱即用',
@@ -254,17 +266,14 @@
 
       'powered.title': '🌟 由 LoongForge 驱动',
       'powered.subtitle': '基于 LoongForge 或其前身 AIAK-Training-LLM 训练的开源模型',
-      'powered.new': 'NEW',
-      'powered.1.t': 'LLaVA-OneVision-2.0',
-      'powered.1.d': '新一代完全开放的多模态模型 —— 在数据、训练配方与 Scale 上全面升级。',
-      'powered.2.t': 'Innovator-VL',
-      'powered.2.d': '面向高阶推理的科学多模态大语言模型。',
-      'powered.3.t': 'LLaVA-OneVision-1.5',
-      'powered.3.d': '面向多模态训练民主化的完全开放框架。',
-      'powered.4.t': 'Qianfan-VL',
-      'powered.4.d': '领域增强的通用视觉-语言模型。',
+      'powered.all': '查看全部项目 →',
 
       'blog.hero.title': '工程博客',
+      'projects.hero.title': '项目',
+      'projects.hero.desc': '基于 LoongForge 构建的项目 —— 来自我们团队与开源社区',
+      'projects.submit.title': '用 LoongForge 做了什么？',
+      'projects.submit.desc': '告诉我们，我们会把它收录到这里。',
+      'projects.submit.cta': '提交你的项目',
       'blog.hero.desc': '来自 LoongForge 团队的版本发布、性能深挖与案例分享',
 
       'about.hero.title': '关于 LoongForge',
@@ -272,9 +281,7 @@
 
       'about.story.title': '🐉 我们的故事',
       'about.story.p1_html': '<b>LoongForge</b> 是一款开源训练框架，由百度智能云 <a class="text-indigo-600 underline" href="https://cloud.baidu.com/product/aihc.html" target="_blank" rel="noopener">百舸团队</a> 开发，旨在为主流 <b>LLM</b>、<b>VLM</b>、<b>Diffusion</b> 与 <b>具身模型</b> 提供更快的训练速度，从而显著降低成本。',
-      'about.story.p2_html': 'LoongForge 由 <a class="text-indigo-600 underline" href="https://cloud.baidu.com/doc/AIHC/s/Alyo476jr" target="_blank" rel="noopener">AIAK-Training-LLM</a> 开源而来 —— 一套在百度智能云上交付给企业客户的训练加速套件，在真实生产负载下沉淀多年：',
-      'about.story.li.1_html': '服务 <b>教育</b>、<b>计算机视觉</b>、<b>具身智能</b> 等领域客户，相较其基线通常实现 <b>30%~50% 加速</b>',
-      'about.story.li.2_html': '最大生产规模达 <b>5,000+ XPU</b>',
+      'about.story.p2_html': 'LoongForge 由 <a class="text-indigo-600 underline" href="https://cloud.baidu.com/doc/AIHC/s/Alyo476jr" target="_blank" rel="noopener">AIAK-Training-LLM</a> 开源而来 —— 一套在百度智能云上交付给教育、计算机视觉、具身智能等领域企业客户的训练加速套件。历经多年真实生产负载的沉淀，其最大生产规模已达 <b>5,000+ XPU</b>。',
       'about.story.p3_html': '它如今加入百舸 <b>Loong</b> 开源系列 —— 取名自中国传统 <b>龙舟</b>，象征协同之力与前行之势。',
       'about.story.p4_html': '想了解我们还在做什么？欢迎访问 <a class="text-indigo-600 underline" href="https://github.com/baidu-baige" target="_blank" rel="noopener">baidu-baige GitHub 组织</a>，查看团队的其他开源项目。',
 
@@ -282,15 +289,18 @@
       'about.license.heading': '开源协议',
       'about.license.body_html': 'LoongForge 采用 <a href="https://github.com/baidu-baige/LoongForge/blob/master/LICENSE" target="_blank" class="text-indigo-600 underline">Apache License 2.0</a> 协议发布。部分文件衍生自第三方开源项目 —— 其具体协议请参见对应文件头。',
       'about.cite.heading': '引用',
+      'about.cite.taot': '如果你在 LoongForge 中使用 TAOT 进行 MoE 训练，也可以引用我们的论文：',
       'about.ack.title': '🙏 致谢',
-      'about.ack.body': 'LoongForge 构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 Transformers、LLaMA-Factory、Megatron-Bridge 等优秀开源项目。真诚感谢这些社区的卓越贡献。',
+      'about.ack.body': 'LoongForge 站在开源社区的肩膀上：其 Megatron 技术栈构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 HuggingFace Transformers、LLaMA-Factory、Megatron-Bridge、LeRobot，以及所支持模型的官方实现（如 OpenPI、NVIDIA Isaac GR00T）。感谢 LINUX DO 社区提供友好的技术交流空间，感谢 AtomGit 托管 LoongForge 官方镜像。',
 
       'about.contact.title': '✉️ 联系我们',
       'about.contact.lead': '欢迎随时联系我们 —— 通过以下任一渠道都可以',
       'about.contact.wechat.d': '加入开发者交流群 —— 扫描 GitHub issue 中的群二维码',
       'about.contact.rednote.d': '关注我们的小红书账号，获取版本动态与实践分享',
       'about.contact.email.d': 'loongforge@baidu.com —— 合作、落地及其他任何事宜',
-      'about.contact.slack.d': '在 Slack workspace 中与团队和其他使用者交流',
+      'about.contact.discord.d': '在 Discord 服务器中与团队和其他使用者交流',
+      'about.contact.zhihu.d': '关注我们的知乎账号，阅读技术深度解析',
+      'about.contact.x.d': '关注 X 上的 @baidu_baige_lf，获取版本动态',
 
       'bench.title': '📊 性能基准',
       'bench.subtitle': '相较主流开源基线的训练吞吐加速 —— 每个模型均在同机型、同训练超参下实测对比',
@@ -368,7 +378,7 @@
 
   // ===== Shared site header (single source of truth) =====
   // Usage on any page:
-  //   <header data-site-header data-active="home|blog|about" [data-base="../"] [data-lang-mode="post"]></header>
+  //   <header data-site-header data-active="home|projects|blog|about" [data-base="../"] [data-lang-mode="post"]></header>
   // Any change to navbar structure only needs to be made here.
   function renderSiteHeader() {
     const hosts = document.querySelectorAll('header[data-site-header]');
@@ -397,6 +407,7 @@
       <nav class="hidden md:flex items-center gap-8 text-[15px] font-medium">
         <a href="${base}index.html" class="${act('home')}" data-i18n="nav.home">Home</a>
         <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link class="ext ${act('docs')}" data-i18n="nav.docs">Docs</a>
+        <a href="${base}projects.html" class="${act('projects')}" data-i18n="nav.projects">Projects</a>
         <a href="${base}blog.html" class="${act('blog')}" data-i18n="nav.blog">Blog</a>
         <a href="${base}about.html" class="${act('about')}" data-i18n="nav.about">About</a>
         <a href="${base}about.html#contact" class="${act('contact')}" data-i18n="nav.contact">Contact</a>
@@ -420,6 +431,7 @@
     <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 dark:border-gray-800 px-5 sm:px-8 py-4 space-y-2 text-base">
       <a href="${base}index.html" class="${actMob('home')}" data-i18n="nav.home">Home</a>
       <a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" rel="noopener" data-docs-link class="block py-1 ext" data-i18n="nav.docs">Docs</a>
+      <a href="${base}projects.html" class="${actMob('projects')}" data-i18n="nav.projects">Projects</a>
       <a href="${base}blog.html" class="${actMob('blog')}" data-i18n="nav.blog">Blog</a>
       <a href="${base}about.html" class="${actMob('about')}" data-i18n="nav.about">About</a>
       <a href="${base}about.html#contact" class="${actMob('contact')}" data-i18n="nav.contact">Contact</a>

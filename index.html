@@ -32,7 +32,7 @@
       theme: { extend: { colors: { brand: { 50: '#EEF2FF', 100: '#E0E7FF', 500: '#6366F1', 600: '#4F46E5', 700: '#4338CA' } } } }
     };
   </script>
-  <link rel="stylesheet" href="assets/css/style.css?v=20260901-r13" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261015-r21" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -64,7 +64,7 @@
         </div>
         <p class="max-w-[60rem] mx-auto text-base md:text-lg text-gray-600 dark:text-gray-300 mb-8"
           data-i18n-html="hero.subtitle_html">
-          <b>Ready-to-run</b> configs for <b>35+</b> model families — built on Megatron-LM and
+          <b>Ready-to-run</b> configs for <b>40+</b> model families — built on Megatron-LM and
           <span class="whitespace-nowrap">torch-native</span> backends.
         </p>
         <div class="flex flex-wrap items-center gap-3 justify-center">
@@ -119,7 +119,7 @@
         <div class="lf-stat-label" data-i18n="hero.stat.speedup">Max training speedup</div>
       </a>
       <div class="lf-stat">
-        <div class="lf-stat-num" data-count-to="35" data-suffix="+">35+</div>
+        <div class="lf-stat-num" data-count-to="40" data-suffix="+">40+</div>
         <div class="lf-stat-label" data-i18n="sb.models">Model families supported</div>
       </div>
       <div class="lf-stat">
@@ -132,21 +132,6 @@
       </div>
     </div>
   </section>
-
-  <!-- ===== Latest post strip ===== -->
-  <!-- A dated liveness signal that costs one line instead of a whole section.
-       Stays hidden until posts.json resolves, so no empty bar ever flashes. -->
-  <div class="lf-newsbar" data-news-bar hidden>
-    <div
-      class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 lf-newsbar-row">
-      <span class="lf-newsbar-tag" data-i18n="news.title">🔥 Latest News</span>
-      <a class="lf-newsbar-link" href="blog.html" data-news-bar-link>
-        <span class="lf-newsbar-title" data-news-bar-title></span>
-        <time class="lf-newsbar-date" data-news-bar-date></time>
-      </a>
-      <a class="lf-newsbar-all" href="blog.html" data-i18n="news.all">All posts →</a>
-    </div>
-  </div>
 
   <!-- ===== Why LoongForge (value props) ===== -->
   <section
@@ -184,6 +169,26 @@
     </div>
   </section>
 
+  <!-- ===== Latest News timeline (rendered by home-news.js from assets/data/news.json) ===== -->
+  <!-- Stays hidden until the feed resolves, so an empty section never flashes.
+       Same container width as the sections around it. -->
+  <section id="news" data-home-news-section hidden>
+    <div
+      class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 pb-16 md:pb-20 reveal">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="news.title">🔥 Latest News</h2>
+        <p class="text-gray-600 dark:text-gray-400" data-i18n="news.subtitle">Releases, new model support and
+          performance work, newest first</p>
+      </div>
+      <div class="lf-card lf-card-static lf-tl-card">
+        <ol class="lf-tl" data-home-news></ol>
+        <div class="flex justify-center mt-6">
+          <button type="button" class="lf-tl-more" data-home-news-more hidden aria-expanded="false"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== Benchmark ===== -->
   <section id="benchmark"
     class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
@@ -211,7 +216,7 @@
           <div class="bench-row">
             <div class="bench-label">GR00T N1.7 <span class="bench-type">VLA</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 35.5%"><span class="bench-val">1.79×</span></div>
+              <div class="bench-bar" style="width: 36.7%"><span class="bench-val">1.85×</span></div>
             </div>
           </div>
           <div class="bench-row">
@@ -229,7 +234,7 @@
           <div class="bench-row">
             <div class="bench-label">FastWAM <span class="bench-type">WAM</span></div>
             <div class="bench-track">
-              <div class="bench-bar" style="width: 44.6%"><span class="bench-val">2.25×</span></div>
+              <div class="bench-bar" style="width: 51.8%"><span class="bench-val">2.61×</span></div>
             </div>
           </div>
           <div class="bench-row">
@@ -321,6 +326,18 @@
             offload in parallel — higher throughput than upstream.</div>
         </div>
 
+        <!-- MoE: Expert Load Balancing (TAOT) -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🗺️</span>
+            <span class="feat-tag feat-tag-moe" data-i18n="feat.cat.1.title">MoE</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.1.item.2.t">Expert Load
+            Balancing (TAOT)</div>
+          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.1.item.2.d">Topology-aware
+            replication of hot experts balances EP workloads, with up to 74% lower overhead than industry solutions.</div>
+        </div>
+
         <!-- Multimodal -->
         <div class="lf-card">
           <div class="flex items-center gap-3 mb-4">
@@ -379,6 +396,31 @@
             Balancing</div>
           <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.4.d">Fixes packing-induced
             imbalance at cluster scale.</div>
+        </div>
+
+        <!-- Multimodal: Flexible Composition -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🧩</span>
+            <span class="feat-tag feat-tag-mm" data-i18n="feat.cat.2.title">Multimodal</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.2.item.5.t">Flexible
+            Composition</div>
+          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.2.item.5.d">Assemble VLMs from
+            interchangeable ViT and LLM components (e.g. GLM-5.2 + MoonViT) straight from config.</div>
+        </div>
+
+        <!-- Embodied: Ego2Robot & Eval -->
+        <div class="lf-card">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="lf-ico">🦾</span>
+            <span class="feat-tag feat-tag-embodied" data-i18n="feat.cat.7.title">Embodied</span>
+          </div>
+          <div class="text-lg font-bold text-gray-900 dark:text-white mb-1.5" data-i18n="feat.cat.7.item.2.t">Ego2Robot
+            &amp; Unified Eval</div>
+          <div class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat.cat.7.item.2.d">Turn human first-person
+            videos into LeRobot v3.0 data for 16 dual-arm morphologies; evaluate on LIBERO / CALVIN / SimplerEnv /
+            RoboTwin.</div>
         </div>
 
         <!-- Training Paradigms -->
@@ -464,13 +506,8 @@
           </div>
           <div
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-            <h4 class="font-semibold mb-2">DeepSeek-V3</h4>
-            <div class="flex flex-wrap gap-1.5"><span class="chip">v3</span></div>
-          </div>
-          <div
-            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-            <h4 class="font-semibold mb-2">DeepSeek-V3.2</h4>
-            <div class="flex flex-wrap gap-1.5"><span class="chip">v3.2</span></div>
+            <h4 class="font-semibold mb-2">DeepSeek-V3/V3.2</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">v3</span><span class="chip">v3.2</span></div>
           </div>
           <div
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
@@ -539,7 +576,12 @@
           <div
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">GLM</h4>
-            <div class="flex flex-wrap gap-1.5"><span class="chip">glm5</span></div>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">glm5</span><span class="chip">glm5.2</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Kimi-K3</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">k3</span></div>
           </div>
         </div>
 
@@ -567,8 +609,33 @@
           </div>
           <div
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Qwen3.8</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">27B</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">Kimi-K2.x</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">k2.5</span><span class="chip">k2.6</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Kimi-K3</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">k3</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">MiniCPM-V-4.6</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">v4.6</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">GLM-5.2 + MoonViT</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">glm5.2_vit</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">GLM-5.3-flash</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">glm5.3-flash</span></div>
           </div>
           <div
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
@@ -634,6 +701,11 @@
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
             <h4 class="font-semibold mb-2">XVLA</h4>
             <div class="flex flex-wrap gap-1.5"><span class="chip">xvla</span></div>
+          </div>
+          <div
+            class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
+            <h4 class="font-semibold mb-2">Wall-OSS</h4>
+            <div class="flex flex-wrap gap-1.5"><span class="chip">wall_oss_0_5</span></div>
           </div>
           <div
             class="rounded-[1.25rem] p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
@@ -831,58 +903,24 @@
     </div>
   </section>
 
-  <!-- ===== Powered By ===== -->
-  <section class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
+  <!-- ===== Powered By (cards rendered by projects.js from assets/data/projects.json) ===== -->
+  <section data-home-projects-section hidden
+    class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
     <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <h2 class="text-3xl md:text-4xl font-bold text-center mb-3" data-i18n="powered.title">🌟 Powered by LoongForge
       </h2>
       <p class="text-center text-gray-600 dark:text-gray-400 mb-10" data-i18n="powered.subtitle">Open-source models
         trained with LoongForge or its predecessor AIAK-Training-LLM</p>
-      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <a href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2" target="_blank"
-          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-2xl">✨</span>
-            <span
-              class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
-              data-i18n="powered.new">NEW</span>
-          </div>
-          <h3 class="font-semibold mb-1" data-i18n="powered.1.t">LLaVA-OneVision-2.0</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.1.d">Next-generation fully open
-            multimodal model — improved data, training recipe, and scaling.</p>
-        </a>
-        <a href="https://github.com/InnovatorLM/Innovator-VL/tree/main" target="_blank"
-          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-2xl">🧪</span>
-            <span
-              class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
-              data-i18n="powered.new">NEW</span>
-          </div>
-          <h3 class="font-semibold mb-1" data-i18n="powered.2.t">Innovator-VL</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.2.d">Scientific multimodal large
-            language model for advanced reasoning.</p>
-        </a>
-        <a href="https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5" target="_blank"
-          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-          <div class="text-2xl mb-2">🔬</div>
-          <h3 class="font-semibold mb-1" data-i18n="powered.3.t">LLaVA-OneVision-1.5</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.3.d">Fully open framework for
-            democratized multimodal training.</p>
-        </a>
-        <a href="https://github.com/baidubce/Qianfan-VL" target="_blank"
-          class="rounded-[1.25rem] p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 card-hover">
-          <div class="text-2xl mb-2">🎯</div>
-          <h3 class="font-semibold mb-1" data-i18n="powered.4.t">Qianfan-VL</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="powered.4.d">Domain-enhanced universal
-            vision-language models.</p>
-        </a>
+      <div data-home-projects class="grid md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+      <div class="text-center mt-8">
+        <a href="projects.html" class="font-medium text-indigo-600 dark:text-indigo-300 hover:underline"
+          data-i18n="powered.all">View all projects →</a>
       </div>
     </div>
   </section>
 
   <!-- ===== Community ===== -->
-  <section id="community" class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
+  <section id="community"class="bg-[#F7F8FF] dark:bg-gray-900/50 border-y border-indigo-100/70 dark:border-gray-800">
     <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 xl:px-20 2xl:px-28 py-20 md:py-24 reveal">
       <div class="text-center mb-10">
         <h2 class="text-3xl md:text-4xl font-bold mb-3" data-i18n="comm.title">🤝 Community</h2>
@@ -962,6 +1000,7 @@
           <li><a href="https://github.com/baidu-baige/LoongForge" target="_blank">GitHub</a></li>
           <li><a href="https://loongforge.readthedocs.io/en/latest/index.html" target="_blank" data-docs-link
               data-i18n="nav.docs">Documentation</a></li>
+          <li><a href="projects.html" data-i18n="nav.projects">Projects</a></li>
           <li><a href="blog.html" data-i18n="nav.blog">Blog</a></li>
           <li><a href="about.html" data-i18n="nav.about">About</a></li>
           <li><a href="#community" data-i18n="comm.title">🤝 Community</a></li>
@@ -999,8 +1038,9 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
-  <script src="assets/js/main.js?v=20260901-r13"></script>
-  <script src="assets/js/home-news.js?v=20260901-r13"></script>
+  <script src="assets/js/main.js?v=20261015-r21"></script>
+  <script src="assets/js/home-news.js?v=20261015-r21"></script>
+  <script src="assets/js/projects.js?v=20261015-r21"></script>
 </body>
 
 </html>

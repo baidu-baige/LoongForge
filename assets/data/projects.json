@@ -1,0 +1,76 @@
+[
+  {
+    "id": "llava-onevision-2",
+    "category": "community",
+    "icon": "✨",
+    "badge": "new",
+    "home": true,
+    "org": "EvolvingLMMs-Lab",
+    "url": "https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2",
+    "tags_en": ["VLM", "Multimodal"],
+    "tags_zh": ["VLM", "多模态"],
+    "en": {
+      "title": "LLaVA-OneVision-2.0",
+      "summary": "Next-generation multimodal model, with new VideoCaption and Spatial datasets."
+    },
+    "zh": {
+      "title": "LLaVA-OneVision-2.0",
+      "summary": "新一代多模态模型，新增 VideoCaption 与 Spatial 数据集。"
+    }
+  },
+  {
+    "id": "innovator-vl",
+    "category": "community",
+    "icon": "🧪",
+    "badge": "new",
+    "home": true,
+    "org": "InnovatorLM",
+    "url": "https://github.com/InnovatorLM/Innovator-VL/tree/main",
+    "tags_en": ["VLM", "Science"],
+    "tags_zh": ["VLM", "科学"],
+    "en": {
+      "title": "Innovator-VL",
+      "summary": "Scientific multimodal large language model for advanced reasoning."
+    },
+    "zh": {
+      "title": "Innovator-VL",
+      "summary": "面向高阶推理的科学多模态大语言模型。"
+    }
+  },
+  {
+    "id": "llava-onevision-1-5",
+    "category": "community",
+    "icon": "🔬",
+    "home": true,
+    "org": "EvolvingLMMs-Lab",
+    "url": "https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5",
+    "tags_en": ["VLM", "Multimodal"],
+    "tags_zh": ["VLM", "多模态"],
+    "en": {
+      "title": "LLaVA-OneVision-1.5",
+      "summary": "Fully open framework for democratized multimodal training."
+    },
+    "zh": {
+      "title": "LLaVA-OneVision-1.5",
+      "summary": "面向多模态训练民主化的完全开放框架。"
+    }
+  },
+  {
+    "id": "qianfan-vl",
+    "category": "community",
+    "icon": "🎯",
+    "home": true,
+    "org": "Baidu AI Cloud",
+    "url": "https://github.com/baidubce/Qianfan-VL",
+    "tags_en": ["VLM", "Domain"],
+    "tags_zh": ["VLM", "垂直领域"],
+    "en": {
+      "title": "Qianfan-VL",
+      "summary": "Domain-enhanced vision-language models for enterprise, 3B–70B parameters."
+    },
+    "zh": {
+      "title": "Qianfan-VL",
+      "summary": "面向企业场景的领域增强视觉-语言模型，参数规模 3B–70B。"
+    }
+  }
+]

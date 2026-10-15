@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Projects — LoongForge</title>
+  <meta name="description"
+    content="Projects built on LoongForge — from the LoongForge team and the open-source community." />
+  <link rel="icon" type="image/svg+xml" href="assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="assets/css/style.css?v=20261015-r21" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="projects"></header>
+
+  <section class="hero-gradient text-gray-900 dark:text-white">
+    <div class="max-w-7xl mx-auto px-6 py-24 md:py-28 text-center relative">
+      <div class="hero-grid absolute inset-0"></div>
+      <div class="relative">
+        <h1 class="text-4xl md:text-5xl font-extrabold mb-3" data-i18n="projects.hero.title">Projects</h1>
+        <p class="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto" data-i18n="projects.hero.desc">What gets built on
+          LoongForge — from our own team and the open-source community</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="max-w-7xl mx-auto px-6 py-12 reveal">
+    <div id="project-tabs" class="flex flex-wrap gap-2 mb-10"></div>
+    <div id="project-groups"></div>
+
+    <!-- Submit your project -->
+    <div class="lf-card mt-16 text-center">
+      <h2 class="text-xl md:text-2xl font-bold mb-2" data-i18n="projects.submit.title">Built something with LoongForge?
+      </h2>
+      <p class="text-gray-600 dark:text-gray-400 mb-5 max-w-xl mx-auto" data-i18n="projects.submit.desc">Tell us about
+        it and we will list it here.</p>
+      <a href="https://github.com/baidu-baige/LoongForge/issues/new" target="_blank" rel="noopener" class="lf-btn"
+        data-i18n="projects.submit.cta">Submit your project</a>
+    </div>
+  </section>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">
+      © 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js?v=20261015-r21"></script>
+  <script src="assets/js/projects.js?v=20261015-r21"></script>
+</body>
+
+</html>

@@ -14,7 +14,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css?v=20260901-r13" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261015-r21" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
@@ -299,13 +299,13 @@
         <p>🔗 LoongForge on GitHub: <a href="https://github.com/baidu-baige/LoongForge" target="_blank"
             rel="noopener">https://github.com/baidu-baige/LoongForge</a></p>
       </blockquote>
-      <p>LoongForge evolved from Baidu Baige's AIAK-Training-LLM acceleration suite. Before open-sourcing, it had
-        already provided production-grade training support to enterprise customers across large language models,
-        computer vision, and embodied intelligence — typically 30%–50% faster than the customer's baseline, with the
-        largest production job exceeding 5,000 XPUs. We target the more general training-engineering problem: one
-        framework covering LLM, VLM, VLA, and Diffusion scenarios, spanning the mainstream pretraining-to-SFT pipeline,
-        validated over a long period across GPU and Kunlun XPU platforms, thousand-GPU clusters, and many kinds of real
-        production workloads.</p>
+      <p>LoongForge evolved from Baidu Baige's AIAK-Training-LLM acceleration suite. Before it was open-sourced, it was
+        already providing production-grade training support to enterprise customers in large language models, computer
+        vision, and embodied intelligence, with its largest production job exceeding 5,000 XPUs. What we set out to
+        solve is the broader training-engineering problem: a single framework that covers LLM, VLM, VLA, and Diffusion
+        workloads and the mainstream pipeline from pretraining to SFT, and that has been validated over the long term
+        on both GPU and Kunlun XPU platforms, on clusters of thousands of cards, and across a wide range of real
+        production scenarios.</p>
       <p>Making all these model classes fast with a single engine isn't realistic. Our approach splits the backend into
         two stacks by modality: LLM / VLM / Diffusion run on a deeply customized Megatron-LM, taking full advantage of
         its mature TP/PP/EP/CP parallelism; embodied models such as VLA and world-action models (WAM) are decoupled from
@@ -334,8 +334,8 @@
     </div>
 
     <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
-      <a href="2026-07-announcing-loongforge-embodied.html"
-        class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: Announcing LoongForge-Embodied</a>
+      <a href="2026-06-loongforge-groot-n16-acceleration.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: GR00T N1.6 Acceleration</a>
       <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
     </div>
   </article>
@@ -364,7 +364,7 @@
     })();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-  <script src="../assets/js/main.js?v=20260901-r13"></script>
+  <script src="../assets/js/main.js?v=20261015-r21"></script>
 </body>
 
 </html>
