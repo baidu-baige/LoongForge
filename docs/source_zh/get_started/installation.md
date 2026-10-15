@@ -114,7 +114,25 @@ docker run --runtime=nvidia --gpus all -itd --rm \
 
 ---
 
-## 方式 B：源码安装
+## 方式 B：从 PyPI 安装
+
+如果您已有 CUDA + PyTorch 环境，并希望在现有环境中安装 LoongForge Python
+包，可以使用此方式。
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install "loongforge[gpu]"
+python -c "import torch, loongforge; print(torch.__version__)"
+```
+
+LoongForge 不会通过包元数据安装 PyTorch，因为用户需要根据加速器和 CUDA
+运行时选择对应的 PyTorch 构建，请先自行安装 PyTorch。wheel 包含 Python
+源码和配置文件，但不包含 CUDA Toolkit，也不包含 Docker 镜像中预构建的编
+译算子。如果需要开箱即用的训练环境，请使用上面的 Docker 镜像。
+
+---
+
+## 方式 C：源码安装
 
 如果您已有可用的 CUDA + PyTorch 环境，并希望为开发或训练搭建 LoongForge，请使用此方式。
 

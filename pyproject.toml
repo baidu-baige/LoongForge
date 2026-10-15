@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "LoongForge"
-version = "0.1.0"
+version = "0.2.2"
 description = "LoongForge framework: an all-scenario training framework"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -168,7 +168,7 @@ vla = [
 Homepage = "https://github.com/baidu-baige/LoongForge"
 Repository = "https://github.com/baidu-baige/LoongForge"
 Documentation = "https://baidu-baige.github.io/LoongForge/"
-Changelog = "CHANGELOG.md"
+Changelog = "https://github.com/baidu-baige/LoongForge/releases"
 
 [project.scripts]
 LoongForge = "loongforge.train:main"

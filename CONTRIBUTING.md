@@ -1,7 +1,7 @@
 # Contribute
 👍🎉 First off, thanks for taking the time to contribute! 🎉👍
 
-Please check out the [Apache Code of Conduct](https://www.apache.org/foundation/policies/conduct.html) first.
+Please check out the [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 We welcome community contributors to LoongForge. Feel free to share your ideas or submit code—help us make LoongForge even better!
 

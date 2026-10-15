@@ -361,9 +361,21 @@ LoongForge/
 }
 ```
 
+## 🚀 发布与兼容性
+
+LoongForge 使用不可变的语义化版本标签（`vX.Y.Z`）。发布按需进行，而不是固定日历节奏。一个版本达到发布条件需要：
+
+1. [`pyproject.toml`](pyproject.toml) 中的版本与发布标签一致。
+2. 阻塞型静态检查以及适用的加速器回归测试通过。
+3. 支持模型的教程与模型支持矩阵保持最新。
+4. 维护者已审阅发布说明与兼容性说明。
+
+[发布工作流](.github/workflows/release.yml) 会校验标签、构建 Python 发行物，通过 trusted publishing 发布到 PyPI，并发布对应的版本化 Docker 镜像；它不会移动 Docker Hub 的 `latest` 标签。源码安装要求 PyTorch >= 2.6；支持的 NVIDIA 与昆仑 XPU 运行时版本见[安装指南](https://loongforge.readthedocs.io/en/latest/get_started/installation.html)。
+
 ## 🤝 参与贡献
 
 我们非常欢迎社区贡献 —— 无论是 Bug 报告、功能提案还是 PR。在提交前请阅读 [贡献指南](./CONTRIBUTING.md)。
+技术所有权与决策流程见[治理文档](./GOVERNANCE.md)。
 
 非常感谢 LoongForge 的所有贡献者：
 

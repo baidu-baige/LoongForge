@@ -21,6 +21,7 @@ This directory contains the CI/CD workflows for LoongForge.
 | `gpu-regression.yml` | Workflow dispatch | Run exact-SHA baseline regression for one model suite |
 | `gpu-invalidate.yml` | PR synchronize | Cancel stale suite GPU work after a new commit |
 | `gpu-watchdog.yml` | GPU workflow completion | Finalize a check if cancellation bypasses normal cleanup |
+| `pytorch-compatibility.yml` | Weekly schedule + workflow dispatch | Test the wheel against the latest release in each of the two newest PyTorch series |
 | `release.yml` | Version tag `vX.Y.Z` or manual dry-run | Build/scan artifacts; tags publish PyPI and Docker Hub |
 
 Pull requests run `static-checks.yml` automatically. Its manual dispatch is diagnostic:
@@ -103,6 +104,18 @@ runner provides its own `CI_CONFIG_PATH_IMAGE` environment variable; this is
 not a Repository Variable because runner filesystem roots may differ.
 The protected release runner must set
 `LOONGFORGE_ALLOW_RELEASE_IMAGE_BUILD=true` in that config.
+
+## PyTorch Compatibility
+
+`pytorch-compatibility.yml` resolves the latest patch release in each of the two
+newest stable PyTorch series from PyPI at run time, installs the built wheel
+against each release, and runs version-sensitive tests that exercise
+PyTorch-dependent LoongForge modules.
+The workflow keeps the release image separate from this compatibility matrix:
+production images remain pinned to NVIDIA NGC containers so their compiled CUDA
+stack can be validated as a complete unit. GPU regressions gate image changes;
+the compatibility workflow catches upstream PyTorch API drift between those
+validated image releases.
 
 Hooks must return nonzero on failure and must not print credentials, signed
 source URLs, runner-local filesystem paths, or physical accelerator details to

@@ -361,9 +361,34 @@ If you use TAOT for MoE training in LoongForge, you can cite our paper:
 }
 ```
 
+## 🚀 Releases and Compatibility
+
+LoongForge uses immutable semantic-version tags (`vX.Y.Z`). Releases are cut on
+demand rather than on a fixed calendar cadence. A release is ready when:
+
+1. The version in [`pyproject.toml`](pyproject.toml) matches the release tag.
+2. The blocking static checks and applicable accelerator regressions pass.
+3. Supported-model tutorials and the model support matrix are current.
+4. The maintainers have reviewed release notes and compatibility notes.
+
+The [release workflow](.github/workflows/release.yml) validates the tag, builds
+the Python distribution, publishes it to PyPI through trusted publishing, and
+publishes the matching versioned Docker image. It does not move Docker Hub's
+`latest` tag. Source installs require PyTorch >= 2.6; the supported NVIDIA and
+Kunlun XPU runtime versions are documented in the
+[installation guide](https://loongforge.readthedocs.io/en/latest/get_started/installation.html).
+
+The [PyTorch compatibility workflow](.github/workflows/pytorch-compatibility.yml)
+tests the built wheel against the latest release in each of the two newest
+upstream PyTorch series.
+Release Docker images intentionally remain pinned to NVIDIA NGC containers and
+are upgraded only after the complete compiled CUDA stack passes accelerator
+regression.
+
 ## 🤝 Contributing
 
 We warmly welcome community contributions — bug reports, feature proposals, and PRs alike. Please read our [Contributing Guidelines](./CONTRIBUTING.md) before submitting.
+Technical ownership and decision-making are described in the [governance document](./GOVERNANCE.md).
 
 Thanks to all our contributors:
 

@@ -127,7 +127,27 @@ launch the desired training script.
 
 ---
 
-## Option B: Install from Source
+## Option B: Install from PyPI
+
+Use this option when you want the LoongForge Python package in an existing
+CUDA + PyTorch environment.
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install "loongforge[gpu]"
+python -c "import torch, loongforge; print(torch.__version__)"
+```
+
+LoongForge does not install PyTorch through package metadata because users must
+select the PyTorch build matching their accelerator and CUDA runtime. Install
+PyTorch separately before installing LoongForge. The wheel contains the Python
+source and configuration files; it does not contain the CUDA toolkit or the
+compiled operators pre-built into the Docker image. For a ready-to-train
+environment, use the Docker image above.
+
+---
+
+## Option C: Install from Source
 
 Use this option if you already have a working CUDA + PyTorch environment and
 want to set up LoongForge for development or training.
