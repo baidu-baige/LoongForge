@@ -1,9 +1,6 @@
 # FastWAM LIBERO config — libero_spatial (open-source).
-# Verified on official libero_optional_idm_2cam224.pt (Wan2.2-TI2V-5B backbone,
-# optional-IDM weights), 10 tasks x 10 episodes, HEAD model code + bf16/fp64:
-#   first_frame mode:  98/100 (official repo: 98.2% full-suite)
-#   idm mode:          99/100 (official repo: 99.0% full-suite)
-# The single optional-IDM checkpoint serves both modes (model.variant: idm).
+# Verified with a LoongForge-trained checkpoint (20k SFT, the official-aligned
+# recipe): 97.00% (485/500) first_frame; official repo full-suite: 98.2%.
 #
 # Open weights:
 #   checkpoint:   https://github.com/yuantianyuan01/FastWAM#inference-with-released-checkpoints
@@ -20,8 +17,8 @@
 #   either costs tens of points. Official FastWAM reads obs['robot0_eef_pos'],
 #   not the OSC controller pose.
 # - controller_force_update: false matches the official eval (the runner default
-#   is the legacy LoongForge behaviour other models still use; measurement in
-#   the FastWAM repro report).
+#   is the legacy LoongForge behaviour other models still use; disabling it
+#   changes the arm motion during num_steps_wait, hence the first observation).
 # - action_infer_mode first_frame: 10 flow-matching steps, sigma_shift 1.0 (official passes null -> action scheduler infer_shift = 1.0; the video scheduler stays 5.0),
 #   32-action chunk with 10 steps executed open-loop per replan (official
 #   replan cadence, applied server-side via chunk_execute_steps=0->10).
@@ -38,21 +35,27 @@
 #   wan/dit.py rope cannot run bf16 (e.g. an unmodified HEAD flash_attn rope
 #   raises "Input and cos/sin must have the same dtype"); fp32 reproduces
 #   bf16+fp64 scores within small-sample noise but is not the official regime.
-# - benchmark.max_steps: official per-suite horizon (spatial/object/goal 400,
-#   libero_10 700). 0 = use the suite default from the adapter.
+# - benchmark.max_steps: 0 would fall back to the adapter default
+#   (220/280/300/520), which is not the official per-suite horizon.
 #
 # Optional overrides (edit this file or copy it):
 #   action_infer_mode: idm  — imagine-then-act mode (official IDM numbers;
-#     ~2.5s/chunk vs ~0.9s for first_frame, and raise timeouts if needed)
+#     ~2.5s/chunk vs ~0.9s for first_frame, and raise timeouts if needed).
+#     Requires model.variant: idm; the uncond variant has no IDM path.
 #   suite: libero_spatial | libero_object | libero_goal | libero_10
-#   max_tasks / episodes_per_task: raise for full-suite eval (official: 10x50)
+#   max_tasks: 0 = all tasks in the suite (the official full-suite)
+#   task_ids: [0] — run one task per process. The 500-episode numbers above were
+#     produced that way (10 processes per suite); max_tasks: 0 runs the whole
+#     suite in one process — same episode total, but the runner seeds numpy once
+#     per process instead of once per task.
 
 benchmark:
   name: libero
   suite: libero_spatial
   max_tasks: 0          # 0 = all tasks in the suite
-  episodes_per_task: 10 # official full-suite: 50
-  max_steps: 0          # 0 = suite default (official per-suite horizon)
+  episodes_per_task: 50 # official full-suite (10 tasks x 50 episodes)
+  max_steps: 400        # official per-suite horizon (libero_10: 700)
+  env_seed_mode: per_task  # official: one env per task, seeded once, reused across trials
   num_steps_wait: 30  # official eval settles the scene before the first replan
   continuous_gripper: false  # official binarize_gripper: true (model >0.5 -> open)
   prefer_controller_ee: false      # official reads obs['robot0_eef_pos'], not the OSC cache
@@ -64,7 +67,7 @@ model:
   name: fastwam-libero-spatial
   backbone_variant: wan22_5b
   dtype: bfloat16        # official base precision; float32 only for bf16-incompatible rope
-  variant: idm
+  variant: uncond        # matches configs/models/embodied/fastwam.yaml (LoongForge-trained ckpts)
   load_text_encoder: true
   skip_dit_load_from_pretrain: true
   action_dit_pretrained_path: null
@@ -76,6 +79,7 @@ model:
   action_infer_mode: first_frame
   num_inference_steps: 10
   sigma_shift: 1.0
+  noise_seed: 42        # official fixed flow-matching noise seed, reused at every replan
   num_video_frames: 9   # IDM mode only
   # Offline Wan release dirs (redirect_common_files=false, no modelscope
   # download). model_id resolves against DIFFSYNTH_MODEL_BASE_PATH (exported by
@@ -92,7 +96,7 @@ server:
   python: /path/to/loongforge_vla/bin/python
   log: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/libero/libero_spatial/policy_server.log
   start_timeout_sec: 1800   # 5B video DiT + 1B action DiT + UMT5 + VAE load
-  ckpt_path: /path/to/libero_optional_idm_2cam224.pt
+  ckpt_path: /path/to/libero_optional_idm_2cam224.pt   # official released ckpt kept as the example; it needs model.variant: idm
   # min/max stats; ships with the checkpoint as libero_optional_idm_2cam224_dataset_stats.json
   dataset_statistics_path: /path/to/libero_optional_idm_2cam224_dataset_stats.json
   loongforge_root: /path/to/LoongForge-VLA
@@ -109,7 +113,7 @@ env:
 
 run:
   output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/libero/libero_spatial
-  seed: 7
+  seed: 42   # official cfg.seed
   save_trace: true
   save_replay: true
 
