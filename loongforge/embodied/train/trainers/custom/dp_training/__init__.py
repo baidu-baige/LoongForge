@@ -8,29 +8,25 @@ parameter is assigned to one owner, gradients are reduced to that owner, and the
 owner publishes the updated parameter back. The fp32 masters and the optimizer
 state that follows them live only on the owner.
 
-    parameter_plan.py     ownership, capabilities, fp32 masters, checkpoint manifest
-    gradient_reducer.py   reduce-to-owner, plus the bucket/buffer layout both paths share
-    parameter_sync.py     owner-to-replica publication, including the fp8 delta path
-    checkpoint_io.py      rank-local master and optimizer-state save/load
-    parameter_manager.py  wires the above, owns the plan, and is the trainer seam
-    optimizer_builder.py  Muon plus its AdamW fallback, over the fp32 masters
-    custom_dp_trainer.py  the finetune-loop integration
+    parameter_plan.py       ownership, capabilities, fp32 masters, checkpoint manifest
+    gradient_reducer.py     reduce-to-owner, plus the bucket/buffer layout both paths share
+    parameter_sync.py       owner-to-replica publication, including the fp8 delta path
+    checkpoint_io.py        rank-local master and optimizer-state save/load
+    custom_dp_optimizer.py  wires the above into one ZeRO-style optimizer
+    optimizer_builder.py    Muon plus its AdamW fallback, over the fp32 masters
+    custom_dp_trainer.py    the finetune-loop integration
 
 Side-stream CUDA execution and bounded look-ahead live one level up, in
 ``custom/async_runtime`` -- they are not specific to this subsystem.
 """
 
 from .checkpoint_io import RankLocalCheckpointIO
+from .custom_dp_optimizer import CollectiveConfig, CustomDpOptimizer
 from .gradient_reducer import (
     WHOLE_TENSOR,
     BufferPool,
     GradientReduceBucket,
     GradientReducer,
-)
-from .parameter_manager import (
-    CollectiveConfig,
-    ParameterManager,
-    build_parameter_manager,
 )
 from .parameter_plan import (
     MasterParameterView,
@@ -45,6 +41,7 @@ __all__ = [
     "WHOLE_TENSOR",
     "BufferPool",
     "CollectiveConfig",
+    "CustomDpOptimizer",
     "GradientReduceBucket",
     "GradientReducer",
     "MasterParameterView",
@@ -54,7 +51,5 @@ __all__ = [
     "ParameterRecord",
     "ParameterSynchronizer",
     "RankLocalCheckpointIO",
-    "ParameterManager",
     "assign_parameter_owners",
-    "build_parameter_manager",
 ]
