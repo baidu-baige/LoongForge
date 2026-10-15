@@ -3,18 +3,19 @@
 
 """LingBot VLA v2 trainer, on the tensor_wise distributed optimizer.
 
-Selecting this trainer is what enables tensor_wise: it always builds
+Selecting a tensor_wise trainer is what enables tensor_wise: it always builds
 ``TensorWiseOptimizer`` under ``--distributed-strategy ddp``.
 
-It is the reference for driving ``TensorWiseOptimizer`` from the finetune loop
-(the contract is listed in that class's docstring), plus what is specific to
-LingBot: the model-side batch, optimizer and compile helpers, and the teacher
-look-ahead (the teachers run a step early, and the queue of started batches and
-the dataloader position it hides live here).
+``TensorWiseTrainer`` drives ``TensorWiseOptimizer`` from the finetune loop (the
+contract is listed in that class's docstring); a new model subclasses it and
+overrides the extension points. ``LingbotVlaV2Trainer`` adds what is specific to
+LingBot: the parameter policy, Muon, the model-side batch and compile helpers,
+and the teacher look-ahead (the teachers run a step early, and the queue of
+started batches and the dataloader position it hides live here).
 
 The optimizer is built in ``_wrap_model_for_training``, not ``_build_optimizer``:
-its parameter plan has to capture the module tree before regional compile
-touches it.
+its parameter plan has to capture the module tree before anything (e.g. regional
+compile) changes it.
 """
 
 import logging
@@ -37,6 +38,9 @@ from loongforge.embodied.model.lingbot_vla_v2.moe_load_balance import (
 from loongforge.embodied.model.lingbot_vla_v2.parameter_policy import (
     LingbotVlaV2ParameterPolicy,
 )
+from loongforge.embodied.optimizer.tensor_wise_optimizer.precision_policy import (
+    DefaultParameterPolicy,
+)
 from loongforge.embodied.optimizer.tensor_wise_optimizer.tensor_wise_optimizer import (
     CollectiveConfig,
     TensorWiseOptimizer,
@@ -52,28 +56,48 @@ from loongforge.embodied.train.trainers.supervised.finetune_trainer import (
 logger = logging.getLogger(__name__)
 
 
-class LingbotVlaV2Trainer(FinetuneTrainer):
-    """LingBot batch/teacher pipeline on the tensor_wise loop."""
+class TensorWiseTrainer(FinetuneTrainer):
+    """Finetune loop on ``TensorWiseOptimizer``; subclass it for a new model.
 
-    # True only while ``_train_step`` runs. Evaluation reads the same loader name
-    # as training, and must not be served look-ahead batches.
-    _in_train_step = False
+    Extension points (the defaults train every parameter in its own dtype with
+    ``--optimizer``):
 
-    def __init__(self, training_args, model_cfg, data_cfg):
-        super().__init__(training_args, model_cfg, data_cfg)
-        self._batch_enricher = LingbotVlaV2BatchEnricher(model_cfg)
-        self._teacher_for_batch = None
-        self._pipeline_teacher = bool(getattr(model_cfg, "pipeline_teacher", True))
-        # ``(batch, teacher handle)`` pairs whose teachers were started a step
-        # early, in fetch order, and the dataloader position from before they were
-        # read (``None`` while the queue is empty).
-        self._lookahead = deque()
-        self._lookahead_position = None
+        _build_parameter_policy()     per-parameter compute dtype, wire precision
+                                      and optimizer route
+        _prepare_module()             the module handed to the optimizer
+        _create_inner_optimizer(tw)   the optimizer over the fp32 masters
+        _after_optimizer_built()      work that must follow the parameter plan,
+                                      e.g. regional compile
+
+    The rest is the loop contract of ``TensorWiseOptimizer``. A subclass is
+    registered in ``trainer_builder.py`` and in ``TENSOR_WISE_TRAINERS``
+    (``tensor_wise_optimizer/validation.py``).
+    """
+
+    # -- extension points -------------------------------------------------------
+
+    def _build_parameter_policy(self):
+        return DefaultParameterPolicy()
+
+    def _prepare_module(self):
+        return self.model.to(self.ctx.device)
+
+    def _create_inner_optimizer(self, tensor_wise):
+        """Build the optimizer over the fp32 masters, not the compute replicas.
+
+        The replicas' ``.grad`` is consumed and cleared by the reduce-to-owner
+        step, so an optimizer built on ``self.model`` would see no gradients and
+        silently leave the run untrained.
+        """
+        return build_optimizer(tensor_wise.optimizer_view(), self.training_args)
+
+    def _after_optimizer_built(self) -> None:
+        """Hook for work that has to run after the parameter plan is captured."""
 
     # -- model and optimizer setup ----------------------------------------------
 
     def _wrap_model_for_training(self) -> None:
-        self._parameter_policy = LingbotVlaV2ParameterPolicy(self.model_cfg)
+        self._parameter_policy = self._build_parameter_policy()
         module = self._prepare_module()
         self._tensor_wise = TensorWiseOptimizer(
             module,
@@ -85,64 +109,13 @@ class LingbotVlaV2Trainer(FinetuneTrainer):
         )
         if self.ctx.is_main:
             self._log_precision_summary()
-        # The executor is built before the compile so the order matches the
-        # previous recipe wiring; regional compile has to run after the optimizer
-        # captured the module tree (see ``apply_regional_compile``).
-        teacher_executor = self._build_teacher_executor()
-        apply_regional_compile(self.model.policy, self.model_cfg.regional_compile)
-        self._batch_enricher.setup(self.ctx, self.model_cfg, teacher_executor)
-        if self.ctx.is_main:
-            logger.info(
-                "Teacher targets start %s",
-                "one step early, in the optimizer window"
-                if self._pipeline_teacher
-                else "at the head of their own step",
-            )
-
-    def _prepare_module(self):
-        module = self.model.policy.to(self.ctx.device)
-        if self.model_cfg.gradient_checkpointing and hasattr(
-            module, "gradient_checkpointing_enable"
-        ):
-            module.gradient_checkpointing_enable(
-                gradient_checkpointing_kwargs={"use_reentrant": False}
-            )
-        return module
-
-    def _create_inner_optimizer(self, dp_optimizer):
-        """Build the optimizer over the fp32 masters, not the compute replicas.
-
-        The replicas' ``.grad`` is consumed and cleared by the reduce-to-owner
-        step, so an optimizer built on ``self.model`` would see no gradients and
-        silently leave the run untrained. Muon belongs to this strategy rather
-        than to the optimizer registry for the same reason: the masters only
-        exist here.
-        """
-        args = self.training_args
-        if args.optimizer.lower() != "muon":
-            return build_optimizer(dp_optimizer.optimizer_view(), args)
-        muon_parameters, adamw_parameters = (
-            dp_optimizer.parameter_plan.split_masters_by_optimizer()
-        )
-        optimizer = build_muon_optimizer(
-            muon_parameters,
-            lr=args.lr_base,
-            adamw_parameters=adamw_parameters,
-            weight_decay=args.weight_decay,
-            momentum=args.muon_momentum,
-            nesterov=args.muon_nesterov,
-            ns_steps=args.muon_ns_steps,
-            adjust_lr_fn=args.muon_adjust_lr_fn,
-            lr_scale_for=moe_expert_lr_scale_for(self.model_cfg),
-        )
-        register_moe_load_balance_hook(optimizer, self.model, self.model_cfg)
-        return optimizer
+        self._after_optimizer_built()
 
     def _log_precision_summary(self) -> None:
         """Log the resolved per-class compute/collective precision."""
         logger.info(
             "tensor_wise collective precision: grad_reduce=%s "
-            "parameter_sync=%s (router/gate and 1-D tensors stay fp32)",
+            "parameter_sync=%s (precision-critical tensors stay fp32)",
             self._tensor_wise.grad_reduce_mode,
             self._tensor_wise.param_sync_precision,
         )
@@ -184,17 +157,8 @@ class LingbotVlaV2Trainer(FinetuneTrainer):
             self.optimizer.prepare_for_backward()
         yield
 
-    def _train_step(self):
-        self._in_train_step = True
-        try:
-            return super()._train_step()
-        finally:
-            self._in_train_step = False
-
     def _clip_gradients(self, max_norm: float) -> float:
-        norm = self.optimizer.clip_grad_norm_(max_norm)
-        self._after_grad_norm()
-        return norm
+        return self.optimizer.clip_grad_norm_(max_norm)
 
     def _compute_grad_norm(self) -> float:
         """Norm over the fp32 master gradients, without clipping.
@@ -203,9 +167,7 @@ class LingbotVlaV2Trainer(FinetuneTrainer):
         reduce-to-owner step already consumed, so the base implementation would
         report a norm of zero whenever ``--clip-grad`` is off.
         """
-        norm = self.optimizer.clip_grad_norm_(0.0)
-        self._after_grad_norm()
-        return norm
+        return self.optimizer.clip_grad_norm_(0.0)
 
     def _clean_nan_gradients(self):
         self.optimizer.scrub_nan_gradients()
@@ -226,30 +188,115 @@ class LingbotVlaV2Trainer(FinetuneTrainer):
             )
         super()._save_checkpoint()
 
+    def _finalize(self):
+        # The final checkpoint is written inside ``super()._finalize()``; the
+        # half-issued collectives are abandoned only after it, and also when it
+        # fails.
+        try:
+            return super()._finalize()
+        finally:
+            tensor_wise = getattr(self, "_tensor_wise", None)
+            if tensor_wise is not None:
+                tensor_wise.close()
+
+
+class LingbotVlaV2Trainer(TensorWiseTrainer):
+    """LingBot batch/teacher pipeline on the tensor_wise loop."""
+
+    # True only while ``_train_step`` runs. Evaluation reads the same loader name
+    # as training, and must not be served look-ahead batches.
+    _in_train_step = False
+
+    def __init__(self, training_args, model_cfg, data_cfg):
+        super().__init__(training_args, model_cfg, data_cfg)
+        self._batch_enricher = LingbotVlaV2BatchEnricher(model_cfg)
+        self._teacher_for_batch = None
+        self._pipeline_teacher = bool(getattr(model_cfg, "pipeline_teacher", True))
+        # ``(batch, teacher handle)`` pairs whose teachers were started a step
+        # early, in fetch order, and the dataloader position from before they were
+        # read (``None`` while the queue is empty).
+        self._lookahead = deque()
+        self._lookahead_position = None
+
+    # -- TensorWiseTrainer extension points --------------------------------------
+
+    def _build_parameter_policy(self):
+        return LingbotVlaV2ParameterPolicy(self.model_cfg)
+
+    def _prepare_module(self):
+        module = self.model.policy.to(self.ctx.device)
+        if self.model_cfg.gradient_checkpointing and hasattr(
+            module, "gradient_checkpointing_enable"
+        ):
+            module.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
+        return module
+
+    def _create_inner_optimizer(self, tensor_wise):
+        """Add Muon over the masters the policy routes to it.
+
+        Muon is built here rather than by the optimizer registry because it
+        needs the masters, which only exist inside ``TensorWiseOptimizer``.
+        """
+        args = self.training_args
+        if args.optimizer.lower() != "muon":
+            return super()._create_inner_optimizer(tensor_wise)
+        muon_parameters, adamw_parameters = (
+            tensor_wise.parameter_plan.split_masters_by_optimizer()
+        )
+        optimizer = build_muon_optimizer(
+            muon_parameters,
+            lr=args.lr_base,
+            adamw_parameters=adamw_parameters,
+            weight_decay=args.weight_decay,
+            momentum=args.muon_momentum,
+            nesterov=args.muon_nesterov,
+            ns_steps=args.muon_ns_steps,
+            adjust_lr_fn=args.muon_adjust_lr_fn,
+            lr_scale_for=moe_expert_lr_scale_for(self.model_cfg),
+        )
+        register_moe_load_balance_hook(optimizer, self.model, self.model_cfg)
+        return optimizer
+
+    def _after_optimizer_built(self) -> None:
+        # The executor is built before the compile so the order matches the
+        # previous recipe wiring; regional compile has to run after the optimizer
+        # captured the module tree (see ``apply_regional_compile``).
+        teacher_executor = self._build_teacher_executor()
+        apply_regional_compile(self.model.policy, self.model_cfg.regional_compile)
+        self._batch_enricher.setup(self.ctx, self.model_cfg, teacher_executor)
+        if self.ctx.is_main:
+            logger.info(
+                "Teacher targets start %s",
+                "one step early, in the optimizer window"
+                if self._pipeline_teacher
+                else "at the head of their own step",
+            )
+
+    # -- LingBot additions to the loop ------------------------------------------
+
+    def _train_step(self):
+        self._in_train_step = True
+        try:
+            return super()._train_step()
+        finally:
+            self._in_train_step = False
+
+    def _clip_gradients(self, max_norm: float) -> float:
+        norm = super()._clip_gradients(max_norm)
+        self._after_grad_norm()
+        return norm
+
+    def _compute_grad_norm(self) -> float:
+        norm = super()._compute_grad_norm()
+        self._after_grad_norm()
+        return norm
+
     def _after_grad_norm(self):
         # The muon + adamw + parameter_sync region is mostly NCCL, so its tensor
         # cores sit idle. Fill it with the next step's teachers.
         self._start_next_step_teachers()
-
-    def _shut_down(self) -> None:
-        """Shut the look-ahead and the optimizer's collectives down, failures and all.
-
-        A partially built or already failed trainer still has to release its
-        worker thread and abandon half-issued collectives, so no single failure
-        may skip the rest.
-        """
-        errors = []
-        for shutdown in (
-            self._shut_down_lookahead,
-            lambda: getattr(self, "_tensor_wise", None) and self._tensor_wise.close(),
-        ):
-            try:
-                shutdown()
-            except Exception as exc:  # keep closing the rest
-                logger.warning("tensor_wise shutdown step failed", exc_info=True)
-                errors.append(exc)
-        if errors:
-            raise errors[0]
 
     def _shut_down_lookahead(self) -> None:
         """Drop the queued batches and stop the teachers, also on a failed run."""
@@ -291,12 +338,11 @@ class LingbotVlaV2Trainer(FinetuneTrainer):
         self._teacher_for_batch = None
         self._batch_enricher.close()
         # The final checkpoint is written inside ``super()._finalize()``, so the
-        # look-ahead bookkeeping has to stay intact until it has been saved, and
-        # the shutdown (which abandons half-issued collectives) runs only after.
+        # look-ahead bookkeeping has to stay intact until it has been saved.
         try:
             return super()._finalize()
         finally:
-            self._shut_down()
+            self._shut_down_lookahead()
 
     def _fetch_batch(self, dl_name: str):
         """Serve a batch whose teachers were already started, when one is queued.
@@ -342,4 +388,4 @@ class LingbotVlaV2Trainer(FinetuneTrainer):
         return super()._get_dataloader_state()
 
 
-__all__ = ["LingbotVlaV2Trainer"]
+__all__ = ["LingbotVlaV2Trainer", "TensorWiseTrainer"]

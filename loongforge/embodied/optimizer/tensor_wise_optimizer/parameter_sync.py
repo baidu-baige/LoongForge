@@ -97,6 +97,19 @@ def validate_runtime(device: torch.device, backend: str) -> None:
         )
 
 
+def _as_block_rows(flat):
+    """View a flat tensor as ``[blocks, FP8_BLOCK]`` rows, zero-padding the tail.
+
+    One row is one scale block, so the codec output is the same as for the flat
+    tensor, but TransformerEngine parallelizes over rows: a single ``[1, numel]``
+    row runs 30-200x slower. Zero padding cannot change the last block's amax.
+    """
+    pad = -flat.numel() % FP8_BLOCK
+    if pad:
+        flat = torch.nn.functional.pad(flat, (0, pad))
+    return flat.view(-1, FP8_BLOCK)
+
+
 @torch.no_grad()
 def _quantize_flat(delta):
     """Quantize a contiguous fp32 tensor to ``(uint8 data, fp32 scales)``.
@@ -107,15 +120,16 @@ def _quantize_flat(delta):
     """
     if delta.dtype is not torch.float32 or not delta.is_contiguous():
         raise ValueError("FP8 parameter delta must be contiguous fp32")
-    if delta.numel() == 0:
+    numel = delta.numel()
+    if numel == 0:
         return (
             torch.empty(0, dtype=torch.uint8, device=delta.device),
             torch.empty(0, dtype=torch.float32, device=delta.device),
         )
-    quantized = _fp8_quantizer()(delta.reshape(-1))
+    quantized = _fp8_quantizer()(_as_block_rows(delta.reshape(-1)))
     data = quantized.get_data_tensors(
         rowwise_data=True, columnwise_data=False
-    ).reshape(-1)
+    ).reshape(-1)[:numel]
     scales = quantized._rowwise_scale_inv.reshape(-1).contiguous()
     return data, scales
 
@@ -132,13 +146,13 @@ def _dequantize_flat(data, scales, numel):
     numel = int(numel)
     if numel == 0:
         return torch.empty(0, dtype=torch.float32, device=data.device)
-    quantizer = _fp8_quantizer()
-    rebuilt = quantizer.make_empty(
-        (numel,), dtype=torch.float32, device=data.device
+    rows = _fp8_scale_count(numel)
+    rebuilt = _fp8_quantizer().make_empty(
+        (rows, FP8_BLOCK), dtype=torch.float32, device=data.device
     )
-    rebuilt._rowwise_data.copy_(data.reshape(-1))
-    rebuilt._rowwise_scale_inv.copy_(scales.reshape(1, -1))
-    return rebuilt.dequantize(dtype=torch.float32).reshape(-1)
+    rebuilt._rowwise_data.view(-1)[:numel].copy_(data.reshape(-1))
+    rebuilt._rowwise_scale_inv.copy_(scales.reshape(rows, 1))
+    return rebuilt.dequantize(dtype=torch.float32).reshape(-1)[:numel]
 
 
 @dataclass

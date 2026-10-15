@@ -228,3 +228,28 @@ def _worker_rejects_other_precision(rank, path):
 def test_checkpoint_rejects_a_different_precision_plan():
     with tempfile.TemporaryDirectory() as path:
         _run(_worker_rejects_other_precision, path)
+
+
+@pytest.mark.parametrize("numel", [1, 127, 128, 129, 1000])
+def test_block_rows_pad_to_whole_scale_blocks(numel):
+    from loongforge.embodied.optimizer.tensor_wise_optimizer import parameter_sync as sync
+
+    rows = sync._as_block_rows(torch.arange(numel, dtype=torch.float32) + 1)
+    assert rows.shape == (sync._fp8_scale_count(numel), sync.FP8_BLOCK)
+    assert rows.reshape(-1)[:numel].tolist() == list(range(1, numel + 1))
+    assert not rows.reshape(-1)[numel:].any()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="FP8 codec needs CUDA")
+@pytest.mark.parametrize("numel", [1, 129, 1000, 1 << 20])
+def test_fp8_codec_round_trip_keeps_wire_sizes(numel):
+    from loongforge.embodied.optimizer.tensor_wise_optimizer import parameter_sync as sync
+
+    if not sync._fp8_is_available():
+        pytest.skip("TransformerEngine blockwise quantizer unavailable")
+    x = torch.randn(numel, device="cuda") * 1e-3
+    data, scales = sync._quantize_flat(x)
+    assert data.numel() == numel and scales.numel() == sync._fp8_scale_count(numel)
+    decoded = sync._dequantize_flat(data, scales, numel)
+    assert decoded.shape == x.shape
+    assert (decoded - x).norm() <= 0.05 * x.norm()

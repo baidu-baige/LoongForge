@@ -25,8 +25,8 @@
 #   bash run_lingbot_vla_v2_finetune.sh model.gradient_checkpointing=true # override a YAML field
 #   SAVE_TRAINING_STATE=true bash run_lingbot_vla_v2_finetune.sh --save-format dcp
 #
-# The pinned upstream ``lingbotvla`` package is installed on demand:
-#   INSTALL_UPSTREAM=1 bash run_lingbot_vla_v2_finetune.sh   # pip install the pin
+# The pinned upstream ``lingbotvla`` package and utils3d are installed on demand:
+#   INSTALL_UPSTREAM=1 bash run_lingbot_vla_v2_finetune.sh   # pip install the pins
 #   SKIP_UPSTREAM_CHECK=1 bash run_lingbot_vla_v2_finetune.sh # already on PYTHONPATH
 #
 # Note: the gradient-ready order is measured inside the run -- the first step
@@ -101,15 +101,26 @@ export NO_ALBUMENTATIONS_UPDATE=${NO_ALBUMENTATIONS_UPDATE:-1}
 # per environment with INSTALL_UPSTREAM=1; otherwise a missing package fails
 # fast here instead of deep inside the first import.
 LINGBOTVLA_UPSTREAM_PIN=${LINGBOTVLA_UPSTREAM_PIN:-"lingbotvla @ git+https://github.com/Robbyant/lingbot-vla-v2.git@69729b4ef24c63ec25e750915491635f4753be1d"}
+# The MoGe depth teacher needs utils3d 1.3, which upstream does not declare and
+# which is git-only: the PyPI package named "utils3d" (0.1.x) is unrelated.
+UTILS3D_PIN=${UTILS3D_PIN:-"utils3d @ git+https://github.com/EasternJournalist/utils3d.git@3fab839f0be9931dac7c8488eb0e1600c236e183"}
 if [[ ${INSTALL_UPSTREAM:-0} == 1 ]]; then
-    python3 -m pip install "$LINGBOTVLA_UPSTREAM_PIN"
-elif [[ ${SKIP_UPSTREAM_CHECK:-0} != 1 ]] \
-    && ! python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('lingbotvla') else 1)"; then
-    echo "ERROR: the pinned upstream 'lingbotvla' package is not installed." >&2
-    echo "       install it with:  INSTALL_UPSTREAM=1 bash $0" >&2
-    echo "       or:  pip install \"$LINGBOTVLA_UPSTREAM_PIN\"" >&2
-    echo "       (if it is provided via PYTHONPATH instead, set SKIP_UPSTREAM_CHECK=1)" >&2
-    exit 1
+    python3 -m pip install "$LINGBOTVLA_UPSTREAM_PIN" "$UTILS3D_PIN"
+elif [[ ${SKIP_UPSTREAM_CHECK:-0} != 1 ]]; then
+    if ! python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('lingbotvla') else 1)"; then
+        echo "ERROR: the pinned upstream 'lingbotvla' package is not installed." >&2
+        echo "       install it with:  INSTALL_UPSTREAM=1 bash $0" >&2
+        echo "       or:  pip install \"$LINGBOTVLA_UPSTREAM_PIN\"" >&2
+        echo "       (if it is provided via PYTHONPATH instead, set SKIP_UPSTREAM_CHECK=1)" >&2
+        exit 1
+    fi
+    # Check the version, not just the name, so the unrelated PyPI package is caught.
+    if ! python3 -c "import importlib.metadata as m, sys; sys.exit(0 if m.version('utils3d') == '1.3' else 1)" 2>/dev/null; then
+        echo "ERROR: utils3d 1.3 (EasternJournalist) is not installed." >&2
+        echo "       install it with:  INSTALL_UPSTREAM=1 bash $0" >&2
+        echo "       or:  pip install \"$UTILS3D_PIN\"" >&2
+        exit 1
+    fi
 fi
 
 # -- Distributed --------------------------------------------------------------
