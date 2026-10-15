@@ -23,11 +23,10 @@
 from typing import Any, Dict, List, Sequence, Tuple
 
 import torch
-import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.optimizer import Optimizer
 
-from .muon import DistributedMuon, split_muon_adamw_params
+from loongforge.embodied.optimizer.muon import DistributedMuon
 
 
 class CombinedOptimizer(Optimizer):
@@ -91,28 +90,28 @@ class CombinedOptimizer(Optimizer):
 
 
 def _split_param_groups_by_scaled_lr(
-    params_and_names: Sequence[Tuple[torch.Tensor, str]],
+    named_parameters: Sequence[Tuple[str, torch.Tensor]],
     base_lr: float,
     lr_scale_for=None,
 ) -> List[Dict[str, Any]]:
-    """Bucket (param, name) pairs by their LR, scaled per parameter name.
+    """Bucket ``(name, parameter)`` pairs by their LR, scaled per parameter name.
 
     ``lr_scale_for(name)`` returns the multiplier for one parameter and defaults
     to no scaling. The model supplies it, so the rule for which parameters run at
     a different LR stays with the model rather than in this generic optimizer.
     """
     lr_to_params: Dict[float, List[torch.Tensor]] = {base_lr: []}
-    for p, name in params_and_names:
+    for name, parameter in named_parameters:
         scale = 1.0 if lr_scale_for is None else float(lr_scale_for(name))
-        lr_to_params.setdefault(base_lr * scale, []).append(p)
+        lr_to_params.setdefault(base_lr * scale, []).append(parameter)
     return [{"params": ps, "lr": lr} for lr, ps in lr_to_params.items() if ps]
 
 
 def build_muon_optimizer(
-    model: "nn.Module",
+    muon_parameters: Sequence[Tuple[str, torch.Tensor]],
     *,
     lr: float,
-    parameter_policy,
+    adamw_parameters: Sequence[Tuple[str, torch.Tensor]] = (),
     weight_decay: float = 0.0,
     momentum: float = 0.95,
     nesterov: bool = True,
@@ -124,21 +123,14 @@ def build_muon_optimizer(
 ) -> "torch.optim.Optimizer":
     """Build DistributedMuon for matrix-like weights plus AdamW fallback groups.
 
-    ``parameter_policy`` is required: it is the only thing that decides which
-    parameters Muon owns (``muon_exclude_name_patterns`` is already folded into
-    its AdamW markers). ``lr_scale_for`` optionally scales the LR of individual
-    parameters (e.g. MoE experts), and is supplied by the model.
+    The caller passes the two ``(name, parameter)`` lists already split, so this
+    builder never routes parameters itself. ``lr_scale_for`` optionally scales
+    the LR of individual parameters (e.g. MoE experts), and is supplied by the
+    model.
     """
-    muon_params, adamw_params, muon_names, adamw_names = split_muon_adamw_params(
-        model,
-        parameter_policy,
-    )
-
-    muon_groups = _split_param_groups_by_scaled_lr(
-        list(zip(muon_params, muon_names)), lr, lr_scale_for
-    )
+    muon_groups = _split_param_groups_by_scaled_lr(muon_parameters, lr, lr_scale_for)
     adamw_groups = _split_param_groups_by_scaled_lr(
-        list(zip(adamw_params, adamw_names)), lr, lr_scale_for
+        adamw_parameters, lr, lr_scale_for
     )
 
     if not muon_groups:

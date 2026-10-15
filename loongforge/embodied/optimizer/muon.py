@@ -1,22 +1,27 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Muon optimizer for the replicated-sharded strategy and MoE expert weights.
+"""Muon optimizer for 2D and 3D parameter tensors.
 
-``DistributedMuon`` keeps upstream ``torch.optim.Muon`` numerics for 2D weights
-and adds batched Newton-Schulz for 3D MoE expert stacks (fused experts are stored
-as a single ``[num_experts, in, out]`` tensor).
+``DistributedMuon`` keeps ``torch.optim.Muon`` numerics for 2D weights and
+extends the same recipe to 3D fused expert stacks. A ``[E, out, in]`` stack is
+orthogonalized per trailing ``[out, in]`` matrix: the expert axis never takes
+part in a reduction, and one batched GEMM per iteration covers all ``E`` experts
+instead of looping over them. ``torch.optim.Muon`` cannot take these -- it
+rejects any parameter that is not exactly 2D.
 
-It operates on the replicated-sharded fp32 master parameters, which are plain
-local tensors: compute replicas are never sharded, so Muon never sees a
-``DTensor`` here. FSDP2-sharded Muon is a different code path entirely
-(``--optimizer=dmuon``, see ``loongforge/embodied/optimizer/dmuon.py``), so this
-optimizer rejects ``DTensor`` inputs instead of carrying a second, divergent
-sharded implementation.
+Each parameter reports itself through ``param_update_callback`` the moment its
+update lands, letting a caller start that tensor's downstream work while the
+remaining Newton-Schulz passes still run. torch's step hooks cannot overlap this
+way: they fire once per ``step()`` call. The callback is ``None`` by default.
+
+Parameters must be plain local tensors of rank 2 or 3; ``DTensor`` and 1-D/4-D+
+inputs are rejected rather than served by a second, divergent sharded
+implementation.
 """
 
 import math
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
 import torch
 from torch import Tensor
@@ -58,7 +63,6 @@ except ImportError:  # pragma: no cover - torch < 2.9 fallback
 
 __all__ = [
     "DistributedMuon",
-    "split_muon_adamw_params",
 ]
 
 
@@ -98,8 +102,9 @@ def batched_newton_schulz(
     ortho = ortho / norm
 
     if ortho.ndim == 3:
-        # Allocate the three NS intermediates once and swap buffers, instead of
-        # allocating a [B, M, M] gram pair on every iteration.
+        # dim 0 is the expert axis and is never reduced, so every expert gets its
+        # own Gram matrix. Allocate the three NS intermediates once and swap
+        # buffers, instead of allocating a [B, M, M] gram pair on every iteration.
         batch, rows, _ = ortho.shape
         gram = torch.empty((batch, rows, rows), device=ortho.device, dtype=ortho.dtype)
         gram_update = torch.empty_like(gram)
@@ -121,40 +126,11 @@ def batched_newton_schulz(
     return ortho.to(original_dtype)
 
 
-def split_muon_adamw_params(
-    model,
-    parameter_policy,
-) -> Tuple[List[Tensor], List[Tensor], List[str], List[str]]:
-    """Split trainable parameters into Muon-eligible weights and AdamW fallbacks.
-
-    ``model`` only has to answer ``named_parameters()``; the routing decision is
-    the policy's alone (``parameter_policy.optimizer_kind``), which already folds
-    in the ndim test, the embedding/norm markers and
-    ``muon_exclude_name_patterns``.
-    """
-    muon_params: List[Tensor] = []
-    adamw_params: List[Tensor] = []
-    muon_names: List[str] = []
-    adamw_names: List[str] = []
-
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        if parameter_policy.optimizer_kind(name, param) == "muon":
-            muon_params.append(param)
-            muon_names.append(name)
-        else:
-            adamw_params.append(param)
-            adamw_names.append(name)
-
-    return muon_params, adamw_params, muon_names, adamw_names
-
-
 class DistributedMuon(Optimizer):
-    """Muon optimizer over the replicated-sharded fp32 master parameters.
+    """Muon optimizer over 2D weight matrices and 3D fused expert stacks.
 
-    One Newton-Schulz pass per parameter; 3D MoE expert stacks are
-    orthogonalized per trailing matrix in a single batched pass.
+    One Newton-Schulz pass per parameter; a 3D stack is orthogonalized per
+    trailing matrix in a single batched pass.
     """
 
     def __init__(
@@ -198,25 +174,25 @@ class DistributedMuon(Optimizer):
         super().__init__(params, defaults)
 
         # Optional hook invoked with each parameter right after its update is
-        # applied. ZeRO-1 uses it to start that parameter's replica sync while
-        # the remaining Newton-Schulz work is still running.
+        # applied. A caller can use it to start that tensor's downstream work
+        # while the remaining Newton-Schulz passes still run -- a per-parameter
+        # granularity torch's per-step hooks cannot reach.
         self.param_update_callback = None
 
         for group in self.param_groups:
             for p in group["params"]:
                 if isinstance(p, DTensor):
                     raise ValueError(
-                        "DistributedMuon operates on local tensors only; got a "
-                        "DTensor. The replicated-sharded strategy keeps compute "
-                        "replicas unsharded, so this indicates an FSDP2-sharded "
-                        "model. Use --optimizer=dmuon for FSDP2."
+                        "DistributedMuon operates on plain local tensors; got a "
+                        "DTensor. Sharded parameters need a shard-aware Muon, "
+                        "not this optimizer."
                     )
                 if p.ndim not in (2, 3):
                     raise ValueError(
                         "DistributedMuon supports only 2D and 3D parameters; "
                         f"got param with shape {tuple(p.size())}. Route 1D/4D+ "
-                        "params (biases, norms, conv weights) to AdamW via "
-                        "split_muon_adamw_params."
+                        "params (biases, norms, conv weights) to a fallback "
+                        "optimizer such as AdamW."
                     )
                 if torch.is_complex(p):
                     raise ValueError("DistributedMuon does not support complex parameters")

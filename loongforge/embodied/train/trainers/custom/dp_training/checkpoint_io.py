@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Rank-local checkpoint I/O for the replicated-sharded training backend.
+"""Rank-local checkpoint I/O for the custom_dp training backend.
 
 Compute replicas are complete on every rank and travel with the model state
 dict, so only the owner-distributed half is written here: the fp32 masters and
@@ -17,12 +17,12 @@ import os
 
 import torch
 
-BACKEND = "replicated_zero1"
+BACKEND = "custom_dp"
 FORMAT_VERSION = 1
 
 
-class ReplicatedShardedCheckpointIO:
-    """Save and restore the owner-distributed half of the replicated shard."""
+class RankLocalCheckpointIO:
+    """Save and restore the owner-distributed half of the custom_dp state."""
 
     def __init__(self, manager, optimizer):
         """Bind to the parameter manager and the optimizer over its masters."""
@@ -179,7 +179,7 @@ class ReplicatedShardedCheckpointIO:
         rank_path = os.path.join(state_dir, f"rank_{rank}.pt")
         if not os.path.exists(rank_path):
             raise FileNotFoundError(
-                f"replicated-sharded optimizer state for rank {rank} not found: {rank_path}"
+                f"custom_dp optimizer state for rank {rank} not found: {rank_path}"
             )
         saved = torch.load(rank_path, map_location="cpu", weights_only=False)
         if saved.get("backend") != BACKEND:
@@ -221,4 +221,4 @@ class ReplicatedShardedCheckpointIO:
         return names_per_optimizer
 
 
-__all__ = ["BACKEND", "FORMAT_VERSION", "ReplicatedShardedCheckpointIO"]
+__all__ = ["BACKEND", "FORMAT_VERSION", "RankLocalCheckpointIO"]

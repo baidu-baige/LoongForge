@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Stable parameter metadata for replicated-sharded training.
+"""Stable parameter metadata for custom_dp training.
 
 The plan runs the setup in five explicitly ordered phases: resolve the
 capabilities, plan ownership, create the fp32 masters from the pre-cast values,
@@ -18,20 +18,19 @@ from typing import Iterable
 import torch
 from torch import nn
 
-from loongforge.embodied.distributed.replicated_sharded_utils.precision_policy import (
+from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
     DTYPES,
     GRAD_REDUCE_MODES,
     PARAM_SYNC_DECOMPOSITION,
     PARAM_SYNC_PRECISIONS,
-    POLICY_VERSION,
     build_parameter_policy,
     dtype_label,
     resolve_parameter_capabilities,
 )
-from loongforge.embodied.distributed.replicated_sharded_utils.replicated_sharded_config import (
-    DEFAULT_FP8_BLOCK,
+from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
     DEFAULT_GRAD_REDUCE_DTYPE,
     DEFAULT_PARAM_SYNC_PRECISION,
+    FP8_BLOCK,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,7 +121,6 @@ class ParameterPlan:
         parameter_policy,
         grad_reduce_dtype=None,
         param_sync_precision=None,
-        param_sync_fp8_block=DEFAULT_FP8_BLOCK,
         param_sync_fp8_reprime_interval=0,
         param_sync_fp8_include=None,
         param_sync_bf16_with_fp8=None,
@@ -184,15 +182,6 @@ class ParameterPlan:
                 raise ValueError(
                     f"FP8 capability for {cap.name} requires FP8 parameter-sync quantization"
                 )
-        self.param_sync_fp8_block = int(param_sync_fp8_block)
-        if (
-            self.param_sync_fp8_block <= 0
-            or self.param_sync_fp8_block & (self.param_sync_fp8_block - 1)
-            or self.param_sync_fp8_block > 1 << 20
-        ):
-            raise ValueError(
-                "param_sync_fp8_block must be a positive power of two <= 1048576"
-            )
         self.param_sync_fp8_reprime_interval = int(param_sync_fp8_reprime_interval)
         if self.param_sync_fp8_reprime_interval < 0:
             raise ValueError("param_sync_fp8_reprime_interval must be non-negative")
@@ -316,12 +305,12 @@ class ParameterPlan:
             ):
                 raise RuntimeError(f"invalid FP32 master: {record.name}")
         return {
-            "policy_version": POLICY_VERSION,
             "world_size": self.world_size,
             "wire_config": {
                 "grad_reduce_dtype": self.grad_reduce_mode,
                 "param_sync_precision": self.param_sync_precision,
-                "fp8_block": self.param_sync_fp8_block,
+                # The codec's fixed block, so the manifest describes the real wire format.
+                "fp8_block": FP8_BLOCK,
                 "fp8_reprime_interval": self.param_sync_fp8_reprime_interval,
             },
             "parameters": [
@@ -334,9 +323,29 @@ class ParameterPlan:
             ],
         }
 
-    def optimizer_kind(self, name, parameter):
-        """Route one parameter to its optimizer, per the resolved capability."""
-        return self._capability_by_name[name].optimizer_kind
+    def split_masters_by_optimizer(self):
+        """Split this rank's fp32 masters by the resolved optimizer kind.
+
+        Returns ``(muon_pairs, adamw_pairs)``, each a list of ``(name, parameter)``
+        in registration order. The routing decision is already resolved into
+        ``ParameterRecord.optimizer_kind``, so the optimizer never sees the policy.
+        """
+        muon, adamw = [], []
+        for name, parameter in self.master.items():
+            kind = self._by_name[name].optimizer_kind
+            (muon if kind == "muon" else adamw).append((name, parameter))
+        return muon, adamw
+
+    def muon_parameter_names(self):
+        """Names the Muon route owns, across every rank, in registration order.
+
+        Deliberately not limited to this rank's masters: the publish plan splits
+        each owner's records by these names and every rank has to derive the same
+        plan, so the set must be rank-independent.
+        """
+        return [
+            record.name for record in self.records if record.optimizer_kind == "muon"
+        ]
 
     def validate_manifest(self, saved, *, allow_reshard=False, saved_world_size=None):
         """Validate before loading tensors; only owners may change on reshard.
@@ -348,8 +357,8 @@ class ParameterPlan:
         if saved is None:
             raise RuntimeError("checkpoint has no parameter manifest")
         current = self.manifest()
-        if not isinstance(saved, dict) or saved.get("policy_version") != POLICY_VERSION:
-            raise RuntimeError("checkpoint parameter policy version mismatch")
+        if not isinstance(saved, dict):
+            raise RuntimeError("invalid checkpoint parameter manifest")
         if saved.get("wire_config") != current["wire_config"]:
             raise RuntimeError("checkpoint wire configuration mismatch")
         world = saved.get("world_size")
@@ -395,14 +404,14 @@ class ParameterPlan:
         )
         for list_name, token in misses:
             logger.warning(
-                "replicated-sharded: %s marker %r matched no parameter name; a "
+                "custom_dp: %s marker %r matched no parameter name; a "
                 "renamed submodule may have silently changed precision/routing",
                 list_name,
                 token,
             )
         if self.param_sync_quantization != "none" and not self.param_sync_fp8_include:
             logger.warning(
-                "replicated-sharded: param_sync_precision selects FP8 but "
+                "custom_dp: param_sync_precision selects FP8 but "
                 "param_sync_fp8_include is empty, so no parameter will be quantized"
             )
 
@@ -459,11 +468,11 @@ class ParameterPlan:
 class MasterParameterView:
     """Minimal module-like view consumed by the optimizer builders.
 
-    The consumers (``build_param_groups``, ``split_muon_adamw_params``) treat the
-    view as an ``nn.Module``. ``named_parameters`` and ``parameters`` carry the
-    real content; ``named_modules`` is empty by design -- the view has no module
-    tree, and ``build_param_groups`` only walks it to log the LR assignment and
-    to find bias/norm modules, which the parameter policy already covers.
+    The consumer (``build_param_groups``) treats the view as an ``nn.Module``.
+    ``named_parameters`` and ``parameters`` carry the real content;
+    ``named_modules`` is empty by design -- the view has no module tree, and
+    ``build_param_groups`` only walks it to log the LR assignment and to find
+    bias/norm modules, which the parameter policy already covers.
     """
 
     def __init__(self, named_parameters):

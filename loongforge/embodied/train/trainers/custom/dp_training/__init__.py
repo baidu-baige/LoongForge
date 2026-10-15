@@ -1,23 +1,26 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Replicated-sharded training.
+"""Custom data parallel (custom_dp) training.
 
-Compute replicas stay complete on every rank; the fp32 masters and the optimizer
-state that follows them are distributed.
+Compute replicas stay complete on every rank and no tensor is split: each
+parameter is assigned to one owner, gradients are reduced to that owner, and the
+owner publishes the updated parameter back. The fp32 masters and the optimizer
+state that follows them live only on the owner.
 
     parameter_plan.py     ownership, capabilities, fp32 masters, checkpoint manifest
     gradient_reducer.py   reduce-to-owner, plus the bucket/buffer layout both paths share
     parameter_sync.py     owner-to-replica publication, including the fp8 delta path
     checkpoint_io.py      rank-local master and optimizer-state save/load
     parameter_manager.py  wires the above, owns the plan, and is the trainer seam
-    trainer_mixin.py      the finetune-loop integration
+    optimizer_builder.py  Muon plus its AdamW fallback, over the fp32 masters
+    custom_dp_trainer.py  the finetune-loop integration
 
 Side-stream CUDA execution and bounded look-ahead live one level up, in
 ``custom/async_runtime`` -- they are not specific to this subsystem.
 """
 
-from .checkpoint_io import ReplicatedShardedCheckpointIO
+from .checkpoint_io import RankLocalCheckpointIO
 from .gradient_reducer import (
     WHOLE_TENSOR,
     BufferPool,
@@ -26,8 +29,8 @@ from .gradient_reducer import (
 )
 from .parameter_manager import (
     CollectiveConfig,
-    ReplicatedShardedManager,
-    build_shard_manager,
+    ParameterManager,
+    build_parameter_manager,
 )
 from .parameter_plan import (
     MasterParameterView,
@@ -50,8 +53,8 @@ __all__ = [
     "ParameterPlan",
     "ParameterRecord",
     "ParameterSynchronizer",
-    "ReplicatedShardedCheckpointIO",
-    "ReplicatedShardedManager",
+    "RankLocalCheckpointIO",
+    "ParameterManager",
     "assign_parameter_owners",
-    "build_shard_manager",
+    "build_parameter_manager",
 ]

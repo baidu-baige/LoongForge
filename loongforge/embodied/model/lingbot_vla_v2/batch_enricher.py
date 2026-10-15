@@ -45,7 +45,7 @@ class LingbotVlaV2BatchEnricher:
         """Build the depth/video teachers and attach their side-stream executor.
 
         ``executor`` is built by the trainer (see
-        ``LingbotVlaV2ReplicatedShardedTrainer._build_teacher_executor``)
+        ``LingbotVlaV2CustomDpTrainer._build_teacher_executor``)
         and is ``None`` when the teachers run synchronously in the training
         thread.
         """

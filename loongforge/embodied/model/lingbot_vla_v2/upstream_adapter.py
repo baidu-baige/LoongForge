@@ -88,18 +88,21 @@ def _register_lazy_symbol(mod, name, value) -> None:
 def _require_upstream_package() -> None:
     """Fail fast with an actionable message when the upstream package is absent.
 
-    ``lingbotvla`` is a pinned third-party dependency delivered as a source /
-    editable install; surface how to install it instead of a bare
-    ``ModuleNotFoundError`` from deep inside an import.
+    ``lingbotvla`` is a pinned third-party dependency installed from its git
+    source; surface how to install it instead of a bare ``ModuleNotFoundError``
+    from deep inside an import.
     """
     import importlib.util
 
     if importlib.util.find_spec("lingbotvla") is None:
         raise ImportError(
             "The upstream 'lingbotvla' package is required but not installed. "
-            "Install the pinned commit with:\n"
-            '    pip install -e ".[lingbotvla-upstream]"\n'
-            "(defined in pyproject.toml; git + network access required)."
+            "Install the pinned commit before training (git + network access "
+            "required):\n"
+            '    pip install "lingbotvla @ git+https://github.com/Robbyant/'
+            'lingbot-vla-v2.git@69729b4ef24c63ec25e750915491635f4753be1d"\n'
+            "The lingbot_vla_v2 launch script can do this for you: run it with "
+            "INSTALL_UPSTREAM=1."
         )
 
 
@@ -623,6 +626,66 @@ def _apply_lingbot_flex_compile_shim(model_cfg) -> None:
     _ufa._lingbot_flex_compile_shim = True
 
 
+def _apply_lingbot_precompute_grid_shim() -> None:
+    """Drop upstream's cached visual-grid metadata when a batch's layout changes.
+
+    Upstream ``QwenvlWithExpertV2Model.get_image_features``
+    (``modeling_lingbot_vla_v2.py``) precomputes ``pos_embeds`` /
+    ``position_embeddings`` / ``cu_seqlens`` / ``visual_split_sizes`` /
+    ``visual_max_seqlen`` from ``image_grid_thw`` **once**, on the first batch, and
+    reuses them for every later batch -- the only guard is ``position_embeddings is
+    None``. That holds while every batch carries the same image layout, which stops
+    being true at an epoch boundary: with ``batch_drop_last`` off (the default) the
+    last batch of an epoch is the remainder of the sampler's index list, so it
+    carries fewer images than the batches before it. The stale ``visual_split_sizes``
+    then no longer sums to the visual token count and ``torch.split`` aborts the run
+    with ``RuntimeError: split_with_sizes expects split_sizes to sum exactly to N``.
+
+    We wrap the method so the cache is dropped -- by clearing ``position_embeddings``,
+    the flag upstream tests -- whenever the incoming ``image_grid_thw`` has a
+    different shape from the one the cache was built from. The steady state is
+    untouched (an identical layout keeps the cache, and with it the precompute win);
+    only a layout change pays for a recompute. The key is the grid's *shape* (the
+    image count), compared at Python level, so the hot path gains no device sync and
+    no host copy.
+
+    Scope: the grid *values* are not compared, so a batch with the same image count
+    but different per-image grids would still reuse the cache. Upstream's precompute
+    only ever promised a constant layout, and this pipeline resizes every frame to
+    one size, so the image count is what actually varies. No upstream source edit;
+    idempotent.
+    """
+    from lingbotvla.models.vla.lingbot_vla.modeling_lingbot_vla_v2 import (
+        QwenvlWithExpertV2Model,
+    )
+
+    if getattr(QwenvlWithExpertV2Model, "_lingbot_precompute_grid_shim", False):
+        return
+
+    _orig_get_image_features = QwenvlWithExpertV2Model.get_image_features
+
+    def get_image_features(self, pixel_values, image_grid_thw):
+        """Invalidate the precomputed grid cache when this batch's image count differs."""
+        if not getattr(self.config, "precompute_grid_thw", False):
+            return _orig_get_image_features(self, pixel_values, image_grid_thw)
+        grid_shape = tuple(image_grid_thw.shape)
+        if (
+            self.position_embeddings is not None
+            and grid_shape != getattr(self, "_lingbot_grid_shape", None)
+        ):
+            # Clearing the flag makes upstream rebuild every cached tensor for this
+            # layout; the previous ones were sized for a different image count.
+            self.position_embeddings = None
+        result = _orig_get_image_features(self, pixel_values, image_grid_thw)
+        # Recorded only after a successful call, so a failed forward cannot leave the
+        # key claiming a layout the cache does not actually hold.
+        self._lingbot_grid_shape = grid_shape
+        return result
+
+    QwenvlWithExpertV2Model.get_image_features = get_image_features
+    QwenvlWithExpertV2Model._lingbot_precompute_grid_shim = True
+
+
 def _import_upstream_data_guarded(import_fn):
     """Import an upstream ``data`` module while neutralising its datasets<4 patch.
 
@@ -685,8 +748,11 @@ def resolve_build_foundation_model(model_cfg):
     default ``model.async_teacher=True``; the seeded flow-matching draw
     (:func:`_apply_lingbot_fm_seed_shim`) so its per-step ``noise`` / ``time`` are
     a pure function of the seed; the parallel-state singleton init
-    (:func:`_apply_lingbot_parallel_state_shim`); and the flex-attention compile
-    (:func:`_apply_lingbot_flex_compile_shim`). None edits upstream source.
+    (:func:`_apply_lingbot_parallel_state_shim`); the flex-attention compile
+    (:func:`_apply_lingbot_flex_compile_shim`); and the visual-grid cache
+    invalidation (:func:`_apply_lingbot_precompute_grid_shim`) that keeps an epoch's
+    final partial batch from reusing the previous batch's split sizes. None edits
+    upstream source.
     """
     build_foundation_model = _resolve_symbol(
         "build_foundation_model", "lingbotvla.models.auto"
@@ -697,6 +763,7 @@ def resolve_build_foundation_model(model_cfg):
         _apply_lingbot_fm_seed_shim()
         _apply_lingbot_parallel_state_shim()
         _apply_lingbot_flex_compile_shim(model_cfg)
+        _apply_lingbot_precompute_grid_shim()
         return build_foundation_model(*args, **kwargs)
 
     return _build_foundation_model_with_shims

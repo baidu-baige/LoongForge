@@ -4,8 +4,8 @@
 # lingbot_vla_v2 (Qwen3-VL-4B + Token-MoE action expert) — robotwin finetune defaults.
 model:
   model_type: lingbot_vla_v2
-  model_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/
-  tokenizer_path: /ssd1/dataset/lingbot-vla/Qwen3-VL-4B-Instruct
+  model_path: null  # set by the launcher (6B checkpoint dir)
+  tokenizer_path: null  # set by the launcher
   moe_implementation: fused
 
   action_dim: 55
@@ -53,7 +53,7 @@ model:
   # run only when throughput matters.
   regional_compile: []
 
-  # Replicated-sharded collective precision. Router/gate weights and 1-D tensors always stay
+  # custom_dp collective precision. Router/gate weights and 1-D tensors always stay
   # fp32 on the wire (expert selection is decided by fp32 gate logits); downcasting
   # is per parameter, never per collective.
   #   grad_reduce_dtype: fp32 | bf16 | mixed | compute
@@ -73,7 +73,6 @@ model:
   #                    compute capability >= 8.9 (H100 and later); opt in per run.
   param_sync_precision: fp32
   # Read only when param_sync_precision=fp8_e4m3_delta:
-  #   param_sync_fp8_block: elements per fp32 scale (power of two).
   #   param_sync_fp8_reprime_interval: 0 keeps a pure delta stream; >0 re-anchors
   #     replicas to a full BF16 copy every N publishes to bound drift.
   #   param_sync_fp8_include: the sole FP8 scope, and a pure opt-in -- an empty list
@@ -85,12 +84,11 @@ model:
   #   param_sync_bf16_with_fp8: also FP8 the bf16 VLM tower via a per-rank fp32
   #     shadow (+4 bytes/param resident). Off by default; scope it with
   #     param_sync_fp8_include when measuring its loss/memory tradeoff.
-  param_sync_fp8_block: 256
   param_sync_fp8_reprime_interval: 0
   param_sync_fp8_include: []
   param_sync_bf16_with_fp8: false
 
-  # Replicated-sharded collective overlap. grad_overlap reduces each gradient bucket as backward
+  # custom_dp collective overlap. grad_overlap reduces each gradient bucket as backward
   # produces it; param_overlap broadcasts each owner's parameters as its master is
   # updated. comm_bucket_mb sizes both; 0 means pick by grad_overlap (256 when
   # on, 1024 when off). grad_inflight_mb caps
@@ -113,8 +111,8 @@ model:
       image_input_size: 224
     depth:
       model_type: MoRGBD
-      moge_path: /ssd1/dataset/lingbot-vla/moge-2-vitb-normal/model.pt
-      morgbd_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/depth/model.pt
+      moge_path: null  # set by the launcher
+      morgbd_path: null  # set by the launcher
       num_layers: 1
       num_heads: 4
       dim_head: 32
@@ -127,8 +125,8 @@ model:
       block_future_depth_to_action: true
       detach_future_image_feats: true
     video:
-      ckpt_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/dino_video/teacher_step_10000.pth
-      config_path: /ssd1/dataset/lingbot-vla/lingbot-vla-v2-6b/dino_video/config.yaml
+      ckpt_path: null  # set by the launcher
+      config_path: null  # set by the launcher
       attention_mode: flex_block_causal
       input_size: 256
       block_suffix_to_future_video: true
@@ -164,7 +162,7 @@ model:
 
 data:
   data_name: multi
-  robot_config_root: /workspace/lingbot_vla_v2/lingbot-vla-v2/configs/robot_configs
+  robot_config_root: ""  # set by the launcher
   prompt_type: global
   joints:
     - "{'arm.position': 14}"

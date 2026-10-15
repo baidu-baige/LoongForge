@@ -318,7 +318,7 @@ Training precision supports `bfloat16` (default), `float16`, and `float32`.
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
-| Distributed strategy | `--distributed-strategy` | `fsdp` | `ddp`, `fsdp` | Select DDP or FSDP |
+| Distributed strategy | `--distributed-strategy` | `fsdp` | `ddp`, `fsdp`, `custom_dp` | Select DDP, FSDP or custom_dp (see 4.2.3) |
 | Training precision | `--dtype` | `bfloat16` | `bfloat16`, `float16`, `float32` | Model training dtype |
 | DDP ZeRO-1 | `--zero-optimizer` | `False` | Bool flag | Shard optimizer state under DDP |
 | HSDP shard size | `--hsdp-shard-size` | `None` | Positive integer | Enable HSDP under FSDP |
@@ -412,6 +412,37 @@ The following arguments give fine-grained control over FSDP sharding, wrap polic
 When replicating frozen module classes, every matched parameter must have `requires_grad=False`. This mode is incompatible with `--init-on-meta`; if `--fsdp-ignored-frozen-param-dtype` is specified, it must match the training compute dtype selected by `--dtype`.
 
 Delta-FP8 changes only FSDP parameter communication precision; model computation remains in the dtype selected by the FSDP mixed-precision policy. See [FSDP2 Delta-FP8 Param AllGather](../features/delta_fp8_allgather.md) for prerequisites, usage, parameter reference, and troubleshooting.
+
+#### 4.2.3 custom_dp (Custom Data Parallel)
+
+custom_dp keeps a complete compute replica on every rank and splits no tensor. Each parameter is assigned to one owner rank: gradients are reduced to the owner, the owner updates its fp32 master and optimizer state, and the updated parameter is broadcast back. Compared with `ddp` + `--zero-optimizer`, it uses reduce instead of all-reduce, can publish parameters in bf16 or fp8, and overlaps both collectives with computation. Because an owner holds whole tensors, it also supports Muon.
+
+A model runs on custom_dp with no code changes. These three arguments are all that is required:
+
+```bash
+--trainer-type CustomDpTrainer \
+--distributed-strategy custom_dp \
+--zero-optimizer
+```
+
+| Feature | Argument | Default | Values / Type | Description |
+| --- | --- | --- | --- | --- |
+| Gradient reduce dtype | `--custom-dp-grad-reduce-dtype` | `bf16` | `fp32`, `bf16`, `mixed`, `compute` | 1-D tensors always stay fp32 |
+| Parameter publish precision | `--custom-dp-param-sync-precision` | `fp32` | `fp32`, `bf16`, `bf16_ef`, `bf16_ef_delta`, `fp8_e4m3_delta` | How masters reach the replicas |
+| Gradient overlap | `--custom-dp-grad-overlap` | `True` | Bool flag | Reduce each bucket as backward produces it |
+| Parameter overlap | `--custom-dp-param-overlap` | `True` | Bool flag | Broadcast each owner's parameters once updated |
+| Bucket size | `--custom-dp-comm-bucket-mb` | `256` | Integer MB | `0` picks by gradient overlap |
+| In-flight cap | `--custom-dp-grad-inflight-mb` | `3072` | Integer MB | A memory bound; lower it on smaller cards |
+
+The `--custom-dp-param-sync-fp8-*` and `--custom-dp-param-sync-bf16-with-fp8` arguments apply only to `fp8_e4m3_delta`. A model whose config inherits `CustomDpConfig` (such as `lingbot_vla_v2`) reads these knobs from its YAML `model:` section instead, and `--custom-dp-*` is ignored.
+
+The default policy keeps each parameter's dtype, holds 1-D tensors at fp32 collectives, and uses the optimizer chosen by `--optimizer`. For fp32 compute on selected modules, fp32-critical parameters, or Muon (`--optimizer muon`), subclass `CustomDpTrainer` and return a `ParameterClassPolicy` from `_build_parameter_policy`.
+
+Constraints:
+
+- `--zero-optimizer` is required; `--fp8`, `--ddp-*` and `--zero-parameters-as-bucket-view` are rejected.
+- Training-state checkpoints require `--save-format dcp` and cannot be combined with `--use-lora`; pass `--no-save-training-state` to export weights only.
+- Module buffers (for example BatchNorm statistics) are not synchronized, and `--init-on-meta` has not been validated. Check both before moving a model onto custom_dp.
 
 ### 4.3 Stability and Runtime Control
 

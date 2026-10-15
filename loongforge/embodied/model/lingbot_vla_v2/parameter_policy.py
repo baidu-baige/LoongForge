@@ -3,10 +3,10 @@
 
 """Parameter precision policy for LingBot VLA v2 distributed strategies.
 
-This is the LingBot instance of the shared, config-driven replicated-sharded policy. It only
+This is the LingBot instance of the shared, config-driven custom_dp policy. It only
 supplies the two per-axis marker lists and their class labels; the matching and
 the ``compute_dtype`` / ``is_comm_precision_critical`` / ``classify`` contract
-live in ``MarkerParameterPolicy``. A new model reuses the same base with its own
+live in ``ParameterClassPolicy``. A new model reuses the same base with its own
 markers -- no branching is duplicated here.
 
     class             compute  grad-reduce            param-publish
@@ -16,14 +16,14 @@ markers -- no branching is duplicated here.
     expert_gate_norm  fp32     fp32 (critical)        fp32 (critical)
     vlm_norm_bias     bf16     fp32 (critical)        fp32 (critical)
 
-The concrete downcast dtype (bf16 vs fp8) is resolved in the replicated-sharded parameter plan from
+The concrete downcast dtype (bf16 vs fp8) is resolved in the custom_dp parameter plan from
 the global param_sync/grad_reduce knob; this policy only declares which class a
 parameter belongs to.
 """
 
 from __future__ import annotations
 
-from loongforge.embodied.distributed.replicated_sharded_utils.precision_policy import MarkerParameterPolicy
+from loongforge.embodied.distributed.custom_dp_utils.precision_policy import ParameterClassPolicy
 
 # Action-expert tensors train in fp32; everything else in bf16.
 _ACTION_FP32_MARKERS = (
@@ -56,10 +56,10 @@ _LABELS = {
 }
 
 
-class LingbotVlaV2ParameterPolicy(MarkerParameterPolicy):
-    """Preserve the validated LingBot replicated-sharded ownership and precision contract.
+class LingbotVlaV2ParameterPolicy(ParameterClassPolicy):
+    """Preserve the validated LingBot custom_dp ownership and precision contract.
 
-    This is a plain ``MarkerParameterPolicy`` (a model-side policy describing what
+    This is a plain ``ParameterClassPolicy`` (a model-side policy describing what
     each parameter *is*). The parameter plan wraps it in the capability-resolving adapter
     once, combining it with the run's collective precision plan -- the model never
     binds runtime precision into the policy itself.

@@ -1,13 +1,13 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collective-precision and overlap knobs for ``ReplicatedShardedManager``.
+"""Collective-precision and overlap knobs for ``ParameterManager``.
 
 Inherit this frozen dataclass in a model's ``ModelConfig`` to get the fields and
 their defaults; the manager reads every field directly:
 
     @dataclass(frozen=True)
-    class MyModelConfig(ReplicatedShardedConfig):
+    class MyModelConfig(CustomDpConfig):
         ...
 
 Downcasting is per parameter: the parameter policy keeps precision-critical
@@ -21,11 +21,13 @@ from typing import List
 # these names instead of repeating the literals.
 DEFAULT_GRAD_REDUCE_DTYPE = "bf16"
 DEFAULT_PARAM_SYNC_PRECISION = "fp32"
-DEFAULT_FP8_BLOCK = 256
+# Elements per fp32 scale in the fp8_e4m3_delta wire format. TransformerEngine's
+# blockwise quantizer fixes it at 128, so this is a codec constant, not a knob.
+FP8_BLOCK = 128
 
 
 @dataclass(frozen=True)
-class ReplicatedShardedConfig:
+class CustomDpConfig:
     """Collective-precision and overlap knobs read by the manager."""
 
     # ── Collective precision ──
@@ -46,9 +48,9 @@ class ReplicatedShardedConfig:
     #                     it is opt-in.
     # Override per run, e.g. model.param_sync_precision=bf16.
     param_sync_precision: str = DEFAULT_PARAM_SYNC_PRECISION
-    # fp8_e4m3_delta only: elements per scale; reprime_interval>0 re-anchors replicas
-    # to a full BF16 copy every N publishes (0 = pure delta stream).
-    param_sync_fp8_block: int = DEFAULT_FP8_BLOCK
+    # fp8_e4m3_delta only: reprime_interval>0 re-anchors replicas to a full BF16 copy
+    # every N publishes (0 = pure delta stream). The scale block is fixed at 128 by
+    # TransformerEngine (FP8_BLOCK), so it is not configurable.
     param_sync_fp8_reprime_interval: int = 0
     # fp8_e4m3_delta only: name substrings selecting which eligible parameters are
     # quantized. Empty means none are, e.g. model.param_sync_fp8_include='[self_attn]'.
@@ -79,8 +81,8 @@ class ReplicatedShardedConfig:
 
 
 __all__ = [
-    "DEFAULT_FP8_BLOCK",
+    "FP8_BLOCK",
     "DEFAULT_GRAD_REDUCE_DTYPE",
     "DEFAULT_PARAM_SYNC_PRECISION",
-    "ReplicatedShardedConfig",
+    "CustomDpConfig",
 ]

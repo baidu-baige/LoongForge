@@ -20,18 +20,18 @@ typed dataclass into that internal config so the two never diverge.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from loongforge.embodied.distributed.replicated_sharded_utils.replicated_sharded_config import (
-    ReplicatedShardedConfig,
+from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
+    CustomDpConfig,
 )
 
 
 @dataclass(frozen=True)
-class LingbotVLAV2ModelConfig(ReplicatedShardedConfig):
+class LingbotVLAV2ModelConfig(CustomDpConfig):
     """lingbot_vla_v2 model-structure config (maps 1:1 to YAML ``model:`` section).
 
-    The replicated-sharded collective-precision and overlap knobs
+    The custom_dp collective-precision and overlap knobs
     (``grad_reduce_dtype``, ``param_sync_precision``, ``grad_overlap`` ...) are
-    inherited from ``ReplicatedShardedConfig``; edit their defaults there.
+    inherited from ``CustomDpConfig``; edit their defaults there.
     """
 
     model_type: str = "lingbot_vla_v2"

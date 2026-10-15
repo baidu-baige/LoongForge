@@ -1,10 +1,10 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Per-parameter precision policy shared by replicated-sharded model integrations.
+"""Per-parameter precision policy shared by custom_dp model integrations.
 
 The model declares what each parameter *is*; the strategy decides how it moves on
-the wire. A model supplies marker lists by subclassing ``MarkerParameterPolicy``,
+the wire. A model supplies marker lists by subclassing ``ParameterClassPolicy``,
 which implements the duck-typed contract the parameter plan consumes (``compute_dtype``,
 ``is_comm_precision_critical``, ``parameter_class``, ``optimizer_kind``).
 
@@ -29,7 +29,6 @@ from dataclasses import dataclass
 import logging
 from types import SimpleNamespace
 
-POLICY_VERSION = 1
 DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16,
           "fp16": torch.float16, "fp8_e4m3_delta": torch.uint8}
 # Public precision enums, validated by the parameter plan, collective plan and resolver.
@@ -259,8 +258,15 @@ _DEFAULT_LABELS = {
 }
 
 
-class MarkerParameterPolicy:
-    """Interpret two per-axis marker lists as the replicated-sharded policy contract."""
+class ParameterClassPolicy:
+    """Declare each parameter's precision class from per-axis name markers.
+
+    A *marker* is a parameter-name substring: a parameter matches a list when any of
+    its markers occurs in the name. ``compute_fp32_markers`` picks fp32 vs bf16
+    compute, ``comm_critical_markers`` forces fp32 collectives, ``adamw_markers``
+    keeps a tensor off the Muon route, and the (compute, comm) pair names the class
+    reported by ``parameter_class``.
+    """
 
     def __init__(
         self,
@@ -272,7 +278,7 @@ class MarkerParameterPolicy:
         adamw_markers: tuple[str, ...] = (),
         muon_ndims: tuple[int, ...] = (2, 3),
     ):
-        """Record the per-model markers that drive both precision axes."""
+        """Record the per-model marker lists that drive precision and routing."""
 
         def markers(values):
             """Validate a marker sequence and drop duplicates, keeping order."""
@@ -342,13 +348,47 @@ class MarkerParameterPolicy:
         return misses
 
 
+class DefaultParameterPolicy:
+    """Marker-free policy for models that declare no precision classes.
+
+    Every parameter keeps the dtype it already has, 1-D tensors (norms, biases)
+    keep fp32 collectives, and everything routes to the registry optimizer. A
+    model that needs fp32 compute, fp32-critical collectives or Muon supplies a
+    ``ParameterClassPolicy`` instead; ``ParameterClassPolicy()`` is not a
+    neutral default because it casts to bf16 and routes matrices to Muon.
+    """
+
+    def __init__(self, force_comm_critical_below_ndim: int = 2):
+        """Record the ndim below which collectives stay fp32."""
+        if force_comm_critical_below_ndim < 0:
+            raise ValueError("force_comm_critical_below_ndim must be non-negative")
+        self._force_comm_critical_below_ndim = int(force_comm_critical_below_ndim)
+
+    def compute_dtype(self, name: str, parameter: nn.Parameter) -> torch.dtype:
+        """Keep the parameter's current dtype, so ``--dtype`` stays in charge."""
+        return parameter.dtype
+
+    def is_comm_precision_critical(self, name: str, parameter: nn.Parameter) -> bool:
+        """True for tensors too small or too sensitive to downcast on the wire."""
+        return parameter.ndim < self._force_comm_critical_below_ndim
+
+    def parameter_class(self, name: str, parameter: nn.Parameter) -> str:
+        """Return the single class label shown in the precision summary."""
+        return "default"
+
+    def optimizer_kind(self, name: str, parameter: nn.Parameter) -> str:
+        """Route every parameter to the registry optimizer; Muon is opt-in."""
+        return "adamw"
+
+
 __all__ = [
     "CapabilityPolicyAdapter",
+    "DefaultParameterPolicy",
     "GRAD_REDUCE_MODES",
-    "MarkerParameterPolicy",
     "PARAM_SYNC_DECOMPOSITION",
     "PARAM_SYNC_PRECISIONS",
     "ParameterCapability",
+    "ParameterClassPolicy",
     "ParameterMetadata",
     "WirePrecisionResolver",
     "build_parameter_policy",

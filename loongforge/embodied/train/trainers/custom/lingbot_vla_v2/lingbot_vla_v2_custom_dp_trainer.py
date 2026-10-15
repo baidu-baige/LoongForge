@@ -1,10 +1,10 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Replicated-sharded trainer for LingBot VLA v2.
+"""custom_dp trainer for LingBot VLA v2.
 
 Everything generic lives one level up: the manager lifecycle in
-``ReplicatedShardedTrainer``. This subclass adds only what is specific to
+``CustomDpTrainer``. This subclass adds only what is specific to
 LingBot -- the model-side batch, optimizer and compile helpers, and the teacher
 look-ahead (the teachers run a step early, and the queue of started batches and
 the dataloader position it hides live here) -- through the mixin's hooks.
@@ -29,14 +29,14 @@ from loongforge.embodied.model.lingbot_vla_v2.moe_load_balance import (
 from loongforge.embodied.model.lingbot_vla_v2.parameter_policy import (
     LingbotVlaV2ParameterPolicy,
 )
-from loongforge.embodied.train.trainers.custom.replicated_sharded_training.trainer_mixin import (
-    ReplicatedShardedTrainer,
+from loongforge.embodied.train.trainers.custom.dp_training.custom_dp_trainer import (
+    CustomDpTrainer,
 )
 
 logger = logging.getLogger(__name__)
 
-class LingbotVlaV2ReplicatedShardedTrainer(ReplicatedShardedTrainer):
-    """LingBot batch/teacher pipeline on the replicated-sharded loop."""
+class LingbotVlaV2CustomDpTrainer(CustomDpTrainer):
+    """LingBot batch/teacher pipeline on the custom_dp loop."""
 
     def __init__(self, training_args, model_cfg, data_cfg):
         super().__init__(training_args, model_cfg, data_cfg)
@@ -49,12 +49,12 @@ class LingbotVlaV2ReplicatedShardedTrainer(ReplicatedShardedTrainer):
         self._lookahead = deque()
         self._lookahead_position = None
 
-    # -- replicated-sharded hooks ------------------------------------------
+    # -- custom_dp hooks ------------------------------------------
 
     def _build_parameter_policy(self):
         return LingbotVlaV2ParameterPolicy(self.model_cfg)
 
-    def _prepare_shard_module(self):
+    def _prepare_module(self):
         module = self.model.policy.to(self.ctx.device)
         if self.model_cfg.gradient_checkpointing and hasattr(
             module, "gradient_checkpointing_enable"
@@ -64,7 +64,7 @@ class LingbotVlaV2ReplicatedShardedTrainer(ReplicatedShardedTrainer):
             )
         return module
 
-    def _after_shard_manager_built(self):
+    def _after_manager_built(self):
         # The executor is built before the compile so the order matches the
         # previous recipe wiring; regional compile has to run after the manager
         # captured the module tree (see ``apply_regional_compile``).
@@ -178,4 +178,4 @@ class LingbotVlaV2ReplicatedShardedTrainer(ReplicatedShardedTrainer):
         return super()._get_dataloader_state()
 
 
-__all__ = ["LingbotVlaV2ReplicatedShardedTrainer"]
+__all__ = ["LingbotVlaV2CustomDpTrainer"]

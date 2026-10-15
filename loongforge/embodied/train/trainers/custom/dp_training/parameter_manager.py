@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The replicated-sharded manager: the trainer-facing seam over the shard.
+"""The custom_dp manager: the trainer-facing seam over the owner-distributed state.
 
 Compute replicas stay complete on every rank; the fp32 masters and the optimizer
 state that follows them are distributed. This module assembles and owns the
@@ -22,7 +22,7 @@ and is the single object a trainer talks to. The lifecycle, once per step:
     -> begin_parameter_sync / optimizer step / finish_parameter_sync
     -> clear_pending_work
 
-``build_shard_manager()`` is the assembly entry point, so a new model reuses the
+``build_parameter_manager()`` is the assembly entry point, so a new model reuses the
 wiring instead of copying it.
 """
 
@@ -33,25 +33,25 @@ from dataclasses import dataclass, replace
 import torch
 import torch.distributed as dist
 
-from loongforge.embodied.distributed.replicated_sharded_utils.precision_policy import (
+from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
     GRAD_REDUCE_MODES,
     PARAM_SYNC_PRECISIONS,
 )
-from loongforge.embodied.distributed.replicated_sharded_utils.replicated_sharded_config import (
-    DEFAULT_FP8_BLOCK,
+from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
     DEFAULT_GRAD_REDUCE_DTYPE,
     DEFAULT_PARAM_SYNC_PRECISION,
+    CustomDpConfig,
 )
-from loongforge.embodied.train.trainers.custom.replicated_sharded_training.checkpoint_io import (
-    ReplicatedShardedCheckpointIO,
+from loongforge.embodied.train.trainers.custom.dp_training.checkpoint_io import (
+    RankLocalCheckpointIO,
 )
-from loongforge.embodied.train.trainers.custom.replicated_sharded_training.gradient_reducer import (
+from loongforge.embodied.train.trainers.custom.dp_training.gradient_reducer import (
     GradientReducer,
 )
-from loongforge.embodied.train.trainers.custom.replicated_sharded_training.parameter_sync import (
+from loongforge.embodied.train.trainers.custom.dp_training.parameter_sync import (
     ParameterSynchronizer,
 )
-from loongforge.embodied.train.trainers.custom.replicated_sharded_training.parameter_plan import (
+from loongforge.embodied.train.trainers.custom.dp_training.parameter_plan import (
     MasterParameterView,
     ParameterPlan,
 )
@@ -79,7 +79,6 @@ class CollectiveConfig:
     param_overlap: bool = True
     bucket_mb: int | None = None
     grad_inflight_mb: int = 3072
-    fp8_block_size: int = DEFAULT_FP8_BLOCK
     fp8_reprime_interval: int = 0
     fp8_include: tuple[str, ...] = ()
     fp8_bf16_shadow: bool | None = None
@@ -89,7 +88,7 @@ class CollectiveConfig:
         """Read the plan from the model config, whose field names are the YAML.
 
         Every field is required: the model config inherits them from
-        ``ReplicatedShardedConfig``, so a missing one is a wiring bug that should
+        ``CustomDpConfig``, so a missing one is a wiring bug that should
         surface at startup rather than be papered over with a local default.
         """
         return cls(
@@ -99,11 +98,37 @@ class CollectiveConfig:
             param_overlap=bool(cfg.param_overlap),
             bucket_mb=cfg.comm_bucket_mb,
             grad_inflight_mb=int(cfg.grad_inflight_mb),
-            fp8_block_size=int(cfg.param_sync_fp8_block),
             fp8_reprime_interval=int(cfg.param_sync_fp8_reprime_interval),
             fp8_include=tuple(cfg.param_sync_fp8_include or ()),
             fp8_bf16_shadow=cfg.param_sync_bf16_with_fp8,
         )
+
+    @classmethod
+    def from_training_args(cls, args) -> "CollectiveConfig":
+        """Read the plan from the ``--custom-dp-*`` command-line knobs."""
+        return cls(
+            gradient_reduce_dtype=args.custom_dp_grad_reduce_dtype,
+            parameter_sync_precision=args.custom_dp_param_sync_precision,
+            grad_overlap=bool(args.custom_dp_grad_overlap),
+            param_overlap=bool(args.custom_dp_param_overlap),
+            bucket_mb=args.custom_dp_comm_bucket_mb,
+            grad_inflight_mb=int(args.custom_dp_grad_inflight_mb),
+            fp8_reprime_interval=int(args.custom_dp_param_sync_fp8_reprime_interval),
+            fp8_include=tuple(args.custom_dp_param_sync_fp8_include or ()),
+            fp8_bf16_shadow=args.custom_dp_param_sync_bf16_with_fp8,
+        )
+
+    @classmethod
+    def from_sources(cls, model_cfg, training_args) -> "CollectiveConfig":
+        """Pick the plan's source: the model config if it carries the knobs.
+
+        A model config that inherits ``CustomDpConfig`` keeps its YAML in charge (and
+        the strict every-field-required check); any other model is tuned through
+        the ``--custom-dp-*`` arguments.
+        """
+        if isinstance(model_cfg, CustomDpConfig):
+            return cls.from_model_config(model_cfg)
+        return cls.from_training_args(training_args)
 
     def validate(self) -> "CollectiveConfig":
         """Reject unsupported plans at startup, and resolve the bucket size.
@@ -150,17 +175,16 @@ class CollectiveConfig:
             "param_overlap": self.param_overlap,
             "bucket_mb": self.resolved_bucket_mb,
             "grad_inflight_mb": self.grad_inflight_mb,
-            "fp8_block_size": self.fp8_block_size,
             "fp8_reprime_interval": self.fp8_reprime_interval,
             "fp8_include": list(self.fp8_include),
             "fp8_bf16_shadow": bool(self.fp8_bf16_shadow),
         }
 
 
-class ReplicatedShardedManager:
+class ParameterManager:
     """Own the fp32 master/state shards while retaining complete compute replicas.
 
-    This is the whole optimizer stack for a replicated-sharded run: it builds the
+    This is the whole optimizer stack for a custom_dp run: it builds the
     parameter plan, the gradient reducer, the parameter synchronizer and the rank-local
     checkpoint IO, and exposes the lifecycle a trainer drives. Every collective and
     every master-weight mutation runs here, so a model never has to reach past it.
@@ -208,7 +232,6 @@ class ReplicatedShardedManager:
             parameter_policy,
             grad_reduce_dtype=config.gradient_reduce_dtype,
             param_sync_precision=config.parameter_sync_precision,
-            param_sync_fp8_block=config.fp8_block_size,
             param_sync_fp8_reprime_interval=config.fp8_reprime_interval,
             param_sync_fp8_include=config.fp8_include,
             param_sync_bf16_with_fp8=config.fp8_bf16_shadow,
@@ -236,7 +259,6 @@ class ReplicatedShardedManager:
             inflight_bytes=PARAM_INFLIGHT_BYTES,
             compensation=self.plan.param_sync_compensation,
             quantization=self.plan.param_sync_quantization,
-            fp8_block=self.plan.param_sync_fp8_block,
             fp8_reprime_interval=self.plan.param_sync_fp8_reprime_interval,
         )
         # Bound by ``attach_optimizer`` once the optimizer over the masters exists.
@@ -253,17 +275,13 @@ class ReplicatedShardedManager:
         state, which are rank-local.
         """
         self.optimizer = optimizer
-        self.checkpoint_io = ReplicatedShardedCheckpointIO(self, optimizer)
+        self.checkpoint_io = RankLocalCheckpointIO(self, optimizer)
         optimizer.zero_checkpoint_io = self.checkpoint_io
         return optimizer
 
     def optimizer_view(self):
         """Return a module-like view over the fp32 master parameters."""
         return MasterParameterView(self.plan.master.items())
-
-    def compute_parameter_view(self):
-        """Module-like view over the compute replicas, for optimizer param splits."""
-        return MasterParameterView(self.plan.compute.items())
 
     # -- plan passthroughs ------------------------------------------------
 
@@ -419,13 +437,13 @@ class ReplicatedShardedManager:
         self.plan.validate_manifest(state.get("manifest"), allow_reshard=False)
         if state["world_size"] != self.world_size:
             raise RuntimeError(
-                f"replicated-sharded checkpoint world_size={state['world_size']} does not match "
+                f"custom_dp checkpoint world_size={state['world_size']} does not match "
                 f"{self.world_size}"
             )
         if state["ownership"] != [item.__dict__ for item in self.plan.ownership]:
-            raise RuntimeError("replicated-sharded parameter ownership schema does not match checkpoint")
+            raise RuntimeError("custom_dp parameter ownership schema does not match checkpoint")
         if set(state["master"]) != set(self.master):
-            raise RuntimeError("replicated-sharded FP32 master keys do not match checkpoint")
+            raise RuntimeError("custom_dp FP32 master keys do not match checkpoint")
         for name, value in state["master"].items():
             target = self.master[name]
             if value.shape != target.shape or value.dtype != torch.float32:
@@ -447,7 +465,7 @@ class ReplicatedShardedManager:
         missing = sorted(set(self.master) - set(tensors))
         if missing:
             raise RuntimeError(
-                f"replicated-sharded checkpoint is missing {len(missing)} FP32 masters this rank "
+                f"custom_dp checkpoint is missing {len(missing)} FP32 masters this rank "
                 f"now owns, e.g. {missing[:3]}"
             )
         for name, target in self.master.items():
@@ -459,7 +477,7 @@ class ReplicatedShardedManager:
             target.copy_(value.to(target.device))
 
 
-def build_shard_manager(
+def build_parameter_manager(
     module,
     parameter_policy,
     *,
@@ -467,7 +485,7 @@ def build_shard_manager(
     world_size,
     group=None,
     collective_config=None,
-) -> ReplicatedShardedManager:
+) -> ParameterManager:
     """Assemble the whole optimizer stack from a policy and the collective config.
 
     Covers the parameter plan (ownership included), the fp32 masters, the gradient
@@ -475,7 +493,7 @@ def build_shard_manager(
     ``attach_optimizer`` binds the optimizer later, because the optimizer is built
     over the masters this call produces.
     """
-    return ReplicatedShardedManager(
+    return ParameterManager(
         module,
         group=group,
         rank=rank,
@@ -487,6 +505,6 @@ def build_shard_manager(
 
 __all__ = [
     "CollectiveConfig",
-    "ReplicatedShardedManager",
-    "build_shard_manager",
+    "ParameterManager",
+    "build_parameter_manager",
 ]

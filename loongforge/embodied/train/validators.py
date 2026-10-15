@@ -12,6 +12,8 @@ data_cfg (DataConfig).
 import logging
 import os
 
+from loongforge.embodied.distributed.custom_dp_utils.custom_dp_validation import validate_custom_dp_args
+
 logger = logging.getLogger(__name__)
 
 
@@ -230,18 +232,8 @@ def validate(training_args, model_cfg, data_cfg):
                 "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
             )
 
-    # ── Replicated-sharded Muon ──
-    # The optimizer is built by the model recipe, not by OPTIMIZER_REGISTRY, so
-    # without this check a wrong strategy surfaces as "Unknown optimizer
-    # 'replicated_muon'" from build_optimizer, which points nowhere useful.
-    if (
-        training_args.optimizer.lower() == "replicated_muon"
-        and training_args.distributed_strategy != "replicated_sharded"
-    ):
-        raise ValueError(
-            "--optimizer=replicated_muon requires "
-            "--distributed-strategy=replicated_sharded."
-        )
+    # ── custom_dp ──
+    validate_custom_dp_args(training_args)
 
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:

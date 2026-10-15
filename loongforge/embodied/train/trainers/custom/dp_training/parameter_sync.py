@@ -14,21 +14,69 @@ from dataclasses import dataclass
 import torch
 import torch.distributed as dist
 
-from loongforge.embodied.train.trainers.custom.replicated_sharded_training.gradient_reducer import (
+from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
+    FP8_BLOCK,
+)
+from loongforge.embodied.train.trainers.custom.dp_training.gradient_reducer import (
     WHOLE_TENSOR,
     assert_plan_matches_ranks,
     bucket_by_bytes,
     split_by_dtype,
 )
 
-NUM_BLOCKS_PER_TILE = 8
+_FP8_QUANTIZER = None
 
-try:
-    import triton
-    import triton.language as tl
-except ImportError:  # pragma: no cover - validated before enabling the path.
-    triton = None
-    tl = None
+
+def _import_te():
+    """Return ``(Float8BlockQuantizer, tex)`` with TransformerEngine imported.
+
+    ``transformer_engine_torch`` is only registered once ``transformer_engine``
+    has been imported, so the order matters.
+    """
+    import transformer_engine  # noqa: F401  (registers transformer_engine_torch)
+    import transformer_engine_torch as tex
+    from transformer_engine.pytorch.tensor.float8_blockwise_tensor import (
+        Float8BlockQuantizer,
+    )
+
+    return Float8BlockQuantizer, tex
+
+
+def _fp8_quantizer():
+    """Return the process-wide blockwise quantizer, building it on first use.
+
+    ``force_pow_2_scales`` is unconditional: on Blackwell TransformerEngine
+    emulates FP8 block scaling with MXFP8, which requires power-of-two scales.
+    ``all_gather_usage`` selects the COMPACT scale layout, i.e. without the GEMM
+    padding, which is what a communication payload wants.
+    """
+    global _FP8_QUANTIZER
+    if _FP8_QUANTIZER is None:
+        Float8BlockQuantizer, tex = _import_te()
+        _FP8_QUANTIZER = Float8BlockQuantizer(
+            fp8_dtype=tex.DType.kFloat8E4M3,
+            rowwise=True,
+            columnwise=False,
+            amax_epsilon=0.0,
+            force_pow_2_scales=True,
+            block_scaling_dim=1,
+            all_gather_usage=True,
+        )
+    return _FP8_QUANTIZER
+
+
+def _fp8_scale_count(numel: int) -> int:
+    """Number of fp32 scales the codec writes for ``numel`` elements."""
+    return (int(numel) + FP8_BLOCK - 1) // FP8_BLOCK
+
+
+def _fp8_is_available() -> bool:
+    """True when TransformerEngine's blockwise quantizer can be imported."""
+    try:
+        _import_te()
+    except Exception:  # pragma: no cover - depends on the installed build.
+        return False
+    return True
 
 
 def validate_runtime(device: torch.device, backend: str) -> None:
@@ -38,101 +86,59 @@ def validate_runtime(device: torch.device, backend: str) -> None:
         raise RuntimeError(
             "fp8_e4m3_delta parameter sync requires a CUDA device and NCCL"
         )
-    if triton is None or tl is None or not hasattr(tl, "float8e4nv"):
-        raise RuntimeError(
-            "fp8_e4m3_delta parameter sync requires Triton tl.float8e4nv"
-        )
     if not hasattr(torch, "float8_e4m3fn"):
         raise RuntimeError("fp8_e4m3_delta requires PyTorch E4M3 support")
     if torch.cuda.get_device_capability(device) < (8, 9):
         raise RuntimeError("fp8_e4m3_delta requires compute capability >= 8.9")
-
-
-if triton is not None:
-
-    @triton.jit
-    def _quantize_kernel(
-        X,
-        Q,
-        S,
-        numel,
-        BLOCK: tl.constexpr,
-        NB: tl.constexpr,
-    ):
-        """Quantize contiguous fp32 deltas to E4M3 with one scale per block."""
-        pid = tl.program_id(0).to(tl.int64)
-        block0 = pid * NB
-        block_offsets = tl.arange(0, NB).to(tl.int64)
-        element_offsets = tl.arange(0, BLOCK).to(tl.int64)
-        offsets = (block0 + block_offsets)[:, None] * BLOCK + element_offsets[None, :]
-        mask = offsets < numel
-        block_mask = block0 + block_offsets < (numel + BLOCK - 1) // BLOCK
-        values = tl.load(X + offsets, mask=mask, other=0.0).to(tl.float32)
-        amax = tl.max(tl.abs(values), axis=1)
-        scale = amax / 448.0
-        inverse = tl.where(scale > 0.0, 1.0 / scale, 0.0)
-        quantized = (values * inverse[:, None]).to(tl.float8e4nv)
-        tl.store(Q + offsets, quantized.to(tl.uint8, bitcast=True), mask=mask)
-        tl.store(S + block0 + block_offsets, scale, mask=block_mask)
-
-    @triton.jit
-    def _dequantize_kernel(
-        Q,
-        S,
-        OUT,
-        numel,
-        BLOCK: tl.constexpr,
-        NB: tl.constexpr,
-    ):
-        """Dequantize E4M3 bytes into a contiguous fp32 delta buffer."""
-        pid = tl.program_id(0).to(tl.int64)
-        block0 = pid * NB
-        block_offsets = tl.arange(0, NB).to(tl.int64)
-        element_offsets = tl.arange(0, BLOCK).to(tl.int64)
-        offsets = (block0 + block_offsets)[:, None] * BLOCK + element_offsets[None, :]
-        mask = offsets < numel
-        block_mask = block0 + block_offsets < (numel + BLOCK - 1) // BLOCK
-        bits = tl.load(Q + offsets, mask=mask, other=0).to(tl.uint8)
-        values = bits.to(tl.float8e4nv, bitcast=True).to(tl.float32)
-        scales = tl.load(
-            S + block0 + block_offsets, mask=block_mask, other=0.0
+    if not _fp8_is_available():
+        raise RuntimeError(
+            "fp8_e4m3_delta parameter sync requires TransformerEngine "
+            "(transformer_engine_torch with Float8BlockQuantizer)"
         )
-        tl.store(OUT + offsets, values * scales[:, None], mask=mask)
 
 
-def _grid(numel: int, block: int) -> tuple[int]:
-    tile = block * NUM_BLOCKS_PER_TILE
-    return ((numel + tile - 1) // tile,)
+@torch.no_grad()
+def _quantize_flat(delta):
+    """Quantize a contiguous fp32 tensor to ``(uint8 data, fp32 scales)``.
 
-
-def quantize_into(delta, quantized, scales, block) -> None:
-    """Quantize a contiguous fp32 delta into preallocated buffers."""
-    if triton is None:
-        raise RuntimeError("fp8_e4m3_delta requires Triton")
-    if not delta.is_contiguous() or delta.dtype is not torch.float32:
+    ``data`` has ``numel`` bytes and ``scales`` has ``_fp8_scale_count(numel)``
+    fp32 values. This is the FP8 wire format, so both sides of a collective must
+    go through it.
+    """
+    if delta.dtype is not torch.float32 or not delta.is_contiguous():
         raise ValueError("FP8 parameter delta must be contiguous fp32")
-    _quantize_kernel[_grid(delta.numel(), block)](
-        delta,
-        quantized,
-        scales,
-        delta.numel(),
-        BLOCK=block,
-        NB=NUM_BLOCKS_PER_TILE,
-    )
+    if delta.numel() == 0:
+        return (
+            torch.empty(0, dtype=torch.uint8, device=delta.device),
+            torch.empty(0, dtype=torch.float32, device=delta.device),
+        )
+    quantized = _fp8_quantizer()(delta.reshape(-1))
+    data = quantized.get_data_tensors(
+        rowwise_data=True, columnwise_data=False
+    ).reshape(-1)
+    scales = quantized._rowwise_scale_inv.reshape(-1).contiguous()
+    return data, scales
 
 
-def dequantize_into(quantized, scales, output, block) -> None:
-    """Dequantize a contiguous FP8 payload into preallocated fp32 storage."""
-    if triton is None:
-        raise RuntimeError("fp8_e4m3_delta requires Triton")
-    _dequantize_kernel[_grid(output.numel(), block)](
-        quantized,
-        scales,
-        output,
-        output.numel(),
-        BLOCK=block,
-        NB=NUM_BLOCKS_PER_TILE,
+@torch.no_grad()
+def _dequantize_flat(data, scales, numel):
+    """Dequantize ``(uint8 data, fp32 scales)`` to a flat fp32 tensor.
+
+    TransformerEngine stores the quantized data in a transposed (GEMM-ready)
+    layout, so it cannot be decoded as ``data * scale``. Rebuilding a quantized
+    tensor and letting TransformerEngine dequantize it reproduces exactly what
+    the sender quantized.
+    """
+    numel = int(numel)
+    if numel == 0:
+        return torch.empty(0, dtype=torch.float32, device=data.device)
+    quantizer = _fp8_quantizer()
+    rebuilt = quantizer.make_empty(
+        (numel,), dtype=torch.float32, device=data.device
     )
+    rebuilt._rowwise_data.copy_(data.reshape(-1))
+    rebuilt._rowwise_scale_inv.copy_(scales.reshape(1, -1))
+    return rebuilt.dequantize(dtype=torch.float32).reshape(-1)
 
 
 @dataclass
@@ -175,7 +181,6 @@ class ParameterSynchronizer:
         inflight_bytes=2048 * 1024 * 1024,
         compensation="none",
         quantization="none",
-        fp8_block=256,
         fp8_reprime_interval=0,
     ):
         """Record the collective geometry; the plan is built on first use."""
@@ -201,10 +206,10 @@ class ParameterSynchronizer:
         if quantization != "none" and not hasattr(torch, "float8_e4m3fn"):
             raise RuntimeError("fp8_e4m3_delta requires torch.float8_e4m3fn")
         self._quantization = quantization
-        self._fp8_block = int(fp8_block)
+        self._fp8_block = FP8_BLOCK
         self._fp8_reprime_interval = int(fp8_reprime_interval)
-        if self._fp8_block <= 0 or self._fp8_reprime_interval < 0:
-            raise ValueError("invalid FP8 block or reprime interval")
+        if self._fp8_reprime_interval < 0:
+            raise ValueError("invalid FP8 reprime interval")
         self._sync_generation = 0
         if self._quantization != "none":
             backend = dist.get_backend(group) if self._world_size > 1 else "nccl"
@@ -299,7 +304,7 @@ class ParameterSynchronizer:
             self._group,
             self._world_size,
             self._plan.device,
-            "replicated-sharded parameter-sync plan differs across ranks; refusing to run "
+            "custom_dp parameter-sync plan differs across ranks; refusing to run "
             "overlapped parameter sync",
         )
 
@@ -381,19 +386,11 @@ class ParameterSynchronizer:
 
     def _fp8_encode(self, value):
         """Encode an fp32 delta as E4M3 bytes plus one fp32 scale per block."""
-        flat = value.reshape(-1)
-        group_count = (flat.numel() + self._fp8_block - 1) // self._fp8_block
-        quantized = torch.empty(flat.numel(), dtype=torch.uint8, device=flat.device)
-        scales = torch.empty(group_count, dtype=torch.float32, device=flat.device)
-        quantize_into(flat, quantized, scales, self._fp8_block)
-        return quantized, scales
+        return _quantize_flat(value.reshape(-1))
 
     def _fp8_decode(self, quantized, scales, shape):
         """Decode E4M3 bytes with block scales into the compute dtype."""
-        numel = quantized.numel()
-        decoded = torch.empty(numel, dtype=torch.float32, device=quantized.device)
-        dequantize_into(quantized, scales, decoded, self._fp8_block)
-        return decoded.view(shape)
+        return _dequantize_flat(quantized, scales, quantized.numel()).view(shape)
 
     @torch.no_grad()
     def _build_whole_tensor_collective(self, records, owner):

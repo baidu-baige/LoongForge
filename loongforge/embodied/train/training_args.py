@@ -37,6 +37,8 @@ from typing import Any, List, Optional, get_args, get_origin, Union
 
 import torch
 
+from loongforge.embodied.distributed.custom_dp_utils.custom_dp_args import CustomDpArgs
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -605,10 +607,10 @@ class _OptimizerArgs:
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
                     "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
-                    "replicated_muon. TEFusedAdamW requires TransformerEngine; "
+                    "muon. TEFusedAdamW requires TransformerEngine; "
                     "ApexFusedAdamW requires Apex. Dmuon is the third-party "
-                    "package's FSDP2 Muon; replicated_muon is LoongForge's own "
-                    "Muon for --distributed-strategy replicated_sharded."
+                    "package's FSDP2 Muon; muon is LoongForge's own "
+                    "Muon for --distributed-strategy custom_dp (custom data parallel)."
         },
     )
     clip_grad: float = field(
@@ -723,8 +725,8 @@ class _OptimizerArgs:
     muon_momentum: float = field(
         default=0.95,
         metadata={
-            "help": "Muon momentum. Used by --optimizer=replicated_muon, which "
-                    "is built by the replicated-sharded trainer rather than by "
+            "help": "Muon momentum. Used by --optimizer=muon, which "
+                    "is built by the custom_dp trainer rather than by "
                     "the optimizer registry."
         },
     )
@@ -1349,13 +1351,11 @@ class _DistributedArgs:
     distributed_strategy: str = field(
         default="fsdp",
         metadata={
-            "choices": ["ddp", "fsdp", "replicated_sharded"],
+            "choices": ["ddp", "fsdp", "custom_dp"],
             "help": "Parallelism strategy: DDP (replicate), FSDP2 (fully "
-                    "sharded), or replicated_sharded. With 'replicated_sharded', "
-                    "LoongForge applies neither DDP nor FSDP: the trainer owns "
-                    "model wrapping and parallelism itself. Use only with a "
-                    "trainer that implements that ownership "
-                    "(e.g. --trainer-type LingbotVlaV2ReplicatedShardedTrainer).",
+                    "sharded), or custom_dp (custom data parallel; requires "
+                    "--zero-optimizer and a custom_dp --trainer-type, see the "
+                    "--custom-dp-* arguments).",
         },
     )
     hsdp_shard_size: Optional[int] = field(
@@ -1703,7 +1703,9 @@ class _DistributedArgs:
         default=False,
         metadata={
             "help": "Wrap optimizer with ZeroRedundancyOptimizer (ZeRO Stage-1). "
-                    "Shards optimizer states across ranks. Only effective with DDP."
+                    "Shards optimizer states across ranks. Effective with "
+                    "--distributed-strategy ddp; required when "
+                    "--distributed-strategy custom_dp."
         },
     )
     zero_parameters_as_bucket_view: bool = field(
@@ -1747,6 +1749,7 @@ class TrainingArgs(
     _ActivationCheckpointArgs,
     _FP8Args,
     _DistributedArgs,
+    CustomDpArgs,
 ):
     """Generic training args (single source of truth). Frozen after construction.
 
