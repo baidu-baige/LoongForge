@@ -11,7 +11,6 @@ state that follows them live only on the owner.
     parameter_plan.py       ownership, capabilities, fp32 masters, checkpoint manifest
     gradient_reducer.py     reduce-to-owner, plus the bucket/buffer layout both paths share
     parameter_sync.py       owner-to-replica publication, including the fp8 delta path
-    checkpoint_io.py        rank-local master and optimizer-state save/load
     custom_dp_optimizer.py  wires the above into one ZeRO-style optimizer
     optimizer_builder.py    Muon plus its AdamW fallback, over the fp32 masters
     custom_dp_trainer.py    the finetune-loop integration
@@ -20,7 +19,6 @@ Side-stream CUDA execution and bounded look-ahead live one level up, in
 ``custom/async_runtime`` -- they are not specific to this subsystem.
 """
 
-from .checkpoint_io import RankLocalCheckpointIO
 from .custom_dp_optimizer import CollectiveConfig, CustomDpOptimizer
 from .gradient_reducer import (
     WHOLE_TENSOR,
@@ -50,6 +48,5 @@ __all__ = [
     "ParameterPlan",
     "ParameterRecord",
     "ParameterSynchronizer",
-    "RankLocalCheckpointIO",
     "assign_parameter_owners",
 ]

@@ -984,7 +984,7 @@ def _get_full_state_dict(
 
 def _is_zero_optimizer(optimizer) -> bool:
     """Check if optimizer is a ZeroRedundancyOptimizer."""
-    if _zero_checkpoint_io(optimizer) is not None:
+    if _owns_local_state(optimizer):
         return True
     from torch.distributed.optim import ZeroRedundancyOptimizer
     return isinstance(optimizer, ZeroRedundancyOptimizer) or getattr(
@@ -1004,13 +1004,27 @@ def _zero_optimizer_children(optimizer) -> list:
     """Return the ZeRO optimizers represented by an optimizer wrapper."""
     from torch.distributed.optim import ZeroRedundancyOptimizer
 
-    if isinstance(optimizer, ZeroRedundancyOptimizer):
+    if isinstance(optimizer, ZeroRedundancyOptimizer) or _owns_local_state(optimizer):
         return [optimizer]
     if getattr(optimizer, "_is_multi_dtype_zero_optimizer", False):
         children = optimizer._optimizers
         if all(isinstance(child, ZeroRedundancyOptimizer) for child in children):
             return children
     raise TypeError(f"Unsupported ZeRO optimizer type: {type(optimizer).__name__}")
+
+
+def _owns_local_state(optimizer) -> bool:
+    """Whether the optimizer itself (not a ``.optim``) exposes its rank-local state."""
+    return hasattr(optimizer, "local_checkpoint_state_dict")
+
+
+def _rank_local_optimizer(child):
+    """Return the object that holds a ZeRO child's rank-local state.
+
+    torch's ZeroRedundancyOptimizer keeps it in ``.optim``; the custom_dp
+    optimizer owns its masters and optimizer state itself.
+    """
+    return child if _owns_local_state(child) else child.optim
 
 
 def _local_optimizer_state_dict(optimizer) -> dict:
@@ -1028,28 +1042,12 @@ def _load_local_optimizer_state_dict(optimizer, state_dict: dict) -> None:
         optimizer.load_state_dict(state_dict)
 
 
-def _zero_checkpoint_io(optimizer):
-    """Return the optimizer's own rank-local checkpoint backend, if it has one.
-
-    This module keeps the file layout and the aux files; the backend owns the
-    payload of ``zero_optimizer/rank_*.pt``.
-    """
-    return getattr(optimizer, "zero_checkpoint_io", None)
-
-
 def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
     """Save each ZeRO rank's local optimizer shard without consolidation."""
     state_dir = os.path.join(path, _ZERO_OPTIMIZER_DIR)
     if ctx.is_main:
         os.makedirs(state_dir, exist_ok=True)
     ctx.barrier()
-
-    own_io = _zero_checkpoint_io(optimizer)
-    if own_io is not None:
-        own_io.save_local_state(
-            state_dir, os.path.join(path, _ZERO_OPTIMIZER_METADATA_FILE), ctx
-        )
-        return
 
     children = _zero_optimizer_children(optimizer)
     local_state = []
@@ -1058,7 +1056,7 @@ def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
         # can retain the previous step's LR until the next ZeRO update, so
         # checkpoint the public options that the next update will consume.
         _copy_param_group_options(child.param_groups, child.optim.param_groups)
-        local_state.append(_local_optimizer_state_dict(child.optim))
+        local_state.append(_local_optimizer_state_dict(_rank_local_optimizer(child)))
     torch.save(
         local_state,
         os.path.join(state_dir, f"rank_{ctx.rank}.pt"),
@@ -1095,17 +1093,6 @@ def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
         raise RuntimeError(
             f"Unsupported rank-local ZeRO checkpoint version: {format_version}."
         )
-    own_io = _zero_checkpoint_io(optimizer)
-    if own_io is not None:
-        own_io.load_local_state(
-            os.path.join(checkpoint_path, _ZERO_OPTIMIZER_DIR), metadata, ctx
-        )
-        return
-    if metadata.get("backend") is not None:
-        raise RuntimeError(
-            f"Checkpoint holds {metadata['backend']!r} ZeRO state, but the current "
-            "optimizer does not provide the matching checkpoint backend."
-        )
     saved_world_size = int(metadata["world_size"])
     if saved_world_size != ctx.world_size:
         raise RuntimeError(
@@ -1135,7 +1122,7 @@ def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
             f"checkpoint={len(local_state)}, current={len(children)}."
         )
     for child, state_dict in zip(children, local_state):
-        _load_local_optimizer_state_dict(child.optim, state_dict)
+        _load_local_optimizer_state_dict(_rank_local_optimizer(child), state_dict)
         _copy_param_group_options(child.optim.param_groups, child.param_groups)
 
 
@@ -1148,10 +1135,6 @@ def _restore_zero_optimizer_lrs(optimizer, last_lrs) -> None:
         )
     for param_group, lr in zip(optimizer.param_groups, last_lrs):
         param_group["lr"] = lr
-    if _zero_checkpoint_io(optimizer) is not None:
-        # The custom_dp optimizer's public groups are the inner optimizers' own
-        # dictionaries, so updating them already updates the rank-local state.
-        return
     for child in _zero_optimizer_children(optimizer):
         _copy_param_group_options(child.param_groups, child.optim.param_groups)
 

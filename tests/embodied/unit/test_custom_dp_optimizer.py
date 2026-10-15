@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import socket
 import tempfile
@@ -17,6 +16,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch import nn
 
+from loongforge.embodied.distributed import checkpoint
 from loongforge.embodied.distributed.custom_dp_utils.precision_policy import (
     DefaultParameterPolicy,
     ParameterClassPolicy,
@@ -185,24 +185,20 @@ def test_muon_route_publishes_bf16_replicas():
 # -- rank-local checkpoint round trip ------------------------------------------
 
 
-def _worker_checkpoint(rank, state_dir):
+def _worker_checkpoint(rank, path):
     ctx = SimpleNamespace(
         rank=rank, world_size=WORLD_SIZE, is_main=rank == 0, barrier=dist.barrier
     )
-    metadata_path = os.path.join(state_dir, "metadata.json")
-
     model = _model()
     optimizer = _build(model, _muon_factory, ParameterClassPolicy())
     _train(model, optimizer, steps=2)
-    optimizer.zero_checkpoint_io.save_local_state(state_dir, metadata_path, ctx)
+    checkpoint._save_zero_optimizer_state(path, optimizer, ctx)
     _train(model, optimizer, steps=2, start=2)
     uninterrupted = _replicas(model)
 
     resumed_model = _model()
     resumed = _build(resumed_model, _muon_factory, ParameterClassPolicy())
-    with open(metadata_path, encoding="utf-8") as file:
-        metadata = json.load(file)
-    resumed.zero_checkpoint_io.load_local_state(state_dir, metadata, ctx)
+    checkpoint._load_zero_optimizer_state(path, resumed, ctx)
     # Replicas come from the published masters, not from the module state.
     _train(resumed_model, resumed, steps=2, start=2)
     for name, parameter in resumed_model.named_parameters():
@@ -210,65 +206,25 @@ def _worker_checkpoint(rank, state_dir):
 
 
 def test_checkpoint_round_trip_is_bitwise():
-    with tempfile.TemporaryDirectory() as state_dir:
-        _run(_worker_checkpoint, state_dir)
+    with tempfile.TemporaryDirectory() as path:
+        _run(_worker_checkpoint, path)
 
 
-def _worker_save_only(rank, state_dir):
+def _worker_rejects_other_precision(rank, path):
     ctx = SimpleNamespace(
         rank=rank, world_size=WORLD_SIZE, is_main=rank == 0, barrier=dist.barrier
     )
+    kwargs = dict(gradient_reduce_dtype="bf16")
     model = _model()
-    optimizer = _build(
-        model, _muon_factory, ParameterClassPolicy(),
-        gradient_reduce_dtype="bf16", parameter_sync_precision="bf16",
-    )
-    _train(model, optimizer, steps=2)
-    optimizer.zero_checkpoint_io.save_local_state(
-        state_dir, os.path.join(state_dir, "metadata.json"), ctx
-    )
+    saved = _build(model, _muon_factory, ParameterClassPolicy(), parameter_sync_precision="bf16", **kwargs)
+    _train(model, saved, steps=1)
+    checkpoint._save_zero_optimizer_state(path, saved, ctx)
+
+    other = _build(_model(), _muon_factory, ParameterClassPolicy(), parameter_sync_precision="fp32", **kwargs)
+    with pytest.raises(RuntimeError, match="wire configuration mismatch"):
+        checkpoint._load_zero_optimizer_state(path, other, ctx)
 
 
-def test_checkpoint_reshards_to_one_rank():
-    """Every saved master and optimizer entry lands on the single new owner, by name."""
-    with tempfile.TemporaryDirectory() as state_dir:
-        _run(_worker_save_only, state_dir)
-        saved = [
-            torch.load(os.path.join(state_dir, f"rank_{r}.pt"), weights_only=False)
-            for r in range(WORLD_SIZE)
-        ]
-        with open(os.path.join(state_dir, "metadata.json"), encoding="utf-8") as file:
-            metadata = json.load(file)
-
-        model = _model()
-        optimizer = CustomDpOptimizer(
-            model, ParameterClassPolicy(), _muon_factory, rank=0, world_size=1,
-            collective_config=CollectiveConfig(
-                gradient_reduce_dtype="bf16", parameter_sync_precision="bf16"
-            ),
-        )
-        ctx = SimpleNamespace(rank=0, world_size=1, is_main=True, barrier=lambda: None)
-        optimizer.zero_checkpoint_io.load_local_state(state_dir, metadata, ctx)
-
-        want_masters = {}
-        want_state = {}
-        for rank_state in saved:
-            want_masters.update(rank_state["manager"]["master"])
-            inner = rank_state["optimizer"]["optimizers"]
-            for names, sd in zip(rank_state["optimizer_param_names"], inner):
-                for position, name in enumerate(names):
-                    if position in sd["state"]:
-                        want_state[name] = sd["state"][position]
-        assert set(optimizer.master) == set(want_masters)
-        for name, master in optimizer.master.items():
-            assert torch.equal(master, want_masters[name]), name
-        got_names = optimizer.zero_checkpoint_io._optimizer_param_names()
-        got_state = {}
-        for names, inner in zip(got_names, optimizer.optim.state_dict()["optimizers"]):
-            for position, name in enumerate(names):
-                if position in inner["state"]:
-                    got_state[name] = inner["state"][position]
-        assert set(got_state) == set(want_state)
-        for name, entry in got_state.items():
-            for key, value in entry.items():
-                assert torch.equal(torch.as_tensor(value), torch.as_tensor(want_state[name][key])), (name, key)
+def test_checkpoint_rejects_a_different_precision_plan():
+    with tempfile.TemporaryDirectory() as path:
+        _run(_worker_rejects_other_precision, path)

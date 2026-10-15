@@ -12,7 +12,6 @@ It assembles and owns:
     ParameterPlan          metadata, masters, resolved wire dtypes
     GradientReducer        reduce-to-owner
     ParameterSynchronizer  owner-to-replica publication
-    RankLocalCheckpointIO  rank-local master and optimizer-state save/load
 
 The lifecycle, once per step:
 
@@ -42,9 +41,6 @@ from loongforge.embodied.distributed.custom_dp_utils.custom_dp_config import (
     DEFAULT_PARAM_SYNC_PRECISION,
     CustomDpConfig,
 )
-from loongforge.embodied.train.trainers.custom.dp_training.checkpoint_io import (
-    RankLocalCheckpointIO,
-)
 from loongforge.embodied.train.trainers.custom.dp_training.gradient_reducer import (
     GradientReducer,
 )
@@ -55,6 +51,10 @@ from loongforge.embodied.train.trainers.custom.dp_training.parameter_plan import
     MasterParameterView,
     ParameterPlan,
 )
+
+# Tag on the rank-local checkpoint payload, so a ZeRO state written by another
+# optimizer is refused instead of misread.
+BACKEND = "custom_dp"
 
 # Overlap scheduling constants, deliberately not exposed as configuration:
 # deeper parameter-sync queues measured slower on 8 GPUs at GBS80, so the depth
@@ -269,10 +269,6 @@ class CustomDpOptimizer(Optimizer):
         self.optim = optimizer_factory(self)
         self.defaults = getattr(self.optim, "defaults", {})
         self._wire_in_step_publish()
-        # The shared checkpoint backend owns the file layout and the aux files;
-        # this IO owns the rank-local masters and the per-parameter optimizer
-        # state, found through ``zero_checkpoint_io``.
-        self.zero_checkpoint_io = RankLocalCheckpointIO(self)
 
     def _wire_in_step_publish(self):
         """Publish the Muon-managed masters as Muon updates them.
@@ -333,7 +329,7 @@ class CustomDpOptimizer(Optimizer):
         return loss
 
     def state_dict(self):
-        """The inner optimizer's rank-local state (masters: ``master_state_dict``)."""
+        """The inner optimizer's rank-local state (masters: ``local_checkpoint_state_dict``)."""
         return self.optim.state_dict()
 
     def load_state_dict(self, state_dict):
@@ -482,38 +478,69 @@ class CustomDpOptimizer(Optimizer):
         self.parameter_synchronizer.start_serial()
         self.parameter_synchronizer.finish_serial()
 
-    # -- master state (written by RankLocalCheckpointIO) ----------------------
+    # -- rank-local checkpoint ------------------------------------------------
+    #
+    # The shared checkpoint backend (``distributed/checkpoint.py``) treats this
+    # optimizer like a ZeRO shard: it owns the file layout and the aux files and
+    # asks for each rank's payload through these two hooks.
 
-    def master_state_dict(self):
-        """Return the fp32 master weights and error-feedback residuals, on CPU."""
+    def local_checkpoint_state_dict(self):
+        """Return this rank's fp32 masters, residuals and optimizer state, on CPU."""
         return {
+            "backend": BACKEND,
+            "manifest": self.parameter_manifest(),
             "master": {
                 name: value.detach().cpu().clone() for name, value in self.master.items()
             },
             "param_sync_residuals": self.parameter_synchronizer.compensation_state_dict(),
+            "optimizer": self.optim.state_dict(),
+            "optimizer_param_names": self._optimizer_param_names(),
         }
 
     @torch.no_grad()
-    def load_masters(self, tensors, residuals=None):
-        """Copy fp32 masters (and residuals) by name into this rank's share.
+    def load_local_checkpoint_state_dict(self, state):
+        """Restore this rank's share, then publish it to the compute replicas.
 
-        The caller has already validated the checkpoint against the manifest, so
-        ownership is not re-checked here; the names the checkpoint must supply are
-        exactly the masters this rank now owns, whatever layout it was saved under.
+        Same world size and ownership only: the manifest check rejects anything
+        else before a tensor is touched.
         """
-        missing = sorted(set(self.master) - set(tensors))
-        if missing:
-            raise RuntimeError(
-                f"custom_dp checkpoint is missing {len(missing)} FP32 masters this rank "
-                f"now owns, e.g. {missing[:3]}"
-            )
+        if state.get("backend") != BACKEND:
+            raise RuntimeError("rank-local ZeRO state was not written by custom_dp")
+        self.plan.validate_manifest(state.get("manifest"))
+        if state["optimizer_param_names"] != self._optimizer_param_names():
+            raise RuntimeError("checkpoint optimizer parameter order mismatch")
+        master = state["master"]
+        if set(master) != set(self.master):
+            raise RuntimeError("custom_dp FP32 master keys do not match checkpoint")
         for name, target in self.master.items():
-            value = tensors[name]
-            if value.shape != target.shape or value.dtype != torch.float32:
+            if master[name].shape != target.shape or master[name].dtype != torch.float32:
                 raise RuntimeError(f"invalid FP32 master tensor for {name}")
         for name, target in self.master.items():
-            target.copy_(tensors[name].to(target.device))
-        self.parameter_synchronizer.load_compensation_state_dict(residuals)
+            target.copy_(master[name].to(target.device))
+        self.parameter_synchronizer.load_compensation_state_dict(
+            state.get("param_sync_residuals")
+        )
+        self.optim.load_state_dict(state["optimizer"])
+        # The model state dict also carries compute parameters, but the fp32 master
+        # is the source of truth: publishing it keeps a stale or rounded replica
+        # from surviving the resume.
+        self.publish_serially()
+
+    def _optimizer_param_names(self):
+        """Map each inner optimizer's state indices to master names.
+
+        ``state_dict`` keys per-parameter state by position in the optimizer's
+        ``param_groups`` traversal; recording the names makes a reordered
+        optimizer fail loudly instead of loading state into the wrong parameter.
+        """
+        return [
+            [
+                self.name_for(parameter)
+                for group in child.param_groups
+                for parameter in group["params"]
+            ]
+            for child in getattr(self.optim, "optimizers", [self.optim])
+        ]
 
 
 __all__ = [
