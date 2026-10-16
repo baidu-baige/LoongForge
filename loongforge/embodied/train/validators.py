@@ -12,6 +12,8 @@ data_cfg (DataConfig).
 import logging
 import os
 
+from loongforge.embodied.optimizer.tensor_wise_optimizer.validation import validate_tensor_wise_args
+
 logger = logging.getLogger(__name__)
 
 
@@ -229,6 +231,9 @@ def validate(training_args, model_cfg, data_cfg):
             raise ValueError(
                 "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
             )
+
+    # ── tensor_wise ──
+    validate_tensor_wise_args(training_args)
 
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:

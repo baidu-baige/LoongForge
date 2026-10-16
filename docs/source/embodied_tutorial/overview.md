@@ -413,6 +413,39 @@ When replicating frozen module classes, every matched parameter must have `requi
 
 Delta-FP8 changes only FSDP parameter communication precision; model computation remains in the dtype selected by the FSDP mixed-precision policy. See [FSDP2 Delta-FP8 Param AllGather](../features/delta_fp8_allgather.md) for prerequisites, usage, parameter reference, and troubleshooting.
 
+#### 4.2.3 tensor_wise (Tensor-wise Distributed Optimizer)
+
+tensor_wise (`TensorWiseOptimizer`) is a distributed optimizer under DDP: it keeps a complete compute replica on every rank and splits no tensor. Each parameter is assigned whole to one owner rank: gradients are reduced to the owner, the owner updates its fp32 master and optimizer state, and the updated parameter is broadcast back. It takes over gradient communication, so it replaces the DDP wrapper and is an alternative to `--zero-optimizer`, not a layer on top of it. Compared with `ddp` + `--zero-optimizer`, it uses reduce instead of all-reduce, can publish parameters in bf16 or fp8, and overlaps both collectives with computation. Because an owner holds whole tensors, Muon's Newton-Schulz runs once on the owner without gathering the matrix, unlike element-wise ZeRO-1. "Tensor-wise" is the unit of assignment, as "layer-wise" is in Megatron's `LayerWiseDistributedOptimizer`; collectives still run on owner-aligned buckets.
+
+Currently `lingbot_vla_v2` uses tensor_wise. The trainer enables it, with no separate flag: selecting `LingbotVlaV2Trainer` builds `TensorWiseOptimizer`:
+
+```bash
+--trainer-type LingbotVlaV2Trainer \
+--distributed-strategy ddp \
+--optimizer muon
+```
+
+The collective knobs are the `model.tensor_wise:` section of the model YAML, or per run `model.tensor_wise.<field>=...`:
+
+| Feature | Field (`model.tensor_wise.*`) | Default | Values / Type | Description |
+| --- | --- | --- | --- | --- |
+| Gradient reduce dtype | `grad_reduce_dtype` | `bf16` | `fp32`, `bf16`, `mixed`, `compute` | 1-D tensors always stay fp32 |
+| Parameter publish precision | `param_sync_precision` | `fp32` | `fp32`, `bf16`, `bf16_ef`, `bf16_ef_delta`, `fp8_e4m3_delta` | How masters reach the replicas |
+| Gradient overlap | `grad_overlap` | `true` | Bool | Reduce each bucket as backward produces it |
+| Parameter overlap | `param_overlap` | `true` | Bool | Broadcast each owner's parameters once updated |
+| Bucket size | `comm_bucket_mb` | `256` | Integer MB | `0` picks by gradient overlap |
+| In-flight cap | `grad_inflight_mb` | `3072` | Integer MB | A memory bound; lower it on smaller cards |
+
+The `param_sync_fp8_*` and `param_sync_bf16_with_fp8` fields apply only to `fp8_e4m3_delta`.
+
+To bring another model onto tensor_wise, write a trainer that drives `TensorWiseOptimizer` the way `LingbotVlaV2Trainer` does (the contract is in the `TensorWiseOptimizer` docstring), add its `--trainer-type` name to `TENSOR_WISE_TRAINERS` (`tensor_wise_optimizer/validation.py`), give the model config a `tensor_wise: TensorWiseConfig` field for the knobs above, and return a `ParameterClassPolicy` (or the default `DefaultParameterPolicy`) as its parameter policy.
+
+Constraints:
+
+- Requires `--distributed-strategy ddp`; `--zero-optimizer`, `--fp8` and `--ddp-*` are rejected; `--optimizer muon` requires a tensor_wise trainer.
+- Training-state checkpoints require `--save-format dcp` and cannot be combined with `--use-lora`; pass `--no-save-training-state` to export weights only.
+- Module buffers (for example BatchNorm statistics) are not synchronized, and `--init-on-meta` has not been validated. Check both before moving a model onto tensor_wise.
+
 ### 4.3 Stability and Runtime Control
 
 If you encounter erratic loss spikes, numerical instability, or GPU OOM during training, the following knobs help:

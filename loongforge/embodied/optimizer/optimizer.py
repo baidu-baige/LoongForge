@@ -372,8 +372,9 @@ def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
                 )
         else:
             logger.warning(
-                f"--zero-optimizer ignored: only effective with --distributed-strategy ddp, "
-                f"current strategy is '{strategy}' (already shards optimizer states)."
+                "--zero-optimizer ignored: only effective with "
+                "--distributed-strategy ddp, current strategy is '%s'.",
+                strategy,
             )
     elif training_args.zero_master_param_dtype != "none":
         logger.warning("--zero-master-param-dtype ignored: --zero-optimizer is not set.")
