@@ -377,7 +377,10 @@ class BaseTrainer(ABC):
             # ── Per-stage timing log (all ranks call; rank 0 emits) ──
             if enable_detail:
                 self.logger.log_stage_times(
-                    self._stage_timers, self.ctx, log_level=training_args.timing_log_level
+                    self._stage_timers,
+                    self.ctx,
+                    log_level=training_args.timing_log_level,
+                    process_group=self.ctx.stage_timing_group,
                 )
                 self._stage_timers.reset()
 
