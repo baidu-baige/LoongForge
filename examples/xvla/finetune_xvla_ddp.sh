@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_xvla_ddp_finetune.sh - X-VLA Training Launch Script (DDP)
+# finetune_xvla_ddp.sh - X-VLA Training Launch Script (DDP)
 #
 # Usage:
-#   bash run_xvla_ddp_finetune.sh
-#   TRAIN_ITERS=50 bash run_xvla_ddp_finetune.sh                  # override via env
-#   bash run_xvla_ddp_finetune.sh --lr-base 1e-4                  # override a training param (flag form)
-#   bash run_xvla_ddp_finetune.sh backbone.image_size=448         # override YAML fields (dotlist form)
+#   bash finetune_xvla_ddp.sh
+#   TRAIN_ITERS=50 bash finetune_xvla_ddp.sh                  # override via env
+#   bash finetune_xvla_ddp.sh --lr-base 1e-4                  # override a training param (flag form)
+#   bash finetune_xvla_ddp.sh backbone.image_size=448         # override YAML fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

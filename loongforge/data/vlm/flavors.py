@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Energon sample types produced by the cookers in ``task_encoder.py``.
+"""Energon sample types produced by the cookers in ``cookers.py``.
 
 Unpacked (online) types: MultiMixQASample, MultiVidQASample, ChatMixSample.
 Offline-packed types: PackedCaptioningSample, PackedVQASample,

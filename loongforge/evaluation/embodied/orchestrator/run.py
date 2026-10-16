@@ -26,7 +26,6 @@ from loongforge.evaluation.embodied.orchestrator.server_manager import (
 
 
 def _benchmark_family(config: Dict[str, Any]) -> str:
-    """Run _benchmark_family."""
     benchmark = config.get("benchmark") or {}
     if not isinstance(benchmark, dict):
         raise ValueError("benchmark section must be a mapping")
@@ -39,7 +38,6 @@ def _benchmark_family(config: Dict[str, Any]) -> str:
 
 
 def _timestamped_run_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Run _timestamped_run_config."""
     run_config = config.get("run") or {}
     if not isinstance(run_config, dict):
         raise ValueError("run section must be a mapping when set")
@@ -64,7 +62,6 @@ def _timestamped_run_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _server_args(config: Dict[str, Any], config_path: str = "") -> argparse.Namespace:
-    """Run _server_args."""
     args = build_server_argparser().parse_args([])
     args = apply_config(args, config)
     args.config = config_path
@@ -76,7 +73,6 @@ def _server_args(config: Dict[str, Any], config_path: str = "") -> argparse.Name
 
 
 def _run_libero_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
-    """Run _run_libero_once."""
     args = libero_runner.build_argparser().parse_args([])
     args = apply_config(args, config)
     args.config = config_path
@@ -106,7 +102,6 @@ def _run_libero_once(config: Dict[str, Any], config_path: str = "") -> Dict[str,
 
 
 def _run_calvin_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
-    """Run _run_calvin_once."""
     from loongforge.evaluation.embodied.orchestrator.runners import calvin_runner
 
     args = calvin_runner.build_argparser().parse_args([])
@@ -150,7 +145,6 @@ def _run_calvin_once(config: Dict[str, Any], config_path: str = "") -> Dict[str,
 
 
 def _run_simplerenv_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
-    """Run _run_simplerenv_once."""
     from loongforge.evaluation.embodied.orchestrator.runners import simplerenv_runner
 
     args = simplerenv_runner.build_argparser().parse_args([])
@@ -175,7 +169,6 @@ def _run_simplerenv_once(config: Dict[str, Any], config_path: str = "") -> Dict[
 
 
 def _run_robotwin_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
-    """Run _run_robotwin_once."""
     from loongforge.evaluation.embodied.orchestrator.runners import robotwin_runner
 
     args = robotwin_runner.build_argparser().parse_args([])
@@ -202,7 +195,6 @@ def _run_robotwin_once(config: Dict[str, Any], config_path: str = "") -> Dict[st
 
 
 def _run_maniskill_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
-    """Run _run_maniskill_once."""
     from loongforge.evaluation.embodied.orchestrator.runners import maniskill_runner
 
     args = maniskill_runner.build_argparser().parse_args([])
@@ -223,7 +215,6 @@ def _run_maniskill_once(config: Dict[str, Any], config_path: str = "") -> Dict[s
 
 
 def _run_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
-    """Run _run_once."""
     family = _benchmark_family(config)
     if family == "libero":
         return _run_libero_once(config, config_path)
@@ -239,14 +230,12 @@ def _run_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     return parser
 
 
 def main() -> None:
-    """Run main."""
     args = build_argparser().parse_args()
     config_path = str(pathlib.Path(args.config).resolve())
     config = load_config(config_path)

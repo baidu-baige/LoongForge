@@ -47,13 +47,9 @@ from megatron.core.transformer.experimental_attention_variant.dsa import (
     DSAIndexerLossLoggingHelper as DSAIndexerLossLoggingHelperFused,
     get_dsa_index_share_topk_holder,
     is_dsa_skip_topk_layer,
+    rotate_activation,
     source_dsa_compute_layer,
 )
-
-try:
-    from fast_hadamard_transform import hadamard_transform
-except ImportError:
-    hadamard_transform = None
 
 from .dsa_fused_utils import (
     all_to_all_hp2sp_with_padding,
@@ -67,25 +63,6 @@ from .dsa_fused_kernels import (
     DSAIndexerKernel,
     fused_apply_mla_rope,
 )
-
-
-def rotate_activation(x: torch.Tensor) -> torch.Tensor:
-    """Apply Hadamard rotation activation.
-    Reference:
-        https://github.com/deepseek-ai/DeepSeek-V3.2-Exp/blob/main/inference/model.py#L424-L428
-
-    Args:
-        x: Input tensor (must be bfloat16).
-
-    Returns:
-        Rotated tensor.
-    """
-    assert (
-        x.dtype == torch.bfloat16
-    ), f"rotate_activation only support bf16 input, but got {x.dtype}"
-    assert hadamard_transform is not None, "fast_hadamard_transform is not installed."
-    hidden_size = x.size(-1)
-    return hadamard_transform(x, scale=hidden_size**-0.5)
 
 
 @dataclass

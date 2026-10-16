@@ -28,7 +28,6 @@ def write_eval_report(
     artifact_limit: int = 20,
     min_episodes_per_task: int = 1,
 ) -> Dict[str, str]:
-    """Run write_eval_report."""
     records = load_jsonl(results_path)
     report_dir = Path(output_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -95,7 +94,6 @@ def _render_markdown_report(
     resource_snapshot_path: Path,
     episode_floor_path: Path,
 ) -> str:
-    """Run _render_markdown_report."""
     total = len(records)
     successes = sum(int(record.get("success", 0)) for record in records)
     success_rate = successes / total if total else 0.0
@@ -204,7 +202,6 @@ def _render_markdown_report(
 
 
 def _failure_summary(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Run _failure_summary."""
     counter: Counter[str] = Counter()
     for record in records:
         if int(record.get("success", 0)):
@@ -217,7 +214,6 @@ def _failure_summary(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _archive_failure_artifacts(
     records: Iterable[Dict[str, Any]], artifact_dir: Path, artifact_limit: int
 ) -> List[Dict[str, Any]]:
-    """Run _archive_failure_artifacts."""
     artifact_dir.mkdir(parents=True, exist_ok=True)
     archived: List[Dict[str, Any]] = []
     per_reason_counts: Dict[str, int] = defaultdict(int)
@@ -256,7 +252,6 @@ def _archive_failure_artifacts(
 
 
 def _collect_repro_info(results_path: PathLike) -> Dict[str, Any]:
-    """Run _collect_repro_info."""
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "results_path": str(Path(results_path)),
@@ -276,7 +271,6 @@ def _collect_repro_info(results_path: PathLike) -> Dict[str, Any]:
 
 
 def collect_resource_snapshot() -> Dict[str, Any]:
-    """Run collect_resource_snapshot."""
     return {
         "captured_at_utc": datetime.now(timezone.utc).isoformat(),
         "cpu_count": os.cpu_count(),
@@ -288,7 +282,6 @@ def collect_resource_snapshot() -> Dict[str, Any]:
 
 
 def _loadavg() -> Optional[List[float]]:
-    """Run _loadavg."""
     try:
         return list(os.getloadavg())
     except OSError:
@@ -296,7 +289,6 @@ def _loadavg() -> Optional[List[float]]:
 
 
 def _memory_info() -> Dict[str, Optional[int]]:
-    """Run _memory_info."""
     meminfo = Path("/proc/meminfo")
     if not meminfo.exists():
         return {"mem_total_kb": None, "mem_available_kb": None}
@@ -311,7 +303,6 @@ def _memory_info() -> Dict[str, Optional[int]]:
 
 
 def _disk_info() -> Dict[str, Dict[str, int]]:
-    """Run _disk_info."""
     paths = [Path(p) for p in os.environ.get("DISK_MONITOR_PATHS", "/workspace").split(":") if p]
     info: Dict[str, Dict[str, int]] = {}
     for path in paths:
@@ -323,7 +314,6 @@ def _disk_info() -> Dict[str, Dict[str, int]]:
 
 
 def _nvidia_smi() -> Optional[str]:
-    """Run _nvidia_smi."""
     try:
         proc = subprocess.run(
             [
@@ -344,7 +334,6 @@ def _nvidia_smi() -> Optional[str]:
 
 
 def _git_info() -> Dict[str, Optional[str]]:
-    """Run _git_info."""
     repo = Path(__file__).resolve().parents[3]
     return {
         "repo": str(repo),
@@ -354,7 +343,6 @@ def _git_info() -> Dict[str, Optional[str]]:
 
 
 def _run_git(repo: Path, args: List[str]) -> Optional[str]:
-    """Run _run_git."""
     try:
         proc = subprocess.run(
             ["git", *args], cwd=str(repo), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5
@@ -367,7 +355,6 @@ def _run_git(repo: Path, args: List[str]) -> Optional[str]:
 
 
 def _wilson_ci(successes: int, total: int, z: float = 1.96) -> tuple[float, float]:
-    """Run _wilson_ci."""
     if total <= 0:
         return (0.0, 0.0)
     p = successes / total
@@ -378,19 +365,16 @@ def _wilson_ci(successes: int, total: int, z: float = 1.96) -> tuple[float, floa
 
 
 def _fmt_float(value: Any) -> str:
-    """Run _fmt_float."""
     if value is None:
         return ""
     return f"{float(value):.4f}"
 
 
 def _safe_name(value: str) -> str:
-    """Run _safe_name."""
     return "".join(char if char.isalnum() or char in "._-" else "_" for char in value)
 
 
 def _episode_name(record: Dict[str, Any]) -> str:
-    """Run _episode_name."""
     return _safe_name(
         "{benchmark}_{task_suite}_task{task_id}_ep{episode_idx}".format(
             benchmark=record.get("benchmark"),

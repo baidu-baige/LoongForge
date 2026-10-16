@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Qwen3 Next Model"""
-
 from typing import Optional
 from copy import deepcopy
 
@@ -14,7 +12,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.inference.contexts import BaseInferenceContext
 from megatron.core.process_groups_config import ProcessGroupCollection
 
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 from loongforge.models.language.base import BaseGPTModel
 from .qwen3_next_config import Qwen3NextConfig
 

@@ -3,9 +3,8 @@
 
 """GR00T-N1.7 optimization factory.
 
-Extends the vanilla FinetuneTrainer behavior with full-iteration CUDA graph
-support and GR00T-specific DDP bucket alignment, fused optimizer, and
-post-setup RNG reset.
+Adds to the default TorchRunner behavior: full-iteration CUDA graph support,
+GR00T-specific DDP bucket alignment, a fused optimizer, and post-setup RNG reset.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from types import SimpleNamespace
 logger = logging.getLogger(__name__)
 
 
-# ── Bucket warmup functions (moved from groot_trainer.py) ──
+# ── Bucket warmup functions ──
 
 def _arm_static_graph_bucket_warmup(model) -> None:
     """Record normal DDP's first-backward parameter ready order."""

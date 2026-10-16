@@ -71,7 +71,7 @@ bash examples/lingbot_va/finetune_lingbot_va_libero_fsdp.sh
 
 例如关闭可选优化：
 
-以下命令以 RoboTwin 为例；LIBERO 使用 `run_lingbot_va_libero_fsdp_finetune.sh`。
+以下命令以 RoboTwin 为例；LIBERO 使用 `finetune_lingbot_va_libero_fsdp.sh`。
 
 ```bash
 LINGBOT_BALANCED_SAMPLER=0 \

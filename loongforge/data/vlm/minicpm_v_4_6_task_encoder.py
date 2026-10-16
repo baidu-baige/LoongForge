@@ -6,13 +6,13 @@
 import torch
 
 from loongforge import constants
-from loongforge.chat_templates.plugins.minicpm_v_4_6_plugin import MiniCPMV46Plugin
+from loongforge.chat_templates.plugins.minicpm_v_4_6 import MiniCPMV46Plugin
 from loongforge.data.vlm.vlm_task_encoder import (
     IMAGE_TOKEN,
     IMAGE_TOKEN_WITH_TAGS,
     VLMTaskEncoder,
 )
-from loongforge.chat_templates.plugins.mm_plugin import Placeholder
+from loongforge.chat_templates.plugins.base import Placeholder
 
 
 class MiniCPMV46TaskEncoder(VLMTaskEncoder):
@@ -61,7 +61,7 @@ class MiniCPMV46TaskEncoder(VLMTaskEncoder):
             "default_use_image_id",
             getattr(image_processor, "use_image_id", True),
         )
-        placeholders = self.minicpm_plugin._build_image_placeholders(
+        placeholders = self.minicpm_plugin.build_image_placeholders(
             mm_inputs,
             self.processor,
             use_image_id=use_image_id,

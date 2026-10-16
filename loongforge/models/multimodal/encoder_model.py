@@ -23,9 +23,9 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
 from transformers.models.auto.modeling_auto import AutoModel
-from loongforge.engines.mcore.initialize import change_parallel_state
-from loongforge.engines.mcore.parallel.dp_balance.vit_balance import dp_balance_vit_encoder
-from loongforge.engines.mcore import get_args
+from loongforge.engines.megatron.initialize import change_parallel_state
+from loongforge.engines.megatron.distributed.dp_balance.vit_balance import dp_balance_vit_encoder
+from loongforge.models.vision.qwen3_vl.qwen3_vl_config import Qwen3VisionModelConfig
 
 
 class _DummyEncoderPassthrough(torch.autograd.Function):
@@ -46,14 +46,12 @@ class _DummyEncoderPassthrough(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_embeds, encoder_output):
-        """forward."""
         ctx.encoder_output_shape = encoder_output.shape
         ctx.encoder_output_dtype = encoder_output.dtype
         return input_embeds
 
     @staticmethod
     def backward(ctx, grad_output):
-        """backward"""
         grad_encoder_output = torch.zeros(
             ctx.encoder_output_shape,
             dtype=ctx.encoder_output_dtype,
@@ -148,16 +146,18 @@ class OmniEncoderModel(torch.nn.Module):
         position_embedding_type: Literal["learned_absolute", "rope"] = "rope",
         scatter_embedding_sequence_parallel: bool = True,
         vp_stage: Optional[int] = None,
+        *,
+        use_vit_dp_balance: bool,
+        enable_encoder_hetero_dp: bool,
+        enable_full_hetero_dp: bool,
         **kwargs,
     ) -> None:
         super().__init__()
         self.config = config
-        # Parallelism flags, not model structure, so they stay on the training
-        # args instead of the model config.
-        args = get_args()
-        self.use_vit_dp_balance = args.use_vit_dp_balance
-        self.enable_encoder_hetero_dp = args.enable_encoder_hetero_dp
-        self.enable_full_hetero_dp = args.enable_full_hetero_dp
+        # Parallelism flags, not model structure: the provider passes them from the training args.
+        self.use_vit_dp_balance = use_vit_dp_balance
+        self.enable_encoder_hetero_dp = enable_encoder_hetero_dp
+        self.enable_full_hetero_dp = enable_full_hetero_dp
         self.mix_used_vision_encoder = getattr(config, "mix_used_vision_encoder", True)
         self.mix_used_vision_projector = getattr(
             config, "mix_used_vision_projector", True
@@ -175,8 +175,12 @@ class OmniEncoderModel(torch.nn.Module):
             and self.config.image_encoder is not None
         ):
             change_parallel_state("image_encoder")
+            image_encoder_kwargs = dict(kwargs)
+            if isinstance(config.image_encoder, Qwen3VisionModelConfig):
+                # The DeepStack mergers need the projector config and the language hidden size.
+                image_encoder_kwargs["model_config"] = config
             self.image_encoder: BaseMegatronModule = AutoModel.from_config(
-                config.image_encoder, vp_stage=vp_stage, **kwargs
+                config.image_encoder, vp_stage=vp_stage, **image_encoder_kwargs
             )
             self.encoder_modality["image"] = True
             self.image_encoder.register_forward_pre_hook(

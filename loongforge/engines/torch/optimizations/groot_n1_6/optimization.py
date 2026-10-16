@@ -3,9 +3,8 @@
 
 """GR00T-N1.6 optimization factory.
 
-Extends the vanilla FinetuneTrainer behavior with an optional per-microbatch
-CUDA graph runner. When the graph runner is disabled, returns a plain
-TorchOptimization() (identical to FinetuneTrainer).
+Adds an optional per-microbatch CUDA graph runner to the default TorchRunner
+behavior. When the graph runner is disabled, returns a plain TorchOptimization().
 """
 
 from __future__ import annotations
@@ -19,6 +18,13 @@ logger = logging.getLogger(__name__)
 def build_optimization(training_args):
     """Return a TorchOptimization for GR00T-N1.6."""
     from loongforge.engines.torch.train_step import TorchOptimization, LossHealth
+    from loongforge.models.embodied.groot_n1_6.eagle3_model import modeling_eagle3_vl
+
+    # Eagle picks its loader and attention paths when it is built; this factory runs before that.
+    modeling_eagle3_vl.set_graph_mode(
+        training_args.cuda_graph_impl == "local"
+        and training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}
+    )
 
     # Lazy import: graph runner itself pulls torch, CUDA, model-specific types.
     from loongforge.engines.torch.optimizations.groot_n1_6.per_microbatch_cuda_graph import (

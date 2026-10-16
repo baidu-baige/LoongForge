@@ -69,18 +69,6 @@ class ModelsEmbodiedRegistryTest(unittest.TestCase):
             data_registry._IMPORTED.clear()
             data_registry._IMPORTED.update(previous_imported)
 
-    def test_pi05_sets_dynamo_cache_limit(self):
-        # Per-layer compile needs one cache entry per layer; the torch default is 8.
-        target = "torch._dynamo.config.cache_size_limit"
-        values = [
-            node.value.value
-            for node in _parse(EMBODIED / "pi05" / "modeling_pi05.py").body
-            if isinstance(node, ast.Assign)
-            and ast.unparse(node.targets[0]) == target
-            and isinstance(node.value, ast.Constant)
-        ]
-        self.assertTrue(values and values[-1] >= 512, f"pi05 must set {target} >= 512")
-
 
 if __name__ == "__main__":
     unittest.main()

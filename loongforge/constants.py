@@ -77,10 +77,17 @@ class CustomModelFamilies(_BaseFamilies):
     QWEN_IMAGE = "qwen_image"
 
 
-class VisionLanguageActionModelFamilies(_BaseFamilies):
-    """Vision language action model families"""
-    PI05 = "pi05"
-    GROOT_N1_6 = "groot_n1_6"
+# Families whose Hydra config puts model_type at the top level; VLM configs put it under ``model``.
+TOP_LEVEL_MODEL_FAMILIES = frozenset(LanguageModelFamilies.names() + CustomModelFamilies.names())
+
+
+def split_model_config(config):
+    """Return ``(model_type, model_config)`` of a composed Megatron Hydra config."""
+    if hasattr(config, "model_type") and config.model_type in TOP_LEVEL_MODEL_FAMILIES:
+        return config.model_type, config
+    if not hasattr(config, "model"):
+        raise ValueError("Invalid model configuration structure")
+    return config.model.model_type, config.model
 
 
 def get_all_model_families() -> List[str]:

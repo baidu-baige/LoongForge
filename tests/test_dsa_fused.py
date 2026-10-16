@@ -3,7 +3,7 @@
 
 from types import SimpleNamespace
 
-import loongforge.engines.mcore  # noqa: F401 - initialize package imports in training order
+import loongforge.engines.megatron  # noqa: F401 - initialize package imports in training order
 import pytest
 import torch
 

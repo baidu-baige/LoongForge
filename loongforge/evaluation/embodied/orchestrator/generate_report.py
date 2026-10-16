@@ -14,7 +14,6 @@ from loongforge.evaluation.embodied.metrics.results import load_jsonl
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--results", required=True, help="Path to results.jsonl")
     parser.add_argument("--output-dir", required=True, help="Directory for report.md and manifests")
@@ -27,7 +26,6 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run main."""
     args = build_argparser().parse_args()
     records = load_jsonl(args.results)
     if args.summary:

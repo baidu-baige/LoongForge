@@ -36,10 +36,10 @@ from typing import (
 
 from loongforge.constants import IGNORE_INDEX
 
-from .plugins.mm_plugin import MMPlugin
+from .plugins.base import MMPlugin
 
 if TYPE_CHECKING:
-    from loongforge.engines.mcore.tokenizer import AutoTokenizerFromHF
+    from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
 
 
 SlotsType = Sequence[Union[str, Set[str], Dict[str, str]]]

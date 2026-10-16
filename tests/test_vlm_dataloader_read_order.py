@@ -124,18 +124,9 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
 
 
 def test_multimodal_argument_defaults_and_overrides():
-    class LanguageModelFamilies:
-        @staticmethod
-        def names():
-            return ["llama"]
-
     namespace = _load_functions(
-        "loongforge/engines/mcore/arguments.py",
+        "loongforge/engines/megatron/arguments.py",
         {"_add_extra_multimodal_args"},
-        {
-            "get_support_model_archs": lambda values: values,
-            "constants": SimpleNamespace(LanguageModelFamilies=LanguageModelFamilies),
-        },
     )
     parser = namespace["_add_extra_multimodal_args"](argparse.ArgumentParser())
 

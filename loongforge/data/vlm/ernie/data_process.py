@@ -21,11 +21,11 @@ import random
 from collections import defaultdict
 from itertools import groupby
 
-from .data_utils import get_hashable, get_uniq_id, group_frame_by_video, image_info_2_hash
+from .utils.data_utils import get_hashable, get_uniq_id, group_frame_by_video, image_info_2_hash
 import logging
 
 logger = logging.getLogger(__name__)
-from .image_enhance import RandomSeedContext
+from .utils.image_enhance import RandomSeedContext
 from .tokenizer_vl import (
     SFT_IMAGE_END_TOKEN,
     SFT_IMAGE_START_TOKEN,

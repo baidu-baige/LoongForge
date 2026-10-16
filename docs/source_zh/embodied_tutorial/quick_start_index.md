@@ -1,6 +1,6 @@
 # 快速入门
 
-每个支持的具身模型均在 [`examples/embodied/`](https://github.com/baidu-baige/LoongForge/tree/master/examples/embodied) 下提供了开箱即用的启动脚本。请在下方选择对应模型的指南；框架整体约定（目录结构、启动脚本、配置分层）请参阅[概述](overview.md)。
+每个支持的具身模型均在 [`examples/<model>/`](https://github.com/baidu-baige/LoongForge/tree/master/examples) 下提供了开箱即用的启动脚本。请在下方选择对应模型的指南；框架整体约定（目录结构、启动脚本、配置分层）请参阅[概述](overview.md)。
 
 ## VLA 模型
 

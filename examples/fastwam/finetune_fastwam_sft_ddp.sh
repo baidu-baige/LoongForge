@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_fastwam_sft_ddp_finetune.sh - FastWAM SFT Launch Script (DDP)
+# finetune_fastwam_sft_ddp.sh - FastWAM SFT Launch Script (DDP)
 #
 # Usage:
-#   bash run_fastwam_sft_ddp_finetune.sh
-#   TRAIN_ITERS=50 bash run_fastwam_sft_ddp_finetune.sh                          # override via env
-#   bash run_fastwam_sft_ddp_finetune.sh --train-iters 50                        # override a training param (flag form)
-#   bash run_fastwam_sft_ddp_finetune.sh model.action_dit_pretrained_path=/path   # override YAML model:/data: fields (dotlist form)
+#   bash finetune_fastwam_sft_ddp.sh
+#   TRAIN_ITERS=50 bash finetune_fastwam_sft_ddp.sh                          # override via env
+#   bash finetune_fastwam_sft_ddp.sh --train-iters 50                        # override a training param (flag form)
+#   bash finetune_fastwam_sft_ddp.sh model.action_dit_pretrained_path=/path   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

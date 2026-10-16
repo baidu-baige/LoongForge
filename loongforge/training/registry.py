@@ -3,16 +3,17 @@
 
 """Unified training registry.
 
-Replaces the per-engine trainer registries (decorator-based registration and
-class lookup) with a single, statically-declared registry.  All heavy imports (torch, megatron, method
-modules) are deferred to call time via importlib.import_module.
+Statically declared: (model family, phase) selects a Megatron method module, and
+``--trainer-type`` selects a Torch method module plus an optional optimization
+package. All heavy imports (torch, megatron, method modules) are deferred to call
+time via importlib.import_module.
 
-Usage (MCore):
-    method = resolve_method("qwen2_vl", "pretrain")
-    # method is the lazily-imported module (e.g. pretrain_vlm)
+Usage (Megatron):
+    method = resolve_method(args.model_family, "pretrain")
+    method.train(args)
 
 Usage (Torch):
-    trainer_cls = resolve_torch_trainer("GrootN1d6Trainer")
+    method, build_optimization = resolve_torch_trainer("GrootN1d6Trainer")
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ FAMILY_GROUP["wan2_2_i2v"] = "wan"
 FAMILY_GROUP["qwen_image"] = "qwen_image"
 
 # ---------------------------------------------------------------------------
-# (group, phase) -> method module path   (MCore engine)
+# (group, phase) -> method module path   (Megatron engine)
 # ---------------------------------------------------------------------------
 
 METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
@@ -57,10 +58,12 @@ METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
 }
 
 
+
 def resolve_method(model_family: str, training_phase: str):
     """Lazily import and return the method module for *model_family* + *phase*.
 
-    Raises ValueError for unsupported combinations.
+    The module's ``train(args)`` runs the training. Raises ValueError for
+    unsupported combinations.
     """
     group = FAMILY_GROUP.get(model_family, model_family)
     key = (group, training_phase)
@@ -76,7 +79,7 @@ def resolve_method(model_family: str, training_phase: str):
 
 # ---------------------------------------------------------------------------
 # Torch engine: --trainer-type -> (method_module, optimization_package)
-# All old values stay valid. Lazy imports; no torch at module level.
+# Lazy imports; no torch at module level.
 # ---------------------------------------------------------------------------
 
 TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
@@ -86,15 +89,12 @@ TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
     "LingBotFinetuneTrainer": ("sft_lingbot_va", "lingbot_va"),
 }
 
-# ponytail: legacy TORCH_TRAINER_REGISTRY removed — trainers/ directory deleted
-
 
 def resolve_torch_trainer(trainer_type: str):
     """Lazily import and return the method module + optimization factory.
 
     Returns ``(method_module, build_optimization_callable)``.
-    Raises ValueError for unknown --trainer-type values, preserving the
-    original error messages from trainer_builder.py.
+    Raises ValueError for unknown --trainer-type values.
     """
     if not trainer_type:
         raise ValueError(

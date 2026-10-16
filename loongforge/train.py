@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dispatch training to the engine that owns the selected model."""
+"""Dispatch training to the runner of the engine that owns the selected model."""
 
 import argparse
 from importlib import import_module
@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.WARNING)
 
 
 def main():
-    """Run the engine selected by ``--model-name``."""
+    """Run ``loongforge.training.<engine>_runner.main`` for the engine selected by ``--model-name``."""
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--model-name")
     parser.add_argument("--config-file")
@@ -20,7 +20,7 @@ def main():
     if args.model_name is None:
         if args.config_file is None:
             parser.error("one of --model-name or --config-file is required")
-        engine = "mcore"
+        engine = "megatron"
     else:
         from loongforge.models.catalog import get_model_entry
 
@@ -29,7 +29,7 @@ def main():
         except ValueError as exc:
             parser.error(str(exc))
 
-    return import_module(f"loongforge.engines.{engine}.entrypoint").main()
+    return import_module(f"loongforge.training.{engine}_runner").main()
 
 
 if __name__ == "__main__":

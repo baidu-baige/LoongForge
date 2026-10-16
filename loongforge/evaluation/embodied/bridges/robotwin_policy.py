@@ -65,7 +65,6 @@ class ModelClient:
         trace_path: Optional[str] = None,
         domain_id: Optional[int] = None,
     ) -> None:
-        """Run __init__."""
         from loongforge.evaluation.embodied.transport import PolicyClient
 
         if action_bridge not in _BRIDGE_WIRING:
@@ -108,7 +107,6 @@ class ModelClient:
         self.trace_records: List[Dict[str, Any]] = []
 
     def reset(self, task_description: str = "", episode_id: Optional[str] = None) -> None:
-        """Run reset."""
         self.task_description = task_description
         self.episode_id = episode_id or f"robotwin/{self.adapter.task_name}/{task_description or 'default'}"
         self.payload_builder.reset(self.episode_id)
@@ -207,13 +205,11 @@ class ModelClient:
         self.trace_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def close(self) -> None:
-        """Run close."""
         self._flush_trace()
         self.client.close()
 
 
 def get_model(usr_args: Dict[str, Any]) -> ModelClient:
-    """Run get_model."""
     return ModelClient(
         host=usr_args.get("host", "127.0.0.1"),
         port=int(usr_args.get("port", 10093)),
@@ -232,12 +228,10 @@ def get_model(usr_args: Dict[str, Any]) -> ModelClient:
 
 
 def reset_model(model: ModelClient) -> None:
-    """Run reset_model."""
     model.reset(task_description="")
 
 
 def eval(TASK_ENV: Any, model: ModelClient, observation: Dict[str, Any]) -> None:
-    """Run eval."""
     if model.action_bridge == "ee6d_dual":
         # Official X-VLA robotwin client: instruction is the plain task name
         # with underscores replaced (e.g. "adjust bottle"), NOT the

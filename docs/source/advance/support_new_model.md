@@ -28,7 +28,7 @@ Register in the MODEL_CONFIG_REGISTRY in loongforge/models/catalog.py, then you 
 MODEL_CONFIG_REGISTRY = {
     # ... existing models
     "llama3-70b": {
-            "engine": "mcore",
+            "engine": "megatron",
             "config_path": "configs/models/llama3",
             "config_name": "llama3_70b",
         },
@@ -121,7 +121,7 @@ MODEL_CONFIG_REGISTRY = {
     
     # === Add your new model ===
     "my-custom-vlm-8b": {
-        "engine": "mcore",
+        "engine": "megatron",
         "config_path": "configs/models/<vlm_family>",       # Directory where the combination configuration file is located
         "config_name": "my_new_vlm",                        # Combination configuration file name (without .yaml)
     },
@@ -147,7 +147,7 @@ configs/models/wan/<your_wan_variant>.yaml
 MODEL_CONFIG_REGISTRY = {
     # ... existing models
     "my-wan-variant": {
-        "engine": "mcore",
+        "engine": "megatron",
         "config_path": "configs/models/wan",
         "config_name": "<your_wan_variant>",
     },

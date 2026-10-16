@@ -18,7 +18,7 @@ import tempfile
 import pytest
 import torch
 
-from loongforge.engines.torch.distributed import fp8_a2a_comm as mod
+from loongforge.engines.torch.quantization import fp8_a2a_comm as mod
 from loongforge.engines.torch.distributed.ddp_comm_hook import resolve_comm_hook
 from loongforge.engines.torch.arguments import TrainingArgs
 

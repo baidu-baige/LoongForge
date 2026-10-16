@@ -77,6 +77,11 @@ class GrootN1d6ModelFactory:
         """
         import torch
 
+        from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import (
+            Gr00tN1d6DataCollator,
+            StateActionProcessor,
+        )
+
         pretrained_path = (
             str(Path(server_args.ckpt_path).expanduser()) if server_args.ckpt_path else ""
         )
@@ -98,6 +103,8 @@ class GrootN1d6ModelFactory:
         model.configure_predict_action(
             checkpoint_statistics=statistics,
             eagle_assets_path=eagle_assets_path,
+            collator_cls=Gr00tN1d6DataCollator,
+            processor_cls=StateActionProcessor,
             embodiment_tag=embodiment_tag,
             use_bf16=server_args.use_bf16,
             # Allow the startup warmup (state=None) to run; real eval steps always

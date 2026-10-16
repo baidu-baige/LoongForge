@@ -69,35 +69,27 @@ class LengthPoolSortDataset(SavableDataset[T_sample]):
 
     # ---- Abstract method implementation delegation ----
     def worker_has_samples(self) -> bool:
-        """worker_has_samples"""
         return self.dataset.worker_has_samples()
 
     def can_restore_sample(self) -> bool:
-        """can_restore_sample"""
         return self.dataset.can_restore_sample()
 
     def assert_can_restore(self) -> None:
-        """assert_can_restore"""
         self.dataset.assert_can_restore()
 
     def restore_sample(self, index):
-        """restore_sample"""
         return self.dataset.restore_sample(index)
 
     def save_state(self):
-        """save_state"""
         return self.dataset.save_state()
 
     def merge_states(self, states):
-        """merge_states"""
         return self.dataset.merge_states(states)
 
     def restore_state(self, state):
-        """restore_state"""
         self.dataset.restore_state(state)
 
     def config(self):
-        """config"""
         return {
             "type": type(self).__qualname__,
             "pool_size": self.pool_size,

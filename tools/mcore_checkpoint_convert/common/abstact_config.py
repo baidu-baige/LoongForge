@@ -7,10 +7,6 @@ from abc import ABC, abstractmethod
 
 
 class AbstractConfig(ABC):
-    """
-       AbstractConfig 
-    """
-
     def __init__(self):
         self.data = {}
         

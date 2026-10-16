@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""config manager"""
-
 import json
 import os
 import re

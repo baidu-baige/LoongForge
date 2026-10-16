@@ -26,8 +26,8 @@ from itertools import groupby
 
 import numpy as np
 
-from .constants import IDTYPES_2_ID, IMAGETYPES_2_ID
-from .image_enhance import ImageEnhance
+from .utils.constants import IDTYPES_2_ID, IMAGETYPES_2_ID
+from .utils.image_enhance import ImageEnhance
 
 logger = logging.getLogger(__name__)
 from .tokenizer_vl import special_tokens_info

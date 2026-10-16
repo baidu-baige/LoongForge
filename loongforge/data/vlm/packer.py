@@ -234,7 +234,6 @@ class Packer:
         for sample in samples:
             assert (sample.tokens.shape[0] <= buffer_capacity), f"sample token length: \
                 {sample.tokens.shape[0]} > max buffer capacity: {buffer_capacity}, will skip this sample"
-            # print(f"sample_len: {sample.total_len}, buffer_capacity: {buffer_capacity}, buffers_num: {buffers_num}")
             img_num = _img_count(sample.imgs)
             if img_num and img_limit:
                 assert (img_num <= img_limit), f"sample img_num: {img_num} \
@@ -253,7 +252,6 @@ class Packer:
                 packed_buffers.append(buffers.pop(0).data)
                 buffers.append(Buffer(buffer_capacity, img_limit))
                 buffers[-1].insert(sample)
-                # print(f"find: False, find_idx: 0, len: {sample.total_len}")
 
             # When prioritize-image-count=True, the buffer prioritizes packing the maximum 
             # number of images, potentially reordering the original samples.

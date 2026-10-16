@@ -18,7 +18,7 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 
 
-from loongforge.engines.mcore.utils import is_te_min_version
+from megatron.core.utils import is_te_min_version
 from loongforge.models.common.layer_dispatch import multiacc_modules
 from megatron.core.extensions.transformer_engine import (
     TELayerNormColumnParallelLinear,

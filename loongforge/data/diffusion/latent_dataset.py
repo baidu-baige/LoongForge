@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""latent dataset"""
-
 import numpy as np
 import torch
 from pathlib import Path

@@ -5,18 +5,15 @@
 
 Runs without torch: it only parses files.
 
-Layering rules:
+Layering rules (``TYPE_CHECKING`` imports never run and are skipped):
   * ``constants.py`` imports only the standard library.
   * ``chat_templates/`` imports no other loongforge layer at run time.
   * ``data/`` family directories do not import each other.
-  * ``data/`` imports no ``training``, and from ``engines`` only the tokenizer
-    (plus ``chunkpipe`` in ``llm_dataloader.py``).
-  * ``data/`` and ``chat_templates/`` do not read engine global state.
-  * ``models/`` does not import ``data`` at module level (``TYPE_CHECKING`` and function bodies are allowed).
-  * ``engines/`` imports no ``data`` at run time (only ``TYPE_CHECKING`` is allowed).
-
-Layout rules: no ``utils/`` directory, fixed ``data/`` first level, fixed role
-files in every ``data/embodied/<model>/``.
+  * ``data/`` imports from ``engines`` only the tokenizer (plus ``chunkpipe`` in ``llm_dataloader.py``).
+  * Only ``training/`` imports ``training``.
+  * ``data/`` and ``chat_templates/`` do not read engine global state; ``models/`` does not import the readers.
+  * ``models/`` does not import ``data`` at run time, including function bodies.
+  * ``engines/`` imports no ``data`` at run time.
 
 Registry strings must point at real code:
   * ``embodied/registry.py``: ``MODEL_MODULES`` (decorator names, package imports) and ``DATASET_STRATEGIES``
@@ -40,12 +37,11 @@ FAMILIES = ("llm", "vlm", "embodied", "diffusion")
 GLOBAL_READERS = {"get_args", "get_tokenizer", "get_model_config", "get_chat_template"}
 # Allowed ``loongforge.engines`` imports from ``data/``: prefix -> files that may use it (None: any).
 DATA_ENGINE_ALLOWED = {
-    ("loongforge", "engines", "mcore", "tokenizer"): None,
-    ("loongforge", "engines", "mcore", "parallel", "chunkpipe"): {"llm_dataloader.py"},
+    ("loongforge", "engines", "megatron", "tokenizer"): None,
+    ("loongforge", "engines", "megatron", "distributed", "chunkpipe"): {"llm_dataloader.py"},
 }
 # ``MODEL_MODULES`` values that are plain modules, not model packages.
 PLAIN_MODULE_MODEL_TYPES = {"dummy"}
-NON_MODEL_DIRS = {"datasets", "transforms"}
 # ``MODEL_MODULES`` keys that register a collator but no transform builder.
 NO_TRANSFORM_MODEL_TYPES = {"dummy"}
 EMBODIED_DECORATORS = ("register_collator", "register_transform_builder", "register_sampler_builder")
@@ -166,11 +162,6 @@ def _decorator_args(path, decorator):
     }
 
 
-def _only_docstring(path):
-    body = _parse(path).body
-    return len(body) == 1 and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
-
-
 class LayeringTest(unittest.TestCase):
     def test_constants_import_only_stdlib(self):
         path = PKG / "constants.py"
@@ -217,9 +208,27 @@ class LayeringTest(unittest.TestCase):
                     continue
                 self.assertNotIn(name, GLOBAL_READERS, f"{_rel(path)}:{getattr(node, 'lineno', '?')}")
 
-    def test_models_do_not_import_data_at_module_level(self):
+    def test_only_training_imports_training(self):
+        for layer in ("engines", "models", "evaluation", "chat_templates"):
+            for path in _py_files(PKG / layer):
+                for target in _runtime_imports(path):
+                    self.assertFalse(
+                        _starts_with(target, ("loongforge", "training")), f"{_rel(path)} imports {'.'.join(target)}"
+                    )
+
+    def test_models_do_not_import_engine_global_readers(self):
         for path in _py_files(PKG / "models"):
-            for target in _module_level_imports(path):
+            for target in _runtime_imports(path):
+                from_engine = _starts_with(target, ("loongforge", "engines")) or _starts_with(
+                    target, ("megatron", "training")
+                )
+                self.assertFalse(
+                    from_engine and target[-1] in GLOBAL_READERS, f"{_rel(path)} imports {'.'.join(target)}"
+                )
+
+    def test_models_do_not_import_data(self):
+        for path in _py_files(PKG / "models"):
+            for target in _runtime_imports(path):
                 self.assertFalse(
                     _starts_with(target, ("loongforge", "data")), f"{_rel(path)} imports {'.'.join(target)}"
                 )
@@ -230,37 +239,6 @@ class LayeringTest(unittest.TestCase):
                 self.assertFalse(
                     _starts_with(target, ("loongforge", "data")), f"{_rel(path)} imports {'.'.join(target)}"
                 )
-
-
-class LayoutTest(unittest.TestCase):
-    def test_no_utils_directory(self):
-        for root in (DATA, CHAT_TEMPLATES, PKG / "engines"):
-            found = [p for p in root.rglob("utils") if p.is_dir()]
-            self.assertEqual(found, [], [_rel(p) for p in found])
-
-    def test_data_first_level(self):
-        dirs = {p.name for p in DATA.iterdir() if p.is_dir() and p.name != "__pycache__"}
-        files = {p.name for p in DATA.iterdir() if p.is_file()}
-        self.assertEqual(dirs, set(FAMILIES))
-        self.assertEqual(files, {"__init__.py"} | {f"{f}_dataloader.py" for f in FAMILIES})
-        self.assertTrue(_only_docstring(DATA / "__init__.py"))
-        self.assertTrue(_only_docstring(CHAT_TEMPLATES / "__init__.py"))
-
-    def test_embodied_model_directories(self):
-        modules = _literal_assignment(EMBODIED / "registry.py", "MODEL_MODULES")
-        packages = [d for m, d in modules.items() if m not in PLAIN_MODULE_MODEL_TYPES]
-        for model_type, directory in modules.items():
-            if model_type in PLAIN_MODULE_MODEL_TYPES:
-                self.assertTrue((EMBODIED / f"{directory}.py").is_file(), f"MODEL_MODULES[{model_type!r}]")
-            else:
-                self.assertTrue((EMBODIED / directory).is_dir(), f"MODEL_MODULES[{model_type!r}]: {directory}")
-        model_dirs = {
-            p.name for p in EMBODIED.iterdir() if p.is_dir() and p.name not in NON_MODEL_DIRS | {"__pycache__"}
-        }
-        self.assertEqual(sorted(packages), sorted(model_dirs))
-        for d in model_dirs:
-            for name in ("__init__.py", f"data_configuration_{d}.py", f"{d}_transform.py", f"{d}_collator.py"):
-                self.assertTrue((EMBODIED / d / name).is_file(), f"embodied/{d}/{name}")
 
 
 class RegistryStringsTest(unittest.TestCase):

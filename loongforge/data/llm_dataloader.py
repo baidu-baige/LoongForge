@@ -18,12 +18,9 @@ from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 from megatron.training.training import cyclic_iter
 
 from loongforge import constants
-from loongforge.engines.mcore.parallel.chunkpipe import (
-    ChunkPipeGroupBatchSampler,
-    _bind_chunkpipe_queue_iter,
-)
+from loongforge.engines.megatron.distributed.chunkpipe import ChunkPipeGroupBatchSampler
 from .llm.sft_data_collator import DataCollatorForSupervisedDataset
-from loongforge.engines.mcore.tokenizer import AutoTokenizerFromHF
+from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +92,6 @@ class _IterableWithState:
             return batch
         except StopIteration:
             self._iterator = iter(self.dataloader)
-            # self.step = 0
             batch = next(self._iterator)
             self.step += 1
             return batch
@@ -220,11 +216,7 @@ def _build_cyclic_iterator(
         base_iter = iter(cyclic_iter(dataloader))
 
     if args.enable_chunkpipe and not args.sft_data_streaming:
-        base_iter = _bind_chunkpipe_queue_iter(
-            base_iter,
-            _batch_sampler._step_g_queue,
-            _batch_sampler._composite_queue,
-        )
+        base_iter = _batch_sampler.bind_queues(base_iter)
 
     return base_iter
 

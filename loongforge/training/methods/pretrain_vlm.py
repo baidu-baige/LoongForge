@@ -28,13 +28,11 @@ from torch.utils.data import DataLoader
 from transformers import DataCollatorForSeq2Seq
 
 from loongforge import constants
-from loongforge.engines.mcore import get_args, get_chat_template, get_model_config, get_tokenizer
-from loongforge.engines.mcore.initialize import get_num_micro_batches_per_decoder_dp
+from loongforge.engines.megatron import get_args, get_chat_template, get_model_config, get_tokenizer
+from loongforge.engines.megatron.initialize import get_num_micro_batches_per_decoder_dp
 
-# from loongforge.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
-from loongforge.engines.mcore.training_utils import dump_model_input_example_once
+from loongforge.engines.megatron.train_step import dump_model_input_example_once
+from loongforge.training.megatron_runner import pretrain
 from loongforge.data.llm_dataloader import (
     build_sft_data_collator,
     build_sft_cyclic_iterators,
@@ -52,9 +50,10 @@ from datasets import load_from_disk
 from loongforge.models.multimodal.multimodal_model_provider import (
     omni_model_provider,
 )
-from loongforge.engines.mcore.parallel.context_parallel import get_batch_on_this_cp_rank
-from loongforge.engines.mcore.parallel.loss_reduction import default_loss_func
-from loongforge.engines.mcore.initialize import (
+from loongforge.engines.megatron.distributed import hetero_dp
+from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
+from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
+from loongforge.engines.megatron.initialize import (
     change_parallel_state,
     get_encoder_dp_size,
     is_mock_microbatch,
@@ -206,107 +205,18 @@ batch_list = []
 forward_step_calling_count = 0
 _vpp0_batch_cache = []   # cached batch_list per forward_group_id from vp_stage=0
 _vpp_counters = {}       # counter for higher vpp chunks
-embedding_list = []
-grad_list = []
-visual_pos_masks_list = []
-deepstack_visual_embeds_list = []
-deepstack_grad_list = []
-
-_cpu_offload_manager = None
-_encoder_data_iterator = None
 
 
-def get_cpu_offload_manager():
-    """Return the global CpuOffloadManager singleton (lazy-initialized)."""
-    global _cpu_offload_manager
-    if _cpu_offload_manager is None:
-        from loongforge.engines.mcore.full_hetero_cpu_offload import CpuOffloadManager
-
-        args = get_args()
-        _cpu_offload_manager = CpuOffloadManager(
-            enabled=args.full_hetero_dp_cpu_offload
-        )
-    return _cpu_offload_manager
-
-def get_encoder_data_iterator():
-    """Return the encoder data iterator for full_hetero_dp mode."""
-    return _encoder_data_iterator
-
-def set_encoder_data_iterator(iterator):
-    """Set the encoder data iterator for full_hetero_dp mode."""
-    global _encoder_data_iterator
-    _encoder_data_iterator = iterator
-
-def get_embedding_list():
-    """Return the global embedding list."""
-    return embedding_list
-
-def clear_embedding_list():
-    """Clear the global embedding list."""
-    embedding_list.clear()
-
-def get_grad_list():
-    """Return the global gradient list."""
-    return grad_list
-
-def clear_grad_list():
-    """Clear the global gradient list."""
-    grad_list.clear()
-
-def get_visual_pos_masks_list():
-    """Return the global visual position masks list."""
-    return visual_pos_masks_list
-
-def clear_visual_pos_masks_list():
-    """Clear the global visual position masks list."""
-    visual_pos_masks_list.clear()
-
-def get_deepstack_visual_embeds_list():
-    """Return the global deepstack visual embeddings list."""
-    return deepstack_visual_embeds_list
-
-def clear_deepstack_visual_embeds_list():
-    """Clear the global deepstack visual embeddings list."""
-    deepstack_visual_embeds_list.clear()
-
-def get_deepstack_grad_list():
-    """Return the global deepstack gradient list."""
-    return deepstack_grad_list
-
-def clear_deepstack_grad_list():
-    """Clear the global deepstack gradient list."""
-    deepstack_grad_list.clear()
-
-def get_count_and_gbs():
-    """Return the forward step calling count and global batch size."""
-    return forward_step_calling_count, get_args().global_batch_size
-
-def clear_vpp0_batch_cache():
-    """Clear the global VPP batch cache."""
+def _reset_step_state():
+    """Reset the forward-step counter and VPP caches; full hetero DP calls this after each step."""
+    global forward_step_calling_count
+    forward_step_calling_count = 0
     _vpp0_batch_cache.clear()
-
-def clear_vpp_counters():
-    """Clear the global VPP counters."""
     _vpp_counters.clear()
 
-def set_count(count=0):
-    """Reset the forward step calling count."""
-    global forward_step_calling_count
-    forward_step_calling_count = count
 
-def clear_full_hetero_info(count=0):
-    """Clear full hetero info."""
-    set_count(count)
-    clear_embedding_list()
-    clear_grad_list()
-    clear_visual_pos_masks_list()
-    clear_deepstack_visual_embeds_list()
-    clear_deepstack_grad_list()
-    clear_vpp0_batch_cache()
-    clear_vpp_counters()
-    manager = get_cpu_offload_manager()
-    if manager.enabled:
-        manager.clear()
+hetero_dp.set_batch_fns(get_batch, _create_mock_batch, _reset_step_state)
+
 
 def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     """Forward training step.
@@ -457,10 +367,8 @@ def build_full_hetero_encoder_data_iterator(
     Uses EncoderStridedSampler to yield only microbatches assigned to this PP rank,
     avoiding unnecessary disk IO for microbatches handled by other ranks.
     """
-    from loongforge.engines.mcore.parallel.encoder_strided_sampler import EncoderStridedSampler
-
     args = get_args()
-    batch_sampler = EncoderStridedSampler(
+    batch_sampler = hetero_dp.EncoderStridedSampler(
         dataset,
         total_samples=len(dataset),
         consumed_samples=consumed_samples,
@@ -481,10 +389,9 @@ def build_full_hetero_encoder_data_iterator(
         pin_memory=True,
         persistent_workers=True if args.num_workers > 0 else False,
     )
-    from loongforge.engines.mcore.parallel.encoder_strided_sampler import PrefetchIterator
     _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
     prefetch_count = tp_size * encoder_rounds
-    return PrefetchIterator(iter(cyclic_iter(dataloader)), prefetch_count=prefetch_count)
+    return hetero_dp.PrefetchIterator(iter(cyclic_iter(dataloader)), prefetch_count=prefetch_count)
 
 
 def build_full_hetero_encoder_energon_iterator(
@@ -496,13 +403,11 @@ def build_full_hetero_encoder_energon_iterator(
     wraps it with EncoderStridedIterator to yield only microbatches assigned
     to this PP rank.
     """
-    from loongforge.engines.mcore.parallel.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
-
     args = get_args()
     encoder_dataset = get_train_dataset(task_encoder, args)
     encoder_dataloader = get_train_loader(encoder_dataset, args, collator)
 
-    strided_iter = EncoderStridedIterator(
+    strided_iter = hetero_dp.EncoderStridedIterator(
         energon_dataloader=encoder_dataloader,
         pp_rank=pp_rank,
         tp_size=tp_size,
@@ -511,12 +416,12 @@ def build_full_hetero_encoder_energon_iterator(
     )
     _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
     prefetch_count = tp_size * encoder_rounds
-    return PrefetchIterator(strided_iter, prefetch_count=prefetch_count)
+    return hetero_dp.PrefetchIterator(strided_iter, prefetch_count=prefetch_count)
 
 
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None):
     """Provides the datasets used by the trainer"""
-    import loongforge.engines.mcore.parallel.dp_balance.patches  # noqa: F401
+    import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
     tokenizer = get_tokenizer()
@@ -533,7 +438,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
 
         # Build encoder-specific iterator for full_hetero_dp
         if getattr(args, 'enable_full_hetero_dp', False):
-            from loongforge.engines.mcore.initialize import (
+            from loongforge.engines.megatron.initialize import (
                 get_model_size, get_num_real_micro_batches_per_decoder_dp,
             )
             pp_rank = mpu.get_pipeline_model_parallel_rank()
@@ -545,7 +450,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
                 pp_rank=pp_rank, tp_size=tp_size, model_size=model_size,
                 num_real_microbatch=num_real_microbatch,
             )
-            set_encoder_data_iterator(encoder_iter)
+            hetero_dp.set_encoder_data_iterator(encoder_iter)
 
         return train_data_iterator, None, None
 
@@ -573,7 +478,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
 
         # Build encoder-specific iterator for full_hetero_dp (Energon path)
         if getattr(args, 'enable_full_hetero_dp', False):
-            from loongforge.engines.mcore.initialize import (
+            from loongforge.engines.megatron.initialize import (
                 get_model_size, get_num_real_micro_batches_per_decoder_dp,
             )
             pp_rank = mpu.get_pipeline_model_parallel_rank()
@@ -585,7 +490,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
                 pp_rank=pp_rank, tp_size=tp_size,
                 model_size=model_size, num_real_microbatch=num_real_microbatch,
             )
-            set_encoder_data_iterator(encoder_iter)
+            hetero_dp.set_encoder_data_iterator(encoder_iter)
 
         return train_dataloader, valid_dataloader, None
 
@@ -603,19 +508,20 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
-@register_model_trainer(
-    model_family=constants.VisionLanguageModelFamilies.names(),
-    training_phase=constants.TrainingPhase.PRETRAIN,
-)
-def default_vlm_pretrain_trainer(train_args):
-    """build trainer"""
-    trainer = MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=train_valid_test_dataset_provider,
-        model_provider=omni_model_provider,
-        model_type=ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
-        forward_step_func=forward_step,
+def model_provider(pre_process=True, post_process=True, vp_stage=None):
+    """Build the multimodal model with this run's args and model config."""
+    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage,
+                               args=get_args(), model_config=get_model_config())
+
+
+def train(args):
+    """Run VLM pretraining."""
+    train_valid_test_dataset_provider.is_distributed = True
+    pretrain(
+        args,
+        train_valid_test_dataset_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
+        forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
-
-    return trainer

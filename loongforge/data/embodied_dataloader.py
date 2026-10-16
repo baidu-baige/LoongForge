@@ -136,7 +136,6 @@ def _build_stateful_dataloader(
     training_args,
     ctx: DistributedContext,
 ) -> StatefulDataLoader:
-    """_build_stateful_dataloader."""
     seed = training_args.seed
     seed_workers = training_args.dataloader_seed_workers
     drop_last = training_args.batch_drop_last

@@ -4,7 +4,7 @@
 """LingBot-VA optimization factory.
 
 Device-side loss guard, GC suppression, nested FSDP2 wrap, DTensor-aware
-clip/clean. Returns a TorchOptimization that overrides the vanilla trainer
+clip/clean. Returns a TorchOptimization that overrides the default TorchRunner
 behavior for LingBot-specific needs.
 """
 

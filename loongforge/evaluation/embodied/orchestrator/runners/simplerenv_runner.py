@@ -35,7 +35,6 @@ def _ensure_vulkan_runtime(args: argparse.Namespace) -> None:
 
 
 def _build_env(args: argparse.Namespace, adapter: SimplerEnvAdapter) -> Tuple[Any, str]:
-    """Run _build_env."""
     import simpler_env
     from simpler_env.utils.env.env_builder import build_maniskill2_env
 
@@ -77,7 +76,6 @@ def _build_env(args: argparse.Namespace, adapter: SimplerEnvAdapter) -> Tuple[An
 
 
 def _reset_env(env: Any, args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Run _reset_env."""
     # Prepackaged (official) path: reset with only a per-episode seed and let the
     # env randomize overlay + robot/object init itself (do NOT pin robot_init).
     if getattr(args, "prepackaged_config", False):
@@ -102,7 +100,6 @@ def _reset_env(env: Any, args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict
 
 
 def _get_instruction(env: Any, fallback: str) -> str:
-    """Run _get_instruction."""
     if hasattr(env, "get_language_instruction"):
         return str(env.get_language_instruction())
     unwrapped = getattr(env, "unwrapped", None)
@@ -112,7 +109,6 @@ def _get_instruction(env: Any, fallback: str) -> str:
 
 
 def _save_replay(frames: List[np.ndarray], output_dir: str, task_name: str, episode_idx: int, success: bool) -> str:
-    """Run _save_replay."""
     if not frames:
         raise ValueError("Cannot save replay with no frames")
     status = "success" if success else "fail"
@@ -121,19 +117,16 @@ def _save_replay(frames: List[np.ndarray], output_dir: str, task_name: str, epis
 
 
 def _save_trace(trace: List[Dict[str, Any]], output_dir: str, task_name: str, episode_idx: int, success: bool) -> str:
-    """Run _save_trace."""
     status = "success" if success else "fail"
     artifact_dir = pathlib.Path(output_dir) / "artifacts" / "simplerenv" / task_name
     return _common.write_trace_json(trace, artifact_dir / f"ep{episode_idx}_{status}_trace.json")
 
 
 def _append_replay_frame(adapter: SimplerEnvAdapter, obs: Dict[str, Any], frames: List[np.ndarray]) -> None:
-    """Run _append_replay_frame."""
     frames.append(np.asarray(obs["image"][adapter.camera_name]["rgb"]))
 
 
 def _ensemble_action(action_history: deque[np.ndarray], current_actions: np.ndarray, alpha: float) -> np.ndarray:
-    """Run _ensemble_action."""
     action_history.append(current_actions)
     num_actions = len(action_history)
     current_predictions = np.stack(
@@ -150,12 +143,10 @@ def _ensemble_action(action_history: deque[np.ndarray], current_actions: np.ndar
 
 
 def _json_safe(value: Any) -> Any:
-    """Run _json_safe."""
     return _common.json_safe(value)
 
 
 def _write_standard_outputs(output_dir: str, record: Dict[str, Any]) -> None:
-    """Run _write_standard_outputs."""
     out_dir = pathlib.Path(output_dir)
     safe_record = _json_safe(record)
     append_jsonl(out_dir / "results.jsonl", safe_record)
@@ -164,7 +155,6 @@ def _write_standard_outputs(output_dir: str, record: Dict[str, Any]) -> None:
 
 
 def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
-    """Run run_evaluation."""
     _ensure_vulkan_runtime(args)
     np.random.seed(args.seed)
 
@@ -314,7 +304,6 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
 
 
 def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.Namespace:
-    """Run _apply_config."""
     benchmark = config.get("benchmark") or {}
     server = config.get("server") or {}
     run = config.get("run") or {}
@@ -367,7 +356,6 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="")
     parser.add_argument("--host", default="127.0.0.1")
@@ -413,7 +401,6 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run main."""
     args = build_argparser().parse_args()
     if args.config:
         args = _apply_config(args, load_config(args.config))

@@ -1603,7 +1603,6 @@ class HashBucketProcessor:
                         self.key_stats[k] = len(self.hash_buckets[k])
                         
             def get_seed_item(self, seed_key: int) -> Tuple[bool, Optional[np.record]]:
-                """Get seed item"""
                 with self.lock:
                     if (seed_key in self.hash_buckets and 
                         len(self.hash_buckets[seed_key]) > 0):
@@ -2264,7 +2263,6 @@ class PackingTracker:
 
 
 def analyze_packing_history(tracker):
-    """Analyze packing history"""
     print("\n=== Detailed Analysis ===")
     
     total_boxes = sum(op['boxes_count'] for op in tracker.history)

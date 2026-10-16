@@ -202,7 +202,7 @@ EMBODIMENT_TAG=oxe_droid \
 
 GPUS_PER_NODE=8 TRAIN_ITERS=20 SAVE_INTERVAL=20 \
 OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
-  bash examples/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
+  bash examples/dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh
 ```
 
 The example runs 20 steps and saves outputs under `OUTPUT_DIR`.
@@ -252,7 +252,7 @@ Click any model for its training examples. See the [User Guide](https://loongfor
 <li><a href="examples/qwen3.5/">Qwen3.5</a> ✅</li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a> ✅</li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
-<li><a href="examples/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
+<li><a href="examples/kimi_k2.x/">Kimi-K2.5/2.6</a> ✅</li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
@@ -311,8 +311,8 @@ LoongForge/
 │   ├── train.py                  # Unified training dispatcher
 │   ├── training/                 # Runners and per-model training methods
 │   ├── engines/                  # Training runtimes selected by train.py
-│   │   ├── mcore/                #   LLM/VLM/Diffusion runtime
-│   │   │   └── tokenizer/        #   MCore tokenizer implementation
+│   │   ├── megatron/             #   LLM/VLM/Diffusion runtime
+│   │   │   └── tokenizer/        #   Megatron tokenizer implementation
 │   │   └── torch/                #   Embodied Torch-native runtime
 │   ├── models/                   # Unified model abstractions
 │   │   ├── catalog.py            # Model names, engines, default YAMLs

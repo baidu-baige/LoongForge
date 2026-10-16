@@ -24,7 +24,6 @@ SUPPORTED_ACTION_MODES = {"abs", "delta", "rel"}
 
 
 def _as_flat_float_array(value: Any, name: str) -> np.ndarray:
-    """Run _as_flat_float_array."""
     array = np.asarray(value, dtype=np.float32).reshape(-1)
     if array.size != ROBOTWIN_ACTION_DIM:
         raise ValueError(f"RoboTwin {name} must be {ROBOTWIN_ACTION_DIM}D, got shape {array.shape}")
@@ -44,7 +43,6 @@ class RoboTwinAdapter(BaseBenchmarkAdapter):
         action_mode: str = "abs",
         reorder_action: bool = True,
     ) -> None:
-        """Run __init__."""
         if action_mode not in SUPPORTED_ACTION_MODES:
             raise ValueError(f"action_mode must be one of {sorted(SUPPORTED_ACTION_MODES)}, got {action_mode!r}")
         self.task_name = task_name
@@ -56,7 +54,6 @@ class RoboTwinAdapter(BaseBenchmarkAdapter):
         self.reorder_action = reorder_action
 
     def obs_to_canonical(self, env_obs: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
-        """Run obs_to_canonical."""
         observation = env_obs["observation"]
         head = np.ascontiguousarray(observation["head_camera"]["rgb"])
         left = np.ascontiguousarray(observation["left_camera"]["rgb"])
@@ -108,7 +105,6 @@ class RoboTwinAdapter(BaseBenchmarkAdapter):
         }
 
     def action_from_canonical(self, canonical_action: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Any:
-        """Run action_from_canonical."""
         if "actions" in canonical_action:
             action = _as_flat_float_array(canonical_action["actions"], "action")
         elif "left" in canonical_action and "right" in canonical_action:
@@ -132,10 +128,7 @@ class RoboTwinAdapter(BaseBenchmarkAdapter):
 
     @staticmethod
     def _action_from_bimanual_fields(canonical_action: Dict[str, Any]) -> np.ndarray:
-        """Run _action_from_bimanual_fields."""
-
         def arm_to_7d(arm: Dict[str, Any], name: str) -> np.ndarray:
-            """Run arm_to_7d."""
             world_vector = np.asarray(arm["world_vector"], dtype=np.float32).reshape(-1)
             rotation_delta = np.asarray(arm["rotation_delta"], dtype=np.float32).reshape(-1)
             gripper = np.asarray([arm["gripper"]], dtype=np.float32)
@@ -150,7 +143,6 @@ class RoboTwinAdapter(BaseBenchmarkAdapter):
         return np.concatenate([left, right], axis=0).astype(np.float32)
 
     def get_eval_context(self) -> Dict[str, Any]:
-        """Run get_eval_context."""
         return {
             "benchmark": "robotwin",
             "robot_setup": self.robot_setup,

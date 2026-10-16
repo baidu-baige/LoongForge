@@ -6,31 +6,27 @@
 import torch
 from megatron.core.transformer.spec_utils import import_module
 
-from loongforge.models.mcore_registry import register_model_provider
-from loongforge.engines.mcore import build_transformer_config, print_rank_0
-from loongforge.constants import CustomModelFamilies
+from megatron.training.arguments import core_transformer_config_from_args
+from megatron.training.utils import print_rank_0
 
 from .qwen_image_config import QwenImageConfig
 from .qwen_image_layer_spec import get_qwen_image_layer_with_te_spec
 from .qwen_image_model import QwenImageModel
 
 
-@register_model_provider(model_family=[CustomModelFamilies.QWEN_IMAGE])
 def qwen_image_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: int = None,
-    args=None,
+    *,
+    args,
 ) -> QwenImageModel:
-    """Build and return the Qwen-Image DiT model wired for Megatron FSDP + TP."""
-    if args is None:
-        from loongforge.engines.mcore import get_args
-        args = get_args()
+    """Build and return the Qwen-Image DiT model wired for Megatron FSDP + TP from the run's training args."""
     if args.context_parallel_size != 1:
         raise AssertionError("Qwen-Image provider uses FSDP + TP; set CP to 1.")
     print_rank_0(f"building {args.model_name} model ...")
-    config = build_transformer_config(args, config_class=QwenImageConfig)
+    config = core_transformer_config_from_args(args, config_class=QwenImageConfig)
     config.pipeline_dtype = torch.float32
     config.normalization = "LayerNorm"
     config.num_query_groups = config.num_attention_heads

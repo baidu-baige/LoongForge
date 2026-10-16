@@ -41,7 +41,6 @@ from loongforge.evaluation.embodied.orchestrator.runners.robotwin_runner import 
 
 
 def fake_robotwin_obs() -> dict:
-    """Run fake_robotwin_obs."""
     return {
         "observation": {
             "head_camera": {"rgb": np.full((2, 3, 3), 10, dtype=np.uint8)},
@@ -53,7 +52,6 @@ def fake_robotwin_obs() -> dict:
 
 
 def test_robotwin_obs_to_canonical_extracts_three_cameras_and_joint_state() -> None:
-    """Run test_robotwin_obs_to_canonical_extracts_three_cameras_and_joint_state."""
     adapter = RoboTwinAdapter(task_name="pick_object")
 
     canonical = adapter.obs_to_canonical(
@@ -72,7 +70,6 @@ def test_robotwin_obs_to_canonical_extracts_three_cameras_and_joint_state() -> N
 
 
 def test_robotwin_action_from_flat_array_reorders_for_env_step() -> None:
-    """Run test_robotwin_action_from_flat_array_reorders_for_env_step."""
     adapter = RoboTwinAdapter()
     raw_action = np.arange(14, dtype=np.float32)
 
@@ -83,7 +80,6 @@ def test_robotwin_action_from_flat_array_reorders_for_env_step() -> None:
 
 
 def test_robotwin_delta_action_adds_current_joint_before_reorder() -> None:
-    """Run test_robotwin_delta_action_adds_current_joint_before_reorder."""
     adapter = RoboTwinAdapter(action_mode="delta")
     current_joint = np.arange(14, dtype=np.float32)
     delta = np.ones(14, dtype=np.float32)
@@ -94,7 +90,6 @@ def test_robotwin_delta_action_adds_current_joint_before_reorder() -> None:
 
 
 def test_robotwin_action_from_bimanual_fields() -> None:
-    """Run test_robotwin_action_from_bimanual_fields."""
     adapter = RoboTwinAdapter(reorder_action=False)
     canonical_action = {
         "left": {"world_vector": [0, 1, 2], "rotation_delta": [3, 4, 5], "gripper": 6},
@@ -107,7 +102,6 @@ def test_robotwin_action_from_bimanual_fields() -> None:
 
 
 def test_robotwin_rejects_invalid_action_shape() -> None:
-    """Run test_robotwin_rejects_invalid_action_shape."""
     adapter = RoboTwinAdapter()
 
     with pytest.raises(ValueError, match="14D"):
@@ -115,7 +109,6 @@ def test_robotwin_rejects_invalid_action_shape() -> None:
 
 
 def test_robotwin_eval_context_marks_script_success_oracle() -> None:
-    """Run test_robotwin_eval_context_marks_script_success_oracle."""
     context = RoboTwinAdapter(task_name="pick_object", action_mode="abs").get_eval_context()
 
     assert context["benchmark"] == "robotwin"
@@ -165,7 +158,6 @@ def test_ee6d_action_to_env_is_16d() -> None:
 
 
 def test_robotwin_runner_writes_vla_eval_policy_config(tmp_path: pathlib.Path) -> None:
-    """Run test_robotwin_runner_writes_vla_eval_policy_config."""
     args = argparse.Namespace(
         policy_ckpt_path="/ckpts/model.pt",
         task_name="adjust_bottle",
@@ -203,7 +195,6 @@ def test_robotwin_runner_writes_vla_eval_policy_config(tmp_path: pathlib.Path) -
 
 
 def test_robotwin_policy_writes_trace_file(tmp_path: pathlib.Path) -> None:
-    """Run test_robotwin_policy_writes_trace_file."""
     client = ModelClient.__new__(ModelClient)
     client.trace_path = tmp_path / "trace.json"
     client.trace_records = []
@@ -230,7 +221,6 @@ def test_robotwin_policy_writes_trace_file(tmp_path: pathlib.Path) -> None:
 
 
 def test_robotwin_runner_builds_eval_policy_command() -> None:
-    """Run test_robotwin_runner_builds_eval_policy_command."""
     args = argparse.Namespace(
         robotwin_python="/envs/robotwin/bin/python",
         robotwin_path="/workspace/RoboTwin",
@@ -250,7 +240,6 @@ def test_robotwin_runner_builds_eval_policy_command() -> None:
 
 
 def test_robotwin_step_limit_override_round_trip(tmp_path: pathlib.Path) -> None:
-    """Run test_robotwin_step_limit_override_round_trip."""
     robotwin_path = tmp_path / "RoboTwin"
     config_dir = robotwin_path / "task_config"
     config_dir.mkdir(parents=True)
@@ -266,7 +255,6 @@ def test_robotwin_step_limit_override_round_trip(tmp_path: pathlib.Path) -> None
 
 
 def test_robotwin_eval_policy_override_round_trip(tmp_path: pathlib.Path) -> None:
-    """Run test_robotwin_eval_policy_override_round_trip."""
     robotwin_path = tmp_path / "RoboTwin"
     script_dir = robotwin_path / "script"
     script_dir.mkdir(parents=True)

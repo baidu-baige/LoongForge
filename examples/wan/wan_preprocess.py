@@ -195,7 +195,6 @@ def preprocess(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """build parser"""
     p = argparse.ArgumentParser(
         description="Wan2.2-I2V offline preprocessing: encode dataset samples into .pth cache files."
     )
@@ -219,7 +218,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main():
-    """main"""
     args = build_parser().parse_args()
 
     accelerator = Accelerator()

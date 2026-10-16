@@ -34,7 +34,7 @@ from megatron.core.transformer.spec_utils import build_module
 from loongforge.models.common import BaseMegatronVisionModule
 from loongforge.models.common.layer_dispatch import multiacc_modules
 from loongforge.models.vision.vision_transformer_block import TransformerBlock
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 
 from .minicpm_v_4_6_config import MiniCPMV46VisionConfig
 from .minicpm_v_4_6_layer_spec import MiniCPMV46TEDotProductAttention

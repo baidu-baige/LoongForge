@@ -30,8 +30,6 @@ from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.transformer_config import TransformerConfig
 
-from loongforge.engines.mcore import get_model_config
-
 from loongforge.models.vision.base_vision_model import (
     BaseVisionModel,
     PatchEmbed
@@ -48,7 +46,8 @@ class Qwen3VisionModel(BaseVisionModel):
     def __init__(self,
         config: TransformerConfig,
         vp_stage: Optional[int] = None,
-        model_config=None,
+        *,
+        model_config,
     ) -> None:
         super().__init__(config, vp_stage=vp_stage)
         self.patch_embed = PatchEmbed(
@@ -66,9 +65,7 @@ class Qwen3VisionModel(BaseVisionModel):
         else:
             self.deepstack_visual_indexes = [8, 16, 24]  # Default Qwen3-VL layers
 
-        # Create deepstack_merger_list in vision_model
-        if model_config is None:
-            model_config = get_model_config()
+        # Create deepstack_merger_list in vision_model; model_config is the full multimodal config.
         self.deepstack_merger_list = torch.nn.ModuleList(
             [
                 Adapter(

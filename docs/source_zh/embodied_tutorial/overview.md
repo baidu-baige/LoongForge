@@ -27,9 +27,9 @@ loongforge/train.py
     ↓
 parse_train_args()
     ↓
-build_model_trainer()
+resolve_torch_trainer()
     ↓
-trainer.train()
+TorchRunner(...).train()
 ```
 
 ### 1.2 启动脚本约定
@@ -304,7 +304,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `trainer_builder.py` 中注册的 Trainer 类名。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `trainer_builder.py` 中注册自定义 Trainer 类。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/training/registry.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应一个训练 method 模块和一个可选的单模型 optimization 包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `loongforge/training/methods/` 下新增 method 模块，并登记到 `TORCH_TRAINER_TYPES`。
 
 ### 4.2 分布式策略
 

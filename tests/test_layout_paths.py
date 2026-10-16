@@ -22,7 +22,7 @@ class LayoutPathsTest(unittest.TestCase):
             module_from_spec=Mock(return_value=module),
         )
         namespace = _load_functions(
-            "tools/embodied_data_preprocess/dreamzero/cache_precompute/features.py",
+            "examples/dreamzero/cache_precompute/features.py",
             {"_load_vae_module"},
             {"_REPO_ROOT": REPO_ROOT, "importlib": SimpleNamespace(util=util)},
         )

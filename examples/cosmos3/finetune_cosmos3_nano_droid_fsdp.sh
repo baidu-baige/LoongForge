@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_cosmos3_nano_droid_fsdp_finetune.sh - Cosmos3-Nano DROID Action-Policy SFT (FSDP2)
+# finetune_cosmos3_nano_droid_fsdp.sh - Cosmos3-Nano DROID Action-Policy SFT (FSDP2)
 #
 # DROID joint_pos 8D + use_state action policy SFT, mirroring cosmos's
 # launch_sft_action_policy_droid.sh recipe.
 #
 # Usage:
-#   bash run_cosmos3_nano_droid_fsdp_finetune.sh
-#   TRAIN_ITERS=50 bash run_cosmos3_nano_droid_fsdp_finetune.sh    # override via env
-#   bash run_cosmos3_nano_droid_fsdp_finetune.sh --train-iters 50  # override a training param (flag form)
+#   bash finetune_cosmos3_nano_droid_fsdp.sh
+#   TRAIN_ITERS=50 bash finetune_cosmos3_nano_droid_fsdp.sh    # override via env
+#   bash finetune_cosmos3_nano_droid_fsdp.sh --train-iters 50  # override a training param (flag form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

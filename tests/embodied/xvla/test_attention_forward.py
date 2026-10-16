@@ -4,7 +4,7 @@
 """Forward unit tests for the XVLA attention modules.
 
 The test *samples* (module constructor args + input tensor shape/dtype/device
-and per-call scalar args) were captured from a real ``run_xvla_ddp.sh`` step by
+and per-call scalar args) were captured from a real ``finetune_xvla_ddp.sh`` step by
 hooking the first invocation of each target forward:
 
   * ``ChannelAttention``        (modeling_florence2.py — DaViT channel attention)
@@ -44,7 +44,7 @@ from loongforge.models.embodied.xvla.transformer import Attention as ActionAtten
 
 
 # --------------------------------------------------------------------------- #
-# Samples captured from a real run_xvla_ddp.sh step (per-device-batch-size=36,
+# Samples captured from a real finetune_xvla_ddp.sh step (per-device-batch-size=36,
 # 3 image views -> 108 vision rows; bf16 autocast -> fp32 module inputs).
 # --------------------------------------------------------------------------- #
 CAPTURED = {

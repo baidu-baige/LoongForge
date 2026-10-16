@@ -28,9 +28,8 @@ import logging
 import math
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
@@ -218,23 +217,6 @@ def resize_with_pad_torch(
     if channels_last:
         padded_images = padded_images.permute(0, 2, 3, 1)
     return padded_images
-
-
-def _q99_unnormalize_actions(actions: torch.Tensor, action_stats: Optional[dict]) -> torch.Tensor:
-    """Unnormalize PI05 quantile-normalized actions with dataset action stats."""
-    if action_stats is None:
-        return actions
-    if "q01" not in action_stats or "q99" not in action_stats:
-        raise ValueError(
-            "PI05 is configured for quantile action unnormalization and requires "
-            "dataset_stats['action'].q01 and q99"
-        )
-    q01 = torch.as_tensor(action_stats["q01"], dtype=actions.dtype, device=actions.device)
-    q99 = torch.as_tensor(action_stats["q99"], dtype=actions.dtype, device=actions.device)
-    dim = min(actions.shape[-1], q01.shape[-1])
-    out = actions.clone()
-    out[..., :dim] = (out[..., :dim] + 1.0) / 2.0 * (q99[:dim] - q01[:dim]) + q01[:dim]
-    return out
 
 
 def build_tokenizer(tokenizer_name: str, local_files_only: bool = True):
@@ -1047,61 +1029,6 @@ class PI05Policy(nn.Module):
     def select_action(self, batch, **kwargs) -> torch.Tensor:
         """Select the first action from a predicted action chunk."""
         return self.predict_action_chunk(batch, **kwargs)[:, 0]
-
-    @torch.no_grad()
-    def predict_action(self, images, instructions, state=None, dataset_stats=None) -> np.ndarray:
-        """Inference: Euler ODE denoising, returns ndarray (B, action_horizon, max_action_dim)."""
-        from loongforge.data.embodied.pi05.pi05_collator import tokenize_prompts
-        from loongforge.data.embodied.pi05.pi05_transform import StateDiscretizationTransform
-        from loongforge.data.embodied.transforms.builders import convert_stats
-        from loongforge.data.embodied.transforms.image_transform import ImageTransform
-
-        device = next(self.parameters()).device
-        if not isinstance(images[0], list):
-            images = [[img] for img in images]
-        B = len(images)
-        image_transform = ImageTransform(apply_to=[], image_size=self._image_size)
-        # Use the number of views provided by the eval client so LIBERO (2) and
-        # RoboTwin (3) both work without hard-coding a single camera count.
-        num_images = max(len(images[0]), 1)
-
-        images_list, img_masks = [], []
-        for v in range(num_images):
-            view = []
-            mask_vals = []
-            for im_list in images:
-                if v < len(im_list):
-                    view.append(im_list[v])
-                    mask_vals.append(True)
-                else:
-                    view.append(torch.zeros(3, self._image_size, self._image_size))
-                    mask_vals.append(False)
-            images_list.append(image_transform.process_batch(view).to(device))
-            img_masks.append(torch.tensor(mask_vals, dtype=torch.bool, device=device))
-
-        if state is not None:
-            if not isinstance(state, torch.Tensor):
-                state = torch.as_tensor(state, dtype=torch.float32)
-            if state.dim() == 1:
-                state = state.unsqueeze(0)
-            state_stats = convert_stats(dataset_stats.get("observation.state")) if dataset_stats else None
-            state_transform = StateDiscretizationTransform(
-                apply_to=["prompt"], state_key="observation.state", task_key="task",
-                num_bins=256, normalization_mode="q99", statistics=state_stats,
-            )
-            prompts = [state_transform.apply({"observation.state": state[i], "task": instructions[i]})["prompt"]
-                       for i in range(B)]
-        else:
-            prompts = [f"Task: {t.strip()};\nAction: " for t in instructions]
-
-        tok = tokenize_prompts(prompts, self.tokenizer, max_length=200)
-        tokens = tok["input_ids"].to(device)
-        masks = tok["attention_mask"].bool().to(device)
-
-        actions = self.model.sample_actions(images_list, img_masks, tokens, masks)
-        action_stats = convert_stats(dataset_stats.get("action")) if dataset_stats else None
-        actions = _q99_unnormalize_actions(actions, action_stats)
-        return actions.cpu().numpy()
 
     @staticmethod
     def default_fp8_targets() -> Dict[str, Any]:

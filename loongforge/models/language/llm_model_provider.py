@@ -11,9 +11,7 @@ from typing import Optional
 from contextlib import nullcontext
 from transformers import AutoModel
 
-from loongforge.engines.mcore import (
-    print_rank_0
-)
+from megatron.training.utils import print_rank_0
 from loongforge.models.common import BaseMegatronLanguageModule
 
 
@@ -22,8 +20,9 @@ def llm_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
-    args=None,
-    config=None,
+    *,
+    args,
+    config,
 ):
     """Generic LLM model provider.
     
@@ -31,17 +30,12 @@ def llm_model_provider(
         pre_process (bool, optional): Set to true if you need to compute embedings. Defaults to True.
         post_process (bool, optional): Set to true if you need to want to compute output logits/loss. Defaults to True.
         parallel_output (bool): whether to allgather the output logits. Defaults to True.
+        args: Training args of the run.
+        config: Model config of the run.
     
     Returns:
         The corresponding LLM model.
     """
-    if args is None:
-        from loongforge.engines.mcore import get_args
-        args = get_args()
-    if config is None:
-        from loongforge.engines.mcore import get_model_config
-        config = get_model_config()
-
     print_rank_0(f"Building {config.model_type} model...")
 
     if args.use_legacy_models:

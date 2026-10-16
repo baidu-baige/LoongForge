@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Ernie_pos_embedding"""
-
 import torch
 from torch import Tensor, nn
 from megatron.core.transformer.transformer_config import TransformerConfig

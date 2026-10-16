@@ -31,7 +31,7 @@ from loongforge.constants import IGNORE_INDEX
 from .base import ChatTemplate
 
 if TYPE_CHECKING:
-    from loongforge.engines.mcore.tokenizer import AutoTokenizerFromHF
+    from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
 
 logger = logging.getLogger(__name__)
 

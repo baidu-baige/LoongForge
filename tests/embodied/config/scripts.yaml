@@ -1,5 +1,5 @@
 # Embodied regression script manifest: <name>: <script path relative to examples/>
-# - The name must match tests/baseline/embodied/<chip>/<name>.json
+# - The name must match tests/embodied/baseline/<chip>/<name>.json
 # - The name encodes the parallel strategy suffix: ddp / fsdp / ddp_zero1
 # - tests/embodied/cli.py executes the scripts serially in the order of this file
 

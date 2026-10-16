@@ -13,23 +13,23 @@ from megatron.core.utils import StragglerDetector
 
 from megatron.training import get_timers
 
-from loongforge.engines.mcore import get_args, print_rank_0
-from loongforge.constants import TrainingPhase, CustomModelFamilies
+from megatron.training.utils import print_rank_0
+from loongforge.engines.megatron import get_args
+from loongforge.constants import CustomModelFamilies
 
 from loongforge.data.diffusion_dataloader import (
     build_latent_dataloader,
     build_packed_dataloader,
 )
 from loongforge.data.diffusion.packed_dataset import (
-    _patchify_for_conv3d,
-    _patchify_latent,
+    patchify_for_conv3d,
+    patchify_latent,
 )
 
 from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
+from loongforge.training.megatron_runner import pretrain
 from megatron.core import parallel_state
 import numpy as np
 
@@ -75,7 +75,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     args.max_position_embeddings = args.seq_length
 
     if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
-        return wan_i2v_model_provider(pre_process, post_process, vp_stage)
+        return wan_i2v_model_provider(pre_process, post_process, args=args)
 
     raise ValueError(f"Unsupported WAN model: {args.model_name}")
 
@@ -99,7 +99,6 @@ def gen_time_steps(batch):
         - training_target (torch.Tensor): Training target, same shape as input.
 
     """
-    # torch.manual_seed(10086)
     args = get_args()
     if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
         latents = batch.pop("input_latents")
@@ -290,8 +289,8 @@ def get_batch(data_iterator):
                 else:
                     noisy_latents_with_y = noisy_latents_without_y
 
-                latent_patched = _patchify_for_conv3d(noisy_latents_with_y, WAN_PATCH_SIZE)
-                target_patched = _patchify_latent(training_target_raw, WAN_PATCH_SIZE)
+                latent_patched = patchify_for_conv3d(noisy_latents_with_y, WAN_PATCH_SIZE)
+                target_patched = patchify_latent(training_target_raw, WAN_PATCH_SIZE)
                 padded_len = seq_len_q_padded[sample_index].item()
                 pad_q = int(padded_len - latent_patched.shape[0])
                 if pad_q > 0:
@@ -308,7 +307,7 @@ def get_batch(data_iterator):
             batch["timestep"] = timestep
 
     if not use_packing and should_broadcast_batch:
-        batch = broadcast_on_cp_group(batch)
+        batch = broadcast_on_cp_group(batch, args)
 
     if batch is None:
         return None, None, None, None, None, None, None, None, None, None, None
@@ -494,21 +493,15 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
     return iter(dataloader), None, None
 
 
-# Set random number seed
-@register_model_trainer(
-    model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN
-)
-def default_pretrain_trainer(train_args):
-    """build trainer"""
+def train(args):
+    """Run Wan pretraining."""
     diffusion = gaussian_diffusion()
-    trainer = MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=partial(
-            train_valid_test_datasets_provider, diffusion
-        ),
-        model_provider=model_provider,
-        model_type=ModelType.encoder_or_decoder,
-        forward_step_func=partial(forward_step, diffusion),
+    datasets_provider = partial(train_valid_test_datasets_provider, diffusion)
+    datasets_provider.is_distributed = True
+    pretrain(
+        args,
+        datasets_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,
+        partial(forward_step, diffusion),
     )
-
-    return trainer

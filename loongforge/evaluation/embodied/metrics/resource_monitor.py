@@ -15,7 +15,6 @@ from .report import collect_resource_snapshot
 
 
 def sample_resources(output_path: str | Path, interval_sec: float = 5.0, duration_sec: float = 60.0) -> Dict[str, Any]:
-    """Run sample_resources."""
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     start = time.time()
@@ -34,7 +33,6 @@ def sample_resources(output_path: str | Path, interval_sec: float = 5.0, duratio
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--interval-sec", type=float, default=5.0)
@@ -43,7 +41,6 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run main."""
     args = build_argparser().parse_args()
     result = sample_resources(args.output, interval_sec=args.interval_sec, duration_sec=args.duration_sec)
     print(json.dumps(result, ensure_ascii=False, indent=2))

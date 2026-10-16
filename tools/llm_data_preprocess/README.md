@@ -124,7 +124,7 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
 ### Supported chat templates
 
 `--chat-template` accepts any template registered in
-`loongforge/data/chat_template.py`, including `llama2` / `llama3` / `llama3.1`,
+`loongforge/chat_templates/registry.py`, including `llama2` / `llama3` / `llama3.1`,
 `qwen` / `qwen2.5-hf` / `qwen3-hf`, `deepseek` / `deepseek3` / `deepseek4`,
 `glm5`, `minimax-m2`, `mistral`, `alpaca`, and more. Run the script with
 `--help` (its `choices` list is the authoritative set) to see everything

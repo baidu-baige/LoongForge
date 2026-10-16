@@ -10,8 +10,6 @@ from functools import cached_property
 
 @dataclass
 class MultiAccModules:
-    """MultiAccModules"""
-
     # dense linear impl
     TELayerNormColumnParallelLinear: Any = None
     TEColumnParallelLinear: Any = None

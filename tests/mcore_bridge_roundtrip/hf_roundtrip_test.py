@@ -49,6 +49,7 @@ import sys
 import json
 from pathlib import Path
 import logging
+from functools import partial
 logging.basicConfig(level=logging.WARNING)
 
 # Add project root and tools to Python path.
@@ -67,11 +68,11 @@ from megatron.core.enums import ModelType
 from megatron.training.training import get_model
 from megatron.training import print_rank_0
 
-from loongforge.engines.mcore.parser import parse_train_args
-from loongforge.engines.mcore.initialize import initialize_loongforge_megatron
+from loongforge.engines.megatron.parser import parse_train_args
+from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
 from loongforge.models.language.llm_model_provider import llm_model_provider
 from loongforge.models.multimodal.multimodal_model_provider import omni_model_provider
-from loongforge.engines.mcore import get_model_config
+from loongforge.engines.megatron import get_model_config
 
 from mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 from mcore_bridge.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
@@ -407,9 +408,10 @@ def main():
             is_vlm = False
             break
     if is_vlm:
-        model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+        provider = partial(omni_model_provider, args=args, model_config=model_config)
     else:
-        model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+        provider = partial(llm_model_provider, args=args, config=model_config)
+    model = get_model(provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
     # ── Step 4: Load HF checkpoint (identical to training) ────────────────
     print_rank_0("=" * 80)

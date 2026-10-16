@@ -3,16 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_pi05_ddp_zero1_finetune.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
+# finetune_pi05_ddp_zero1.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
 #
 # Mirrors the config from examples/pi05/finetuning/sft_pi05.sh
 # but uses the embodied training framework (loongforge/train.py).
 #
 # Usage:
-#   bash run_pi05_ddp_zero1_finetune.sh
-#   TRAIN_ITERS=50 bash run_pi05_ddp_zero1_finetune.sh                          # override via env
-#   bash run_pi05_ddp_zero1_finetune.sh --train-iters 50000                     # override a training param (flag form)
-#   bash run_pi05_ddp_zero1_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash finetune_pi05_ddp_zero1.sh
+#   TRAIN_ITERS=50 bash finetune_pi05_ddp_zero1.sh                          # override via env
+#   bash finetune_pi05_ddp_zero1.sh --train-iters 50000                     # override a training param (flag form)
+#   bash finetune_pi05_ddp_zero1.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

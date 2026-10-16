@@ -437,7 +437,7 @@ class Wan22Core(torch.nn.Module):
         """Save DiT weights and optional optimizer state to a checkpoint path."""
         payload = {
             # `_extra_state` is dropped so the file does not depend on the RMSNorm
-            # implementation it was trained with (see `utils.state_dict`).
+            # implementation it was trained with (see `fastwam/utils/state_dict.py`).
             "dit": drop_extra_state(self.dit.state_dict()),
             "step": step,
             "torch_dtype": str(self.torch_dtype),

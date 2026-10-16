@@ -42,7 +42,6 @@ def apply_rotary_pos_emb_kimi(
     config: TransformerConfig,
     **kwargs,
 ) -> torch.Tensor:
-    """apply_rotary_pos_emb_kimi"""
     freqs = freqs.unsqueeze(-2)
     t_complex = torch.view_as_complex(t.float().view(*t.shape[:-1], -1, 2))
     t_out = torch.view_as_real(t_complex * freqs).flatten(-2)

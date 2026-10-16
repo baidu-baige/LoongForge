@@ -139,7 +139,6 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         }
 
     def action_from_canonical(self, canonical_action: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Any:
-        """Run action_from_canonical."""
         if "world_vector" in canonical_action:
             world_vector = np.asarray(canonical_action["world_vector"], dtype=np.float32).reshape(-1)
             rotation_delta = np.asarray(canonical_action["rotation_delta"], dtype=np.float32).reshape(-1)
@@ -163,7 +162,6 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         return np.concatenate([world_vector, rotation_delta, gripper], axis=0).astype(np.float32).tolist()
 
     def get_eval_context(self) -> Dict[str, Any]:
-        """Run get_eval_context."""
         return {
             "benchmark": "libero",
             "robot_setup": self.robot_setup,

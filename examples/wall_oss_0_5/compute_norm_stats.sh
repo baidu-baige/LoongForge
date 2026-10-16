@@ -7,7 +7,7 @@
 # Reads ``observation.state`` and ``action`` columns from a local LeRobot
 # v2.1/v3 parquet dataset and writes per-dim mean/std/q01/q99 as JSON in the
 # layout expected by the Wall-OSS-0.5 collator
-# (see ``wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats``).
+# (see ``loongforge/data/embodied/wall_oss_0_5/wall_oss_0_5_utils.py::load_norm_stats``).
 #
 # Usage:
 #   bash compute_norm_stats.sh
@@ -50,7 +50,7 @@ echo "  Keys:     $STATE_KEY / $ACTION_KEY"
 echo "════════════════════════════════════════════════════════════"
 
 PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-  "$PYTHON_BIN" "$LOONGFORGE_PATH/tools/embodied_data_preprocess/wall_oss_0_5/compute_norm_stats.py" \
+  "$PYTHON_BIN" "$LOONGFORGE_PATH/examples/wall_oss_0_5/compute_norm_stats.py" \
     --data-root "$DATASET_PATH" \
     --output-path "$OUTPUT_PATH" \
     --state-key "$STATE_KEY" \

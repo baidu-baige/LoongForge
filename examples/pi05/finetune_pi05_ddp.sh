@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_pi05_ddp_finetune.sh - pi05 VLA SFT Launch Script (DDP)
+# finetune_pi05_ddp.sh - pi05 VLA SFT Launch Script (DDP)
 #
 # Usage:
-#   bash run_pi05_ddp_finetune.sh
-#   TRAIN_ITERS=50 bash run_pi05_ddp_finetune.sh                          # override via env
-#   bash run_pi05_ddp_finetune.sh --train-iters 50                        # override a training param (flag form)
-#   bash run_pi05_ddp_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash finetune_pi05_ddp.sh
+#   TRAIN_ITERS=50 bash finetune_pi05_ddp.sh                          # override via env
+#   bash finetune_pi05_ddp.sh --train-iters 50                        # override a training param (flag form)
+#   bash finetune_pi05_ddp.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

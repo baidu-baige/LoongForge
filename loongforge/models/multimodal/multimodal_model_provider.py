@@ -28,35 +28,30 @@ def omni_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
-    args=None,
-    model_config=None,
+    *,
+    args,
+    model_config,
 ) -> OmniCombinationModel:
     """
     Construct and return an Omni combination model instance.
     
-    This function builds a multimodal combination model based on provided parameters 
-    and global args configuration. Model configuration is obtained from args.model_name,
-    with support for parallel processing and pre/post-processing options.
+    This function builds a multimodal combination model from the caller's training args
+    and model config, with support for parallel processing and pre/post-processing options.
 
     Args:
         pre_process: Whether to perform pre-processing (default: True)
         post_process: Whether to perform post-processing (default: True)
         parallel_output: Whether to enable parallel output (default: True)
+        args: Training args of the run.
+        model_config: Model config of the run.
 
     Returns:
         OmniCombinationModel: Constructed combination model instance
 
     Notes:
-        - Model configuration is obtained from args.model_name
         - Supports encoder pipeline parallel processing
         - Includes language model related parameter configuration
     """
-    if args is None:
-        from loongforge.engines.mcore import get_args
-        args = get_args()
-    if model_config is None:
-        from loongforge.engines.mcore import get_model_config
-        model_config = get_model_config()
     # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
@@ -97,6 +92,9 @@ def omni_model_provider(
         seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
         allow_missing_adapter_checkpoint=args.allow_missing_adapter_checkpoint,
         vp_stage=vp_stage,
+        use_vit_dp_balance=args.use_vit_dp_balance,
+        enable_encoder_hetero_dp=args.enable_encoder_hetero_dp,
+        enable_full_hetero_dp=args.enable_full_hetero_dp,
     )
 
     return model

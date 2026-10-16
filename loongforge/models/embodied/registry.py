@@ -42,11 +42,13 @@ def register_model(model_type: str):
     return decorator
 
 
-def build_model(model_cfg) -> nn.Module:
+def build_model(model_cfg, training_args=None) -> nn.Module:
     """Build a model instance by model_cfg.model_type.
 
     Args:
         model_cfg: typed ModelConfig instance (must have a ``model_type`` attribute).
+        training_args: the run's TrainingArgs. Models whose build depends on them define
+            ``from_training_args(model_cfg, training_args)`` instead of ``from_pretrained``.
 
     Returns:
         Initialized nn.Module.
@@ -60,4 +62,8 @@ def build_model(model_cfg) -> nn.Module:
     importlib.import_module(f"loongforge.models.embodied.{MODEL_MODULES[model_type]}")
 
     cls = MODEL_REGISTRY[model_type]
+    if hasattr(cls, "from_training_args"):
+        if training_args is None:
+            raise ValueError(f"model_type '{model_type}' needs training args to build.")
+        return cls.from_training_args(model_cfg, training_args)
     return cls.from_pretrained(model_cfg)

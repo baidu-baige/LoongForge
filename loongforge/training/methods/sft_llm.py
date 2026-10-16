@@ -11,7 +11,6 @@ import torch
 from functools import partial
 
 from typing import List
-from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
 
 from megatron.core import mpu
 from megatron.core.enums import ModelType
@@ -22,13 +21,13 @@ from megatron.core.num_microbatches_calculator import get_num_microbatches
 
 from megatron.training import get_timers
 
-from loongforge.engines.mcore import (
+from loongforge.engines.megatron import (
     get_args,
     get_model_config,
     get_tokenizer,
     get_chat_template,
-    print_rank_0,
 )
+from megatron.training.utils import print_rank_0
 
 from loongforge.data.llm.sft_dataset import SFTDataset
 from loongforge.data.llm.sft_dataset_config import SFTDatasetConfig
@@ -37,17 +36,16 @@ from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDatas
 
 from loongforge import constants
 
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
+from loongforge.training.megatron_runner import pretrain
 
-from loongforge.engines.mcore.parallel.batch_broadcast import get_batch_on_this_tp_rank
-from loongforge.engines.mcore.parallel.context_parallel import get_batch_on_this_cp_rank
+from loongforge.engines.megatron.distributed.batch_broadcast import get_batch_on_this_tp_rank
+from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 from loongforge.data.llm_dataloader import (
     build_sft_cyclic_iterators,
     build_sft_data_collator,
 )
-from loongforge.models.language.llm_model_provider import llm_model_provider
+from loongforge.training.methods.pretrain_llm import get_embedding_ranks, model_provider
 
 
 stimer = StragglerDetector()
@@ -235,7 +233,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     #
     # The D pre-compensation symmetrically applies to the reporting tensor so
     # that the post-aggregation report (sum-across-mbs → all-reduce-sum →
-    # divide-by-DPxCP-world-size in engines/mcore/train_step.py) recovers the same
+    # divide-by-DPxCP-world-size in engines/megatron/train_step.py) recovers the same
     # (1/G_total) sum_g (1/N_g) sum_k S_{g,k} value. Using G_total instead of
     # G_local also fixes a latent precision bug in the equal-DP case where
     # LPT did not strictly guarantee G_local = G_total / D across ranks.
@@ -250,7 +248,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
 
         denom = N_g * G_total * cp
         scaled = loss * (D * M_raw / denom)
-        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in engines/mcore/train_step.py.
+        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in engines/megatron/train_step.py.
         # Without cp factor, the logged loss would be 1/cp times smaller than correct value.
         reporting = (D * cp * loss / (N_g * G_total)).detach()
         loss_reduced_dict = {'lm loss': reporting}
@@ -430,32 +428,14 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
     return train_iter, valid_iter, test_iter
 
-def get_embedding_ranks(pp_ranks: List[int]):
-    """Get the embedding ranks."""
-    embedding_ranks = [pp_ranks[0]]
-    if len(pp_ranks) > 1:
-        args = get_args()
-        if not args.untie_embeddings_and_output_weights:
-            embedding_ranks.append(pp_ranks[-1])
-        mtp_ranks = get_mtp_ranks(pp_ranks, config=get_model_config())
-        embedding_ranks.extend(mtp_ranks)
-    embedding_ranks = list(set(embedding_ranks))
-    embedding_ranks = sorted(embedding_ranks)
-    return embedding_ranks
-
-@register_model_trainer(
-    model_family=constants.LanguageModelFamilies.names(),
-    training_phase=constants.TrainingPhase.SFT,
-)
-def default_sft_trainer(train_args):
-    """build trainer"""
-    trainer = MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-        model_provider=llm_model_provider,
-        model_type=ModelType.encoder_or_decoder,
-        forward_step_func=forward_step,
+def train(args):
+    """Run LLM SFT."""
+    train_valid_test_datasets_provider.is_distributed = True
+    pretrain(
+        args,
+        train_valid_test_datasets_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,
+        forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
-
-    return trainer

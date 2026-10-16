@@ -30,9 +30,10 @@ from .base import (
     StringFormatter,
 )
 from .hf import HFChatTemplate
-from .plugins.mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
-from .plugins.kimi_plugin import KimiPlugin
-from .plugins.minicpm_v_4_6_plugin import MiniCPMV46Plugin
+from .plugins.base import MMPlugin
+from .plugins.kimi import KimiPlugin
+from .plugins.minicpm_v_4_6 import MiniCPMV46Plugin
+from .plugins.qwen_vl import Qwen2VLPlugin, Qwen3VLPlugin
 
 
 MAPPING_NAME_TO_TEMPLATE: Dict[str, ChatTemplate] = {}

@@ -248,7 +248,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             return result
 
         run_start = time.perf_counter()
-        output, _accum_loss = self._replay()
+        output, _accum_loss = self._replay(step_ctx)
         if profile is not None:
             torch.cuda.synchronize()
             profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0

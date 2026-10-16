@@ -66,6 +66,10 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     absorb_backend: str = "te"
     # DSA sequence parallel: run SP before the indexer when True.
     use_dsa_sp_first: bool = False
+    # Omni fused DSA modules (--use-dsa-fused); read by the DeepSeek/GLM layer specs.
+    use_dsa_fused: bool = False
+    # Fused DSA kernel backend (--dsa-kernel-backend); None falls back to the env var, then auto.
+    dsa_kernel_backend: Optional[str] = None
 
     # --- FP8 dynamic policy (same as BaseModelConfig) ---
     fp8_dynamic_policy_path: Optional[str] = None

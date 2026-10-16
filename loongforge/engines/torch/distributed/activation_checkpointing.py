@@ -75,7 +75,7 @@ def apply_activation_checkpointing(
     # raise CheckpointError. TE ships its own checkpoint that handles this.
     checkpoint_fn = None
     if fp8_backend == "te":
-        from loongforge.engines.torch.distributed.fp8_utils import te_checkpoint_fn
+        from loongforge.engines.torch.quantization.fp8_utils import te_checkpoint_fn
 
         checkpoint_fn = te_checkpoint_fn()
 

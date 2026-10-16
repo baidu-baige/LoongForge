@@ -16,7 +16,6 @@ PathLike = Union[str, Path]
 
 
 def append_jsonl(path: PathLike, record: Dict[str, Any]) -> None:
-    """Run append_jsonl."""
     result_path = Path(path)
     result_path.parent.mkdir(parents=True, exist_ok=True)
     with result_path.open("a", encoding="utf-8") as file:
@@ -25,7 +24,6 @@ def append_jsonl(path: PathLike, record: Dict[str, Any]) -> None:
 
 
 def load_jsonl(path: PathLike) -> List[Dict[str, Any]]:
-    """Run load_jsonl."""
     result_path = Path(path)
     if not result_path.exists():
         return []
@@ -34,7 +32,6 @@ def load_jsonl(path: PathLike) -> List[Dict[str, Any]]:
 
 
 def completed_episode_keys(records: Iterable[Dict[str, Any]]) -> Set[Tuple[str, str, int, int]]:
-    """Run completed_episode_keys."""
     keys: Set[Tuple[str, str, int, int]] = set()
     for record in records:
         keys.add(
@@ -49,7 +46,6 @@ def completed_episode_keys(records: Iterable[Dict[str, Any]]) -> Set[Tuple[str, 
 
 
 def write_summary_csv(path: PathLike, records: Iterable[Dict[str, Any]]) -> None:
-    """Run write_summary_csv."""
     rows = summarize_records(records)
     summary_path = Path(path)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -61,7 +57,6 @@ def write_summary_csv(path: PathLike, records: Iterable[Dict[str, Any]]) -> None
 
 
 def write_suite_summary_csv(path: PathLike, records: Iterable[Dict[str, Any]], min_episodes: int = 1) -> None:
-    """Run write_suite_summary_csv."""
     rows = summarize_suites(records, min_episodes=min_episodes)
     summary_path = Path(path)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,12 +99,10 @@ _SUMMARY_FIELDNAMES = [
 
 
 def summarize_records(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Run summarize_records."""
     return _summarize(records)
 
 
 def summarize_suites(records: Iterable[Dict[str, Any]], min_episodes: int = 1) -> List[Dict[str, Any]]:
-    """Run summarize_suites."""
     grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
     for record in records:
         key = (str(record.get("benchmark")), str(record.get("task_suite")))
@@ -146,7 +139,6 @@ def summarize_suites(records: Iterable[Dict[str, Any]], min_episodes: int = 1) -
 
 
 def validate_episode_floor(records: Iterable[Dict[str, Any]], min_episodes: int) -> List[Dict[str, Any]]:
-    """Run validate_episode_floor."""
     violations = []
     grouped: Dict[Tuple[str, str, int], int] = {}
     for record in records:
@@ -167,7 +159,6 @@ def validate_episode_floor(records: Iterable[Dict[str, Any]], min_episodes: int)
 
 
 def _summarize(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Run _summarize."""
     grouped: Dict[Tuple[str, str, int], List[Dict[str, Any]]] = {}
     for record in records:
         key = (str(record.get("benchmark")), str(record.get("task_suite")), int(record.get("task_id")))
@@ -200,7 +191,6 @@ def _summarize(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _average(values: Iterable[Any]) -> Optional[float]:
-    """Run _average."""
     numeric_values = [float(value) for value in values if value is not None]
     if not numeric_values:
         return None
@@ -208,14 +198,12 @@ def _average(values: Iterable[Any]) -> Optional[float]:
 
 
 def _binomial_stderr(success_rate: float, n_episodes: int) -> float:
-    """Run _binomial_stderr."""
     if n_episodes <= 0:
         return 0.0
     return math.sqrt(success_rate * (1.0 - success_rate) / n_episodes)
 
 
 def _wilson_ci(successes: int, n_episodes: int, z: float = 1.96) -> Tuple[float, float]:
-    """Run _wilson_ci."""
     if n_episodes <= 0:
         return (0.0, 0.0)
     p = successes / n_episodes
@@ -226,7 +214,6 @@ def _wilson_ci(successes: int, n_episodes: int, z: float = 1.96) -> Tuple[float,
 
 
 def _failure_reasons(records: Iterable[Dict[str, Any]]) -> str:
-    """Run _failure_reasons."""
     counts: Dict[str, int] = {}
     for record in records:
         if int(record.get("success", 0)):
@@ -237,7 +224,6 @@ def _failure_reasons(records: Iterable[Dict[str, Any]]) -> str:
 
 
 def _task_episode_counts(records: Iterable[Dict[str, Any]]) -> Dict[int, int]:
-    """Run _task_episode_counts."""
     counts: Dict[int, int] = {}
     for record in records:
         task_id = int(record.get("task_id"))

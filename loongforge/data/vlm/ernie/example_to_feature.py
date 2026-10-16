@@ -29,8 +29,8 @@ import numpy as np
 from loongforge.constants import IGNORE_INDEX
 from . import data_adaptive as _data_adaptive_mod
 from . import data_process as _data_process_mod
-from .data_utils import group_frame_by_video, image_info_2_hash, merge_list
-from .constants import (
+from .utils.data_utils import group_frame_by_video, image_info_2_hash, merge_list
+from .utils.constants import (
     CUT_FLAG,
     DATASET_TYPE_TO_DATA_TYPE,
     DATASET_TYPE_TO_PROCESS_FN,

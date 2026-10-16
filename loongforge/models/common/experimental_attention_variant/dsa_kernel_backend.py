@@ -32,10 +32,11 @@ e4m3 (TransformerEngine ``Float8BlockQuantizer``, which needs SM89+), while SM80
 runs BF16 because Ampere has no FP8 tensor cores.  Callers must branch on
 :attr:`DSAKernelBackend.indexer_is_fp8` rather than assuming FP8.
 
-Selection order: explicit ``--dsa-kernel-backend`` > ``LOONGFORGE_DSA_KERNEL_BACKEND``
-env var > compute capability.  ``torch_ref`` is intentionally kept as a permanent
-option: it is the numerical ground truth used to validate the CUDA kernels, and it
-is the only backend that runs without any custom kernel installed.
+Selection order: ``TransformerConfig.dsa_kernel_backend`` (from ``--dsa-kernel-backend``)
+> ``LOONGFORGE_DSA_KERNEL_BACKEND`` env var > compute capability.  ``torch_ref`` is
+intentionally kept as a permanent option: it is the numerical ground truth used to
+validate the CUDA kernels, and it is the only backend that runs without any custom
+kernel installed.
 """
 
 import sys
@@ -99,17 +100,10 @@ def _auto_backend() -> str:
     return BACKEND_SM100
 
 
-def _requested_backend(args=None) -> str:
+def _requested_backend(source=None) -> str:
     import os
 
-    if args is None:
-        try:
-            from megatron.training import get_args
-
-            args = get_args()
-        except Exception:  # noqa: BLE001 - args not initialised outside training
-            args = None
-    value = getattr(args, "dsa_kernel_backend", None) if args is not None else None
+    value = getattr(source, "dsa_kernel_backend", None)
     if not value:
         value = os.environ.get("LOONGFORGE_DSA_KERNEL_BACKEND")
     if not value:
@@ -310,8 +304,7 @@ class DSAKernelBackend:
             # in TMEM and issues 2-SM cluster UMMA, neither of which exists
             # before Blackwell.  The sm100 backend also serves SM89/SM90, where
             # the FlashMLA *forward* runs but this backward does not, so fall
-            # back to the TileLang backward there -- exactly what the
-            # pre-refactor ``major != 10`` branch did.
+            # back to the TileLang backward there.
             if torch.cuda.get_device_capability()[0] == 10:
                 def _load():
                     try:
@@ -550,25 +543,29 @@ def _tilelang_sparse_mla_bwd(q, kv, out, grad_out, indices, lse, sm_scale,
 _BACKEND: Optional[DSAKernelBackend] = None
 
 
-def resolve_backend_name(args=None) -> str:
-    """Backend name :func:`get_dsa_backend` would resolve to for ``args``.
+def resolve_backend_name(source=None) -> str:
+    """Backend name :func:`get_dsa_backend` would resolve to for ``source``.
 
-    Name resolution only -- no kernels are bound and no operator packages are
-    imported -- so this is safe to call from argument validation.  ``args``
-    defaults to the megatron global args; pass it explicitly when they are not
-    yet installed (e.g. during early arg validation).
+    ``source`` is the training args or a TransformerConfig; its ``dsa_kernel_backend``
+    wins over the env var.  Name resolution only -- no kernels are bound and no
+    operator packages are imported -- so this is safe to call from argument validation.
     """
-    name = _requested_backend(args)
+    name = _requested_backend(source)
     if name == BACKEND_AUTO:
         name = _auto_backend()
     return name
 
 
-def get_dsa_backend() -> DSAKernelBackend:
-    """Resolve (once) and return the active fused-DSA kernel backend."""
+def get_dsa_backend(config=None) -> DSAKernelBackend:
+    """Resolve (once) and return the active fused-DSA kernel backend.
+
+    The first call fixes the backend.  ``DSADotProductAttention`` makes that call at
+    construction with its TransformerConfig, so the kernel calls inside autograd
+    functions omit ``config`` and get the configured backend.
+    """
     global _BACKEND
     if _BACKEND is None:
-        name = resolve_backend_name()
+        name = resolve_backend_name(config)
         _BACKEND = DSAKernelBackend(name)
         _warn_once(f"kernel backend = {name}")
     return _BACKEND

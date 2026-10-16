@@ -21,7 +21,7 @@ import json
 
 from PIL import Image
 
-from .data_utils import get_downloadable
+from .utils.data_utils import get_downloadable
 from .tokenizer_vl import (
     SFT_IMAGE_END_TOKEN,
     SFT_IMAGE_START_TOKEN,

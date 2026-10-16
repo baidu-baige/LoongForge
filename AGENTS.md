@@ -1,81 +1,107 @@
 # AGENTS.md
 
-LoongForge：基于 Loong-Megatron（Megatron-LM 补丁分支）和 TransformerEngine 的大规模训练框架，支持 LLM、VLM、VLA（具身）和扩散模型，运行在 NVIDIA GPU 与昆仑 XPU 上。训练阶段：pretrain、SFT。
+LoongForge: Large-scale training framework built on Loong-Megatron and TransformerEngine for NVIDIA GPUs and Kunlun XPUs.
+- **Megatron Engine**: LLMs, VLMs, and diffusion models.
+- **Torch Engine**: Embodied AI models.
 
-## 环境
+## Environment & Build
 
-```bash
-git clone --recurse-submodules https://github.com/baidu-baige/LoongForge.git
-uv pip install -e ".[gpu]"            # NVIDIA GPU；昆仑 XPU 用 ".[xpu]"
-python setup_env.py --te-tag v2.9     # 仅构建 TransformerEngine（打 patches/TransformerEngine_v2.9）
-```
-
-- Loong-Megatron 是 `third_party/Loong-Megatron` 子模块，不由 `setup_env.py` 处理。
-- Docker 构建：`docker build --build-arg COMPILE_ENV=<ampere|hopper|blackwell> -f docker/Dockerfile .`
-- 打包：`python -m build --sdist --wheel --outdir dist/`
-
-## 常用命令
+Run commands from the repository root. See `docs/source/get_started/installation.md` for standard setup and `docs/source/kunlun_tutorial/install_p800.md` for Kunlun XPU setup.
 
 ```bash
-pre-commit run --all-files            # 空白、YAML、SPDX 头；ruff 配置见 pyproject.toml（行宽 120）
-ruff check loongforge tools tests
+git submodule update --init --recursive
+uv pip install -e ".[gpu]"            # Use ".[xpu]" for Kunlun XPU
+python setup_env.py --te-tag v2.9
+python -m build --sdist --wheel --outdir dist/
 ```
 
-训练启动，`PYTHONPATH` 必须同时含 Megatron 和 LoongForge：
+- `third_party/Loong-Megatron` is a Git submodule.
+- `setup_env.py` only fetches, patches, and builds TransformerEngine (patches in `patches/TransformerEngine_v2.9/`).
+- **GPU Docker Build** (`COMPILE_ENV`: `ampere`, `hopper`, or `blackwell`):
+  ```bash
+  docker build --build-arg COMPILE_ENV=hopper -f docker/Dockerfile .
+  ```
+- **Running Training**: Scripts are in `examples/` (`examples_xpu/` for XPU). Follow the target model's script for dataset, checkpoint, parallelism, and output settings. When launching `loongforge/train.py` with `torchrun`, include both LoongForge and Loong-Megatron in `PYTHONPATH`. `--model-name` selects the engine and config via `loongforge/models/catalog.py`; Megatron engine also supports `--config-file <yaml>`.
+
+## Project Structure
+
+| Path | Responsibility |
+|---|---|
+| `loongforge/train.py` | Training entrypoint and engine routing |
+| `loongforge/training/` | Training loop, lifecycle, and method registration |
+| `loongforge/training/methods/` | Task-specific model/data assembly, forward pass, and loss |
+| `loongforge/engines/` | Megatron / Torch initialization, model wrapping, optimizer, step execution, and checkpointing |
+| `loongforge/models/` | Model implementations, configs, and registries (`language`, `vision`, `multimodal`, `diffusion`, `embodied`) |
+| `loongforge/data/` | Datasets, preprocessing, collators, samplers, and dataloaders |
+| `loongforge/chat_templates/` | Chat templates and registry |
+| `loongforge/evaluation/` | Inference services and evaluation |
+| `configs/` | Model and data configurations |
+| `examples/` | Model-specific training, conversion, and data scripts (including single-model/family offline scripts) |
+| `tools/` | Shared cross-model offline utilities (weight conversion, data preprocessing) |
+| `ops/` | Custom operators |
+| `tests/` | Unit tests and training regression suites (see `tests/README.md`) |
+
+MCore weight conversion entrypoint: `tools/mcore_checkpoint_convert/module_convertor/model.py` (see model example scripts for arguments and multi-stage flows).
+
+## Code Organization & Dependencies
+
+- **Scope Isolation**: Keep single-model/subsystem helpers inside their respective modules. Place shared code in well-defined common layers; avoid circular and cross-layer dependencies.
+- **`utils/` Convention**: Name all helper directories `utils/`. Keep module-private helpers in the module's `utils/` and cross-module helpers in the shared parent layer's `utils/`, respecting layer dependency boundaries. Name files by purpose (e.g., `io.py`, `state_dict.py`); never dump unrelated helpers into one file.
+- **Core vs. Helpers**: Separate model entrypoints and core logic from auxiliary helpers. Base directory depth on cohesion and readability—do not use file count as a hard threshold or flatten helpers just to reduce nesting.
+- **Training vs. Engine**: `training/` manages loops and lifecycle; `engines/` handles backend execution. `training/methods/` assembles models, data, and objectives, and must not manage process groups or checkpoints.
+- **Explicit Configs & Data Decoupling**: Pass runtime info to model and data components via arguments or configs—never read global CLI args directly. Models must not depend on the data layer; assemble embodied inference preprocessing in `evaluation/embodied/factories/` before passing to the model.
+- **Stateless Engine Boundaries**: Engines must not depend on private states of datasets or training methods; pass task logic via explicit interfaces or callbacks. Reuse family-specific data entrypoints for DataLoaders and samplers, and follow native Megatron interfaces when integrating Megatron data pipelines.
+- **Lazy Loading**: Load selected models and backends on demand in configs, registries, and package `__init__.py` files to avoid importing unused weights or optional dependencies. Never auto-register by walking all model packages; raise clear errors naming the missing module when optional dependencies are absent.
+- **Upstream Reuse**: Prefer Loong-Megatron and upstream capabilities. Modify upstream behavior via extension hooks first; if maintaining a modified copy, keep original licenses/attribution and document divergences.
+
+## Extending Functionality
+
+Follow existing implementations of similar models or tasks for interfaces and naming.
+
+| Change | Primary Entrypoints |
+|---|---|
+| New LLM / VLM | Model package, `loongforge/models/catalog.py`, `configs/models/`, `examples/`; VLM data encoders in `loongforge/data/vlm/` (`TASK_ENCODER_REGISTRY`) |
+| New Embodied Model | `loongforge/models/embodied/registry.py`, `loongforge/models/catalog.py`, model package; data in `loongforge/data/embodied/registry.py`; optional eval factory |
+| New Data Format | Family data module; embodied dataset strategies in `loongforge/data/embodied/registry.py` (`DATASET_STRATEGIES`) |
+| New Training Objective | `loongforge/training/methods/` and `loongforge/training/registry.py` |
+| New Parallelism / Comm | `distributed/` under the target engine |
+| Single-Model Torch Opt | `loongforge/engines/torch/optimizations/` and `TORCH_TRAINER_TYPES` |
+| New Chat Template | `loongforge/chat_templates/jinja/` and `loongforge/chat_templates/registry.py` |
+
+- **File Naming**: Use `modeling_<model>.py`, `configuration_<model>.py`, `processing_<model>.py` for models; `<model>_layer_spec.py` for layer specs; `<phase>_<scope>.py` for training methods. Mirror existing configs, transforms, and collators for new embodied data components.
+
+## Code Style
+
+- Enforced via `pyproject.toml` (Ruff line length: 120). See `.github/workflows/` for CI tool versions and scopes.
+- Include required copyright and SPDX license headers in new files. Preserve licenses, attribution, and meaningful comments in upstream-ported code.
+- Comment on non-obvious rationale, constraints, and behavior; document purpose, I/O, and side effects in docstrings. No redundant identifier restatements, empty TODOs, or dev logs.
 
 ```bash
-PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
-  torchrun --nproc_per_node 8 --nnodes $NNODES \
-  $LOONGFORGE_PATH/loongforge/train.py \
-  --model-name <name> --training-phase pretrain|sft ...
+ruff check path/to/changed_file.py
+pre-commit run --files path/to/changed_file.py
 ```
 
-`--model-name` 经 `loongforge/models/catalog.py` 映射到 engine 与配置；也可用 `--config-file` 直接指定 YAML。每个模型族的脚本在 `examples/<model>/{pretrain,sft,checkpoint_convert}/`，XPU 版在 `examples_xpu/`。
+## Testing & Verification
 
-## 测试
+Match tests to your changes: cover happy paths and critical edge cases, and verify model, data, or distributed changes on target hardware. **Static checks do not replace training/inference verification.** When delivering, report executed commands, results, and unverified areas.
 
-不使用 pytest 跑 E2E；E2E 是 YAML 驱动的自研框架。入口不会下载数据、HF 模型和转换后的检查点，需先备好。
+- **Unit Tests**: Run `python -m pytest <path>` (setup in `tests/README.md`).
+- **LLM/VLM E2E Tests** (requires pre-staged data, HF models, and converted checkpoints):
+  ```bash
+  bash tests/llm_vlm/main_start.sh
+  ```
+  Configs in `tests/llm_vlm/configs/`. Set `model_names` in the script to select models; set `include_optional=true` for `optional_configs/`.
+- **Embodied Regression Tests** (registered in `tests/embodied/config/scripts.yaml`, paths relative to `examples/`):
+  ```bash
+  bash tests/embodied/run.sh --chip a --list_models
+  bash tests/embodied/run.sh --chip a --models fastwam_ddp --dry_run
+  bash tests/embodied/run.sh --chip a --models fastwam_ddp
+  ```
+  Select `--chip` by hardware. Register new scripts and add hardware-specific baselines at `tests/embodied/baseline/<chip>/<name>.json` (never reuse baselines across hardware). Set data, checkpoint, cache, and output paths via environment variables. Validates `loss` and `grad_norm`.
+- **Docs & CI**: Run `python3 ci/check_doc_links.py` after Markdown edits. Check affected workflows and script tests when modifying CI.
 
-```bash
-bash tests/llm_vlm/main_start.sh      # 默认 CI 套件：tests/llm_vlm/configs/
-```
+## Security & Collaboration
 
-- 跑单个模型：改 `tests/llm_vlm/main_start.sh` 里的 `model_names`；`optional_configs/` 下的模型需同时设 `include_optional=true`，整个系列用 `model_names="NONE"` + `optional_subdir=<series>`。
-- 具身/VLA 回归：`bash tests/embodied/run.sh --chip <a|...> [--models ...] [--dry_run] [--list_models]`。
-  - 新训练脚本必须登记到 `tests/embodied/config/scripts.yaml`（路径相对 `examples/`），并为每个支持的芯片添加 `tests/embodied/baseline/<chip>/<name>.json`。
-  - 训练脚本的数据、检查点、缓存、输出路径用环境变量覆盖，不靠执行器改写参数。
-  - loss 和 `grad_norm` 硬检查；基线缺失、非零退出、NaN/Inf 均判失败；性能退化只告警。
-  - 基线按芯片区分，未验证不要跨硬件复用。
-  - 改动视频/动作预处理、text-embedding 缓存或分布式策略时，先 `--dry_run`，再跑真实回归。
-
-## 架构约束
-
-分层：`train → catalog → engines.<engine>.entrypoint → engine runner → training method + data + models`。
-
-- **catalog** 只根据启动模型名选择 engine、配置路径和 typed config，不加载未选中的 engine、权重、训练数据或可选依赖。
-- **engine** 拥有 parser、分布式初始化、模型包装、optimizer、step、checkpoint、profiling 和 runner 生命周期；不按模型名复制训练循环，也不读取具体 method 的私有全局状态。现有 MCore full-hetero 旧路径仍有 method 状态回读，已归档到 `todo.md`，新代码不得继续增加同类依赖。
-- **training method** 表达 workload：model/data provider、forward、loss 和任务 hook。它可以适配所选 engine 的 batch/parallel 协议，但不创建进程组，不管理通用 checkpoint 和 runner 生命周期。
-- **models** 不导入 training、runner、DataLoader，不读取 engine 全局训练状态。MCore 的 language/vision/multimodal/diffusion 与 Torch 的 embodied 保持各自模型注册和配置方式；统一启动入口、配置选择和模型身份检查，不强行统一 registry。
-- **data** 第一层只有 4 个家族目录（`llm/ vlm/ embodied/ diffusion/`）、4 个 `<family>_dataloader.py` 和只含 docstring 的 `__init__.py`；普通 DataLoader、sampler 在 family factory 组装。MCore 上游 callback、VLM full-hetero encoder iterator、ERNIE tensor 路径和上游 Megatron iterator是显式例外，必须有独立的输入输出和生命周期说明。data 只可用 `engines.mcore.tokenizer`（`llm_dataloader.py` 另可用 `chunkpipe`），不读 engine 全局状态，不创建进程组。
-- **`chat_templates/`、`constants.py`** 不导入 data 和 engines；`constants.py` 只用标准库。
-- `engines/mcore/` 与 `engines/torch/` 的同名文件表示同一职责在两种运行时中的独立实现，不表示两套运行时必须共享实现。
-
-## 禁止事项
-
-1. 不新建 `utils/` 或 `custom/` 目录。已有 `*_utils.py` 保留，但不作为新功能的默认落点。
-2. 不 fork 上游函数：Loong-Megatron 已有的直接 import；需要扩展点时在上游加 hook。
-3. 不在 `__init__.py` 中扫描导入全部模型：只导入选中的模块，依赖缺失时报出具体模块名。
-4. models/data/chat_templates 不读 engine 全局状态（`get_args`、`get_tokenizer`、`get_model_config`、`get_chat_template`），由 method 传参。
-5. 不提交内部主机名、内部镜像源、个人家目录路径；发布前用 `sensitive-scan` skill 扫描。
-
-## Skills
-
-`skills/`（`.claude/skills` 是其符号链接）：`sensitive-scan`、`submit-pr`、`code-review`。开 PR 用 `submit-pr`（含 PR 标题的 module/type 校验）。
-
-## Code Review
-
-评审 PR 或 diff 时严格遵循 `skills/code-review/SKILL.md`：检查清单、严重度标签（🔴 Critical / 🟠 Major / 🟡 Minor / 🟢 Nit）和输出格式都以它为准。
-
-- 与具体代码相关的问题用 `mcp__github_inline_comment__create_inline_comment` 发在精确的 `file:line`（或区间）上，不要堆在总结里。
-- 总结评论只放 `Verdict`、2–4 句 `Summary`、`Tests` 行和 `Checklist` 表。
-- 只对真实评审发现设 `confirmed: true`，探测和自测不设。
+- **Security**: Never commit secrets, internal hostnames, internal mirrors, or personal absolute paths. Pass data, weights, and artifact paths via configs or environment variables. Run `skills/sensitive-scan/SKILL.md` or `python3 ci/sensitive_scan.py` before committing.
+- **Skills**: Maintained in `skills/` (symlinked by both `.claude/skills` and `.agents/skills`).
+- **PRs & Reviews**: See `CONTRIBUTING.md` for workflow and PR title rules. Use `skills/submit-pr/SKILL.md` for PR creation and `skills/code-review/SKILL.md` for reviews. Post specific code issues as inline comments; keep the top-level summary to conclusions, verification results, and overall judgment.

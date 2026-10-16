@@ -40,7 +40,7 @@ def _get_cp_sample_alignment(cp_world_size: int) -> int:
 # Patchify utilities (Wan: patch_size=(1,2,2))
 # ---------------------------------------------------------------------------
 
-def _patchify_latent(latent: torch.Tensor, patch_size=(1, 2, 2)):
+def patchify_latent(latent: torch.Tensor, patch_size=(1, 2, 2)):
     """Convert [C, T, H, W] → [num_patches, pT * pH * pW * C].
 
     Output is in **(pT, pH, pW, C)** order within each patch.
@@ -60,7 +60,7 @@ def _patchify_latent(latent: torch.Tensor, patch_size=(1, 2, 2)):
     return x.reshape(num_patches, c * pT * pH * pW)
 
 
-def _patchify_for_conv3d(latent: torch.Tensor, patch_size=(1, 2, 2)):
+def patchify_for_conv3d(latent: torch.Tensor, patch_size=(1, 2, 2)):
     """Convert [C, T, H, W] → [num_patches, C * pT * pH * pW].
 
     Output is in **(C, pT, pH, pW)** order within each patch — the same

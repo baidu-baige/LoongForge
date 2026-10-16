@@ -30,32 +30,32 @@ export RESUME_POLICY=${RESUME_POLICY:-skip_completed}
 node_nums=1
 gpu_nums=8
 
-# Mode 1: Run one/multiple/all models under tests/configs (space-separated; all models: model_names="")
+# Mode 1: Run one/multiple/all models under tests/llm_vlm/configs (space-separated; all models: model_names="")
 # model_names="qwen3_14b" 
 # model_names="deepseek_v2_lite llama3_8b qwen3_14b"  
 model_names=""                                                   
 optional_subdir=""
 include_optional=false
 
-# Mode 2: Run one/multiple/all models under tests/optional/ (space-separated; all models: model_names="NONE")
+# Mode 2: Run one/multiple/all models under tests/llm_vlm/optional_configs/ (space-separated; all models: model_names="NONE")
 # model_names="deepseek_v2/deepseek_v2_lite"
 # model_names="llama2/llama2_7b internvl2.5/internvl2.5_8b"
 # model_names="NONE"                                               
 # optional_subdir=""
 # include_optional=true   
 
-# Mode 3: Mixed run of multiple models from tests/configs and tests/optional/ (space-separated)
+# Mode 3: Mixed run of multiple models from tests/llm_vlm/configs and tests/llm_vlm/optional_configs/ (space-separated)
 # model_names="qwen3_14b"
 # extra_models="internvl2.5/internvl2.5_8b"                              
 # optional_subdir=""
 # include_optional=true 
 
-# Mode 4: Run all models in a series under tests/optional/ (e.g., internvl2.5 series)
+# Mode 4: Run all models in a series under tests/llm_vlm/optional_configs/ (e.g., internvl2.5 series)
 # model_names="NONE"  
 # optional_subdir="internvl2.5"
 # include_optional=true
 
-# Mode 5: Run all models under tests/configs and optional_configs
+# Mode 5: Run all models under tests/llm_vlm/configs and optional_configs
 # model_names=""                                                   
 # optional_subdir=""
 # include_optional=true

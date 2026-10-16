@@ -6,7 +6,7 @@ import torch
 from typing import Union
 from megatron.core.transformer.spec_utils import build_module
 from loongforge.models.common import BaseMegatronModule
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 from .moon_vision_config import KimiK3PatchMergerConfig, PatchMergerMLPAdapterConfig
 
 

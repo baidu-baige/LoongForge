@@ -12,16 +12,13 @@ from transformers import DataCollatorForSeq2Seq
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.training import get_timers
 from megatron.core import mpu, tensor_parallel
-from loongforge.engines.mcore.parallel.loss_reduction import default_loss_func
+from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 from megatron.core import parallel_state
 
 from megatron.core.utils import StragglerDetector
-from loongforge.engines.mcore import (get_args, get_tokenizer, get_model_config)
+from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_config)
 from megatron.core.enums import ModelType
-from loongforge import constants
-from loongforge.models import get_model_provider
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
+from loongforge.training.megatron_runner import pretrain
 from loongforge.data.vlm.internvl_task_encoder import InternVLTaskEncoder
 from loongforge.data.llm_dataloader import (
     build_sft_data_collator,
@@ -39,24 +36,7 @@ from loongforge.models.vision.internvl.internvl_config import IMG_CONTEXT_TOKEN
 stimer = StragglerDetector()
 
 
-def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
-    """Builds the model.
-
-    Args:
-        pre_process (bool, optional): Set to true if you need to compute embedings. Defaults to True.
-        post_process (bool, optional): Set to true if you need to want to compute output logits/loss. Defaults to True.
-
-    Returns:
-        MCoreModel: The returned model
-    """
-    args = get_args()
-    model_provider = get_model_provider(args.model_family)
-    assert model_provider is not None, f'model provider for {args.model_name} not found'
-    return model_provider(pre_process, post_process, vp_stage)
-
-
 def get_packed_seq_params(attention_mask):
-    """Get packed seq params """
     packed_seq_params = PackedSeqParams()
     packed_seq_params.qkv_format = "thd"
     packed_seq_params.cu_seqlens_q = attention_mask
@@ -187,15 +167,13 @@ def forward_step(data_iterator, model):
             print("filter_ignore_data get True, skip current microbatch...")
             output_tensor = output_tensor * 0.0
 
-    # print(f"packed_seq_params:{packed_seq_params}")
     model_config = get_model_config()
     loss_func = getattr(model_config, "loss_func", default_loss_func)
     return output_tensor, partial(loss_func, loss_mask, loss_weights)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
-    """Train_valid_test_datasets_provider """
-    import loongforge.engines.mcore.parallel.dp_balance.patches  # noqa: F401
+    import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     args = get_args()
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
@@ -227,16 +205,19 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         return train_dataloader, None, None
 
 
-@register_model_trainer(model_family=constants.VisionLanguageModelFamilies.INTERN_VL,
-                        training_phase=constants.TrainingPhase.SFT, override=True)
-def default_sft_trainer(train_args):
-    """Build trainer"""
-    trainer = MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-        model_provider=omni_model_provider,
-        model_type=ModelType.encoder_or_decoder,
-        forward_step_func=forward_step,
-    )
+def model_provider(pre_process=True, post_process=True, vp_stage=None):
+    """Build the multimodal model with this run's args and model config."""
+    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage,
+                               args=get_args(), model_config=get_model_config())
 
-    return trainer
+
+def train(args):
+    """Run InternVL SFT."""
+    train_valid_test_datasets_provider.is_distributed = True
+    pretrain(
+        args,
+        train_valid_test_datasets_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,
+        forward_step,
+    )

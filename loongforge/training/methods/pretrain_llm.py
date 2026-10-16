@@ -37,15 +37,14 @@ from megatron.core.utils import get_attr_wrapped_model
 from megatron.core import parallel_state
 from megatron.core.transformer.multi_token_prediction import mtp_on_this_rank, get_mtp_ranks
 
-from loongforge import constants
-from loongforge.engines.mcore import get_args, get_tokenizer, print_rank_0
+from megatron.training.utils import print_rank_0
+from loongforge.engines.megatron import get_args, get_tokenizer
 
 
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
 from loongforge.models.language.llm_model_provider import llm_model_provider
+from loongforge.training.megatron_runner import pretrain
 
-from loongforge.engines.mcore.global_vars import get_model_config
+from loongforge.engines.megatron.global_vars import get_model_config
 
 
 stimer = StragglerDetector()
@@ -244,19 +243,19 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
-@register_model_trainer(
-    model_family=constants.LanguageModelFamilies.names(),
-    training_phase=constants.TrainingPhase.PRETRAIN,
-)
-def default_pretrain_trainer(train_args):
-    """build trainer"""
-    trainer = MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-        model_provider=llm_model_provider,
-        model_type=ModelType.encoder_or_decoder,
-        forward_step_func=forward_step,
+def model_provider(pre_process=True, post_process=True, vp_stage=None):
+    """Build the LLM with this run's args and model config."""
+    return llm_model_provider(pre_process, post_process, vp_stage=vp_stage,
+                              args=get_args(), config=get_model_config())
+
+def train(args):
+    """Run LLM pretraining."""
+    train_valid_test_datasets_provider.is_distributed = True
+    pretrain(
+        args,
+        train_valid_test_datasets_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,
+        forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
-
-    return trainer

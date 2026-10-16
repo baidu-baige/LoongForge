@@ -20,7 +20,7 @@ try:
 except ImportError:
     nltk_available = False
 
-from loongforge.engines.mcore.tokenizer import build_tokenizer
+from loongforge.engines.megatron.tokenizer import build_tokenizer
 from megatron.core.datasets import indexed_dataset
 from loongforge import constants
 from loongforge.constants import get_all_model_families

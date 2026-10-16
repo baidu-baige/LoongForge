@@ -20,7 +20,7 @@ from .intern_vision_transformer_layer import (
     TransformerLayerInternVisionSubmodules,
 )
 from loongforge.models.common.layer_dispatch import multiacc_modules
-from loongforge.engines.mcore.utils import is_te_min_version
+from megatron.core.utils import is_te_min_version
 from dataclasses import dataclass
 
 

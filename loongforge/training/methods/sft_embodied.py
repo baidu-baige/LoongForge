@@ -3,8 +3,8 @@
 
 """SFT method for embodied models (Pi05 / GR00T / etc).
 
-Module-level functions replacing FinetuneTrainer's model/data/forward hooks.
-The method module does NOT do autocast, backward, or optimizer steps.
+Module-level hooks that TorchRunner calls to build the model and dataloaders
+and run the forward. The method module does NOT do autocast, backward, or optimizer steps.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build_model(model_cfg) -> "nn.Module":
-    """Build the embodied model from YAML model_cfg."""
+def build_model(model_cfg, training_args) -> "nn.Module":
+    """Build the embodied model from YAML model_cfg and this run's training args."""
     from loongforge.models.embodied.registry import build_model as _build
-    return _build(model_cfg)
+    return _build(model_cfg, training_args)
 
 
 def build_dataloaders(model_cfg, data_cfg, training_args, ctx) -> Dict[str, "DataLoader"]:

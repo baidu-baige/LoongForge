@@ -10,21 +10,20 @@ from functools import partial
 from megatron.core.enums import ModelType
 from megatron.training import get_timers
 
-from loongforge.engines.mcore import get_args, get_tokenizer, print_rank_0
-from loongforge.constants import TrainingPhase, VisionLanguageModelFamilies
-from loongforge.data.vlm.ernie.data_utils import ErnieTensorDataset
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
+from megatron.training.utils import print_rank_0
+from loongforge.engines.megatron import get_args, get_tokenizer
+from loongforge.data.vlm.ernie.utils.data_utils import ErnieTensorDataset
+from loongforge.training.megatron_runner import pretrain
 from megatron.core import parallel_state
 from megatron.core import mpu, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.utils import StragglerDetector
-from loongforge.engines.mcore import get_model_config
+from loongforge.engines.megatron import get_model_config
 from loongforge.models.multimodal.multimodal_model_provider import (
     omni_model_provider
 )
-from loongforge.engines.mcore.parallel.loss_reduction import default_loss_func
+from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 
 logger = logging.getLogger(__name__)
 stimer = StragglerDetector()
@@ -171,7 +170,6 @@ def forward_step(data_iterator, model):
 
     model_config = get_model_config()
     image_mask = input_ids == model_config.foundation.im_patch_id
-    # breakpoint()
     with stimer:
         loss = model(
             input_ids=input_ids,
@@ -239,16 +237,19 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     return iter(dataloader), None, None
 
 
-@register_model_trainer(
-    model_family=[VisionLanguageModelFamilies.ERNIE4_5_VL],
-    training_phase=TrainingPhase.SFT, override=True)
-def default_pretrain_trainer(train_args):
-    """build trainer"""
-    trainer = MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
-        model_provider=omni_model_provider,
-        model_type=ModelType.encoder_or_decoder,
-        forward_step_func=forward_step,
+def model_provider(pre_process=True, post_process=True, vp_stage=None):
+    """Build the multimodal model with this run's args and model config."""
+    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage,
+                               args=get_args(), model_config=get_model_config())
+
+
+def train(args):
+    """Run ERNIE-4.5-VL SFT."""
+    train_valid_test_datasets_provider.is_distributed = True
+    pretrain(
+        args,
+        train_valid_test_datasets_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,
+        forward_step,
     )
-    return trainer

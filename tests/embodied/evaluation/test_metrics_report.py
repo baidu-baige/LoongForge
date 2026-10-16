@@ -23,7 +23,6 @@ from loongforge.evaluation.embodied.metrics.trace_archive import archive_traces
 
 
 def test_summary_includes_confidence_and_failures(tmp_path: Path) -> None:
-    """Run test_summary_includes_confidence_and_failures."""
     records = [
         {"benchmark": "libero", "task_suite": "libero_goal", "task_id": 0, "episode_idx": 0, "success": 1, "steps": 10},
         {
@@ -64,7 +63,6 @@ def test_summary_includes_confidence_and_failures(tmp_path: Path) -> None:
 
 
 def test_write_eval_report_archives_failure_artifacts(tmp_path: Path) -> None:
-    """Run test_write_eval_report_archives_failure_artifacts."""
     trace_path = tmp_path / "trace.json"
     trace_path.write_text("[]\n", encoding="utf-8")
     results_path = tmp_path / "results.jsonl"
@@ -111,7 +109,6 @@ def test_write_eval_report_archives_failure_artifacts(tmp_path: Path) -> None:
 
 
 def test_compare_results_ignores_runtime_fields(tmp_path: Path) -> None:
-    """Run test_compare_results_ignores_runtime_fields."""
     left_path = tmp_path / "left.jsonl"
     right_path = tmp_path / "right.jsonl"
     base = {

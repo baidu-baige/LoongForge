@@ -13,28 +13,24 @@ from megatron.core.utils import StragglerDetector
 from megatron.training import get_timers
 
 from loongforge.data.diffusion_dataloader import build_latent_dataloader
-from loongforge.models import get_model_provider
-from loongforge.engines.mcore.megatron_trainer import MegatronTrainer
-from loongforge.engines.mcore.trainer_builder import register_model_trainer
-from loongforge.engines.mcore import get_args, get_model_config, print_rank_0
-from loongforge.constants import CustomModelFamilies, TrainingPhase
+from megatron.training.utils import print_rank_0
+from loongforge.engines.megatron import get_args, get_model_config
+from loongforge.models.diffusion.qwen_image.qwen_image_provider import qwen_image_model_provider
+from loongforge.training.megatron_runner import pretrain
 
 from loongforge.models.diffusion.qwen_image.qwen_image_flow_match import QwenImageFlowMatchScheduler
 
-SUPPORTED_MODELS = [CustomModelFamilies.QWEN_IMAGE]
 stimer = StragglerDetector()
 
 
 def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
-    """Return the Qwen-Image model instance registered with LoongForge."""
+    """Return the Qwen-Image model instance."""
     args = get_args()
     if args.context_parallel_size != 1:
         raise AssertionError("Qwen-Image uses FSDP + TP; set context parallel size to 1.")
     args.max_position_embeddings = args.seq_length
-    provider = get_model_provider(CustomModelFamilies.QWEN_IMAGE)
-    if provider is None:
-        raise ValueError("Qwen-Image model provider is not registered")
-    return provider(pre_process=pre_process, post_process=post_process, vp_stage=vp_stage)
+    return qwen_image_model_provider(pre_process=pre_process, post_process=post_process, vp_stage=vp_stage,
+                                     args=args)
 
 
 def _scheduler_for_shape(height, width):
@@ -321,14 +317,15 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
     return iter(dataloader), None, None
 
 
-@register_model_trainer(model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN)
-def default_pretrain_trainer(train_args):
-    """Register the default Qwen-Image pretrain trainer with MegatronTrainer."""
+def train(args):
+    """Run Qwen-Image pretraining."""
     diffusion = None
-    return MegatronTrainer(
-        train_args=train_args,
-        train_valid_test_dataset_provider=partial(train_valid_test_datasets_provider, diffusion),
-        model_provider=model_provider,
-        model_type=ModelType.encoder_or_decoder,
-        forward_step_func=partial(forward_step, diffusion),
+    datasets_provider = partial(train_valid_test_datasets_provider, diffusion)
+    datasets_provider.is_distributed = True
+    pretrain(
+        args,
+        datasets_provider,
+        model_provider,
+        ModelType.encoder_or_decoder,
+        partial(forward_step, diffusion),
     )

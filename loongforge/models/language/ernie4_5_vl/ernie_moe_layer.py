@@ -34,9 +34,6 @@ class  MultiTypeMoeSubmodules:
 class ErnieDispatcher(MoEAlltoAllTokenDispatcher):
     """Ernie Dispatcher"""
     def token_dispatch(self, permutated_local_input_tokens, permuted_probs):
-        """
-        Token dispatch
-        """
         # Perform expert parallel AlltoAll communication
         self.tokens_per_expert = self._maybe_dtoh_and_synchronize(
             "before_ep_alltoall", self.tokens_per_expert

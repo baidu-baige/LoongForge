@@ -36,7 +36,7 @@ except ImportError:
     _hf_no_init_weights = None
 
 from .configuration_eagle3_vl import Eagle3VLConfig, build_eagle_load_kwargs, resolve_eagle_local_path
-from .modeling_eagle3_vl import load_eagle_model
+from .modeling_eagle3_vl import configured_graph_mode, load_eagle_model
 
 
 _GROOT_EAGLE_TORCH_INIT_FUNCTIONS = (
@@ -102,15 +102,9 @@ def _groot_eagle_no_init_weights():
 def _use_graph_safe_eagle() -> bool:
     if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
         return True
-    try:
-        from loongforge.engines.torch.global_vars import get_training_args
-        training_args = get_training_args()
-        return (
-            training_args.cuda_graph_impl == "local"
-            and training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}
-        )
-    except (ImportError, RuntimeError, AssertionError):
-        pass
+    graph_mode = configured_graph_mode()
+    if graph_mode is not None:
+        return graph_mode
     return (
         os.environ.get("CUDA_GRAPH_IMPL", "none") == "local"
         and os.environ.get("CUDA_GRAPH_SCOPE", "full_iteration") in {"full_iteration", "per_microbatch"}

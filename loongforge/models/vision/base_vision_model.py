@@ -33,7 +33,7 @@ from loongforge.models.vision.qwen2_vl.qwen2_vl_config import (
     Qwen2VisionModelConfig
 ) 
 from loongforge.models.common import BaseMegatronVisionModule
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 
 
 # adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen2_5_vl/modeling_qwen2_5_vl.py # pylint: disable=line-too-long

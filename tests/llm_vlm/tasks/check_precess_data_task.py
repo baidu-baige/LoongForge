@@ -15,7 +15,6 @@ logger = create_color_logger(name=__name__)
 import glob
 
 class PrecessDataCheckTask(BaseTask):
-    """PrecessDataCheckTask"""
     def __init__(self,
                  model_description: Dict[str, Any],
                  task_description: Dict[str, Any],

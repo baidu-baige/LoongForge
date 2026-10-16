@@ -1,3 +1,3 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
-""" loongforge.models.embodied.cosmos3 """
+"""Cosmos3 embodied policy model."""

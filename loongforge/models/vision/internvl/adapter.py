@@ -9,7 +9,7 @@ import transformer_engine as te
 from megatron.core.transformer.spec_utils import build_module
 from .internvl_config import InternMLPAdapterConfig
 from loongforge.models.common import BaseMegatronModule
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 from megatron.core.transformer.transformer_config import TransformerConfig
 
 
@@ -68,7 +68,6 @@ class InternAdapter(BaseMegatronModule):
             self.freeze()
 
     def forward(self, hidden_states, window_index=None, **kwargs):
-        """ forward """
         hidden_states = self.layernorm(hidden_states)
 
         # [s, b, 4 * h/p]

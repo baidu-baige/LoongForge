@@ -78,7 +78,6 @@ def vocab_size_with_padding(orig_vocab_size, make_vocab_size_divisible_by, tp):
 
 
 def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_vocab_size=None):
-    """ add embedding padding """
     if weight is None:
         return None
     if padded_vocab_size is None:
@@ -97,7 +96,6 @@ def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_voca
 
 
 def cut_embedding_padding(weight, orig_vocab_size):
-    """ cut embedding padding """
     if weight is None:
         return None
     return weight[0:orig_vocab_size, :]
@@ -171,9 +169,6 @@ def custom_partition_imbalanced(num_layers, num_parts, custom_layers):
 
 
 def partition_balanced(num_layers, num_parts, eps=1e-3):
-    """
-    partition balanced.
-    """
     # First check for the trivial edge case
     if num_layers <= num_parts:
         parts = partition_uniform(num_layers, num_parts)
@@ -197,9 +192,6 @@ def partition_balanced(num_layers, num_parts, eps=1e-3):
 
 
 def partition_uniform(num_items, num_parts):
-    """
-    partition uniform.
-    """
     parts = [0] * (num_parts + 1)
     # First check for the trivial edge case
     if num_items <= num_parts:

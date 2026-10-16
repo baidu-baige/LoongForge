@@ -67,7 +67,7 @@ def run_script(model_name, script_path, args, log_dir, logger):
     """Execute one regression script and return a result dict.
 
     The baseline path is determined by reporting.baseline (EMBODIED_BASELINE_ROOT env var
-    when set, otherwise the in-repo tests/baseline/embodied default), so no repo-root
+    when set, otherwise the in-repo tests/embodied/baseline default), so no repo-root
     argument is needed here.
     """
     out_dir = os.path.join(log_dir, model_name)

@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Wan layer spec."""
-
 from megatron.core.extensions.transformer_engine import (
     TEColumnParallelLinear,
     TERowParallelLinear,

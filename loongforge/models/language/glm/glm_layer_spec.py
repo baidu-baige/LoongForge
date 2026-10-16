@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Glm layer spec."""
-
 from typing import Tuple, Optional
 from omegaconf import ListConfig
 
@@ -41,17 +39,15 @@ def _get_glm_layer_with_te_spec(
     moe_grouped_gemm: Optional[bool] = True,
     qk_layernorm: Optional[bool] = False,
     experimental_attention_variant: Optional[str] = None,
-    args=None,
+    use_dsa_fused: bool = False,
 ) -> ModuleSpec:
     """Get the transformer layer spec for glm
 
     Args:
         experimental_attention_variant (str, optional): The type of experimental attention variant.
                                                         Defaults to None.
+        use_dsa_fused (bool): use the Omni fused DSA modules (``--use-dsa-fused``). Defaults to False.
     """
-    if args is None:
-        from loongforge.engines.mcore import get_args
-        args = get_args()
 
     mlp = _get_mlp_module_spec(
         num_experts=num_experts,
@@ -72,7 +68,6 @@ def _get_glm_layer_with_te_spec(
     if experimental_attention_variant is not None:
         # Glm Sparse Attention (DSA)
         if experimental_attention_variant == "dsa":
-            use_dsa_fused = getattr(args, "use_dsa_fused", False)
             # By default, use the naive MegatronLM implementation of DSA.
             if not use_dsa_fused:
                 from megatron.core.transformer.experimental_attention_variant.dsa import (
@@ -229,6 +224,7 @@ def get_glm_decoder_block_and_mtp_spec(
         moe_grouped_gemm=False,
         qk_layernorm=config.qk_layernorm,
         experimental_attention_variant=config.experimental_attention_variant,
+        use_dsa_fused=getattr(config, "use_dsa_fused", False),
     )
 
     moe_layer_spec = _get_glm_layer_with_te_spec(
@@ -236,6 +232,7 @@ def get_glm_decoder_block_and_mtp_spec(
         moe_grouped_gemm=config.moe_grouped_gemm,
         qk_layernorm=config.qk_layernorm,
         experimental_attention_variant=config.experimental_attention_variant,
+        use_dsa_fused=getattr(config, "use_dsa_fused", False),
     )
 
     # In FP8 training, replace `linear_q_down_proj` and `linear_kv_down_proj`
@@ -323,6 +320,7 @@ def get_glm_decoder_block_and_mtp_spec(
                     moe_grouped_gemm=config.moe_grouped_gemm,
                     qk_layernorm=config.qk_layernorm,
                     experimental_attention_variant=config.experimental_attention_variant,
+                    use_dsa_fused=getattr(config, "use_dsa_fused", False),
                 )
         else:
             transformer_layer_spec_for_mtp = block_spec

@@ -2121,6 +2121,8 @@ class DSADotProductAttention(MegatronModule):
         super().__init__(config=config)
 
         self.config: TransformerConfig = config
+        # Fix the process-wide kernel backend from this config before any kernel call.
+        get_dsa_backend(config)
         self.qkv_format: str = 'sbhd'
         # layer_number is not used.
         # attention_type is not used.

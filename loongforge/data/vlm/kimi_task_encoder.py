@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 from loongforge import constants
 from loongforge.chat_templates.base import DataRoles
 from loongforge.chat_templates.hf import HFChatTemplate
-from loongforge.chat_templates.plugins.mm_plugin import Placeholder
+from loongforge.chat_templates.plugins.base import Placeholder
 
 # Kimi multimodal special tokens
 MEDIA_BEGIN = "<|media_begin|>"

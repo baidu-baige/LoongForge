@@ -28,7 +28,7 @@ num_attention_heads: 64
 MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "llama3-70b": {
-            "engine": "mcore",
+            "engine": "megatron",
             "config_path": "configs/models/llama3",
             "config_name": "llama3_70b",
         },
@@ -121,7 +121,7 @@ MODEL_CONFIG_REGISTRY = {
 
     # === 添加你的新模型 ===
     "my-custom-vlm-8b": {
-        "engine": "mcore",
+        "engine": "megatron",
         "config_path": "configs/models/<vlm_family>",       # 组合配置文件所在目录
         "config_name": "my_new_vlm",                        # 组合配置文件名（不含 .yaml）
     },
@@ -147,7 +147,7 @@ configs/models/wan/<your_wan_variant>.yaml
 MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "my-wan-variant": {
-        "engine": "mcore",
+        "engine": "megatron",
         "config_path": "configs/models/wan",
         "config_name": "<your_wan_variant>",
     },

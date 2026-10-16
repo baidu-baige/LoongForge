@@ -230,6 +230,22 @@ def _graph_safe_unpad_and_attend(
     return attn_output_flat.reshape(batch_size, kv_seq_len, num_q_heads, head_dim)
 
 
+# Whether training runs a local full_iteration / per_microbatch CUDA graph. The GR00T-N1.6
+# optimization sets it before the model is built; None outside training.
+_GRAPH_MODE: bool | None = None
+
+
+def set_graph_mode(enabled: bool) -> None:
+    """Select the graph-safe Eagle paths: loader, FA2 packing and image-token scatter."""
+    global _GRAPH_MODE
+    _GRAPH_MODE = enabled
+
+
+def configured_graph_mode() -> bool | None:
+    """Value given to :func:`set_graph_mode`, or None if it was never called."""
+    return _GRAPH_MODE
+
+
 def _is_graph_mode_active() -> bool:
     """Check if we should use graph-safe FA2 path.
 
@@ -237,18 +253,7 @@ def _is_graph_mode_active() -> bool:
     - Full-iteration or per-microbatch CUDA graph is configured (covers warmup + capture + replay phases)
     - OR we're currently in a CUDA graph capture stream
     """
-    try:
-        from loongforge.engines.torch.global_vars import get_training_args
-
-        training_args = get_training_args()
-        if (
-            training_args.cuda_graph_impl == "local"
-            and training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}
-        ):
-            return True
-    except (ImportError, RuntimeError, AssertionError):
-        pass
-    return _is_cuda_capturing()
+    return bool(_GRAPH_MODE) or _is_cuda_capturing()
 
 
 def _install_graph_safe_fa2_patch():

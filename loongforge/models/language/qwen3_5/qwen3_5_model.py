@@ -14,7 +14,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.models.common.embeddings.rotary_pos_embedding import MultimodalRotaryEmbedding
 
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 from loongforge.models.language.base import BaseGPTModel
 from .qwen3_5_config import Qwen35Config
 

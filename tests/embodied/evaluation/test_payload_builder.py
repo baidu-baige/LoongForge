@@ -183,8 +183,7 @@ def test_yaml_override_respects_type_annotation_whitelist():
 
 
 # ---------------------------------------------------------------------------
-# CALVIN + ManiSkill + SimplerEnv coverage (added when the refactor extended
-# past LIBERO to the other 3 A-form benchmarks).
+# CALVIN + ManiSkill + SimplerEnv coverage
 # ---------------------------------------------------------------------------
 
 

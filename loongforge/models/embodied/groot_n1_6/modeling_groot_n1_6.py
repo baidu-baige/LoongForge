@@ -929,6 +929,9 @@ class GrootN1d6Policy(nn.Module):
         self._predict_action_statistics: Dict[str, Any] | None = None
         self._predict_action_default_processor: StateActionProcessor | None = None
         self._predict_action_processor_cache: dict[str, StateActionProcessor] = {}
+        # Data-side classes for inference preprocessing, given by configure_predict_action.
+        self._predict_action_collator_cls = None
+        self._predict_action_processor_cls = None
 
     @staticmethod
     def default_fp8_targets() -> Dict[str, Any]:
@@ -976,16 +979,24 @@ class GrootN1d6Policy(nn.Module):
         *,
         checkpoint_statistics: Dict[str, Any],
         eagle_assets_path: str,
+        collator_cls: type,
+        processor_cls: type,
         embodiment_tag: str = _DEFAULT_PREDICT_ACTION_EMBODIMENT_TAG,
         use_bf16: bool | None = None,
         validation_zero_state: bool = False,
     ) -> None:
-        """Configure eval-side resources used by ``predict_action``."""
+        """Configure eval-side resources used by ``predict_action``.
+
+        ``collator_cls`` (``Gr00tN1d6DataCollator``) and ``processor_cls``
+        (``StateActionProcessor``) come from the data package; the eval factory passes them.
+        """
         if embodiment_tag not in MODALITY_CONFIGS:
             raise ValueError(f"Unsupported GR00T-N1.6 embodiment_tag={embodiment_tag!r}")
         if embodiment_tag not in EMBODIMENT_TAG_TO_PROJECTOR_INDEX:
             raise ValueError(f"No projector id registered for embodiment_tag={embodiment_tag!r}")
 
+        self._predict_action_collator_cls = collator_cls
+        self._predict_action_processor_cls = processor_cls
         self.embodiment_tag = embodiment_tag
         self.modality_config = MODALITY_CONFIGS[embodiment_tag]
         self.modality_meta = EMBODIMENT_STAT_CONFIGS[embodiment_tag]["modality_meta"]
@@ -1005,9 +1016,7 @@ class GrootN1d6Policy(nn.Module):
             self._predict_action_statistics
         )
         self.native_action_dim = self._compute_native_action_dim(self._predict_action_default_processor)
-        from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import Gr00tN1d6DataCollator
-
-        self.model.collator = Gr00tN1d6DataCollator(
+        self.model.collator = collator_cls(
             model_name=eagle_assets_path,
             vlm_tokenizer_path=eagle_assets_path,
             model_type=self.config.backbone_model_type,
@@ -1375,9 +1384,9 @@ class GrootN1d6Policy(nn.Module):
         )
 
     def _build_state_action_processor(self, statistics: Dict[str, Any]) -> "StateActionProcessor":
-        from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import StateActionProcessor
-
-        processor = StateActionProcessor(
+        if self._predict_action_processor_cls is None:
+            raise RuntimeError("Call configure_predict_action(...) before predict_action.")
+        processor = self._predict_action_processor_cls(
             modality_configs={self.embodiment_tag: self.modality_config},
             statistics=statistics,
             apply_sincos_state_encoding=False,
@@ -1409,14 +1418,12 @@ class GrootN1d6Policy(nn.Module):
         if self.model.collator is not None:
             return
         eagle_assets_path = self._predict_action_eagle_assets_path
-        if not eagle_assets_path:
+        if not eagle_assets_path or self._predict_action_collator_cls is None:
             raise RuntimeError(
                 "GR00T-N1.6 predict_action requires Eagle processor assets. "
                 "Call configure_predict_action(...) with a valid eagle_assets_path."
             )
-        from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import Gr00tN1d6DataCollator
-
-        self.model.collator = Gr00tN1d6DataCollator(
+        self.model.collator = self._predict_action_collator_cls(
             model_name=eagle_assets_path,
             vlm_tokenizer_path=eagle_assets_path,
             model_type=self.config.backbone_model_type,

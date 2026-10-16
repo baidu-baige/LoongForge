@@ -51,7 +51,7 @@ DTYPE="${DTYPE:-float32}"
 LOCAL_MODEL_PATH="${LOCAL_MODEL_PATH:-}"
 
 PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}" \
-  python "$LOONGFORGE_PATH/tools/mcore_checkpoint_convert/fastwam/preprocess_action_dit_backbone.py" \
+  python "$LOONGFORGE_PATH/examples/fastwam/preprocess_action_dit_backbone.py" \
     --output "$OUTPUT" \
     --model-id "$MODEL_ID" \
     --tokenizer-model-id "$TOKENIZER_MODEL_ID" \

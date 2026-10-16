@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""llama model"""
-
 from typing import Optional
 
 import torch
@@ -14,7 +12,7 @@ from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
 
 from loongforge.models.language.base import BaseGPTModel
-from loongforge.engines.mcore.model_config import import_module
+from loongforge.models.common.spec_utils import import_module
 from .llama_config import LLaMAConfig
 
 

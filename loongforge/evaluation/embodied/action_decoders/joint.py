@@ -17,9 +17,8 @@ from loongforge.evaluation.embodied.action_decoders.base import ActionDecoder, r
 from loongforge.evaluation.embodied.adapters.robotwin import ROBOTWIN_ACTION_DIM
 
 # openpi Aloha/RoboTwin action helpers (adapt_to_pi output side + delta->abs).
-# These used to live in ``adapters/robotwin.py``; they now live next to their
-# only consumer (the RoboTwin pi0.5 decoder) so the action side no longer
-# imports behavior from the adapter. ``_normalize_range``, ``_unnormalize_range``
+# They live next to their only consumer (the RoboTwin pi0.5 decoder), so the
+# action side does not import behavior from the adapter. ``_normalize_range``, ``_unnormalize_range``
 # and ``_PI05_JOINT_FLIP_MASK`` are intentionally duplicated from
 # ``payload_builders/pi05.py`` (proprio side) rather than shared, to avoid a
 # shared module.

@@ -11,9 +11,12 @@ import unittest
 from unittest.mock import patch
 
 import loongforge.train as train
+from loongforge import constants
 from loongforge.models import catalog
+from loongforge.training import registry
 
 ROOT = Path(__file__).resolve().parents[1]
+PHASES = (constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT)
 
 
 def _literal_assignment(path, name):
@@ -25,15 +28,32 @@ def _literal_assignment(path, name):
     raise AssertionError(f"{name} not found in {path}")
 
 
+def _previous_method(family, phase):
+    """Method that the removed @register_model_trainer factories ran for (family, phase), or None."""
+    if family in constants.LanguageModelFamilies.names():
+        return {"pretrain": "pretrain_llm", "sft": "sft_llm"}[phase]
+    if family == constants.VisionLanguageModelFamilies.INTERN_VL:
+        return {"sft": "sft_internvl"}.get(phase)
+    if family == constants.VisionLanguageModelFamilies.ERNIE4_5_VL:
+        return {"sft": "sft_ernie"}.get(phase)
+    if family in constants.VisionLanguageModelFamilies.names():
+        return {"pretrain": "pretrain_vlm", "sft": "sft_vlm"}[phase]
+    if family in (constants.CustomModelFamilies.WAN2_1_I2V, constants.CustomModelFamilies.WAN2_2_I2V):
+        return {"pretrain": "pretrain_wan"}.get(phase)
+    if family == constants.CustomModelFamilies.QWEN_IMAGE:
+        return {"pretrain": "pretrain_qwen_image"}.get(phase)
+    return None
+
+
 class TrainDispatchTest(unittest.TestCase):
-    def test_routes_registered_models_and_config_only_mcore(self):
+    def test_routes_registered_models_and_config_only_megatron(self):
         cases = (
-            (["train.py", "--model-name", "qwen3-0.6b"], "loongforge.engines.mcore.entrypoint"),
-            (["train.py", "--model-name", "pi05"], "loongforge.engines.torch.entrypoint"),
-            (["train.py", "--model-name", "GROOT-N1-6"], "loongforge.engines.torch.entrypoint"),
+            (["train.py", "--model-name", "qwen3-0.6b"], "loongforge.training.megatron_runner"),
+            (["train.py", "--model-name", "pi05"], "loongforge.training.torch_runner"),
+            (["train.py", "--model-name", "GROOT-N1-6"], "loongforge.training.torch_runner"),
             (["train.py", "--model-name", "pi05", "--config-file", "custom.yaml"],
-             "loongforge.engines.torch.entrypoint"),
-            (["train.py", "--config-file", "custom.yaml"], "loongforge.engines.mcore.entrypoint"),
+             "loongforge.training.torch_runner"),
+            (["train.py", "--config-file", "custom.yaml"], "loongforge.training.megatron_runner"),
         )
         for argv, entrypoint in cases:
             with (
@@ -44,13 +64,58 @@ class TrainDispatchTest(unittest.TestCase):
                 train.main()
                 load.assert_called_once_with(entrypoint)
 
+    def test_megatron_family_and_phase_resolve_to_previous_method(self):
+        families = [
+            *constants.LanguageModelFamilies.names(),
+            *constants.VisionLanguageModelFamilies.names(),
+            *constants.CustomModelFamilies.names(),
+        ]
+        for family in families:
+            for phase in PHASES:
+                expected = _previous_method(family, phase)
+                with self.subTest(family=family, phase=phase), \
+                        patch.object(registry.importlib, "import_module") as load:
+                    if expected is None:
+                        with self.assertRaises(ValueError):
+                            registry.resolve_method(family, phase)
+                        load.assert_not_called()
+                    else:
+                        registry.resolve_method(family, phase)
+                        load.assert_called_once_with(f"loongforge.training.methods.{expected}")
+
+    def test_split_model_config_reads_top_level_or_model_section(self):
+        llm = constants.LanguageModelFamilies.names()[0]
+        vlm = constants.VisionLanguageModelFamilies.names()[0]
+        top = SimpleNamespace(model_type=llm)
+        self.assertEqual(constants.split_model_config(top), (llm, top))
+        nested = SimpleNamespace(model_type=vlm)
+        self.assertEqual(constants.split_model_config(SimpleNamespace(model_type=vlm, model=nested)), (vlm, nested))
+        self.assertEqual(constants.split_model_config(SimpleNamespace(model=nested)), (vlm, nested))
+        with self.assertRaises(ValueError):
+            constants.split_model_config(SimpleNamespace(model_type=vlm))
+
+    def test_megatron_methods_train_through_pretrain(self):
+        for module in sorted(set(registry.METHOD_REGISTRY.values())):
+            with self.subTest(module=module):
+                tree = ast.parse((ROOT / (module.replace(".", "/") + ".py")).read_text(encoding="utf-8"))
+                train_fn = next(
+                    (node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "train"), None
+                )
+                self.assertIsNotNone(train_fn)
+                self.assertEqual([arg.arg for arg in train_fn.args.args], ["args"])
+                called = {
+                    node.func.id for node in ast.walk(train_fn)
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                }
+                self.assertIn("pretrain", called)
+
     def test_rejects_unknown_and_ambiguous_models(self):
         with patch.object(sys, "argv", ["train.py", "--model-name", "missing"]), self.assertRaises(SystemExit):
             train.main()
         with (
             patch.object(sys, "argv", ["train.py", "--model-name", "same-name"]),
             patch.dict(catalog.MODEL_CONFIG_REGISTRY, {
-                "same-name": {"engine": "mcore"}, "same_name": {"engine": "torch"},
+                "same-name": {"engine": "megatron"}, "same_name": {"engine": "torch"},
             }),
             self.assertRaises(SystemExit),
         ):
@@ -72,7 +137,7 @@ class TrainDispatchTest(unittest.TestCase):
     def test_all_bindings_point_to_existing_configs_and_types(self):
         for name, entry in catalog.MODEL_CONFIG_REGISTRY.items():
             with self.subTest(name=name):
-                self.assertIn(entry["engine"], {"mcore", "torch"})
+                self.assertIn(entry["engine"], {"megatron", "torch"})
                 self.assertTrue(Path(catalog.get_config_path(name)).is_file())
                 if entry["engine"] != "torch":
                     continue
@@ -112,7 +177,7 @@ import sys
 from loongforge.models.catalog import get_model_entry, get_config_path
 import loongforge.data
 assert get_model_entry('pi05')['engine'] == 'torch'
-assert get_model_entry('QWEN3-0.6B')['engine'] == 'mcore'
+assert get_model_entry('QWEN3-0.6B')['engine'] == 'megatron'
 assert get_config_path('qwen3-0.6b').endswith('/configs/models/qwen3/qwen3_0_6b.yaml')
 assert not any(name.split('.')[0] in {'torch', 'megatron', 'transformers', 'omegaconf'} for name in sys.modules)
 assert not any(name.startswith('loongforge.engines.') or name.startswith('loongforge.training.') for name in sys.modules)

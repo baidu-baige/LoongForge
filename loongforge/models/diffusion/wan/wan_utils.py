@@ -1,18 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""wan utils"""
-
 import torch
 from megatron.core import mpu
-from loongforge.engines.mcore import get_args
 from einops import rearrange
 from megatron.core.parallel_state import get_context_parallel_group
 from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
 )
-from loongforge.engines.mcore.utils import print_rank_0
+from megatron.training.utils import print_rank_0
 
 
 # ---------------------------------------------------------------------------
@@ -69,10 +66,8 @@ def wan_rope_apply(
     return x_out.clone(memory_format=torch.contiguous_format)
 
 
-def send_batch(batch, broadcast, args=None):
-    """send batch"""
-    if args is None:
-        args = get_args()
+def send_batch(batch, broadcast, args):
+    """Broadcast a batch from the source rank; sets ``args.micro_batch_size`` from it."""
     video_shape = torch.tensor(batch["latents"].shape, dtype=torch.int64).cuda(
         non_blocking=True
     )
@@ -115,10 +110,8 @@ def send_batch(batch, broadcast, args=None):
     return batch
 
 
-def receive_batch(broadcast, args=None):
-    """receive batch"""
-    if args is None:
-        args = get_args()
+def receive_batch(broadcast, args):
+    """Receive a batch broadcast by ``send_batch``; sets ``args.micro_batch_size`` from it."""
     device = torch.cuda.current_device()
     # receive video
     video_shape = torch.empty(5, dtype=torch.int64, device=device)
@@ -177,8 +170,8 @@ def receive_batch(broadcast, args=None):
     return batch
 
 
-def broadcast_on_cp_group(batch):
-    """broadcast_on_cp_group,"""
+def broadcast_on_cp_group(batch, args):
+    """Broadcast the batch from CP rank 0 to the other CP ranks."""
 
     def _broadcast(item):
         if item is not None:
@@ -189,23 +182,6 @@ def broadcast_on_cp_group(batch):
             )
 
     if mpu.get_context_parallel_rank() == 0:
-        return send_batch(batch, _broadcast)
+        return send_batch(batch, _broadcast, args)
     else:
-        return receive_batch(_broadcast)
-
-
-def broadcast_on_tp_group(batch):
-    """get_batch_on_this_tp_rank,"""
-
-    def _broadcast(item):
-        if item is not None:
-            torch.distributed.broadcast(
-                item,
-                mpu.get_tensor_model_parallel_src_rank(),
-                group=mpu.get_tensor_model_parallel_group(),
-            )
-
-    if mpu.get_tensor_model_parallel_rank() == 0:
-        return send_batch(batch, _broadcast)
-    else:
-        return receive_batch(_broadcast)
+        return receive_batch(_broadcast, args)

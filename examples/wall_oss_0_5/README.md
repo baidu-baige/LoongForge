@@ -5,7 +5,7 @@ Run these scripts from the repository root.
 | Script | Purpose |
 | --- | --- |
 | `compute_norm_stats.sh` | Compute LeRobot action/state normalization statistics (e.g. `libero_norm_stats.json`). |
-| `run_wall_oss_dmuon_fsdp8.sh` | Run Wall-OSS-0.5 fine-tuning on 8 GPUs with FSDP + the DMuon optimizer. |
+| `finetune_wall_oss_0_5_dmuon_fsdp8.sh` | Run Wall-OSS-0.5 fine-tuning on 8 GPUs with FSDP + the DMuon optimizer. |
 
 ## Paths
 
@@ -26,7 +26,7 @@ export WALL_OSS_OPS_SRC=/path/to/ops/cuda_source/wall_oss_05_op   # CUDA operato
 
 The fused operators (RoPE / M-RoPE / RMSNorm / SwiGLU / MoE permute / index
 kernels) ship as the standalone `wall_oss_05_op` package, whose sources live in
-`ops/cuda_source/wall_oss_05_op`. `run_wall_oss_dmuon_fsdp8.sh` imports the
+`ops/cuda_source/wall_oss_05_op`. `finetune_wall_oss_0_5_dmuon_fsdp8.sh` imports the
 package first and, when it is missing, installs it from `WALL_OSS_OPS_SRC`
 (default `$LOONGFORGE_PATH/ops/cuda_source/wall_oss_05_op`):
 
@@ -48,7 +48,7 @@ Wall-OSS-0.5 normalizes actions/proprioception with per-dim `mean/std/q01/q99`
 statistics. **This step is required before the fine-tuning below** — the
 fine-tune script consumes the resulting JSON via `NORM_STATS_PATH`, so generate
 it once from the source LeRobot dataset first. The JSON layout matches
-`wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats`.
+`loongforge/data/embodied/wall_oss_0_5/wall_oss_0_5_utils.py::load_norm_stats`.
 
 ```bash
 DATASET_PATH=/path/to/libero \

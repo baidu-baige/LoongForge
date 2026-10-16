@@ -27,7 +27,6 @@ class HealthHandler(BaseHTTPRequestHandler):
     """Provide HealthHandler behavior."""
 
     def do_GET(self) -> None:
-        """Run do_GET."""
         if self.path == "/healthz":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -38,19 +37,16 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format: str, *args: Any) -> None:
-        """Run log_message."""
         return
 
 
 def start_health_server(port: int) -> None:
-    """Run start_health_server."""
     server = ReusableHTTPServer(("0.0.0.0", port), HealthHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
 
 def _apply_config(args: argparse.Namespace) -> argparse.Namespace:
-    """Run _apply_config."""
     if not args.config:
         return args
     config = load_config(args.config)
@@ -70,7 +66,6 @@ def _apply_config(args: argparse.Namespace) -> argparse.Namespace:
 
 
 def main() -> None:
-    """Run main."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="")
     parser.add_argument("--port", type=int, default=10093)

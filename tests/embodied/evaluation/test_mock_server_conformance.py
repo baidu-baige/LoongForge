@@ -16,20 +16,17 @@ from loongforge.evaluation.embodied.transport import PolicyClient, PolicyServer
 
 
 def _free_port() -> int:
-    """Run _free_port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
 
 
 def _serve(port: int) -> None:
-    """Run _serve."""
     policy = MockPolicy(action_chunk_size=4)
     PolicyServer(policy=policy, host="127.0.0.1", port=port, metadata=policy.metadata).serve_forever()
 
 
 def test_mock_server_conformance() -> None:
-    """Run test_mock_server_conformance."""
     port = _free_port()
     proc = mp.Process(target=_serve, args=(port,), daemon=True)
     proc.start()

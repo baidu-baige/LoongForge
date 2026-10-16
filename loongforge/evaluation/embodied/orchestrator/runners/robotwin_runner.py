@@ -32,7 +32,6 @@ _SUCCESS_RATE_LINE_RE = re.compile(
 
 
 def _write_deploy_policy(args: argparse.Namespace, path: pathlib.Path) -> None:
-    """Run _write_deploy_policy."""
     fields: Dict[str, object] = {
         "policy_name": "loongforge.evaluation.embodied.bridges.robotwin_policy",
         "policy_ckpt_path": args.policy_ckpt_path,
@@ -60,7 +59,6 @@ def _write_deploy_policy(args: argparse.Namespace, path: pathlib.Path) -> None:
 
 
 def _write_worker_eval_step_limit(args: argparse.Namespace) -> Optional[pathlib.Path]:
-    """Run _write_worker_eval_step_limit."""
     if not args.worker_local_files or args.step_limit_override is None:
         return None
     robotwin_path = pathlib.Path(args.robotwin_path)
@@ -77,7 +75,6 @@ def _write_worker_eval_step_limit(args: argparse.Namespace) -> Optional[pathlib.
 
 
 def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
-    """Run _worker_eval_script."""
     if not args.worker_local_files:
         return None
     robotwin_path = pathlib.Path(args.robotwin_path)
@@ -147,7 +144,6 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
 def build_command(
     args: argparse.Namespace, config_path: pathlib.Path, eval_script: Optional[pathlib.Path] = None
 ) -> List[str]:
-    """Run build_command."""
     return [
         args.robotwin_python,
         str(eval_script or (pathlib.Path(args.robotwin_path) / "script" / "eval_policy.py")),
@@ -168,7 +164,6 @@ def build_command(
 
 
 def _robotwin_result_root(args: argparse.Namespace) -> pathlib.Path:
-    """Run _robotwin_result_root."""
     return (
         pathlib.Path(args.robotwin_path)
         / "eval_result"
@@ -180,7 +175,6 @@ def _robotwin_result_root(args: argparse.Namespace) -> pathlib.Path:
 
 
 def _robotwin_result_dirs(args: argparse.Namespace) -> Set[pathlib.Path]:
-    """Run _robotwin_result_dirs."""
     result_root = _robotwin_result_root(args)
     if not result_root.is_dir():
         return set()
@@ -188,7 +182,6 @@ def _robotwin_result_dirs(args: argparse.Namespace) -> Set[pathlib.Path]:
 
 
 def _new_robotwin_result_dir(args: argparse.Namespace, before_dirs: Set[pathlib.Path]) -> Optional[pathlib.Path]:
-    """Run _new_robotwin_result_dir."""
     candidates = sorted(_robotwin_result_dirs(args) - before_dirs, key=lambda path: path.stat().st_mtime)
     if not candidates:
         return None
@@ -196,12 +189,10 @@ def _new_robotwin_result_dir(args: argparse.Namespace, before_dirs: Set[pathlib.
 
 
 def _robotwin_artifact_dir(args: argparse.Namespace) -> pathlib.Path:
-    """Run _robotwin_artifact_dir."""
     return pathlib.Path(args.output_dir) / "artifacts" / "robotwin" / args.task_name / args.task_config
 
 
 def _copy_file_if_exists(source: pathlib.Path, target_dir: pathlib.Path) -> Optional[pathlib.Path]:
-    """Run _copy_file_if_exists."""
     if not source.is_file():
         return None
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -217,7 +208,6 @@ def _collect_robotwin_artifacts(
     config_path: Optional[pathlib.Path],
     result_dir: Optional[pathlib.Path],
 ) -> Dict[str, object]:
-    """Run _collect_robotwin_artifacts."""
     artifact_dir = _robotwin_artifact_dir(args)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -257,7 +247,6 @@ def _cleanup_robotwin_work_files(
     log_path: pathlib.Path,
     config_path: Optional[pathlib.Path],
 ) -> None:
-    """Run _cleanup_robotwin_work_files."""
     artifact_dir = _robotwin_artifact_dir(args).resolve()
     for path in [log_path, config_path]:
         if path is None:
@@ -271,7 +260,6 @@ def _cleanup_robotwin_work_files(
 
 
 def _override_step_limit(robotwin_path: pathlib.Path, task_name: str, step_limit: Optional[int]) -> Optional[str]:
-    """Run _override_step_limit."""
     if step_limit is None:
         return None
     step_limit_path = robotwin_path / "task_config" / "_eval_step_limit.yml"
@@ -288,7 +276,6 @@ def _override_eval_policy_for_smoke(
     disable_expert_check: bool,
     start_seed: Optional[int] = None,
 ) -> Optional[str]:
-    """Run _override_eval_policy_for_smoke."""
     if test_num is None and not disable_expert_check and start_seed is None:
         return None
     eval_policy_path = robotwin_path / "script" / "eval_policy.py"
@@ -307,7 +294,6 @@ def _override_eval_policy_for_smoke(
 
 
 def _apply_config(args: argparse.Namespace, config: Dict[str, object]) -> argparse.Namespace:
-    """Run _apply_config."""
     benchmark = config.get("benchmark") or {}
     model = config.get("model") or {}
     server = config.get("server") or {}
@@ -520,7 +506,6 @@ def _write_standard_outputs(
 
 
 def run_evaluation(args: argparse.Namespace) -> int:
-    """Run run_evaluation."""
     robotwin_path = pathlib.Path(args.robotwin_path)
     eval_script = robotwin_path / "script" / "eval_policy.py"
     if not eval_script.is_file():
@@ -614,7 +599,6 @@ def run_evaluation(args: argparse.Namespace) -> int:
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="")
     parser.add_argument("--loongforge-root", default=os.environ.get("LOONGFORGE_ROOT", "/workspace/LoongForge-VLA"))
@@ -657,7 +641,6 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run main."""
     args = build_argparser().parse_args()
     if args.config:
         args = _apply_config(args, load_config(args.config))

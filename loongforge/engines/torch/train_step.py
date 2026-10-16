@@ -4,7 +4,7 @@
 """Single optimizer step: dataclasses, forward/backward, grad clip, update.
 
 All functions operate on an explicit ``StepContext`` rather than ``self.*``.
-``TorchOptimization`` (frozen dataclass, all-None = vanilla FinetuneTrainer)
+``TorchOptimization`` (frozen dataclass, all-None = default behavior)
 lets per-model optimizations override any slice without subclassing.
 """
 
@@ -15,6 +15,8 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Callable, Dict, Optional, Tuple
+
+from loongforge.engines.torch.initialize import cfg_bool, resolve_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ class StepContext:
 
 @dataclass(frozen=True)
 class TorchOptimization:
-    # consulted by engines/torch/runner.py
+    # consulted by training/torch_runner.py
     prepare_args: Optional[Callable] = None
     configure_gc: Optional[Callable] = None
     wrap_model: Optional[Callable] = None
@@ -83,29 +85,12 @@ class TorchOptimization:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _cfg_bool(cfg, key: str, default: bool = False) -> bool:
-    value = getattr(cfg, key, default)
-    if isinstance(value, str):
-        return value.lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
-def _resolve_dtype(dtype_str: str):
-    import torch as _torch
-    mapping = {
-        "bfloat16": _torch.bfloat16,
-        "float16": _torch.float16,
-        "float32": _torch.float32,
-    }
-    return mapping[dtype_str]
-
-
 def train_autocast(step_ctx: StepContext):
     """Return the autocast context for training forward passes."""
     import torch as _torch
-    if _cfg_bool(step_ctx.model_cfg, "disable_train_autocast", False):
+    if cfg_bool(step_ctx.model_cfg, "disable_train_autocast", False):
         return nullcontext()
-    dtype = _resolve_dtype(step_ctx.training_args.dtype)
+    dtype = resolve_dtype(step_ctx.training_args.dtype)
     return _torch.autocast("cuda", dtype=dtype)
 
 
@@ -115,7 +100,7 @@ def train_fp8_ctx(step_ctx: StepContext):
     ``te.fp8_autocast`` has to enclose the whole model call, so both the
     standard forward and the CUDA-graph capture go through this.
     """
-    from loongforge.engines.torch.distributed.fp8_utils import resolve_fp8_forward_ctx
+    from loongforge.engines.torch.quantization.fp8_utils import resolve_fp8_forward_ctx
 
     return resolve_fp8_forward_ctx(step_ctx.training_args)
 

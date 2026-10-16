@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_lingbot_va_libero_fsdp_finetune.sh - LingBot-VA LIBERO-Long post-training
+# finetune_lingbot_va_libero_fsdp.sh - LingBot-VA LIBERO-Long post-training
 # with baseline-aligned data semantics.
 #
 # Set all data and checkpoint paths to existing local files; this script runs offline.
 #
 # Usage:
-#   bash run_lingbot_va_libero_fsdp_finetune.sh
-#   TRAIN_ITERS=50 bash run_lingbot_va_libero_fsdp_finetune.sh   # override via env
-#   bash run_lingbot_va_libero_fsdp_finetune.sh --train-iters 50 # override a training param (flag form)
+#   bash finetune_lingbot_va_libero_fsdp.sh
+#   TRAIN_ITERS=50 bash finetune_lingbot_va_libero_fsdp.sh   # override via env
+#   bash finetune_lingbot_va_libero_fsdp.sh --train-iters 50 # override a training param (flag form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

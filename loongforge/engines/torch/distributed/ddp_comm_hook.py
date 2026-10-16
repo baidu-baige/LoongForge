@@ -12,7 +12,8 @@ from torch.distributed.algorithms.ddp_comm_hooks.default_hooks import (
     fp16_compress_hook,
 )
 
-from .fp8_a2a_comm import fp8_a2a_allgather_hook
+from loongforge.engines.torch.quantization.fp8_a2a_comm import fp8_a2a_allgather_hook
+
 from .utils import is_rank_zero
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-import loongforge.engines.mcore  # noqa: F401 - initialize package imports in training order
+import loongforge.engines.megatron  # noqa: F401 - initialize package imports in training order
 import torch
 from PIL import Image
 from transformers import AutoImageProcessor, AutoTokenizer
@@ -18,7 +18,7 @@ from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
 from loongforge.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
-from loongforge.chat_templates.plugins.kimi_plugin import KimiPlugin
+from loongforge.chat_templates.plugins.kimi import KimiPlugin
 import loongforge.data.vlm_dataloader as dataloader_provider
 from loongforge.data.vlm.base_task_encoder import BaseTaskEncoder
 from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
@@ -348,13 +348,10 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
             None,
         )
         encoder.image_projector = None
+        encoder.use_vit_dp_balance = False
         return encoder
 
-    @patch(
-        "loongforge.models.multimodal.encoder_model.get_args",
-        return_value=SimpleNamespace(use_vit_dp_balance=False),
-    )
-    def test_matching_image_tokens_and_features_are_accepted(self, _):
+    def test_matching_image_tokens_and_features_are_accepted(self):
         encoder = self._encoder_with_features(2)
         input_ids = torch.tensor([[99, 1, 99]])
         input_embeds = torch.zeros(3, 1, 4)
@@ -364,11 +361,7 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
         self.assertEqual(combined.shape, input_embeds.shape)
         self.assertEqual(mask.sum().item(), 8)
 
-    @patch(
-        "loongforge.models.multimodal.encoder_model.get_args",
-        return_value=SimpleNamespace(use_vit_dp_balance=False),
-    )
-    def test_mismatched_image_tokens_and_features_are_rejected(self, _):
+    def test_mismatched_image_tokens_and_features_are_rejected(self):
         encoder = self._encoder_with_features(1)
         input_ids = torch.tensor([[99, 1, 99]])
         input_embeds = torch.zeros(3, 1, 4)

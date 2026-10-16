@@ -23,7 +23,6 @@ class MockPolicy:
         default_unnorm_key: str = "libero_franka",
         available_unnorm_keys: Optional[List[str]] = None,
     ) -> None:
-        """Run __init__."""
         self._action_chunk_size = action_chunk_size
         self._action_dim = action_dim
         self._default_unnorm_key = default_unnorm_key
@@ -32,7 +31,6 @@ class MockPolicy:
 
     @property
     def metadata(self) -> Dict[str, Any]:
-        """Run metadata."""
         return {
             "protocol_version": PROTOCOL_VERSION,
             "env": "vla_eval_mock_policy_server",
@@ -54,12 +52,10 @@ class MockPolicy:
         }
 
     def reset(self, episode_id: str) -> Dict[str, Any]:
-        """Run reset."""
         self._chunk_cache.pop(episode_id, None)
         return {"episode_id": episode_id}
 
     def predict_action(self, episode_id: str = "default", episode_step: int = 0, **_: Any) -> Dict[str, Any]:
-        """Run predict_action."""
         cache_entry = self._chunk_cache.get(episode_id)
         if cache_entry is not None:
             chunk_index, chunk = cache_entry
@@ -81,7 +77,6 @@ class MockPolicy:
         }
 
     def _generate_chunk(self) -> np.ndarray:
-        """Run _generate_chunk."""
         chunk = np.zeros((self._action_chunk_size, self._action_dim), dtype=np.float32)
         chunk[:, :3] = np.random.uniform(-0.01, 0.01, (self._action_chunk_size, 3))
         chunk[:, 3:6] = np.random.uniform(-0.005, 0.005, (self._action_chunk_size, 3))

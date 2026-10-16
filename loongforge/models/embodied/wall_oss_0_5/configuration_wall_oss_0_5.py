@@ -63,10 +63,8 @@ class WallOss05ModelConfig:
 
     @property
     def action_dim(self) -> int:
-        """Action dim."""
         return int(sum(self.dof_config.values()))
 
     @property
     def propri_dim(self) -> int:
-        """Propri dim."""
         return int(sum(self.agent_pos_config.values()))

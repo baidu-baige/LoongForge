@@ -18,7 +18,7 @@ adaptive
 
 import numpy as np
 
-from .data_utils import get_text_token_num, group_frame_by_video
+from .utils.data_utils import get_text_token_num, group_frame_by_video
 import logging
 
 logger = logging.getLogger(__name__)

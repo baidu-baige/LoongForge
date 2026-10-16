@@ -52,7 +52,6 @@ TASK_TO_ENV_NAME = {
 
 
 def _infer_policy_setup(robot_setup: str) -> str:
-    """Run _infer_policy_setup."""
     if robot_setup.startswith("google_robot"):
         return "google_robot"
     if robot_setup.startswith("widowx"):
@@ -61,7 +60,6 @@ def _infer_policy_setup(robot_setup: str) -> str:
 
 
 def _default_camera_name(robot_setup: str) -> str:
-    """Run _default_camera_name."""
     policy_setup = _infer_policy_setup(robot_setup)
     if policy_setup == "google_robot":
         return "overhead_camera"
@@ -69,7 +67,6 @@ def _default_camera_name(robot_setup: str) -> str:
 
 
 def _extract_agent_state(env_obs: Dict[str, Any]) -> Dict[str, Any]:
-    """Run _extract_agent_state."""
     agent = env_obs.get("agent", {})
     if isinstance(agent, dict):
         return agent
@@ -104,7 +101,6 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         action_scale: float = 1.0,
         rotation_mode: str = "euler",
     ) -> None:
-        """Run __init__."""
         if task_name not in TASK_TO_ENV_NAME:
             raise ValueError(f"Unknown SimplerEnv task {task_name!r}; choose one of {sorted(TASK_TO_ENV_NAME)}")
         self.task_name = task_name
@@ -184,7 +180,6 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         }
 
     def action_from_canonical(self, canonical_action: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Any:
-        """Run action_from_canonical."""
         if "world_vector" in canonical_action:
             world_vector = np.asarray(canonical_action["world_vector"], dtype=np.float32).reshape(-1)
             rotation_delta = np.asarray(
@@ -209,7 +204,6 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         ).astype(np.float32)
 
     def _convert_rotation(self, rotation_delta: np.ndarray) -> np.ndarray:
-        """Run _convert_rotation."""
         if self.rotation_mode == "axis_angle":
             return rotation_delta.astype(np.float32)
         # Lazy import: ``transforms3d`` is only available in the simplerenv
@@ -223,14 +217,12 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         return np.asarray(axis * angle, dtype=np.float32)
 
     def _convert_gripper(self, gripper_value: Any) -> np.ndarray:
-        """Run _convert_gripper."""
         value = float(np.asarray(gripper_value, dtype=np.float32).reshape(-1)[0])
         if self.policy_setup == "google_robot":
             return np.asarray([value], dtype=np.float32)
         return np.asarray([2.0 * (value > 0.5) - 1.0], dtype=np.float32)
 
     def get_eval_context(self) -> Dict[str, Any]:
-        """Run get_eval_context."""
         return {
             "benchmark": "simplerenv",
             "robot_setup": self.robot_setup,

@@ -71,7 +71,7 @@ The following performance optimizations are user-controllable and are exported a
 
 For example, to disable the optional optimizations:
 
-The command below uses RoboTwin as an example; for LIBERO, use `run_lingbot_va_libero_fsdp_finetune.sh`.
+The command below uses RoboTwin as an example; for LIBERO, use `finetune_lingbot_va_libero_fsdp.sh`.
 
 ```bash
 LINGBOT_BALANCED_SAMPLER=0 \

@@ -57,16 +57,21 @@ loongforge/
 │   └── embodied/
 │       ├── registry.py
 │       └── <model>/
-├── data/embodied/
-│   ├── dataloader.py
-│   └── datasets/
+├── data/
+│   ├── embodied_dataloader.py
+│   └── embodied/
+│       ├── registry.py
+│       ├── datasets/
+│       └── <model>/
+├── training/
+│   ├── torch_runner.py
+│   └── methods/
 ├── engines/
-│   ├── mcore/
+│   ├── megatron/
 │   └── torch/
-│       ├── entrypoint.py
 │       ├── parser.py
-│       ├── training_args.py
-│       ├── trainers/
+│       ├── arguments.py
+│       ├── optimizations/
 │       ├── distributed/
 │       └── optimizer/
 └── evaluation/embodied/

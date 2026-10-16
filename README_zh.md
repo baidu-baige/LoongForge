@@ -202,7 +202,7 @@ EMBODIMENT_TAG=oxe_droid \
 
 GPUS_PER_NODE=8 TRAIN_ITERS=20 SAVE_INTERVAL=20 \
 OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
-  bash examples/dreamzero/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
+  bash examples/dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh
 ```
 
 示例运行 20 步，训练产物保存在 `OUTPUT_DIR` 下。
@@ -252,7 +252,7 @@ OUTPUT_DIR=/workspace/data/dreamzero/outputs/lora \
 <li><a href="examples/qwen3.5/">Qwen3.5</a> ✅</li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a> ✅</li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a> ✅</li>
-<li><a href="examples/kimi_k2.5/">Kimi-K2.5/2.6</a> ✅</li>
+<li><a href="examples/kimi_k2.x/">Kimi-K2.5/2.6</a> ✅</li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a> ✅</li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a> ✅</li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a> ✅</li>
@@ -311,8 +311,8 @@ LoongForge/
 │   ├── train.py                  # 统一训练分发入口
 │   ├── training/                 # 训练运行器与逐模型训练方法
 │   ├── engines/                  # train.py 选择的训练运行时
-│   │   ├── mcore/                #   LLM/VLM/Diffusion 运行时
-│   │   │   └── tokenizer/        #   MCore Tokenizer 实现
+│   │   ├── megatron/             #   LLM/VLM/Diffusion 运行时
+│   │   │   └── tokenizer/        #   Megatron Tokenizer 实现
 │   │   └── torch/                #   具身 Torch-native 运行时
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── catalog.py            # 模型名、引擎与默认 YAML

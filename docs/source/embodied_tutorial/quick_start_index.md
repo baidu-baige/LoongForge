@@ -1,6 +1,6 @@
 # Quick Start
 
-Ready-to-run launch scripts for each supported embodied model live under [`examples/embodied/`](https://github.com/baidu-baige/LoongForge/tree/master/examples/embodied). Pick the guide for your model below. For framework-wide conventions (directory layout, launch scripts, configuration layering), see the [Overview](overview.md).
+Ready-to-run launch scripts for each supported embodied model live under [`examples/<model>/`](https://github.com/baidu-baige/LoongForge/tree/master/examples). Pick the guide for your model below. For framework-wide conventions (directory layout, launch scripts, configuration layering), see the [Overview](overview.md).
 
 ## VLA Models
 

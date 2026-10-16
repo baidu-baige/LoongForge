@@ -263,7 +263,6 @@ def cooker_multi_vid_vqa(sample: dict, args):
 @stateless
 def cooker_feature_qa(sample: dict):
     """Convert raw sample dict into a FeatureQASample."""
-    # TODO
     pass
 
 

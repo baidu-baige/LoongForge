@@ -5,12 +5,12 @@
 # DreamZero Wan2.2-5B full fine-tuning with FSDP.
 #
 # Usage:
-#   bash run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+#   bash finetune_dreamzero_wan22_5b_full_fsdp.sh
 #   CACHE_DIR=/path/to/dreamzero_cache \
-#     bash run_dreamzero_wan22_5b_full_fsdp_finetune.sh
+#     bash finetune_dreamzero_wan22_5b_full_fsdp.sh
 #   PER_DEVICE_BATCH_SIZE=4 GLOBAL_BATCH_SIZE=32 \
-#     bash run_dreamzero_wan22_5b_full_fsdp_finetune.sh
-#   bash run_dreamzero_wan22_5b_full_fsdp_finetune.sh --train-iters 100
+#     bash finetune_dreamzero_wan22_5b_full_fsdp.sh
+#   bash finetune_dreamzero_wan22_5b_full_fsdp.sh --train-iters 100
 #
 # Optional offline features are enabled by setting CACHE_DIR to an artifact
 # produced by precompute_dreamzero_cache.sh.

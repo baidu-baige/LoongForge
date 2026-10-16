@@ -10,13 +10,11 @@ Flow:
   4. Merge YAML model:/data: sections into structured schemas.
   5. Apply Shell dotlist overrides (model.* / data.*) — still DictConfig stage.
   6. Validate on DictConfig (missing-key / interpolation checks).
-  7. to_object() → frozen TrainingArgs / ModelConfig / DataConfig instances.
-  8. Store in global singletons; return the triple.
+  7. to_object() → frozen TrainingArgs / ModelConfig / DataConfig instances; return the triple.
 
 Usage:
     from loongforge.engines.torch.parser import parse_train_args
     training_args, model_cfg, data_cfg = parse_train_args()
-    # also accessible via global_vars.get_training_args / get_model_config / get_data_config
 """
 
 import os
@@ -25,7 +23,6 @@ from omegaconf import OmegaConf
 
 from .arguments import build_arg_parser, TrainingArgs
 from loongforge.models.catalog import get_config_path, get_config_types
-from .global_vars import set_data_config, set_model_config, set_training_args
 from .validators import validate
 
 
@@ -92,9 +89,4 @@ def parse_train_args():
     training_args = OmegaConf.to_object(training_dc)
     model_cfg = OmegaConf.to_object(model_dc)
     data_cfg = OmegaConf.to_object(data_dc)
-
-    # ── 7. Store globally + return ──
-    set_training_args(training_args)
-    set_model_config(model_cfg)
-    set_data_config(data_cfg)
     return training_args, model_cfg, data_cfg

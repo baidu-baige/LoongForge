@@ -15,7 +15,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from .activation_checkpointing import apply_activation_checkpointing
 from .context import DistributedContext
 
-from . import fp8_a2a_comm
+from loongforge.engines.torch.quantization import fp8_a2a_comm
 from .ddp_comm_hook import resolve_comm_hook
 from .fsdp_utils import (
     FSDPWrapContext,
@@ -25,7 +25,7 @@ from .fsdp_utils import (
     fully_shard_unit,
     resolve_wrap_runs,
 )
-from .fp8_utils import apply_fp8_linear_conversion
+from loongforge.engines.torch.quantization.fp8_utils import apply_fp8_linear_conversion
 from .utils import filter_kwargs, is_mixed_param_dtype
 
 
@@ -132,7 +132,7 @@ def _register_delta_fp8_allgather(model: nn.Module, training_args) -> None:
     if not training_args.fsdp_delta_fp8_allgather:
         return
 
-    from .delta_fp8_allgather import register_delta_fp8_allgather
+    from loongforge.engines.torch.quantization.delta_fp8_allgather import register_delta_fp8_allgather
 
     register_delta_fp8_allgather(
         model,

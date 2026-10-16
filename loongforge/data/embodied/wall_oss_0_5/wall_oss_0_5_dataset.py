@@ -16,12 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 def _wall_oss_split_len(dataset):
-    """Wall oss split len."""
     return len(dataset._wall_oss_split_indices)
 
 
 def _wall_oss_split_index(dataset, idx):
-    """Wall oss split index."""
     return dataset._wall_oss_split_indices[int(idx)]
 
 

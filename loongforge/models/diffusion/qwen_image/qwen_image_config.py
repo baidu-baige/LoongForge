@@ -6,8 +6,6 @@
 from dataclasses import dataclass
 
 from loongforge.models.common import BaseModelStditConfig
-from loongforge.models.mcore_registry import register_model_config
-from loongforge.constants import CustomModelFamilies
 
 
 @dataclass
@@ -62,12 +60,3 @@ class QwenImageConfig(BaseModelStditConfig):
     num_latent_frames: int = 1
     max_latent_height: int = 1024
     max_latent_width: int = 1024
-
-
-@register_model_config(
-    model_family=CustomModelFamilies.QWEN_IMAGE,
-    model_arch="qwen-image-edit-2511",
-)
-def qwen_image_edit_2511_config():
-    """Register Qwen-Image-Edit-2511 in the model factory."""
-    return QwenImageConfig()

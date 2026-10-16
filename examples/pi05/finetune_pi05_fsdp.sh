@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# run_pi05_fsdp_finetune.sh - pi05 VLA SFT Launch Script (FSDP)
+# finetune_pi05_fsdp.sh - pi05 VLA SFT Launch Script (FSDP)
 #
-# Mirrors run_pi05_ddp_zero1_finetune.sh, but uses the embodied FSDP strategy.
+# Mirrors finetune_pi05_ddp_zero1.sh, but uses the embodied FSDP strategy.
 #
 # Usage:
-#   bash run_pi05_fsdp_finetune.sh
-#   TRAIN_ITERS=50 bash run_pi05_fsdp_finetune.sh                          # override via env
-#   bash run_pi05_fsdp_finetune.sh --train-iters 50000                     # override a training param (flag form)
-#   bash run_pi05_fsdp_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash finetune_pi05_fsdp.sh
+#   TRAIN_ITERS=50 bash finetune_pi05_fsdp.sh                          # override via env
+#   bash finetune_pi05_fsdp.sh --train-iters 50000                     # override a training param (flag form)
+#   bash finetune_pi05_fsdp.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

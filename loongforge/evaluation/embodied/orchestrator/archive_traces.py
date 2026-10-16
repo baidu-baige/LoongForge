@@ -12,7 +12,6 @@ from loongforge.evaluation.embodied.metrics import archive_traces
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--results", required=True)
     parser.add_argument("--output-dir", required=True)
@@ -21,7 +20,6 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run main."""
     args = build_argparser().parse_args()
     manifest = archive_traces(args.results, args.output_dir, run_id=args.run_id)
     print(json.dumps({"archived_traces": len(manifest)}, ensure_ascii=False, indent=2))

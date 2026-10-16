@@ -193,7 +193,6 @@ def write_config(path: EPath, media: str=None, sample_type: bool=False):
 
 
 def _add_arguments(parser: argparse.ArgumentParser):
-    """Add arguments"""
     group = parser.add_argument_group(title='wds')
     group.add_argument('--output_dir', type=str, required=True, help='Output directory')
     group.add_argument('--json_file', type=str, required=True, help='Json file')
