@@ -528,6 +528,15 @@ class _LearningRateArgs:
             "help": "Number of scheduler decay steps. Defaults to --train-iters when unset."
         },
     )
+    lr_decay_start_iters: int = field(
+        default=0,
+        metadata={
+            "cli_type": parse_non_negative_int,
+            "help": "Optimizer step at which custom cosine decay begins, holding "
+                    "the peak LR after warmup until then. 0 starts decay immediately "
+                    "after warmup. Requires --custom-lr-lambda."
+        },
+    )
     min_lr: float = field(
         default=1e-6,
         metadata={"help": "Lower bound the LR schedule decays to (floor)."},

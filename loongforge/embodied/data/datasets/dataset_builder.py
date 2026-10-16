@@ -25,6 +25,12 @@ def _default_strategy_builder() -> Callable:
     return build_default_lerobot_dataset
 
 
+def _vlda_strategy_builder() -> Callable:
+    from loongforge.embodied.data.datasets.vlda import build_vlda_dataset
+
+    return build_vlda_dataset
+
+
 def _fastwam_strategy_builder() -> Callable:
     from loongforge.embodied.data.datasets.fastwam import (
         build_fastwam_lerobot_dataset,
@@ -74,6 +80,7 @@ def _wall_oss_0_5_strategy_builder() -> Callable:
 # name -> lazy loader (imports deferred so lerobot / motus deps only load when used)
 _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "default": _default_strategy_builder,
+    "vlda": _vlda_strategy_builder,
     "fastwam": _fastwam_strategy_builder,
     "lingbot_va": _lingbot_va_strategy_builder,
     "groot_n1_7": _groot_n1_7_strategy_builder,
