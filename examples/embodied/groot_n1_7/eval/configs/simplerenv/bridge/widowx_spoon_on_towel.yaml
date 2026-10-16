@@ -43,11 +43,6 @@ server:
   host: 127.0.0.1
   port: 13773
   health_port: 13774
-  # To reproduce the reported success rates this env must have transformers
-  # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 -- the
-  # version our own pyproject.toml installs -- the six-task WidowX total
-  # drops from 85/120 to 35/120, and nothing in the run warns about it. See
-  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_7.md.
   python: /path/to/conda/envs/loongforge/bin/python
   log: /path/to/reports/groot_n1_7/simplerenv/widowx_spoon_on_towel/policy_server.log
   start_timeout_sec: 2400

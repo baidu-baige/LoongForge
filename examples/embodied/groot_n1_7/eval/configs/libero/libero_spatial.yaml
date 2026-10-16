@@ -13,12 +13,18 @@
 benchmark:
   name: libero
   suite: libero_spatial
-  max_tasks: 1              # 0 = all 10 tasks in the suite
-  episodes_per_task: 10
+  max_tasks: 0              # 0 = all 10 tasks in the suite
+  episodes_per_task: 20     # 10 tasks x 20 = the official 200 denominator
   max_steps: 720            # official --max_episode_steps
   num_steps_wait: 0         # official path has no settle steps
   continuous_gripper: false # official normalize_gripper_action(binarize=True)
   control_mode: delta       # GR00T outputs delta EE (pos + axis-angle) + gripper
+  # Explicit, never the runner default: --libero-protocol defaults to legacy,
+  # which reads the OSC controller pose as state and drops libero_10 by ~5 pts
+  # on the same weights. groot_official runs one env serially, requires
+  # num_steps_wait 0 / chunk_execute_steps 8 / delta / sign gripper / 256px,
+  # and writes results under <run.output_dir>/groot_official/<run-id>/.
+  libero_protocol: groot_official
 
 model:
   backend: loongforge
@@ -28,16 +34,18 @@ model:
   state_encoding: libero_ee_axis_angle
   action_encoding: axis_angle
   use_flash_attention: true
+  # Inference-only: keep the frozen backbone in bf16 and every head frozen.
+  # Without these the training-side precision policy undoes the bf16 cast
+  # (FlashAttention dtype error in the backbone, Float/BFloat16 mismatch in vlln).
+  backbone_trainable_params_fp32: false
+  tune_projector: false
+  tune_diffusion_model: false
+  tune_vlln: false
 
 server:
   host: 127.0.0.1
   port: 13741
   health_port: 13742
-  # To reproduce the reported success rates this env must have transformers
-  # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 --
-  # the version our own pyproject.toml installs -- libero_10 scores 11/50
-  # against 46/50 on 4.57.3, and nothing in the run warns about it. See
-  # loongforge/embodied/eval/docs/patches/libero/groot_n1_7.md.
   python: /path/to/conda/envs/loongforge/bin/python
   log: /path/to/reports/groot_n1_7/libero/libero_spatial/policy_server.log
   start_timeout_sec: 2400
@@ -51,7 +59,6 @@ server:
 
 env:
   eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
-  libero_config_path: /path/to/libero_config
   mujoco_gl: osmesa
   pyopengl_platform: osmesa
   ld_library_path: /path/to/nvidia_lib
