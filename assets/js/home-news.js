@@ -114,7 +114,7 @@
     });
   }
 
-  fetch('assets/data/news.json?v=20261015b', { cache: 'no-cache' })
+  fetch('assets/data/news.json?v=20261015c', { cache: 'no-cache' })
     .then(r => r.json())
     .then(list => {
       if (!Array.isArray(list)) return;
