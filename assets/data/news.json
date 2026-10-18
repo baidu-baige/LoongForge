@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-10",
+    "icon": "🤖",
+    "url": "projects/vlda.html",
+    "en": { "text": "Introducing **LoongForge-VLDA**, a Vision-Language-Delta-Action model trained with LoongForge: 98.5% on LIBERO, 84.5% zero-shot on LIBERO-Plus, and +17–18 points over π0.5 on real robots." },
+    "zh": { "text": "推出 **LoongForge-VLDA**：基于 LoongForge 训练的 Vision-Language-Delta-Action 模型，LIBERO 98.5%，LIBERO-Plus 零样本 84.5%，真机领先 π0.5 17–18 个点。" }
+  },
+  {
     "date": "2026-09",
     "icon": "✨",
     "url": "https://github.com/baidu-baige/LoongForge/tree/master/examples/glm5_next",

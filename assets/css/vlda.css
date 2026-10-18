@@ -1,0 +1,818 @@
+/* LoongForge-VLDA project page. Loaded only by vlda.html, on top of style.css.
+   Everything is prefixed .vl- so it cannot leak into other pages. */
+
+/* ---- Hero extras ---- */
+.vl-authors {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .25rem 1.1rem;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.vl-authors sup {
+  font-size: .68em;
+  font-weight: 500;
+  margin-left: .1em;
+  color: #6366F1;
+}
+
+.dark .vl-authors sup {
+  color: #A5B4FC;
+}
+
+.vl-affil {
+  margin-top: .6rem;
+  font-size: .85rem;
+  color: #6B7280;
+}
+
+.dark .vl-affil {
+  color: #9CA3AF;
+}
+
+/* Contribution / corresponding-author marks sit on their own line under the affiliations. */
+.vl-affil.vl-affil-note {
+  margin-top: .2rem;
+}
+
+.vl-soon {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .85rem 1.6rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  color: #9CA3AF;
+  background: transparent;
+  border: 1.5px dashed #CBD5E1;
+  cursor: not-allowed;
+}
+
+.dark .vl-soon {
+  border-color: rgba(255, 255, 255, .2);
+  color: #6B7280;
+}
+
+/* Anchored sections must clear the sticky navbar */
+.vl-sec {
+  scroll-margin-top: 5.5rem;
+}
+
+/* ---- Video ---- */
+.vl-video {
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: #0b1020;
+  border: 1px solid #E9EBF5;
+  box-shadow: 0 24px 60px -28px rgba(79, 70, 229, .45);
+}
+
+.dark .vl-video {
+  border-color: #1f2937;
+  box-shadow: none;
+}
+
+.vl-video video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+/* ---- Figures ---- */
+.vl-fig {
+  margin: 0;
+}
+
+.vl-fig-frame {
+  display: block;
+  border-radius: 1rem;
+  background: #fff;
+  border: 1px solid #E9EBF5;
+  padding: .75rem;
+  overflow: hidden;
+}
+
+.dark .vl-fig-frame {
+  border-color: #1f2937;
+  background: #f8fafc;
+}
+
+.vl-fig-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.vl-fig figcaption {
+  margin-top: .85rem;
+  font-size: .875rem;
+  line-height: 1.6;
+  color: #4B5563;
+}
+
+.dark .vl-fig figcaption {
+  color: #9CA3AF;
+}
+
+.vl-fig figcaption a {
+  white-space: nowrap;
+  color: #4F46E5;
+  font-weight: 600;
+}
+
+.dark .vl-fig figcaption a {
+  color: #A5B4FC;
+}
+
+/* ---- Understand -> Transition -> Execute flow ---- */
+.vl-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: stretch;
+  gap: .75rem;
+}
+
+.vl-node {
+  border-radius: 1.1rem;
+  padding: 1.1rem 1.2rem;
+  background: #fff;
+  border: 1px solid #E9EBF5;
+}
+
+.dark .vl-node {
+  background: #0f172a;
+  border-color: #1f2937;
+}
+
+.vl-node b {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: .25rem;
+}
+
+.vl-node span {
+  font-size: .85rem;
+  line-height: 1.55;
+  color: #4B5563;
+}
+
+.dark .vl-node span {
+  color: #9CA3AF;
+}
+
+.vl-node.vl-delta {
+  border-color: transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    var(--lf-grad) border-box;
+  border: 2px solid transparent;
+  box-shadow: 0 16px 36px -22px rgba(124, 58, 237, .6);
+}
+
+.dark .vl-node.vl-delta {
+  background:
+    linear-gradient(#0f172a, #0f172a) padding-box,
+    var(--lf-grad) border-box;
+}
+
+.vl-arrow {
+  align-self: center;
+  font-size: 1.5rem;
+  color: #A5B4FC;
+}
+
+@media (max-width: 768px) {
+  .vl-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .vl-arrow {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+}
+
+/* ---- Numbered mechanism cards ---- */
+.vl-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 9999px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--lf-grad);
+  margin-bottom: .9rem;
+}
+
+.vl-abbr {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .78rem;
+  font-weight: 500;
+  color: #6366F1;
+  letter-spacing: .02em;
+}
+
+.dark .vl-abbr {
+  color: #A5B4FC;
+}
+
+/* ---- Two-stage training ---- */
+.vl-stage {
+  border-radius: 1.1rem;
+  padding: 1.25rem 1.4rem;
+  background: #F7F8FF;
+  border: 1px solid #E0E7FF;
+}
+
+.dark .vl-stage {
+  background: rgba(99, 102, 241, .08);
+  border-color: rgba(99, 102, 241, .25);
+}
+
+.vl-stage p b {
+  color: #111827;
+}
+
+.dark .vl-stage p b {
+  color: #F3F4F6;
+}
+
+.vl-stage code {
+  display: block;
+  margin-top: .6rem;
+  padding: .55rem .75rem;
+  border-radius: .6rem;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .8rem;
+  background: #fff;
+  border: 1px solid #E0E7FF;
+  overflow-x: auto;
+}
+
+.dark .vl-stage code {
+  background: #0b1020;
+  border-color: #1f2937;
+}
+
+/* ---- Result tables ---- */
+.vl-tablewrap {
+  overflow-x: auto;
+  border-radius: 1rem;
+  border: 1px solid #E9EBF5;
+  background: #fff;
+}
+
+.dark .vl-tablewrap {
+  border-color: #1f2937;
+  background: #0f172a;
+}
+
+.vl-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: .875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vl-table th,
+.vl-table td {
+  padding: .6rem .8rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid #EEF0F7;
+}
+
+.dark .vl-table th,
+.dark .vl-table td {
+  border-bottom-color: #1f2937;
+}
+
+/* Few-column tables sit in a half-width column: drop the wide-table floor and
+   tighten the padding so they fit without a horizontal scroll. */
+.vl-table.vl-compact {
+  min-width: 0;
+}
+
+.vl-table.vl-compact th,
+.vl-table.vl-compact td {
+  padding: .6rem .55rem;
+}
+
+.vl-table th:first-child,
+.vl-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fff;
+}
+
+.dark .vl-table td:first-child {
+  background: #0f172a;
+}
+
+.vl-table thead th:first-child {
+  background: #F9FAFB;
+}
+
+.dark .vl-table thead th:first-child {
+  background: #111827;
+}
+
+.vl-table thead th {
+  font-weight: 600;
+  font-size: .78rem;
+  color: #6B7280;
+  background: #F9FAFB;
+}
+
+.dark .vl-table thead th {
+  color: #9CA3AF;
+  background: #111827;
+}
+
+.vl-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.vl-table tr.vl-ours td {
+  font-weight: 700;
+  color: #3730A3;
+  background: #EEF2FF;
+}
+
+.dark .vl-table tr.vl-ours td {
+  color: #E0E7FF;
+  background: rgba(99, 102, 241, .18);
+}
+
+.vl-table td.vl-best {
+  font-weight: 700;
+}
+
+.vl-note {
+  margin-top: .75rem;
+  font-size: .82rem;
+  line-height: 1.6;
+  color: #6B7280;
+}
+
+.dark .vl-note {
+  color: #9CA3AF;
+}
+
+/* ---- Real-world bars ---- */
+.vl-bar {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 3rem;
+  align-items: center;
+  gap: .6rem;
+  font-size: .82rem;
+  margin-top: .45rem;
+}
+
+.vl-bar>span:first-child {
+  color: #6B7280;
+  white-space: nowrap;
+}
+
+.dark .vl-bar>span:first-child {
+  color: #9CA3AF;
+}
+
+.vl-bar>span:last-child {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.vl-bar i {
+  display: block;
+  height: .55rem;
+  border-radius: 9999px;
+  background: #CBD5E1;
+}
+
+.dark .vl-bar i {
+  background: #475569;
+}
+
+.vl-bar.vl-b-ours i {
+  background: var(--lf-grad);
+}
+
+.vl-bar.vl-b-ours>span {
+  color: #4338CA;
+  font-weight: 700;
+}
+
+.dark .vl-bar.vl-b-ours>span {
+  color: #C7D2FE;
+}
+
+.vl-bar-track {
+  height: .55rem;
+  border-radius: 9999px;
+  background: #F1F5F9;
+  overflow: hidden;
+}
+
+.dark .vl-bar-track {
+  background: #1e293b;
+}
+
+/* ---- Ablation tiles ---- */
+.vl-abl {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.vl-abl-num {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vl-abl-num s {
+  color: #9CA3AF;
+  font-size: .95rem;
+}
+
+.vl-abl-num strong {
+  font-size: 1.6rem;
+  line-height: 1.1;
+  color: #DC2626;
+}
+
+.dark .vl-abl-num strong {
+  color: #F87171;
+}
+
+/* ---- Project hero background ---- */
+.vl-head {
+  background: linear-gradient(180deg, #F7F8FF 0%, #fff 100%);
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.dark .vl-head {
+  background: linear-gradient(180deg, rgba(99, 102, 241, .08) 0%, transparent 100%);
+  border-bottom-color: #1f2937;
+}
+
+/* The hero fades to white, so the first section needs less run-up than the rest. */
+.vl-head+.vl-pad {
+  padding-top: clamp(3rem, 5vw, 4.5rem);
+}
+
+/* Hero is centered; the sub-title and authors inherit that. */
+
+.vl-sec {
+  scroll-margin-top: 5.5rem;
+}
+
+/* ================= Editorial project-page layer ================= */
+.vl-eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .75rem;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #6366F1;
+}
+
+.vl-eyebrow b {
+  margin-right: .6rem;
+  color: #9CA3AF;
+  font-weight: 500;
+}
+
+.dark .vl-eyebrow {
+  color: #A5B4FC;
+}
+
+.vl-title {
+  font-size: clamp(2.25rem, 8.5vw, 6rem);
+  font-weight: 800;
+  letter-spacing: -.045em;
+  line-height: .95;
+}
+
+.vl-sub {
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  line-height: 1.5;
+  color: #4B5563;
+  max-width: 44rem;
+}
+
+.dark .vl-sub {
+  color: #D1D5DB;
+}
+
+.vl-h2 {
+  font-size: clamp(1.9rem, 4.2vw, 3.1rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.025em;
+  margin: .7rem 0 1.1rem;
+}
+
+.vl-h2 em {
+  font-style: italic;
+  background: var(--lf-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* Italic glyphs overhang their box, and the gradient only paints inside it:
+     pad every line fragment (clone) so a wrapped line's last letter is not cut. */
+  padding: 0 .14em;
+  margin: 0 -.14em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.vl-lead {
+  font-size: 1.075rem;
+  line-height: 1.75;
+  color: #4B5563;
+  max-width: 46rem;
+}
+
+.dark .vl-lead {
+  color: #9CA3AF;
+}
+
+.vl-lead+.vl-lead {
+  margin-top: 1rem;
+}
+
+.vl-lead b {
+  color: #111827;
+}
+
+.dark .vl-lead b {
+  color: #F3F4F6;
+}
+
+.vl-pad {
+  padding-top: clamp(4rem, 8vw, 6.5rem);
+  padding-bottom: clamp(4rem, 8vw, 6.5rem);
+}
+
+.vl-tint {
+  background: #F7F8FF;
+  border-top: 1px solid rgba(199, 210, 254, .5);
+  border-bottom: 1px solid rgba(199, 210, 254, .5);
+}
+
+.dark .vl-tint {
+  background: rgba(17, 24, 39, .5);
+  border-color: #1f2937;
+}
+
+/* ---- Headline metrics strip ---- */
+.vl-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 2.5rem;
+  border-top: 1px solid #E5E7EB;
+}
+
+.dark .vl-stats {
+  border-top-color: #1f2937;
+}
+
+.vl-stats>div {
+  padding: 1.1rem 1rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.dark .vl-stats>div {
+  border-bottom-color: #1f2937;
+}
+
+.vl-stats strong {
+  display: inline-block;
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: #4338CA;
+}
+
+.dark .vl-stats strong {
+  color: #C7D2FE;
+}
+
+.vl-stats span {
+  display: block;
+  margin-top: .15rem;
+  font-size: .8rem;
+  color: #6B7280;
+}
+
+.dark .vl-stats span {
+  color: #9CA3AF;
+}
+
+@media (max-width: 768px) {
+  .vl-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---- Big-number result callout ---- */
+.vl-big {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .4rem 1rem;
+}
+
+.vl-big strong {
+  font-size: clamp(3rem, 7vw, 4.75rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+  background: var(--lf-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.vl-big span {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .75rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #6B7280;
+}
+
+.dark .vl-big span {
+  color: #9CA3AF;
+}
+
+.vl-meta {
+  margin: .5rem 0 1.25rem;
+  font-size: .82rem;
+  color: #9CA3AF;
+}
+
+/* ---- Numbered steps ---- */
+.vl-step {
+  padding-top: 1.1rem;
+  border-top: 2px solid #C7D2FE;
+}
+
+.dark .vl-step {
+  border-top-color: rgba(129, 140, 248, .4);
+}
+
+.vl-step h3 {
+  margin: .35rem 0 .5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+/* ---- Real-world score cards ---- */
+.vl-score {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  margin-bottom: .75rem;
+}
+
+.vl-score strong {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.03em;
+  color: #4338CA;
+}
+
+.dark .vl-score strong {
+  color: #C7D2FE;
+}
+
+.vl-score span {
+  font-size: .8rem;
+  color: #9CA3AF;
+}
+
+/* ---- Figure lightbox ---- */
+.vl-open {
+  display: inline-block;
+  margin-top: .6rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  color: #4F46E5;
+}
+
+.vl-open:hover {
+  text-decoration: underline;
+}
+
+.dark .vl-open {
+  color: #A5B4FC;
+}
+
+.vl-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(3, 7, 18, .86);
+}
+
+.vl-lightbox.open {
+  display: flex;
+}
+
+.vl-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: .75rem;
+  background: #fff;
+}
+
+.vl-lightbox button {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  padding: .4rem .9rem;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #111827;
+  background: #fff;
+}
+
+/* ---- Section intro / panel head: stacked (title, then text) ---- */
+.vl-intro {
+  margin-bottom: 2.5rem;
+}
+
+.vl-intro .vl-h2 {
+  margin-bottom: 1.1rem;
+}
+
+.vl-split {
+  margin-bottom: 1.5rem;
+}
+
+.vl-split>div+div {
+  margin-top: 1rem;
+}
+
+.vl-intro .vl-lead,
+.vl-split .vl-lead {
+  max-width: none;
+}
+
+.vl-split h3 {
+  margin-bottom: 0;
+}
+
+.vl-split>h3+.vl-lead {
+  margin-top: .5rem;
+}
+
+/* ---- Footer strip ---- */
+.vl-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem 1.5rem;
+  font-size: .85rem;
+  color: #6B7280;
+}
+
+/* Clone command beside the GitHub card: same height, text vertically centered. */
+pre.cite-pre.vl-clone {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+pre.cite-pre.vl-clone>code {
+  flex: 1;
+  min-width: 0;
+}
