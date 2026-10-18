@@ -15,19 +15,13 @@
 <p align="center">
   <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b></a>
-  &nbsp;·&nbsp;
-  <a href="#embodied"><b>具身模型</b></a>
-  &nbsp;·&nbsp;
-  <a href="#llm-vlm"><b>LLM / VLM / Diffusion</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>官方博客</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
   <a href="#quickstart"><b>快速开始</b></a>
   &nbsp;·&nbsp;
   <a href="#models"><b>支持模型</b></a>
-  &nbsp;·&nbsp;
-  <a href="#powered-by-loongforge"><b>项目案例</b></a>
 </p>
 
 <p align="center">
@@ -55,7 +49,7 @@
 **LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，旨在加速主流 **LLM、VLM、Diffusion 与具身模型**的训练。
 
 - **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[深度优化训练速度](#performance)，同时保证**训练 loss 与基线对齐**。
-- **易用性** —— 每个支持的模型均提供开箱即用的配置与启动示例，并配套权重转换、数据预处理等工具；支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
+- **易用性** —— 已覆盖 40+ 个[主流开源模型](#models)，每个模型均附带开箱即用的配置与启动示例；框架另提供权重转换、数据预处理等配套工具，并支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
 - **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[若干开源模型的训练与发布](#powered-by-loongforge)；在大模型训练中，最大验证规模达 **5,000+ XPU**。
 
 ---
@@ -101,7 +95,7 @@
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
 - **[2026/08]** 🧪 新增具身模型统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / 具身 / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-07-announcing-loongforge-embodied.html)]
+- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 
 <details>
