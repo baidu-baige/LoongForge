@@ -1746,3 +1746,141 @@ footer a:hover {
     border-width: 0.5rem 0 0.5rem 0.85rem;
   }
 }
+
+/* ===== Code blocks: one light style site-wide, using the same indigo tint as the page tint sections (#F7F8FF) =====
+   Covers Prism blocks, blog .prose-lf blocks and the Quick Start .cmd-block.
+   Dark mode keeps the dark block. style.css forces the Prism background with
+   !important, so the light override needs it too. */
+:root:not(.dark) pre[class*="language-"] {
+  background: #F7F8FF !important;
+  border: 1px solid #E0E7FF !important;
+}
+
+:root:not(.dark) .prose-lf pre,
+:root:not(.dark) .cmd-block {
+  background: #F7F8FF;
+  color: #24292F;
+  border: 1px solid #E0E7FF;
+}
+
+:root:not(.dark) code[class*="language-"],
+:root:not(.dark) pre[class*="language-"] {
+  color: #24292F;
+  text-shadow: none;
+}
+
+:root:not(.dark) pre .token.comment,
+:root:not(.dark) pre .token.prolog,
+:root:not(.dark) pre .token.doctype,
+:root:not(.dark) pre .token.cdata {
+  color: #6E7781;
+}
+
+:root:not(.dark) pre .token.punctuation {
+  color: #24292F;
+}
+
+:root:not(.dark) pre .token.tag,
+:root:not(.dark) pre .token.attr-name,
+:root:not(.dark) pre .token.namespace,
+:root:not(.dark) pre .token.selector,
+:root:not(.dark) pre .token.deleted {
+  color: #116329;
+}
+
+:root:not(.dark) pre .token.function,
+:root:not(.dark) pre .token.function-name {
+  color: #8250DF;
+}
+
+:root:not(.dark) pre .token.boolean,
+:root:not(.dark) pre .token.number,
+:root:not(.dark) pre .token.constant,
+:root:not(.dark) pre .token.symbol,
+:root:not(.dark) pre .token.operator,
+:root:not(.dark) pre .token.entity,
+:root:not(.dark) pre .token.url {
+  color: #0550AE;
+  background: none;
+}
+
+:root:not(.dark) pre .token.property,
+:root:not(.dark) pre .token.class-name {
+  color: #953800;
+}
+
+:root:not(.dark) pre .token.keyword,
+:root:not(.dark) pre .token.builtin,
+:root:not(.dark) pre .token.atrule,
+:root:not(.dark) pre .token.important {
+  color: #CF222E;
+}
+
+:root:not(.dark) pre .token.string,
+:root:not(.dark) pre .token.char,
+:root:not(.dark) pre .token.attr-value,
+:root:not(.dark) pre .token.regex,
+:root:not(.dark) pre .token.variable,
+:root:not(.dark) pre .token.inserted {
+  color: #0A3069;
+}
+
+:root:not(.dark) .cmd-block .prompt {
+  color: #8250DF;
+}
+
+:root:not(.dark) .cmd-block .flag {
+  color: #953800;
+}
+
+:root:not(.dark) .cmd-block .val {
+  color: #116329;
+}
+
+:root:not(.dark) .cmd-block .cmt {
+  color: #6E7781;
+}
+
+:root:not(.dark) pre .copy-btn {
+  background: #fff;
+  color: #475569;
+  border-color: #E0E7FF;
+}
+
+:root:not(.dark) pre .copy-btn:hover {
+  background: #EEF2FF;
+}
+
+/* Back link shared by blog posts and project pages: chevron icon + text. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .875rem;
+  font-weight: 500;
+  color: #6B7280;
+  transition: color .15s ease;
+}
+
+.back-link svg {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  transition: transform .15s ease;
+}
+
+.back-link:hover {
+  color: #4F46E5;
+}
+
+.back-link:hover svg {
+  transform: translateX(-2px);
+}
+
+.dark .back-link {
+  color: #9CA3AF;
+}
+
+.dark .back-link:hover {
+  color: #A5B4FC;
+}

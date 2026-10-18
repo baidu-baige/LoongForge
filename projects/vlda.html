@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>LoongForge-VLDA — Vision-Language-Delta-Action</title>
+  <meta name="description"
+    content="VLDA: learning compact Deltas as actionable transition interfaces for robotic manipulation. 98.5% average on LIBERO; zero-shot 84.5% on LIBERO-Plus and 62.9% on RoboTwin 2.0 hard tasks, and 17–18 points ahead of π0.5 on real robots, trained with LoongForge." />
+  <link rel="canonical" href="https://baidu-baige.github.io/LoongForge/projects/vlda.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="LoongForge" />
+  <meta property="og:title" content="LoongForge-VLDA — Vision-Language-Delta-Action" />
+  <meta property="og:description"
+    content="Learning compact Deltas as actionable transition interfaces for robotic manipulation. 98.5% average on LIBERO; zero-shot 84.5% on LIBERO-Plus and 62.9% on RoboTwin 2.0 hard tasks, 17–18 points ahead of π0.5 on real robots." />
+  <meta property="og:url" content="https://baidu-baige.github.io/LoongForge/projects/vlda.html" />
+  <meta property="og:image" content="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/poster.jpg" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
+  <meta property="og:image:alt" content="LoongForge-VLDA: Vision-Language-Delta-Action" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="LoongForge-VLDA — Vision-Language-Delta-Action" />
+  <meta name="twitter:description"
+    content="Learning compact Deltas as actionable transition interfaces for robotic manipulation." />
+  <meta name="twitter:image" content="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/poster.jpg" />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261015-r25" />
+  <link rel="stylesheet" href="../assets/css/vlda.css?v=20261015-r46" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 antialiased">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="projects" data-base="../"></header>
+
+  <main>
+  <!-- ===== Hero ===== -->
+  <section class="vl-head">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-10 md:pb-12 text-center">
+      <!-- Shared back link: identical on every project page (see project-bar.js). -->
+      <nav class="text-left" aria-label="Project" data-project-bar>
+        <a href="../projects.html" class="back-link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg><span data-pb="back">Back to Projects</span></a>
+      </nav>
+      <h1 class="vl-title mt-10"><span class="text-gradient">LoongForge-VLDA</span></h1>
+      <p class="vl-sub mt-5 mx-auto" data-t="hero.title"><b>Vision-Language-Delta-Action:</b> learning compact Deltas as
+        actionable transition interfaces for robotic manipulation.</p>
+
+      <div class="vl-authors mt-8">
+        <span>Lingsen Zhang<sup>1,2,*</sup></span>
+        <span>Wei Li<sup>1,2,*</sup></span>
+        <span>Jie He<sup>1,2</sup></span>
+        <span>Henghua Zhang<sup>2</sup></span>
+        <span>Kai Mo<sup>2</sup></span>
+        <span>Shiyong Li<sup>2</sup></span>
+        <span>Yanpeng Wang<sup>2</sup></span>
+        <span>Rui Shao<sup>1,3,&dagger;</sup></span>
+      </div>
+      <p class="vl-affil"><sup>1</sup> <span data-t="hero.aff1">Harbin Institute of Technology, Shenzhen</span> &nbsp;·&nbsp;
+        <sup>2</sup> Baidu, Inc. &nbsp;·&nbsp;
+        <sup>3</sup> <span data-t="hero.aff3">Shenzhen Loop Area Institute</span></p>
+      <p class="vl-affil vl-affil-note"><span data-t="hero.equal">* Equal contribution</span> &nbsp;&nbsp;
+        <span data-t="hero.corr">&dagger; Corresponding author</span></p>
+
+      <div class="mt-7 flex flex-wrap justify-center gap-3">
+        <span class="vl-soon" aria-disabled="true" data-t="hero.paper">Paper · arXiv soon</span>
+        <a href="https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda" target="_blank" rel="noopener" class="lf-btn"
+          data-t="hero.code">Code ↗</a>
+        <a href="https://huggingface.co/collections/LoongForge/loongforge-vlda" target="_blank" rel="noopener"
+          class="lf-btn-ghost">Hugging Face ↗</a>
+      </div>
+
+      <div class="vl-video reveal mt-10">
+        <video controls preload="none" playsinline poster="../assets/projects/vlda/poster.jpg">
+          <source src="../assets/projects/vlda/demo.mp4" type="video/mp4" />
+        </video>
+      </div>
+
+      <div class="vl-stats">
+        <div><strong>98.5%</strong><span data-t="s.libero">LIBERO average</span></div>
+        <div><strong>84.5%</strong><span data-t="s.plus">LIBERO-Plus, zero-shot</span></div>
+        <div><strong>62.9%</strong><span data-t="s.rt">RoboTwin 2.0, 10 hard tasks</span></div>
+        <div><strong>73.0%</strong><span data-t="s.r1">Real robot · R1 Lite</span></div>
+        <div><strong>72.0%</strong><span data-t="s.ag">Real robot · AgileX</span></div>
+        <div><strong>1 GPU</strong><span data-t="s.gpu">Real-world inference on a single GPU</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 01 The Idea ===== -->
+  <section id="idea" class="vl-sec vl-pad">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8">
+      <div class="vl-intro">
+        <div>
+          <p class="vl-eyebrow"><b>01</b><span data-t="i.eyebrow">The idea</span></p>
+          <h2 class="vl-h2" data-t="i.h">Don't predict the whole future. <em>Capture the change.</em></h2>
+        </div>
+        <div>
+          <p class="vl-lead" data-t="i.p1"><b>What does an action actually change?</b> Manipulation is a chain of state
+            transitions, and most of every frame stays the same. VLA models must infer that change implicitly; world-action
+            models predict whole future frames and spend capacity on pixels that never move.</p>
+          <p class="vl-lead" data-t="i.p2">VLDA distills only <b>what changes</b> into a compact Delta and hands it to the
+            action head as an explicit interface: understand the scene, express the transition, then execute.</p>
+        </div>
+      </div>
+
+      <figure class="vl-fig reveal mb-10">
+        <div class="vl-fig-frame"><img src="../assets/projects/vlda/fig_1.png" alt="VLA, WAM and VLDA compared"
+            loading="lazy" /></div>
+        <button type="button" class="vl-open" data-open="../assets/projects/vlda/fig_1.png" data-t="open">View full figure ↗</button>
+        <figcaption data-t="fig1.cap"><b>Figure 1.</b> VLA, WAM and VLDA side by side. VLDA keeps the transition
+          signal and drops the redundant future pixels.</figcaption>
+      </figure>
+
+      <div class="vl-flow reveal">
+        <div class="vl-node"><b data-t="flow.u">Understand</b><span data-t="flow.us">Vision and language are encoded
+            into a task-aware representation.</span></div>
+        <div class="vl-arrow" aria-hidden="true">→</div>
+        <div class="vl-node vl-delta"><b data-t="flow.t">Transition · Δ</b><span data-t="flow.ts">A compact Delta captures
+            the local and global change the task requires.</span></div>
+        <div class="vl-arrow" aria-hidden="true">→</div>
+        <div class="vl-node"><b data-t="flow.e">Execute</b><span data-t="flow.es">The action head is refined by the
+            Delta, with no future frames needed at inference.</span></div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mt-8">
+        <span class="chip">VLA</span>
+        <span class="chip" data-t="i.c2">Transition modeling</span>
+        <span class="chip" data-t="i.c3">Flow-matching actions</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 02 The Method ===== -->
+  <section id="method" class="vl-sec vl-pad vl-tint">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8">
+      <div class="vl-intro">
+        <div>
+          <p class="vl-eyebrow"><b>02</b><span data-t="m.eyebrow">The method</span></p>
+          <h2 class="vl-h2" data-t="m.h">From a Delta to an action, <em>in three moves.</em></h2>
+        </div>
+        <p class="vl-lead" data-t="m.p">A V-JEPA 2 EMA teacher provides the target transition. Two filters distill it into
+          a Delta; one refinement module feeds it back into the action head.</p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="vl-step reveal">
+          <div class="vl-abbr">01 / LT-FILTER</div>
+          <h3>Local Transition Filter</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-t="m.ltf">Selects the top-64 regions with the largest transition magnitude and matches them to the
+            predicted Delta by Sinkhorn optimal transport, so the Delta is not diluted by static background.</p>
+        </div>
+        <div class="vl-step reveal">
+          <div class="vl-abbr">02 / GT-ANCHOR</div>
+          <h3>Global Transition Anchor</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-t="m.gta">Anchors the local patches to a global
+            summary of the transition, keeping the Delta consistent with the task as a whole.</p>
+        </div>
+        <div class="vl-step reveal">
+          <div class="vl-abbr">03 / DDAR</div>
+          <h3>Delta-Driven Action Refinement</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-t="m.ddar"><b>DAMG</b> grounds the Delta on the
+            action manifold with an InfoNCE loss. <b>DSAF</b> seeds the action flow with a Delta-based noise bias and a
+            prefix token.</p>
+        </div>
+      </div>
+
+      <figure class="vl-fig reveal mt-12">
+        <div class="vl-fig-frame"><img src="../assets/projects/vlda/fig_2.png" alt="VLDA architecture" loading="lazy" />
+        </div>
+        <button type="button" class="vl-open" data-open="../assets/projects/vlda/fig_2.png" data-t="open">View full figure ↗</button>
+        <figcaption data-t="fig2.cap"><b>Figure 2.</b> The VLDA architecture: the teacher builds the target
+          transition, LT-Filter and GT-Anchor distill the Delta, and DDAR feeds it into action generation.</figcaption>
+      </figure>
+      <div class="grid md:grid-cols-2 gap-6 mt-12">
+        <div class="vl-stage reveal">
+          <div class="vl-abbr" data-t="tr.st1">STAGE 1</div>
+          <b data-t="tr.s1">Learn the transition</b>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1" data-t="tr.s1p">Pre-train the Delta from the
+            teacher, without actions.</p>
+          <code>L1 = L_LTF + L_GTA</code>
+        </div>
+        <div class="vl-stage reveal">
+          <div class="vl-abbr" data-t="tr.st2">STAGE 2</div>
+          <b data-t="tr.s2">Learn to act</b>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1" data-t="tr.s2p">Train the action head with the
+            Delta as an interface, keeping the stage-1 loss as a regularizer.</p>
+          <code>L2 = L_act + λ·L1 + λ_DDAR·L_DDAR</code>
+        </div>
+      </div>
+      <div class="vl-stage reveal mt-6">
+        <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed" data-t="bl.p"><b>Built on LoongForge.</b> VLDA is trained with the LoongForge embodied
+          stack: DDP, ZeRO-1, FSDP and HSDP, component-wise freezing and checkpointing. Training used 8 GPUs.
+          Inference needs no future observations, and the EMA teacher can be dropped after training.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 03 The Results ===== -->
+  <section id="results" class="vl-sec vl-pad">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8">
+      <div class="vl-intro">
+        <div>
+          <p class="vl-eyebrow"><b>03</b><span data-t="r.eyebrow">The results</span></p>
+          <h2 class="vl-h2" data-t="r.h">Stronger where it counts, <em>consistently.</em></h2>
+        </div>
+        <p class="vl-lead" data-t="r.p">Three simulation benchmarks and a set of ablations. Our row is highlighted.</p>
+      </div>
+
+      <div data-tabs>
+        <div class="flex flex-wrap gap-2 mb-8">
+          <button data-tab="libero" class="tab-btn active">LIBERO</button>
+          <button data-tab="plus" class="tab-btn">LIBERO-Plus</button>
+          <button data-tab="rt" class="tab-btn">RoboTwin 2.0</button>
+          <button data-tab="abl" class="tab-btn" data-t="r.tab.abl">Ablation</button>
+        </div>
+        <div data-panel="libero">
+          <div class="vl-split">
+            <div>
+              <div class="vl-big"><strong>98.5%</strong><span data-t="r.lb.l">LIBERO average</span></div>
+              <h3 class="text-2xl font-bold mt-3" data-t="r.lb.h">Top average, with the biggest lift on long-horizon tasks.</h3>
+            </div>
+            <div>
+              <p class="vl-lead" data-t="r.lb.p">VLDA beats π0.5 by 1.6 points on average and edges out every other baseline, reaching 95.2% on the Long suite.</p>
+              <p class="vl-meta" data-t="r.lb.m">Spatial · Object · Goal · Long</p>
+            </div>
+          </div>
+          <p class="text-sm font-semibold mb-2" data-t="r.lb.c">Success rate (%) on LIBERO</p>
+          <div class="vl-tablewrap">
+            <table class="vl-table">
+              <thead><tr><th>Method</th><th>Spatial</th><th>Object</th><th>Goal</th><th>Long</th><th>Avg</th></tr></thead>
+              <tbody>
+                <tr class="vl-ours"><td>VLDA</td><td>99.8</td><td>99.6</td><td>99.4</td><td>95.2</td><td>98.5</td></tr>
+                <tr><td>π0.5</td><td>98.8</td><td>98.2</td><td>98.0</td><td>92.4</td><td>96.9</td></tr>
+                <tr><td>VLA-Adapter</td><td>97.8</td><td>99.2</td><td>97.2</td><td>95.0</td><td>97.3</td></tr>
+                <tr><td>OpenVLA-OFT</td><td>97.6</td><td>98.4</td><td>97.9</td><td>94.5</td><td>97.1</td></tr>
+                <tr><td>CronusVLA</td><td>97.3</td><td>99.6</td><td>96.9</td><td>94.0</td><td>97.0</td></tr>
+                <tr><td>InternVLA-M1</td><td>98.0</td><td>99.0</td><td>93.8</td><td>92.6</td><td>95.9</td></tr>
+                <tr><td>UniVLA</td><td>95.4</td><td>98.8</td><td>93.6</td><td>94.0</td><td>95.4</td></tr>
+                <tr><td>π0</td><td>96.8</td><td>98.8</td><td>95.8</td><td>85.2</td><td>94.2</td></tr>
+                <tr><td>GR00T-N1</td><td>94.4</td><td>97.6</td><td>93.0</td><td>90.6</td><td>93.9</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div data-panel="plus" class="hidden">
+          <div class="vl-split">
+            <div>
+              <div class="vl-big"><strong>+10.9</strong><span data-t="r.pl.l">points over π0.5, zero-shot</span></div>
+              <h3 class="text-2xl font-bold mt-3" data-t="r.pl.h">Robust when the world is perturbed.</h3>
+            </div>
+            <div>
+              <p class="vl-lead" data-t="r.pl.p">Ahead of π0.5 on all seven perturbation dimensions, and ahead of the strongest baseline, GuidedVLA, on six of them (+9.1 on average). The gap widens on the Long suite: +13.4 over π0.5 and +12.1 over GuidedVLA.</p>
+              <p class="vl-meta" data-t="r.pl.m">7 perturbation dimensions · 10,030 rollouts</p>
+            </div>
+          </div>
+          <p class="text-sm font-semibold mb-2" data-t="r.pl.c">Zero-shot success rate (%) on LIBERO-Plus</p>
+          <div class="vl-tablewrap">
+            <table class="vl-table">
+              <thead><tr><th>Method</th><th>Camera</th><th>Robot</th><th>Language</th><th>Light</th><th>Background</th><th>Noise</th><th>Layout</th><th>Avg</th></tr></thead>
+              <tbody>
+                <tr class="vl-ours"><td>VLDA</td><td>72.4</td><td>75.3</td><td>84.0</td><td>96.0</td><td>95.5</td><td>89.4</td><td>85.7</td><td>84.5</td></tr>
+                <tr><td>GuidedVLA</td><td>73.7</td><td>51.4</td><td>62.6</td><td>94.6</td><td>89.0</td><td>85.2</td><td>79.9</td><td>75.4</td></tr>
+                <tr><td>π0.5</td><td>59.7</td><td>65.5</td><td>75.3</td><td>87.0</td><td>82.4</td><td>72.1</td><td>80.3</td><td>73.6</td></tr>
+                <tr><td>DreamVLA</td><td>65.0</td><td>40.8</td><td>63.5</td><td>85.7</td><td>82.6</td><td>84.9</td><td>74.0</td><td>69.9</td></tr>
+                <tr><td>OpenVLA-OFT</td><td>56.4</td><td>31.9</td><td>79.5</td><td>88.7</td><td>93.3</td><td>75.8</td><td>74.2</td><td>69.6</td></tr>
+                <tr><td>π0</td><td>13.8</td><td>6.0</td><td>58.8</td><td>85.0</td><td>81.4</td><td>79.0</td><td>68.9</td><td>53.6</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div data-panel="rt" class="hidden">
+          <div class="vl-split">
+            <div>
+              <div class="vl-big"><strong>+20.2</strong><span data-t="r.rb.l">points over π0.5, 10 hard tasks</span></div>
+              <h3 class="text-2xl font-bold mt-3" data-t="r.rb.h">Biggest gains on complex state-transition tasks.</h3>
+            </div>
+            <div>
+              <p class="vl-lead" data-t="r.rb.p">Best or tied-best on every selected task. Put Bottles Dustbin jumps +46, Stacking Three +30, Place Dual Shoes +27 and Open Microwave +27. Across all 50 tasks VLDA scores 50.86% against 43.84% for π0.5.</p>
+              <p class="vl-meta" data-t="r.rb.m">10 selected hard tasks · 50-task average 50.86% vs 43.84%</p>
+            </div>
+          </div>
+          <p class="text-sm font-semibold mb-2" data-t="r.rb.c">Success rate (%) on RoboTwin 2.0</p>
+          <div class="vl-tablewrap">
+            <table class="vl-table">
+              <thead><tr><th>Method</th><th>Ranking RGB</th><th>Ranking Size</th><th>Grab Roller</th><th>Open Laptop</th><th>Open Microwave</th><th>Place Dual Shoes</th><th>Put Bottles Dustbin</th><th>Shake Bottle</th><th>Stacking Three</th><th>Stacking Two</th><th>Avg</th></tr></thead>
+              <tbody>
+                <tr class="vl-ours"><td>VLDA</td><td>53</td><td>16</td><td>96</td><td>60</td><td>64</td><td>34</td><td>55</td><td>100</td><td>65</td><td>86</td><td>62.9</td></tr>
+                <tr><td>π0.5</td><td>35</td><td>14</td><td>89</td><td>35</td><td>37</td><td>7</td><td>9</td><td>100</td><td>35</td><td>66</td><td>42.7</td></tr>
+                <tr><td>π0</td><td>5</td><td>1</td><td>80</td><td>46</td><td>50</td><td>0</td><td>13</td><td>60</td><td>24</td><td>41</td><td>32.0</td></tr>
+                <tr><td>RDT</td><td>0</td><td>0</td><td>43</td><td>32</td><td>20</td><td>4</td><td>4</td><td>45</td><td>17</td><td>30</td><td>19.5</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div data-panel="abl" class="hidden">
+          <div class="vl-split">
+            <div>
+              <div class="vl-big"><strong>+24</strong><span data-t="r.ab.l">points on Basket Relocation</span></div>
+              <h3 class="text-2xl font-bold mt-3" data-t="r.ab.h">Every module earns its place.</h3>
+            </div>
+            <div>
+              <p class="vl-lead" data-t="r.ab.p">Removing any single piece costs accuracy. LT-Filter and GT-Anchor each help alone, and together they help most, notably on the real robot.</p>
+              <p class="vl-meta" data-t="r.ab.m">Basket Relocation, R1 Lite: 48% without both → 72% with both</p>
+            </div>
+          </div>
+          <p class="text-sm font-semibold mb-2" data-t="r.ab.c">Ablations (LIBERO average unless noted)</p>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+            <div class="lf-card lf-card-static vl-abl reveal">
+              <span class="text-sm font-semibold" data-t="a.dsaf">w/o DSAF</span>
+              <div class="vl-abl-num"><s>98.5</s><strong>97.2</strong></div>
+              <span class="text-xs text-gray-500" data-t="a.dsaf.d">Delta-seeded action flow removed</span>
+            </div>
+            <div class="lf-card lf-card-static vl-abl reveal">
+              <span class="text-sm font-semibold" data-t="a.pre">w/o transition pre-training</span>
+              <div class="vl-abl-num"><s>98.5</s><strong>97.3</strong></div>
+              <span class="text-xs text-gray-500" data-t="a.pre.d">Stage 1 skipped</span>
+            </div>
+            <div class="lf-card lf-card-static vl-abl reveal">
+              <span class="text-sm font-semibold" data-t="a.full">Full-future prediction</span>
+              <div class="vl-abl-num"><s>98.5</s><strong>97.8</strong></div>
+              <span class="text-xs text-gray-500" data-t="a.full.d">Predicting whole frames instead of the Delta</span>
+            </div>
+            <div class="lf-card lf-card-static vl-abl reveal">
+              <span class="text-sm font-semibold" data-t="a.damg">w/o DAMG (LIBERO-Plus)</span>
+              <div class="vl-abl-num"><s>84.5</s><strong>82.0</strong></div>
+              <span class="text-xs text-gray-500" data-t="a.damg.d">Light +6.3, Background +3.7 with DAMG</span>
+            </div>
+          </div>
+          <h3 class="text-xl font-bold mb-4" data-t="a.t.h">LT-Filter and GT-Anchor</h3>
+          <div class="vl-tablewrap">
+            <table class="vl-table">
+              <thead><tr><th>LT-Filter</th><th>GT-Anchor</th><th>LIBERO Spatial</th><th>Object</th><th>Goal</th><th>Long</th><th>Ring</th><th>Sweep</th><th>Sort</th><th>Basket</th></tr></thead>
+              <tbody>
+                <tr><td>✗</td><td>✗</td><td>98.6</td><td>98.4</td><td>98.0</td><td>92.8</td><td>76</td><td>52</td><td>48</td><td>48</td></tr>
+                <tr><td>✓</td><td>✗</td><td>99.4</td><td>99.4</td><td>99.0</td><td>94.4</td><td>84</td><td>60</td><td>56</td><td>68</td></tr>
+                <tr><td>✗</td><td>✓</td><td>98.8</td><td>99.0</td><td>98.8</td><td>93.8</td><td>80</td><td>60</td><td>52</td><td>60</td></tr>
+                <tr class="vl-ours"><td>✓</td><td>✓</td><td>99.8</td><td>99.6</td><td>99.4</td><td>95.2</td><td>92</td><td>68</td><td>60</td><td>72</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="vl-note" data-t="a.t.n">Simulation columns are LIBERO success rate (%); real-world columns are Ring
+            Stacking, Table Sweeping, Conveyor Sorting and Basket Relocation on R1 Lite. Each module helps alone; together
+            they help most.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 04 In the Real World ===== -->
+  <section id="real" class="vl-sec vl-pad vl-tint">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8">
+      <div class="vl-intro">
+        <div>
+          <p class="vl-eyebrow"><b>04</b><span data-t="w.eyebrow">In the real world</span></p>
+          <h2 class="vl-h2" data-t="w.h">Still ahead on <em>real robots.</em></h2>
+        </div>
+        <p class="vl-lead" data-t="w.p">Four long-horizon tasks on a GALAXEA R1 Lite, 25 trials each, plus a second platform, AgileX
+          Cobot Magic. Numbers are final-stage success rates (%).</p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="lf-card lf-card-static reveal">
+          <h4 class="font-semibold mb-2" data-t="r.t1">Ring Stacking</h4>
+          <div class="vl-score"><strong>92%</strong><span><span data-t="sc.vs">vs.</span> π0.5 80%</span></div>
+          <div class="vl-bar vl-b-ours"><span>VLDA</span><div class="vl-bar-track"><i style="width:92%"></i></div><span>92</span></div>
+          <div class="vl-bar"><span>π0.5</span><div class="vl-bar-track"><i style="width:80%"></i></div><span>80</span></div>
+          <div class="vl-bar"><span>OpenVLA-OFT</span><div class="vl-bar-track"><i style="width:48%"></i></div><span>48</span></div>
+        </div>
+        <div class="lf-card lf-card-static reveal">
+          <h4 class="font-semibold mb-2" data-t="r.t2">Table Sweeping</h4>
+          <div class="vl-score"><strong>68%</strong><span><span data-t="sc.vs">vs.</span> π0.5 52%</span></div>
+          <div class="vl-bar vl-b-ours"><span>VLDA</span><div class="vl-bar-track"><i style="width:68%"></i></div><span>68</span></div>
+          <div class="vl-bar"><span>π0.5</span><div class="vl-bar-track"><i style="width:52%"></i></div><span>52</span></div>
+          <div class="vl-bar"><span>OpenVLA-OFT</span><div class="vl-bar-track"><i style="width:8%"></i></div><span>8</span></div>
+        </div>
+        <div class="lf-card lf-card-static reveal">
+          <h4 class="font-semibold mb-2" data-t="r.t3">Conveyor Sorting</h4>
+          <div class="vl-score"><strong>60%</strong><span><span data-t="sc.vs">vs.</span> π0.5 44%</span></div>
+          <div class="vl-bar vl-b-ours"><span>VLDA</span><div class="vl-bar-track"><i style="width:60%"></i></div><span>60</span></div>
+          <div class="vl-bar"><span>π0.5</span><div class="vl-bar-track"><i style="width:44%"></i></div><span>44</span></div>
+          <div class="vl-bar"><span>OpenVLA-OFT</span><div class="vl-bar-track"><i style="width:4%"></i></div><span>4</span></div>
+        </div>
+        <div class="lf-card lf-card-static reveal">
+          <h4 class="font-semibold mb-2" data-t="r.t4">Basket Relocation</h4>
+          <div class="vl-score"><strong>72%</strong><span><span data-t="sc.vs">vs.</span> π0.5 48%</span></div>
+          <div class="vl-bar vl-b-ours"><span>VLDA</span><div class="vl-bar-track"><i style="width:72%"></i></div><span>72</span></div>
+          <div class="vl-bar"><span>π0.5</span><div class="vl-bar-track"><i style="width:48%"></i></div><span>48</span></div>
+          <div class="vl-bar"><span>OpenVLA-OFT</span><div class="vl-bar-track"><i style="width:4%"></i></div><span>4</span></div>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-8 items-center mt-10">
+        <div>
+          <div class="vl-big"><strong>+17.0</strong><span data-t="w.big">points over π0.5, R1 Lite</span></div>
+          <p class="vl-lead mt-3" data-t="w.lead">Averaged over four tasks, VLDA reaches 73.0% against 56.0% for π0.5. On a
+            second robot the lead holds. Basket Relocation uses an out-of-distribution mat position, and VLDA still
+            reaches 72% at the final placement.</p>
+        </div>
+        <div class="vl-tablewrap">
+          <table class="vl-table vl-compact">
+            <thead><tr><th data-t="r.plat">Platform (average)</th><th>OpenVLA-OFT</th><th>π0.5</th><th>VLDA</th></tr></thead>
+            <tbody>
+              <tr><td>GALAXEA R1 Lite</td><td>16.0</td><td>56.0</td><td class="vl-best">73.0</td></tr>
+              <tr><td>AgileX Cobot Magic</td><td>17.0</td><td>54.0</td><td class="vl-best">72.0</td></tr>
+              <tr class="vl-ours"><td data-t="r.dlt">Δ vs. π0.5 (pp)</td><td></td><td></td><td>+17.0 / +18.0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="vl-split mt-16">
+        <h3 class="text-2xl font-bold" data-t="d.h">What the Delta looks at</h3>
+        <p class="vl-lead" data-t="d.p">The Delta concentrates on the regions that move and interact, not on the static
+          scene.</p>
+      </div>
+      <figure class="vl-fig reveal mt-6">
+        <div class="vl-fig-frame"><img src="../assets/projects/vlda/fig_3.png" alt="Delta visualization" loading="lazy" />
+        </div>
+        <button type="button" class="vl-open" data-open="../assets/projects/vlda/fig_3.png" data-t="open">View full figure ↗</button>
+        <figcaption data-t="fig3.cap"><b>Figure 3.</b> Visualization of the learned Delta during manipulation.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ===== 05 Build with VLDA ===== -->
+  <section id="cite" class="vl-sec vl-pad">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8">
+      <p class="vl-eyebrow"><b>05</b><span data-t="c.eyebrow">Build with VLDA</span></p>
+      <h2 class="vl-h2" data-t="c.h">Code and <em>citation.</em></h2>
+
+      <div class="grid lg:grid-cols-2 gap-5 mt-8">
+        <a href="https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda" target="_blank" rel="noopener"
+          class="lf-card card-hover block">
+          <div class="vl-eyebrow mb-2">GitHub ↗</div>
+          <h3 class="font-semibold mb-1" data-t="c.gh.h">LoongForge-VLDA Cookbook</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400" data-t="c.gh">Training code, configs and recipes for VLDA live in LoongForge.</p>
+        </a>
+        <pre class="cite-pre vl-clone"><code class="language-bash">git clone https://github.com/baidu-baige/LoongForge.git</code></pre>
+      </div>
+
+      <h3 class="text-xl font-bold mt-10 mb-3" data-t="c.bib">Citation</h3>
+      <pre class="cite-pre"><code class="language-bash">@article{zhang2026vlda,
+  title  = {Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},
+  author = {Zhang, Lingsen and Li, Wei and He, Jie and Zhang, Henghua and Mo, Kai and Li, Shiyong and Wang, Yanpeng and Shao, Rui},
+  year   = {2026},
+  note   = {Code: https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda}
+}</code></pre>
+      <p class="vl-note" data-t="c.note">The arXiv entry will be added once the preprint is public.</p>
+    </div>
+  </section>
+  </main>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-6xl mx-auto px-5 sm:px-8 py-8 vl-foot">
+      <span><b class="text-gray-900 dark:text-gray-100">LoongForge-VLDA</b> · <span data-t="f.tag">A LoongForge project</span></span>
+      <a href="#" class="lf-inline-link" data-t="f.top">Back to top ↑</a>
+      <span>© 2026 LoongForge Authors · Apache 2.0</span>
+    </div>
+  </footer>
+
+  <div class="vl-lightbox" id="vl-lightbox" role="dialog" aria-modal="true" aria-label="Figure">
+    <button type="button" id="vl-lightbox-close" data-t="close">Close ×</button>
+    <img alt="" />
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js?v=20261015-r22"></script>
+  <script src="../assets/js/project-bar.js?v=20261015-r32"></script>
+  <script src="../assets/js/vlda.js?v=20261015-r51"></script>
+</body>
+
+</html>

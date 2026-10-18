@@ -156,7 +156,7 @@
     renderHome(views, lang);
   }
 
-  fetch('assets/data/projects.json?v=20261015b', { cache: 'no-cache' })
+  fetch('assets/data/projects.json?v=20261015c', { cache: 'no-cache' })
     .then(r => r.json())
     .then(list => {
       allProjects = Array.isArray(list) ? list : [];
