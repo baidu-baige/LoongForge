@@ -167,12 +167,22 @@ CONFIG_MAPPING = {
     "benchmark.task_ids": "task_ids",
     "benchmark.episodes_per_task": "episodes_per_task",
     "benchmark.num_steps_wait": "num_steps_wait",
+    # Env seeding granularity: per_episode (legacy default) re-creates and re-seeds the env
+    # for every episode; per_task reuses ONE env seeded with run.seed across all trials,
+    # which is what the official FastWAM eval does (see docs §4.8).
+    "benchmark.env_seed_mode": "env_seed_mode",
     "benchmark.max_steps": "max_steps",
     "benchmark.continuous_gripper": "continuous_gripper",
     # False -> proprio reads obs['robot0_eef_pos']/quat (official FastWAM
     # convention); True -> prefer the OSC controller's ee_pos/ee_ori_mat
     # (X-VLA client convention).
     "benchmark.prefer_controller_ee": "prefer_controller_ee",
+    # Force an OSC cache refresh right after set_init_state. Default True = legacy
+    # LoongForge behaviour; the official FastWAM eval does not force it, so its
+    # configs set this false. Disabling it changes the arm motion during
+    # num_steps_wait and hence the first observation (see libero_runner.run_episode
+    # for the measurement).
+    "benchmark.controller_force_update": "controller_force_update",
     # Camera render resolution passed to robosuite. Omit to keep the shared
     # default (LIBERO_ENV_RESOLUTION); set it when the official eval client of
     # a model renders natively at another size (e.g. LingBot-VA renders 128).

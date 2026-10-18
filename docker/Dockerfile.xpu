@@ -90,8 +90,6 @@ RUN set -exuo pipefail && \
     install_lerobot() { \
         echo "Installing lerobot..." && \
         pip install "dmuon @ git+https://github.com/X-Square-Robot/dmuon.git" && \
-        cd /workspace/LoongForge/ && \
-        uv pip install --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
         cd /workspace && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \

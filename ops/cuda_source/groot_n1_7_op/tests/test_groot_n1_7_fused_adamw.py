@@ -112,6 +112,26 @@ def test_capturable_step_matches_reference():
         torch.testing.assert_close(actual_tensor, expected_tensor, atol=2e-6, rtol=2e-6)
 
 
+def test_capturable_step_zero_lr_zero_gradient_stays_finite():
+    """Warmup starts at LR=0; zero gradient entries must not become 0/0 NaNs."""
+    parameter = torch.randn(257, device="cuda", dtype=torch.float32)
+    original = parameter.clone()
+    gradient = torch.randn_like(parameter)
+    gradient[:13].zero_()
+    exp_avg = torch.zeros_like(parameter)
+    exp_avg_sq = torch.zeros_like(parameter)
+    args = _capturable_args()
+    args["lr"].zero_()
+    args["step"].fill_(1)
+
+    capturable_step(
+        [parameter], [gradient], [exp_avg], [exp_avg_sq], **args
+    )
+
+    assert torch.isfinite(parameter).all()
+    torch.testing.assert_close(parameter, original, atol=0.0, rtol=0.0)
+
+
 def test_capturable_grad_scaled_step_matches_reference():
     params, grads, exp_avgs, exp_avg_sqs = _state(31)
     actual = [tensor.clone() for tensor in params]

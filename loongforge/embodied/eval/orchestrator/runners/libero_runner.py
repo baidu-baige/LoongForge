@@ -81,6 +81,39 @@ def _extract_primary_frame(obs: Dict[str, Any]) -> np.ndarray:
     return np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
 
 
+# One env per task, seeded once -- the official eval semantics (`--env-seed-mode per_task`).
+# The official harness creates the env outside its 50-trial loop with `cfg.seed` and reuses
+# it, so the env's internal RNG advances across trials and each trial's scene is a function
+# of (seed, trial order), not of episode_idx alone. LIBERO's own `env.seed()` comment notes
+# the seed "seems to affect object positions even when using fixed initial state", so this
+# is not cosmetic: with `--env-seed-mode per_episode` (the default, kept for compatibility)
+# LoongForge re-creates and re-seeds the env every episode and therefore renders a
+# different observation for the same recorded initial state.
+_ENV_CACHE: Dict[str, Any] = {"key": None, "env": None}
+
+
+def _get_cached_env(task, resolution: int, seed: int):
+    """Return a per-task cached env, creating it (and seeding it) on first use."""
+    key = (str(getattr(task, "language", task)), int(resolution), int(seed))
+    if _ENV_CACHE.get("key") != key:
+        close_cached_env()
+        env, _ = _get_libero_env(task, resolution, seed)
+        _ENV_CACHE["key"] = key
+        _ENV_CACHE["env"] = env
+    return _ENV_CACHE["env"]
+
+
+def close_cached_env() -> None:
+    """Close the cached env if any (called per task switch and at batch exit)."""
+    env = _ENV_CACHE.get("env")
+    if env is not None:
+        try:
+            env.close()
+        finally:
+            _ENV_CACHE["env"] = None
+            _ENV_CACHE["key"] = None
+
+
 def _save_replay(
     frames: List[np.ndarray], output_dir: str, task_suite: str, task_id: int, episode_idx: int, success: bool
 ) -> Optional[str]:
@@ -216,8 +249,16 @@ def run_episode(
     args: argparse.Namespace,
 ) -> Dict[str, Any]:
     """Run run_episode."""
-    episode_seed = int(args.seed) + task_id * 1000 + episode_idx
-    np.random.seed(episode_seed)
+    env_seed_mode = str(getattr(args, "env_seed_mode", "per_episode"))
+    if env_seed_mode == "per_task":
+        # Official semantics: seed once per task (process), env reused across trials.
+        episode_seed = int(args.seed)
+        if not _ENV_CACHE.get("np_seeded"):
+            np.random.seed(episode_seed)
+            _ENV_CACHE["np_seeded"] = True
+    else:
+        episode_seed = int(args.seed) + task_id * 1000 + episode_idx
+        np.random.seed(episode_seed)
 
     task_description = task.language
     episode_id = f"libero/{task_suite_name}/task={task_id}/episode={episode_idx}"
@@ -232,19 +273,37 @@ def run_episode(
 
     try:
         with alarm_timeout(args.per_episode_timeout_sec, EpisodeTimeoutError):
-            env, task_description = _get_libero_env(task, _render_resolution(args), episode_seed)
+            if env_seed_mode == "per_task":
+                env = _get_cached_env(task, _render_resolution(args), episode_seed)
+            else:
+                env, task_description = _get_libero_env(task, _render_resolution(args), episode_seed)
             reset_start = time.time()
             client.reset(episode_id)
             payload_builder.reset(episode_id)
             action_decoder.reset()
             env.reset()
             obs = env.set_init_state(initial_state)
-            # set_init_state teleports the sim but robosuite OSC controllers only
-            # refresh ee_pos/ee_ori_mat inside step(); force a sync so the first
-            # observation does not mix the pre-reset controller pose with the
-            # init-state quaternion.
-            for robot in env.env.robots:
-                robot.controller.update(force=True)
+            # set_init_state teleports the sim, but the robosuite OSC caches
+            # (ee_pos / ee_ori_mat / Jacobians / mass matrix) are only refreshed by
+            # `Controller.update()`, which `run_controller()` calls before every sim
+            # step and which clears the `new_update` flag. Forcing a refresh here
+            # therefore *removes* the refresh the first num_steps_wait dummy step
+            # would otherwise do, changing the torques applied during those dummy
+            # steps -- i.e. the arm pose and both camera images at the first policy
+            # call. The default is therefore ON: that is the legacy LoongForge
+            # behaviour every other model's recorded LIBERO numbers were taken with.
+            # The official FastWAM eval does NOT force it: measured 2026-09-20 with
+            # the same weights/input, the first call's `input_image` was
+            # bit-identical to the official harness with the forced update disabled,
+            # and differed by max|d|=1.77 (1.3% of pixels) with it enabled -- so the
+            # FastWAM eval configs set `benchmark.controller_force_update: false`.
+            # LIBERO_CONTROLLER_FORCE_UPDATE=1 forces it on regardless.
+            force_controller_update = bool(getattr(args, "controller_force_update", True))
+            if os.environ.get("LIBERO_CONTROLLER_FORCE_UPDATE") == "1":
+                force_controller_update = True
+            if force_controller_update:
+                for robot in env.env.robots:
+                    robot.controller.update(force=True)
             reset_time_sec = time.time() - reset_start
 
             # Explicit benchmark.max_steps takes priority over the suite
@@ -375,7 +434,9 @@ def run_episode(
             trace_path=trace_path,
         )
     finally:
-        if env is not None:
+        # In `per_task` mode the env is cached and reused across trials (official semantics),
+        # so it must NOT be closed here -- run_batch closes it on task switch / at exit.
+        if env is not None and str(getattr(args, "env_seed_mode", "per_episode")) != "per_task":
             env.close()
 
     success = bool(info.get("success", done))
@@ -461,11 +522,14 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     )
     payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
     logging.info(
-        "libero runner: model_type=%s action_encoding=%s adapter.action_space=%s decoder_key=%s",
+        "libero runner: model_type=%s action_encoding=%s adapter.action_space=%s decoder_key=%s "
+        "prefer_controller_ee=%s controller_force_update=%s",
         type(payload_builder).__name__,
         getattr(payload_builder, "action_encoding", ""),
         adapter.action_space,
         action_decoder_key or "<identity>",
+        adapter.prefer_controller_ee,
+        bool(getattr(args, "controller_force_update", True)),
     )
     server_manager = getattr(args, "server_manager", None)
     if server_manager is not None:
@@ -520,6 +584,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
                 print(json.dumps(record, ensure_ascii=False), flush=True)
     finally:
         client.close()
+        close_cached_env()  # no-op unless --env-seed-mode per_task kept an env alive
 
     all_records = existing_records + new_records
     write_summary_csv(summary_path, all_records)
@@ -578,6 +643,43 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--env-seed-mode",
+        default="per_episode",
+        choices=["per_episode", "per_task"],
+        help=(
+            "per_episode (default, legacy): new env + seed per episode "
+            "(`seed + task_id*1000 + episode_idx`). "
+            "per_task: one env per task seeded with --seed and reused across trials "
+            "(official FastWAM eval semantics; see docs §4.8)."
+        ),
+    )
+    parser.add_argument(
+        "--prefer-controller-ee",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Source the proprio end-effector position from the OSC controller's cached "
+            "ee_pos (default, X-VLA convention) or, with --no-prefer-controller-ee, from the "
+            "observation's robot0_eef_pos (official FastWAM convention; the two differ by "
+            "sub-millimetre amounts because the controller cache is refreshed inside "
+            "run_controller, i.e. before the physics step). Settable from the eval YAML via "
+            "benchmark.prefer_controller_ee."
+        ),
+    )
+    parser.add_argument(
+        "--controller-force-update",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Force a robosuite OSC cache refresh (ee_pos/ee_ori_mat/Jacobians/mass "
+            "matrix) right after set_init_state. Default ON = legacy LoongForge "
+            "behaviour; the official FastWAM eval does not force it, so its configs "
+            "set benchmark.controller_force_update=false (see the comment in "
+            "run_episode: disabling it changes the arm motion during num_steps_wait "
+            "and hence the first observation)."
+        ),
+    )
     parser.add_argument("--unnorm-key", default="franka")
     parser.add_argument("--ckpt-path", default="")
     parser.add_argument("--model-name", default="loongforge")

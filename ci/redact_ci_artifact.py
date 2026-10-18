@@ -21,6 +21,8 @@ CONFIG_NAMES = {
     "LOONGFORGE_DEFAULT_IMAGE",
     "LOONGFORGE_HOST_DATA_ROOT",
     "LOONGFORGE_CONTAINER_DATA_ROOT",
+    "LOONGFORGE_HOST_LLM_DATA_ROOT",
+    "LOONGFORGE_CONTAINER_LLM_DATA_ROOT",
     "LOONGFORGE_HOST_OUTPUT_ROOT",
     "LOONGFORGE_CONTAINER_OUTPUT_ROOT",
     "LOONGFORGE_CONTAINER_SOURCE",
@@ -29,6 +31,9 @@ CONFIG_NAMES = {
     "TRITON_LIBCUDA_PATH",
     "LOONGFORGE_GPU_DEVICE",
     "LOONGFORGE_ALLOW_PR_IMAGE_BUILD",
+    "LOONGFORGE_ALLOW_RELEASE_IMAGE_BUILD",
+    "LOONGFORGE_RELEASE_RUN_REGRESSION",
+    "LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX",
     "IMAGE_DOCKERFILE",
     "IMAGE_BASE_IMAGE",
     "IMAGE_APT_SOURCES",
@@ -36,6 +41,20 @@ CONFIG_NAMES = {
     "IMAGE_SOURCE_MANIFEST",
     "CI_CANDIDATE_IMAGE_REPOSITORY",
     "CANDIDATE_TAG_PREFIX",
+    "INTERNAL_IMAGE_REPOSITORY",
+    "INTERNAL_IMAGE_REF",
+    "DOCKERHUB_IMAGE",
+    "DOCKERHUB_REF",
+    "DOCKER_HOST",
+    "DOCKER_CONFIG",
+    "LOONGFORGE_RELEASE_CONFIG",
+    "LOONGFORGE_IREGISTRY_CREDENTIALS",
+    "LOONGFORGE_DOCKERHUB_CREDENTIALS",
+    "LOONGFORGE_RELEASE_PUBLISHER_ALIAS",
+    "IREGISTRY_USERNAME",
+    "IREGISTRY_PASSWORD",
+    "DOCKERHUB_USERNAME",
+    "DOCKERHUB_TOKEN",
     "HTTP_PROXY",
     "HTTPS_PROXY",
     "NO_PROXY",
@@ -151,9 +170,20 @@ def redact_json(text: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--input", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="redact newline-delimited text from stdin to stdout",
+    )
     args = parser.parse_args()
+    if args.stream:
+        for line in sys.stdin:
+            sys.stdout.write(redact_text(line))
+        return 0
+    if args.input is None or args.output is None:
+        parser.error("--input and --output are required unless --stream is used")
     try:
         text = args.input.read_text(encoding="utf-8")
         output = redact_json(text) if args.input.suffix.lower() == ".json" else redact_text(text)

@@ -88,6 +88,21 @@ def docker(docker_bin: str, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 124, "", "")
 
 
+def image_metadata(inspect_json: str, history_json: str) -> str:
+    """Return image metadata without daemon-local graph-driver paths."""
+    parsed = json.loads(inspect_json)
+    if isinstance(parsed, list):
+        if len(parsed) != 1:
+            raise json.JSONDecodeError("multiple image records", inspect_json, 0)
+        inspect = parsed[0]
+    else:
+        inspect = parsed
+    if not isinstance(inspect, dict):
+        raise json.JSONDecodeError("image record is not an object", inspect_json, 0)
+    inspect.pop("GraphDriver", None)
+    return json.dumps(inspect, sort_keys=True) + "\n" + history_json
+
+
 def fail(message: str) -> int:
     print(f"image-policy: {message}", file=sys.stderr)
     return 1
@@ -103,10 +118,6 @@ def main() -> int:
     inspect = docker(docker_bin, "image", "inspect", image)
     if inspect.returncode != 0:
         return fail("inspect failed")
-    try:
-        json.loads(inspect.stdout)
-    except json.JSONDecodeError:
-        return fail("inspect failed")
 
     history = docker(
         docker_bin,
@@ -118,7 +129,10 @@ def main() -> int:
     )
     if history.returncode != 0:
         return fail("history inspection failed")
-    metadata = inspect.stdout + "\n" + history.stdout
+    try:
+        metadata = image_metadata(inspect.stdout, history.stdout)
+    except json.JSONDecodeError:
+        return fail("inspect failed")
     if CREDENTIAL_PATTERN.search(metadata) or SHORT_CREDENTIAL_PATTERN.search(metadata):
         return fail("sensitive metadata")
     if INTERNAL_PATTERN.search(metadata):

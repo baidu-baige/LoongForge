@@ -20,6 +20,17 @@ The workflow has three phases: **Environment Preparation**, **Configuration**, a
 
 Provision the datasets, HuggingFace base models, and pre-converted checkpoints required by the selected model configs before starting the test. The test entry script does not download these artifacts.
 
+Export the artifact, output, LoongForge, and Loong-Megatron paths before starting the suite:
+
+```bash
+export PFS_PATH=/workspace/loongforge_ci
+export TRAINING_LOG_PATH=/workspace/loongforge_ci_output/logs
+export LOONGFORGE_PATH=/workspace/LoongForge/
+export MEGATRON_PATH=/workspace/Loong-Megatron
+```
+
+`PFS_PATH` is the read-only artifact root. `TRAINING_LOG_PATH` is the writable output root and also contains dataset caches, lock files, and checkpoints.
+
 ```bash
 bash tests/llm_vlm/main_start.sh
 ```
@@ -106,7 +117,7 @@ extra_models=""
 bash tests/llm_vlm/main_start.sh
 ```
 
-After completion, check regression results under `/workspace/E2E/diff`.
+After completion, check regression results under `$TRAINING_LOG_PATH`.
 
 ## 4. Add New Test Cases
 

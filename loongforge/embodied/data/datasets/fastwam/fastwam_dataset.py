@@ -79,18 +79,34 @@ def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args):
     if not dataset_path:
         raise ValueError("Must specify --dataset-path")
 
-    dataset_path = Path(dataset_path)
-    repo_id = dataset_path.name
+    # --dataset-path may be a comma-separated list of dataset dirs. When multiple
+    # datasets are given they are concatenated into one MultiLeRobotV2Dataset
+    # (each sub-dataset keeps its own task_index -> text map), reproducing the
+    # official FastWAM "4 suites joint + frame-count-weighted sampling" setup.
+    roots = [Path(p.strip()) for p in str(dataset_path).split(",") if p.strip()]
+    if len(roots) == 1:
+        repo_id = roots[0].name
+        return _build_lerobot_dataset(
+            repo_id=repo_id,
+            root=str(roots[0]),
+            action_horizon=model_cfg.action_horizon,
+            streaming=training_args.streaming,
+            episodes=None,
+            video_backend=training_args.video_backend,
+            tolerance_s=1e-4,
+            lerobotdataset_version=training_args.lerobotdataset_version,
+            observation_delta_indices=data_cfg.observation_delta_indices,
+            delta_timestamps_fn=fastwam_delta_timestamps,
+        )
 
-    return _build_lerobot_dataset(
-        repo_id=repo_id,
-        root=str(dataset_path),
+    from loongforge.embodied.data.datasets.lerobot_dataset import (
+        MultiLeRobotV2Dataset,
+    )
+
+    return MultiLeRobotV2Dataset(
+        roots=roots,
         action_horizon=model_cfg.action_horizon,
-        streaming=training_args.streaming,
         episodes=None,
         video_backend=training_args.video_backend,
-        tolerance_s=1e-4,
-        lerobotdataset_version=training_args.lerobotdataset_version,
         observation_delta_indices=data_cfg.observation_delta_indices,
-        delta_timestamps_fn=fastwam_delta_timestamps,
     )

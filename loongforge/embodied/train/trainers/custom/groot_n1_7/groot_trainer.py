@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+import os
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass, field, is_dataclass, replace
 from functools import partial
 
 import torch
@@ -14,18 +16,30 @@ import torch.distributed as dist
 from torch import nn
 
 from loongforge.embodied.distributed.parallel import wrap_model
-from loongforge.embodied.train.trainers.custom.groot_n1_7.groot_optimizer import (
-    build_groot_optimizer,
-)
 from loongforge.embodied.distributed.utils import unwrap_model
 from loongforge.embodied.train.trainers.custom.groot_n1_7.full_iteration_cuda_graph import (
     GrootN1d7FullIterationCudaGraphRunner,
 )
-
+from loongforge.embodied.train.trainers.custom.groot_n1_7.groot_optimizer import (
+    build_groot_optimizer,
+)
 from loongforge.embodied.train.trainers.supervised.finetune_trainer import FinetuneTrainer
 from loongforge.embodied.train.utils.utils import set_seed
 
 logger = logging.getLogger(__name__)
+
+
+def _ddp_bucket_alignment_enabled(training_args=None) -> bool:
+    # Bucket rebuilding changes DDP's floating-point reduction order. Keep the
+    # reference bucket order for the exact eager/Graph baseline. FP8 A2A needs
+    # the rebuilt buckets to avoid the oversized fused first bucket.
+    if os.environ.get("LOONGFORGE_DDP_BUCKET_ALIGNMENT", "0") == "1":
+        return True
+    return bool(
+        training_args is not None
+        and getattr(training_args, "ddp_comm_hook", None)
+        == "fp8_a2a_allgather_hook"
+    )
 
 
 @dataclass
@@ -39,26 +53,21 @@ class _StaticGraphBucketWarmup:
     hook_handles: list = field(default_factory=list)
 
     def record_ready(self, parameter_index: int, _parameter: nn.Parameter) -> None:
-        """Append a parameter index the first time its gradient becomes ready.
-
-        Gradient accumulation runs one backward per micro-batch, so the hook
-        fires several times per optimizer step; only the first backward defines
-        the bucket order.
-        """
+        """Record each trainable parameter's first gradient-ready event."""
         if parameter_index in self.recorded_indices:
             return
         self.recorded_indices.add(parameter_index)
         self.ready_order.append(parameter_index)
 
     def remove_hooks(self) -> None:
-        """Detach all registered gradient-ready hooks."""
+        """Detach all gradient-ready hooks."""
         for handle in self.hook_handles:
             handle.remove()
         self.hook_handles.clear()
 
 
 def _arm_static_graph_bucket_warmup(model) -> None:
-    """Record normal DDP's first-backward parameter ready order."""
+    """Record DDP's first-backward parameter ready order for graph buckets."""
     if not isinstance(model, torch.nn.parallel.DistributedDataParallel):
         return
     raw_model = model.module
@@ -78,7 +87,9 @@ def _arm_static_graph_bucket_warmup(model) -> None:
             continue
         seen.add(id(parameter))
         parameters.append(parameter)
-        sparse.append(isinstance(module, (nn.Embedding, nn.EmbeddingBag)) and module.sparse)
+        sparse.append(
+            isinstance(module, (nn.Embedding, nn.EmbeddingBag)) and module.sparse
+        )
     state = _StaticGraphBucketWarmup(parameters, sparse)
     state.hook_handles = [
         parameter.register_post_accumulate_grad_hook(
@@ -90,7 +101,7 @@ def _arm_static_graph_bucket_warmup(model) -> None:
 
 
 def _align_static_graph_buckets_after_warmup(model) -> bool:
-    """Rebuild static DDP buckets in the observed first-backward order."""
+    """Rebuild DDP buckets in the observed first-backward ready order."""
     if not isinstance(model, torch.nn.parallel.DistributedDataParallel):
         return False
     state = getattr(model, "_loong_static_graph_bucket_warmup", None)
@@ -109,7 +120,8 @@ def _align_static_graph_buckets_after_warmup(model) -> bool:
             or max(ready_order, default=-1) != len(state.parameters) - 1
         ):
             raise RuntimeError(
-                "Static DDP bucket warmup did not observe every trainable parameter exactly once: "
+                "Static DDP bucket warmup did not observe every trainable parameter "
+                "exactly once: "
                 f"observed={len(ready_order)} expected={len(state.parameters)}"
             )
         config = model._bucket_config
@@ -129,11 +141,105 @@ def _align_static_graph_buckets_after_warmup(model) -> bool:
 
         initialize_buckets(model.reducer, bucket_indices)
         model._has_rebuilt_buckets = True
-        logger.info("Initialized %d GR00T DDP buckets from first-backward ready order.", len(bucket_indices))
+        logger.info(
+            "Initialized %d GR00T DDP buckets from first-backward ready order.",
+            len(bucket_indices),
+        )
         return True
     finally:
         state.remove_hooks()
         delattr(model, "_loong_static_graph_bucket_warmup")
+
+
+def _validate_fp8_cuda_graph_args(training_args) -> None:
+    """Validate the FP8 graph contract owned by the GR00T-N1.7 trainer."""
+    if not (training_args.fp8 and training_args.cuda_graph_impl == "local"):
+        return
+    if training_args.cuda_graph_scope != "full_iteration":
+        raise ValueError(
+            "GR00T-N1.7 FP8 CUDA graph support requires "
+            "--cuda-graph-scope=full_iteration."
+        )
+    if training_args.fp8_backend != "te":
+        raise ValueError(
+            "GR00T-N1.7 FP8 CUDA graph support requires --fp8-backend=te."
+        )
+    if training_args.fp8_te_recipe != "blockwise":
+        raise ValueError(
+            "GR00T-N1.7 FP8 CUDA graph support requires "
+            "--fp8-te-recipe=blockwise."
+        )
+    if training_args.gradient_accumulation_steps != 1:
+        raise ValueError(
+            "GR00T-N1.7 FP8 full-iteration CUDA graph requires "
+            "--gradient-accumulation-steps=1."
+        )
+    if not training_args.cuda_graph_ddp_sync_in_graph:
+        raise ValueError(
+            "GR00T-N1.7 FP8 full-iteration CUDA graph requires "
+            "--cuda-graph-ddp-sync-in-graph."
+        )
+    if training_args.check_for_nan_in_loss_and_grad:
+        raise ValueError(
+            "GR00T-N1.7 FP8 full-iteration CUDA graph requires "
+            "--no-check-for-nan-in-loss-and-grad."
+        )
+
+
+def _build_groot_fp8_recipe(training_args):
+    """Build the run-owned TE recipe and align TE 2.9 blockwise QParams."""
+    from loongforge.embodied.distributed.fp8_utils.te_fp8.recipe import (
+        build_fp8_recipe,
+    )
+
+    recipe = build_fp8_recipe(
+        training_args.fp8_te_recipe,
+        recipe_args=training_args,
+    )
+    if training_args.fp8_te_recipe != "blockwise":
+        return recipe
+
+    use_f32_scales = bool(getattr(recipe, "use_f32_scales", False))
+    for name in (
+        "fp8_quant_fwd_inp",
+        "fp8_quant_fwd_weight",
+        "fp8_quant_bwd_grad",
+    ):
+        qparams = getattr(recipe, name, None)
+        if qparams is None or not hasattr(qparams, "power_2_scale"):
+            continue
+        if is_dataclass(qparams):
+            qparams = replace(qparams, power_2_scale=not use_f32_scales)
+        else:
+            qparams.power_2_scale = not use_f32_scales
+        setattr(recipe, name, qparams)
+    return recipe
+
+
+@contextmanager
+def _groot_fp8_graph_capture_ctx(recipe):
+    """Enter TE's graph-aware autocast while recording a GR00T CUDA graph."""
+    try:
+        from transformer_engine.pytorch import autocast as te_autocast
+    except ImportError:
+        from transformer_engine.pytorch import fp8_autocast as te_autocast
+
+        with te_autocast(
+            enabled=True,
+            fp8_recipe=recipe,
+            fp8_group=None,
+            _graph=True,
+        ):
+            yield
+        return
+
+    with te_autocast(
+        enabled=True,
+        recipe=recipe,
+        amax_reduction_group=None,
+        _graph=True,
+    ):
+        yield
 
 
 def _full_iteration_graph_stream_priority(backbone_pipeline: bool) -> int:
@@ -166,9 +272,37 @@ class GrootN1d7Trainer(FinetuneTrainer):
     """GR00T-N1.7 finetune trainer with an optional full-iteration CUDA graph."""
 
     def __init__(self, training_args, model_cfg, data_cfg):
+        _validate_fp8_cuda_graph_args(training_args)
         super().__init__(training_args, model_cfg, data_cfg)
         self._train_step_runner: GrootN1d7FullIterationCudaGraphRunner | None = None
         self._full_iteration_graph_stream: torch.cuda.Stream | None = None
+        self._fp8_recipe = None
+
+    def _get_fp8_recipe(self):
+        """Return the single TE recipe shared by eager warmup and graph capture."""
+        if self._fp8_recipe is None:
+            self._fp8_recipe = _build_groot_fp8_recipe(self.training_args)
+        return self._fp8_recipe
+
+    def _fp8_forward_ctx(self):
+        """Use the trainer-owned recipe for GR00T TE FP8 forwards."""
+        if not (
+            self.training_args.fp8 and self.training_args.fp8_backend == "te"
+        ):
+            return super()._fp8_forward_ctx()
+
+        from transformer_engine.pytorch import fp8_autocast
+
+        return fp8_autocast(
+            enabled=True,
+            fp8_recipe=self._get_fp8_recipe(),
+        )
+
+    def _fp8_graph_capture_ctx(self):
+        """Return the GR00T-specific graph-aware TE FP8 context."""
+        if not self.training_args.fp8:
+            return nullcontext()
+        return _groot_fp8_graph_capture_ctx(self._get_fp8_recipe())
 
     def _setup(self) -> None:
         """Build training resources and match HF Trainer's post-build RNG reset."""
@@ -194,7 +328,8 @@ class GrootN1d7Trainer(FinetuneTrainer):
             graph_stream.wait_stream(default_stream)
             with torch.cuda.stream(graph_stream):
                 self.model = wrap_model(self.model, self.training_args, self.ctx)
-            _arm_static_graph_bucket_warmup(self.model)
+            if _ddp_bucket_alignment_enabled(self.training_args):
+                _arm_static_graph_bucket_warmup(self.model)
             default_stream.wait_stream(graph_stream)
             torch.cuda.synchronize(self.ctx.device)
             self._full_iteration_graph_stream = graph_stream
@@ -214,7 +349,7 @@ class GrootN1d7Trainer(FinetuneTrainer):
             return
 
     def _build_optimizer(self):
-        """Keep eager on the reference optimizer; graph owns its capturable path."""
+        """Keep eager on reference AdamW; graph owns its capturable path."""
         if self._full_iteration_graph_stream is None:
             return build_groot_optimizer(
                 self.model,
@@ -242,7 +377,11 @@ class GrootN1d7Trainer(FinetuneTrainer):
             elif hasattr(value, "item") and value.__class__.__module__.split(".")[0] == "numpy":
                 metrics[key] = value.item()
         if (
-            isinstance(self._train_step_runner, GrootN1d7FullIterationCudaGraphRunner)
+            _ddp_bucket_alignment_enabled(self.training_args)
+            and isinstance(
+                self._train_step_runner,
+                GrootN1d7FullIterationCudaGraphRunner,
+            )
             and self.completed_steps == 1
         ):
             _align_static_graph_buckets_after_warmup(self.model)

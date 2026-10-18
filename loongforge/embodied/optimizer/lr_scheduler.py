@@ -11,7 +11,7 @@ from typing import Dict, List
 import torch.nn as nn
 
 from loongforge.embodied.distributed.utils import is_rank_zero, unwrap_model
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR, LinearLR, SequentialLR
 from loongforge.embodied.optimizer.custom_lr_scheduler import LambdaLinearScheduler
 from transformers import get_scheduler
 
@@ -319,7 +319,30 @@ def build_scheduler(optimizer, training_args):
         )
 
         return LambdaLR(optimizer, _scheduler.schedule)
-    
+
+    if style == "linear_warmup_cosine_annealing":
+        # Keep identical to FastWAM's Trainer._build_scheduler for LR parity.
+        total_steps = max(int(training_args.lr_decay_iters or training_args.train_iters), 1)
+        warmup_steps = min(max(int(training_args.lr_warmup_iters), 0), total_steps - 1)
+        main_scheduler = CosineAnnealingLR(
+            optimizer,
+            T_max=max(total_steps - warmup_steps, 1),
+            eta_min=training_args.min_lr,
+        )
+        if warmup_steps <= 0:
+            return main_scheduler
+        warmup_scheduler = LinearLR(
+            optimizer,
+            start_factor=1.0 / warmup_steps,
+            end_factor=1.0,
+            total_iters=warmup_steps,
+        )
+        return SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, main_scheduler],
+            milestones=[warmup_steps],
+        )
+
     if style in {"cosine_with_min_lr", "cosine_warmup_with_min_lr"} and training_args.custom_lr_lambda:
         peak_lr = float(optimizer.defaults["lr"])
         end_lr = float(training_args.min_lr if training_args.min_lr is not None else peak_lr * 0.1)

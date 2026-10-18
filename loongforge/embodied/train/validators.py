@@ -275,12 +275,6 @@ def validate(training_args, model_cfg, data_cfg):
                 "targets and replaces Linear modules before FP8 conversion; "
                 "this combination has not been validated for either backend."
             )
-        if training_args.cuda_graph_impl == "local":
-            raise ValueError(
-                "--fp8 and --cuda-graph-impl=local are mutually exclusive; "
-                "the model-managed graph runners do not capture FP8 scaling "
-                "and conversion state."
-            )
         if training_args.fp8_skip_modules and not training_args.fp8_module_patterns:
             logger.warning(
                 "--fp8-skip-modules is set without --fp8-module-patterns; it "

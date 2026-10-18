@@ -1,6 +1,7 @@
 """FastWAM per-sample transform for LoongForge datasets."""
 
-from typing import Any, Dict
+import json
+from typing import Any, Dict, List, Optional
 
 import torch
 import torchvision.transforms.functional as TF
@@ -78,6 +79,76 @@ class FastWAMKeyMappingTransform(BaseTransform):
         return out
 
 
+def _fastwam_linear_params(stats: Dict[str, Any], mode: str):
+    """Scale/offset of FastWAM's ``SingleFieldLinearNormalizer`` from ``global_*`` stats."""
+    stats = {k.removeprefix("global_"): torch.tensor(v, dtype=torch.float64).to(torch.float32)
+             for k, v in stats.items() if k.startswith("global_")}
+    if mode == "z-score":
+        return 1.0 / (stats["std"] + 1e-8), -stats["mean"] / (stats["std"] + 1e-8)
+    if mode == "min/max":
+        input_min, input_max = stats["min"], stats["max"]
+    elif mode == "q01/q99":
+        input_min, input_max = stats["q01"], stats["q99"]
+    else:
+        raise ValueError(f"Unsupported fastwam_norm_mode: {mode!r} (min/max | q01/q99 | z-score)")
+    input_range = input_max - input_min
+    ignore_dim = input_range < 1e-4
+    input_range[ignore_dim] = 2.0
+    scale = 2.0 / input_range
+    offset = -1.0 - scale * input_min
+    offset[ignore_dim] = -input_min[ignore_dim]
+    return scale, offset
+
+
+class FastWAMLinearNormalizeTransform(BaseTransform):
+    """Normalize ``action`` / ``observation.state`` exactly like FastWAM's processor.
+
+    Padded action steps have their delta dims zeroed first, then both fields go
+    through ``x * scale + offset`` clamped to [-5, 5].
+    """
+
+    def __init__(
+        self,
+        stats_path: str,
+        mode: str = "min/max",
+        delta_action_dim_mask: Optional[List[bool]] = None,
+        training: bool = True,
+    ):
+        super().__init__(apply_to=["action", "observation.state"], training=training)
+        with open(stats_path, "r") as f:
+            stats = json.load(f)
+        self.params = {
+            "action": _fastwam_linear_params(stats["action"]["default"], mode),
+            "observation.state": _fastwam_linear_params(stats["state"]["default"], mode),
+        }
+        self.delta_action_dim_mask = (
+            None if delta_action_dim_mask is None
+            else torch.as_tensor(list(delta_action_dim_mask), dtype=torch.bool)
+        )
+
+    def apply(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Zero padded delta dims, then normalize and clamp."""
+        for key in self.apply_to:
+            if data.get(key) is None:
+                continue
+            value = torch.as_tensor(data[key], dtype=torch.float32).clone()
+            if key == "action" and self.delta_action_dim_mask is not None and data.get("action_is_pad") is not None:
+                is_pad = torch.as_tensor(data["action_is_pad"], dtype=torch.bool)
+                value[is_pad.unsqueeze(1) & self.delta_action_dim_mask.unsqueeze(0)] = 0.0
+            scale, offset = self.params[key]
+            data[key] = torch.clamp(value * scale + offset, -5.0, 5.0)
+        return data
+
+    def unapply(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Inverse normalization (clamping is not undone)."""
+        for key in self.apply_to:
+            if data.get(key) is None:
+                continue
+            scale, offset = self.params[key]
+            data[key] = (torch.as_tensor(data[key], dtype=torch.float32) - offset) / scale
+        return data
+
+
 @register_transform_builder("fastwam")
 def build_fastwam_transforms(ctx: TransformBuilderContext):
     """Build FastWAM-specific per-sample transforms."""
@@ -86,13 +157,21 @@ def build_fastwam_transforms(ctx: TransformBuilderContext):
 
     transforms = []
 
+    fastwam_norm = ctx.data_cfg.norm_stats_path is not None
+    if fastwam_norm:
+        transforms.append(FastWAMLinearNormalizeTransform(
+            stats_path=ctx.data_cfg.norm_stats_path,
+            mode=ctx.data_cfg.fastwam_norm_mode,
+            delta_action_dim_mask=ctx.data_cfg.delta_action_dim_mask,
+        ))
+
     normalization_mode = ctx.data_cfg.normalization_mode
 
     # Action normalization: matches bak pipeline.py step 2.
     # ActionTransform(apply_to=["action"], action_horizon=32, normalization_mode=q99)
     action_stats = (
         convert_stats(ctx.dataset_stats.get("action"))
-        if ctx.dataset_stats
+        if ctx.dataset_stats and not fastwam_norm
         else None
     )
     action_horizon = getattr(ctx.model_cfg, "action_horizon", None)
@@ -111,7 +190,7 @@ def build_fastwam_transforms(ctx: TransformBuilderContext):
     # before FastWAMKeyMappingTransform reads it as `proprio`.
     proprio_stats = (
         convert_stats(ctx.dataset_stats.get("observation.state"))
-        if ctx.dataset_stats
+        if ctx.dataset_stats and not fastwam_norm
         else None
     )
     transforms.append(ActionTransform(

@@ -1,9 +1,52 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      build_image:
+        description: Build a new release image
+        required: false
+        type: string
+      run_regression:
+        description: Run release regression
+        required: false
+        type: string
+      publish_internal:
+        description: Publish the validated image to the internal registry
+        required: false
+        type: string
+      publish_dockerhub:
+        description: Promote the validated image to Docker Hub
+        required: false
+        type: string
+      execution_slot:
+        description: Execution slot for build and regression
+        required: false
+        type: string
+      llm_model:
+        description: LLM release regression model
+        required: false
+        type: string
+      vla_model:
+        description: VLA release regression model
+        required: false
+        type: string
+      baseline_chip:
+        description: Baseline chip directory shared by both regression suites
+        required: false
+        type: string
+      debug_tag_suffix:
+        description: Non-production suffix appended to generated image tags
+        required: false
+        type: string
+      existing_image_ref:
+        description: Existing image reference used when build_image is false
+        required: false
+        type: string
+      skip_regression_reason:
+        description: Required reason when publishing without regression; use __dry_run__ to validate without execution
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -18,72 +61,197 @@ jobs:
     timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.version }}
+      build_image: ${{ steps.stages.outputs.build_image }}
+      run_regression: ${{ steps.stages.outputs.run_regression }}
+      publish_internal: ${{ steps.stages.outputs.publish_internal }}
+      publish_dockerhub: ${{ steps.stages.outputs.publish_dockerhub }}
+      execution_slot: ${{ steps.stages.outputs.execution_slot }}
+      llm_model: ${{ steps.stages.outputs.llm_model }}
+      vla_model: ${{ steps.stages.outputs.vla_model }}
+      baseline_chip: ${{ steps.stages.outputs.baseline_chip }}
+      debug_tag_suffix: ${{ steps.stages.outputs.debug_tag_suffix }}
+      existing_image_ref: ${{ steps.stages.outputs.existing_image_ref }}
+      skip_regression_reason: ${{ steps.stages.outputs.skip_regression_reason }}
+      dry_run: ${{ steps.stages.outputs.skip_regression_reason == '__dry_run__' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - id: stages
+        name: Validate release stage switches
+        shell: bash
+        env:
+          INPUT_BUILD_IMAGE: ${{ github.event.inputs.build_image }}
+          INPUT_RUN_REGRESSION: ${{ github.event.inputs.run_regression }}
+          INPUT_PUBLISH_INTERNAL: ${{ github.event.inputs.publish_internal }}
+          INPUT_PUBLISH_DOCKERHUB: ${{ github.event.inputs.publish_dockerhub }}
+          INPUT_EXECUTION_SLOT: ${{ github.event.inputs.execution_slot }}
+          INPUT_LLM_MODEL: ${{ github.event.inputs.llm_model }}
+          INPUT_VLA_MODEL: ${{ github.event.inputs.vla_model }}
+          INPUT_BASELINE_CHIP: ${{ github.event.inputs.baseline_chip }}
+          INPUT_DEBUG_TAG_SUFFIX: ${{ github.event.inputs.debug_tag_suffix }}
+          INPUT_EXISTING_IMAGE_REF: ${{ github.event.inputs.existing_image_ref }}
+          INPUT_SKIP_REGRESSION_REASON: ${{ github.event.inputs.skip_regression_reason }}
+          VAR_BUILD_IMAGE: ${{ vars.BUILD_RELEASE_IMAGE }}
+          VAR_RUN_REGRESSION: ${{ vars.RUN_RELEASE_REGRESSION }}
+          VAR_PUBLISH_INTERNAL: ${{ vars.PUBLISH_TO_INTERNAL_REGISTRY }}
+          VAR_PUBLISH_DOCKERHUB: ${{ vars.PUBLISH_TO_DOCKERHUB }}
+          VAR_EXECUTION_SLOT: ${{ vars.RELEASE_EXECUTION_SLOT }}
+          VAR_LLM_MODEL: ${{ vars.RELEASE_LLM_MODEL }}
+          VAR_VLA_MODEL: ${{ vars.RELEASE_VLA_MODEL }}
+          VAR_BASELINE_CHIP: ${{ vars.RELEASE_BASELINE_CHIP }}
+        run: |
+          set -euo pipefail
+          build_image="${INPUT_BUILD_IMAGE:-$VAR_BUILD_IMAGE}"
+          run_regression="${INPUT_RUN_REGRESSION:-$VAR_RUN_REGRESSION}"
+          publish_internal="${INPUT_PUBLISH_INTERNAL:-$VAR_PUBLISH_INTERNAL}"
+          publish_dockerhub="${INPUT_PUBLISH_DOCKERHUB:-$VAR_PUBLISH_DOCKERHUB}"
+          execution_slot="${INPUT_EXECUTION_SLOT:-$VAR_EXECUTION_SLOT}"
+          llm_model="${INPUT_LLM_MODEL:-$VAR_LLM_MODEL}"
+          vla_model="${INPUT_VLA_MODEL:-$VAR_VLA_MODEL}"
+          baseline_chip="${INPUT_BASELINE_CHIP:-$VAR_BASELINE_CHIP}"
+          python3 .github/scripts/release_request.py \
+            --build-image "$build_image" \
+            --run-regression "$run_regression" \
+            --publish-internal "$publish_internal" \
+            --publish-dockerhub "$publish_dockerhub" \
+            --execution-slot "$execution_slot" \
+            --llm-model "$llm_model" \
+            --vla-model "$vla_model" \
+            --baseline-chip "$baseline_chip" \
+            --debug-tag-suffix "${INPUT_DEBUG_TAG_SUFFIX:-}" \
+            --existing-image-ref "${INPUT_EXISTING_IMAGE_REF:-}" \
+            --skip-regression-reason "${INPUT_SKIP_REGRESSION_REASON:-}" \
+            >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/validate_release_models.py \
+            --llm-model "$llm_model" \
+            --vla-model "$vla_model" \
+            --source .
       - id: version
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
           RELEASE_REF: ${{ github.ref }}
+          PUBLISH_INTERNAL: ${{ steps.stages.outputs.publish_internal }}
+          PUBLISH_DOCKERHUB: ${{ steps.stages.outputs.publish_dockerhub }}
+          DEBUG_TAG_SUFFIX: ${{ steps.stages.outputs.debug_tag_suffix }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == workflow_dispatch && "$RELEASE_REF" != refs/heads/master ]]; then
-            echo "manual releases must be dispatched from master" >&2
+          package_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+
+          production_source=false
+          if [[ "$RELEASE_REF" =~ ^refs/tags/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?$ ]]; then
+            if [[ -n "$DEBUG_TAG_SUFFIX" ]]; then
+              echo "release tags cannot use a debug suffix" >&2
+              exit 1
+            fi
+            tag_version="${RELEASE_REF#refs/tags/v}"
+            if [[ "$tag_version" != "$package_version" ]]; then
+              echo "release tag must match pyproject version" >&2
+              exit 1
+            fi
+            compare_status="$(GH_TOKEN="$GITHUB_TOKEN" gh api \
+              "repos/${GITHUB_REPOSITORY}/compare/master...${GITHUB_SHA}" \
+              --jq .status)"
+            if [[ "$compare_status" != "behind" && "$compare_status" != "identical" ]]; then
+              echo "release tag must point to a commit on master" >&2
+              exit 1
+            fi
+            production_source=true
+          fi
+
+          if [[ "$production_source" != true && "$DEBUG_TAG_SUFFIX" == "" && \
+                ("$PUBLISH_INTERNAL" == true || "$PUBLISH_DOCKERHUB" == true) ]]; then
+            echo "production publishing must use a matching release tag" >&2
             exit 1
           fi
-          package_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-          if [[ "$EVENT_NAME" == push ]]; then
-            tag_version="${GITHUB_REF_NAME#v}"
-            [[ "$tag_version" == "$package_version" ]] || {
-              echo "tag and package versions do not match" >&2
-              exit 1
-            }
-          fi
+
           echo "version=$package_version" >> "$GITHUB_OUTPUT"
 
-  package:
+  dry_run:
     needs: validate
-    uses: ./.github/workflows/build.yml
-
-  publish:
-    needs: package
-    if: github.event_name == 'push'
+    if: needs.validate.outputs.dry_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: pypi-release
-    permissions:
-      contents: read
-      id-token: write
+    timeout-minutes: 5
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+      - name: Report validated release request
+        run: |
+          echo "build_image=${{ needs.validate.outputs.build_image }}"
+          echo "run_regression=${{ needs.validate.outputs.run_regression }}"
+          echo "publish_internal=${{ needs.validate.outputs.publish_internal }}"
+          echo "publish_dockerhub=${{ needs.validate.outputs.publish_dockerhub }}"
+          echo "execution_slot=${{ needs.validate.outputs.execution_slot }}"
+          echo "llm_model=${{ needs.validate.outputs.llm_model }}"
+          echo "vla_model=${{ needs.validate.outputs.vla_model }}"
+          echo "baseline_chip=${{ needs.validate.outputs.baseline_chip }}"
+          echo "dry_run: stages were not executed"
 
-  docker:
-    needs: [validate, package, publish]
+  build_test_push_internal:
+    needs: validate
     if: >-
       ${{
-        always() &&
         needs.validate.result == 'success' &&
-        needs.package.result == 'success' &&
-        (github.event_name == 'workflow_dispatch' || needs.publish.result == 'success')
+        needs.validate.outputs.dry_run == 'false' &&
+        (needs.validate.outputs.build_image == 'true' ||
+         needs.validate.outputs.run_regression == 'true' ||
+         needs.validate.outputs.publish_internal == 'true')
       }}
     runs-on: ${{ fromJSON(vars.CI_RELEASE_RUNNER) }}
     timeout-minutes: 360
-    environment: dockerhub-release
+    environment: iregistry-release
     env:
-      IMAGE_REF: docker.io/loongforge/loongforge:${{ needs.validate.outputs.version }}
+      INTERNAL_IMAGE_REPOSITORY: ${{ secrets.INTERNAL_IMAGE_REPOSITORY }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      BUILD_IMAGE: ${{ needs.validate.outputs.build_image }}
+      RUN_RELEASE_REGRESSION: ${{ needs.validate.outputs.run_regression }}
+      PUBLISH_TO_INTERNAL_REGISTRY: ${{ needs.validate.outputs.publish_internal }}
+      LOONGFORGE_RELEASE_EXECUTION_SLOT: ${{ needs.validate.outputs.execution_slot }}
+      LLM_MODEL: ${{ needs.validate.outputs.llm_model }}
+      VLA_MODEL: ${{ needs.validate.outputs.vla_model }}
+      BASELINE_CHIP: ${{ needs.validate.outputs.baseline_chip }}
+      DEBUG_TAG_SUFFIX: ${{ needs.validate.outputs.debug_tag_suffix }}
+      EXISTING_IMAGE_REF: ${{ needs.validate.outputs.existing_image_ref }}
+      DOCKER_CONFIG: /tmp/loongforge-release-docker-config-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Protect runner-local metadata
+        run: "${LOONGFORGE_RUNNER_MASK_SCRIPT:?}"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: LoongForge
           persist-credentials: false
           submodules: recursive
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.11.1
+      - name: Resolve execution slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/self_runner/resolve_execution_slot.sh
+      - name: Resolve internal release image reference
+        shell: bash
+        env:
+          INTERNAL_IMAGE_REPOSITORY: ${{ env.INTERNAL_IMAGE_REPOSITORY }}
+          VERSION: ${{ env.VERSION }}
+          DEBUG_TAG_SUFFIX: ${{ env.DEBUG_TAG_SUFFIX }}
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          mkdir -p "$DOCKER_CONFIG"
+          : "${INTERNAL_IMAGE_REPOSITORY:?INTERNAL_IMAGE_REPOSITORY secret is required}"
+          : "${LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX:?LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX is required}"
+          # The suffix is empty for real releases; operators set it on a
+          # non-production runner so a rehearsal cannot claim a release tag.
+          tag_suffix="${DEBUG_TAG_SUFFIX:-}"
+          [[ "$tag_suffix" =~ ^[A-Za-z0-9._-]*$ ]]
+          image_ref="${INTERNAL_IMAGE_REPOSITORY}:${LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX}_v${VERSION}_release${tag_suffix}"
+          # A registry host may carry a port, so only the final tag is split off.
+          [[ "$image_ref" =~ ^[A-Za-z0-9._-]+(:[0-9]+)?(/[A-Za-z0-9._-]+)*:[A-Za-z0-9._-]+$ ]]
+          # Docker only treats the first component as a registry host when it
+          # looks like one; otherwise the image lives on Docker Hub.
+          registry_host="${INTERNAL_IMAGE_REPOSITORY%%/*}"
+          if [[ "$registry_host" == "$INTERNAL_IMAGE_REPOSITORY" || "$registry_host" != *[.:]* ]]; then
+            registry_host=docker.io
+          fi
+          printf 'INTERNAL_IMAGE_REF=%s\n' "$image_ref" >> "$GITHUB_ENV"
+          printf 'INTERNAL_REGISTRY_HOST=%s\n' "$registry_host" >> "$GITHUB_ENV"
       - name: Verify Docker storage capacity
         shell: bash
         run: |
@@ -94,8 +262,17 @@ jobs:
       - id: release_image
         name: Build release image with the trusted image builder
         shell: bash
+        env:
+          IMAGE_REF: loongforge-release:${{ env.VERSION }}-${{ github.run_id }}
+          BUILD_IMAGE: ${{ env.BUILD_IMAGE }}
+          EXISTING_IMAGE_REF: ${{ env.EXISTING_IMAGE_REF }}
         run: |
           set -euo pipefail
+          if [[ "$BUILD_IMAGE" != true ]]; then
+            : "${EXISTING_IMAGE_REF:?existing_image_ref is required when build_image is false}"
+            echo "image_ref=$EXISTING_IMAGE_REF" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           tree_sha="$(git -C LoongForge rev-parse 'HEAD^{tree}')"
           built_ref="$(LoongForge/.github/scripts/self_runner/build_candidate_image.sh \
             --release \
@@ -108,15 +285,296 @@ jobs:
           echo "image_ref=$built_ref" >> "$GITHUB_OUTPUT"
       - name: Enforce release image policy
         run: python3 LoongForge/.github/scripts/image_policy.py "${{ steps.release_image.outputs.image_ref }}"
-      - name: Log in to Docker Hub
-        if: github.event_name == 'push'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.6.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Push immutable release image
-        if: github.event_name == 'push'
-        run: docker push "${{ steps.release_image.outputs.image_ref }}"
-      - name: Remove local release image
+      - name: Run release regression in one container
+        if: env.RUN_RELEASE_REGRESSION == 'true'
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.release_image.outputs.image_ref }}
+          LLM_MODEL: ${{ env.LLM_MODEL }}
+          VLA_MODEL: ${{ env.VLA_MODEL }}
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          LoongForge/.github/scripts/self_runner/run_release_regression.sh \
+            --image "$IMAGE_REF" \
+            --source "$GITHUB_WORKSPACE/LoongForge" \
+            --sha "$GITHUB_SHA" \
+            --llm-model "$LLM_MODEL" \
+            --vla-model "$VLA_MODEL" \
+            --baseline-chip "$BASELINE_CHIP"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
-        run: docker image rm -f "$IMAGE_REF" >/dev/null 2>&1 || true
+        with:
+          name: release-regression
+          path: loongforge-release-artifacts/
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Tag validated image for iregistry
+        if: >-
+          ${{
+            env.PUBLISH_TO_INTERNAL_REGISTRY == 'true'
+          }}
+        env:
+          LOCAL_IMAGE_REF: ${{ steps.release_image.outputs.image_ref }}
+        run: docker tag "$LOCAL_IMAGE_REF" "$INTERNAL_IMAGE_REF"
+      - name: Log in to iregistry
+        if: >-
+          ${{
+            env.PUBLISH_TO_INTERNAL_REGISTRY == 'true'
+          }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_credentials.sh iregistry
+          printf '%s' "${IREGISTRY_PASSWORD:?}" |
+            LoongForge/.github/scripts/self_runner/docker_redacted.sh login \
+              --username "${IREGISTRY_USERNAME:?}" \
+              --password-stdin \
+              "$INTERNAL_REGISTRY_HOST"
+      - name: Push validated image to iregistry
+        if: >-
+          ${{
+            env.PUBLISH_TO_INTERNAL_REGISTRY == 'true'
+          }}
+        run: LoongForge/.github/scripts/self_runner/docker_redacted.sh push "$INTERNAL_IMAGE_REF"
+      - name: Remove local release image
+        if: >-
+          ${{
+            always() &&
+            (env.BUILD_IMAGE == 'true' || env.PUBLISH_TO_INTERNAL_REGISTRY == 'true')
+          }}
+        env:
+          LOCAL_IMAGE_REF: ${{ steps.release_image.outputs.image_ref }}
+        run: |
+          if [[ "$BUILD_IMAGE" == true ]]; then
+            docker image rm -f "$LOCAL_IMAGE_REF" "$INTERNAL_IMAGE_REF" >/dev/null 2>&1 || true
+          else
+            docker image rm -f "$INTERNAL_IMAGE_REF" >/dev/null 2>&1 || true
+          fi
+      - name: Remove release Docker config
+        if: always()
+        run: |
+          if [[ -d "$DOCKER_CONFIG" && ! -L "$DOCKER_CONFIG" ]]; then
+            find "$DOCKER_CONFIG" -mindepth 1 -delete
+            rmdir "$DOCKER_CONFIG"
+          fi
+
+  promote_to_dockerhub:
+    needs: [validate, build_test_push_internal]
+    if: >-
+      ${{
+        always() &&
+        needs.validate.result == 'success' &&
+        needs.validate.outputs.dry_run == 'false' &&
+        needs.validate.outputs.publish_dockerhub == 'true' &&
+        (needs.build_test_push_internal.result == 'success' ||
+         needs.build_test_push_internal.result == 'skipped')
+      }}
+    runs-on: ${{ fromJSON(vars.CI_RELEASE_RUNNER) }}
+    timeout-minutes: 90
+    environment: dockerhub-release
+    env:
+      INTERNAL_IMAGE_REPOSITORY: ${{ secrets.INTERNAL_IMAGE_REPOSITORY }}
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE || 'docker.io/loongforge/loongforge' }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      DEBUG_TAG_SUFFIX: ${{ needs.validate.outputs.debug_tag_suffix }}
+      PUBLISH_INTERNAL: ${{ needs.validate.outputs.publish_internal }}
+      # Keep job credentials out of the runner's shared Docker config.
+      DOCKER_CONFIG: /tmp/loongforge-release-docker-config-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Protect runner-local metadata
+        run: "${LOONGFORGE_RUNNER_MASK_SCRIPT:?}"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: LoongForge
+          persist-credentials: false
+      - name: Load runner-local release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_config.sh
+          mkdir -p "$DOCKER_CONFIG"
+          ssh -o BatchMode=yes "$LOONGFORGE_RELEASE_PUBLISHER_ALIAS" true \
+            >/dev/null 2>&1 || {
+              echo "publisher: unavailable" >&2
+              exit 1
+            }
+          printf 'DOCKER_HOST=%s\n' "$DOCKER_HOST" >> "$GITHUB_ENV"
+      - id: hub_ref
+        name: Resolve Docker Hub image reference
+        shell: bash
+        env:
+          DEBUG_TAG_SUFFIX: ${{ env.DEBUG_TAG_SUFFIX }}
+          PUBLISH_INTERNAL: ${{ env.PUBLISH_INTERNAL }}
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_config.sh
+          : "${INTERNAL_IMAGE_REPOSITORY:?INTERNAL_IMAGE_REPOSITORY secret is required}"
+          : "${LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX:?LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX is required}"
+          : "${DOCKERHUB_IMAGE:?DOCKERHUB_IMAGE must name the target Docker Hub repository}"
+          tag_suffix="${DEBUG_TAG_SUFFIX:-}"
+          [[ "$tag_suffix" =~ ^[A-Za-z0-9._-]*$ ]]
+          internal_ref="${INTERNAL_IMAGE_REPOSITORY}:${LOONGFORGE_RELEASE_IMAGE_TAG_PREFIX}_v${VERSION}_release${tag_suffix}"
+          [[ "$internal_ref" =~ ^[A-Za-z0-9._-]+(:[0-9]+)?(/[A-Za-z0-9._-]+)*:[A-Za-z0-9._-]+$ ]]
+          internal_registry_host="${INTERNAL_IMAGE_REPOSITORY%%/*}"
+          if [[ "$internal_registry_host" == "$INTERNAL_IMAGE_REPOSITORY" || "$internal_registry_host" != *[.:]* ]]; then
+            internal_registry_host=docker.io
+          fi
+          dockerhub_ref="${DOCKERHUB_IMAGE}:${VERSION}${tag_suffix}"
+          # A registry host may carry a port, so only the final tag is split off.
+          [[ "$dockerhub_ref" =~ ^[A-Za-z0-9._-]+(:[0-9]+)?(/[A-Za-z0-9._-]+)*:[A-Za-z0-9._-]+$ ]]
+          # Docker only treats the first component as a registry host when it
+          # looks like one; otherwise the image lives on Docker Hub.
+          registry_host="${DOCKERHUB_IMAGE%%/*}"
+          if [[ "$registry_host" == "$DOCKERHUB_IMAGE" || "$registry_host" != *[.:]* ]]; then
+            registry_host=docker.io
+          fi
+          printf 'INTERNAL_IMAGE_REF=%s\n' "$internal_ref" >> "$GITHUB_ENV"
+          printf 'INTERNAL_REGISTRY_HOST=%s\n' "$internal_registry_host" >> "$GITHUB_ENV"
+          echo "dockerhub_ref=$dockerhub_ref" >> "$GITHUB_OUTPUT"
+          echo "registry_host=$registry_host" >> "$GITHUB_OUTPUT"
+      - id: promotion
+        name: Pull, tag, and push image to Docker Hub
+        env:
+          DOCKERHUB_REF: ${{ steps.hub_ref.outputs.dockerhub_ref }}
+          DOCKERHUB_REGISTRY_HOST: ${{ steps.hub_ref.outputs.registry_host }}
+        run: |
+          LoongForge/.github/scripts/self_runner/promote_to_dockerhub.sh \
+            "$INTERNAL_IMAGE_REF" \
+            "$DOCKERHUB_REF" \
+            "$INTERNAL_REGISTRY_HOST" \
+            "$DOCKERHUB_REGISTRY_HOST"
+      - name: Verify Docker Hub image
+        env:
+          VERIFIED: ${{ steps.promotion.outputs.verified }}
+        run: |
+          set -euo pipefail
+          [[ "$VERIFIED" == true ]]
+          echo "Docker Hub image content and published digest verified"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: dockerhub-promotion
+          path: loongforge-release-artifacts/dockerhub-promotion.result.json
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Remove release Docker config
+        if: always()
+        run: |
+          if [[ -d "$DOCKER_CONFIG" && ! -L "$DOCKER_CONFIG" ]]; then
+            find "$DOCKER_CONFIG" -mindepth 1 -delete
+            rmdir "$DOCKER_CONFIG"
+          fi
+
+  github_release:
+    needs: [validate, build_test_push_internal, promote_to_dockerhub]
+    if: >-
+      ${{
+        needs.validate.result == 'success' &&
+        needs.build_test_push_internal.result == 'success' &&
+        needs.promote_to_dockerhub.result == 'success' &&
+        startsWith(github.ref, 'refs/tags/v') &&
+        needs.validate.outputs.dry_run == 'false' &&
+        needs.validate.outputs.debug_tag_suffix == '' &&
+        needs.validate.outputs.build_image == 'true' &&
+        needs.validate.outputs.run_regression == 'true' &&
+        needs.validate.outputs.publish_internal == 'true' &&
+        needs.validate.outputs.publish_dockerhub == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IS_PRERELEASE: ${{ contains(github.ref_name, '-rc.') }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release already exists; leaving it unchanged"
+            exit 0
+          fi
+          args=(
+            "$RELEASE_TAG"
+            --repo "$GITHUB_REPOSITORY"
+            --title "LoongForge $RELEASE_TAG"
+            --generate-notes
+          )
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"
+
+  cleanup_debug_tags:
+    needs: [validate, build_test_push_internal, promote_to_dockerhub]
+    if: >-
+      ${{
+        always() &&
+        needs.validate.result == 'success' &&
+        needs.validate.outputs.dry_run == 'false' &&
+        needs.validate.outputs.debug_tag_suffix != '' &&
+        needs.validate.outputs.publish_dockerhub == 'true'
+      }}
+    runs-on: ${{ fromJSON(vars.CI_RELEASE_RUNNER) }}
+    timeout-minutes: 10
+    env:
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE || 'docker.io/loongforge/loongforge' }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      DEBUG_TAG_SUFFIX: ${{ needs.validate.outputs.debug_tag_suffix }}
+    steps:
+      - name: Protect runner-local metadata
+        run: "${LOONGFORGE_RUNNER_MASK_SCRIPT:?}"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: LoongForge
+          persist-credentials: false
+      - name: Load runner-local release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_config.sh
+      - name: Resolve Docker Hub debug tag
+        id: debug_tags
+        shell: bash
+        env:
+          DEBUG_TAG_SUFFIX: ${{ env.DEBUG_TAG_SUFFIX }}
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_config.sh
+          tag_suffix="${DEBUG_TAG_SUFFIX:-}"
+          if [[ -z "$tag_suffix" ]]; then
+            {
+              echo "skip=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "skip=false"
+          } >> "$GITHUB_OUTPUT"
+          dockerhub_ref="${DOCKERHUB_IMAGE}:${VERSION}${tag_suffix}"
+          {
+            echo "dockerhub_ref=$dockerhub_ref"
+          } >> "$GITHUB_OUTPUT"
+      - name: Clean up Docker Hub debug tag
+        if: steps.debug_tags.outputs.skip == 'false'
+        shell: bash
+        env:
+          DOCKERHUB_REF: ${{ steps.debug_tags.outputs.dockerhub_ref }}
+        run: |
+          set -euo pipefail
+          source LoongForge/.github/scripts/load_ci_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_config.sh
+          source LoongForge/.github/scripts/self_runner/load_release_credentials.sh dockerhub
+          export HTTPS_PROXY="$LOONGFORGE_DOCKERHUB_PROXY"
+          export NO_PROXY="$LOONGFORGE_DOCKERHUB_NO_PROXY"
+          python3 LoongForge/.github/scripts/self_runner/cleanup_debug_tags.py \
+            dockerhub \
+            --image "$DOCKERHUB_REF"

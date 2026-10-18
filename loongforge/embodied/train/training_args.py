@@ -507,10 +507,12 @@ class _LearningRateArgs:
                 "cosine_with_min_lr",
                 "cosine_warmup_with_min_lr",
                 "lambda_linear",
+                "linear_warmup_cosine_annealing",
             ],
             "help": "Learning-rate scheduler name. Most values are passed to "
                     "transformers.get_scheduler; lambda_linear uses the custom "
-                    "LambdaLinearScheduler."
+                    "LambdaLinearScheduler; linear_warmup_cosine_annealing is "
+                    "torch LinearLR (1/W -> 1) then CosineAnnealingLR to --min-lr."
         },
     )
     lr_warmup_iters: int = field(
@@ -823,6 +825,19 @@ class _DataArgs:
             "choices": ["cyclic", "block"],
             "help": "How the distributed sampler partitions indices across ranks: "
                     "'cyclic' (round-robin) or 'block' (contiguous shards).",
+        },
+    )
+    sampler_epoch_mode: str = field(
+        default="advance",
+        metadata={
+            "choices": ["advance", "fixed"],
+            "help": "Whether the sampler's epoch advances between epochs. "
+                    "'advance' (default) uses seed+epoch, so every epoch reshuffles. "
+                    "'fixed' pins the epoch to 0, so every epoch reuses the SAME "
+                    "permutation -- this reproduces standalone FastWAM, whose "
+                    "ResumableEpochSampler epoch is never advanced. Only used by "
+                    "model types that register their own sampler builder (currently "
+                    "fastwam); see data/datasets/<model>/samplers.py.",
         },
     )
     batch_drop_last: bool = field(

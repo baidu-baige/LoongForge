@@ -202,6 +202,38 @@ def test_redactor_keeps_result_fields_and_removes_runner_values(tmp_path):
     assert "runner" + ".example" + ".invalid" not in text
 
 
+def test_redactor_stream_removes_release_infrastructure(monkeypatch):
+    internal_host = "registry" + ".corp" + ".invalid"
+    publisher_host = "publisher" + ".corp" + ".invalid"
+    env = os.environ.copy()
+    env.update({
+        "INTERNAL_IMAGE_REPOSITORY": f"{internal_host}/private/image",
+        "DOCKER_HOST": f"ssh://{publisher_host}",
+        "LOONGFORGE_RELEASE_CONFIG": "/private/release/release.env",
+        "HTTP_PROXY": "http://proxy" + ".corp" + ".invalid:8891",
+    })
+    text = (
+        f"push {internal_host}/private/image:test via {publisher_host} "
+        "/private/release/release.env http://proxy.corp.invalid:8891\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "ci/redact_ci_artifact.py", "--stream"],
+        input=text,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    for private_value in (
+        internal_host,
+        publisher_host,
+        "/private/release/release.env",
+        "proxy.corp.invalid",
+    ):
+        assert private_value not in result.stdout
+
+
 def test_redactor_filters_json_and_redacts_physical_device(tmp_path):
     source = tmp_path / "run.json"
     target = tmp_path / "safe.json"
@@ -590,6 +622,7 @@ def test_candidate_builder_uses_a_trusted_dockerfile_and_scans_the_image():
     assert '"IMAGE_PIP_CONFIG:pip_config"' in script
     assert '"IMAGE_SOURCE_MANIFEST:source_manifest"' in script
     assert "IMAGE_BUILD_ARG_" in script
+    assert "--network host" in script
     assert 'image_policy.py" "$image_ref"' in script
 
 
