@@ -23,7 +23,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>Supported Models</b></a>
   &nbsp;·&nbsp;
-  <a href="#powered-by-loongforge"><b>Projects</b></a>
+  <a href="#powered-by-loongforge"><b>Awesome Projects</b></a>
 </p>
 
 <p align="center">
@@ -52,7 +52,7 @@
 
 - **High Performance** — Built on Megatron-LM and torch-native backends, with deep optimizations for [training speed](#performance) that keep **training loss aligned with the baseline**.
 - **Easy to Use** — Ready-to-run configs and launch scripts for 40+ open-source [models](#models), plus checkpoint conversion and data preprocessing tools. Supports **pre-training**, **mid-training**, **SFT**, and **LoRA**.
-- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), which serves enterprise customers' proprietary models and powers several [open-source projects](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
+- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), which powers enterprise customers' proprietary models and several [open-source projects](#powered-by-loongforge). Production runs reach **5,000+ XPUs**.
 
 ---
 
