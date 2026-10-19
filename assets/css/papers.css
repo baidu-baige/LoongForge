@@ -1,0 +1,48 @@
+/* Papers page (papers.html). Loaded only by that page. */
+.paper-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 1.5rem;
+  padding: 1.75rem 0;
+  border-top: 1px solid #E5E7EB;
+  scroll-margin-top: 5rem;
+}
+.paper-row:first-child { border-top: 0; padding-top: 0; }
+.dark .paper-row { border-top-color: #1F2937; }
+
+.paper-date {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .8rem;
+  color: #6B7280;
+  padding-top: .45rem;
+}
+.dark .paper-date { color: #9CA3AF; }
+
+.paper-title { font-size: 1.25rem; font-weight: 700; line-height: 1.35; margin: 0 0 .4rem; }
+.paper-authors { font-size: .875rem; color: #6B7280; margin: 0 0 .6rem; }
+.dark .paper-authors { color: #9CA3AF; }
+.paper-summary { font-size: .95rem; color: #4B5563; margin: 0 0 .9rem; }
+.dark .paper-summary { color: #D1D5DB; }
+
+.paper-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.paper-link { font-size: .875rem; font-weight: 500; color: #4F46E5; }
+.paper-link:hover { text-decoration: underline; }
+.dark .paper-link { color: #A5B4FC; }
+
+.paper-bib { margin-top: .9rem; }
+.paper-bib > summary {
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 500;
+  color: #6B7280;
+  width: fit-content;
+}
+.paper-bib > summary:hover { color: #4F46E5; }
+.dark .paper-bib > summary { color: #9CA3AF; }
+.dark .paper-bib > summary:hover { color: #A5B4FC; }
+.paper-bib pre { margin-top: .6rem; }
+
+@media (max-width: 640px) {
+  .paper-row { grid-template-columns: 1fr; gap: .25rem; }
+  .paper-date { padding-top: 0; }
+}

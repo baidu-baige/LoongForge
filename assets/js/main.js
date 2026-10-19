@@ -113,6 +113,9 @@
       'projects.submit.title': 'Built something with LoongForge?',
       'projects.submit.desc': 'Tell us about it and we will list it here.',
       'projects.submit.cta': 'Submit your project',
+      'projects.papers.link_html': 'Looking for the research behind them? See all <a class="text-indigo-600 underline" href="papers.html">LoongForge papers</a>.',
+      'papers.hero.title': 'Papers',
+      'papers.hero.desc': 'Research from the LoongForge team',
       'blog.hero.desc': 'Releases, performance deep-dives, and stories from the LoongForge team',
 
       'about.hero.title': 'About LoongForge',
@@ -128,7 +131,7 @@
       'about.license.heading': 'License',
       'about.license.body_html': 'LoongForge is released under the <a href="https://github.com/baidu-baige/LoongForge/blob/master/LICENSE" target="_blank" class="text-indigo-600 underline">Apache License 2.0</a>. Some files are derived from third-party open-source projects — please consult file headers for their specific notices.',
       'about.cite.heading': 'Citation',
-      'about.cite.taot': 'If you use TAOT for MoE training in LoongForge, you can also cite our paper:',
+      'about.cite.papers_html': 'Citations for our research papers (TAOT, VLDA, …) are on the <a class="text-indigo-600 underline" href="papers.html">Papers page</a>.',
       'about.ack.title': '🙏 Acknowledgments',
       'about.ack.body': 'LoongForge stands on the shoulders of the open-source community. Its Megatron stack builds on NVIDIA\'s Megatron-LM, and the project also draws on HuggingFace Transformers, LLaMA-Factory, Megatron-Bridge, LeRobot, and the official implementations of the models we support (e.g. OpenPI, NVIDIA Isaac GR00T). We also thank the LINUX DO community for providing a welcoming space for technical discussion, and AtomGit for hosting LoongForge\'s official mirror.',
 
@@ -274,6 +277,9 @@
       'projects.submit.title': '用 LoongForge 做了什么？',
       'projects.submit.desc': '告诉我们，我们会把它收录到这里。',
       'projects.submit.cta': '提交你的项目',
+      'projects.papers.link_html': '想了解背后的研究？查看全部 <a class="text-indigo-600 underline" href="papers.html">LoongForge 论文</a>。',
+      'papers.hero.title': '论文',
+      'papers.hero.desc': '来自 LoongForge 团队的研究工作',
       'blog.hero.desc': '来自 LoongForge 团队的版本发布、性能深挖与案例分享',
 
       'about.hero.title': '关于 LoongForge',
@@ -289,7 +295,7 @@
       'about.license.heading': '开源协议',
       'about.license.body_html': 'LoongForge 采用 <a href="https://github.com/baidu-baige/LoongForge/blob/master/LICENSE" target="_blank" class="text-indigo-600 underline">Apache License 2.0</a> 协议发布。部分文件衍生自第三方开源项目 —— 其具体协议请参见对应文件头。',
       'about.cite.heading': '引用',
-      'about.cite.taot': '如果你在 LoongForge 中使用 TAOT 进行 MoE 训练，也可以引用我们的论文：',
+      'about.cite.papers_html': '我们研究论文（TAOT、VLDA 等）的引用格式请见 <a class="text-indigo-600 underline" href="papers.html">论文页</a>。',
       'about.ack.title': '🙏 致谢',
       'about.ack.body': 'LoongForge 站在开源社区的肩膀上：其 Megatron 技术栈构建于 NVIDIA 的 Megatron-LM 之上，同时借鉴并参考了 HuggingFace Transformers、LLaMA-Factory、Megatron-Bridge、LeRobot，以及所支持模型的官方实现（如 OpenPI、NVIDIA Isaac GR00T）。感谢 LINUX DO 社区提供友好的技术交流空间，感谢 AtomGit 托管 LoongForge 官方镜像。',
 
@@ -623,7 +629,7 @@
     initScrollProgress();
     initQuickStart();
     initCounters();
-    window.LF = { toggleTheme, toggleMobileMenu, setLang };
+    window.LF = { toggleTheme, toggleMobileMenu, setLang, attachCopyButtons };
 
     document.querySelectorAll('[data-theme-toggle]').forEach(el => el.addEventListener('click', toggleTheme));
     document.querySelectorAll('[data-mobile-toggle]').forEach(el => el.addEventListener('click', toggleMobileMenu));
