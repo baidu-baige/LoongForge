@@ -1,6 +1,23 @@
-<h1 align="center">LoongForge-VLDA</h1>
+<h1 align="center">Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation</h1>
 
-<h2 align="center">Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation</h2>
+<p align="center">
+  Lingsen Zhang<sup>1,2,*</sup> &nbsp;·&nbsp;
+  Wei Li<sup>1,2,*</sup> &nbsp;·&nbsp;
+  Jie He<sup>1,2</sup> &nbsp;·&nbsp;
+  Henghua Zhang<sup>2</sup> &nbsp;·&nbsp;
+  Kai Mo<sup>2</sup> &nbsp;·&nbsp;
+  Shiyong Li<sup>2</sup> &nbsp;·&nbsp;
+  Yanpeng Wang<sup>2</sup> &nbsp;·&nbsp;
+  Rui Shao<sup>1,3,&dagger;</sup>
+</p>
+
+<p align="center">
+  <sup>1</sup> Harbin Institute of Technology, Shenzhen &nbsp;·&nbsp;
+  <sup>2</sup> Baidu, Inc. &nbsp;·&nbsp;
+  <sup>3</sup> Shenzhen Loop Area Institute
+  <br>
+  <sup>*</sup> Equal contribution &nbsp;&nbsp; <sup>&dagger;</sup> Corresponding author
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/arXiv-Coming_Soon-F59E0B?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=4F46E5" alt="arXiv coming soon">
@@ -8,13 +25,13 @@
   &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-06B6D4?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
 </p>
 
-We introduce VLDA (Vision-Language-Delta-Action), a new model architecture that
-learns compact Deltas as actionable transition interfaces for robotic
-manipulation. It extends π₀.₅ with latent world modeling and world-conditioned
-action prediction, using V-JEPA 2 visual representations to learn latent changes
-and future features, and jointly trains the action policy with an auxiliary
-alignment objective. This project provides the two-stage training and LIBERO
-evaluation recipe, built on [LoongForge](../../README.md).
+We introduce LoongForge-VLDA (Vision-Language-Delta-Action), a new model
+architecture that learns compact Deltas as actionable transition interfaces for
+robotic manipulation. It extends π₀.₅ with latent world modeling and
+world-conditioned action prediction, using V-JEPA 2 visual representations to
+learn latent changes and future features, and jointly trains the action policy
+with an auxiliary alignment objective. This project provides the two-stage
+training and LIBERO evaluation recipe, built on [LoongForge](../../README.md).
 
 ## Framework
 
@@ -22,9 +39,9 @@ evaluation recipe, built on [LoongForge](../../README.md).
   <img alt="LoongForge-VLDA framework: a V-JEPA 2 EMA teacher and an online encoder distill the scene change into a compact Delta through LT-Filter and GT-Anchor, and the Delta refines the action expert through DAMG and DSAF" src="assets/framework.png" width="100%">
 </p>
 
-*Overview of VLDA. Given the observation and instruction, the World Expert
-predicts an actionable Delta under transition supervision. In training stage I,
-LT-Filter and GT-Anchor learn selective and consistent transition
+*Overview of LoongForge-VLDA. Given the observation and instruction, the World
+Expert predicts an actionable Delta under transition supervision. In training
+stage I, LT-Filter and GT-Anchor learn selective and consistent transition
 representations. In stage II, Delta-Driven Action Refinement grounds Delta in
 the action manifold through Delta-to-Action Manifold Grounding and injects it
 into action denoising through Delta-Seeded Action Flow, enabling the Action
