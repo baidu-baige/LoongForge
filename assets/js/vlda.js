@@ -109,6 +109,7 @@
     'c.gh': 'VLDA 的训练代码、配置与示例都在 LoongForge 中。',
     'c.bib': '引用',
     'c.note': 'arXiv 条目将在预印本公开后补充。',
+    'c.papers': '查看全部 <a href="../papers.html">LoongForge 论文</a>。',
     'f.tag': 'LoongForge 项目',
     'f.top': '回到顶部 ↑'
   };

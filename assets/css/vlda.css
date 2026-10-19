@@ -367,6 +367,15 @@
   color: #9CA3AF;
 }
 
+.vl-note a {
+  color: #4F46E5;
+  text-decoration: underline;
+}
+
+.dark .vl-note a {
+  color: #A5B4FC;
+}
+
 /* ---- Real-world bars ---- */
 .vl-bar {
   display: grid;
