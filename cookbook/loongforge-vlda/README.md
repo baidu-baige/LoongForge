@@ -8,12 +8,13 @@
   &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-06B6D4?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
 </p>
 
-LoongForge-VLDA is LoongForge's implementation of VLDA. It extends π₀.₅ with
-latent world modeling and world-conditioned action prediction. It uses V-JEPA
-2 visual representations to learn latent changes and future features, then
-jointly trains the action policy with an auxiliary alignment objective. This
-implementation provides two-stage LIBERO training and evaluation on
-[LoongForge](../../README.md).
+We introduce VLDA (Vision-Language-Delta-Action), a new model architecture that
+learns compact Deltas as actionable transition interfaces for robotic
+manipulation. It extends π₀.₅ with latent world modeling and world-conditioned
+action prediction, using V-JEPA 2 visual representations to learn latent changes
+and future features, and jointly trains the action policy with an auxiliary
+alignment objective. This project provides the two-stage training and LIBERO
+evaluation recipe, built on [LoongForge](../../README.md).
 
 ## Framework
 
