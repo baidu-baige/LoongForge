@@ -209,7 +209,7 @@ def initialize_loongforge_megatron(
     set_megatron_global_variables(args, build_tokenizer=False)
 
     # set loongforge extra global args
-    set_loongforge_extra_global_vars(args, build_tokenizer=True)
+    set_loongforge_extra_global_vars(args)
 
     # set logging level
     setup_logging(args)

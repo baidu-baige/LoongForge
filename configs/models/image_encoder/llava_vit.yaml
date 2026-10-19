@@ -9,7 +9,6 @@ image_size: [1344, 1344]
 kv_channels: 64
 normalization: LayerNorm
 swiglu: false
-class_token_len: 0
 group_query_attention: false
 attention_dropout: 0
 hidden_dropout: 0

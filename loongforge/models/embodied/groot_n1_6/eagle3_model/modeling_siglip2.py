@@ -213,7 +213,6 @@ def flash_attention_forward_for_packing(
         max_seq_len = max(seq_len_list)
         module._cu_seqlens_cache = cu_seqlens.detach()
         module._max_seq_len_cache = max_seq_len
-        module._seq_len_list_cache = list(seq_len_list)
     attn_output = _flash_attention_forward(
         query,
         key,

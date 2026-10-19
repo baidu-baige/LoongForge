@@ -1325,8 +1325,3 @@ class GrootN1d7FullIterationCudaGraphRunner:
             self._saved_ddp_broadcast_buffers = None
         self._clear_time_buffer()
         self.ctx.barrier()
-
-    @property
-    def captured(self) -> bool:
-        """Return whether the training graph has been captured."""
-        return self.graph is not None

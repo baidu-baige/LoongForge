@@ -52,9 +52,7 @@ def prepare_groot_n1d7_lerobot_dataset(
         return dataset
 
     data_cfg = _default_data_cfg() if data_cfg is None else data_cfg
-    dataset._groot_n1d7_data_cfg = data_cfg
     seed = _resolve_data_seed(training_args)
-    dataset._groot_n1d7_seed = seed
     # Shard double buffering is a data-supply fix, not a CUDA-Graph feature.
     # Keep it enabled for both Eager and full-iteration Graph; Graph additionally
     # overlaps the next batch's CPU/H2D transfer in its static input buffers.
@@ -211,9 +209,6 @@ def _build_isaac_sharded_step_index(
         sharded_episodes[shard_index].append((episode_index, split_step_indices))
         shard_lengths[shard_index] += len(split_step_indices)
 
-    dataset._groot_n1d7_sharded_episodes = sharded_episodes
-    dataset._groot_n1d7_shard_lengths = shard_lengths.tolist()
-    dataset._groot_n1d7_sharded_order = True
     dataset._groot_n1d7_pair_to_dataset_index = pair_to_dataset_index
     return full_step_index, {
         "sharded_episodes": sharded_episodes,
@@ -244,7 +239,6 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         self._prefetch_shards = bool(prefetch_shards)
         self._shard_prefetch_depth = max(1, int(prefetch_depth))
         self._pair_to_dataset_index = dict(dataset._groot_n1d7_pair_to_dataset_index)
-        self._groot_n1d7_sharded_order = True
         self._thread_local = threading.local()
 
         if self._dataset._transform is not None:

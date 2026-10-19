@@ -178,14 +178,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
 
-    # Disable wandb if it causes issues
-    if not hasattr(args, 'wandb_project') or args.wandb_project is None:
-        print("Warning: Disabling wandb logging as wandb_project is not set")
-        args.wandb_project = ""
-        args.wandb_exp_name = ""
-        args.wandb_save = False
-        args.use_wandb = False
-
     # create dataloader
     if args.is_tokenized_data:
         rank = parallel_state.get_data_parallel_rank()

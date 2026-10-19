@@ -34,10 +34,6 @@ model:
   # VAE encoder.
   vae_path: "/mnt/cluster/models/Wan-AI/Wan2.2-TI2V-5B/Wan2.2_VAE.pth"
   vae_temporal_compression: 4
-  vae_spatial_compression: 16
-  # Conditioning distribution: vision-only path uses [0.7, 0.2, 0.1] but
-  # the action-policy path overrides condition_frame_indexes_vision per-sample.
-  condition_frame_distribution: [0.7, 0.2, 0.1]
   num_embodiment_domains: 32
   max_action_dim: 64
   action_loss_weight: 10.0

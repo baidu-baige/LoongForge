@@ -88,7 +88,6 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
     # — for xvla ee6d × ``simpler_abs_euler`` the composed registry key is
     # ``ee6d_to_simpler_abs_euler``.
     action_space: str = "simpler_abs_euler"
-    default_fps: int = 5
     cameras: tuple = ("primary",)
 
     def __init__(

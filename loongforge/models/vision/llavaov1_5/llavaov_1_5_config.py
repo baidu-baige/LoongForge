@@ -24,7 +24,6 @@ class RiceVisionConfig(BaseModelConfig):
     patch_size: tuple[int] = 14
     image_size: tuple[int] = (1344, 1344)
     swiglu: bool = False
-    class_token_len: int = 0
     group_query_attention: bool = False
     attention_dropout: float = 0
     hidden_dropout: float = 0

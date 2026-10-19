@@ -398,7 +398,6 @@ def cooker_packed_multi_mix_qa(sample: dict):
             videos=videos,
             contexts=contexts,
             answers=answers,
-            answer_weights=None,
         )
     else:
         return PackedMultiMixQASample(
@@ -409,7 +408,6 @@ def cooker_packed_multi_mix_qa(sample: dict):
             videos=videos,
             contexts=contexts,
             answers=answers,
-            answer_weights=None,
         )
 
 

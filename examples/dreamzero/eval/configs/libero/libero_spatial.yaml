@@ -48,7 +48,6 @@ model:
   max_state_dim: 64
   max_action_dim: 32
   dit_action_state_hidden_size: 1024
-  action_loss_embodiment_ids: [21]
   eval_num_inference_timesteps: 16
   # Frozen Wan encoders (same paths as the training YAML).
   text_encoder_pretrained_path: /path/to/Wan2.2-TI2V-5B/models_t5_umt5-xxl-enc-bf16.pth

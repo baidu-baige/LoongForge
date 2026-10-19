@@ -307,7 +307,6 @@ Registered keys (`ACTION_DECODER_REGISTRY`) auto-assembled as `{action_encoding}
 | `ee6d_to_axis_angle` | xvla × LIBERO / ManiSkill: 20D EE6D → 7D (pos + axis-angle + grip) |
 | `ee6d_to_simpler_abs_euler` | xvla × SimplerEnv WidowX: rot6d→euler + offset + grip mapping |
 | `ee6d_to_calvin_abs` | xvla × CALVIN official absolute-pose protocol |
-| `ee6d_to_euler` / `ee6d_to_quat` | Other EE variants |
 | `pi05_aloha_robotwin` | pi05 × RoboTwin joint decoder (stateful; via bridge) |
 | `ee6d_robotwin_ee_dual` | xvla × RoboTwin dual-arm ee decoder (via bridge) |
 

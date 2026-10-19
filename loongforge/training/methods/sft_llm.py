@@ -10,7 +10,6 @@ import torch
 
 from functools import partial
 
-from typing import List
 
 from megatron.core import mpu
 from megatron.core.enums import ModelType
@@ -59,11 +58,10 @@ def get_batch(data_iterator):
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
 
-    # Extract chunk_group_size into args (for scheduler) and config (for model-side code).
+    # Extract chunk_group_size into the model config for model-side code.
     args = get_args()
     if args.enable_chunkpipe and "chunk_group_size" in batch:
         group_size = batch["chunk_group_size"][0].item()
-        args.chunkpipe_current_chunk_group_size = group_size
         config = get_model_config()
         if config is not None and getattr(config, 'sft_chunkpipe_mode', False):
             # Always write chunkpipe_current_group_size from the batch data, regardless of
@@ -99,13 +97,11 @@ def get_batch(data_iterator):
                     components = batch["composite_component_sizes"]
                     if components:
                         config.chunkpipe_component_sizes = list(components)
-                        config.chunkpipe_composite_group_size = sum(components)
                     else:
                         # No composite info → fall back to trivial (single
                         # real group). Keeps behavior sane if the queues are
                         # somehow not populated (e.g. ad-hoc test paths).
                         config.chunkpipe_component_sizes = [group_size]
-                        config.chunkpipe_composite_group_size = group_size
 
         # N_g and G for the per-sample loss path. N_g is per-chunk (same value
         # for all chunks in one source sequence), G_total is per-step (same

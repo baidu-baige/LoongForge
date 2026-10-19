@@ -106,36 +106,6 @@ def make_encoder_forward_hook(module_name):
     return encoder_forward_hook
 
 
-def make_encoder_backward_pre_hook(module_name):
-    """
-    Create a backward pre-hook that adjusts the tensor-parallel state
-    before the backward pass of a module.
-
-    This factory function generates a backward pre-hook intended for use
-    with `module.register_full_backward_pre_hook(...)`. The returned hook
-    is invoked before gradients are computed for the module, allowing the
-    runtime to switch tensor-parallel or pipeline-parallel states
-    dynamically based on the module name.
-
-    Args:
-        module_name : str
-            The name of the module whose backward pass should trigger a
-            parallel-state change.
-
-    Returns:
-        callable:
-            A backward pre-hook function with signature `(module, input)`,
-            which updates the parallel state and returns the original input
-            tuple unchanged.
-    """
-
-    def encoder_backward_pre_hook(module, input):
-        change_parallel_state(module_name)
-        return input
-
-    return encoder_backward_pre_hook
-
-
 class OmniEncoderModel(torch.nn.Module):
     def __init__(
         self,

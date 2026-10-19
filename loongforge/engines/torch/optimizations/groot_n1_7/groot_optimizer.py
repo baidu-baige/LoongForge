@@ -16,7 +16,7 @@ import math
 
 import torch
 
-from loongforge.engines.torch.optimizer.lr_scheduler import build_param_groups
+from loongforge.engines.torch.optimizer.param_groups import build_param_groups
 from loongforge.engines.torch.optimizer.optimizer import build_optimizer as build_generic_optimizer
 
 try:

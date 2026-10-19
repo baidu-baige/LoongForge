@@ -11,7 +11,6 @@ from typing import Any, Dict
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.embodied.servers.loongforge_policy import (
-    GenericPredictActionPolicy,
     PredictActionModelSpec,
 )
 from loongforge.models.embodied.xvla.configuration_xvla import XvlaModelConfig
@@ -105,50 +104,3 @@ class XVLAModelFactory:
             "dataset_statistics_path": server_args.dataset_statistics_path,
         }
         return PredictActionModelSpec(model=model, metadata=metadata)
-
-
-class LoongForgeXVLAPolicy(GenericPredictActionPolicy):
-    """Backward-compatible XVLA policy built from the generic predict_action policy."""
-
-    def __init__(
-        self,
-        ckpt_path: str,
-        loongforge_root: str = "",
-        device: str = "cuda",
-        use_bf16: bool = True,
-        dataset_statistics_path: str = "",
-        action_dim: int = 7,
-        state_dim: int = 8,
-        action_horizon: int = 30,
-        max_action_dim: int = 20,
-        max_state_dim: int = 20,
-        action_mode: str = "ee6d",
-        real_action_dim: int = 20,
-        num_actions: int = 30,
-        num_image_views: int = 3,
-        random_init: bool = False,
-    ) -> None:
-        """Build XVLA through its factory and attach it to the generic eval policy."""
-        model_cfg = XvlaModelConfig(
-            action_horizon=action_horizon,
-            max_action_dim=max_action_dim,
-            real_action_dim=real_action_dim,
-            action_mode=action_mode,
-            num_actions=num_actions,
-        )
-        server_args = EvalServerArgs(
-            ckpt_path=ckpt_path,
-            loongforge_root=loongforge_root,
-            device=device,
-            use_bf16=use_bf16,
-            dataset_statistics_path=dataset_statistics_path,
-            random_init=random_init,
-        )
-        spec = XVLAModelFactory.build(model_cfg, server_args)
-        super().__init__(
-            model=spec.model,
-            metadata=spec.metadata,
-            dataset_statistics_path=dataset_statistics_path,
-            action_dim=action_dim,
-            request_id_prefix="loongforge-xvla",
-        )

@@ -112,18 +112,6 @@ class BaseModelStditConfig(TransformerConfig):
     latent_time_scale: float = 1.0
     """Time scale of the latent."""
 
-    caption_channels: int = 0
-    """Number of channels in the caption."""
-
-    max_text_length: int = 0
-    """Maximum text length."""
-
-    max_image_length: int = 0
-    """Maximum image length."""
-
-    max_video_length: int = 0
-    """Maximum video length."""
-
     def __post_init__(self):
         super().__post_init__()
 

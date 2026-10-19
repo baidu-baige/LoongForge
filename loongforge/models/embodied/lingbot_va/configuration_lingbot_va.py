@@ -12,7 +12,6 @@ class LingBotVAModelConfig:
     """Native LingBot-VA model and training configuration."""
 
     model_type: str = "lingbot_va"
-    requires_tokenizer: bool = False
     latent_in_channels: int = 48
     latent_out_channels: int = 48
     latent_patch_size: Tuple[int, int, int] = (1, 2, 2)

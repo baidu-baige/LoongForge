@@ -143,7 +143,8 @@ class OmniCombinationModel(BaseMegatronModule):
         elif self.add_encoder:
             self.encoder_model.set_input_tensor(input_tensor[0])
         elif self.pre_process:
-            self.encoder_hidden_state = input_tensor[0]  # TODO: Handle encoder hidden state
+            # Encoder-only mode: no foundation model consumes the hidden state yet.
+            pass
         else:
             self.foundation_model.set_input_tensor(input_tensor[0])
 
@@ -155,22 +156,6 @@ class OmniCombinationModel(BaseMegatronModule):
             raise ValueError("In offline mode, `output_embeddings` must be provided.")
 
         return output_embeddings
-
-    def get_modality(self):
-        """Get input/output modality types of the current model"""
-        input_modality = self.encoder.modality
-        output_modality = self.decoder.modality
-        return {"input": input_modality, "output": output_modality}
-
-    def prepare_inputs_for_generation(
-        self, input_ids: Optional[torch.LongTensor] = None
-    ):
-        """Prepare inputs for generation process"""
-        pass
-
-    def generate_multimodal(self, hidden_states):
-        """Generate multimodal data"""
-        pass
 
     def preprocess_for_fine_grained_offloading(self):
         """Preprocess for fine-grained activation offloading."""

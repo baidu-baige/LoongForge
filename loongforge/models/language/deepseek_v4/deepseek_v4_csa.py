@@ -674,49 +674,6 @@ def _cp_indexer_sparse_kl_loss(
     return kl_per_row.sum() * float(loss_coeff) / float(loss_divisor)
 
 
-def _get_csa_compressed_capacity(
-    packed_seq_params: Optional[PackedSeqParams], ratio: int, total_tokens: int
-) -> Optional[int]:
-    """Return a host-known compressed capacity for THD CUDA graph capture.
-
-    The exact ``sum(seq_len // ratio)`` lives in ``cu_seqlens`` on device.
-    Reading it on the host would break CUDA graph capture, and
-    ``PackedSeqParams`` must stay a generic MCore contract rather than
-    carrying CSA-specific metadata.  Use a static upper bound instead;
-    device-side ``cu_seqlens_compressed`` keeps the true valid rows and
-    downstream kernels leave the extra rows as tail padding.
-    """
-    if packed_seq_params is None or ratio <= 1:
-        return None
-    max_seqlen = packed_seq_params.max_seqlen_q
-    cu_seqlens = (
-        packed_seq_params.cu_seqlens_q_padded
-        if packed_seq_params.cu_seqlens_q_padded is not None
-        else packed_seq_params.cu_seqlens_q
-    )
-    if max_seqlen is None or cu_seqlens is None:
-        return None
-    num_sequences = max(int(cu_seqlens.shape[0]) - 1, 0)
-    return min(int(total_tokens) // ratio, num_sequences * (int(max_seqlen) // ratio))
-
-
-# ---------------------------------------------------------------------------
-# THD (packed) variants of the index helpers above.
-#
-# Both produce per-row local-to-segment indices in the SAME index space that
-# ``dsa_kernels.local_to_global_flat(..., cu_seqlens_q=..., cu_seqlens_kv=...)``
-# expects: each row is one query token in the packed layout, each value is
-# either ``-1`` (invalid / future position) or a non-negative local KV id in
-# ``[0, seqlen_kv_full[batch_of_row])`` where ``seqlen_kv_full[b] =
-# seqlen_kv[b] + seqlen_compressed[b]``. Window indices live in
-# ``[0, seqlen_kv[b])``; compressed indices live in
-# ``[seqlen_kv[b], seqlen_kv[b] + seqlen_compressed[b])``.
-#
-# These mirror the SBHD helpers above but cannot be lru-cached because
-# their output shape depends on the per-batch ``cu_seqlens`` tensors.
-# ---------------------------------------------------------------------------
-
-
 def get_window_topk_idxs_thd(
     window_size: int, cu_seqlens_q: torch.Tensor, total_q: Optional[int] = None
 ) -> torch.Tensor:

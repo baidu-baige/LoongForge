@@ -246,7 +246,6 @@ class LeRobotV2Dataset(Dataset):
             pass
         m = _Meta()
         m.stats = self.stats
-        m.camera_keys = self._video_keys
         return m
 
     @property

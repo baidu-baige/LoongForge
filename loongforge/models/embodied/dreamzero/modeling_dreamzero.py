@@ -470,15 +470,3 @@ class DreamZeroPolicy(PreTrainedPolicy):
             # (batch, n_action_steps, action_dim) -> queue of (batch, action_dim)
             self._action_queue.extend(actions.transpose(0, 1))
         return self._action_queue.popleft()
-
-    # Megatron pipeline APIs expect set_input_tensor even when pipeline parallel size is 1.
-    # Provide a no-op shim to satisfy forward_backward_no_pipelining.
-    def set_input_tensor(self, input_tensor):
-        """Set input tensor for pipeline parallelism (no-op for PP=1)."""
-        self._input_tensor = input_tensor
-
-    # Megatron checkpointing.generate_state_dict calls model.state_dict_for_save_checkpoint().
-    # Default to torch nn.Module.state_dict() — adequate for non-PP, non-distributed-optim cases.
-    def state_dict_for_save_checkpoint(self, destination=None, prefix: str = "", keep_vars: bool = False):
-        """Return a Megatron-compatible checkpoint state dictionary."""
-        return self.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)

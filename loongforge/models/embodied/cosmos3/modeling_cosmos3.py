@@ -454,7 +454,6 @@ class Cosmos3(nn.Module):
                 timesteps=ts_dev,
                 has_valid_tokens=True,
                 rectified_flow=self.rectified_flow,
-                tensor_kwargs_fp32={"device": device, "dtype": torch.float32},
             )
             loss = loss + loss_scale * loss_vision
         else:
@@ -468,7 +467,6 @@ class Cosmos3(nn.Module):
                 timesteps=ts_dev,
                 has_valid_tokens=True,
                 rectified_flow=self.rectified_flow,
-                tensor_kwargs_fp32={"device": device, "dtype": torch.float32},
                 raw_action_dim=raw_action_dims,
             )
             loss = loss + action_loss_weight * loss_action

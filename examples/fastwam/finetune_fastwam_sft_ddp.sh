@@ -61,7 +61,6 @@ DATA_ARGS=(
     --dataset-strategy fastwam
     --dataset-path "$DATASET_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
-    --robot-type libero_franka
     --num-workers "$NUM_WORKERS"
     --lerobotdataset-version v2.1
     --video-backend pyav

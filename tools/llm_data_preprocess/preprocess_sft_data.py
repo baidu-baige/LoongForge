@@ -15,7 +15,7 @@ from loongforge.chat_templates.hf import HFChatTemplate, load_chat_template_kwar
 from loongforge.chat_templates.registry import get_support_templates
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from loongforge import constants
-from loongforge.engines.megatron.utils import get_default_sft_dataset_config
+from loongforge.training.megatron_args import get_default_sft_dataset_config
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 
 

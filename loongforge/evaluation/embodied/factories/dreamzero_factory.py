@@ -171,7 +171,6 @@ class DreamZeroLiberoEvalModel:
         infer_model: DreamZeroInferenceModel,
         state_stats: _Q99Stats,
         action_stats: _Q99Stats,
-        num_frames: int = 33,
         action_horizon: int = 16,
         action_dim: int = 7,
         max_state_dim: int = 64,
@@ -180,7 +179,6 @@ class DreamZeroLiberoEvalModel:
         self._infer_model = infer_model
         self._state_stats = state_stats
         self._action_stats = action_stats
-        self._num_frames = int(num_frames)
         self._action_horizon = int(action_horizon)
         self._action_dim = int(action_dim)
         self._max_state_dim = int(max_state_dim)
@@ -190,15 +188,13 @@ class DreamZeroLiberoEvalModel:
         # Single-session state (see _episode); DreamZero's caches are global.
         self._episode_id: Optional[str] = None
         self._frames: deque = deque()
-        self._queue: deque()
-        self._first_call = True
+        self._queue = deque()
 
     def reset(self) -> None:
         """Drop session state (frames, queue, model KV/language caches)."""
         self._episode_id = None
         self._frames = deque()
         self._queue = deque()
-        self._first_call = True
         self._infer_model.reset()
 
     def _episode(self, episode_id: str) -> Tuple[deque, deque]:
@@ -214,7 +210,6 @@ class DreamZeroLiberoEvalModel:
             self._episode_id = episode_id
             self._frames = deque(maxlen=1024)
             self._queue = deque()
-            self._first_call = True
         return self._frames, self._queue
 
     def _build_video(self, frames: deque) -> np.ndarray:
@@ -278,7 +273,6 @@ class DreamZeroLiberoEvalModel:
                 negative_prompt=_DREAMZERO_NEGATIVE_PROMPT,
                 state=state_norm,
             )
-            self._first_call = False
             # (1, H, 32) normalized padded actions -> (H, 7) raw. The model
             # denoises actions padded to ``max_action_dim`` (32); the first
             # ``action_dim`` (7) columns carry the LIBERO action.
@@ -352,7 +346,6 @@ class DreamZeroModelFactory:
             infer_model=infer_model,
             state_stats=state_stats,
             action_stats=action_stats,
-            num_frames=model_cfg.num_frames,
             action_horizon=model_cfg.action_horizon,
             action_dim=7,
             max_state_dim=model_cfg.max_state_dim,

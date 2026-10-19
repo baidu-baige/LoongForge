@@ -79,8 +79,6 @@ class PreProcessNode(ScheduleNode):
         self.forward_group_id = forward_group_id
         self.inner_group_id = inner_group_id
         self.enable_full_hetero_dp = enable_full_hetero_dp
-        # Cache the model chunk state reference for backward
-        self.model_chunk_state = chunk_state
 
     def forward_impl(self):
         """forward pass for pre-processing.

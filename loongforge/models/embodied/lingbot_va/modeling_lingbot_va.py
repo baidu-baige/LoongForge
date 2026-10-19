@@ -25,11 +25,6 @@ from .modules.flow_match import (
 from .modules.wan_model import WanTransformer3DModel
 
 
-def _reference_rotary(x: torch.Tensor, frequencies: torch.Tensor):
-    complex_x = torch.view_as_complex(x.double().reshape(*x.shape[:-1], -1, 2))
-    return torch.view_as_real(complex_x * frequencies).flatten(3).to(x.dtype)
-
-
 def _cfg_get(cfg, key, default=None):
     return cfg.get(key, default) if hasattr(cfg, "get") else getattr(cfg, key, default)
 

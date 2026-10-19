@@ -78,12 +78,6 @@ class WanLayer(TransformerLayer):
             vp_stage=vp_stage,
         )
 
-        self.d_t = ((config.num_latent_frames - 1) // config.vae_temporal_compress + 1) // config.latent_patch_size[0]
-        self.d_s = (
-            (config.max_latent_height // config.vae_spatial_compress // config.latent_patch_size[1])
-            * (config.max_latent_width // config.vae_spatial_compress // config.latent_patch_size[2])
-        )
-
         dim = config.hidden_size
         ffn_dim = config.ffn_hidden_size
         eps = config.layernorm_epsilon

@@ -10,8 +10,8 @@ Each transform is a plain ``fn(actions, ctx) -> actions`` registered with
 
 Registered keys:
 * form-A (auto-composed ``{action_encoding}_to_{action_space}``):
-  ``ee6d_to_axis_angle`` / ``ee6d_to_euler`` / ``ee6d_to_quat`` /
-  ``ee6d_to_calvin_abs`` / ``ee6d_to_simpler_abs_euler``
+  ``ee6d_to_axis_angle`` / ``ee6d_to_calvin_abs`` /
+  ``ee6d_to_simpler_abs_euler``
 * form-B RoboTwin (bridge-wired): ``ee6d_robotwin_ee_dual``
 """
 
@@ -60,28 +60,6 @@ def ee6d_to_axis_angle(actions: np.ndarray, ctx: Dict[str, Any]) -> np.ndarray:
     axis_angle = rot6d_to_axis_angle(actions[:, 3:9])
     grip = np.where(actions[:, 9:10] > 0.5, 1.0, -1.0)
     return np.concatenate([pos, axis_angle, grip], axis=-1).astype(np.float32)
-
-
-@register_action_fn("ee6d_to_euler")
-def ee6d_to_euler(actions: np.ndarray, ctx: Dict[str, Any]) -> np.ndarray:
-    """ee6d chunk [H, >=10] -> Euler 7D [H, 7]; gripper > 0.25 -> +1 else -1."""
-    from scipy.spatial.transform import Rotation
-
-    pos = actions[:, :3]
-    euler = Rotation.from_rotvec(rot6d_to_axis_angle(actions[:, 3:9])).as_euler("xyz")
-    grip = np.where(actions[:, 9:10] > 0.25, 1.0, -1.0)
-    return np.concatenate([pos, euler, grip], axis=-1).astype(np.float32)
-
-
-@register_action_fn("ee6d_to_quat")
-def ee6d_to_quat(actions: np.ndarray, ctx: Dict[str, Any]) -> np.ndarray:
-    """ee6d chunk [H, >=10] -> quaternion 8D [H, 8]; gripper > 0.5 -> +1 else -1."""
-    from scipy.spatial.transform import Rotation
-
-    pos = actions[:, :3]
-    quat = Rotation.from_rotvec(rot6d_to_axis_angle(actions[:, 3:9])).as_quat()
-    grip = np.where(actions[:, 9:10] > 0.5, 1.0, -1.0)
-    return np.concatenate([pos, quat, grip], axis=-1).astype(np.float32)
 
 
 @register_action_fn("ee6d_to_calvin_abs")

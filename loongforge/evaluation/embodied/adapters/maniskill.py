@@ -83,7 +83,6 @@ class ManiSkillAdapter(BaseBenchmarkAdapter):
     # ``pd_ee_delta_pose`` expects a 7D delta OSC action (pos + axis_angle +
     # gripper) — same as LIBERO's ``axis_angle``.
     action_space: str = "axis_angle"
-    default_fps: int = 5
     cameras: tuple = ("primary",)
 
     def __init__(

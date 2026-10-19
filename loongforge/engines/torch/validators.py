@@ -1,16 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""VLA training config validation.
+"""Backend option validation for the Torch engine.
 
-Called by parse_train_args() on the DictConfig stage (before to_object()), so it
-benefits from OmegaConf missing-key / interpolation checks. Operates on the three
-typed configs: training_args (TrainingArgs), model_cfg (ModelConfig),
-data_cfg (DataConfig).
+Checks the combinations that only make sense for this backend: CUDA graph, FSDP,
+DDP ZeRO, DMuon, LoRA, and FP8. Recipe checks (learning rate, step counts, data
+loading, profiling) live in ``loongforge.training.torch_args.validate``, which
+calls :func:`validate_engine_args` last.
 """
 
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -63,45 +62,11 @@ def _validate_fsdp_ignored_frozen_args(training_args):
             )
 
 
-def validate(training_args, model_cfg, data_cfg):
-    """Validate the combination of TrainingArgs + ModelConfig + DataConfig.
+def validate_engine_args(training_args, model_cfg):
+    """Validate backend options for the Torch engine.
 
     Raises ValueError on hard errors, logs warnings for soft issues.
     """
-    # ── Learning rate ──
-    if training_args.lr_base <= 0:
-        raise ValueError(f"--lr-base must be positive, got {training_args.lr_base}")
-    if training_args.min_lr < 0:
-        raise ValueError(f"--min-lr must be >= 0, got {training_args.min_lr}")
-    if training_args.min_lr >= training_args.lr_base:
-        logger.warning(
-            f"--min-lr ({training_args.min_lr}) >= --lr-base ({training_args.lr_base}); "
-            f"cosine decay will have no effect."
-        )
-
-    # ── Steps ──
-    if training_args.train_iters <= 0:
-        raise ValueError(f"--train-iters must be positive, got {training_args.train_iters}")
-    if training_args.save_interval < 0:
-        raise ValueError(
-            f"--save-interval must be >= 0, got {training_args.save_interval}"
-        )
-    if training_args.lr_decay_iters is not None and training_args.lr_decay_iters <= 0:
-        raise ValueError(f"--lr-decay-iters must be positive, got {training_args.lr_decay_iters}")
-    lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
-    if training_args.lr_warmup_iters >= lr_schedule_steps:
-        logger.warning(
-            f"--lr-warmup-iters ({training_args.lr_warmup_iters}) >= scheduler steps ({lr_schedule_steps})"
-        )
-    if training_args.manual_gc_interval < 0:
-        raise ValueError(
-            f"--manual-gc-interval must be >= 0, got {training_args.manual_gc_interval}"
-        )
-    if training_args.dataloader_prefetch_factor <= 0:
-        raise ValueError(
-            "--dataloader-prefetch-factor must be positive, got "
-            f"{training_args.dataloader_prefetch_factor}"
-        )
     if training_args.cuda_graph_warmup_steps <= 0:
         raise ValueError(
             f"--cuda-graph-warmup-steps must be positive, got {training_args.cuda_graph_warmup_steps}"
@@ -126,13 +91,6 @@ def validate(training_args, model_cfg, data_cfg):
             raise ValueError(
                 f"Unsupported --cuda-graph-scope={training_args.cuda_graph_scope!r} in embodied trainer."
             )
-
-    # ── Tokenizer ──
-    if training_args.tokenizer_path is None and not os.environ.get("TOKENIZER_PATH"):
-        logger.warning(
-            "Neither --tokenizer-path nor TOKENIZER_PATH env var is set. "
-            "Model initialization may fail if a tokenizer is required."
-        )
 
     # ── FSDP ──
     for option_name, value in (
@@ -230,18 +188,6 @@ def validate(training_args, model_cfg, data_cfg):
                 "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
             )
 
-    # ── Profiler mutual exclusion ──
-    if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
-        raise ValueError(
-            "--use-pytorch-profiler and --use-nsys-profiler are mutually exclusive."
-        )
-    if training_args.use_pytorch_profiler or training_args.use_nsys_profiler:
-        if training_args.profile_step_end < training_args.profile_step_start:
-            raise ValueError(
-                f"--profile-step-end ({training_args.profile_step_end}) must be greater than "
-                f"--profile-step-start ({training_args.profile_step_start})."
-            )
-
     # ── LoRA ──
     if training_args.lora_r <= 0:
         raise ValueError(f"--lora-r must be positive, got {training_args.lora_r}")
@@ -337,7 +283,3 @@ def validate(training_args, model_cfg, data_cfg):
             raise ValueError(
                 "TorchAO-specific FP8 options require --fp8-backend=torchao."
             )
-
-    # ── Model config sanity ──
-    if not model_cfg.model_type:
-        raise ValueError("ModelConfig.model_type must be set (from YAML model.model_type).")

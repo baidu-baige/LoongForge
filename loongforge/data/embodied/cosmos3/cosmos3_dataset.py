@@ -303,7 +303,6 @@ class DROIDLeRobotDataset(Dataset):
         self._domain_id = _domain_id_from_name(domain_name)
         self._video_backend = video_backend
         self._use_image_augmentation = use_image_augmentation
-        self._colorjitter_on_gpu = bool(colorjitter_on_gpu)
         # When ColorJitter runs on the model device, the dataset stops right after
         # crop/resize and ships the 3-view stack; ColorJitter and everything after it
         # run in the deferred pipeline, so the augmentation keeps its pipeline slot.

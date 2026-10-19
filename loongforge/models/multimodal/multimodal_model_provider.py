@@ -12,15 +12,6 @@ from typing import Optional
 from .combination_model import OmniCombinationModel
 from megatron.core import mpu
 import torch
-from loongforge.models.common import BaseModelConfig
-
-
-def check_model_config(model_config: BaseModelConfig):
-    """Validate model configuration including hidden size and number of attention heads."""
-    for config in model_config:  # TODO: Implement actual validation logic
-        # Check hidden_size and num_attention_heads
-        print(config)
-    return model_config
 
 
 def omni_model_provider(
@@ -52,7 +43,6 @@ def omni_model_provider(
         - Supports encoder pipeline parallel processing
         - Includes language model related parameter configuration
     """
-    # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
     if args.enable_full_hetero_dp:

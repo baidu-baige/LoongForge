@@ -64,12 +64,11 @@ def set_args_dict(args_dict):
     _GLOBAL_ARGS_DICT = args_dict
 
 
-def set_loongforge_extra_global_vars(args, build_tokenizer=True) -> None:
+def set_loongforge_extra_global_vars(args) -> None:
     """Set LOONGFORGE extra global variables"""
     assert args is not None
-    if build_tokenizer:
-        _ = _build_chat_template(args)
-        _ = _build_tokenizer(args)
+    _ = _build_chat_template(args)
+    _ = _build_tokenizer(args)
 
 
 def _build_chat_template(args) -> Optional["ChatTemplate"]:

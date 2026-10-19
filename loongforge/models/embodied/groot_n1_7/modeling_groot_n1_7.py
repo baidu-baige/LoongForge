@@ -13,7 +13,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import random
 import re
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Optional, Tuple
 
@@ -123,7 +122,6 @@ class Gr00tN1d7ActionHead(nn.Module):
         self._split_noise_buf = None
         self._split_time_buf = None
         self._split_state_dropout_buf = None
-        self._split_supports_state_dropout_buf = True
         self._split_record_shape = False
         self._split_actions_shape = None
         self._split_actions_device = None
@@ -334,10 +332,6 @@ class Gr00tN1d7(nn.Module):
         )
         self.action_head = Gr00tN1d7ActionHead(config)
 
-    def set_input_tensor(self, input_tensor) -> None:
-        """Megatron compatibility no-op."""
-        self._input_tensor = input_tensor
-
     def prepare_input(self, inputs: dict) -> Tuple[BatchFeature, BatchFeature]:
         """Split LoongForge batch dict into backbone and action inputs."""
         backbone_inputs = self.backbone.prepare_input(inputs)
@@ -399,8 +393,6 @@ class Gr00tN1d7(nn.Module):
 class GrootN1d7Policy(nn.Module):
     """GR00T-N1.7 policy wrapper for the LoongForge Torch engine."""
 
-    preserve_param_dtype = True
-
     def __init__(self, config: GrootN1d7Config):
         super().__init__()
         self.config = config
@@ -429,7 +421,6 @@ class GrootN1d7Policy(nn.Module):
         self.action_dim = int(
             max(meta["end"] for meta in self.modality_meta["action"].values())
         )
-        self._predict_action_initialized = False
         self._predict_action_validation_zero_state = False
         self._predict_action_use_bf16 = bool(config.use_bf16)
         self._predict_action_statistics: Dict[str, Any] | None = None
@@ -455,15 +446,6 @@ class GrootN1d7Policy(nn.Module):
         if not self.config.tune_diffusion_model:
             return "tune_diffusion_model=false freezes the action DiT"
         return None
-
-    def reset_data_iterator_rng(self, seed: int) -> None:
-        """Align DataLoader worker base seeds with Isaac's finetune path."""
-        seed = int(seed)
-        random.seed(seed)
-        np.random.seed(seed % (2**32 - 1))
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
 
     @classmethod
     def from_pretrained(cls, cfg) -> "GrootN1d7Policy":
@@ -507,11 +489,6 @@ class GrootN1d7Policy(nn.Module):
         if not self._restoring_after_apply:
             self._restore_precision_after_apply()
         return result
-
-    def restore_trainable_params_fp32(self) -> None:
-        """Restore trainable parameters to fp32 after framework dtype casts."""
-        with self._precision_restore_guard():
-            self._restore_trainable_params_fp32_impl()
 
     def _restore_trainable_params_fp32_impl(self) -> None:
         if self.config.backbone_trainable_params_fp32:
@@ -662,7 +639,6 @@ class GrootN1d7Policy(nn.Module):
             self._predict_action_use_percentiles,
             self._predict_action_clip_outliers,
         )
-        self._predict_action_initialized = True
         self.eval()
 
     @torch.no_grad()

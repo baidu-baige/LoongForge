@@ -252,7 +252,6 @@ class DMuonOptimizerAdapter(torch.optim.Optimizer):
         self._optimizer = optimizer
         self._model = model
         self._scheduler_peak_lr = scheduler_peak_lr
-        self.last_dmuon_clip_stats = None
         self._refresh_public_optimizer_state()
         self._hook_for_profile = None
         self._root_optimizer_prefetch = root_optimizer_prefetch
@@ -456,7 +455,6 @@ class DMuonOptimizerAdapter(torch.optim.Optimizer):
 
         fsdp_norm = float(clip_gradients(self._model, max_norm))
         clip_stats = dmuon.clip_grad_norm_(self._optimizer, max_norm)
-        self.last_dmuon_clip_stats = clip_stats.as_dict()
         dmuon_norm = float(clip_stats.total_norm)
         return float((fsdp_norm**2 + dmuon_norm**2) ** 0.5)
 

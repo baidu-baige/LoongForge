@@ -91,7 +91,6 @@ The main arguments in the script are grouped as follows.
 --dataset-format hdf5_datasets       # Use the native HDF5 dataset
 --dataset-path $DATA_PATH            # Directory containing metadata.json
 --tokenizer-path $TOKENIZER_PATH     # Florence2 tokenizer / processor directory
---robot-type libero_franka           # Embodiment type identifier
 --num-workers 2                      # Number of DataLoader workers
 ```
 **Training:**

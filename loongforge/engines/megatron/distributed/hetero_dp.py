@@ -176,11 +176,6 @@ class CpuOffloadManager:
         self._store[key] = (cpu_tensor, tensor.shape, tensor.dtype, tensor.device)
         self._offload_events[key] = event
 
-    def offload_sync(self, key: str) -> None:
-        """Block until a specific offload finishes."""
-        if key in self._offload_events:
-            self._offload_events[key].synchronize()
-
     def reload(self, key: str) -> Optional[torch.Tensor]:
         """Async copy a tensor back from CPU to GPU.
 

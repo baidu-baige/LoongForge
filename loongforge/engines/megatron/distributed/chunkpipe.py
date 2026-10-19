@@ -107,19 +107,10 @@ class ChunkPipeGroupBatchSampler:
             f"Increase global_batch_size or decrease seq_length/chunksize ratio."
         )
 
-        # Pre-compute a stable usable-sample estimate for external consumers
-        # that still inspect these attributes. Resume positioning below uses
-        # the exact shuffled schedule of each epoch instead.
-        dummy_buckets = self._lpt_partition(range(len(self.groups)))
-        _, _, _, _, dummy_aligned = self._schedule_buckets(dummy_buckets)
-        self.usable_per_rank = dummy_aligned * self.step_capacity
-        self.usable_total = self.usable_per_rank * self.data_parallel_size
-
         # Determine initial epoch and completed iteration offset for checkpoint
         # resume. ChunkPipe SFT only supports resuming from full training
         # iteration boundaries.
         self._epoch, self._resume_step_in_epoch = self._locate_resume_position(consumed_samples)
-        self._resume_offset = self._resume_step_in_epoch * self.step_capacity
 
         # Per-microbatch G FIFO queue. Semantics: each entry is the GLOBAL
         # source group count G_total for the step that the corresponding
@@ -638,7 +629,6 @@ class ChunkPipeGroupBatchSampler:
         # the first real batch consumed after resume.
         skip_steps = self._resume_step_in_epoch
         self._resume_step_in_epoch = 0
-        self._resume_offset = 0
 
         # Yield one micro-batch at a time. Every micro-batch within a step
         # shares the same G_total = total source groups in that step across
@@ -682,6 +672,5 @@ class ChunkPipeGroupBatchSampler:
         # Epoch complete — next __iter__ call will use a different shuffle
         self._epoch += 1
         self._resume_step_in_epoch = 0
-        self._resume_offset = 0
 
 

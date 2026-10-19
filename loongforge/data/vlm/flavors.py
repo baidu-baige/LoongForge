@@ -96,7 +96,6 @@ class PackedVQASample(Sample):
     images: List[torch.Tensor]
     contexts: List[str]
     answers: Optional[List[List[str]]] = None
-    answer_weights: Optional[List[torch.Tensor]] = None
 
 
 @dataclass
@@ -117,7 +116,6 @@ class PackedMultiMixQASample(Sample):
     videos: Optional[List[list[AVData]]]
     contexts: List[List[str]]
     answers: List[List[str]]
-    answer_weights: Optional[List[torch.Tensor]] = None
 
 
 @dataclass

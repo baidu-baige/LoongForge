@@ -51,26 +51,6 @@ def decode_video_frames_by_timestamps(
                          f"Supported: torchcodec, decord, opencv, pyav, torchvision_av")
 
 
-def decode_video_frames_by_indices(
-    video_path: str,
-    indices: list,
-    backend: str = "torchcodec",
-    fps: float = None,
-    **kwargs,
-) -> np.ndarray:
-    """Decode frames at given frame indices.
-
-    If the backend supports index-based access, uses it directly.
-    Otherwise converts indices to timestamps using fps.
-    """
-    if backend == "decord":
-        return _decode_decord(video_path, indices=indices, **kwargs)
-    if fps is None:
-        raise ValueError("fps is required for index-based decoding with this backend")
-    timestamps = [i / fps for i in indices]
-    return decode_video_frames_by_timestamps(video_path, timestamps, backend, **kwargs)
-
-
 # ─── Backend Implementations ───────────────────────────────────────────────────
 def _decode_torchcodec(video_path, timestamps=None):
     from torchcodec.decoders import VideoDecoder
@@ -79,17 +59,13 @@ def _decode_torchcodec(video_path, timestamps=None):
     return frames.permute(0, 2, 3, 1).numpy()
 
 
-def _decode_decord(video_path, timestamps=None, indices=None, **kwargs):
+def _decode_decord(video_path, timestamps=None, **kwargs):
     import decord
     decord.bridge.set_bridge("numpy")
     vr = decord.VideoReader(str(video_path), **kwargs)
-    if indices is not None:
-        frames = vr.get_batch(indices).asnumpy()
-    else:
-        fps = vr.get_avg_fps()
-        frame_indices = [min(int(t * fps), len(vr) - 1) for t in timestamps]
-        frames = vr.get_batch(frame_indices).asnumpy()
-    return frames
+    fps = vr.get_avg_fps()
+    frame_indices = [min(int(t * fps), len(vr) - 1) for t in timestamps]
+    return vr.get_batch(frame_indices).asnumpy()
 
 
 def _decode_opencv(video_path, timestamps=None):

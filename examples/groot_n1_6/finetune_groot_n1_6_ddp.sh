@@ -60,7 +60,6 @@ NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-path "$DATA_PATH"
-    --robot-type libero_franka
     --video-backend torchcodec
     --num-workers "$NUM_WORKERS"
     --dataloader-multiprocessing-context spawn

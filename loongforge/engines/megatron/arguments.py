@@ -29,15 +29,11 @@ def loongforge_extra_train_args_provider(parser: argparse.ArgumentParser):
     parser.conflict_handler = "resolve"
     parser = _add_extra_model_args(parser)
     parser = _add_extra_tokenizer_args(parser)
-    parser = _add_extra_sft_args(parser)
-    parser = _add_extra_video_args(parser)
+    parser = _add_model_config_args(parser)
     parser = _add_extra_training_args(parser)
-    parser = _add_extra_multimodal_args(parser)
     parser = _add_extra_parallel_args(parser)
     # Debug and logging arguments
     parser = _add_log_tensor_args(parser)
-    # Rice-VL specific arguments
-    parser = _add_extra_training_rice_vl_args(parser)
     parser = _add_extra_bridge_args(parser)
 
     return parser
@@ -165,45 +161,9 @@ def _add_log_tensor_args(parser):
              "Default: '' (current directory)"
     )
 
-    group.add_argument(
-        "--random-fallback-cpu",
-        action="store_true",
-        help="Generate random numbers on CPU then move to target device. "
-             "Useful for hardware that has issues with on-device random number generation. "
-             "Default: False"
-    )
-
     return parser
 
 
-# =============================================================================
-# Rice-VL Training Arguments
-# =============================================================================
-
-def _add_extra_training_rice_vl_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add arguments specific to Rice-VL model training.
-
-    Rice-VL is a vision-language model that requires special handling
-    for answer length during training.
-    """
-    group = parser.add_argument_group(
-        title='Training Rice-VL',
-        description='Arguments specific to Rice-VL vision-language model training'
-    )
-
-    group.add_argument(
-        '--training-rice-vl-max-answer-length',
-        type=int,
-        default=4096,
-        help="Maximum character length allowed for answers during Rice-VL training. "
-             "Answers exceeding this length will be truncated. Default: 4096"
-    )
-    return parser
-
-
-# =============================================================================
-# Bridge bridge Arguments
-# =============================================================================
 def _add_extra_bridge_args(parser):
     """Add bridge arguments"""
     group = parser.add_argument_group(title='extra-bridge')
@@ -267,9 +227,6 @@ def _add_extra_bridge_args(parser):
     return parser
 
 
-# =============================================================================
-# Model Arguments
-# =============================================================================
 
 def _add_extra_model_args(parser: argparse.ArgumentParser):
     """Add arguments for model configuration and loading.
@@ -379,14 +336,6 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
-        "--hf-processor-path",
-        type=str,
-        default=None,
-        help="Optional HuggingFace processor path when it differs from the tokenizer path. "
-             "Defaults to --hf-tokenizer-path."
-    )
-
-    group.add_argument(
         "--use-fast-tokenizer",
         action="store_true",
         dest="use_fast_tokenizer",
@@ -438,32 +387,8 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
              "vocabulary padding requirements. Default: None"
     )
 
-    group.add_argument(
-        "--task-encoder",
-        type=str,
-        default=None,
-        help="Registry name for the multimodal task encoder. Responsible for "
-             "encoding task-specific inputs (images, video, text). "
-             "Examples: 'VLMTaskEncoder', 'KimiTaskEncoder'. Default: None"
-    )
-    return parser
-
-
-# =============================================================================
-# SFT (Supervised Fine-Tuning) Arguments
-# =============================================================================
-
-def _add_extra_sft_args(parser: argparse.ArgumentParser):
-    """Add arguments for supervised fine-tuning data configuration.
-
-    These arguments control dataset selection, preprocessing, packing,
-    and training behavior for SFT tasks.
-    """
-    group = parser.add_argument_group(
-        title="SFT Data Configuration",
-        description="Arguments for supervised fine-tuning data processing"
-    )
-
+    # The tokenizer and the global chat template are built together at
+    # initialization, so these two arguments stay with the tokenizer.
     group.add_argument(
         "--chat-template",
         type=str,
@@ -484,175 +409,61 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
              "Default: None"
     )
 
-    group.add_argument(
-        "--sft-dataset-config",
-        type=str,
-        default=None,
-        help="Path to YAML file containing dataset configurations. "
-             "Defines dataset formats and processing rules. "
-             "Default: configs/data/sft_dataset_config.yaml"
-    )
-
-    group.add_argument(
-        "--sft-dataset",
-        nargs="*",
-        default=None,
-        help="List of dataset names for combined train/valid/test splits. "
-             "Names must be defined in --sft-dataset-config. "
-             "Examples: 'dataset1' or 'dataset1 dataset2'. "
-             "Mutually exclusive with --sft-train-dataset/--sft-valid-dataset/--sft-test-dataset. "
-             "Default: None"
-    )
-
-    group.add_argument(
-        "--sft-train-dataset",
-        nargs="*",
-        default=None,
-        help="List of training dataset names. Used with --train-data-path. "
-             "Follows same naming rules as --sft-dataset. Default: None"
-    )
-
-    group.add_argument(
-        "--sft-valid-dataset",
-        nargs="*",
-        default=None,
-        help="List of validation dataset names. Used with --valid-data-path. "
-             "Follows same naming rules as --sft-dataset. Default: None"
-    )
-
-    group.add_argument(
-        "--sft-test-dataset",
-        nargs="*",
-        default=None,
-        help="List of test dataset names. Used with --test-data-path. "
-             "Follows same naming rules as --sft-dataset. Default: None"
-    )
-
-    group.add_argument(
-        "--sft-sort-batch",
-        action="store_true",
-        help="Sort dataset samples by length (smallest to largest) for more efficient "
-             "padding. Sorting occurs after packing if --packing-sft-data is enabled. "
-    )
-
-    group.add_argument(
-        "--sft-data-streaming",
-        action="store_true",
-        help="Enable streaming mode for large datasets that don't fit in memory. "
-             "Data is loaded on-demand during training. Default: False"
-    )
-
-    group.add_argument(
-        "--streaming-buffer-size",
-        type=int,
-        default=16384,
-        help="Buffer size for random sampling in streaming mode. Larger buffers "
-             "provide more randomization but use more memory. Default: 16384"
-    )
-
-    group.add_argument(
-        "--sft-data-mix-strategy",
-        type=str,
-        choices=["concat", "interleave_under", "interleave_over"],
-        default="concat",
-        help=(
-            "Strategy for mixing multiple SFT datasets: "
-            "'concat': concatenate datasets sequentially; "
-            "'interleave_under': interleave datasets and stop when the shortest dataset is exhausted; "
-            "'interleave_over': interleave datasets until the longest dataset is exhausted."
-        ),
-    )
-
-    group.add_argument(
-        "--sft-num-preprocess-workers",
-        type=int,
-        default=None,
-        help="Number of worker processes for data preprocessing. Only applies to "
-             "non-streaming mode. More workers speed up preprocessing but use more memory. "
-             "Default: None (auto-detect)"
-    )
-
-    group.add_argument(
-        "--train-on-prompt",
-        action="store_true",
-        help="Include prompt tokens in loss computation. By default, loss is computed "
-             "only on response tokens. Default: False"
-    )
-
-    group.add_argument(
-        "--history-mask-loss",
-        action="store_true",
-        help="Compute loss only on the last turn response in multi-turn conversations, "
-             "masking the loss for tokens from previous turns. Default: False"
-    )
-
-    group.add_argument(
-        "--is-tokenized-data",
-        action="store_true",
-        help="Indicate that input data is already tokenized. Skips tokenization step "
-             "in data processing pipeline. Default: False"
-    )
-
-    group.add_argument(
-        "--packing-sft-data",
-        action="store_true",
-        help="Pack multiple short sequences into a single training sample to improve "
-             "GPU utilization. Default: False"
-    )
-
-    group.add_argument(
-        "--enable-discard-sample",
-        action="store_true",
-        help="Discard samples that exceed --seq-length instead of truncating. "
-             "Useful for ensuring consistent sequence lengths. Default: False"
-    )
-
-    group.add_argument(
-        "--packing-buffer-size",
-        type=int,
-        default=10000,
-        help="Size of the sample buffer used for sequence packing. "
-            "Samples are first loaded into this buffer and then packed into sequences "
-            "by the packing algorithm. Effective only when --packing-sft-data is enabled."
-        )
-
-    group.add_argument(
-        "--use-fixed-seq-lengths",
-        action="store_true",
-        help="Pad all sequences to exactly --seq-length. Currently only supported "
-             "for language models. Default: False"
-    )
-
-    group.add_argument(
-        "--sample-type",
-        type=str,
-        default=None,
-        help="Default sample type used for fallback cooker routing when no cooker "
-            "matches a sample. For example: 'multi_mix_vqa'. "
-            "This allows the dataloader to apply the corresponding cooker "
-            "to samples that do not specify a subflavor."
-    )
     return parser
 
 
 # =============================================================================
-# Video Processing Arguments
+# Model Config Arguments
 # =============================================================================
 
-def _add_extra_video_args(parser):
-    """Add arguments for video and vision task configuration.
+def _add_model_config_args(parser: argparse.ArgumentParser):
+    """Add arguments copied by name into the model config.
 
-    These arguments control video latent processing, frame handling,
-    and InternVL-specific vision settings.
+    ``build_model_config`` copies every attribute of the parsed namespace whose
+    name matches a field of the target config class, so these must be
+    registered before the config is built.
     """
     group = parser.add_argument_group(
-        title="Video & Vision Configuration",
-        description="Arguments for video processing and vision model configuration"
+        title="Model Config Overrides",
+        description="Arguments that override model structure fields from the command line"
     )
 
-    # -------------------------------------------------------------------------
-    # Latent Space Configuration
-    # -------------------------------------------------------------------------
+    group.add_argument(
+        "--use-dsa-fused",
+        action="store_true",
+        help="Force use of Omni fused DSA implementation for DeepSeek models. "
+             "Default: False"
+    )
+    group.add_argument(
+        "--dsa-kernel-backend",
+        type=str,
+        default="auto",
+        choices=["auto", "sm100", "sm80", "torch_ref", "tilelang"],
+        help="Kernel backend for the fused DSA path. 'auto' picks by compute "
+             "capability: sm100 (FP8 indexer + FlashMLA) on SM90/SM100, sm80 "
+             "(BF16 indexer, Ampere has no FP8 tensor cores) on A100/A800. "
+             "'torch_ref' runs the PyTorch reference implementations -- correct "
+             "but slow and memory hungry, intended for numerical validation and "
+             "for machines with no DSA kernels installed. 'tilelang' forces the "
+             "TileLang sparse-MLA backward. Default: auto"
+    )
+    group.add_argument(
+        "--use-dsa-sp-first",
+        action="store_true",
+        help="Use SP-First partitioning for DSA fused path. Eliminates All-to-All "
+             "communication by making projection layers hold full-head weights and "
+             "operate on sequence-split data. Requires --use-dsa-fused and "
+             "--sequence-parallel. Default: False"
+    )
+    group.add_argument(
+        "--absorb-backend",
+        type=str,
+        default="te",
+        choices=["te", "torch"],
+        help="Backend for MLA absorb projections. "
+             "'te' uses TEGroupedLinear, 'torch' uses torch.einsum with sliced weights. "
+             "Default: te"
+    )
     group.add_argument(
         "--latent-in-channels",
         type=int,
@@ -660,7 +471,6 @@ def _add_extra_video_args(parser):
         help="Number of input channels in latent space. Used by video diffusion models. "
              "Default: None"
     )
-
     group.add_argument(
         "--latent-out-channels",
         type=int,
@@ -668,14 +478,6 @@ def _add_extra_video_args(parser):
         help="Number of output channels in latent space. Used by video diffusion models. "
              "Default: None"
     )
-
-    group.add_argument(
-        "--caption-channels",
-        type=int,
-        default=None,
-        help="Number of channels for caption/text embeddings in video models. Default: None"
-    )
-
     group.add_argument(
         "--latent-patch-size",
         type=tuple,
@@ -683,280 +485,44 @@ def _add_extra_video_args(parser):
         help="Patch size (time, height, width) for latent space tokenization. "
              "Default: (1, 1, 1)"
     )
-
     group.add_argument(
         "--latent-space-scale",
         type=float,
         default=1.0,
         help="Spatial scaling factor for latent space. Default: 1.0"
     )
-
     group.add_argument(
         "--latent-time-scale",
         type=float,
         default=1.0,
         help="Temporal scaling factor for latent space. Default: 1.0"
     )
-
     group.add_argument(
         "--num-latent-frames",
         type=int,
         default=None,
         help="Number of frames in the latent video representation. Default: None"
     )
-
     group.add_argument(
         "--max-latent-height",
         type=int,
         default=None,
         help="Maximum height of video in latent space. Default: None"
     )
-
     group.add_argument(
         "--max-latent-width",
         type=int,
         default=None,
         help="Maximum width of video in latent space. Default: None"
     )
-
-    group.add_argument(
-        "--max-text-length",
-        type=int,
-        default=None,
-        help="Maximum text/caption token length. Default: None"
-    )
-
-    group.add_argument(
-        "--max-video-length",
-        type=int,
-        default=32760,
-        help="Maximum video token length. Default: 32760"
-    )
-
-    group.add_argument(
-        "--max-image-length",
-        type=int,
-        default=None,
-        help="Maximum image token length. Default: None"
-    )
-
-    group.add_argument(
-        "--max-timestep-boundary",
-        type=float,
-        default=1.0,
-        help="Maximum diffusion timestep boundary (0-1 range) for DiT models. "
-             "Default: 1.0"
-    )
-
-    group.add_argument(
-        "--min-timestep-boundary",
-        type=float,
-        default=0.0,
-        help="Minimum diffusion timestep boundary (0-1 range) for DiT models. "
-             "Default: 0.0"
-    )
-
-    group.add_argument(
-        '--dataset-metadata-path',
-        type=str,
-        default=None,
-        help="Path to dataset metadata file containing video/image information. "
-             "Default: None"
-    )
-
-    # -------------------------------------------------------------------------
-    # InternVL-specific Arguments
-    # -------------------------------------------------------------------------
-    group.add_argument(
-        "--loss-reduction-all-gather",
-        action="store_true",
-        help="Gather losses from all GPUs during loss reduction. Default: False"
-    )
-
-    group.add_argument(
-        "--conv-style",
-        type=str,
-        default="internvl2_5",
-        help="Conversation/prompt style format. Defines how multi-turn conversations "
-             "are structured. Default: internvl2_5"
-    )
-
-    group.add_argument(
-        "--force-image-size",
-        type=int,
-        default=448,
-        help="Force resize images to this size (pixels). Default: 448"
-    )
-
-    group.add_argument(
-        "--num-images-expected",
-        type=int,
-        default=48,
-        help="Maximum number of images allowed in a single packed sample. Default: 48"
-    )
-
-    group.add_argument(
-        "--pad2square",
-        action="store_true",
-        help="Pad rectangular images to square shape with padding. Default: False"
-    )
-
-    group.add_argument(
-        "--down-sample-ratio",
-        type=float,
-        default=0.5,
-        help="Image down-sampling ratio for resolution reduction. Default: 0.5"
-    )
-
-    group.add_argument(
-        "--max-buffer-size",
-        type=int,
-        default=20,
-        help="Buffer size for packed dataset construction. Default: 20"
-    )
-
-    group.add_argument(
-        "--max-packed-tokens",
-        type=int,
-        default=None,
-        help="[DEPRECATED] Ignored; defaults to and is forced equal to "
-             "--seq-length. In LoongForge seq_length is the packed-sequence length."
-    )
-
-    group.add_argument(
-        "--strict-mode",
-        action="store_true",
-        help="Pad images to exactly --num-images-expected when enabled. Default: False"
-    )
-
-    group.add_argument(
-        "--replacement",
-        action="store_true",
-        help="Restart dataset iteration from beginning when exhausted. Default: False"
-    )
-
-    group.add_argument(
-        "--loss-reduction",
-        type=str,
-        default="square",
-        help="Loss reduction method: 'square', 'mean', or 'sum'. Default: square"
-    )
-
-    group.add_argument(
-        "--patch-size",
-        type=int,
-        default=14,
-        help="Vision encoder patch size for image tokenization. Default: 14"
-    )
-
-    group.add_argument(
-        "--group-by-length",
-        action="store_true",
-        help="Group samples by sequence length for more efficient batching. Default: False"
-    )
-
-    group.add_argument(
-        "--min-num-frame",
-        type=int,
-        default=8,
-        help="Minimum number of frames to sample from video data. Default: 8"
-    )
-
-    group.add_argument(
-        "--max-num-frame",
-        type=int,
-        default=32,
-        help="Maximum number of frames to sample from video data. Default: 32"
-    )
-
-    group.add_argument(
-        "--dynamic-image-size",
-        action="store_true",
-        help="Enable dynamic high-resolution strategy for images. Default: False"
-    )
-
-    group.add_argument(
-        "--min-dynamic-patch",
-        type=int,
-        default=1,
-        help="Minimum number of dynamic patches per image. Default: 1"
-    )
-
-    group.add_argument(
-        "--max-dynamic-patch",
-        type=int,
-        default=12,
-        help="Maximum number of dynamic patches per image. Default: 12"
-    )
-
-    group.add_argument(
-        "--use_thumbnail",
-        action="store_true",
-        help="Add thumbnail image alongside dynamic patches. Default: False"
-    )
-
-    group.add_argument(
-        "--normalize_type",
-        type=str,
-        default="imagenet",
-        help="Image normalization preset. Options: 'imagenet', 'clip', etc. Default: imagenet"
-    )
-
-    group.add_argument(
-        "--use-packed-ds",
-        action="store_true",
-        help="[DEPRECATED] Enable packed dataset mode for efficient multi-image training. Default: False"
-    )
-
-    group.add_argument(
-        "--save-dataset-state",
-        action="store_true",
-        help="[DEPRECATED] Save dataset state for resumable training. Default: False"
-    )
-
-    group.add_argument(
-        "--dataloader-prefetch-factor",
-        type=int,
-        default=2,
-        help="Number of batches to prefetch per worker in dataloader. Default: 2"
-    )
-
     return parser
-
-
-# =============================================================================
-# Training Arguments
-# =============================================================================
-
-def _extend_cuda_graph_scope_choices(parser: argparse.ArgumentParser):
-    """Add ``'per_microbatch'`` to the choices of Megatron's ``--cuda-graph-scope``.
-
-    Avoids patching the upstream Megatron parser. Looks up the action by its
-    option string and mutates its ``choices``/``help`` in place. Silently
-    no-ops if the upstream definition has changed and the action can't be
-    found, so we never break parsing.
-    """
-    extra_help = (
-        ' "per_microbatch" scope (LoongForge extension) captures one CUDA graph per '
-        'micro-batch with eager RNG between sub-graphs for bit-exact '
-        'alignment with pure eager. Only supported with --cuda-graph-impl=local.'
-    )
-    for action in parser._actions:
-        if "--cuda-graph-scope" in getattr(action, "option_strings", ()):
-            choices = list(action.choices or [])
-            if "per_microbatch" not in choices:
-                choices.append("per_microbatch")
-                action.choices = choices
-            if action.help and "per_microbatch" not in action.help:
-                action.help = action.help.rstrip() + extra_help
-            return
 
 
 def _add_extra_training_args(parser: argparse.ArgumentParser):
     """Add arguments for training configuration.
 
-    These arguments control training phase, checkpointing, logging,
-    and EMA (Exponential Moving Average).
+    These arguments control training phase, task flags read by the engine,
+    checkpointing, LoRA, logging, and EMA (Exponential Moving Average).
     """
     group = parser.add_argument_group(
         title="Training Configuration",
@@ -972,89 +538,13 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
              "Default: pretrain"
     )
 
-
-    group.add_argument(
-        "--use-dsa-fused",
-        action="store_true",
-        help="Force use of Omni fused DSA implementation for DeepSeek models. "
-             "Default: False"
-    )
-
-    group.add_argument(
-        "--dsa-kernel-backend",
-        type=str,
-        default="auto",
-        choices=["auto", "sm100", "sm80", "torch_ref", "tilelang"],
-        help="Kernel backend for the fused DSA path. 'auto' picks by compute "
-             "capability: sm100 (FP8 indexer + FlashMLA) on SM90/SM100, sm80 "
-             "(BF16 indexer, Ampere has no FP8 tensor cores) on A100/A800. "
-             "'torch_ref' runs the PyTorch reference implementations -- correct "
-             "but slow and memory hungry, intended for numerical validation and "
-             "for machines with no DSA kernels installed. 'tilelang' forces the "
-             "TileLang sparse-MLA backward. Default: auto"
-    )
-
-    group.add_argument(
-        "--use-dsa-sp-first",
-        action="store_true",
-        help="Use SP-First partitioning for DSA fused path. Eliminates All-to-All "
-             "communication by making projection layers hold full-head weights and "
-             "operate on sequence-split data. Requires --use-dsa-fused and "
-             "--sequence-parallel. Default: False"
-    )
-
-    group.add_argument(
-        "--absorb-backend",
-        type=str,
-        default="te",
-        choices=["te", "torch"],
-        help="Backend for MLA absorb projections. "
-             "'te' uses TEGroupedLinear, 'torch' uses torch.einsum with sliced weights. "
-             "Default: te"
-    )
-
-    group.add_argument(
-        "--no-detail-log",
-        action="store_false",
-        dest="log_detail",
-        help="Disable detailed timing logs during training. Default: enabled"
-    )
-
-    group.add_argument(
-        "--detail-log-interval",
-        type=int,
-        default=20,
-        help="Interval (iterations) between detailed timing log reports. "
-             "Only effective when timing-log-level is 0. Default: 20"
-    )
-
     group.add_argument(
         "--variable-seq-lengths",
         action="store_true",
-        help="[DEPRECATED] This flag is ignored. Variable sequence length support "
-             "is now automatic. Default: False"
+        help="Use per-batch variable sequence lengths. Ignored for VLM families, "
+             "which always enable it. SFT may force it off for tp-comm-overlap or "
+             "MoE all-gather/all-to-all-seq dispatch. Default: False"
     )
-
-    group.add_argument(
-        "--cuda-graph-pad-length",
-        type=int,
-        default=None,
-        dest="cuda_graph_pad_length",
-        help="Fixed sequence length for CUDA graph mode. "
-             "When set (e.g. --cuda-graph-pad-length 220), the data collator pads "
-             "all token sequences to this length (padding='max_length', truncation=True) "
-             "so all batches have identical tensor shapes — a prerequisite for CUDA graph "
-             "capture. When None (default), dynamic padding is used. "
-             "Should be set to a value slightly larger than the maximum actual token "
-             "length in the dataset to minimize wasted computation. "
-             "NOTE: currently only consumed by the groot SFT pipeline "
-             "(Gr00tN1d6DataCollator); other model pipelines ignore this flag.",
-    )
-
-    # Extend Megatron's --cuda-graph-scope to accept "per_microbatch" without patching
-    # the upstream parser. Mutates the already-registered action's choices/help
-    # in place (this provider runs after add_megatron_arguments).
-    _extend_cuda_graph_scope_choices(parser)
 
     # EMA (Exponential Moving Average) arguments
     group.add_argument(
@@ -1102,14 +592,6 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
-        "--log-memory-stats",
-        action="store_true",
-        default=False,
-        help="Log GPU memory statistics (allocated/peak) during training. "
-             "Default: False"
-    )
-
-    group.add_argument(
         "--save-hf",
         type=str,
         default='false',
@@ -1122,6 +604,32 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
         type=str,
         default=None,
         help="Path to save the HF model checkpoint. If not specified, will save to <save>/release_hf_weights/"
+    )
+
+    # Task flags that the engine reads directly. They stay here until the read
+    # sites (batch broadcast, loss reduction, DP balance) take them as parameters.
+    group.add_argument(
+        "--packing-sft-data",
+        action="store_true",
+        help="Pack multiple short sequences into a single training sample to improve "
+             "GPU utilization. Default: False"
+    )
+    group.add_argument(
+        "--loss-reduction-all-gather",
+        action="store_true",
+        help="Gather losses from all GPUs during loss reduction. Default: False"
+    )
+    group.add_argument(
+        "--force-image-size",
+        type=int,
+        default=448,
+        help="Force resize images to this size (pixels). Default: 448"
+    )
+    group.add_argument(
+        "--dataloader-save",
+        type=str,
+        default=None,
+        help="Path to save Energon dataloader state for resumable training. Default: None"
     )
 
     group.add_argument('--lora-alpha', type=int, help="Lora alpha for LoRA fine tuning.")
@@ -1141,14 +649,6 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
     )
 
     group.add_argument(
-        "--force-all-weight-decay",
-        action="store_false",
-        default=None,
-        help="Force all parameters into weight-decay group, overriding default "
-             "exclusions for bias and LayerNorm. Default: None (use model defaults)"
-    )
-
-    group.add_argument(
         "--should-get-embedding-weights-for-mtp",
         action="store_true",
         help="For models such as GLM-5, MTP does not have separate embedding weights,"
@@ -1156,161 +656,6 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
              "Default: False"
     )
 
-    return parser
-
-
-# =============================================================================
-# Multimodal Arguments
-# =============================================================================
-
-def _add_extra_multimodal_args(parser):
-    """Add arguments for multimodal model configuration.
-
-    These arguments control vision-language model settings, image/video
-    processing parameters, and data packing strategies.
-    """
-    group = parser.add_argument_group(
-        title="Multimodal Configuration",
-        description="Arguments for vision-language and multimodal models"
-    )
-
-    group.add_argument(
-        "--trainable-modules",
-        default=["all"],
-        nargs="*",
-        help="List of modules to train (unfrozen). Options: 'all', 'language_model', "
-             "'adapter', 'vision_model', 'language_expert_linear', 'vision_expert_linear'. "
-             "Default: ['all']"
-    )
-
-    group.add_argument(
-        "--dataloader-save",
-        type=str,
-        default=None,
-        help="Path to save Energon dataloader state for resumable training. Default: None"
-    )
-
-    group.add_argument(
-        "--ernie-chat-template",
-        type=str,
-        default="ernie_vl",
-        choices=["ernie_vl", "ernie_vl_thinking"],
-        help="Chat template used by ErnieTaskEncoder. Default: ernie_vl"
-    )
-
-    group.add_argument(
-        "--data-shuffle-buffer-size",
-        type=int,
-        default=0,
-        help="Size of the Energon sample shuffle buffer applied before cooking and "
-             "encoding. For an offline-packed dataset, each sample is one complete "
-             "packed sequence, so this randomizes pack order without changing pack "
-             "contents. Use this to reduce length correlation when shards are ordered "
-             "by sample length. Larger buffers increase cross-sample mixing and worker "
-             "memory use. 0 or 1 disables the sample-level buffer (default)."
-    )
-
-    group.add_argument(
-        "--data-max-samples-per-sequence",
-        type=int,
-        default=0,
-        help="Target size of each shard sequence used by Energon for parallel "
-             "iteration. Large worker shard ranges are divided into sequences of roughly "
-             "this many samples, creating more sequences that Energon can interleave. "
-             "Use this when --data-shuffle-buffer-size cannot cover long ordered runs. "
-             "0 leaves Energon's limit unset (default)."
-    )
-
-    group.add_argument(
-        "--packing-pretrain-data",
-        action="store_true",
-        help="Pack multiple pretraining samples into single sequence. Default: False"
-    )
-
-    group.add_argument(
-        "--add-question-in-pretrain",
-        action="store_true",
-        help="Include question text in pretrain VQA samples. Default: False"
-    )
-
-    # Qwen2-VL specific image processing arguments
-    group.add_argument(
-        "--image-resolution",
-        type=int,
-        default=None,
-        help="Target resolution (height/width) for image inputs. Default: None"
-    )
-
-    group.add_argument(
-        "--min-pixels",
-        type=int,
-        default=4 * 28 * 28,
-        help="Minimum pixel count for image resizing. Images smaller than this "
-             "will be upscaled. Default: 3136 (4 * 28 * 28)"
-    )
-
-    group.add_argument(
-        "--max-pixels",
-        type=int,
-        default=16384 * 28 * 28,
-        help="Maximum pixel count for image resizing. Images larger than this "
-             "will be downscaled. Default: 1286144 (16384 * 28 * 28)"
-    )
-
-    group.add_argument(
-        "--frame-min-pixels",
-        type=int,
-        default=128 * 28 * 28,
-        help="Minimum pixel count per video frame. Default: 100352 (128 * 28 * 28)"
-    )
-
-    group.add_argument(
-        "--frame-max-pixels",
-        type=int,
-        default=768 * 28 * 28,
-        help="Maximum pixel count per video frame. Default: 602112 (768 * 28 * 28)"
-    )
-
-    group.add_argument(
-        "--video-max-pixels",
-        type=int,
-        default=65536 * 28 * 28,
-        help="Maximum total pixel count for video. Default: 51380224 (65536 * 28 * 28)"
-    )
-
-    # Frame sampling arguments
-    group.add_argument(
-        "--fps",
-        type=float,
-        default=2.0,
-        help="Frames per second to sample from video. Default: 2.0"
-    )
-
-    group.add_argument(
-        "--fps-min-frames",
-        type=int,
-        default=4,
-        help="Minimum number of frames to sample from video. Default: 4"
-    )
-
-    group.add_argument(
-        "--fps-max-frames",
-        type=int,
-        default=768,
-        help="Maximum number of frames to sample from video. Default: 768"
-    )
-
-    group.add_argument(
-        '--energon-pack-algo',
-        type=str,
-        default="balanced",
-        choices=["balanced", "sequential", "sequential_max_images"],
-        help="Sample packing algorithm for Energon dataloader: "
-             "'balanced': Greedy knapsack approach, balances computational load across GPUs, "
-             "'sequential': Fills buffers in order, minimizes sequence disruption, "
-             "'sequential_max_images': Sequential with priority on maximizing images per buffer. "
-             "Default: balanced"
-    )
     return parser
 
 

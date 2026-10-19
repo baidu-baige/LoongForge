@@ -43,4 +43,3 @@ class DeepseekConfig(BaseModelMLAConfig):
     make_vocab_size_divisible_by: int = 128
     # MTP hyperparameters
     mtp_num_layers: int = 0
-    mtp_loss_coef: float = 0.1

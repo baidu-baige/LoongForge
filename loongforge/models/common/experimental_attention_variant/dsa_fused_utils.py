@@ -168,26 +168,6 @@ def all_to_all_sp2hp_with_padding(input_, ori_s=None):
     return output
 
 
-class _GatherHeadsAndSplitSequence(torch.autograd.Function):
-    """Gather heads from tensor parallel region and split along sequence dimension."""
-
-    @staticmethod
-    def forward(ctx, input_):
-        """input_: [seq_len, batch, heads_per_tp, head_dim]"""
-        # Gather head and split sequence at the same time
-        output = all_to_all_hp2sp_with_padding(input_)  # [seq_len_padded/tp, batch, total_heads, head_dim]
-        ctx.orig_s = input_.size(0)
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        """grad_output: [seq_len_padded/tp, batch, total_heads, head_dim]"""
-        # Gather sequence and scatter head at the same time
-        orig_s = ctx.orig_s
-        output = all_to_all_sp2hp_with_padding(grad_output, orig_s)  # [seq_len, batch, heads_per_tp, head_dim]
-        return output
-
-
 class _GatherSequenceAndScatterHeads(torch.autograd.Function):
     """Gather sequence from sequence parallel region and scatter heads along tensor parallel."""
 
@@ -212,11 +192,6 @@ class _GatherSequenceAndScatterHeads(torch.autograd.Function):
         # Swap back batch and sequence dim
         output = output.transpose(0, 1).contiguous()
         return output
-
-
-def gather_heads_and_split_sequence(input_):
-    """Wrapper for autograd function: gather heads + split sequence"""
-    return _GatherHeadsAndSplitSequence.apply(input_)
 
 
 def gather_sequence_and_scatter_heads(input_):

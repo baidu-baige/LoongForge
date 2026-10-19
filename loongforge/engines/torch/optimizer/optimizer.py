@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from loongforge.engines.torch.distributed.utils import is_rank_zero
-from loongforge.engines.torch.optimizer.lr_scheduler import build_param_groups
+from loongforge.engines.torch.optimizer.param_groups import build_param_groups
 from loongforge.engines.torch.optimizer.dmuon import build_dmuon_optimizer
 
 try:

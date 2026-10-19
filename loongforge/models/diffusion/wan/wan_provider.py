@@ -60,6 +60,3 @@ def wan_i2v_model_provider(
     )
 
     return model
-
-
-wan2_2_i2v_model_provider = wan_i2v_model_provider

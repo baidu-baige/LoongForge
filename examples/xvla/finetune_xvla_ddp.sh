@@ -67,7 +67,6 @@ DATA_ARGS=(
     --dataset-format hdf5_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
-    --robot-type libero_franka
     --num-workers "$NUM_WORKERS"
     --batch-drop-last
 )

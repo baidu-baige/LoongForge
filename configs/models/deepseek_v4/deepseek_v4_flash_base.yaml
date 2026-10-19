@@ -94,7 +94,6 @@ make_vocab_size_divisible_by: 128
 
 # ── MTP ────────────────────────────────────────────────────────
 mtp_num_layers: 1
-mtp_loss_coef: 0.1
 
 model_type: deepseek_v4
 

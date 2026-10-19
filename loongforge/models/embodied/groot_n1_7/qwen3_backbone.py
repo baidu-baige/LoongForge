@@ -131,7 +131,6 @@ def _patch_qwen3vl_flash_attention_target_dtype() -> None:
         return original_get_target_dtype(query, module)
 
     get_target_dtype_compat._loongforge_qwen3vl_compat = True
-    get_target_dtype_compat._loongforge_original = original_get_target_dtype
     flash_attention.get_target_dtype = get_target_dtype_compat
 
 
@@ -168,7 +167,6 @@ def _patch_qwen3_vl_fused_vision_rope() -> bool:
         return qwen3_vl_fused_vision_rope_forward(query, key, cos, sin)
 
     apply_rotary_pos_emb_vision_compat._loongforge_qwen3_vl_fused_vision_rope = True
-    apply_rotary_pos_emb_vision_compat._loongforge_original = original
     qwen_mod.apply_rotary_pos_emb_vision = apply_rotary_pos_emb_vision_compat
     return True
 
@@ -208,7 +206,6 @@ def _patch_qwen3_vl_fused_text_rope() -> bool:
         return qwen3_vl_fused_text_rope_forward(query, key, cos, sin)
 
     apply_rotary_pos_emb_compat._loongforge_qwen3_vl_fused_text_rope = True
-    apply_rotary_pos_emb_compat._loongforge_original = original
     qwen_mod.apply_rotary_pos_emb = apply_rotary_pos_emb_compat
     return True
 
@@ -252,7 +249,6 @@ def _patch_qwen3_vl_fused_text_rms_norm() -> bool:
         )
 
     forward_compat._loongforge_qwen3_vl_fused_text_rms_norm = True
-    forward_compat._loongforge_original = original
     norm_cls.forward = forward_compat
     return True
 
@@ -295,7 +291,6 @@ def _patch_qwen3_vl_fused_text_silu_mul() -> bool:
         return self.down_proj(qwen3_vl_fused_text_silu_mul_forward(gate, up))
 
     forward_compat._loongforge_qwen3_vl_fused_text_silu_mul = True
-    forward_compat._loongforge_original = original
     mlp_cls.forward = forward_compat
     return True
 
@@ -336,7 +331,6 @@ def _patch_qwen3vl_output_projection_dtypes(model: torch.nn.Module) -> int:
                 input = input.to(target_dtype)
             return _original_forward(input, *args, **kwargs)
 
-        forward_compat._loongforge_qwen3vl_dtype_patched = True
         proj.forward = forward_compat
         proj._loongforge_qwen3vl_dtype_patched = True
         patched += 1
@@ -425,7 +419,6 @@ def _patch_qwen3vl_skip_unused_lm_head() -> bool:
         )
 
     forward_compat._loongforge_skip_lm_head_compat = True
-    forward_compat._loongforge_original = original_forward
     cls.forward = forward_compat
     return True
 
@@ -764,21 +757,6 @@ def _patch_qwen3vl_cuda_graph_vision_metadata() -> bool:
         )
 
     fast_pos_embed_interpolate_compat._loongforge_cuda_graph_metadata_compat = True
-    fast_pos_embed_interpolate_compat._loongforge_original = original_fast_pos_embed_interpolate
-    rot_pos_emb_compat._loongforge_cuda_graph_metadata_compat = True
-    rot_pos_emb_compat._loongforge_original = original_rot_pos_emb
-    visual_forward_compat._loongforge_cuda_graph_metadata_compat = True
-    visual_forward_compat._loongforge_original = original_visual_forward
-    attention_forward_compat._loongforge_cuda_graph_metadata_compat = True
-    attention_forward_compat._loongforge_original = original_attention_forward
-    get_image_features_compat._loongforge_cuda_graph_metadata_compat = True
-    get_image_features_compat._loongforge_original = original_get_image_features
-    get_placeholder_mask_compat._loongforge_cuda_graph_metadata_compat = True
-    get_placeholder_mask_compat._loongforge_original = original_get_placeholder_mask
-    deepstack_process_compat._loongforge_cuda_graph_metadata_compat = True
-    deepstack_process_compat._loongforge_original = original_deepstack_process
-    model_forward_compat._loongforge_cuda_graph_metadata_compat = True
-    model_forward_compat._loongforge_original = original_model_forward
     visual_cls.fast_pos_embed_interpolate = fast_pos_embed_interpolate_compat
     visual_cls.rot_pos_emb = rot_pos_emb_compat
     visual_cls.forward = visual_forward_compat

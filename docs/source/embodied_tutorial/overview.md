@@ -13,7 +13,7 @@ This chapter describes the directory layout and launch script convention under e
 | `examples/` | Model-level launch scripts; default configs can be overridden via the trailing pass-through arguments at the end of each script |
 | `configs/models/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
 | `loongforge/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
-| `loongforge/engines/torch/arguments.py` | Definition file for common training arguments; generates the shell CLI |
+| `loongforge/training/torch_args.py` | Definition file for the training recipe arguments; generates the shell CLI |
 | `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
 | `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
 | `loongforge/data/embodied/` | Embodied data pipeline: `datasets/` (shared dataset classes: `lerobot_dataset.py`, `dummy_dataset.py`, video backends, stats), `transforms/` (shared per-sample transforms), `sampler.py`, `collator.py`, `registry.py`, and one directory per model |
@@ -102,19 +102,17 @@ Use `--dataset-format` to select the dataset reader. LeRobot, HDF5, and dummy fo
 | --- | --- | --- | --- | --- |
 | Dataset format | `--dataset-format` | `lerobot_datasets` | `lerobot_datasets`, `hdf5_datasets`, `dummy_datasets` | Select dataset format |
 | Dataset path | `--dataset-path` | `None` | Local path or dataset id | Training data path |
-| Dataset split | `--split` | `train` | String | Dataset split |
 | Dummy sample count | `--num-samples` | `100` | Positive integer | Number of samples generated under `dummy_datasets` |
 
 ### 2.2 LeRobot Data Strategy
 
-When using the LeRobot format, the following arguments give finer control over data loading: pick the dataset format version (v2.0 / v2.1 / v3.0), select a build strategy tailored to different robots or tasks, configure the video decoding backend, and specify the robot type to match the embodiment's action-state layout.
+When using the LeRobot format, the following arguments give finer control over data loading: pick the dataset format version (v2.0 / v2.1 / v3.0), select a build strategy tailored to different robots or tasks, and configure the video decoding backend.
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
 | LeRobotDataset version | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | Parse different LeRobot on-disk formats |
 | Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `groot_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | Select LeRobot build strategy |
 | Video backend | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | Video decoding implementation |
-| Robot type | `--robot-type` | `None` | String | Select embodiment / action-state layout |
 
 > **Note:** `--video-backend` selects the reading backend for `--lerobotdataset-version` v2.x and its variants. The v3.0 series supports `torchcodec` and `pyav` by default.
 

@@ -21,16 +21,16 @@ python -m build --sdist --wheel --outdir dist/
   ```bash
   docker build --build-arg COMPILE_ENV=hopper -f docker/Dockerfile .
   ```
-- **Running Training**: Scripts are in `examples/` (`examples_xpu/` for XPU). Follow the target model's script for dataset, checkpoint, parallelism, and output settings. When launching `loongforge/train.py` with `torchrun`, include both LoongForge and Loong-Megatron in `PYTHONPATH`. `--model-name` selects the engine and config via `loongforge/models/catalog.py`; Megatron engine also supports `--config-file <yaml>`.
+- **Running Training**: Scripts are in `examples/` (`examples_xpu/` for XPU). Follow the target model's script for dataset, checkpoint, parallelism, and output settings. When launching `loongforge/train.py` with `torchrun`, include both LoongForge and Loong-Megatron in `PYTHONPATH`. `--model-name` selects the engine and config via `loongforge/models/catalog.py`. `--config-file <yaml>` without `--model-name` runs on the Megatron engine; Megatron ignores `--config-file` when `--model-name` is set. On the Torch engine, `--config-file` replaces the catalog YAML and still requires `--model-name` to select the config classes.
 
 ## Project Structure
 
 | Path | Responsibility |
 |---|---|
 | `loongforge/train.py` | Training entrypoint and engine routing |
-| `loongforge/training/` | Training loop, lifecycle, and method registration |
+| `loongforge/training/` | Training loop, lifecycle, recipe/task/data arguments, learning-rate schedules, profiling, and method registration |
 | `loongforge/training/methods/` | Task-specific model/data assembly, forward pass, and loss |
-| `loongforge/engines/` | Megatron / Torch initialization, model wrapping, optimizer, step execution, and checkpointing |
+| `loongforge/engines/` | Megatron / Torch backend arguments, initialization, parallelism, model wrapping, optimizer, step execution, and checkpointing |
 | `loongforge/models/` | Model implementations, configs, and registries (`language`, `vision`, `multimodal`, `diffusion`, `embodied`) |
 | `loongforge/data/` | Datasets, preprocessing, collators, samplers, and dataloaders |
 | `loongforge/chat_templates/` | Chat templates and registry |
@@ -48,7 +48,7 @@ MCore weight conversion entrypoint: `tools/mcore_checkpoint_convert/module_conve
 - **Scope Isolation**: Keep single-model/subsystem helpers inside their respective modules. Place shared code in well-defined common layers; avoid circular and cross-layer dependencies.
 - **`utils/` Convention**: Name all helper directories `utils/`. Keep module-private helpers in the module's `utils/` and cross-module helpers in the shared parent layer's `utils/`, respecting layer dependency boundaries. Name files by purpose (e.g., `io.py`, `state_dict.py`); never dump unrelated helpers into one file.
 - **Core vs. Helpers**: Separate model entrypoints and core logic from auxiliary helpers. Base directory depth on cohesion and readability—do not use file count as a hard threshold or flatten helpers just to reduce nesting.
-- **Training vs. Engine**: `training/` manages loops and lifecycle; `engines/` handles backend execution. `training/methods/` assembles models, data, and objectives, and must not manage process groups or checkpoints.
+- **Training vs. Engine**: `training/` manages loops and lifecycle; `engines/` handles backend execution. `training/methods/` assembles models, data, and objectives, and must not manage process groups or checkpoints. Ownership test: would the code still make sense with a different backend? If yes, it belongs to `training/` or `data/` (learning-rate schedules, run length, logging, profiling); if no, it belongs to `engines/<backend>/` (optimizer implementation, parallelism, low precision, step execution, checkpoint format). Define each parameter next to the code that reads it; parameters read only by `data/` are defined in `training/` and passed in explicitly. Upstream Megatron arguments stay upstream.
 - **Explicit Configs & Data Decoupling**: Pass runtime info to model and data components via arguments or configs—never read global CLI args directly. Models must not depend on the data layer; assemble embodied inference preprocessing in `evaluation/embodied/factories/` before passing to the model.
 - **Stateless Engine Boundaries**: Engines must not depend on private states of datasets or training methods; pass task logic via explicit interfaces or callbacks. Reuse family-specific data entrypoints for DataLoaders and samplers, and follow native Megatron interfaces when integrating Megatron data pipelines.
 - **Lazy Loading**: Load selected models and backends on demand in configs, registries, and package `__init__.py` files to avoid importing unused weights or optional dependencies. Never auto-register by walking all model packages; raise clear errors naming the missing module when optional dependencies are absent.
@@ -64,8 +64,9 @@ Follow existing implementations of similar models or tasks for interfaces and na
 | New Embodied Model | `loongforge/models/embodied/registry.py`, `loongforge/models/catalog.py`, model package; data in `loongforge/data/embodied/registry.py`; optional eval factory |
 | New Data Format | Family data module; embodied dataset strategies in `loongforge/data/embodied/registry.py` (`DATASET_STRATEGIES`) |
 | New Training Objective | `loongforge/training/methods/` and `loongforge/training/registry.py` |
+| New CLI Argument | Read by backend code: `loongforge/engines/<backend>/arguments.py`; other recipe, task, or data options: `loongforge/training/megatron_args.py` or `loongforge/training/torch_args.py` |
 | New Parallelism / Comm | `distributed/` under the target engine |
-| Single-Model Torch Opt | `loongforge/engines/torch/optimizations/` and `TORCH_TRAINER_TYPES` |
+| Single-Model Torch Opt | `loongforge/engines/torch/optimizations/` and `TORCH_TRAINER_TYPES` in `loongforge/training/registry.py` |
 | New Chat Template | `loongforge/chat_templates/jinja/` and `loongforge/chat_templates/registry.py` |
 
 - **File Naming**: Use `modeling_<model>.py`, `configuration_<model>.py`, `processing_<model>.py` for models; `<model>_layer_spec.py` for layer specs; `<phase>_<scope>.py` for training methods. Mirror existing configs, transforms, and collators for new embodied data components.

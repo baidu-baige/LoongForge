@@ -34,7 +34,6 @@ class CalvinAdapter(BaseBenchmarkAdapter):
     # PayloadBuilder's ``action_encoding × adapter.action_space`` compose to
     # ``ee6d_to_calvin_abs`` (registered decoder key).
     action_space: str = "calvin_abs"
-    default_fps: int = 30
     cameras: tuple = ("primary", "wrist")
 
     def __init__(

@@ -285,7 +285,6 @@ class ErnieMultiTypeMoE(MegatronModule):
         self.submodules = submodules
         self.text_config = deepcopy(self.config)
         self.vision_config = deepcopy(self.config)
-        self.shared_config = deepcopy(self.config)
         self.text_config.moe_ffn_hidden_size = self.config.moe_intermediate_size[0]
         self.vision_config.moe_ffn_hidden_size = self.config.moe_intermediate_size[1]
         self.text_moe_layer = build_module(self.submodules.text_moe_layer, self.text_config)

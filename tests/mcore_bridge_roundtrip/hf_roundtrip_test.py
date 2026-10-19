@@ -68,7 +68,7 @@ from megatron.core.enums import ModelType
 from megatron.training.training import get_model
 from megatron.training import print_rank_0
 
-from loongforge.engines.megatron.parser import parse_train_args
+from loongforge.training.megatron_args import parse_megatron_train_args
 from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
 from loongforge.models.language.llm_model_provider import llm_model_provider
 from loongforge.models.multimodal.multimodal_model_provider import omni_model_provider
@@ -381,7 +381,7 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
 
 def main():
     # ── Step 1: Parse args (identical to training entry) ──────────────────
-    args = parse_train_args()
+    args = parse_megatron_train_args()
 
     # ── Step 2: Initialize Megatron (identical to training) ───────────────
     initialize_loongforge_megatron(args=args)

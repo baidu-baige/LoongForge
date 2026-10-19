@@ -16,7 +16,7 @@ shuffling (map-style) or natural iteration (iterable-style).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Iterator, Optional
 
 import torch
 from torch.utils.data import Dataset, IterableDataset, Sampler
@@ -33,9 +33,6 @@ class SamplerBuilderContext:
     batch_size: int
     seed: int
     shuffle: bool
-
-
-SamplerBuilder = Callable[[SamplerBuilderContext], Optional[Sampler]]
 
 
 class _StatefulIndexIterator(Iterator[int]):

@@ -58,8 +58,8 @@ def _synthetic_context() -> dict:
 def test_registry_keys_are_consistent():
     """Every Factory must have a matching PayloadBuilder (and vice versa).
 
-    Orchestrator startup will assert this; the unit test lets the misalignment
-    surface fast when a new model is added but only half-wired.
+    Nothing checks this at runtime; this test catches the misalignment when a
+    new model is added but only half-wired.
 
     Factories run on the model-server side (require ``torch``); this test
     therefore skips in benchmark client envs (simplerenv / libero / calvin /

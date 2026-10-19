@@ -18,19 +18,22 @@ from loongforge.engines.megatron.tokenizer import get_default_tokenizer
 from loongforge import constants
 from megatron.core.utils import is_torch_min_version
 from megatron.training.utils import get_device_arch_version, print_rank_0
-from loongforge.engines.megatron.utils import (get_default_sft_dataset_config, get_transformers_version,
+from loongforge.engines.megatron.utils import (get_transformers_version,
                                              convert_custom_pipeline_to_layout)
 
 
-def validate_loongforge_extra_args(args, config):
-    """ "Validate LoongForge extra arguments"""
+def validate_loongforge_extra_args(args, config, validate_training_args=None):
+    """Validate LoongForge extra arguments.
+
+    ``validate_training_args`` runs after the tokenizer checks and before the
+    backend training and parallel checks.
+    """
     _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
-    _validate_extra_sft_args(args)
+    if validate_training_args is not None:
+        validate_training_args(args)
     _validate_extra_training_args(args)
-    _validate_extra_multimodal_args(args)
-    _validata_extra_custom_args(args)
-    _validata_extra_parallel_args(args)
+    _validate_extra_parallel_args(args)
 
     # megatron one_logger is not supported in loongforge
     args.enable_one_logger = False
@@ -38,7 +41,6 @@ def validate_loongforge_extra_args(args, config):
 
 def validate_megatron_args(args):
     """Validate Megatron arguments"""
-    _align_wan_packing_seq_length(args)
     _validate_legacy_pipeline_args(args)
     validate_args(args)
 
@@ -46,29 +48,6 @@ def validate_megatron_args(args):
 def validate_custom_model_args(name, args):
     """Validate non foundational model arguments"""
     _validate_custom_model_args(name, args)
-
-
-def _get_wan_packing_cp_alignment(cp_size):
-    """Return WAN packing sequence alignment required by CP split."""
-    return 2 * cp_size
-
-
-def _align_wan_packing_seq_length(args):
-    """Align WAN packing seq-length before Megatron validation."""
-    if getattr(args, "model_name", None) != "wan2-2-i2v":
-        return
-    if not getattr(args, "packing_sft_data", False):
-        return
-    cp_size = getattr(args, "context_parallel_size", 1)
-    seq_length = getattr(args, "seq_length", None)
-    if cp_size <= 1 or seq_length is None:
-        return
-    alignment = _get_wan_packing_cp_alignment(cp_size)
-    aligned_seq_length = ((seq_length + alignment - 1) // alignment) * alignment
-    args.seq_length = aligned_seq_length
-    if getattr(args, "encoder_seq_length", None) is not None:
-        args.encoder_seq_length = aligned_seq_length
-    args.max_position_embeddings = max(args.max_position_embeddings, aligned_seq_length)
 
 
 # YAML key → args attribute name, for cases where TransformerConfig field
@@ -140,194 +119,6 @@ def _validate_extra_tokenizer_args(args):
         ]
 
 
-def _validate_extra_sft_args(args):
-    """Validate SFT arguments"""
-    if args.training_phase != constants.TrainingPhase.SFT:
-        return
-
-    if args.tokenizer_type != "HFTokenizer":
-        raise ValueError(
-            "--tokenizer-type should be HFTokenizer when training phase is sft"
-        )
-
-    args.dataloader_type = "external"
-    print_rank_0(
-        "INFO: Set dataloader type to external since --training-phase=SFT", args.rank
-    )
-
-    if args.chat_template is None:
-        raise ValueError("--chat-template is required when training phase is sft")
-
-    if args.train_on_prompt and args.history_mask_loss:
-        raise ValueError(
-            "--train-on-prompt and --history-mask-loss cannot both be True at the same time"
-        )
-
-    if args.sft_dataset_config is None:
-        # set default sft-dataset-config
-        default_config = get_default_sft_dataset_config()
-        if default_config is not None:
-            args.sft_dataset_config = default_config
-            print_rank_0(
-                f"WARNING: --sft-dataset-config is not specified, setup to default config ({default_config})",
-                args.rank,
-            )
-        else:
-            raise ValueError(
-                "--sft-dataset-config is not specified, and "
-                "the default config does not exist, please setup it"
-            )
-    if args.sft_data_streaming:
-        assert (
-            args.sft_sort_batch is None or not args.sft_sort_batch
-        ), '--sft-sort-batch" cannot be used together with --sft-data-streaming'
-
-    if args.use_fixed_seq_lengths:
-        args.variable_seq_lengths = False
-    else:
-        # Defaults to True but enforced as fixed-length for specific features (e.g., tp-comm-overlap/ moe allgather)
-        args.variable_seq_lengths = True
-        if args.tp_comm_overlap:
-            # tp_comm_overlap requires fixed-length
-            args.variable_seq_lengths = False
-
-        if (
-            args.num_experts is not None
-            and args.num_experts > 0
-            and args.moe_token_dispatcher_type in ["allgather", "alltoall_seq"]
-        ):
-            # allgather or alltoall_seq requires fixed-length
-            args.variable_seq_lengths = False
-
-    if args.packing_sft_data:
-        if args.micro_batch_size > 1:
-            args.micro_batch_size = 1
-            print_rank_0(
-                "WARING: Setting args.micro_batch_size to 1 since packing_sft_data is enabled",
-                args.rank,
-            )
-
-        if args.context_parallel_size > 1:
-            if (
-                args.context_parallel_ulysses_degree < args.context_parallel_size
-                and args.cp_comm_type == "allgather"
-            ):
-                args.cp_comm_type = "p2p"
-                print_rank_0(
-                    "WARNING: Setting args.cp_comm_type to p2p since ring attention "
-                    "does not support all gather while packing_sft_data is enabled",
-                    args.rank,
-                )
-
-    if args.padding_side == "left":
-        args.padding_side = "right"
-        print_rank_0(
-            "WARING: Setting args.padding_side to right when run sft.", args.rank
-        )
-
-    # NOTE on ordering: this validator runs BEFORE megatron's `validate_args`,
-    # so `args.sft_chunkpipe_mode` and `args.data_parallel_size` are not yet
-    # populated. We are already inside the SFT branch (early-return above),
-    # which is exactly the condition under which `sft_chunkpipe_mode` is later
-    # set to True in megatron arguments.py, so we don't need to re-check it.
-    # `data_parallel_size` is recomputed locally with megatron's formula.
-    if getattr(args, "enable_chunkpipe", False):
-        # A-series (Ampere / sm80) fused-DSA backend only supports ChunkPipe in
-        # pretrain; the SFT ChunkPipe path is not implemented for it yet.
-        from loongforge.models.common.experimental_attention_variant.dsa_kernel_backend import (
-            BACKEND_SM80,
-            resolve_backend_name,
-        )
-
-        if resolve_backend_name(args) == BACKEND_SM80:
-            raise NotImplementedError(
-                "SFT ChunkPipe is not supported on the sm80 (A-series / Ampere) "
-                "fused-DSA backend yet; only pretrain is supported. Use "
-                "--training-phase pretrain, or select a non-sm80 "
-                "--dsa-kernel-backend."
-            )
-        if args.sft_data_streaming:
-            raise NotImplementedError(
-                "SFT chunkpipe does not support --sft-data-streaming."
-            )
-        if getattr(args, "dataloader_save", None):
-            raise NotImplementedError(
-                "SFT chunkpipe does not support --dataloader-save. "
-                "Please resume from iteration checkpoints via consumed_train_samples."
-            )
-        if args.context_parallel_size != 1:
-            raise NotImplementedError(
-                "SFT chunkpipe temporarily requires context_parallel_size == 1. "
-                f"Got context_parallel_size={args.context_parallel_size}."
-            )
-        if args.sequence_parallel and args.chunksize % args.tensor_model_parallel_size != 0:
-            raise ValueError(
-                "SFT chunkpipe requires chunksize to be divisible by "
-                "tensor_model_parallel_size when sequence_parallel is enabled. "
-                f"Got chunksize={args.chunksize}, "
-                f"tensor_model_parallel_size={args.tensor_model_parallel_size}."
-            )
-        if getattr(args, "mtp_num_layers", 0) and args.mtp_num_layers > 0:
-            if args.overlap_grad_reduce:
-                raise NotImplementedError(
-                    "SFT chunkpipe + MTP temporarily does not support "
-                    "--overlap-grad-reduce because MTP checkpoint/recompute can "
-                    "trigger duplicate grad-ready marking on output/shared embedding weights."
-                )
-
-        # SFT chunkpipe per-sample loss path: default when
-        # --calculate-per-token-loss is not set. Requires the new 2-tuple
-        # reporting format (legacy_reporting_loss_reduction=False); the new
-        # path returns a scalar S/(N*G), not the 2-tuple [loss, num_tokens]
-        # the legacy path expects.
-        if not args.calculate_per_token_loss:
-            assert not args.legacy_reporting_loss_reduction, (
-                "SFT chunkpipe per-sample loss path requires "
-                "legacy_reporting_loss_reduction=False. "
-                "Either drop --legacy-reporting-loss-reduction or pass "
-                "--calculate-per-token-loss to fall back to the "
-                "token-weighted path."
-            )
-            print_rank_0(
-                "INFO: SFT chunkpipe per-sample loss path enabled (default). "
-                "Pass --calculate-per-token-loss to fall back to the "
-                "token-weighted loss path.",
-                args.rank,
-            )
-
-        # Decide whether to enable the heterogeneous-DP synthesis path.
-        # attn_dp != expert_dp happens when EP > 1 or ETP differs from TP, in
-        # which case the LPT partition cannot guarantee identical group-size
-        # multisets across DP ranks; without synthesis the MoE All2All would
-        # desync. The sampler reads `args.chunkpipe_enable_synthesis` at
-        # construction time and switches to `_equal_size_partition`.
-        tp = args.tensor_model_parallel_size
-        pp = args.pipeline_model_parallel_size
-        cp = args.context_parallel_size
-        ep = getattr(args, "expert_model_parallel_size", 1) or 1
-        etp = getattr(args, "expert_tensor_parallel_size", None)
-        if etp is None:
-            etp = tp
-        attn_dp = args.world_size // (tp * pp * cp)
-        expert_dp = args.world_size // (etp * pp * ep)
-        vpp = args.num_virtual_stages_per_pipeline_rank or 1
-        if vpp != 1 and attn_dp != expert_dp:
-            raise NotImplementedError(
-                f"SFT chunkpipe with virtual pipeline parallelism (vpp={vpp}) is temporarily not supported "
-                f"when attn_dp ({attn_dp}) != expert_dp ({expert_dp}). "
-                f"Please set vpp=1, or ensure attn_dp == expert_dp."
-            )
-        args.chunkpipe_enable_synthesis = (attn_dp != expert_dp)
-        if args.chunkpipe_enable_synthesis:
-            print_rank_0(
-                f"INFO: SFT chunkpipe synthesis path enabled "
-                f"(attn_dp={attn_dp}, expert_dp={expert_dp}). "
-                f"Group-size multisets will be aligned across DP ranks via "
-                f"short-pool synthesis with all-or-nothing rollback.",
-                args.rank,
-            )
-
-
 def _validate_extra_training_args(args):
     """Validate training arguments"""
 
@@ -384,46 +175,7 @@ def _validate_extra_training_args(args):
         )
 
 
-def _validate_extra_multimodal_args(args):
-    """Validate multimodal arguments"""
-    if args.model_family not in constants.VisionLanguageModelFamilies.names():
-        return
-
-    args.variable_seq_lengths = True
-
-    if not (args.packing_pretrain_data or args.packing_sft_data):
-        args.packing_buffer_size = None
-
-    # [DEPRECATED] --max-packed-tokens is redundant with --seq-length. In
-    # LoongForge seq_length IS the post-concatenation packed-sequence window: it
-    # drives every downstream shape / position-embedding / parallel init, so the
-    # packed length can never diverge from it. The flag defaults to None and is
-    # always resolved to seq_length; only warn when the user passes a value that
-    # differs. Guard on seq_length being set (it always is for VLM) to avoid
-    # assigning None before Megatron finalizes seq_length.
-    if args.seq_length is not None:
-        if args.max_packed_tokens is not None and args.max_packed_tokens != args.seq_length:
-            print_rank_0(
-                "WARNING: --max-packed-tokens is deprecated and ignored; using "
-                f"--seq-length ({args.seq_length}) instead "
-                f"(you passed {args.max_packed_tokens}).",
-                args.rank,
-            )
-        args.max_packed_tokens = args.seq_length
-
-
-def _validata_extra_custom_args(args):
-    """Validate multimodal arguments"""
-    if args.model_family not in constants.CustomModelFamilies.names():
-        return
-
-    # make text length divisible by cp size
-    if args.max_text_length is not None and args.context_parallel_size > 1:
-        while (args.max_text_length % args.context_parallel_size) != 0:
-            args.max_text_length += 1
-
-
-def _validata_extra_parallel_args(args):
+def _validate_extra_parallel_args(args):
     """Validate parallel arguments"""
     # check cp, NOTE: maybe removed in the future
     if args.context_parallel_size > 1:
@@ -553,7 +305,7 @@ def _validate_legacy_pipeline_args(args):
 
 
 # Adapted from megatron/training/arguments.py
-def _validate_custom_model_args(name, args, defaults={}):
+def _validate_custom_model_args(name, args):
     """Validate non foundational model arguments"""
     if args.custom_pipeline_recompute_layers is not None:
         assert args.recompute_granularity == "full", \
@@ -670,20 +422,6 @@ def _validate_custom_model_args(name, args, defaults={}):
     if "a2a+p2p" in args.cp_comm_type:
         assert args.hierarchical_context_parallel_sizes is not None, \
         "--hierarchical-context-parallel-sizes must be set when a2a+p2p is used in cp comm"
-
-    # Set input defaults.
-    for key in defaults:
-        # For default to be valid, it should not be provided in the
-        # arguments that are passed to the program. We check this by
-        # ensuring the arg is set to None.
-        if getattr(args, key, None) is not None:
-            if args.rank == 0:
-                print('WARNING: overriding default arguments for {key}:{v} \
-                       with {key}:{v2}'.format(key=key, v=defaults[key],
-                                               v2=getattr(args, key)),
-                                               flush=True)
-        else:
-            setattr(args, key, defaults[key])
 
     if args.data_path is not None and args.split is None:
         legacy_default_split_value = '969, 30, 1'

@@ -19,7 +19,7 @@ from functools import partial
 from types import ModuleType
 from typing import Any, Dict, Optional
 
-from loongforge.engines.torch.parser import parse_train_args
+from loongforge.training.torch_args import parse_train_args
 from loongforge.engines.torch.train_step import (
     StepContext,
     TorchOptimization,
@@ -94,7 +94,8 @@ class TorchRunner:
             get_latest_checkpoint, resume_training_state,
         )
         from loongforge.engines.torch.distributed.parallel import wrap_model
-        from loongforge.engines.torch.optimizer import build_optimizer, build_scheduler
+        from loongforge.engines.torch.optimizer import build_optimizer
+        from loongforge.training.lr_scheduler import build_scheduler
         import torch
 
         training_args = self.training_args
@@ -268,7 +269,7 @@ class TorchRunner:
     # ═══════════════════════════════════════════════
 
     def _training_loop(self):
-        from loongforge.engines.torch.profiling import Profiler
+        from loongforge.training.profiling import Profiler
         from loongforge.training.train_logging import StageTimers
 
         training_args = self.training_args

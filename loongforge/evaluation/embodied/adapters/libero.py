@@ -53,7 +53,6 @@ class LiberoAdapter(BaseBenchmarkAdapter):
     # a 7D delta OSC action (pos + axis_angle + gripper) in canonical form,
     # decoded from whatever ``model.action_encoding`` the model emits.
     action_space: str = "axis_angle"
-    default_fps: int = 20
     cameras: tuple = ("primary", "wrist")
 
     def __init__(

@@ -39,7 +39,6 @@ class ActionModelMixMin:
         self.action_preprocessor = action_preprocessor
         self.router = router
         self.moe = moe
-        self._mot_opt_warned = False
 
     def _apply_mlp_moe(self, hidden_states, token_types, start_indices, end_indices):
         """Apply mlp moe."""

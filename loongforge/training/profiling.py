@@ -43,11 +43,6 @@ class Profiler:
             self.mode = "off"
         self._active = self.mode != "off"
 
-    @property
-    def is_active(self) -> bool:
-        """Is profiling active on this rank"""
-        return self._active
-
     def start(self):
         """Build the underlying profiler and start it (pytorch mode).
 

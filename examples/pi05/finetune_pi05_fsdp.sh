@@ -59,7 +59,6 @@ DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
-    --robot-type libero_franka
     --batch-drop-last
     --num-workers "$NUM_WORKERS"
 )

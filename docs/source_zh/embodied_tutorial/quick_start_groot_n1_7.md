@@ -66,7 +66,6 @@ data:
   preprocess_action_horizon: null
   state_dropout_prob: 0.2
   exclude_state: false
-  use_mean_std: false
   use_percentiles: true
   clip_outliers: true
   apply_sincos_state_encoding: false

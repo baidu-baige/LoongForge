@@ -25,7 +25,6 @@ except ImportError:  # pragma: no cover - install path raises a clearer error.
 
 import torch
 
-E4M3_MAX = 448.0
 DEFAULT_BLOCK = 256
 
 

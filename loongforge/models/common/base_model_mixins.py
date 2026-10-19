@@ -6,7 +6,6 @@ Alternative translations"""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 import torch
@@ -122,17 +121,3 @@ class BaseMegatronVisionModule(MegatronModule):
             torch.randn((4, patch_dim), dtype=torch.bfloat16, device=device),
             torch.tensor([[1, 2, 2]], dtype=torch.int32, device=device),
         )
-
-
-class BaseDecoderModelMixin(PreTrainedModel, ABC):
-    """Unified decoder model mixin class."""
-
-    @abstractmethod
-    def forward_loss(
-        self,
-        decoder_inputs: Dict[str, torch.Tensor],
-        foundation_outputs: torch.Tensor,
-        **kwargs: Any,
-    ) -> Dict[str, torch.Tensor]:
-        """Calculate decoder loss function, for training stage."""
-        raise NotImplementedError

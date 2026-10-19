@@ -91,7 +91,6 @@ torch_compile_mode: default
 --dataset-format hdf5_datasets       # 使用原生 HDF5 数据集
 --dataset-path $DATA_PATH            # metadata.json 所在目录
 --tokenizer-path $TOKENIZER_PATH     # Florence2 tokenizer / processor 目录
---robot-type libero_franka           # 具身类型标识
 --num-workers 2                      # DataLoader worker 数
 ```
 **训练：**

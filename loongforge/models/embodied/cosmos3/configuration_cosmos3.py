@@ -80,10 +80,8 @@ class Cosmos3ModelConfig:
     # VAE encoder.
     vae_path: str = "Wan-AI/Wan2.2-TI2V-5B/Wan2.2_VAE.pth"
     vae_temporal_compression: int = 4
-    vae_spatial_compression: int = 16
     # Conditioning distribution: vision-only path uses [0.7, 0.2, 0.1] but
     # the action-policy path overrides condition_frame_indexes_vision per-sample.
-    condition_frame_distribution: list = field(default_factory=lambda: [0.7, 0.2, 0.1])
     # Action heads.
     max_action_dim: int = 64
     num_embodiment_domains: int = 32

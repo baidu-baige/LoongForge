@@ -7,27 +7,11 @@
 """Megatron engine helpers that upstream Megatron does not provide."""
 
 import os
-from pathlib import Path
-from typing import Optional
 from importlib.metadata import version
+from typing import Optional
 from packaging.version import Version as PkgVersion
 
 _transformers_version = None
-
-
-def get_default_sft_dataset_config() -> Optional[str]:
-    """get default sft dataset config"""
-    config_dir = Path(__file__).resolve().parents[3] / "configs" / "data"
-    candidates = [
-        config_dir / "sft_dataset_config.yaml",
-        config_dir / "sft_dataset_config.yml",
-    ]
-
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-
-    return None
 
 
 def get_transformers_version():

@@ -25,7 +25,6 @@ class GrootN1d7Config:
     base_model_path: str = _DEFAULT_BASE_MODEL
     model_name: str = _DEFAULT_BACKBONE
     backbone_model_type: str = "qwen"
-    model_revision: str | None = None
 
     model_dtype: str = "bfloat16"
     tune_top_llm_layers: int = 0

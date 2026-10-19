@@ -1896,11 +1896,6 @@ class Qwen25VLMoEForAction(
                 del fused[full]
 
     @staticmethod
-    def is_fused(state_dict):
-        # Check whether the model is already fused by looking for fused weight markers
-        return any(".moe.experts.0.gate_up_proj" in key for key in state_dict.keys())
-
-    @staticmethod
     def convert_to_fused(state_dict):
         """
         Convert an unfused checkpoint to a fused checkpoint

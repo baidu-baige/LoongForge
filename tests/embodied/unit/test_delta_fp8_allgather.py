@@ -18,8 +18,7 @@ from torch.distributed.fsdp._fully_shard import _fsdp_param_group as _param_grou
 from loongforge.engines.torch.quantization import delta_fp8_allgather as delta_mod
 from loongforge.engines.torch.quantization import delta_fp8_comm
 from loongforge.engines.torch.quantization.delta_fp8_comm import triton as delta_triton
-from loongforge.engines.torch.arguments import TrainingArgs, build_arg_parser
-from loongforge.engines.torch.validators import validate
+from loongforge.training.torch_args import TrainingArgs, build_arg_parser, validate
 
 
 def _training_args(**overrides):

@@ -44,7 +44,6 @@ IMAGE_TOKEN = "<|image_pad|>"
 VIDEO_TOKEN = "<|video_pad|>"
 VISION_TAGS = ["<|vision_start|>", "<|vision_end|>"]
 IMAGE_TOKEN_WITH_TAGS = VISION_TAGS[0] + IMAGE_TOKEN + VISION_TAGS[1]
-VIDEO_TOKEN_WITH_TAGS = VISION_TAGS[0] + VIDEO_TOKEN + VISION_TAGS[1]
 
 
 @dataclass

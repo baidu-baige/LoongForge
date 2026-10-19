@@ -350,9 +350,6 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
 
-GLOBAL_TRAIN_DATASET_SIZE = None
-
-
 def build_full_hetero_encoder_data_iterator(
     dataset,
     consumed_samples: int,
@@ -422,7 +419,6 @@ def build_full_hetero_encoder_energon_iterator(
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None):
     """Provides the datasets used by the trainer"""
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
-    global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
     tokenizer = get_tokenizer()
 
@@ -458,11 +454,6 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
         chat_template = get_chat_template() if args.training_phase == constants.TrainingPhase.SFT else None
         task_encoder = build_task_encoder(args, tokenizer, chat_template)
         train_dataset = get_train_dataset(task_encoder, args)
-
-        try:
-            GLOBAL_TRAIN_DATASET_SIZE = len(train_dataset)
-        except TypeError:
-            GLOBAL_TRAIN_DATASET_SIZE = getattr(train_dataset, "num_rows", None)
 
         collator = build_sft_data_collator(
             partial(VLMPretrainCollator, args=args, model_config=get_model_config()), args, tokenizer

@@ -104,7 +104,7 @@ from megatron.training.training import (
 
 from loongforge.engines.megatron import get_args
 from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
-from loongforge.engines.megatron.parser import parse_train_args
+from loongforge.training.megatron_args import parse_megatron_train_args
 from loongforge.engines.megatron.checkpointing import save_checkpoint
 # model_setup puts tools/ on sys.path, which the mcore_bridge import below needs.
 from loongforge.engines.megatron.model_setup import (
@@ -130,7 +130,7 @@ _TRAIN_START_TIME = time.time()
 
 def main():
     """Megatron entry: parse args, pick the method for the configured model family, run it."""
-    args = parse_train_args()
+    args = parse_megatron_train_args()
     resolve_method(args.model_family, args.training_phase).train(args)
 
 
@@ -168,8 +168,6 @@ def pretrain(
     model_type,
     forward_step_func,
     process_non_loss_data_func=None,
-    extra_args_provider=None,
-    args_defaults={},
     get_embedding_ranks=None,
     get_position_embedding_ranks=None,
     non_loss_data_func=None,
@@ -199,10 +197,6 @@ def pretrain(
             network. It can be used for dumping output tensors (e.g images) to
             tensorboard. It takes `collected data`(list of tensors),
             `current iteration index` and `tensorboard writer` as arguments.
-        extra_args_provider: a function that takes a parser and adds arguments
-            to it. It is used for programs to add their own arguments.
-        args_defaults: a dictionary from argument-name to argument-value. It
-            to set already parse arguments.
         get_embedding_ranks (TODO):
         get_position_embedding_ranks (TODO):
         non_loss_data_func (callable): A custom function to call during evaluation.
