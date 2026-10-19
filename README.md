@@ -56,7 +56,7 @@
 
 ---
 
-**Example:** training the embodied model DreamZero (full fine-tuning of Wan2.2-5B) on LoongForge reaches 4.38× the open-source baseline's throughput, with loss curves staying aligned
+**Example:** training the embodied model DreamZero on LoongForge reaches 4.38× the open-source baseline's throughput, with loss curves staying aligned
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
@@ -72,7 +72,7 @@
 <a id="architecture"></a>
 ## 🏗️ Architecture
 
-Different model families and scales call for different training strategies, so LoongForge adopts a multi-backend architecture.
+Since optimal training strategies differ across model families and scales, LoongForge adopts a multi-backend architecture.
 
 <p align="center">
   <picture>
@@ -97,13 +97,13 @@ Different model families and scales call for different training strategies, so L
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
 - **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
-- **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / Embodied / Diffusion) now share a single image.
-- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**.
-- **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 
 <details>
 <summary><b>📅 More</b></summary>
 
+- **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / Embodied / Diffusion) now share a single image.
+- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**.
+- **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/06]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **2.3× speedup** on GR00T training. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/05]** ⚡ Accelerated **Wan 2.2** training by **116%**, and added CP and data packing support.

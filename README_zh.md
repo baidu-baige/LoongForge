@@ -56,7 +56,7 @@
 
 ---
 
-**示例**：在 LoongForge 上训练具身模型 DreamZero（Wan2.2-5B 全参微调），吞吐达开源基线的 4.38 倍，loss 曲线保持对齐
+**示例**：在 LoongForge 上训练具身模型 DreamZero，吞吐达开源基线的 4.38 倍，loss 曲线保持对齐
 
 <p align="center">
   <a href="https://baidu-baige.github.io/LoongForge/assets/video/dreamzero-comparison.mp4">
@@ -97,13 +97,13 @@
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
 - **[2026/08]** 🧪 新增具身模型统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
-- **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / 具身 / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。
-- **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 
 <details>
 <summary><b>📅 更多</b></summary>
 
+- **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / 具身 / Diffusion 全部模型家族共用同一镜像。
+- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。
+- **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
 - **[2026/05]** ⚡ **Wan 2.2** 训练 **加速 116%**，并新增 CP（上下文并行）与数据 packing 策略支持。
