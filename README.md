@@ -356,7 +356,7 @@ Here are some awesome projects built with **LoongForge** or its predecessor, **A
 
 - [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) — Vision-Language-Delta-Action model for robotic manipulation: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **17–18 points** ahead of π₀.₅ on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 
-https://github.com/user-attachments/assets/7f91b2aa-b755-465a-8e48-1e3019c852f2
+https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 
 <a id="blogs"></a>
 ## 📝 Community Blogs
