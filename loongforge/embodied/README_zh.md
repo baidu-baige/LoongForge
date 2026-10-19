@@ -6,6 +6,14 @@
 - **广泛的开源模型支持**：π0.5、GR00T-N1.6 / N1.7、xVLA、Lingbot-VA、FastWAM、DreamZero、Cosmos3 等均支持微调，且精度与官方 baseline 对齐。
 - **高训练吞吐**：典型模型最高可达 2x+ 吞吐提升，集成 `torch.compile`、CUDA Graph、自定义 kernel 与 I/O 优化，并支持 DDP、ZeRO-1、FSDP、HSDP 等多种分布式策略。
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="../../docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied 架构：一体化数据管线、加速模型训练（可扩展的模型接入、加速工具集、分布式训练）与一体化评测" src="../../docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
+
 ---
 
 ## 为什么单独拆成一个子系统？

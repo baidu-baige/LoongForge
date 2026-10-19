@@ -6,6 +6,14 @@
 - **Extensive open-source model support** — Pi0.5, GR00T-N1.6 / N1.7, xVLA, Wall-OSS-0.5, LingBot-VA, FastWAM, DreamZero, Cosmos3, and more — each supports fine-tuning, with accuracy aligned to the official baselines.
 - **High training throughput** — up to 2x+ throughput on representative models through `torch.compile`, CUDA Graph, custom kernels, and I/O optimization, plus a full range of distributed strategies: DDP, ZeRO-1, FSDP, and HSDP.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="../../docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied architecture: an integrated data pipeline, accelerated model training with an extensible model registry, acceleration toolkit and distributed training, and integrated evaluation" src="../../docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
+
 ---
 
 ## Why a Separate Subsystem?
