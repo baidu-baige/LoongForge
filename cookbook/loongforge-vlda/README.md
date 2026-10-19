@@ -1,7 +1,12 @@
-# LoongForge-VLDA
+<h1 align="center">LoongForge-VLDA</h1>
 
-**Paper:** _Paper title and authors to be added._  
-**arXiv:** <!-- Add the paper URL here. -->
+<h2 align="center">Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation</h2>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/arXiv-Coming_Soon-F59E0B?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=4F46E5" alt="arXiv coming soon">
+  &nbsp;<a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html"><img src="https://img.shields.io/badge/Project-Page-7C3AED?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=4F46E5" alt="Project page"></a>
+  &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-06B6D4?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
+</p>
 
 LoongForge-VLDA is LoongForge's implementation of VLDA. It extends π₀.₅ with
 latent world modeling and world-conditioned action prediction. It uses V-JEPA
@@ -12,11 +17,17 @@ implementation provides two-stage LIBERO training and evaluation on
 
 ## Framework
 
-<!-- Add the framework figure here, for example:
-![LoongForge-VLDA framework](assets/framework.png)
--->
+<p align="center">
+  <img alt="LoongForge-VLDA framework: a V-JEPA 2 EMA teacher and an online encoder distill the scene change into a compact Delta through LT-Filter and GT-Anchor, and the Delta refines the action expert through DAMG and DSAF" src="assets/framework.png" width="100%">
+</p>
 
-_Framework figure to be added._
+*Overview of VLDA. Given the observation and instruction, the World Expert
+predicts an actionable Delta under transition supervision. In training stage I,
+LT-Filter and GT-Anchor learn selective and consistent transition
+representations. In stage II, Delta-Driven Action Refinement grounds Delta in
+the action manifold through Delta-to-Action Manifold Grounding and injects it
+into action denoising through Delta-Seeded Action Flow, enabling the Action
+Expert to generate action chunks.*
 
 ## Getting started
 
