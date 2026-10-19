@@ -41,7 +41,7 @@
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/WeChat_Group-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="Join our WeChat group"></a>
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/RedNote_Group-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="Find us on RedNote"></a>
   <a href="https://www.zhihu.com/people/nbqbn3"><img src="https://img.shields.io/badge/Follow_on_Zhihu-0084FF?style=for-the-badge&logo=zhihu&logoColor=white" alt="Follow us on Zhihu"></a>
-  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow_Us-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow us on X"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow_on_X-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow us on X"></a>
 </p>
 
 </div>
@@ -341,18 +341,29 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <a id="powered-by-loongforge"></a>
 ## 🌟 Powered by LoongForge
 
-### Community Showcase
+Here are some awesome projects built with **LoongForge** or its predecessor, **AIAK-Training-LLM**. You'll find more on the [Projects page](https://baidu-baige.github.io/LoongForge/projects.html), and if you've built one yourself, we'd love to [hear about it](https://github.com/baidu-baige/LoongForge/issues/new) and add it to the list.
 
-Open-source models trained with **LoongForge** or its predecessor **AIAK-Training-LLM**:
+### From the Community
 
 - [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) — Next-generation multimodal model, with new VideoCaption and Spatial datasets
 - [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) — Scientific multimodal LLM for advanced reasoning
 - [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) — Fully open framework for democratized multimodal training
 - [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) — Domain-enhanced vision-language models for enterprise, 3B–70B parameters
 
+### From the LoongForge Team
+
+- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) — Vision-Language-Delta-Action model for robotic manipulation: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **17–18 points** ahead of π₀.₅ on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+
+<p align="center">
+  <video src="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/demo.mp4" poster="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/poster.jpg" controls width="80%">
+    <a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html">Watch the LoongForge-VLDA demo video on the project page</a>
+  </video>
+</p>
+
 <a id="blogs"></a>
 ## 📝 Community Blogs
 
+- [VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践](https://zhuanlan.zhihu.com/p/2095555587304117777)
 - [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
 - [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
 - [多模态模型终于不用「抽帧看世界」？LLaVA-OneVision-2.0 全开源全帧率技术解读](https://mp.weixin.qq.com/s/dechFptcXCvF30mfmC3dWA)
@@ -386,6 +397,7 @@ LoongForge/
 ├── configs/                      # Hydra YAML configs (models, data)
 ├── examples/                     # Launch scripts for NVIDIA GPUs
 ├── examples_xpu/                 # Launch scripts for Kunlun XPUs
+├── cookbook/                     # End-to-end project recipes built on LoongForge
 ├── tools/                        # Standalone dev tools: checkpoint conversion, data preprocessing, etc. (see tools/README.md)
 ├── ops/                          # Custom fused operators (incl. open-sourced TileLang)
 ├── patches/                      # TransformerEngine patches

@@ -41,7 +41,7 @@
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/WeChat_Group-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="加入微信群"></a>
   <a href="https://github.com/baidu-baige/LoongForge/issues/80"><img src="https://img.shields.io/badge/RedNote_Group-FF2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="小红书"></a>
   <a href="https://www.zhihu.com/people/nbqbn3"><img src="https://img.shields.io/badge/Follow_on_Zhihu-0084FF?style=for-the-badge&logo=zhihu&logoColor=white" alt="在知乎上关注我们"></a>
-  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow_Us-000000?style=for-the-badge&logo=x&logoColor=white" alt="在 X 上关注我们"></a>
+  <a href="https://x.com/baidu_baige_lf"><img src="https://img.shields.io/badge/Follow_on_X-000000?style=for-the-badge&logo=x&logoColor=white" alt="在 X 上关注我们"></a>
 </p>
 
 </div>
@@ -342,18 +342,29 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <a id="powered-by-loongforge"></a>
 ## 🌟 基于 LoongForge 的优秀项目案例
 
-### 社区案例
+以下项目均基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 构建。更多项目见[项目展示页](https://baidu-baige.github.io/LoongForge/projects.html)；如果你也做了基于 LoongForge 的项目，欢迎[告诉我们](https://github.com/baidu-baige/LoongForge/issues/new)，我们会收录。
 
-基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 训练的开源模型：
+### 社区项目
 
 - [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) —— 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集
 - [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) —— 面向高级推理的科学多模态大模型
 - [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) —— 旨在降低多模态训练门槛的全开源框架
 - [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B
 
+### LoongForge 团队项目
+
+- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) —— 面向机器人操作的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，零样本 LIBERO-Plus **84.5%**，真机较 π₀.₅ 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+
+<p align="center">
+  <video src="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/demo.mp4" poster="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/poster.jpg" controls width="80%">
+    <a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html">在项目主页观看 LoongForge-VLDA 演示视频</a>
+  </video>
+</p>
+
 <a id="blogs"></a>
 ## 📝 社区相关博客
 
+- [VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践](https://zhuanlan.zhihu.com/p/2095555587304117777)
 - [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
 - [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
 - [多模态模型终于不用「抽帧看世界」？LLaVA-OneVision-2.0 全开源全帧率技术解读](https://mp.weixin.qq.com/s/dechFptcXCvF30mfmC3dWA)
@@ -387,6 +398,7 @@ LoongForge/
 ├── configs/                      # Hydra YAML 配置（模型、数据）
 ├── examples/                     # NVIDIA GPU 启动脚本
 ├── examples_xpu/                 # 昆仑芯 XPU 启动脚本
+├── cookbook/                     # 基于 LoongForge 的端到端项目复现方案
 ├── tools/                        # 独立开发工具：Checkpoint 转换、数据预处理等（详见 tools/README.md）
 ├── ops/                          # 自定义融合算子（含开源的 TileLang 版本）
 ├── patches/                      # TransformerEngine 补丁
