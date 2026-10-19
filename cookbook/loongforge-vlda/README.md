@@ -31,7 +31,7 @@ robotic manipulation. It extends π₀.₅ with latent world modeling and
 world-conditioned action prediction, using V-JEPA 2 visual representations to
 learn latent changes and future features, and jointly trains the action policy
 with an auxiliary alignment objective. This project provides the two-stage
-training and LIBERO evaluation recipe, built on [LoongForge](../../README.md).
+training and evaluation recipe, built on [LoongForge](../../README.md).
 
 ## Framework
 
