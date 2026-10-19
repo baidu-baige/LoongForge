@@ -13,9 +13,9 @@
 <h3 align="center">Train LLMs, VLMs, diffusion, and embodied models — faster.</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs &#8599;&#xFE0E;</b></a>
+  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs</b> &#8599;&#xFE0E;</a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog &#8599;&#xFE0E;</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog</b> &#8599;&#xFE0E;</a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>Performance</b></a>
   &nbsp;·&nbsp;
@@ -52,7 +52,7 @@
 
 - **High Performance** — Built on a multi-backend architecture (Megatron-LM and torch-native), with [deep training-speed](#performance) optimizations that keep **training loss aligned with the baseline**.
 - **Easy to Use** — Covers 40+ mainstream open-source [models](#models), each with ready-to-run configs and launch examples. Ships with supporting tools such as checkpoint conversion and data preprocessing, and supports **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
-- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and also powers some [awesome projects](#powered-by-loongforge), with its largest validated scale for large-model training reaching **5,000+ XPUs**.
+- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and also powers some [awesome projects](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
 
 ---
 

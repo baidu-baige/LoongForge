@@ -13,9 +13,9 @@
 <h3 align="center">更快地训练 LLM、VLM、Diffusion 与具身模型</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档 &#8599;&#xFE0E;</b></a>
+  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b> &#8599;&#xFE0E;</a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客 &#8599;&#xFE0E;</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b> &#8599;&#xFE0E;</a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
@@ -52,7 +52,7 @@
 
 - **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[深度优化训练速度](#performance)，同时保证**训练 loss 与基线对齐**。
 - **易用性** —— 已覆盖 40+ 个主流开源[模型](#models)，每个模型均附带开箱即用的配置与启动示例；框架另提供权重转换、数据预处理等配套工具，并支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
-- **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[不少优秀项目](#powered-by-loongforge)；在大模型训练中，最大验证规模达 **5,000+ XPU**。
+- **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[不少优秀项目](#powered-by-loongforge)；在实际生产中，最大训练规模达 **5,000+ XPU**。
 
 ---
 
