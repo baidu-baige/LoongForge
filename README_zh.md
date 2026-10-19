@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>官方博客</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
