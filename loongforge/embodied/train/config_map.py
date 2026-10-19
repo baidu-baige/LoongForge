@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Type
 
 from loongforge.embodied.model.pi05.model_configuration_pi05 import Pi05ModelConfig
+from loongforge.embodied.model.vlda.model_configuration_vlda import VLDAModelConfig
+from loongforge.embodied.data.datasets.vlda.transforms.data_configuration_vlda import VLDADataConfig
 from loongforge.embodied.data.datasets.pi05.transforms.data_configuration_pi05 import Pi05DataConfig
 from loongforge.embodied.model.groot_n1_6.model_configuration_groot_n1_6 import GrootN1d6ModelConfig
 from loongforge.embodied.data.datasets.groot_n1_6.transforms.data_configuration_groot_n1_6 import GrootN1d6DataConfig
@@ -58,6 +60,7 @@ MODEL_SCHEMA = {
         "lingbot_va_libero.yaml", LingBotVAModelConfig, LingBotVADataConfig
     ),
     "pi05": ModelSchema("pi05.yaml", Pi05ModelConfig, Pi05DataConfig),
+    "vlda": ModelSchema("vlda.yaml", VLDAModelConfig, VLDADataConfig),
     "groot_n1_6": ModelSchema("groot_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
     "xvla": ModelSchema("xvla.yaml", XvlaModelConfig, XvlaDataConfig),
     "fastwam": ModelSchema("fastwam.yaml", FastWAMModelConfig, FastWAMDataConfig),

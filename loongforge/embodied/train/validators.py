@@ -89,6 +89,18 @@ def validate(training_args, model_cfg, data_cfg):
     if training_args.lr_decay_iters is not None and training_args.lr_decay_iters <= 0:
         raise ValueError(f"--lr-decay-iters must be positive, got {training_args.lr_decay_iters}")
     lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
+    if training_args.lr_decay_start_iters < 0:
+        raise ValueError("--lr-decay-start-iters must be non-negative")
+    if training_args.lr_decay_start_iters:
+        if not training_args.custom_lr_lambda or training_args.lr_decay_style not in {
+            "cosine_with_min_lr", "cosine_warmup_with_min_lr"
+        }:
+            raise ValueError("--lr-decay-start-iters requires a custom cosine LR scheduler")
+        if not training_args.lr_warmup_iters <= training_args.lr_decay_start_iters < lr_schedule_steps:
+            raise ValueError(
+                "--lr-decay-start-iters must be at least --lr-warmup-iters "
+                "and less than the scheduler steps"
+            )
     if training_args.lr_warmup_iters >= lr_schedule_steps:
         logger.warning(
             f"--lr-warmup-iters ({training_args.lr_warmup_iters}) >= scheduler steps ({lr_schedule_steps})"
