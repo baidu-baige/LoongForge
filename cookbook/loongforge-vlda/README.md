@@ -20,9 +20,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/arXiv-Coming_Soon-F59E0B?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=4F46E5" alt="arXiv coming soon">
-  &nbsp;<a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html"><img src="https://img.shields.io/badge/Project-Page-7C3AED?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=4F46E5" alt="Project page"></a>
-  &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-06B6D4?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
+  <img src="https://img.shields.io/badge/arXiv-Coming_Soon-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=4F46E5" alt="arXiv coming soon">
+  &nbsp;<a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html"><img src="https://img.shields.io/badge/Project-Page-0891B2?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=4F46E5" alt="Project page"></a>
+  &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-FFD21E?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
 </p>
 
 We introduce LoongForge-VLDA (Vision-Language-Delta-Action), a new model
