@@ -23,7 +23,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>Supported Models</b></a>
   &nbsp;·&nbsp;
-  <a href="#powered-by-loongforge"><b>Awesome Projects</b></a>
+  <a href="#powered-by-loongforge"><b>Projects</b></a>
 </p>
 
 <p align="center">
@@ -50,9 +50,9 @@
 
 **LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver faster training for mainstream **LLMs, VLMs, diffusion, and embodied models**.
 
-- **High Performance** — Built on a multi-backend architecture (Megatron-LM and torch-native), with [deep training-speed](#performance) optimizations that keep **training loss aligned with the baseline**.
-- **Easy to Use** — Covers 40+ mainstream open-source [models](#models), each with ready-to-run configs and launch examples. Ships with supporting tools such as checkpoint conversion and data preprocessing, and supports **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
-- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and also powers some [awesome projects](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
+- **High Performance** — Built on Megatron-LM and torch-native backends, with deep optimizations for [training speed](#performance) that keep **training loss aligned with the baseline**.
+- **Easy to Use** — Ready-to-run configs and launch scripts for 40+ open-source [models](#models), plus checkpoint conversion and data preprocessing tools. Supports **pre-training**, **mid-training**, **SFT**, and **LoRA**.
+- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), which serves enterprise customers' proprietary models and powers several [open-source projects](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
 
 ---
 

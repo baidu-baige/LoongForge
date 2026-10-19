@@ -23,7 +23,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>支持模型</b></a>
   &nbsp;·&nbsp;
-  <a href="#powered-by-loongforge"><b>优秀项目</b></a>
+  <a href="#powered-by-loongforge"><b>项目案例</b></a>
 </p>
 
 <p align="center">
@@ -50,9 +50,9 @@
 
 **LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，旨在加速主流 **LLM、VLM、Diffusion 与具身模型**的训练。
 
-- **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[深度优化训练速度](#performance)，同时保证**训练 loss 与基线对齐**。
-- **易用性** —— 已覆盖 40+ 个主流开源[模型](#models)，每个模型均附带开箱即用的配置与启动示例；框架另提供权重转换、数据预处理等配套工具，并支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
-- **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[不少优秀项目](#powered-by-loongforge)；在实际生产中，最大训练规模达 **5,000+ XPU**。
+- **高性能** —— 基于 Megatron-LM 与 torch-native 后端，在[深度优化训练速度](#performance)的同时，保证**训练 loss 与基线对齐**。
+- **易用性** —— 支持 40+ 个开源[模型](#models)，并附带开箱即用的配置与启动示例，另有权重转换、数据预处理等配套工具；覆盖**预训练**、**中期训练**、**SFT** 与 **LoRA**。
+- **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[多个开源项目](#powered-by-loongforge)；在实际生产中，最大训练规模达 **5,000+ XPU**。
 
 ---
 
