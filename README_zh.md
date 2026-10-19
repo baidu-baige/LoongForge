@@ -261,7 +261,6 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 ## 🏛️ 支持的模型
 
 点击任意模型查看训练示例，对应的模型参数配置详见 [`configs/models/`](./configs/models/)；全部变体见[模型支持矩阵](https://loongforge.readthedocs.io/zh-cn/latest/get_started/support_model.html)。
-<!--MODELS_PLACEHOLDER-->
 
 <table width="100%">
 <colgroup>
