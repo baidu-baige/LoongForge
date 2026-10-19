@@ -347,14 +347,17 @@ Here are some awesome projects built with **LoongForge** or its predecessor, **A
 
 ### From the Community
 
-- [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) — Next-generation multimodal model, with new VideoCaption and Spatial datasets
-- [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) — Scientific multimodal LLM for advanced reasoning
-- [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) — Fully open framework for democratized multimodal training
-- [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) — Domain-enhanced vision-language models for enterprise, 3B–70B parameters
+🔹 [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) — Next-generation multimodal model, with new VideoCaption and Spatial datasets
+
+🔹 [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) — Scientific multimodal LLM for advanced reasoning
+
+🔹 [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) — Fully open framework for democratized multimodal training
+
+🔹 [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) — Domain-enhanced vision-language models for enterprise, 3B–70B parameters
 
 ### From the LoongForge Team
 
-- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) — Vision-Language-Delta-Action model for robotic manipulation: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **17–18 points** ahead of π₀.₅ on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+🔹 [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) — Vision-Language-Delta-Action model for robotic manipulation: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **17–18 points** ahead of π₀.₅ on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 
 https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 

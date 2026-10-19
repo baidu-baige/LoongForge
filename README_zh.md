@@ -348,14 +348,17 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 
 ### 社区项目
 
-- [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) —— 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集
-- [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) —— 面向高级推理的科学多模态大模型
-- [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) —— 旨在降低多模态训练门槛的全开源框架
-- [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B
+🔹 [**LLaVA-OneVision-2.0**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2) —— 新一代多模态模型，配套全新的 VideoCaption 与 Spatial 数据集
+
+🔹 [**Innovator-VL**](https://github.com/InnovatorLM/Innovator-VL/tree/main) —— 面向高级推理的科学多模态大模型
+
+🔹 [**LLaVA-OneVision-1.5**](https://github.com/EvolvingLMMs-Lab/LLaVA-OneVision-2/tree/1.5) —— 旨在降低多模态训练门槛的全开源框架
+
+🔹 [**Qianfan-VL**](https://github.com/baidubce/Qianfan-VL) —— 面向企业的领域增强视觉-语言模型，参数量覆盖 3B ~ 70B
 
 ### LoongForge 团队项目
 
-- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) —— 面向机器人操作的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，零样本 LIBERO-Plus **84.5%**，真机较 π₀.₅ 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+🔹 [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) —— 面向机器人操作的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，零样本 LIBERO-Plus **84.5%**，真机较 π₀.₅ 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 
 https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 
