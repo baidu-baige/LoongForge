@@ -23,7 +23,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>支持模型</b></a>
   &nbsp;·&nbsp;
-  <a href="#powered-by-loongforge"><b>项目</b></a>
+  <a href="#powered-by-loongforge"><b>优秀项目</b></a>
 </p>
 
 <p align="center">
@@ -51,8 +51,8 @@
 **LoongForge** 是百度智能云 [百舸团队](https://cloud.baidu.com/product/aihc.html) 打造的开源训练框架，旨在加速主流 **LLM、VLM、Diffusion 与具身模型**的训练。
 
 - **高性能** —— 基于多后端架构（Megatron-LM 与 torch-native），[深度优化训练速度](#performance)，同时保证**训练 loss 与基线对齐**。
-- **易用性** —— 已覆盖 40+ 个[主流开源模型](#models)，每个模型均附带开箱即用的配置与启动示例；框架另提供权重转换、数据预处理等配套工具，并支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
-- **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[若干开源模型的训练与发布](#powered-by-loongforge)；在大模型训练中，最大验证规模达 **5,000+ XPU**。
+- **易用性** —— 已覆盖 40+ 个主流开源[模型](#models)，每个模型均附带开箱即用的配置与启动示例；框架另提供权重转换、数据预处理等配套工具，并支持**预训练**、**持续预训练**、**SFT** 与 **LoRA** 等训练方式。
+- **源自生产** —— 前身为 [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr)，既落地于企业客户的闭源模型训练，也支撑了[不少优秀项目](#powered-by-loongforge)；在大模型训练中，最大验证规模达 **5,000+ XPU**。
 
 ---
 
@@ -87,7 +87,7 @@
 
 ## 🔥 最新动态
 
-- **[2026/10]** 🤖 发布 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+- **[2026/10]** 🤖 推出 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 - **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
@@ -344,7 +344,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <a id="powered-by-loongforge"></a>
 ## 🌟 基于 LoongForge 的优秀项目案例
 
-以下项目均基于 **LoongForge** 或其前身 **AIAK-Training-LLM** 构建。更多项目见[项目展示页](https://baidu-baige.github.io/LoongForge/projects.html)；如果你也做了基于 LoongForge 的项目，欢迎[告诉我们](https://github.com/baidu-baige/LoongForge/issues/new)，我们会收录。
+更多项目见[项目展示页](https://baidu-baige.github.io/LoongForge/projects.html)。如果你也基于 LoongForge（或其前身 AIAK-Training-LLM）做了项目，欢迎[告诉我们](https://github.com/baidu-baige/LoongForge/issues/new)，我们会收录。
 
 ### 社区项目
 

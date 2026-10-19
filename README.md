@@ -23,7 +23,7 @@
   &nbsp;·&nbsp;
   <a href="#models"><b>Supported Models</b></a>
   &nbsp;·&nbsp;
-  <a href="#powered-by-loongforge"><b>Projects</b></a>
+  <a href="#powered-by-loongforge"><b>Awesome Projects</b></a>
 </p>
 
 <p align="center">
@@ -50,9 +50,9 @@
 
 **LoongForge** is an open-source training framework developed by the [Baidu AI Cloud Baige team](https://cloud.baidu.com/product/aihc.html), built to deliver faster training for mainstream **LLMs, VLMs, diffusion, and embodied models**.
 
-- **High Performance** — Built on a multi-backend architecture (Megatron-LM and torch-native), with [deep training-speed optimizations](#performance) that keep **training loss aligned with the baseline**.
-- **Easy to Use** — Covers 40+ [mainstream open-source models](#models), each with ready-to-run configs and launch examples. Ships with supporting tools such as checkpoint conversion and data preprocessing, and supports **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
-- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and powers [open-source model releases](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
+- **High Performance** — Built on a multi-backend architecture (Megatron-LM and torch-native), with [deep training-speed](#performance) optimizations that keep **training loss aligned with the baseline**.
+- **Easy to Use** — Covers 40+ mainstream open-source [models](#models), each with ready-to-run configs and launch examples. Ships with supporting tools such as checkpoint conversion and data preprocessing, and supports **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
+- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and also powers some [awesome projects](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
 
 ---
 
@@ -87,7 +87,7 @@ Different model families and scales call for different training strategies, so L
 
 ## 🔥 Latest News
 
-- **[2026/10]** 🤖 Released **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+- **[2026/10]** 🤖 Introducing **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 - **[2026/10]** 🦾 Open-sourced **[ego2robot](./tools/ego2robot/)** — a pipeline that converts first-person videos of human manipulation into dual-arm robot training data, outputting **LeRobot v3.0** format across **16 robot morphologies**.
 - **[2026/09]** ✨ Added training support for **[GLM-5.3-flash](./examples/glm5_next/)**.
 - **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** BF16 training support for both LLMs and VLMs.
@@ -341,9 +341,9 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 > For VLMs, also see the [custom composition example](./examples/custom/), which assembles a new model from a ViT and an LLM purely through configuration.
 
 <a id="powered-by-loongforge"></a>
-## 🌟 Powered by LoongForge
+## 🌟 Awesome Projects Built with LoongForge
 
-Here are some awesome projects built with **LoongForge** or its predecessor, **AIAK-Training-LLM**. You'll find more on the [Projects page](https://baidu-baige.github.io/LoongForge/projects.html), and if you've built one yourself, we'd love to [hear about it](https://github.com/baidu-baige/LoongForge/issues/new) and add it to the list.
+See more on the [Projects page](https://baidu-baige.github.io/LoongForge/projects.html), and if you've built something with LoongForge (or its predecessor, AIAK-Training-LLM), [let us know](https://github.com/baidu-baige/LoongForge/issues/new) — we'd love to feature it.
 
 ### From the Community
 
