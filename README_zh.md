@@ -116,7 +116,7 @@
 <a id="embodied"></a>
 ## 🤖 具身模型
 
-支持视觉-语言-动作（VLA）与世界-动作（WAM）模型的**数据处理、训练与评测**，训练吞吐相对开源基线提升 **1.79×–4.38×**。[[文档](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html)]
+支持视觉-语言-动作（VLA）与世界-动作（WAM）模型的**数据处理、训练与评测**，在已评测模型上训练吞吐相对开源基线提升 **1.79×–4.38×**。[[文档](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html)]（论文即将发布）
 
 <p align="center">
   <picture>

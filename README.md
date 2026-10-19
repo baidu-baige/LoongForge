@@ -116,7 +116,7 @@ Different model families and scales call for different training strategies, so L
 <a id="embodied"></a>
 ## 🤖 Embodied Models
 
-**Data processing, training, and evaluation** for Vision-Language-Action (VLA) and World-Action Models (WAM), with training throughput **1.79×–4.38×** over open-source baselines. [[Docs](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/quick_start_index.html)]
+**Data processing, training, and evaluation** for Vision-Language-Action (VLA) and World-Action (WAM) models, with **1.79×–4.38×** training throughput over open-source baselines across benchmarked models. [[Docs](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/quick_start_index.html)] (Paper coming soon)
 
 <p align="center">
   <picture>
@@ -145,7 +145,7 @@ Different model families and scales call for different training strategies, so L
 
 ### Training
 
-* **Per-Model Deep Optimization** — Custom optimizations targeting each model's bottlenecks (I/O, communication strategy, `torch.compile`, CUDA Graph, custom fused operators, etc.), reaching **1.79×–4.38×** throughput over open-source baselines (see [Performance](#performance)).
+* **Per-Model Deep Optimization** — Custom optimizations targeting each model's bottlenecks (I/O, communication strategy, `torch.compile`, CUDA Graph, custom fused operators, etc.), reaching **1.79×–4.38×** measured throughput over open-source baselines (see [Performance](#performance)).
 * **Precision Alignment** — Training loss aligns with open-source baselines; comparison curves are already available for several models and will keep expanding alongside new model support. [[Precision Comparisons](./docs/assets/images/precision/)]
 * **Multiple Distributed Strategies** — Supports **DDP / DDP + ZeRO-1 / FSDP / HSDP**, selectable by model scale and cluster topology. [[Tutorial](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/overview.html)]
 * **FP8 Communication Optimization (optional)** — On supported NVIDIA GPUs, compresses cross-rank traffic to FP8: blockwise FP8 delta compression for FSDP2 parameter AllGather, and FP8 compression for DDP gradient all-reduce. [[Usage](https://loongforge.readthedocs.io/en/latest/features/fp8_communication.html)]
