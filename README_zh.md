@@ -357,11 +357,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 
 - [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) —— 面向机器人操作的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，零样本 LIBERO-Plus **84.5%**，真机较 π₀.₅ 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 
-<p align="center">
-  <video src="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/demo.mp4" poster="https://baidu-baige.github.io/LoongForge/assets/projects/vlda/poster.jpg" controls width="80%">
-    <a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html">在项目主页观看 LoongForge-VLDA 演示视频</a>
-  </video>
-</p>
+https://github.com/user-attachments/assets/7f91b2aa-b755-465a-8e48-1e3019c852f2
 
 <a id="blogs"></a>
 ## 📝 社区相关博客
