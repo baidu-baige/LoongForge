@@ -52,7 +52,7 @@
 
 - **High Performance** — Built on a multi-backend architecture (Megatron-LM and torch-native), with [deep training-speed](#performance) optimizations that keep **training loss aligned with the baseline**.
 - **Easy to Use** — Covers 40+ mainstream open-source [models](#models), each with ready-to-run configs and launch examples. Ships with supporting tools such as checkpoint conversion and data preprocessing, and supports **pre-training**, **continued pre-training**, **SFT**, and **LoRA**.
-- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and also powers some [awesome projects](#powered-by-loongforge), with production runs reaching **5,000+ XPUs**.
+- **Production-Proven** — Open-sourced from [AIAK-Training-LLM](https://cloud.baidu.com/doc/AIHC/s/Alyo476jr), a training suite that serves enterprise customers' proprietary models and also powers some [awesome projects](#powered-by-loongforge), with its largest validated scale for large-model training reaching **5,000+ XPUs**.
 
 ---
 
@@ -97,7 +97,7 @@ Different model families and scales call for different training strategies, so L
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
 - **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
-- **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / VLA / Diffusion) now share a single image.
+- **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / Embodied / Diffusion) now share a single image.
 - **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 

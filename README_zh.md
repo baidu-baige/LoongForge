@@ -343,7 +343,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <a id="powered-by-loongforge"></a>
 ## 🌟 基于 LoongForge 的优秀项目案例
 
-更多项目见[项目展示页](https://baidu-baige.github.io/LoongForge/projects.html)。如果你也基于 LoongForge（或其前身 AIAK-Training-LLM）做了项目，欢迎[告诉我们](https://github.com/baidu-baige/LoongForge/issues/new)，我们会收录。
+更多项目见[项目展示页](https://baidu-baige.github.io/LoongForge/projects.html)。如果您也基于 LoongForge（或其前身 AIAK-Training-LLM）做了项目，欢迎[告诉我们](https://github.com/baidu-baige/LoongForge/issues/new)，我们很乐意收录。
 
 ### 社区项目
 
