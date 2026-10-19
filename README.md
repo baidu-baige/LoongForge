@@ -13,9 +13,9 @@
 <h3 align="center">Train LLMs, VLMs, diffusion, and embodied models — faster.</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs</b> &#8599;&#xFE0E;</a>
+  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog</b> &#8599;&#xFE0E;</a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>Performance</b></a>
   &nbsp;·&nbsp;

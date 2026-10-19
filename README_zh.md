@@ -13,9 +13,9 @@
 <h3 align="center">更快地训练 LLM、VLM、Diffusion 与具身模型</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b> &#8599;&#xFE0E;</a>
+  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b> &#8599;&#xFE0E;</a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
