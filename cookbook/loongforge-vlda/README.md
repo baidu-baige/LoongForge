@@ -25,7 +25,7 @@
   &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-FFD21E?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
 </p>
 
-We introduce LoongForge-VLDA (Vision-Language-Delta-Action), a new model
+We introduce **LoongForge-VLDA** (Vision-Language-Delta-Action), a new model
 architecture that learns compact Deltas as actionable transition interfaces for
 robotic manipulation. It extends π₀.₅ with latent world modeling and
 world-conditioned action prediction, using V-JEPA 2 visual representations to
