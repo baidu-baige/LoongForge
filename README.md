@@ -13,15 +13,17 @@
 <h3 align="center">Train LLMs, VLMs, diffusion, and embodied models — faster.</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs</b></a>
+  <a href="https://loongforge.readthedocs.io/en/latest/index.html"><b>Docs &#8599;&#xFE0E;</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>Blog &#8599;&#xFE0E;</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>Performance</b></a>
   &nbsp;·&nbsp;
   <a href="#quickstart"><b>Quick Start</b></a>
   &nbsp;·&nbsp;
   <a href="#models"><b>Supported Models</b></a>
+  &nbsp;·&nbsp;
+  <a href="#powered-by-loongforge"><b>Projects</b></a>
 </p>
 
 <p align="center">
@@ -208,7 +210,7 @@ Training throughput speedups over mainstream open-source baselines — each mode
 
 ### 1. Install
 
-Using NVIDIA GPU as an example, pull the [prebuilt image](https://hub.docker.com/u/loongforge) and start a container (requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)):
+Using NVIDIA GPU as an example, pull the [prebuilt image](https://hub.docker.com/u/loongforge) and start a container (requires the NVIDIA Container Toolkit):
 
 ```bash
 docker pull loongforge/loongforge:latest

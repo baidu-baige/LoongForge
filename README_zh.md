@@ -13,15 +13,17 @@
 <h3 align="center">更快地训练 LLM、VLM、Diffusion 与具身模型</h3>
 
 <p align="center">
-  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档</b></a>
+  <a href="https://loongforge.readthedocs.io/zh-cn/latest/index.html"><b>文档 &#8599;&#xFE0E;</b></a>
   &nbsp;·&nbsp;
-  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客</b></a>
+  <a href="https://baidu-baige.github.io/LoongForge/blog/"><b>博客 &#8599;&#xFE0E;</b></a>
   &nbsp;·&nbsp;
   <a href="#performance"><b>性能表现</b></a>
   &nbsp;·&nbsp;
   <a href="#quickstart"><b>快速开始</b></a>
   &nbsp;·&nbsp;
   <a href="#models"><b>支持模型</b></a>
+  &nbsp;·&nbsp;
+  <a href="#powered-by-loongforge"><b>项目</b></a>
 </p>
 
 <p align="center">
@@ -208,7 +210,7 @@
 
 ### 1. 安装
 
-以下以 NVIDIA GPU 为例，拉取[预构建镜像](https://hub.docker.com/u/loongforge)并启动容器（需安装 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)）：
+以下以 NVIDIA GPU 为例，拉取[预构建镜像](https://hub.docker.com/u/loongforge)并启动容器（需安装 NVIDIA Container Toolkit）：
 
 ```bash
 docker pull loongforge/loongforge:latest
