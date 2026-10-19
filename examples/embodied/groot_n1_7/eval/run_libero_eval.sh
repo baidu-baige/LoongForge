@@ -40,7 +40,6 @@ SEED=${SEED:-42}
 MUJOCO_GL=${MUJOCO_GL:-egl}    # osmesa in the YAMLs; egl where osmesa is not installed
 
 export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/groot_n1_7_op:${PYTHONPATH:-}"
-export HF_HOME=${HF_HOME:-"/path/to/hf_home"}
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 export CUDA_VISIBLE_DEVICES="$GPU"
 # The policy server is a child process and inherits these. COSMOS_LOCAL_PATH loads

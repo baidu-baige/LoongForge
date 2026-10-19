@@ -1337,13 +1337,13 @@ class Qwen3Backbone(torch.nn.Module):
             _patch_qwen3vl_output_projection_dtypes(self.model)
         if _patch_qwen3vl_cuda_graph_vision_metadata():
             logger.info("Patched Qwen3-VL visual metadata paths for full-iteration CUDA graphs.")
-        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_vision_rope():
+        if _patch_qwen3_vl_fused_vision_rope():
             logger.info("Enabled fused FP32-compatible Qwen3-VL vision RoPE.")
-        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_text_rope():
+        if _patch_qwen3_vl_fused_text_rope():
             logger.info("Enabled dtype-rounding-compatible Qwen3-VL text RoPE.")
-        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_text_rms_norm():
+        if _patch_qwen3_vl_fused_text_rms_norm():
             logger.info("Enabled reduction-order-compatible Qwen3-VL text RMSNorm fusion.")
-        if os.environ.get("GROOT_EVAL_NATIVE_OPS", "0") != "1" and _patch_qwen3_vl_fused_text_silu_mul():
+        if _patch_qwen3_vl_fused_text_silu_mul():
             logger.info("Enabled dtype-rounding-compatible Qwen3-VL text MLP pointwise fusion.")
         self._supports_mm_token_type_ids = _forward_has_explicit_arg(self.model, "mm_token_type_ids")
 
