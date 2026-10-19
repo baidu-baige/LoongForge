@@ -118,6 +118,14 @@
 
 支持视觉-语言-动作（VLA）与世界-动作（WAM）模型的**数据处理、训练与评测**，训练吞吐相对开源基线提升 **1.79×–4.38×**。[[文档](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_index.html)]
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied 架构：一体化数据管线、加速模型训练（可扩展的模型接入、加速工具集、分布式训练）与一体化评测" src="./docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
+
 ### 数据
 
 * **统一数据加载** —— 提供统一的数据加载接口，支持 LeRobot（v2.0 / v2.1 / v3.0）等典型格式；各模型的数据处理流程与其开源实现对齐。
@@ -265,16 +273,12 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <tbody valign="top">
 <tr>
 <td valign="top">
-<b>VLA</b>
 <ul>
 <li><a href="examples/embodied/pi05/">Pi0.5</a></li>
 <li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a></li>
 <li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a></li>
 <li><a href="examples/embodied/xvla/">xVLA</a></li>
 <li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
-</ul>
-<b>WAM</b>
-<ul>
 <li><a href="examples/embodied/fastwam/">FastWAM</a></li>
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>

@@ -118,6 +118,14 @@ Different model families and scales call for different training strategies, so L
 
 **Data processing, training, and evaluation** for Vision-Language-Action (VLA) and World-Action Models (WAM), with training throughput **1.79×–4.38×** over open-source baselines. [[Docs](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/quick_start_index.html)]
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="./docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied architecture: an integrated data pipeline, accelerated model training with an extensible model registry, acceleration toolkit and distributed training, and integrated evaluation" src="./docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
+
 ### Data
 
 * **Unified Data Loading** — A unified data-loading interface supporting mainstream formats like LeRobot (v2.0 / v2.1 / v3.0); each model's data pipeline matches its original open-source implementation.
@@ -264,16 +272,12 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <tbody valign="top">
 <tr>
 <td valign="top">
-<b>VLA</b>
 <ul>
 <li><a href="examples/embodied/pi05/">Pi0.5</a></li>
 <li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a></li>
 <li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a></li>
 <li><a href="examples/embodied/xvla/">xVLA</a></li>
 <li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
-</ul>
-<b>WAM</b>
-<ul>
 <li><a href="examples/embodied/fastwam/">FastWAM</a></li>
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>
