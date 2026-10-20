@@ -34,6 +34,12 @@ from loongforge.embodied.model.wall_oss_0_5.model_configuration_wall_oss_0_5 imp
 from loongforge.embodied.data.datasets.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
     WallOss05DataConfig,
 )
+from loongforge.embodied.model.giga_brain07.model_configuration_giga_brain07 import (
+    GigaBrain07ModelConfig,
+)
+from loongforge.embodied.data.datasets.giga_brain07.transforms.data_configuration_giga_brain07 import (
+    GigaBrain07DataConfig,
+)
 
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -85,6 +91,9 @@ MODEL_SCHEMA = {
         "dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
     ),
     "wall_oss_0_5": ModelSchema("wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
+    "giga_brain07": ModelSchema(
+        "giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
+    ),
 }
 
 def get_model_schema(model_name: str) -> ModelSchema:
