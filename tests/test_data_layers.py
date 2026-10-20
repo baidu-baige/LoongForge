@@ -5,19 +5,24 @@
 
 Runs without torch: it only parses files.
 
-Layering rules (``TYPE_CHECKING`` imports never run and are skipped):
+Layering rules:
   * ``constants.py`` imports only the standard library.
-  * ``chat_templates/`` imports no other loongforge layer at run time.
+  * ``chat_templates/`` imports no other loongforge layer, not even under ``TYPE_CHECKING``.
   * ``data/`` family directories do not import each other.
-  * ``data/`` imports from ``engines`` only the tokenizer (plus ``chunkpipe`` in ``llm_dataloader.py``).
+  * ``data/`` imports no ``models`` implementation, ``training``, ``evaluation`` or ``extensions``.
+    It may import model-package declarative modules (config / schema / pure helpers); the
+    blacklist below rejects ``modeling_*``, ``*_model``, ``*_layer_spec`` and kernel modules.
+  * ``data/`` imports from ``engines`` only ``chunkpipe`` in ``llm_dataloader.py``.
   * Only ``training/`` imports ``training``.
-  * ``data/`` and ``chat_templates/`` do not read engine global state; ``models/`` does not import the readers.
-  * ``models/`` does not import ``data`` at run time, including function bodies.
+  * ``models/`` imports no ``data`` at run time (``TYPE_CHECKING`` type contracts are allowed),
+    and no ``training``, ``evaluation``, ``extensions`` or ``chat_templates``.
+  * ``models/ -> engines/`` is technical debt, not a channel. Only ``MODELS_ENGINE_DEBT`` is allowed.
   * ``engines/`` imports no ``data`` at run time.
-  * ``engines/`` imports only generic model packages (``common``, ``multimodal``, ``catalog``), never a model family.
+  * ``engines/`` imports only ``models/base``, ``models/multimodal`` and ``models/catalog``,
+    never a model family.
   * ``training/megatron`` and ``training/torch`` do not import each other's training or engine modules.
-  * ``accelerations/`` may import ``models`` and ``engines`` but not ``training`` or ``data``;
-    ``models`` and ``engines`` do not import ``accelerations``.
+  * ``extensions/`` may import ``models`` and ``engines`` but not ``training`` or ``data``;
+    ``models`` and ``engines`` do not import ``extensions``.
 
 Registry strings must point at real code:
   * ``embodied/registry.py``: ``MODEL_MODULES`` (decorator names, package imports) and ``DATASET_STRATEGIES``
@@ -41,14 +46,64 @@ FAMILIES = ("llm", "vlm", "embodied", "diffusion")
 GLOBAL_READERS = {"get_args", "get_tokenizer", "get_model_config", "get_chat_template"}
 # Allowed ``loongforge.engines`` imports from ``data/``: prefix -> files that may use it (None: any).
 DATA_ENGINE_ALLOWED = {
-    ("loongforge", "engines", "megatron", "tokenizer"): None,
     ("loongforge", "engines", "megatron", "distributed", "chunkpipe"): {"llm_dataloader.py"},
 }
+# ``engines/`` may import these generic model packages only.
+ENGINE_MODEL_ALLOWED = (
+    ("loongforge", "models", "base"),
+    ("loongforge", "models", "catalog"),
+    ("loongforge", "models", "multimodal"),
+)
+# Remaining ``models/ -> engines/`` runtime imports. Each entry is debt with an owner:
+# - multimodal: hetero-DP getters, encoder DP size, parallel-state switch, schedule plan.
+# - removed when the orchestration moves to ``training/megatron/methods`` or a runtime port.
+MODELS_ENGINE_DEBT = {
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.initialize.mpu"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.initialize.get_encoder_dp_size"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_grad_list"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_embedding_list"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_visual_pos_masks_list"),
+    (
+        "multimodal/combination_model.py",
+        "loongforge.engines.megatron.distributed.hetero_dp.get_deepstack_visual_embeds_list",
+    ),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_deepstack_grad_list"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_cpu_offload_manager"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.initialize.get_model_size"),
+    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.reload_list_item"),
+    (
+        "multimodal/combination_model.py",
+        "loongforge.engines.megatron.distributed.model_chunk_schedule_plan.TransformerModelChunkSchedulePlan",
+    ),
+    ("multimodal/encoder_model.py", "loongforge.engines.megatron.initialize.change_parallel_state"),
+    (
+        "multimodal/encoder_model.py",
+        "loongforge.engines.megatron.distributed.dp_balance.vit_balance.dp_balance_vit_encoder",
+    ),
+}
+# ``models/embodied/dreamzero/modeling_dreamzero.py`` has one ``TYPE_CHECKING`` import of
+# ``engines.torch.distributed.context.DistributedContext``. It never runs, so it is not listed here.
 # ``MODEL_MODULES`` values that are plain modules, not model packages.
 PLAIN_MODULE_MODEL_TYPES = {"dummy"}
 # ``MODEL_MODULES`` keys that register a collator but no transform builder.
 NO_TRANSFORM_MODEL_TYPES = {"dummy"}
 EMBODIED_DECORATORS = ("register_collator", "register_transform_builder", "register_sampler_builder")
+
+
+def _is_model_implementation(module_name):
+    """True when a ``models/`` module name denotes an implementation, not a contract.
+
+    Both naming conventions in the repository count: ``modeling_<model>.py`` on the
+    HF side and ``<model>_model.py`` on the Megatron side (``qwen_model.py``,
+    ``encoder_model.py``). Declarative modules (``configuration_*``, ``*_config``,
+    ``processing_*``, ``features``, ``embodiment_configs``) stay importable.
+    """
+    return (
+        module_name.startswith("modeling_")
+        or module_name.endswith(("_model", "_layer_spec"))
+        or module_name in {"model", "modeling"}
+        or "kernel" in module_name
+    )
 
 
 def _rel(path):
@@ -105,9 +160,10 @@ class _Imports(ast.NodeVisitor):
             self.generic_visit(node)
 
     def _visit_function(self, node):
-        saved, self.in_function = self.in_function, True
+        saved = self.in_function, self.type_checking
+        self.in_function, self.type_checking = True, False
         self.generic_visit(node)
-        self.in_function = saved
+        self.in_function, self.type_checking = saved
 
     visit_FunctionDef = visit_AsyncFunctionDef = visit_Lambda = _visit_function
 
@@ -168,14 +224,21 @@ def _decorator_args(path, decorator):
 
 class LayeringTest(unittest.TestCase):
     def test_constants_import_only_stdlib(self):
+        if not hasattr(sys, "stdlib_module_names"):
+            self.skipTest("sys.stdlib_module_names requires Python 3.10+")
         path = PKG / "constants.py"
         for target in (t for t, _, _ in _imports(path)):
             self.assertIn(target[0], sys.stdlib_module_names, f"constants.py imports {'.'.join(target)}")
 
     def test_chat_templates_import_no_other_layer(self):
-        banned = [("loongforge", layer) for layer in ("data", "engines", "models", "training")]
+        # Stricter than every other rule: chat_templates is a leaf, so even a
+        # TYPE_CHECKING import would couple it to a layer it must not know.
+        banned = [
+            ("loongforge", layer)
+            for layer in ("data", "engines", "models", "training", "evaluation", "extensions")
+        ]
         for path in _py_files(CHAT_TEMPLATES):
-            for target in _runtime_imports(path):
+            for target, _, _ in _imports(path):
                 for prefix in banned:
                     self.assertFalse(_starts_with(target, prefix), f"{_rel(path)} imports {'.'.join(target)}")
 
@@ -188,9 +251,11 @@ class LayeringTest(unittest.TestCase):
                         self.assertFalse(_starts_with(target, prefix), f"{_rel(path)} imports {'.'.join(target)}")
 
     def test_data_imports_no_training_and_limited_engines(self):
+        banned = [("loongforge", layer) for layer in ("training", "evaluation", "extensions")]
         for path in _py_files(DATA):
             for target in _runtime_imports(path):
-                self.assertFalse(_starts_with(target, ("loongforge", "training")), f"{_rel(path)}: {target}")
+                for prefix in banned:
+                    self.assertFalse(_starts_with(target, prefix), f"{_rel(path)}: {'.'.join(target)}")
                 if not _starts_with(target, ("loongforge", "engines")):
                     continue
                 allowed = any(
@@ -198,6 +263,17 @@ class LayeringTest(unittest.TestCase):
                     for prefix, files in DATA_ENGINE_ALLOWED.items()
                 )
                 self.assertTrue(allowed, f"{_rel(path)} imports {'.'.join(target)}")
+
+    def test_data_do_not_import_model_implementations(self):
+        for path in _py_files(DATA):
+            for target in _runtime_imports(path):
+                if not _starts_with(target, ("loongforge", "models")):
+                    continue
+                offenders = [part for part in target if _is_model_implementation(part)]
+                self.assertFalse(
+                    offenders,
+                    f"{_rel(path)} imports model implementation {'.'.join(target)}",
+                )
 
     def test_data_and_chat_templates_do_not_read_global_state(self):
         for path in _py_files(DATA) + _py_files(CHAT_TEMPLATES):
@@ -213,11 +289,12 @@ class LayeringTest(unittest.TestCase):
                 self.assertNotIn(name, GLOBAL_READERS, f"{_rel(path)}:{getattr(node, 'lineno', '?')}")
 
     def test_only_training_imports_training(self):
-        for layer in ("engines", "models", "evaluation", "chat_templates"):
+        for layer in ("engines", "models", "evaluation", "chat_templates", "extensions", "data"):
             for path in _py_files(PKG / layer):
                 for target in _runtime_imports(path):
                     self.assertFalse(
-                        _starts_with(target, ("loongforge", "training")), f"{_rel(path)} imports {'.'.join(target)}"
+                        _starts_with(target, ("loongforge", "training")),
+                        f"{_rel(path)} imports {'.'.join(target)}",
                     )
 
     def test_models_do_not_import_engine_global_readers(self):
@@ -237,6 +314,39 @@ class LayeringTest(unittest.TestCase):
                     _starts_with(target, ("loongforge", "data")), f"{_rel(path)} imports {'.'.join(target)}"
                 )
 
+    def test_models_do_not_import_other_layers(self):
+        banned = [("loongforge", layer) for layer in ("training", "evaluation", "extensions", "chat_templates")]
+        for path in _py_files(PKG / "models"):
+            for target in _runtime_imports(path):
+                for prefix in banned:
+                    self.assertFalse(_starts_with(target, prefix), f"{_rel(path)} imports {'.'.join(target)}")
+
+    def test_models_do_not_import_engines(self):
+        found = set()
+        for path in _py_files(PKG / "models"):
+            rel = str(path.relative_to(PKG / "models"))
+            for target in _runtime_imports(path):
+                if _starts_with(target, ("loongforge", "engines")):
+                    found.add((rel, ".".join(target)))
+        self.assertEqual(found - MODELS_ENGINE_DEBT, set(), "new models -> engines import")
+        self.assertEqual(MODELS_ENGINE_DEBT - found, set(), "stale MODELS_ENGINE_DEBT entry")
+
+    def test_type_checking_imports_stay_type_only(self):
+        # The three files below carry model/data type contracts under TYPE_CHECKING.
+        # Guard the visitor so they never get reported as runtime imports.
+        contracts = {
+            "models/embodied/groot_n1_6/modeling_groot_n1_6.py",
+            "models/embodied/groot_n1_7/modeling_groot_n1_7.py",
+            "models/embodied/cosmos3/modeling_cosmos3.py",
+        }
+        for rel in contracts:
+            type_only = [
+                target
+                for target, type_checking, _ in _imports(PKG / rel)
+                if type_checking and _starts_with(target, ("loongforge", "data"))
+            ]
+            self.assertTrue(type_only, f"{rel}: expected a TYPE_CHECKING data contract")
+
     def test_engines_import_no_data_at_run_time(self):
         for path in _py_files(PKG / "engines"):
             for target in _runtime_imports(path):
@@ -244,14 +354,13 @@ class LayeringTest(unittest.TestCase):
                     _starts_with(target, ("loongforge", "data")), f"{_rel(path)} imports {'.'.join(target)}"
                 )
 
-    def test_engines_do_not_import_model_families(self):
+    def test_engines_import_only_generic_model_packages(self):
         for path in _py_files(PKG / "engines"):
             for target in _runtime_imports(path):
-                for family in ("language", "vision", "diffusion", "embodied"):
-                    self.assertFalse(
-                        _starts_with(target, ("loongforge", "models", family)),
-                        f"{_rel(path)} imports {'.'.join(target)}",
-                    )
+                if not _starts_with(target, ("loongforge", "models")):
+                    continue
+                allowed = any(_starts_with(target, prefix) for prefix in ENGINE_MODEL_ALLOWED)
+                self.assertTrue(allowed, f"{_rel(path)} imports {'.'.join(target)}")
 
     def test_training_backends_are_isolated(self):
         for backend, other in (("megatron", "torch"), ("torch", "megatron")):
@@ -263,23 +372,32 @@ class LayeringTest(unittest.TestCase):
                         f"{_rel(path)} imports {'.'.join(target)}",
                     )
 
-    def test_models_and_engines_do_not_import_accelerations(self):
+    def test_models_and_engines_do_not_import_extensions(self):
         for layer in ("models", "engines"):
             for path in _py_files(PKG / layer):
                 for target in _runtime_imports(path):
                     self.assertFalse(
-                        _starts_with(target, ("loongforge", "accelerations")),
+                        _starts_with(target, ("loongforge", "extensions")),
                         f"{_rel(path)} imports {'.'.join(target)}",
                     )
 
-    def test_accelerations_do_not_import_training_or_data(self):
-        for path in _py_files(PKG / "accelerations"):
+    def test_extensions_do_not_import_training_or_data(self):
+        for path in _py_files(PKG / "extensions"):
             for target in _runtime_imports(path):
                 for layer in ("training", "data"):
                     self.assertFalse(
                         _starts_with(target, ("loongforge", layer)),
                         f"{_rel(path)} imports {'.'.join(target)}",
                     )
+
+    def test_evaluation_does_not_import_training_or_extensions(self):
+        for path in _py_files(PKG / "evaluation"):
+            for target in _runtime_imports(path):
+                self.assertFalse(
+                    _starts_with(target, ("loongforge", "training"))
+                    or _starts_with(target, ("loongforge", "extensions")),
+                    f"{_rel(path)} imports {'.'.join(target)}",
+                )
 
 
 class RegistryStringsTest(unittest.TestCase):

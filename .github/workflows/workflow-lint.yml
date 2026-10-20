@@ -38,8 +38,8 @@ jobs:
         run: node --test tests/test_ci_helpers.js
       - name: Run CI Python tests
         run: |
-          python -m pip install 'pytest==9.1.1'
-          # Only the CI-helper tests run here: the rest of tests/ needs torch
+          python -m pip install 'pytest==9.1.1' 'pyflakes==4.0.3'
+          # Only the torch-free tests run here: the rest of tests/ needs torch
           # and accelerator hardware, which this runner does not have.
           python -m pytest -q \
             tests/test_ci_artifacts.py \
@@ -51,4 +51,5 @@ jobs:
             tests/test_release_request.py \
             tests/test_release_regression_harness.py \
             tests/test_sensitive_scan.py \
+            tests/test_undefined_names.py \
             tests/test_vlm_dataloader_read_order.py

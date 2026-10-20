@@ -7,7 +7,7 @@ import os
 import shutil
 
 # mcore_bridge -> tools/mcore_bridge, mcore_checkpoint_convert -> tools/mcore_checkpoint_convert.
-# Run via test_hf_checkpoint_converter.sh, which sets PYTHONPATH for both.
+# Run via hf_checkpoint_converter.sh, which sets PYTHONPATH for both.
 from mcore_bridge.config.parallel_config import ParallelConfig
 from mcore_bridge.checkpoint.hf_checkpoint_converter import HfCheckpointConverter
 from mcore_checkpoint_convert.utils.config_utils import get_yaml_config
@@ -16,10 +16,6 @@ from mcore_checkpoint_convert.utils.utils import(
     check_all_done,
     make_hf_sub_checkpoints
 )
-
-# This module is a script, not a pytest suite: the test_* helpers below are
-# driven by the __main__ block, which test_hf_checkpoint_converter.sh invokes.
-__test__ = False
 
 
 def test_hf_to_mcore(tp, pp, vpp, pp_ranks, tp_ranks, encoder_tp_size=None):

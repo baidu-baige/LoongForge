@@ -80,4 +80,4 @@ if [ $TEST_MODEL == "qwen3_vl_30b_a3b" ]; then
 fi
 
 PYTHONPATH=$LOONGFORGE_PATH:$LOONGFORGE_PATH/tools:$MEGATRON_PATH:$PYTHONPATH \
-    python $LOONGFORGE_PATH/tests/mcore_bridge_roundtrip/test_hf_checkpoint_converter.py
+    python $LOONGFORGE_PATH/tests/mcore_bridge_roundtrip/hf_checkpoint_converter.py
