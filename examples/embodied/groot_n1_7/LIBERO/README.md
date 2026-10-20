@@ -175,15 +175,17 @@ Main parameters:
 
 Success rates on the four suites (10 tasks × 20 episodes = 200 episodes per suite):
 
-| Suite | Successful episodes | Success rate |
-|---|:---:|:---:|
-| libero_spatial | 196 / 200 | 98.0% |
-| libero_object | 197 / 200 | 98.5% |
-| libero_goal | 193 / 200 | 96.5% |
-| libero_10 (Long) | 191 / 200 | 95.5% |
-| **Average** | **777 / 800** | **97.13%** |
+| Suite | Successful episodes | LoongForge | Official N1.7 |
+|---|:---:|:---:|:---:|
+| libero_spatial | 196 / 200 | 98.0% | 97.65% |
+| libero_object | 197 / 200 | 98.5% | 98.45% |
+| libero_goal | 193 / 200 | 96.5% | 97.5% |
+| libero_10 (Long) | 191 / 200 | 95.5% | 94.35% |
+| **Average** | **777 / 800** | **97.13%** | **96.99%** |
 
-> **Note**: evaluation is stochastic, so results vary slightly from run to run.
+> **Notes**:
+> - The "Official N1.7" column is taken from Isaac-GR00T `examples/LIBERO/README.md`.
+> - Evaluation is stochastic, so results vary slightly from run to run.
 
 ### 4.3 Rollout Examples
 

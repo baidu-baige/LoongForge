@@ -6,8 +6,8 @@
 # the 7 official Bridge tasks x EPISODES episodes.
 #
 # - Each task YAML ($CONFIG_DIR/<task>.yaml) holds only the fixed eval protocol plus
-#   the NVIDIA render-library paths; the machine/artifact paths below are injected
-#   at runtime, so no YAML needs editing.
+#   the eval protocol; the machine/artifact paths below are injected at runtime,
+#   so no YAML needs editing.
 # - One policy server per task (port taken from that task's YAML) shares a single
 #   GPU with one render env; tasks and episodes run serially.
 # - The reset seed of episode i is SEED + i.
@@ -25,6 +25,8 @@ STATS_PATH=${STATS_PATH:-"/path/to/datasets/stats.json"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/path/to/LoongForge"}
 SIMPLERENV_ROOT=${SIMPLERENV_ROOT:-"/path/to/SimplerEnv"}
 OUT_ROOT=${OUT_ROOT:-"/path/to/reports"}
+NVIDIA_LIB_DIR=${NVIDIA_LIB_DIR:-"/usr/lib64"}
+NVIDIA_ICD_JSON=${NVIDIA_ICD_JSON:-"/etc/vulkan/icd.d/nvidia_icd.json"}
 SERVER_PY=${SERVER_PY:-"/usr/bin/python"}
 
 # ---- Other run parameters ----
@@ -38,7 +40,6 @@ EPISODES=${EPISODES:-100}
 SEED=${SEED:-0}
 
 export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/groot_n1_7_op:${PYTHONPATH:-}"
-export HF_HOME=${HF_HOME:-"/path/to/hf_home"}
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 # Required on the render side:
 #   LD_PRELOAD mesa libGLdispatch -> otherwise `import sapien` fails with _glapi_tls_Current
@@ -100,7 +101,9 @@ for task in "${TASK_ARR[@]}"; do
         "server.python=$SERVER_PY" "server.log=$slog" \
         "server.ckpt_path=$CKPT_PATH" "server.dataset_statistics_path=$STATS_PATH" \
         "server.loongforge_root=$LOONGFORGE_PATH" \
-        "env.eval_root=$LOONGFORGE_PATH/loongforge/embodied/eval" "env.simplerenv_root=$SIMPLERENV_ROOT"
+        "env.eval_root=$LOONGFORGE_PATH/loongforge/embodied/eval" "env.simplerenv_root=$SIMPLERENV_ROOT" \
+        "env.ld_library_path=$NVIDIA_LIB_DIR" "env.nvidia_lib_dir=$NVIDIA_LIB_DIR" \
+        "env.nvidia_icd_json=$NVIDIA_ICD_JSON"
     start_server "$cfg" "$slog"
     for ep in $(seq 0 $((EPISODES - 1))); do
         render_cfg "$cfg" "$ecfg" "run.output_dir=$tdir" "run.seed=$SEED" "run.episode_idx=$ep"
