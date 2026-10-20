@@ -252,6 +252,22 @@ class _RuntimeArgs:
 class _CheckpointIOArgs:
     """On-disk checkpoint format and save behavior."""
 
+    pretrained_checkpoint: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Path to pretrained weights to initialize the model from "
+                    "(fine-tuning)."
+        },
+    )
+
+    resume: bool = field(
+        default=False,
+        metadata={
+            "help": "Resume training (weights + optimizer/scheduler/RNG state) "
+                    "from the latest checkpoint in --output-dir."
+        },
+    )
+
     save_format: str = field(
         default="safetensors",
         metadata={
