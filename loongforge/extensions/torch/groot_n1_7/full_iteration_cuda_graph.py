@@ -9,7 +9,7 @@ import dataclasses
 import ctypes
 import logging
 from collections.abc import Mapping
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from typing import Any
 
 import torch

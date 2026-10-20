@@ -243,8 +243,8 @@ def add_hooks(model, args, prefix):
         print_rank_0(
             f"For log tensor name pattern: {args.log_tensor_name_pattern}, find the following layers:"
         )
-        for l in matched_modules:
-            print_rank_0(f"  {l}")
+        for layer_name in matched_modules:
+            print_rank_0(f"  {layer_name}")
     else:
         print_rank_0(
             f"No layers found for the log tensor name pattern: {args.log_tensor_name_pattern}"
