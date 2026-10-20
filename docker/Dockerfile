@@ -230,9 +230,9 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             git checkout -b "loongforge_${TE_TAGS}"; \
         fi && \
         git restore . && \
-        if [ -f "/workspace/LoongForge/patches/apply_patches.sh" ]; then \
-            NON_INTERACTIVE=true bash /workspace/LoongForge/patches/apply_patches.sh \
-                /workspace/LoongForge/patches/TransformerEngine_${TE_TAGS} \
+        if [ -f "/workspace/LoongForge/third_party/patches/apply_patches.sh" ]; then \
+            NON_INTERACTIVE=true bash /workspace/LoongForge/third_party/patches/apply_patches.sh \
+                /workspace/LoongForge/third_party/patches/TransformerEngine_${TE_TAGS} \
                 ${transformerEngine_dir}; \
         fi && \
         if [ "${source_mode}" = public ]; then git submodule update --init --recursive; fi && \
@@ -255,8 +255,6 @@ RUN --mount=type=secret,id=source_manifest,required=false \
             git -C /workspace/dmuon checkout --detach "${DMUON_COMMIT}"; \
         fi && \
         pip --disable-pip-version-check --quiet install /workspace/dmuon && rm -rf /workspace/dmuon && \
-        cd /workspace/LoongForge/ && \
-        uv pip install --quiet --no-config --system --break-system-packages --no-cache -e ".[vla]" && \
         cd /workspace && \
         if [ -d "lerobot" ]; then \
             rm -rf lerobot; \
@@ -285,6 +283,13 @@ RUN --mount=type=secret,id=source_manifest,required=false \
     }; \
     install_transformer_engine && \
     install_lerobot
+
+# Lerobot v0.5.0 constrains diffusers to <0.36, which conflicts with LoongForge
+# and reintroduces the torchao import failure. Restore the release-pinned
+# version after Lerobot's dependency resolution, then fail the image build if
+# the compatibility-sensitive import path regresses.
+RUN pip --disable-pip-version-check --quiet install "diffusers==0.38.0" && \
+    python -c 'import diffusers; assert diffusers.__version__ == "0.38.0"; from diffusers import ConfigMixin, ModelMixin'
 
 
 # =========================================================

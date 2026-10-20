@@ -35,7 +35,7 @@ from loongforge.engines.torch.arguments import (
     _RuntimeArgs,
     _StepArgs,
 )
-from loongforge.engines.torch.arguments import parse_positive_int
+from loongforge.engines.torch.arguments import parse_non_negative_int, parse_positive_int
 from loongforge.engines.torch.validators import validate_engine_args
 from loongforge.models.catalog import get_config_path, get_config_types
 
@@ -139,22 +139,6 @@ class _RunArgs:
         },
     )
 
-    pretrained_checkpoint: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Path to pretrained weights to initialize the model from "
-                    "(fine-tuning)."
-        },
-    )
-
-    resume: bool = field(
-        default=False,
-        metadata={
-            "help": "Resume training (weights + optimizer/scheduler/RNG state) "
-                    "from the latest checkpoint in --output-dir."
-        },
-    )
-
 
 @dataclass(frozen=True)
 class _DataArgs:
@@ -249,6 +233,20 @@ class _DataArgs:
             "choices": ["cyclic", "block"],
             "help": "How the distributed sampler partitions indices across ranks: "
                     "'cyclic' (round-robin) or 'block' (contiguous shards).",
+        },
+    )
+
+    sampler_epoch_mode: str = field(
+        default="advance",
+        metadata={
+            "choices": ["advance", "fixed"],
+            "help": "Whether the sampler's epoch advances between epochs. "
+                    "'advance' (default) uses seed+epoch, so every epoch reshuffles. "
+                    "'fixed' pins the epoch to 0, so every epoch reuses the SAME "
+                    "permutation -- this reproduces standalone FastWAM, whose "
+                    "ResumableEpochSampler epoch is never advanced. Only used by "
+                    "model types that register their own sampler builder (currently "
+                    "fastwam); see data/datasets/<model>/samplers.py.",
         },
     )
 
@@ -448,10 +446,12 @@ class _LearningRateArgs:
                 "cosine_with_min_lr",
                 "cosine_warmup_with_min_lr",
                 "lambda_linear",
+                "linear_warmup_cosine_annealing",
             ],
             "help": "Learning-rate scheduler name. Most values are passed to "
                     "transformers.get_scheduler; lambda_linear uses the custom "
-                    "LambdaLinearScheduler."
+                    "LambdaLinearScheduler; linear_warmup_cosine_annealing uses "
+                    "torch LinearLR followed by CosineAnnealingLR."
         },
     )
 
@@ -467,6 +467,16 @@ class _LearningRateArgs:
         default=None,
         metadata={
             "help": "Number of scheduler decay steps. Defaults to --train-iters when unset."
+        },
+    )
+
+    lr_decay_start_iters: int = field(
+        default=0,
+        metadata={
+            "cli_type": parse_non_negative_int,
+            "help": "Optimizer step at which custom cosine decay begins, holding "
+                    "the peak LR after warmup until then. 0 starts decay immediately "
+                    "after warmup. Requires --custom-lr-lambda."
         },
     )
 
@@ -799,6 +809,18 @@ def validate(training_args, model_cfg, data_cfg):
     if training_args.lr_decay_iters is not None and training_args.lr_decay_iters <= 0:
         raise ValueError(f"--lr-decay-iters must be positive, got {training_args.lr_decay_iters}")
     lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
+    if training_args.lr_decay_start_iters < 0:
+        raise ValueError("--lr-decay-start-iters must be non-negative")
+    if training_args.lr_decay_start_iters:
+        if not training_args.custom_lr_lambda or training_args.lr_decay_style not in {
+            "cosine_with_min_lr", "cosine_warmup_with_min_lr"
+        }:
+            raise ValueError("--lr-decay-start-iters requires a custom cosine LR scheduler")
+        if not training_args.lr_warmup_iters <= training_args.lr_decay_start_iters < lr_schedule_steps:
+            raise ValueError(
+                "--lr-decay-start-iters must be at least --lr-warmup-iters "
+                "and less than the scheduler steps"
+            )
     if training_args.lr_warmup_iters >= lr_schedule_steps:
         logger.warning(
             f"--lr-warmup-iters ({training_args.lr_warmup_iters}) >= scheduler steps ({lr_schedule_steps})"

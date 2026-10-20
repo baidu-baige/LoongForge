@@ -73,6 +73,7 @@ class TorchOptimization:
     on_step_end: Optional[Callable] = None
     close: Optional[Callable] = None
     # consulted by train_step
+    fp8_forward_context: Optional[Callable] = None
     move_batch_to_device: Optional[Callable] = None
     forward_backward: Optional[Callable] = None
     clean_nan_gradients: Optional[Callable] = None
@@ -100,6 +101,8 @@ def train_fp8_ctx(step_ctx: StepContext):
     ``te.fp8_autocast`` has to enclose the whole model call, so both the
     standard forward and the CUDA-graph capture go through this.
     """
+    if step_ctx.optimization.fp8_forward_context is not None:
+        return step_ctx.optimization.fp8_forward_context(step_ctx.training_args)
     from loongforge.engines.torch.quantization.fp8_utils import resolve_fp8_forward_ctx
 
     return resolve_fp8_forward_ctx(step_ctx.training_args)

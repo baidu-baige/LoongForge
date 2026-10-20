@@ -41,6 +41,7 @@ def register_payload_builder(model_type: str):
 def _auto_import_payload_builder_modules() -> None:
     """Import known PayloadBuilder modules so decorators fire on lookup."""
     _MODULES = [
+        "loongforge.evaluation.embodied.payload_builders.vlda",
         "loongforge.evaluation.embodied.payload_builders.pi05",
         "loongforge.evaluation.embodied.payload_builders.xvla",
         "loongforge.evaluation.embodied.payload_builders.groot_n1_6",

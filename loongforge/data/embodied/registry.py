@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 # Importing that package must register the model's builders. "dummy" points at
 # the plain module ``collator`` that defines ``DummyCollator``.
 MODEL_MODULES: Dict[str, str] = {
+    "vlda": "vlda",
     "pi05": "pi05",
     "Gr00tN1d6": "groot_n1_6",
     "Gr00tN1d7": "groot_n1_7",
@@ -46,6 +47,7 @@ MODEL_MODULES: Dict[str, str] = {
 # plug custom multi-frame geometry into the same generic dataset classes.
 DATASET_STRATEGIES: Dict[str, str] = {
     "default": "datasets.lerobot_dataset:build_default_lerobot_dataset",
+    "vlda": "vlda.vlda_dataset:build_vlda_dataset",
     "fastwam": "fastwam.fastwam_dataset:build_fastwam_lerobot_dataset",
     "lingbot_va": "lingbot_va.lingbot_va_dataset:build_lingbot_dataset",
     "groot_n1_7": "groot_n1_7.groot_n1_7_dataset:build_groot_n1_7_lerobot_dataset",

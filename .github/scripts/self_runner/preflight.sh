@@ -6,7 +6,7 @@ set -euo pipefail
 
 suite="${1:-}"
 build_image="${2:-false}"
-[[ "$suite" =~ ^(llm_vlm|embodied)$ ]] || { printf '%s\n' 'suite: invalid' >&2; exit 2; }
+[[ "$suite" =~ ^(llm_vlm|embodied|release)$ ]] || { printf '%s\n' 'suite: invalid' >&2; exit 2; }
 [[ "$build_image" == true || "$build_image" == false ]] || {
   printf '%s\n' 'build_image: invalid' >&2
   exit 2
@@ -40,6 +40,18 @@ for name in LOONGFORGE_HOST_DATA_ROOT LOONGFORGE_HOST_OUTPUT_ROOT LOONGFORGE_RUN
     exit 2
   fi
 done
+if [[ "$suite" == release ]]; then
+  for name in LOONGFORGE_HOST_LLM_DATA_ROOT LOONGFORGE_CONTAINER_LLM_DATA_ROOT; do
+    if [[ -z "${!name:-}" ]]; then
+      printf '%s\n' "$name" >&2
+      exit 2
+    fi
+  done
+  if [[ ! -e "$LOONGFORGE_HOST_LLM_DATA_ROOT" ]]; then
+    printf '%s\n' 'mounts: missing' >&2
+    exit 2
+  fi
+fi
 
 docker_bin="${DOCKER_BIN:-docker}"
 if ! "$docker_bin" version >/dev/null 2>&1; then

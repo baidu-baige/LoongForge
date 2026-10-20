@@ -19,6 +19,7 @@ from typing import Dict, Tuple
 
 TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
     "FinetuneTrainer": ("sft_embodied", None),
+    "VLDAFinetuneTrainer": ("sft_vlda", None),
     "GrootN1d6Trainer": (
         "sft_embodied", "loongforge.accelerations.torch.groot_n1_6.factory"),
     "GrootN1d7Trainer": (
@@ -53,3 +54,12 @@ def resolve_torch_trainer(trainer_type: str):
         from loongforge.engines.torch.train_step import TorchOptimization
         return method, lambda _args: TorchOptimization()
     return method, importlib.import_module(factory_path).build_optimization
+
+
+def resolve_torch_runner(trainer_type: str):
+    """Select the lifecycle for the recipe's checkpoint contract."""
+    if trainer_type == "VLDAFinetuneTrainer":
+        from loongforge.training.torch.vlda_runner import VLDARunner
+        return VLDARunner
+    from loongforge.training.torch.runner import TorchRunner
+    return TorchRunner

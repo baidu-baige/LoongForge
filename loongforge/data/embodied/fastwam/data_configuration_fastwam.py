@@ -47,6 +47,14 @@ class FastWAMDataConfig:
     normalization_mode: str = "q99"
     action_padding_strategy: str = "zero"
     action_video_freq_ratio: int = 4
+    # FastWAM-format ``*_dataset_stats.json`` (same file eval uses). When set,
+    # action/proprio are normalized exactly like FastWAM's LinearNormalizer
+    # with ``fastwam_norm_mode``, and ``normalization_mode`` is ignored.
+    norm_stats_path: str | None = None
+    fastwam_norm_mode: str = "min/max"
+    # Per action dim: True = delta dim, zeroed on padded steps before
+    # normalization (FastWAM processor ``delta_action_dim_mask``).
+    delta_action_dim_mask: list[bool] | None = None
 
     # Reference — not serialized, injected at construction time
     model_cfg: Any = field(default=None, repr=False, compare=False, hash=False)

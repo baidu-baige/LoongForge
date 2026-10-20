@@ -5,7 +5,7 @@
 set -euo pipefail # Exit on error, undefined variable, pipe fail
 
 # Configuration
-PATCH_DIR="${1:-patches}"
+PATCH_DIR="${1:-third_party/patches}"
 TARGET_REPO="${2:-./target-repo}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 

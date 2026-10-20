@@ -6,6 +6,14 @@ This directory contains offline evaluation for embodied models. Training is laun
 - **Model policy servers** — shared `predict_action` RPC protocol with model-specific factories.
 - **Action semantics** — payload builders, action decoders, normalization, and metrics stay in the evaluation domain.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="../../../docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../../../docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied architecture: an integrated data pipeline, accelerated model training with an extensible model registry, acceleration toolkit and distributed training, and integrated evaluation" src="../../../docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
+
 ---
 
 ## Evaluation Scope

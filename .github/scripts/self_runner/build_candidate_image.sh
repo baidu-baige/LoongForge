@@ -105,6 +105,7 @@ trap 'rm -rf "$context_dir"' EXIT
 dockerfile="$source_dockerfile"
 
 build_args=(
+  --network host
   --build-arg "COMPILE_ENV=$compile_env"
   --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   --label "org.opencontainers.image.revision=$head_sha"
@@ -157,40 +158,7 @@ if [[ "$release_mode" == false ]]; then
 fi
 
 redact_build_output() {
-  python3 -c '
-import os
-import re
-import sys
-
-names = {
-    "CI_CONFIG_PATH",
-    "CI_CONFIG_PATH_IMAGE",
-    "IMAGE_APT_SOURCES",
-    "IMAGE_BASE_IMAGE",
-    "IMAGE_DOCKERFILE",
-    "IMAGE_PIP_CONFIG",
-    "IMAGE_SOURCE_MANIFEST",
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "NO_PROXY",
-    "http_proxy",
-    "https_proxy",
-    "no_proxy",
-}
-names.update(name for name in os.environ if name.startswith("IMAGE_BUILD_ARG_"))
-values = sorted(
-    {os.environ[name] for name in names if os.environ.get(name)},
-    key=len,
-    reverse=True,
-)
-url = re.compile(r"https?://[^\s\"<>]+")
-absolute_path = re.compile(r"(?<![A-Za-z0-9_])/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._@+%=-]+")
-for line in sys.stdin:
-    for value in values:
-        line = line.replace(value, "[runner-local value]")
-    line = url.sub("[redacted-url]", line)
-    sys.stderr.write(absolute_path.sub("[redacted-path]", line))
-'
+  python3 "$script_dir/../../../ci/redact_ci_artifact.py" --stream >&2
 }
 
 if ! DOCKER_BUILDKIT=1 "$docker_bin" build "${build_args[@]}" \

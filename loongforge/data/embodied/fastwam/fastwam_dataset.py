@@ -17,6 +17,8 @@ chunk). The base dataset stays entirely model-agnostic.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from typing import Any, Dict, List
 
 from loongforge.data.embodied.datasets.lerobot_dataset import (
@@ -73,6 +75,17 @@ def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args):
     Sampling geometry (``observation_delta_indices``) comes from the FastWAM
     ``data_cfg``; ``action_horizon`` comes from the ``model_cfg``.
     """
+    roots = [Path(part.strip()) for part in str(training_args.dataset_path or "").split(",") if part.strip()]
+    if len(roots) > 1:
+        from loongforge.data.embodied.datasets.lerobot_dataset import MultiLeRobotV2Dataset
+
+        return MultiLeRobotV2Dataset(
+            roots=roots,
+            action_horizon=model_cfg.action_horizon,
+            episodes=None,
+            video_backend=training_args.video_backend,
+            observation_delta_indices=data_cfg.observation_delta_indices,
+        )
     return build_default_lerobot_dataset(
         model_cfg,
         data_cfg,

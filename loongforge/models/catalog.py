@@ -567,6 +567,13 @@ MODEL_CONFIG_REGISTRY = {
         "model_config": "loongforge.models.embodied.xvla.configuration_xvla.XvlaModelConfig",
         "data_config": "loongforge.data.embodied.xvla.data_configuration_xvla.XVLADataConfig",
     },
+    "vlda": {
+        "engine": "torch",
+        "config_path": "configs/models/vlda",
+        "config_name": "vlda",
+        "model_config": "loongforge.models.embodied.vlda.configuration_vlda.VLDAModelConfig",
+        "data_config": "loongforge.data.embodied.vlda.data_configuration_vlda.VLDADataConfig",
+    },
     "fastwam": {
         "engine": "torch",
         "config_path": "configs/models/fastwam",

@@ -20,6 +20,7 @@ import torch.nn as nn
 # model_type -> modeling module, relative to ``loongforge.models.embodied.``.
 # Only the module of the requested model_type is imported.
 MODEL_MODULES: Dict[str, str] = {
+    "vlda": "vlda.modeling_vlda",
     "pi05": "pi05.modeling_pi05",
     "Gr00tN1d6": "groot_n1_6.modeling_groot_n1_6",
     "Gr00tN1d7": "groot_n1_7.modeling_groot_n1_7",

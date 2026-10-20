@@ -140,6 +140,23 @@ DISTRIBUTED_TRAINING_ARGS=(
     # --dataloader-seed-workers
 )
 
+# ── FP8
+FP8_ARGS=(
+    # --fp8
+    # --fp8-backend te
+    # --fp8-te-recipe blockwise
+    # --fp8-min-dim 2048
+)
+
+# ── FP8 DDP comm hook
+# fp8 AllToAll + fp8 AllGather, with error feedback enabled at both quantization points;
+# sensitive 1-D params (norm/bias) + embedding go through exact allreduce, the rest are fp8.
+FP8_COMM_HOOK_ARGS=(
+    # --ddp-comm-hook fp8_a2a_allgather_hook
+    # --ddp-comm-hook-fp8-error-feedback both
+    # --ddp-comm-hook-fp8-exempt ""
+)
+
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
     --log-interval 1
@@ -166,4 +183,6 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
+    "${FP8_ARGS[@]}" \
+    "${FP8_COMM_HOOK_ARGS[@]}" \
     "$@"

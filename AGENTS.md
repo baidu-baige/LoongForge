@@ -16,7 +16,7 @@ python -m build --sdist --wheel --outdir dist/
 ```
 
 - `third_party/Loong-Megatron` is a Git submodule.
-- `setup_env.py` only fetches, patches, and builds TransformerEngine (patches in `patches/TransformerEngine_v2.9/`).
+- `setup_env.py` only fetches, patches, and builds TransformerEngine (patches in `third_party/patches/TransformerEngine_v2.9/`).
 - **GPU Docker Build** (`COMPILE_ENV`: `ampere`, `hopper`, or `blackwell`):
   ```bash
   docker build --build-arg COMPILE_ENV=hopper -f docker/Dockerfile .

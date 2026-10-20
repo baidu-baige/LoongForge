@@ -6,6 +6,14 @@
 - **模型策略服务**：通过统一的 `predict_action` RPC 协议连接各模型工厂。
 - **动作语义处理**：payload builder、action decoder、归一化与指标均保留在评测域。
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="../../../docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../../../docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied 架构：一体化数据管线、加速模型训练（可扩展的模型接入、加速工具集、分布式训练）与一体化评测" src="../../../docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
+
 ---
 
 ## 评测范围
@@ -18,14 +26,14 @@
 
 完整的框架使用说明请参阅 [用户手册](../../../docs/source_zh/embodied_tutorial/overview.md)，各模型的快速入门：
 
-- [π0.5 (pi05)](../../../docs/source_zh/embodied_tutorial/quick_start_pi05.md)
+- [Pi0.5 (pi05)](../../../docs/source_zh/embodied_tutorial/quick_start_pi05.md)
 - [GR00T-N1.6](../../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_6.md)
 - [GR00T-N1.7](../../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_7.md)
 - [FastWAM](../../../docs/source_zh/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../../docs/source_zh/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../../docs/source_zh/embodied_tutorial/quick_start_cosmos3.md)
 - [xVLA](../../../docs/source_zh/embodied_tutorial/quick_start_xvla.md)
-- [Lingbot-VA](../../../docs/source_zh/embodied_tutorial/quick_start_lingbot_va.md)
+- [LingBot-VA](../../../docs/source_zh/embodied_tutorial/quick_start_lingbot_va.md)
 
 ---
 

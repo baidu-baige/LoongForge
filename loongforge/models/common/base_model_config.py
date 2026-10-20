@@ -12,6 +12,16 @@ from typing import Optional, List, Dict, Set
 from collections import defaultdict
 
 
+def _initialize_pretrained_config(config, **kwargs):
+    # Transformers 5.6 moves PretrainedConfig setup to __post_init__, while the
+    # release image still pins 5.3 where the same setup belongs to __init__.
+    post_init = getattr(PretrainedConfig, "__post_init__", None)
+    if post_init is not None:
+        post_init(config, **kwargs)
+    else:
+        PretrainedConfig.__init__(config, **kwargs)
+
+
 @dataclasses.dataclass
 class BasePeftModelConfig():    
     """configuration class for the peft transformer"""
@@ -44,12 +54,7 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
     When left at 0 (default), auto-computed from ``args.seq_length * args.micro_batch_size``."""
 
     def __post_init__(self, **kwargs):
-        # transformers >= 5.6 makes PretrainedConfig a dataclass with __post_init__;
-        # older releases only have __init__. Both accept **kwargs.
-        if hasattr(PretrainedConfig, "__post_init__"):
-            PretrainedConfig.__post_init__(self, **kwargs)
-        else:
-            PretrainedConfig.__init__(self, **kwargs)
+        _initialize_pretrained_config(self, **kwargs)
         TransformerConfig.__post_init__(self)
 
 
@@ -76,10 +81,7 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
     fp8_dynamic_num_tokens: int = 0
 
     def __post_init__(self, **kwargs):
-        if hasattr(PretrainedConfig, "__post_init__"):
-            PretrainedConfig.__post_init__(self, **kwargs)
-        else:
-            PretrainedConfig.__init__(self, **kwargs)
+        _initialize_pretrained_config(self, **kwargs)
         MLATransformerConfig.__post_init__(self)
 
 

@@ -25,7 +25,7 @@ from loongforge.engines.torch.train_step import (
     TorchOptimization,
     train_step,
 )
-from loongforge.training.torch.registry import resolve_torch_trainer
+from loongforge.training.torch.registry import resolve_torch_runner, resolve_torch_trainer
 
 logger = logging.getLogger(__name__)
 
@@ -354,6 +354,10 @@ class TorchRunner:
             )
             metrics["nan_iterations"] = self.nan_iterations
             metrics["skipped_iterations"] = self.skipped_iterations
+
+            on_step_end = getattr(self.method, "on_step_end", None)
+            if on_step_end is not None:
+                on_step_end(metrics, self.completed_steps, self.model, training_args=training_args)
 
             # Step-end hook
             if opt.on_step_end is not None:
@@ -685,4 +689,5 @@ def main():
     """Torch entry: parse configs, pick the method and optimization, run the training loop."""
     training_args, model_cfg, data_cfg = parse_train_args()
     method, build_optimization = resolve_torch_trainer(training_args.trainer_type)
-    TorchRunner(training_args, model_cfg, data_cfg, method, build_optimization(training_args)).train()
+    runner_type = resolve_torch_runner(training_args.trainer_type)
+    runner_type(training_args, model_cfg, data_cfg, method, build_optimization(training_args)).train()
