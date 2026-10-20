@@ -10,9 +10,9 @@ from typing import Any, Dict, Optional, Tuple
 import torch
 from torch import Tensor
 from .encoder_model import OmniEncoderModel
-from loongforge.engines.megatron.distributed.context_parallel import get_inputs_on_this_cp_rank
+from loongforge.models.base.context_parallel import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
-from loongforge.models.common import BaseMegatronModule, BaseModelConfig
+from loongforge.models.base import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
 from loongforge.engines.megatron.initialize import (
     mpu,

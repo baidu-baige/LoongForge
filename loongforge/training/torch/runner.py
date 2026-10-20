@@ -20,6 +20,7 @@ from types import ModuleType
 from typing import Any, Dict, Optional
 
 from loongforge.training.torch.args import parse_train_args
+from loongforge.engines.torch.initialize import resolve_dtype
 from loongforge.engines.torch.train_step import (
     StepContext,
     TorchOptimization,
@@ -214,7 +215,7 @@ class TorchRunner:
                 start_msg=f"materializing meta tensors on {self.ctx.device}",
                 end_msg="materialized in {elapsed}",
             ):
-                self.model.materialize(self.ctx.device, training_args.dtype)
+                self.model.materialize(self.ctx.device, resolve_dtype(training_args.dtype))
             if training_args.pretrained_checkpoint:
                 with log_stage(
                     "ckpt",

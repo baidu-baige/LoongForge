@@ -15,8 +15,8 @@ from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEm
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 
-from loongforge.models.common.spec_utils import import_module
-from loongforge.engines.megatron.distributed.context_parallel import get_pos_emb_on_this_cp_rank
+from loongforge.models.base.spec_utils import import_module
+from loongforge.models.base.context_parallel import get_pos_emb_on_this_cp_rank
 from loongforge.models.language.base import BaseGPTModel
 from .qwen_config import Qwen2Config
 

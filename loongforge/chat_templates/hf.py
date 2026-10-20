@@ -24,14 +24,11 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from loongforge.constants import IGNORE_INDEX
 
-from .base import ChatTemplate
-
-if TYPE_CHECKING:
-    from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
+from .base import ChatTemplate, TokenizerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +59,7 @@ class HFChatTemplate(ChatTemplate):
 
     def _encode(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, str]],
         system: Optional[str],
     ) -> List[List[int]]:
@@ -99,7 +96,7 @@ class HFChatTemplate(ChatTemplate):
 
     def _tokenize(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
         add_generation_prompt: bool = False,
@@ -171,7 +168,7 @@ class HFChatTemplate(ChatTemplate):
 
     def _render_with_generation_indices(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> Tuple[str, List[Tuple[int, int]]]:
@@ -322,7 +319,7 @@ class HFChatTemplate(ChatTemplate):
 
     def _tokenize_with_generation_indices(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> Tuple[List[int], List[int]]:
@@ -421,7 +418,7 @@ class HFChatTemplate(ChatTemplate):
 
     def encode_openai(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
         train_on_prompt: bool = False,

@@ -44,7 +44,6 @@ from loongforge.models.embodied.cosmos3.sequence_packing import (
 from loongforge.models.embodied.cosmos3.data_and_condition import GenerationDataClean
 from loongforge.models.embodied.cosmos3.unified_mot import Qwen3VLMoTConfig, Qwen3VLTextForCausalLM
 from loongforge.models.embodied.cosmos3.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
-from loongforge.engines.torch.initialize import resolve_dtype
 
 if TYPE_CHECKING:
     from loongforge.data.embodied.cosmos3.cosmos3_collator import Cosmos3Batch
@@ -217,7 +216,7 @@ class Cosmos3(nn.Module):
         each submodule's init_weights to populate them. Mirrors cosmos's
         ``hf_model._apply(empty_like, ...) + tie_embeddings``.
         """
-        self.net.to(resolve_dtype(dtype))
+        self.net.to(dtype)
         self.net.to_empty(device=device)
         self.net.init_weights(buffer_device=device)
         logger.info("Cosmos3 materialized on %s", device)

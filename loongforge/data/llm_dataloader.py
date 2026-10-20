@@ -20,7 +20,6 @@ from megatron.training.training import cyclic_iter
 from loongforge import constants
 from loongforge.engines.megatron.distributed.chunkpipe import ChunkPipeGroupBatchSampler
 from .llm.sft_data_collator import DataCollatorForSupervisedDataset
-from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +28,11 @@ def build_sft_data_collator(
     collator_cls: Type[DataCollatorForSupervisedDataset], args, tokenizer, **kwargs
 ) -> DataCollatorForSupervisedDataset:
     """build data collator for sft"""
-    assert isinstance(
-        tokenizer, AutoTokenizerFromHF
-    ), f"Only support HFTokenizer for sft, but got {args.tokenizer_type}."
+    if not hasattr(tokenizer, "tokenizer"):
+        raise TypeError(
+            "Only support HFTokenizer for sft, but got "
+            f"{type(tokenizer).__name__} (args.tokenizer_type={args.tokenizer_type})."
+        )
 
     pad_to_multiple_of = 1
     # When using sequence parallel, sequence will further be split by TP size

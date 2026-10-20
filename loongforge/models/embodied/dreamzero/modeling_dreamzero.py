@@ -360,17 +360,22 @@ class DreamZeroPolicy(PreTrainedPolicy):
         completed_steps: int,
         micro_step: int,
         batch: Any = None,
-    ) -> None:
-        """Apply DreamZero's first-forward RNG policy after the first batch fetch."""
+    ) -> tuple[int, int] | None:
+        """Decide DreamZero's first-forward RNG policy after the first batch fetch.
+
+        Returns ``(seed, cpu_burn)`` when the training loop should reset the RNG,
+        or ``None`` when no reset is needed. Applying the reset is the caller's
+        job: models do not mutate global RNG state.
+        """
         del micro_step, batch
         if self._train_rng_reset_after_first_batch_done:
-            return
+            return None
         if not self.config.train_rng_reset_after_first_batch:
             self._train_rng_reset_after_first_batch_done = True
-            return
+            return None
         if args.resume or completed_steps != 0:
             self._train_rng_reset_after_first_batch_done = True
-            return
+            return None
 
         seed = self.config.train_rng_seed
         if seed is None:
@@ -381,17 +386,8 @@ class DreamZeroPolicy(PreTrainedPolicy):
         if cpu_burn < 0:
             raise ValueError("DreamZeroConfig.train_rng_cpu_burn must be >= 0")
 
-        from loongforge.engines.torch.initialize import set_seed
-
-        set_seed(seed)
-        if cpu_burn:
-            torch.rand(cpu_burn)
         self._train_rng_reset_after_first_batch_done = True
-        logger.info(
-            "DreamZero reset training RNG after first batch fetch: seed=%d cpu_burn=%d",
-            seed,
-            cpu_burn,
-        )
+        return seed, cpu_burn
 
     def forward(
         self, batch: dict[str, Tensor], reduction: str = "mean"

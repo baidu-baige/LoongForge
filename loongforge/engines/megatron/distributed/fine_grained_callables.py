@@ -43,7 +43,7 @@ from megatron.core.models.gpt.fine_grained_callables import (
     should_free_input,
     weak_method,
 )
-from loongforge.engines.megatron.distributed.context_parallel import get_inputs_on_this_cp_rank
+from loongforge.models.base.context_parallel import get_inputs_on_this_cp_rank
 from loongforge.engines.megatron.initialize import mpu
 
 

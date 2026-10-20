@@ -23,11 +23,11 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import (
-    TYPE_CHECKING,
     Any,
     Dict,
     List,
     Optional,
+    Protocol,
     Sequence,
     Set,
     Tuple,
@@ -38,8 +38,24 @@ from loongforge.constants import IGNORE_INDEX
 
 from .plugins.base import MMPlugin
 
-if TYPE_CHECKING:
-    from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
+
+class TokenizerProtocol(Protocol):
+    """Tokenizer surface used by chat templates.
+
+    Defined locally so ``chat_templates`` stays a leaf layer: it must not import
+    engines or any concrete tokenizer implementation, not even under
+    ``TYPE_CHECKING``.
+    """
+
+    tokenizer: Any
+    bos: Any
+    eos: Any
+
+    def tokenize(self, text: str, add_special_tokens: bool = False) -> List[str]:
+        ...
+
+    def convert_tokens_to_ids(self, token: str) -> int:
+        ...
 
 
 SlotsType = Sequence[Union[str, Set[str], Dict[str, str]]]
@@ -157,7 +173,7 @@ class ChatTemplate:
 
     def encode_multiturn(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, str]],
         system: Optional[str] = None,
     ) -> List[Tuple[List[int], List[int]]]:
@@ -172,7 +188,7 @@ class ChatTemplate:
 
     def encode_oneturn(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, str]],
         system: Optional[str] = None,
     ) -> Tuple[List[int], List[int]]:
@@ -189,7 +205,7 @@ class ChatTemplate:
 
     def encode_openai(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
         train_on_prompt: bool = False,
@@ -206,7 +222,7 @@ class ChatTemplate:
 
     def _encode(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, str]],
         system: Optional[str],
     ) -> List[List[int]]:
@@ -243,7 +259,7 @@ class ChatTemplate:
 
     def _convert_elements_to_ids(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         elements: "SlotsType",
     ) -> List[int]:
         """
@@ -288,7 +304,7 @@ class Llama2Template(ChatTemplate):
 
     def _encode(
         self,
-        tokenizer: "AutoTokenizerFromHF",
+        tokenizer: "TokenizerProtocol",
         messages: Sequence[Dict[str, str]],
         system: str,
     ) -> List[List[int]]:
