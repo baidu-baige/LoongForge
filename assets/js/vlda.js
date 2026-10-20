@@ -13,7 +13,7 @@
     'hero.equal': '* 共同第一作者',
     'hero.corr': '† 通讯作者',
     'hero.code': '代码 ↗',
-    'hero.paper':'论文 · arXiv 即将上线',
+    'hero.paper':'论文 ↗',
     'd.h': 'Delta 在看什么',
     'd.p': 'Delta 集中在运动与交互的区域，而不是静态场景。',
     's.libero': 'LIBERO 平均',
@@ -108,7 +108,7 @@
     'c.gh.h': 'LoongForge-VLDA Cookbook',
     'c.gh': 'VLDA 的训练代码、配置与示例都在 LoongForge 中。',
     'c.bib': '引用',
-    'c.note': 'arXiv 条目将在预印本公开后补充。',
+    'c.note': '可在 <a href="https://arxiv.org/abs/2610.25874" target="_blank" rel="noopener" class="lf-inline-link">arXiv ↗</a> 阅读预印本。',
     'f.tag': 'LoongForge 项目',
     'f.top': '回到顶部 ↑'
   };
