@@ -41,6 +41,11 @@
   function featuredChipLabel(lang) { return lang === 'zh' ? '精选' : 'Featured'; }
   function allTagLabel(lang) { return lang === 'zh' ? '全部' : 'All'; }
 
+  // Featured (pinned) card = the newest post.
+  // Right-hand panel: if the post has an optional `cover` in assets/data/posts.json
+  // (a path like "assets/blog/<slug>/NN.png", shared by EN and ZH), show that image;
+  // otherwise show the gradient "LoongForge" wordmark. Prefer a cover whose labels
+  // are language-neutral (plots/charts), since the same image is used for both languages.
   function renderFeatured(v, lang) {
     if (!v || !featuredEl) return;
     featuredEl.innerHTML = `
