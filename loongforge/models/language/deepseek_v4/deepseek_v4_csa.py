@@ -1998,7 +1998,7 @@ class CompressedSparseAttention(MegatronModule):
 
         if not self.force_unfused_dsa:
             try:
-                from loongforge.models.common.experimental_attention_variant.dsa_fused_kernels import (
+                from loongforge.models.base.experimental_attention_variant.dsa_fused_kernels import (
                     DSADotProductAttention as _DSAKernel,
                 )
             except ImportError:
@@ -2247,7 +2247,7 @@ class CompressedSparseAttention(MegatronModule):
                 indexer_loss_coeff = getattr(self.config, 'dsa_indexer_loss_coeff', None)
                 if (self.indexer is not None and self.training and torch.is_grad_enabled()
                         and indexer_loss_coeff is not None and indexer_loss_coeff > 0):
-                    from loongforge.models.common.experimental_attention_variant.dsa_fused_kernels import (
+                    from loongforge.models.base.experimental_attention_variant.dsa_fused_kernels import (
                         triton_attn_dist,
                     )
                     import triton
@@ -3071,7 +3071,7 @@ class CompressedSparseAttention(MegatronModule):
             # calling FusedDSAIndexerLoss, whose THD fallback forms dense QK scores.
             indexer_loss = None
             if indexer_loss_coeff > 0:
-                from loongforge.models.common.experimental_attention_variant.dsa_fused_kernels import (
+                from loongforge.models.base.experimental_attention_variant.dsa_fused_kernels import (
                     triton_attn_dist,
                 )
                 import triton
@@ -3399,7 +3399,7 @@ class CompressedSparseAttention(MegatronModule):
         # Input shapes: query [l_local, np, d], kv_full [skv, d]
         # Function expects: q [sq, h, d], kv [skv, 1, d], indices [sq, 1, topk_padded]
         if not self.force_unfused_dsa:
-            from loongforge.models.common.experimental_attention_variant.dsa_fused_kernels import (
+            from loongforge.models.base.experimental_attention_variant.dsa_fused_kernels import (
                 DSADotProductAttentionFunction,
             )
             import torch.nn.functional as F

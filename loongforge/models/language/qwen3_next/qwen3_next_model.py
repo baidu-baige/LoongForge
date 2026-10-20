@@ -12,7 +12,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.inference.contexts import BaseInferenceContext
 from megatron.core.process_groups_config import ProcessGroupCollection
 
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.base.spec_utils import import_module
 from loongforge.models.language.base import BaseGPTModel
 from .qwen3_next_config import Qwen3NextConfig
 

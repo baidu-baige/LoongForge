@@ -22,8 +22,8 @@ from typing import Dict, List, Optional, Set
 from megatron.core.tensor_parallel import ColumnParallelLinear, RowParallelLinear
 from torch import nn
 
-from loongforge.models.common.peft.utils import wildcard_match
-from loongforge.models.common.peft.utils import safe_import_from
+from loongforge.models.base.peft.utils import wildcard_match
+from loongforge.models.base.peft.utils import safe_import_from
 
 
 TEColumnParallelLinear, HAVE_TE_COL_LINEAR = safe_import_from(

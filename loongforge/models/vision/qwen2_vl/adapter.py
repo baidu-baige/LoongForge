@@ -7,8 +7,8 @@ import torch
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.spec_utils import  build_module
 from .qwen2_vl_config import MLPAdapterConfig
-from loongforge.models.common import BaseMegatronModule
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.base import BaseMegatronModule
+from loongforge.models.base.spec_utils import import_module
 
 
 class Adapter(BaseMegatronModule):

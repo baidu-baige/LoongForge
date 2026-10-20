@@ -21,9 +21,9 @@ from megatron.core.transformer.enums import ModelType
 from loongforge.models.vision.vision_transformer_block import TransformerBlock
 
 from .internvl_config import InternVisionConfig
-from loongforge.models.common import BaseMegatronVisionModule
+from loongforge.models.base import BaseMegatronVisionModule
 from megatron.core import tensor_parallel
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.base.spec_utils import import_module
 
 
 class InternVisionEmbeddings(nn.Module):

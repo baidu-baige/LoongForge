@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 
-from loongforge.models.common import BaseModelStditConfig
+from loongforge.models.base import BaseModelStditConfig
 
 
 @dataclass

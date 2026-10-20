@@ -7,7 +7,7 @@ from typing import Optional, Union, List
 from dataclasses import dataclass
 
 from loongforge.constants import LanguageModelFamilies
-from loongforge.models.common.base_model_config import BaseModelConfig
+from loongforge.models.base.base_model_config import BaseModelConfig
 
 
 @dataclass

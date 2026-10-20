@@ -15,7 +15,7 @@ implementations and benchmarks:
 
 They use flat imports (`from index import ...`, `from utils import ...`) and are
 run standalone, not imported by LoongForge. Training uses the vendored copy in
-`loongforge/models/common/experimental_attention_variant/sparse_mla_bwd.py`
+`loongforge/models/base/experimental_attention_variant/sparse_mla_bwd.py`
 (imported by `dsa_kernel_backend.py`).
 
 ### Model operator packages

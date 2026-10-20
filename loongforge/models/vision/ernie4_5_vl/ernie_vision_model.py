@@ -25,9 +25,9 @@ import torch.nn.functional as F
 import numpy as np
 from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
-from loongforge.models.common import BaseMegatronVisionModule
+from loongforge.models.base import BaseMegatronVisionModule
 from loongforge.models.vision.vision_transformer_block import TransformerBlock
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.base.spec_utils import import_module
 
 from .ernie_adapter import UniqueNameGuard
 from .ernie_image_preprocess import ErnieImagePreprocess

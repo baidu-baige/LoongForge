@@ -27,7 +27,7 @@ def build_optimization(training_args):
     )
 
     # Lazy import: graph runner itself pulls torch, CUDA, model-specific types.
-    from loongforge.accelerations.torch.groot_n1_6.per_microbatch_cuda_graph import (
+    from loongforge.extensions.torch.groot_n1_6.per_microbatch_cuda_graph import (
         GrootN1d6PerMicrobatchCudaGraphRunner,
     )
 

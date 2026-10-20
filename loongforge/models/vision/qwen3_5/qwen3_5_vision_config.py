@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import torch
 
 from megatron.core.activations import quick_gelu
-from ...common.base_model_config import BaseModelConfig
+from ...base.base_model_config import BaseModelConfig
 
 
 @dataclass

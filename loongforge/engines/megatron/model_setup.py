@@ -70,8 +70,8 @@ from loongforge.engines.megatron.checkpointing import (
     checkpoint_exists,
 )
 from loongforge.engines.megatron.hf_bridge import load_hf_checkpoint_online
-from loongforge.models.common.peft.lora import LoRA, VLMLoRA
-from loongforge.models.common.peft.utils import apply_peft_transformation
+from loongforge.models.base.peft.lora import LoRA, VLMLoRA
+from loongforge.models.base.peft.utils import apply_peft_transformation
 
 
 def is_hf_checkpoint(load_path):

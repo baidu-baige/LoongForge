@@ -113,7 +113,7 @@ def _align_static_graph_buckets_after_warmup(model) -> bool:
         bucket_indices, _ = dist._compute_bucket_assignment_by_size(
             ordered, limits, sparse, ready_order
         )
-        from loongforge.accelerations.torch.groot_n1_7.groot_ddp_reducer_bucket_control import (
+        from loongforge.extensions.torch.groot_n1_7.groot_ddp_reducer_bucket_control import (
             initialize_buckets,
         )
 
@@ -237,10 +237,10 @@ def build_optimization(training_args):
     """Return a TorchOptimization for GR00T-N1.7."""
     import torch
     from loongforge.engines.torch.train_step import TorchOptimization
-    from loongforge.accelerations.torch.groot_n1_7.full_iteration_cuda_graph import (
+    from loongforge.extensions.torch.groot_n1_7.full_iteration_cuda_graph import (
         GrootN1d7FullIterationCudaGraphRunner,
     )
-    from loongforge.accelerations.torch.groot_n1_7.groot_optimizer import (
+    from loongforge.extensions.torch.groot_n1_7.groot_optimizer import (
         build_groot_optimizer,
     )
     from loongforge.engines.torch.distributed.utils import unwrap_model

@@ -84,7 +84,7 @@ if _TEFusedAdam is not None:
                     continue
                 beta1, beta2 = group["betas"]
                 if self.capturable:
-                    from loongforge.accelerations.torch.groot_n1_7.groot_fused_adamw import (
+                    from loongforge.extensions.torch.groot_n1_7.groot_fused_adamw import (
                         capturable_grad_scaled_step,
                         capturable_step,
                     )
@@ -113,7 +113,7 @@ if _TEFusedAdam is not None:
                             eps=group["eps"], weight_decay=group["weight_decay"],
                         )
                 else:
-                    from loongforge.accelerations.torch.groot_n1_7.groot_fused_adamw import (
+                    from loongforge.extensions.torch.groot_n1_7.groot_fused_adamw import (
                         eager_step,
                     )
 
@@ -194,7 +194,7 @@ class GrootTorchCapturableAdamW(torch.optim.Optimizer):
                     state["exp_avg_sq"] = torch.zeros_like(parameter)
                 state["step"].add_(1)
                 correction1, correction2 = self._bias_tables(parameter.device, beta1, beta2)
-                from loongforge.accelerations.torch.groot_n1_7.groot_fused_adamw import (
+                from loongforge.extensions.torch.groot_n1_7.groot_fused_adamw import (
                     capturable_step,
                 )
 

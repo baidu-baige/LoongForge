@@ -69,7 +69,7 @@ from megatron.training.checkpointing import (
     _load_non_persistent_base_checkpoint,
 )
 
-from loongforge.models.common.peft.utils import apply_peft_adapter_filter_to_state_dict
+from loongforge.models.base.peft.utils import apply_peft_adapter_filter_to_state_dict
 try:
     # The uneven_dtensor import only checks that Megatron-FSDP is available.
     from megatron.core.distributed.fsdp.src.megatron_fsdp import uneven_dtensor  # noqa: F401

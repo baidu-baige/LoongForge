@@ -21,7 +21,7 @@
 import torch
 import torch.nn as nn
 from copy import deepcopy
-from loongforge.models.common import BaseMegatronVisionModule
+from loongforge.models.base import BaseMegatronVisionModule
 
 
 class UniqueNameGuard:

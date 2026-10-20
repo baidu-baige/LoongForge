@@ -54,7 +54,7 @@ def _gpu_backend_transformer_layer_modules() -> MultiAccModules:
     from megatron.core.models.common.embeddings.rotary_pos_embedding import (
         apply_rotary_pos_emb,
     )
-    from loongforge.models.common.local_layers.local_norm import LocalNorm
+    from loongforge.models.base.local_layers.local_norm import LocalNorm
 
     return MultiAccModules(
         # dense linear

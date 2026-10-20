@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import torch
 
 import loongforge.engines.megatron  # noqa: F401 - initialize package imports in repository order
-from loongforge.models.common import BaseMegatronModule
+from loongforge.models.base import BaseMegatronModule
 from loongforge.models.vision.moon import patch_merger_adapter
 
 

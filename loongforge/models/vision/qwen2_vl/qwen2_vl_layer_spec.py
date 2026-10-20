@@ -26,7 +26,7 @@ from megatron.core.extensions.transformer_engine import (
     TENorm,
 )
 from megatron.core.transformer.transformer_config import TransformerConfig
-from loongforge.models.common.local_layers.local_norm import LocalNorm
+from loongforge.models.base.local_layers.local_norm import LocalNorm
 
 from dataclasses import dataclass
 

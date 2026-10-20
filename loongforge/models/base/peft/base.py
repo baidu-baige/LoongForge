@@ -25,8 +25,8 @@ import torch
 import torch.nn as nn
 from megatron.core.transformer.module import MegatronModule
 
-from loongforge.models.common.peft.recompute import maybe_enable_recompute_inputs_grad
-from loongforge.models.common.peft.walk_utils import walk
+from loongforge.models.base.peft.recompute import maybe_enable_recompute_inputs_grad
+from loongforge.models.base.peft.walk_utils import walk
 
 
 logger: logging.Logger = logging.getLogger(__name__)

@@ -12,7 +12,7 @@ from contextlib import nullcontext
 from transformers import AutoModel
 
 from megatron.training.utils import print_rank_0
-from loongforge.models.common import BaseMegatronLanguageModule
+from loongforge.models.base import BaseMegatronLanguageModule
 
 
 def llm_model_provider(

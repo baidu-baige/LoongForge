@@ -12,7 +12,7 @@ from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
 
 from loongforge.models.language.base import BaseGPTModel
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.base.spec_utils import import_module
 from .llama_config import LLaMAConfig
 
 

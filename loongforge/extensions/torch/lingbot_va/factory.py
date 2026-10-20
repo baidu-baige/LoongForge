@@ -39,7 +39,7 @@ def build_optimization(training_args):
             raise RuntimeError(
                 "LingBot native nested FSDP2 requires embodied FSDP strategy"
             )
-        from loongforge.accelerations.torch.lingbot_va.fsdp2_adapter import (
+        from loongforge.extensions.torch.lingbot_va.fsdp2_adapter import (
             wrap_lingbot_torch_nested_fsdp2,
         )
         return wrap_lingbot_torch_nested_fsdp2(model, args, ctx)
@@ -52,7 +52,7 @@ def build_optimization(training_args):
         from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
             register_post_step_reshard,
         )
-        from loongforge.accelerations.torch.lingbot_va.fsdp2_adapter import (
+        from loongforge.extensions.torch.lingbot_va.fsdp2_adapter import (
             apply_lingbot_fsdp2_tuning,
         )
         from loongforge.engines.torch.optimizer import build_optimizer

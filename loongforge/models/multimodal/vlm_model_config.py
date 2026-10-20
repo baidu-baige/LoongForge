@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 from loongforge.constants import VisionLanguageModelFamilies
-from loongforge.models.common.base_model_config import BaseModelConfig, BasePeftModelConfig
+from loongforge.models.base.base_model_config import BaseModelConfig, BasePeftModelConfig
 
 
 @dataclass

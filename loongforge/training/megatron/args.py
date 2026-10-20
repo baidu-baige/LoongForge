@@ -577,7 +577,7 @@ def _validate_sft_args(args):
     if getattr(args, "enable_chunkpipe", False):
         # A-series (Ampere / sm80) fused-DSA backend only supports ChunkPipe in
         # pretrain; the SFT ChunkPipe path is not implemented for it yet.
-        from loongforge.models.common.experimental_attention_variant.dsa_kernel_backend import (
+        from loongforge.models.base.experimental_attention_variant.dsa_kernel_backend import (
             BACKEND_SM80,
             resolve_backend_name,
         )

@@ -7,7 +7,7 @@ import loongforge.engines.megatron  # noqa: F401 - initialize package imports in
 import pytest
 import torch
 
-from loongforge.models.common.experimental_attention_variant import dsa_fused
+from loongforge.models.base.experimental_attention_variant import dsa_fused
 
 
 def test_fused_indexer_uses_configured_k_norm_epsilon(monkeypatch):

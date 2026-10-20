@@ -44,7 +44,7 @@ from megatron.core.utils import WrappedTensor, deprecate_inference_params
 from megatron.core.num_microbatches_calculator import get_num_microbatches
 
 from loongforge.models.language.language_transformer_block import TransformerBlock
-from loongforge.models.common.base_model_mixins import BaseMegatronLanguageModule
+from loongforge.models.base.base_model_mixins import BaseMegatronLanguageModule
 
 
 class BaseGPTModel(BaseMegatronLanguageModule):

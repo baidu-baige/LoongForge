@@ -26,8 +26,8 @@ import torch
 from torch import nn
 from megatron.core.transformer.spec_utils import build_module
 
-from loongforge.models.common import BaseMegatronModule
-from loongforge.models.common.layer_dispatch import multiacc_modules
+from loongforge.models.base import BaseMegatronModule
+from loongforge.models.base.layer_dispatch import multiacc_modules
 
 from .minicpm_v_4_6_config import MiniCPMV46MergerConfig
 

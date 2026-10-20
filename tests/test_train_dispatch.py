@@ -61,7 +61,7 @@ class TrainDispatchTest(unittest.TestCase):
                 self.assertEqual(torch_registry.resolve_torch_trainer(trainer), (method, factory.build_optimization))
                 self.assertEqual([call.args[0] for call in load.call_args_list], [
                     f"loongforge.training.torch.methods.{method_name}",
-                    f"loongforge.accelerations.torch.{model}.factory",
+                    f"loongforge.extensions.torch.{model}.factory",
                 ])
 
     def test_default_torch_trainer_and_invalid_selection(self):

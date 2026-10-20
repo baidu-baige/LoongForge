@@ -4,7 +4,7 @@
 """register llama model with different config"""
 
 from dataclasses import dataclass
-from loongforge.models.common import BaseModelConfig
+from loongforge.models.base import BaseModelConfig
 
 @dataclass
 class LLaMAConfig(BaseModelConfig):

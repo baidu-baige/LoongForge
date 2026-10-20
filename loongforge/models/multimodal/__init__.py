@@ -5,7 +5,7 @@
 
 from importlib import import_module
 
-from ..common.base_model_mixins import (
+from ..base.base_model_mixins import (
     BaseMegatronVisionModule,
     BaseMegatronLanguageModule,
     BaseMegatronModule,

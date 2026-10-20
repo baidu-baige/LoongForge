@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
-from loongforge.models.common.base_model_config import BaseModelMLAConfig
+from loongforge.models.base.base_model_config import BaseModelMLAConfig
 
 
 @dataclass

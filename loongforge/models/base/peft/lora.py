@@ -27,8 +27,8 @@ from megatron.core import parallel_state
 from megatron.core.transformer.moe.router import TopKRouter
 from megatron.core.utils import unwrap_model
 
-from loongforge.models.common.peft.base import PEFT
-from loongforge.models.common.peft.lora_layers import (
+from loongforge.models.base.peft.base import PEFT
+from loongforge.models.base.peft.lora_layers import (
     LinearAdapter,
     LoRALinear,
     LoRATopKRouter,
@@ -36,8 +36,8 @@ from loongforge.models.common.peft.lora_layers import (
     TELinearAdapter,
     patch_linear_module,
 )
-from loongforge.models.common.peft.module_matcher import ModuleMatcher
-from loongforge.models.common.peft.utils import (
+from loongforge.models.base.peft.module_matcher import ModuleMatcher
+from loongforge.models.base.peft.utils import (
     ParallelLinearAdapter,
     get_adapter_attributes_from_linear,
     is_expert_linear,

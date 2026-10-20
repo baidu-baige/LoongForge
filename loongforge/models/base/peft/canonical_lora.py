@@ -24,11 +24,11 @@ from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.transformer.moe.router import TopKRouter
 from torch import nn
 
-from loongforge.models.common.peft.adapter_wrapper import AdapterWrapper
-from loongforge.models.common.peft.base import PEFT
-from loongforge.models.common.peft.lora_layers import LinearAdapter, LoRALinear, LoRATopKRouter
-from loongforge.models.common.peft.module_matcher import ModuleMatcher
-from loongforge.models.common.peft.utils import ParallelLinearAdapter, get_adapter_attributes_from_linear, is_expert_linear
+from loongforge.models.base.peft.adapter_wrapper import AdapterWrapper
+from loongforge.models.base.peft.base import PEFT
+from loongforge.models.base.peft.lora_layers import LinearAdapter, LoRALinear, LoRATopKRouter
+from loongforge.models.base.peft.module_matcher import ModuleMatcher
+from loongforge.models.base.peft.utils import ParallelLinearAdapter, get_adapter_attributes_from_linear, is_expert_linear
 
 
 logger = logging.getLogger(__name__)

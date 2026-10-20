@@ -21,11 +21,11 @@ TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
     "FinetuneTrainer": ("sft_embodied", None),
     "VLDAFinetuneTrainer": ("sft_vlda", None),
     "GrootN1d6Trainer": (
-        "sft_embodied", "loongforge.accelerations.torch.groot_n1_6.factory"),
+        "sft_embodied", "loongforge.extensions.torch.groot_n1_6.factory"),
     "GrootN1d7Trainer": (
-        "sft_embodied", "loongforge.accelerations.torch.groot_n1_7.factory"),
+        "sft_embodied", "loongforge.extensions.torch.groot_n1_7.factory"),
     "LingBotFinetuneTrainer": (
-        "sft_lingbot_va", "loongforge.accelerations.torch.lingbot_va.factory"),
+        "sft_lingbot_va", "loongforge.extensions.torch.lingbot_va.factory"),
 }
 
 

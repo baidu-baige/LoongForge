@@ -32,7 +32,7 @@ from megatron.core.transformer.moe.shared_experts import SharedExpertMLP
 from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.enums import Fp8Recipe
 
-from loongforge.models.common.layer_dispatch import multiacc_modules
+from loongforge.models.base.layer_dispatch import multiacc_modules
 
 def _get_glm_layer_with_te_spec(
     num_experts: Optional[int] = None,
@@ -82,7 +82,7 @@ def _get_glm_layer_with_te_spec(
                 attention_submodules = DSAttentionSubmodules
             # Use Omni optimized fused implementation of DSA, which has better performance.
             else:
-                from loongforge.models.common.experimental_attention_variant import (
+                from loongforge.models.base.experimental_attention_variant import (
                     DSAIndexerFused,
                     DSAIndexerFusedSubmodules,
                     DSAttentionFused,

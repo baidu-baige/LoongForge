@@ -5,7 +5,7 @@
 
 import torch
 from dataclasses import dataclass
-from ...common.base_model_config import BaseModelConfig
+from ...base.base_model_config import BaseModelConfig
 
 IMG_CONTEXT_TOKEN = '<IMG_CONTEXT>'
 

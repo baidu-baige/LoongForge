@@ -8,7 +8,7 @@ from typing import Callable, Optional, Tuple
 
 import torch
 
-from loongforge.models.common.base_model_config import BaseModelConfig
+from loongforge.models.base.base_model_config import BaseModelConfig
 
 
 def gelu_pytorch_tanh(inputs: torch.Tensor) -> torch.Tensor:

@@ -23,8 +23,8 @@ import torch.nn as nn
 import transformer_engine.pytorch as te
 from megatron.core.transformer.moe.moe_utils import apply_random_logits
 
-from loongforge.models.common.peft.adapter_wrapper import AdapterWrapper
-from loongforge.models.common.peft.utils import safe_import
+from loongforge.models.base.peft.adapter_wrapper import AdapterWrapper
+from loongforge.models.base.peft.utils import safe_import
 
 
 if torch.cuda.is_available():
@@ -383,7 +383,7 @@ class TEFusedLoRALinear(LoRALinear):
     ) -> te.ops.Sequential:
         """Construct fused module for LoRA branch (linear_in + linear_out + add)"""
 
-        from loongforge.models.common.peft.utils import ParallelLinearAdapter
+        from loongforge.models.base.peft.utils import ParallelLinearAdapter
 
         # Extract params from LoRA adapter
         linear_in_weight = None

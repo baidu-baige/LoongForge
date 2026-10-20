@@ -11,7 +11,7 @@ from pathlib import Path
 import torch.nn.functional as F
 
 if __package__:
-    from loongforge.models.common.base_model_config import BaseModelMLAConfig
+    from loongforge.models.base.base_model_config import BaseModelMLAConfig
 else:
     from megatron.core.transformer.transformer_config import MLATransformerConfig as BaseModelMLAConfig
 

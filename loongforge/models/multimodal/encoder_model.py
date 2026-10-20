@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple, Literal
 import torch
 from collections import namedtuple
 from functools import partial
-from ..common import BaseMegatronModule, BaseModelConfig
+from ..base import BaseMegatronModule, BaseModelConfig
 from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
