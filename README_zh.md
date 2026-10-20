@@ -87,7 +87,7 @@
 
 ## 🔥 最新动态
 
-- **[2026/10]** 🤖 推出 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[论文](https://arxiv.org/abs/2610.25874)]
+- **[2026/10]** 🤖 推出 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 - **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
@@ -354,7 +354,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 
 ### LoongForge 团队项目
 
-- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) —— 面向机器人操作的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，零样本 LIBERO-Plus **84.5%**，真机较 π₀.₅ 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[论文](https://arxiv.org/abs/2610.25874)]
+- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) —— 面向机器人操作的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，零样本 LIBERO-Plus **84.5%**，真机较 π₀.₅ 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
 
 https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 
@@ -409,7 +409,7 @@ LoongForge/
 
 ## 📝 引用
 
-如果您觉得 LoongForge 对您的工作有帮助，欢迎引用本项目：
+如果您觉得 LoongForge 对您的工作有帮助，请引用本项目：
 
 ```bibtex
 @software{LoongForge2026,
@@ -420,7 +420,7 @@ LoongForge/
 }
 ```
 
-如果您觉得 TAOT 对您的工作有帮助，欢迎引用我们的论文：
+如果您在 LoongForge 中使用 TAOT 进行 MoE 训练，可以引用我们的论文：
 
 ```bibtex
 @article{zhang2026taot,
@@ -429,18 +429,6 @@ LoongForge/
   journal = {arXiv preprint arXiv:2608.03676},
   year    = {2026},
   url     = {https://arxiv.org/abs/2608.03676}
-}
-```
-
-如果您觉得 LoongForge-VLDA 对您的工作有帮助，欢迎引用我们的论文：
-
-```bibtex
-@article{zhang2026vlda,
-  title   = {{Vision-Language-Delta-Action}: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},
-  author  = {Zhang, Lingsen and Li, Wei and He, Jie and Zhang, Henghua and Mo, Kai and Li, Shiyong and Wang, Yanpeng and Shao, Rui},
-  journal = {arXiv preprint arXiv:2610.25874},
-  year    = {2026},
-  url     = {https://arxiv.org/abs/2610.25874}
 }
 ```
 
