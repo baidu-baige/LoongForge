@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/arXiv-Coming_Soon-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=4F46E5" alt="arXiv coming soon">
+  <a href="https://arxiv.org/abs/2610.25874"><img src="https://img.shields.io/badge/arXiv-2610.25874-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=4F46E5" alt="arXiv"></a>
   &nbsp;<a href="https://baidu-baige.github.io/LoongForge/projects/vlda.html"><img src="https://img.shields.io/badge/Project-Page-0891B2?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=4F46E5" alt="Project page"></a>
   &nbsp;<a href="https://huggingface.co/collections/LoongForge/loongforge-vlda"><img src="https://img.shields.io/badge/Hugging_Face-Model-FFD21E?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4F46E5" alt="Hugging Face model"></a>
 </p>
@@ -408,6 +408,35 @@ CONFIG=/path/to/libero.yaml \
 bash cookbook/loongforge-vlda/eval/run_libero_eval.sh
 ```
 
+### Evaluation results
+
+The released Stage 2 checkpoint was evaluated **10 times** on all four LIBERO
+suites. Each evaluation covers the full 10 tasks × 50 episodes = 500 episodes
+per suite, so the numbers below summarize 10 independent 500-episode runs for
+every suite. Each row is one evaluation; the per-run **Avg** column is the mean
+over the four suites. The final **Result** row reports the mean ± fluctuation,
+where fluctuation is `(max − min) / 2` across the 10 runs, in percent. The
+highest value in each column is shown in bold.
+
+| Run | libero_spatial | libero_object | libero_goal | libero_10 | Avg |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 98.8 | 99.0 | 98.0 | 95.8 | 97.90 |
+| 2 | 99.0 | 98.6 | 99.0 | 94.6 | 97.80 |
+| 3 | 98.0 | 98.8 | 98.2 | 94.8 | 97.45 |
+| 4 | 98.8 | 99.0 | 98.8 | 95.2 | 97.95 |
+| 5 | 99.2 | 98.4 | 99.2 | 94.8 | 97.90 |
+| 6 | 99.0 | **99.2** | 98.0 | 96.4 | 98.15 |
+| 7 | **99.6** | 98.2 | **99.4** | **97.4** | **98.65** |
+| 8 | 99.4 | 98.2 | 98.8 | 95.2 | 97.90 |
+| 9 | 99.0 | 98.4 | 98.2 | 96.2 | 97.95 |
+| 10 | 98.6 | 98.8 | 99.2 | 96.8 | 98.35 |
+| **Result** | **98.94 ± 0.80** | **98.66 ± 0.50** | **98.68 ± 0.70** | **95.72 ± 1.40** | **98.00 ± 0.60** |
+
+The **Avg** column in the final row is computed from the 10 per-run averages
+(mean 98.00, range 97.45–98.65). `libero_10` is the hardest suite and shows the
+largest spread (95.72 ± 1.40, range 94.6–97.4); the other three suites stay
+within ±0.5–0.8.
+
 ## Code layout
 
 | Component | Location |
@@ -424,6 +453,22 @@ bash cookbook/loongforge-vlda/eval/run_libero_eval.sh
 VLDA uses part of [V-JEPA 2](https://github.com/facebookresearch/vjepa2)'s
 encoder code with minor integration changes. The original
 [MIT license](../../loongforge/embodied/model/vlda/vjepa2/LICENSE) is included.
+
+## Citation
+
+If you find this work useful for your research, please consider citing:
+
+```bibtex
+@misc{zhang2026visionlanguagedeltaactionlearningcompactdeltas,
+      title={Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},
+      author={Lingsen Zhang and Wei Li and Jie He and Henghua Zhang and Kai Mo and Shiyong Li and Yanpeng Wang and Rui Shao},
+      year={2026},
+      eprint={2610.25874},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2610.25874},
+}
+```
 
 ## Acknowledgements
 
