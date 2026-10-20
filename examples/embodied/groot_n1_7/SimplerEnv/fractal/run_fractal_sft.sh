@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
 # run_fractal_sft.sh - GR00T N1.7 SimplerEnv Fractal (Google Robot) SFT on LoongForge, DDP
 #
 # Usage:

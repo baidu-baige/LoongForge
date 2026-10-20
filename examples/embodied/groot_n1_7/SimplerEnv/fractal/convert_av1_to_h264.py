@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modified from Isaac-GR00T under the Apache-2.0 License.
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #

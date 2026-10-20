@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+#
 # run_libero_sft.sh - GR00T N1.7 LIBERO SFT on LoongForge, DDP
 #
 # Each suite is finetuned separately -> one checkpoint per suite.
@@ -71,7 +74,7 @@ TRAIN_ITERS=${TRAIN_ITERS:-20000}
 GLOBAL_BATCH_SIZE=${GLOBAL_BATCH_SIZE:-640}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-1000}
-SEED=${SEED:-42} 
+SEED=${SEED:-42}
 NUM_WORKERS=${NUM_WORKERS:-4}
 # warmup_ratio 0.05 x max_steps, as iterations.
 LR_WARMUP_ITERS=${LR_WARMUP_ITERS:-$((TRAIN_ITERS / 20))}
