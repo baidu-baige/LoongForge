@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>从间断执行到连续流水：GR00T-N1.7 训练优化 | LoongForge Blog</title>
+  <meta name="description"
+    content="LoongForge 上 GR00T-N1.7 的训练优化：修复重复视频解码并异步预取 shard、缓存 metadata 并融合高频小算子、Full-Iteration CUDA Graph 与跨迭代 Backbone 流水、减少梯度重复访存，训练吞吐提升至社区实现的 1.79 倍。" />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261020-r27" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="back-link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg><span>返回博客</span></a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">VLA</span><span
+          class="chip">GR00T</span><span class="chip">训练加速</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">从间断执行到连续流水：GR00T-N1.7 训练优化</h1>
+      <div class="text-sm text-gray-500">2026-10-18 · LoongForge 团队</div>
+    </div>
+
+    <div class="prose-lf">
+      <aside class="post-links" aria-label="相关链接">
+        <div class="post-links-row"><span class="post-links-label">GitHub</span><a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></div>
+      </aside>
+      <h2>前言</h2>
+      <p>大语言模型和视觉语言模型的训练通常具有相对清晰的优化主线：将文本转换为 token，将主要计算组织为规则的 Transformer block，再围绕<strong>矩阵乘</strong>、<strong>显存访问和集合通信</strong>进行优化。但 VLA（Vision-Language-Action）并非语言模型与动作预测模块的简单组合，一次训练迭代需要同时处理多路相机视频、语言指令、机器人状态和连续动作，并依次经过视觉编码器、语言模型与动作生成网络。对 GPU 而言，这是一张计算图；但对训练后端而言，则是一套横跨视频解码、动态多模态序列、异构模型结构和分布式更新的复杂系统。</p>
+      <p>GR00T-N1.7 具备上述典型特征：模型规模约为 3.1B，训练时冻结 Backbone，仅更新 Action Head。该策略减少了反向计算，但也形成了不对称负载——Backbone 承担多模态前向，Action Head 负责前反向与参数更新，数据处理和跨卡通信则分布于训练迭代的不同阶段。</p>
+      <p>面对这种复合负载，单一优化手段难以达到理想效果。因此，优化工作的首要任务是准确刻画当前训练配置下 GR00T-N1.7 单次迭代的时间分布，并识别影响训练效率的关键瓶颈。本文将相关优化归纳为三个层面，并分别讨论其形成机制与实现路径：</p>
+      <ol>
+        <li><strong>数据供给优化：</strong>修复重复视频解码，并通过 shard 异步预取使数据处理与 GPU 计算稳定衔接；</li>
+        <li><strong>模型计算优化：</strong>消除冻结 Backbone 中的动态 metadata、冗余输出和高频小算子开销；</li>
+        <li><strong>训练执行与分布式优化：</strong>通过 CUDA Graph、跨迭代流水与梯度访存优化减少执行碎片。</li>
+      </ol>
+      <p>这三条主线分别对应数据、计算、执行三个层面，最终将训练吞吐提升至原始实现的 <strong>1.79 倍</strong>。</p>
+      <h2>1. 瓶颈定位：训练耗时集中于冻结 Backbone 与碎片化执行</h2>
+      <p>GR00T-N1.7 是典型的 Vision-Language-Action 结构。输入图像和文本先经过 Qwen3-VL Backbone，得到视觉—语言特征，随后 Action Head 使用 flow matching 与 32 层 DiT 预测机器人动作。官方社区训练配置冻结 Backbone，只训练 Action Head。在保持训练配置相同的口径下，我们测得 NVIDIA Isaac-GR00T 社区 DDP 实现的训练吞吐存在异常抖动（如图 1）。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/01.png"
+          alt="Isaac-GR00T 社区 DDP 实现前 100 步的每步吞吐曲线，在约 53 到 63 samples/s/device 之间剧烈抖动" loading="lazy" />
+        <figcaption>图 1：Isaac-GR00T 社区 DDP 实现的每步吞吐（samples/s/device），在约 53 到 63 之间明显抖动，前 100 步均值为 58.44。</figcaption>
+      </figure>
+      <p>该现象源于 Isaac 数据层对同一条 episode 缺乏去重机制：当一条 episode 被切分为 10 个 split 并分散至不同 shard 时，由于没有去重缓存，该 episode 会被完整解码最多 10 次，进而产生大量 FFmpeg 原生线程。当多个 rank 的多个 worker 消费节奏一致时，会同时触发解码，导致数十个解码线程与训练主线程争抢 CPU 时间片。这使负责发起 GPU kernel launch 的训练主线程遭受调度延迟，GPU 侧无法及时收到下一批指令，最终表现为吞吐量的忽高忽低。</p>
+      <p>通过 Nsight Systems 对单步执行进行拆解，导出整个迭代的耗时占比：</p>
+      <p><strong>表 1　单个 TrainStep 各阶段耗时与占比</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>单步耗时（ms）</th>
+            <th>E2E 占比</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>TrainStep</td><td>1791</td><td>-</td><td></td></tr>
+          <tr><td>Forward + Backward</td><td>1735</td><td>96.9%</td><td></td></tr>
+          <tr><td>　batch fetch</td><td>8.25</td><td>0.46%</td><td>数据处理耗时</td></tr>
+          <tr><td>　Forward</td><td>1262.23</td><td>70.5%</td><td>冻结 Backbone 耗时占比最大</td></tr>
+          <tr><td>　　Qwen Vision</td><td>638.90</td><td>35.67%</td><td></td></tr>
+          <tr><td>　　Qwen Text</td><td>258.23</td><td>14.42%</td><td></td></tr>
+          <tr><td>　　Action Head</td><td>142.61</td><td>7.96%</td><td></td></tr>
+          <tr><td>　Backward</td><td>464.52</td><td>26%</td><td></td></tr>
+          <tr><td>GradClip</td><td>18.500</td><td>1.0%</td><td></td></tr>
+          <tr><td>Optimizer Step</td><td>31.285</td><td>1.74%</td><td>43 次 FP32 AllReduce 占主导</td></tr>
+          <tr><td>others</td><td>6.215</td><td>0.35%</td><td></td></tr>
+        </tbody>
+      </table>
+      <p>结合表 1 可以发现，训练迭代的主要耗时集中在 Forward + Backward 阶段。通过 Profiler 进一步观察，Forward 阶段内存在 GPU Idle（如图 2 所示），并伴随 RoPE、pointwise 及 layout/cat 等小算子；同时，Backbone 默认 forward 每步仍会计算 <code>lm_head</code> 大矩阵，但此处实际只需要 VLM 的特征，<code>lm_head</code> 的计算结果并未被后续使用，因此该步属于冗余计算。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/02.png"
+          alt="Nsight Systems 时间线：单个 TrainStep 的 Forward 阶段存在多段 GPU 空闲区间" loading="lazy" />
+        <figcaption>图 2：单步 Profiler 时间线，红框标出 Forward 阶段中的 GPU 空闲区间。</figcaption>
+      </figure>
+      <p>从 kernel 维度进一步分析，每卡每步约发射 26,852 个 kernel，其中约 21,005 个 kernel 平均耗时不足 20 μs，占调用数的 78.22%。可见瓶颈并非集中于某个 GEMM，而是源于大量碎片化 kernel 的持续发射，以及 host 侧同步对 GPU 执行队列的频繁中断。</p>
+      <h2>2. 数据供给优化：消除重复解码并建立异步预取</h2>
+      <h3>2.1 DataLoader 抖动背后的 episode 重复解码问题</h3>
+      <p>机器人数据以 episode 为单位存储元数据：一个 episode 包含连续视频、状态和动作，而训练采样的单位是其中某个 step。分析<a href="https://github.com/NVIDIA/Isaac-GR00T/releases/tag/n1.7-release" target="_blank" rel="noopener">社区实现</a>后发现，其分片索引与底层数据集索引之间缺少稳定的对应关系，导致不同采样项可能反复命中并完整解码同一 episode。每次视频解码都会启动 FFmpeg 相关线程；当多个 DataLoader worker 并发执行重复解码时，大量解码线程占用 CPU 调度资源，导致训练主线程无法及时向 GPU 下发 kernel，最终在 GPU 时间线上形成空闲区间，并造成 step time 明显波动。</p>
+      <p>如图 3 所示，优化重点并非继续增加 worker 数量，而是重新建立训练样本与原始 episode 之间的索引关系。具体而言，首先遍历全部 episode，并依据 action horizon 过滤末尾无法构成完整动作序列的 step，为每个有效训练样本建立唯一定位信息；随后沿用社区已有的 episode 分组与 shard 负载均衡策略，在 worker 消费 shard 时通过该定位信息读取正确的样本位置。该方案不改变原有采样语义和数据分布，同时避免重复查找、解码同一 episode 以及重复构造局部索引。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/03.png"
+          alt="数据索引优化前后对比：优化前同一 episode 被重复完整解码，优化后为每个样本建立唯一 episode/step 定位" loading="lazy" />
+        <figcaption>图 3：数据索引优化，从样本级重复解码到 episode 级复用。分组与 shard 调度沿用社区设计，仅修正样本索引映射（图中编号仅为示意）。</figcaption>
+      </figure>
+      <h3>2.2 通过异步预取隐藏后续 shard 的准备开销</h3>
+      <p>索引修复避免了无意义的重复解码，但 shard 的准备本身仍然需要时间。为此，我们使用有界线程池异步构造后续 shard：当前 shard 被 DataLoader 消费时，预取队列并行准备后面的 shard；消费完成后，从队首取得已经构造好的结果，再补入一个新任务。这一机制包含两个影响正确性与稳定性的关键设计：</p>
+      <ul>
+        <li>每个预取线程持有独立的浅拷贝 dataset，并重置 episode cache 与 decoder 状态。否则多个线程共享视频 decoder，容易在并发读取时破坏缓存一致性。</li>
+        <li>图像增强等随机变换不能由并发线程独立生成随机数。否则，线程完成顺序的变化会导致同一 seed 下的数据增强序列发生偏移，进而破坏精度对齐。</li>
+      </ul>
+      <p>为此，我们先按训练消费顺序生成 transform replay 参数，再将确定的 replay 交由预取线程执行（如图 4）。这样，异步机制仅改变执行时序，不改变随机语义。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/04.png"
+          alt="Shard 异步预取：同步路径中消费与准备串行，异步路径中预取线程池并行准备后续 shard" loading="lazy" />
+        <figcaption>图 4：Shard 异步预取，将后续数据准备移出消费关键路径。预取队列保持先进先出，消费顺序仍与原有调度一致。</figcaption>
+      </figure>
+      <h2>3. 模型计算优化：减少冻结 Backbone 的冗余开销</h2>
+      <p>通过插桩观察 GR00T-N1.7 完整训练 step 的 Profiler，发现 GPU 时间线上存在两段显著的空闲区间：一段位于 Vision Conv3D 与第一个 Vision Block 之间，另一段位于视觉 token 写入与第一个 Text Block 之间（如图 2 所示）。这两段空闲区间并非由大规模矩阵计算引起，而是源于 CPU 侧的 metadata 构造。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/05.png"
+          alt="冻结 Backbone 的优化概览：缓存不变量以消除 GPU 空转，并将 RoPE 等高频小算子融合为单个 kernel" loading="lazy" />
+        <figcaption>图 5：冻结 Backbone 的优化概览——缓存不变量以消除 GPU 空转，融合 RoPE、RMSNorm 与 SiLU(gate) × up 等高频小算子。</figcaption>
+      </figure>
+      <h3>3.1 把每步动态 metadata 变成按签名复用的不变量</h3>
+      <p>Qwen3-VL 需要根据 <code>image_grid_thw</code> 动态生成多类辅助信息，包括：</p>
+      <ul>
+        <li>位置插值的 index 与 weight；</li>
+        <li>Vision RoPE 的 position id 和频率表索引；</li>
+        <li>FlashAttention 使用的 <code>cu_seqlens</code> 与 <code>max_seqlen</code>；</li>
+        <li>图像 token 在文本序列中的位置；</li>
+        <li>multimodal position id、rope delta 和 token type。</li>
+      </ul>
+      <p>通用实现需要支持任意图像尺寸和序列形状，因此默认在每个 step 重新计算相关信息。但 GR00T-N1.7 训练中的图像预处理尺寸、spatial merge 规则和 batch 布局高度稳定，对相同 grid signature 重复构造 metadata 属于冗余操作。同时，构造过程中的 <code>.item()</code>、<code>.tolist()</code>、布尔归约和 H2D copy 会触发 host-device 同步，造成 GPU 主计算路径等待。</p>
+      <p>针对上述问题，我们设计了两级 metadata 缓存（如图 5）：</p>
+      <ul>
+        <li>在 batch 仍位于 CPU 时，按输入内容与 shape 生成 position metadata，避免数据搬上 GPU 后再做标量回读；</li>
+        <li>在 CUDA Graph 准备阶段，按 <code>grid_signature = ((T, H, W), ...)</code> 构造 Vision metadata，并在 replay 时按静态张量的稳定 <code>data_ptr()</code> 绑定。</li>
+      </ul>
+      <p>按内容建立缓存可避免相同输入的重复计算，按指针绑定则可避免 Graph replay 期间执行 Python 动态查找。当 grid、token 数或 attention mask 形状发生变化时，系统会校验 Graph 合约，无法安全复用的 batch 不会沿用已有 metadata。</p>
+      <h3>3.2 跳过 action loss 未使用的 151,936 维词表投影</h3>
+      <p><code>lm_head</code> 用于将 Backbone 输出映射为语言词表 logits，而 GR00T-N1.7 训练只使用 hidden states 计算 action loss，并不消费语言 logits。因此，默认 forward 中的 2048 → 151936 词表投影对该模型属于冗余计算。针对这一冗余路径，我们在 GR00T-N1.7 训练中直接返回 Backbone hidden states 并跳过 <code>lm_head</code>；其他需要语言 logits 的任务仍保持原有 forward 行为。</p>
+      <h3>3.3 融合 RoPE 与 Pointwise 计算，减少 Kernel 发射与中间张量</h3>
+      <p>Profiler 中 <code>vectorized_elementwise_kernel</code> 每步调用 16,260 次；98 次 <code>CatArrayBatchedCopy</code> 里有 80 次来自 Vision/Text RoPE 的 <code>rotate_half()</code>。典型 PyTorch 实现如下：</p>
+      <pre><code class="language-python">def rotate_half(x):
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+q = q * cos + rotate_half(q) * sin
+k = k * cos + rotate_half(k) * sin</code></pre>
+      <p>该计算在数学上仅包含旋转与乘加，执行时却会展开为 slice、neg、cat、mul、add 等多个 kernel，并产生中间张量和 layout copy。单个 block 中的开销有限，但在 24 层 Vision Block 和 16 层 Text Block 中重复执行后，其累计成本不可忽略。针对这种高频模式，我们为 Vision RoPE 与 Text RoPE 分别实现了 CUDA 融合 kernel，在一次 kernel 中读取 <code>q/k/cos/sin</code>，直接完成 half rotation 和乘加并写出结果。随后，我们又把冻结 Text Backbone 中的两类 pointwise 模式纳入融合（如图 5 所示）：</p>
+      <ul>
+        <li>RMSNorm 保留原有 FP32 reduction 语义，在同一 kernel 内完成归一化收尾与权重缩放；</li>
+        <li>合并 MLP 中的 <code>SiLU(gate) * up</code>，减少激活中间张量及一次逐元素遍历。</li>
+      </ul>
+      <p>融合 kernel 不会无条件替换所有调用：当输入为 CUDA tensor，rank/shape 与 cos/sin dtype 均满足约束，且所有输入均不需要梯度时，才启用 fused path；Text Norm 和 MLP 同样需要校验连续性、dtype、device 与冻结状态。任一条件不满足时，均回退至 Transformers 原始实现。</p>
+      <h2>4. 训练执行优化：重构迭代调度与分布式通信</h2>
+      <p>算子融合减少了执行节点，但每个 step 仍包含大量 Python、dispatcher 和 CUDA launch 开销。继续优化单个耗时较短的算子，边际收益已经有限（如图 6 所示），此时需要从整体上调整迭代的执行方式。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/06.png"
+          alt="从 Full-Iteration Graph 到跨迭代双 Graph 流水：阶段 A 将整次训练迭代固化为可回放执行图，阶段 B 按冻结边界拆成 Backbone Graph 与 Train Graph" loading="lazy" />
+        <figcaption>图 6：从 Full-Iteration Graph 到跨迭代双 Graph 流水。阶段 A 把一次训练迭代固化成可回放的执行图；阶段 B 按冻结边界拆成 Backbone Graph 与 Train Graph，提前计算下一个 batch。</figcaption>
+      </figure>
+      <h3>4.1 选择 Full-Iteration CUDA Graph</h3>
+      <p>在评估 CUDA Graph 时，我们没有将捕获范围限定在单个模块或 microbatch forward。对 GR00T-N1.7 而言，局部捕获仍会将训练循环划分为多个阶段：forward Graph 之外还包括 backward、DDP bucket AllReduce、梯度裁剪、optimizer step、输入复制和随机数准备。CPU 仍需在这些边界之间进行调度，跨阶段的小 kernel 也无法被完整固化，因此我们选择捕获完整训练迭代：</p>
+      <pre><code class="language-text">Forward
+  → action loss
+  → Backward + DDP AllReduce
+  → grad norm / clip
+  → AdamW step</code></pre>
+      <p>在 capture 前，我们先完成 Eager warmup，物化优化器状态和稳定 grad buffer；随后为输入、输出、学习率、随机数与 Graph 结果分配地址稳定的 tensor。Graph replay 期间不再创建新的训练对象，只把下一批数据复制进静态 buffer，然后重放已经捕获的 CUDA 工作。</p>
+      <p>该方案的关键不在于调用 <code>torch.cuda.graph()</code>，而在于将原本依赖 Python 和动态 shape 的执行路径转化为稳定的 Graph 合约：</p>
+      <ul>
+        <li>FlashAttention mask 处理不能在 capture 中执行 <code>attention_mask.all()</code> 或 <code>max().item()</code>，因此提前缓存 unpadding metadata；</li>
+        <li>图像 grid、token 数、attention mask 和序列长度必须在 replay 前验证；</li>
+        <li>CPU 上采样的 flow-matching timestep 通过 pinned host buffer 和独立 stream 搬运，保持原随机数消费顺序；</li>
+        <li>CUDA generator 状态注册到 Graph，确保 dropout 与 action noise 的 replay 语义；</li>
+        <li>DDP AllReduce 留在 Graph 内，避免 capture 外重复同步。</li>
+      </ul>
+      <h3>4.2 利用冻结边界实现跨迭代 Backbone 前向</h3>
+      <p>Full Graph 降低了 launch 碎片化，但反向末端仍存在难以完全隐藏的 NCCL 通信。GR00T-N1.7 的冻结结构提供了进一步优化的条件：batch <code>n+1</code> 的 Backbone 前向不依赖 batch <code>n</code> 的 optimizer 更新。</p>
+      <p>因此，我们进一步将完整执行图拆分为两个 Graph：</p>
+      <ol>
+        <li><strong>Backbone Graph：</strong>只执行冻结 Qwen3-VL 前向，结果写入独立 staging buffer；</li>
+        <li><strong>Train Graph：</strong>读取稳定的 Backbone 输出，执行 Action Head forward、backward、DDP 通信、梯度处理和 optimizer。</li>
+      </ol>
+      <p>在稳态流水中，Train Graph 正在处理 batch <code>n</code> 时，专用 Backbone stream 已经开始计算 batch <code>n+1</code>。Backbone 输出完成后，通过 event 建立生产者—消费者依赖，再拷贝到 Train Graph 的静态输入。与此同时，copy stream 继续预取 batch <code>n+2</code>。</p>
+      <p>该方案并未并行执行同一 batch 的前向与反向，因为二者存在真实的数据依赖。实际利用的是不同 batch 之间的无依赖区间，并通过冻结边界确保参数在两条流水之间不会发生版本错位。运行前还会检查 Backbone 所有参数的 <code>requires_grad=False</code>；一旦 Backbone 参与训练，该流水假设便不再成立。该方案不仅提前完成下一批的部分前向计算，也利用这段计算覆盖当前批次的一部分暴露 NCCL 通信。</p>
+      <h3>4.3 覆盖暴露通信并减少梯度重复访存</h3>
+      <p>在利用跨迭代 Backbone 流水覆盖部分通信后，进一步的优化重点转向 backward 之后的显存读写。传统路径中，同一份 gradient 至少经历三类额外操作：</p>
+      <ul>
+        <li>每次 replay 前，把 leaf grad buffer 清零；</li>
+        <li>Autograd 的 AccumulateGrad 再执行一次 <code>grad += new_grad</code>；</li>
+        <li><code>clip_grad_norm_</code> 用独立的 <code>_foreach_mul_</code> 把裁剪系数写回全部 gradient，随后 AdamW 又完整读取一次。</li>
+      </ul>
+      <p>对于地址稳定且每次仅包含一个 microbatch 的 Full Graph，上述内存操作可以进一步合并。我们在 capture 前物化所有 trainable parameter 的稳定 grad buffer；capture/replay 时由 backward 直接写入本轮梯度，避免"先写 0、再执行 add"。同时，梯度裁剪仅计算 global norm 与 device-side scale，不再单独写回缩放后的梯度。如图 7 所示，我们实现的 capturable AdamW 在首次读取 gradient 时完成 <code>grad × scale</code>，并直接更新一阶动量、二阶动量与参数。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/07.png"
+          alt="反向尾部梯度访存优化：传统路径需清零、AccumulateGrad 累加与裁剪写回，LoongForge 路径由 backward 直接写入稳定 grad buffer，AdamW 首次读取时完成缩放并更新" loading="lazy" />
+        <figcaption>图 7：反向尾部的梯度访存优化——同一份梯度少读写两遍。</figcaption>
+      </figure>
+      <h2>5. 性能收益与训练正确性验证</h2>
+      <p>上述优化的实验结果如表 2。每一阶段均包含此前已启用的优化，累计提升以 Isaac 社区 DDP 后段训练结果作为 baseline。</p>
+      <p><strong>表 2　性能收益消融实验</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>配置</th>
+            <th>MBS</th>
+            <th>吞吐（samples/s/device）</th>
+            <th>相对 Baseline 累计提升</th>
+            <th>加速比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Isaac-GR00T N1.7（baseline）</td><td>112</td><td>58.44</td><td>/</td><td>/</td></tr>
+          <tr><td>LoongForge-GR00T N1.7 + 数据供给优化</td><td>同上</td><td>64.64</td><td>+10.6%</td><td>1.10×</td></tr>
+          <tr><td>LoongForge-GR00T N1.7 + 模型计算优化</td><td>同上</td><td>85.10</td><td>+45.6%</td><td>1.45×</td></tr>
+          <tr><td>LoongForge-GR00T N1.7 + 训练执行优化</td><td>同上</td><td>104.64</td><td>+79.0%</td><td>1.79×</td></tr>
+        </tbody>
+      </table>
+      <p>同时，为验证端到端正确性，所有阶段均固定模型权重、数据、seed、batch、学习率调度和分布式配置，并如图 8 所示逐 step 对比 action loss 与 grad norm。优化后的 loss MAE/max 均为 0/0，说明数据预取、算子融合、Graph replay 和通信调度等优化项未改变训练语义。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/08.png"
+          alt="前 100 步 Action Loss 曲线：Isaac-GR00T 与 LoongForge 完全重合" loading="lazy" />
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/09.png"
+          alt="前 100 步 Grad Norm 曲线：Isaac-GR00T 与 LoongForge 完全重合" loading="lazy" />
+        <figcaption>图 8：前 100 步 Action Loss（上）与 Grad Norm（下）逐 step 对比，Isaac-GR00T 与 LoongForge 两条曲线完全重合。</figcaption>
+      </figure>
+      <h2>总结</h2>
+      <p>本次性能优化并非针对单一算子，而是围绕数据供给、模型计算与训练执行重新梳理关键路径，使原本间断的执行过程形成连续流水。最终，GR00T-N1.7 的训练吞吐从 58.44 samples/s/device 提升至 104.64 samples/s/device，达到社区实现的 1.79 倍加速。</p>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-10-loongforge-lingbot-va-training-acceleration.zh.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← 上一篇：LingBot-VA 训练加速技术解析</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">所有文章 →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-10-loongforge-gr00t-n17-training-optimization.html';
+      const POST_ZH = '2026-10-loongforge-gr00t-n17-training-optimization.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === 'zh')
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js?v=20261020-r25"></script>
+</body>
+
+</html>

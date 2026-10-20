@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>From Stop-and-Go Execution to a Continuous Pipeline: Optimizing GR00T-N1.7 Training | LoongForge Blog</title>
+  <meta name="description"
+    content="Optimizing GR00T-N1.7 training on LoongForge: fixing duplicate video decoding with async shard prefetch, caching metadata and fusing small kernels, full-iteration CUDA Graph with a cross-iteration backbone pipeline, and fewer gradient memory passes. 1.79x the community implementation's throughput." />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261020-r27" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="back-link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg><span>Back to Blog</span></a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">VLA</span><span
+          class="chip">GR00T</span><span class="chip">Training Acceleration</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">From Stop-and-Go Execution to a Continuous Pipeline: Optimizing GR00T-N1.7 Training</h1>
+      <div class="text-sm text-gray-500">2026-10-18 · The LoongForge Team</div>
+    </div>
+
+    <div class="prose-lf">
+      <aside class="post-links" aria-label="Links">
+        <div class="post-links-row"><span class="post-links-label">GitHub</span><a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></div>
+      </aside>
+      <h2>Introduction</h2>
+      <p>Training large language models and vision-language models usually has a fairly clear optimization story: turn text into tokens, organize most of the compute into regular Transformer blocks, and then optimize around <strong>matrix multiplication</strong>, <strong>memory access, and collective communication</strong>. A VLA (Vision-Language-Action) model is not a simple sum of a language model and an action predictor. One training iteration has to handle multi-camera video, language instructions, robot state, and continuous actions, passing in turn through a vision encoder, a language model, and an action-generation network. To a GPU this is one compute graph; to the training backend it is a complex system spanning video decoding, dynamic multimodal sequences, heterogeneous model structures, and distributed updates.</p>
+      <p>GR00T-N1.7 has all of these traits: it has about 3.1B parameters, and training freezes the Backbone and updates only the Action Head. This reduces backward compute but also creates an asymmetric workload: the Backbone carries the multimodal forward pass, the Action Head handles forward, backward, and parameter updates, and data processing and cross-GPU communication are spread across different phases of an iteration.</p>
+      <p>With a composite workload like this, no single optimization is enough. The first job is therefore to characterize how one GR00T-N1.7 iteration spends its time under the current training configuration and to identify the key bottlenecks. This post groups the optimizations into three levels and discusses how each arises and how it is implemented:</p>
+      <ol>
+        <li><strong>Data supply:</strong> fix duplicate video decoding, and use asynchronous shard prefetch so data processing keeps up with GPU compute;</li>
+        <li><strong>Model compute:</strong> remove dynamic metadata, redundant outputs, and high-frequency small-kernel overhead from the frozen Backbone;</li>
+        <li><strong>Training execution and distributed:</strong> reduce execution fragmentation with CUDA Graph, a cross-iteration pipeline, and fewer gradient memory passes.</li>
+      </ol>
+      <p>These three lines correspond to data, compute, and execution, and together raise training throughput to <strong>1.79x</strong> that of the original implementation.</p>
+      <h2>1. Locating the bottleneck: time goes to the frozen Backbone and fragmented execution</h2>
+      <p>GR00T-N1.7 is a typical Vision-Language-Action architecture. Input images and text first pass through a Qwen3-VL Backbone to produce vision-language features, and an Action Head then predicts robot actions using flow matching and a 32-layer DiT. The official community training configuration freezes the Backbone and trains only the Action Head. Under the same training configuration, we measured the NVIDIA Isaac-GR00T community DDP implementation and saw abnormal throughput jitter (Figure 1).</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/01.png"
+          alt="Per-step throughput of the Isaac-GR00T community DDP implementation over the first 100 steps, jittering between roughly 53 and 63 samples/s/device" loading="lazy" />
+        <figcaption>Figure 1: Per-step throughput (samples/s/device) of the Isaac-GR00T community DDP implementation. It jitters visibly between about 53 and 63, with a mean of 58.44 over the first 100 steps.</figcaption>
+      </figure>
+      <p>The cause is that the Isaac data layer has no deduplication for the same episode. When one episode is split into 10 splits scattered across different shards, and there is no dedup cache, that episode can be fully decoded up to 10 times, spawning a large number of native FFmpeg threads. When many workers across many ranks consume at the same pace, they trigger decoding at the same time, and dozens of decoder threads fight the main training thread for CPU time. The main thread, which issues GPU kernel launches, is delayed by scheduling; the GPU does not receive its next instructions in time, and the result is throughput that swings up and down.</p>
+      <p>We broke down a single step with Nsight Systems and extracted the time share of the whole iteration:</p>
+      <p><strong>Table 1: Time and share of each phase in one TrainStep</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Phase</th>
+            <th>Time per step (ms)</th>
+            <th>E2E share</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>TrainStep</td><td>1791</td><td>-</td><td></td></tr>
+          <tr><td>Forward + Backward</td><td>1735</td><td>96.9%</td><td></td></tr>
+          <tr><td>&nbsp;&nbsp;batch fetch</td><td>8.25</td><td>0.46%</td><td>Data processing time</td></tr>
+          <tr><td>&nbsp;&nbsp;Forward</td><td>1262.23</td><td>70.5%</td><td>The frozen Backbone takes the largest share</td></tr>
+          <tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Qwen Vision</td><td>638.90</td><td>35.67%</td><td></td></tr>
+          <tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Qwen Text</td><td>258.23</td><td>14.42%</td><td></td></tr>
+          <tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Action Head</td><td>142.61</td><td>7.96%</td><td></td></tr>
+          <tr><td>&nbsp;&nbsp;Backward</td><td>464.52</td><td>26%</td><td></td></tr>
+          <tr><td>GradClip</td><td>18.500</td><td>1.0%</td><td></td></tr>
+          <tr><td>Optimizer Step</td><td>31.285</td><td>1.74%</td><td>Dominated by 43 FP32 AllReduce calls</td></tr>
+          <tr><td>others</td><td>6.215</td><td>0.35%</td><td></td></tr>
+        </tbody>
+      </table>
+      <p>Table 1 shows that most of an iteration is spent in Forward + Backward. A closer look with the Profiler shows GPU idle gaps inside the Forward phase (Figure 2), accompanied by small kernels such as RoPE, pointwise ops, and layout/cat. Also, the Backbone's default forward still computes the large <code>lm_head</code> matmul every step, yet only the VLM features are needed here and the <code>lm_head</code> result is never used downstream, so that step is redundant.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/02.png"
+          alt="Nsight Systems timeline: the Forward phase of one TrainStep has several GPU idle gaps" loading="lazy" />
+        <figcaption>Figure 2: Profiler timeline of one step. The red boxes mark GPU idle gaps in the Forward phase.</figcaption>
+      </figure>
+      <p>At the kernel level, each GPU launches about 26,852 kernels per step, and about 21,005 of them (78.22% of all calls) average under 20 μs. The bottleneck is therefore not a single GEMM, but the continuous launch of a large number of fragmented kernels, plus host-side synchronization that repeatedly interrupts the GPU execution queue.</p>
+      <h2>2. Data supply: eliminate duplicate decoding and add asynchronous prefetch</h2>
+      <h3>2.1 The duplicate episode decoding behind DataLoader jitter</h3>
+      <p>Robot data stores its metadata per episode: an episode contains continuous video, state, and actions, while the unit of training sampling is a single step inside it. After analyzing the <a href="https://github.com/NVIDIA/Isaac-GR00T/releases/tag/n1.7-release" target="_blank" rel="noopener">community implementation</a>, we found that its shard index and the underlying dataset index have no stable mapping between them, so different samples can repeatedly hit and fully decode the same episode. Every video decode launches FFmpeg-related threads; when several DataLoader workers decode duplicates concurrently, the many decoder threads occupy CPU scheduling resources, the main training thread cannot issue kernels to the GPU in time, idle gaps appear on the GPU timeline, and step time fluctuates noticeably.</p>
+      <p>As Figure 3 shows, the fix is not to add more workers, but to rebuild the index relationship between training samples and their original episodes. Concretely, we first traverse all episodes and, based on the action horizon, filter out trailing steps that cannot form a complete action sequence, building a unique locator for every valid training sample. We then keep the community's existing episode grouping and shard load-balancing strategy, and when a worker consumes a shard it uses the locator to read the correct sample position. This does not change the sampling semantics or data distribution, and it avoids repeated lookups, repeated decoding of the same episode, and repeated construction of local indexes.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/03.png"
+          alt="Data index optimization before and after: before, the same episode is fully decoded repeatedly; after, every sample gets a unique episode/step locator" loading="lazy" />
+        <figcaption>Figure 3: Data index optimization, from per-sample duplicate decoding to episode-level reuse. Grouping and shard scheduling follow the community design; only the sample-index mapping is fixed (numbers in the figure are illustrative).</figcaption>
+      </figure>
+      <h3>2.2 Hiding shard preparation with asynchronous prefetch</h3>
+      <p>Fixing the index avoids pointless duplicate decoding, but preparing a shard still takes time. So we build upcoming shards asynchronously with a bounded thread pool: while the DataLoader consumes the current shard, the prefetch queue prepares the following shards in parallel; after a shard is consumed, the already-built result is taken from the head of the queue and a new task is added. Two design points matter for correctness and stability:</p>
+      <ul>
+        <li>Each prefetch thread holds its own shallow-copied dataset and resets the episode cache and decoder state. Otherwise several threads would share a video decoder, which easily corrupts cache consistency under concurrent reads.</li>
+        <li>Random transforms such as image augmentation must not draw random numbers independently in concurrent threads. Otherwise a change in thread completion order shifts the augmentation sequence under the same seed and breaks accuracy alignment.</li>
+      </ul>
+      <p>So we first generate the transform replay parameters in training consumption order, and then hand the determined replay to the prefetch threads (Figure 4). The asynchronous mechanism then changes only execution timing, not random semantics.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/04.png"
+          alt="Async shard prefetch: in the synchronous path, consuming and preparing are serial; in the async path, a prefetch thread pool prepares upcoming shards in parallel" loading="lazy" />
+        <figcaption>Figure 4: Asynchronous shard prefetch moves preparation of upcoming data off the consumption critical path. The prefetch queue stays first-in-first-out, so consumption order still matches the original schedule.</figcaption>
+      </figure>
+      <h2>3. Model compute: cut redundant overhead in the frozen Backbone</h2>
+      <p>Instrumenting the Profiler for a complete GR00T-N1.7 training step showed two significant idle gaps on the GPU timeline: one between Vision Conv3D and the first Vision Block, and another between writing the visual tokens and the first Text Block (Figure 2). Neither is caused by large matrix computation; both come from metadata construction on the CPU side.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/05.png"
+          alt="Overview of frozen-Backbone optimizations: cache invariants to remove GPU stalls, and fuse high-frequency small ops such as RoPE into single kernels" loading="lazy" />
+        <figcaption>Figure 5: Overview of the frozen-Backbone optimizations: cache invariants to remove GPU stalls, and fuse high-frequency small ops such as RoPE, RMSNorm, and SiLU(gate) × up.</figcaption>
+      </figure>
+      <h3>3.1 Turning per-step dynamic metadata into invariants reused by signature</h3>
+      <p>Qwen3-VL dynamically generates several kinds of auxiliary information from <code>image_grid_thw</code>, including:</p>
+      <ul>
+        <li>the index and weight for position interpolation;</li>
+        <li>the position ids and frequency-table indices for Vision RoPE;</li>
+        <li><code>cu_seqlens</code> and <code>max_seqlen</code> used by FlashAttention;</li>
+        <li>the positions of image tokens within the text sequence;</li>
+        <li>the multimodal position ids, rope delta, and token type.</li>
+      </ul>
+      <p>A general-purpose implementation must support arbitrary image sizes and sequence shapes, so by default it recomputes all of this every step. In GR00T-N1.7 training, however, the image preprocessing size, spatial merge rule, and batch layout are highly stable, so rebuilding metadata for the same grid signature is redundant. In addition, <code>.item()</code>, <code>.tolist()</code>, boolean reductions, and H2D copies in that construction trigger host-device synchronization and make the main GPU compute path wait.</p>
+      <p>To address this we designed a two-level metadata cache (Figure 5):</p>
+      <ul>
+        <li>While the batch is still on the CPU, generate position metadata from the input content and shape, avoiding scalar readbacks after the data has moved to the GPU;</li>
+        <li>During CUDA Graph preparation, build Vision metadata keyed by <code>grid_signature = ((T, H, W), ...)</code>, and bind it by the stable <code>data_ptr()</code> of static tensors at replay time.</li>
+      </ul>
+      <p>Caching by content avoids recomputing identical inputs, and binding by pointer avoids dynamic Python lookups during Graph replay. When the grid, token count, or attention mask shape changes, the system validates the Graph contract, and a batch that cannot be safely reused does not inherit existing metadata.</p>
+      <h3>3.2 Skipping the 151,936-dim vocabulary projection that action loss never uses</h3>
+      <p><code>lm_head</code> maps Backbone output to language vocabulary logits, but GR00T-N1.7 training uses only the hidden states to compute the action loss and never consumes language logits. The 2048 → 151936 vocabulary projection in the default forward is therefore redundant for this model. We return the Backbone hidden states directly and skip <code>lm_head</code> in GR00T-N1.7 training; other tasks that need language logits keep the original forward behavior.</p>
+      <h3>3.3 Fusing RoPE and pointwise ops to cut kernel launches and intermediate tensors</h3>
+      <p>In the Profiler, <code>vectorized_elementwise_kernel</code> is called 16,260 times per step, and 80 of the 98 <code>CatArrayBatchedCopy</code> calls come from <code>rotate_half()</code> in Vision/Text RoPE. A typical PyTorch implementation looks like this:</p>
+      <pre><code class="language-python">def rotate_half(x):
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+q = q * cos + rotate_half(q) * sin
+k = k * cos + rotate_half(k) * sin</code></pre>
+      <p>Mathematically this is only a rotation plus multiply-add, but at execution time it expands into slice, neg, cat, mul, and add kernels, producing intermediate tensors and layout copies. The cost in any one block is limited, but repeated across 24 Vision Blocks and 16 Text Blocks, the accumulated cost is not negligible. For this high-frequency pattern we implemented separate fused CUDA kernels for Vision RoPE and Text RoPE: one kernel reads <code>q/k/cos/sin</code>, completes the half rotation and multiply-add, and writes the result. We then also fused two pointwise patterns in the frozen Text Backbone (Figure 5):</p>
+      <ul>
+        <li>RMSNorm keeps its original FP32 reduction semantics and finishes normalization and weight scaling in the same kernel;</li>
+        <li>the <code>SiLU(gate) * up</code> in the MLP is merged, saving an intermediate activation tensor and one elementwise pass.</li>
+      </ul>
+      <p>The fused kernels do not replace every call unconditionally. The fused path is used only when the input is a CUDA tensor, rank/shape and the cos/sin dtype satisfy the constraints, and no input requires gradients; Text Norm and MLP additionally check contiguity, dtype, device, and frozen status. If any condition fails, execution falls back to the original Transformers implementation.</p>
+      <h2>4. Training execution: restructure iteration scheduling and distributed communication</h2>
+      <p>Operator fusion reduces the number of execution nodes, but every step still carries a lot of Python, dispatcher, and CUDA launch overhead. Squeezing individual short kernels further has diminishing returns (Figure 6), so we need to change how the iteration executes as a whole.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/06.png"
+          alt="From Full-Iteration Graph to a cross-iteration dual-Graph pipeline: stage A freezes a whole training iteration into a replayable graph; stage B splits it at the frozen boundary into a Backbone Graph and a Train Graph" loading="lazy" />
+        <figcaption>Figure 6: From Full-Iteration Graph to a cross-iteration dual-Graph pipeline. Stage A freezes a whole training iteration into a replayable graph; stage B splits it at the frozen boundary into a Backbone Graph and a Train Graph, computing the next batch ahead of time.</figcaption>
+      </figure>
+      <h3>4.1 Choosing a Full-Iteration CUDA Graph</h3>
+      <p>When evaluating CUDA Graph, we did not limit the capture scope to a single module or a microbatch forward. For GR00T-N1.7, partial capture still splits the training loop into several phases: beyond the forward Graph there are backward, DDP bucket AllReduce, gradient clipping, the optimizer step, input copies, and random-number preparation. The CPU still has to schedule across those boundaries, and small kernels across phases cannot be fully frozen, so we capture the complete training iteration:</p>
+      <pre><code class="language-text">Forward
+  → action loss
+  → Backward + DDP AllReduce
+  → grad norm / clip
+  → AdamW step</code></pre>
+      <p>Before capture, we run an eager warmup to materialize optimizer state and stable grad buffers; we then allocate address-stable tensors for inputs, outputs, learning rate, random numbers, and Graph results. During Graph replay no new training objects are created: we only copy the next batch into the static buffers and replay the captured CUDA work.</p>
+      <p>The key to this approach is not calling <code>torch.cuda.graph()</code>, but turning an execution path that depends on Python and dynamic shapes into a stable Graph contract:</p>
+      <ul>
+        <li>FlashAttention mask handling cannot run <code>attention_mask.all()</code> or <code>max().item()</code> during capture, so unpadding metadata is cached ahead of time;</li>
+        <li>image grid, token count, attention mask, and sequence length must be validated before replay;</li>
+        <li>flow-matching timesteps sampled on the CPU are moved through a pinned host buffer and a dedicated stream, preserving the original random-number consumption order;</li>
+        <li>the CUDA generator state is registered with the Graph to keep replay semantics for dropout and action noise;</li>
+        <li>DDP AllReduce stays inside the Graph, avoiding repeated synchronization outside capture.</li>
+      </ul>
+      <h3>4.2 Using the frozen boundary for a cross-iteration Backbone forward</h3>
+      <p>The Full Graph reduces launch fragmentation, but NCCL communication at the tail of backward still cannot be fully hidden. The frozen structure of GR00T-N1.7 offers a further opening: the Backbone forward of batch <code>n+1</code> does not depend on the optimizer update of batch <code>n</code>.</p>
+      <p>So we further split the full execution graph into two Graphs:</p>
+      <ol>
+        <li><strong>Backbone Graph:</strong> runs only the frozen Qwen3-VL forward and writes the result into a separate staging buffer;</li>
+        <li><strong>Train Graph:</strong> reads the stable Backbone output and runs the Action Head forward, backward, DDP communication, gradient handling, and the optimizer.</li>
+      </ol>
+      <p>In steady state, while the Train Graph is processing batch <code>n</code>, a dedicated Backbone stream has already started on batch <code>n+1</code>. Once the Backbone output is ready, a producer-consumer dependency is established through an event, and the output is copied into the Train Graph's static input. Meanwhile, the copy stream keeps prefetching batch <code>n+2</code>.</p>
+      <p>This does not run the forward and backward of the same batch in parallel, because they have a real data dependency. What it exploits is the dependency-free window between different batches, and the frozen boundary guarantees that parameters cannot go out of version between the two pipelines. Before running, we also check that <code>requires_grad=False</code> holds for every Backbone parameter; once the Backbone participates in training, this pipeline assumption no longer holds. The scheme not only computes part of the next batch's forward early, it also uses that compute to cover part of the exposed NCCL communication of the current batch.</p>
+      <h3>4.3 Covering exposed communication and reducing repeated gradient memory access</h3>
+      <p>After the cross-iteration Backbone pipeline covers part of the communication, the next focus is the memory reads and writes after backward. On the traditional path, the same gradient goes through at least three kinds of extra operations:</p>
+      <ul>
+        <li>before each replay, the leaf grad buffer is zeroed;</li>
+        <li>Autograd's AccumulateGrad performs one more <code>grad += new_grad</code>;</li>
+        <li><code>clip_grad_norm_</code> uses a separate <code>_foreach_mul_</code> to write the clipping coefficient back to every gradient, and AdamW then reads it all again.</li>
+      </ul>
+      <p>For a Full Graph with stable addresses and only one microbatch per step, these memory operations can be merged. Before capture, we materialize stable grad buffers for all trainable parameters; during capture/replay, backward writes the current gradients directly, avoiding "write 0, then add". Gradient clipping now computes only the global norm and a device-side scale, and no longer writes scaled gradients back separately. As Figure 7 shows, our capturable AdamW applies <code>grad × scale</code> the first time it reads the gradient and directly updates the first moment, second moment, and parameters.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/07.png"
+          alt="Gradient memory-access optimization at the tail of backward: the traditional path zeroes, accumulates with AccumulateGrad, and writes back clipped gradients; the LoongForge path writes directly into a stable grad buffer and AdamW applies the scale on first read and updates" loading="lazy" />
+        <figcaption>Figure 7: Gradient memory-access optimization at the tail of backward: two fewer read/write passes over the same gradient.</figcaption>
+      </figure>
+      <h2>5. Performance gains and training-correctness validation</h2>
+      <p>Table 2 shows the results. Each stage includes the optimizations enabled before it, and cumulative gains are measured against the late-phase training result of the Isaac community DDP implementation as the baseline.</p>
+      <p><strong>Table 2: Ablation of performance gains</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Configuration</th>
+            <th>MBS</th>
+            <th>Throughput (samples/s/device)</th>
+            <th>Cumulative gain vs. baseline</th>
+            <th>Speedup</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Isaac-GR00T N1.7 (baseline)</td><td>112</td><td>58.44</td><td>/</td><td>/</td></tr>
+          <tr><td>LoongForge-GR00T N1.7 + data supply optimization</td><td>same</td><td>64.64</td><td>+10.6%</td><td>1.10×</td></tr>
+          <tr><td>LoongForge-GR00T N1.7 + model compute optimization</td><td>same</td><td>85.10</td><td>+45.6%</td><td>1.45×</td></tr>
+          <tr><td>LoongForge-GR00T N1.7 + training execution optimization</td><td>same</td><td>104.64</td><td>+79.0%</td><td>1.79×</td></tr>
+        </tbody>
+      </table>
+      <p>To validate end-to-end correctness, every stage fixes the model weights, data, seed, batch, learning-rate schedule, and distributed configuration, and, as Figure 8 shows, compares action loss and grad norm step by step. The loss MAE/max of the optimized runs are both 0/0, showing that data prefetch, operator fusion, Graph replay, and communication scheduling do not change training semantics.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/08.png"
+          alt="Action Loss over the first 100 steps: Isaac-GR00T and LoongForge curves overlap exactly" loading="lazy" />
+        <img src="../assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/09.png"
+          alt="Grad Norm over the first 100 steps: Isaac-GR00T and LoongForge curves overlap exactly" loading="lazy" />
+        <figcaption>Figure 8: Step-by-step comparison of Action Loss (top) and Grad Norm (bottom) over the first 100 steps. The Isaac-GR00T and LoongForge curves overlap exactly.</figcaption>
+      </figure>
+      <h2>Summary</h2>
+      <p>This round of optimization does not target any single operator. Instead it reworks the critical path across data supply, model compute, and training execution, so that a previously stop-and-go execution becomes a continuous pipeline. In the end, GR00T-N1.7 training throughput rises from 58.44 samples/s/device to 104.64 samples/s/device, a 1.79x speedup over the community implementation.</p>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-10-loongforge-lingbot-va-training-acceleration.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: Accelerating LingBot-VA Training: A Technical Walkthrough</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-10-loongforge-gr00t-n17-training-optimization.html';
+      const POST_ZH = '2026-10-loongforge-gr00t-n17-training-optimization.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === 'en')
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js?v=20261020-r25"></script>
+</body>
+
+</html>
