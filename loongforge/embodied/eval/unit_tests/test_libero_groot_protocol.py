@@ -13,6 +13,7 @@ import pytest
 
 from loongforge.embodied.eval.adapters.libero import LiberoAdapter
 from loongforge.embodied.eval.orchestrator.config import apply_config
+from loongforge.embodied.eval.orchestrator.runners import libero_groot_runner as groot
 from loongforge.embodied.eval.orchestrator.runners import libero_runner as legacy
 from loongforge.embodied.eval.payload_builders.groot_n1_7 import GrootN1d7PayloadBuilder
 
@@ -104,7 +105,7 @@ def test_adapter_state_gripper_and_legacy_unchanged():
     obs = observation()
     ctx = {"instruction": "test", "ee_pos": np.array([99., 99., 99.]),
            "ee_ori_mat": np.eye(3)}
-    adapter = legacy.GrootOfficialAdapter()
+    adapter = groot.GrootOfficialAdapter()
     canonical = adapter.obs_to_canonical(obs, ctx)
     payload = GrootN1d7PayloadBuilder().build(canonical, ctx)
     np.testing.assert_allclose(payload["state"], [1, 2, 3, 0, 0, 0, .02, -.02])
@@ -121,7 +122,7 @@ def test_adapter_state_gripper_and_legacy_unchanged():
 @pytest.mark.parametrize("seed", [None, 42])
 def test_session_seed_once_random_reset_reuses_env_and_interrupts(seed):
     env = FakeEnv()
-    session = legacy.GrootOfficialEnvSession(env, seed, 17)
+    session = groot.GrootOfficialEnvSession(env, seed, 17)
     for _ in range(3):
         _, completed = session.step([[0] * 7] * 8)
         assert completed["steps"] == 2
@@ -134,7 +135,7 @@ def test_session_seed_once_random_reset_reuses_env_and_interrupts(seed):
 
 def test_macro_eight_actual_steps_and_exact_truncation():
     env = FakeEnv(SimpleNamespace(done_after=100))
-    session = legacy.GrootOfficialEnvSession(env, 42, 17)
+    session = groot.GrootOfficialEnvSession(env, 42, 17)
     assert session.step([[0] * 7] * 8)[1] is None
     assert session.steps == 8
     assert session.step([[0] * 7] * 8)[1] is None
@@ -150,7 +151,7 @@ def test_autoreset_success_is_merged_into_terminal_episode():
             return self.resets >= 2 and self.steps == 0
 
     env = ResetSuccessEnv(SimpleNamespace(done_after=100))
-    session = legacy.GrootOfficialEnvSession(env, 42, 1)
+    session = groot.GrootOfficialEnvSession(env, 42, 1)
     _, completed = session.step([[0] * 7] * 8)
     assert completed["steps"] == 1
     assert completed["success"] == 1
@@ -162,7 +163,7 @@ def test_initial_reset_success_does_not_mark_first_episode_successful():
         def check_success(self):
             return self.resets == 1 and self.steps == 0
 
-    session = legacy.GrootOfficialEnvSession(InitialSuccessEnv(SimpleNamespace(done_after=100)), 42, 1)
+    session = groot.GrootOfficialEnvSession(InitialSuccessEnv(SimpleNamespace(done_after=100)), 42, 1)
     assert session.reset_success is True
     _, completed = session.step([[0] * 7] * 8)
     assert completed["success"] == 0
@@ -186,7 +187,7 @@ class EnvFactory:
 @pytest.mark.parametrize("requested", [1, 3, 11])
 def test_collection_exact_limit_cache_reset_and_rpc(requested):
     factory = EnvFactory()
-    records = legacy.collect_groot_official_task(
+    records = groot.collect_groot_official_task(
         arguments(episodes_per_task=requested), SimpleNamespace(language="test"), 7, "run",
         env_factory=factory, client_factory=FakeClient)
     assert len(records) == requested
@@ -212,7 +213,7 @@ def test_collection_exact_limit_cache_reset_and_rpc(requested):
 
 def test_macro_rounds_advance_episode_step_until_completion():
     factory = EnvFactory(done_after=10)
-    records = legacy.collect_groot_official_task(
+    records = groot.collect_groot_official_task(
         arguments(episodes_per_task=1), SimpleNamespace(language="test"), 0, "run",
         env_factory=factory, client_factory=FakeClient)
     assert [r["steps"] for r in records] == [10]
@@ -231,7 +232,7 @@ class BrokenResetEnv(FakeEnv):
 def test_failure_after_partial_completion_raises_and_closes():
     factory = EnvFactory(env_cls=BrokenResetEnv)
     with pytest.raises(RuntimeError, match="autoreset failed"):
-        legacy.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
+        groot.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
                               env_factory=factory, client_factory=FakeClient)
     assert FakeClient.instances[-1].closed and factory.envs[-1].closed
 
@@ -248,7 +249,7 @@ def test_policy_error_and_short_chunk_fail_task():
     for client, error in [(ErrorClient, RuntimeError), (ShortClient, ValueError)]:
         factory = EnvFactory()
         with pytest.raises(error):
-            legacy.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
+            groot.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
                                   env_factory=factory, client_factory=client)
         assert factory.envs[-1].closed
 
@@ -268,7 +269,7 @@ def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
         return [{"success": s, "frames": [], "trace": [], "episode_idx": i}
                 for i, s in enumerate([1] if task_id == 0 else [0, 0, 1])]
 
-    monkeypatch.setattr(legacy, "collect_groot_official_task", collect)
+    monkeypatch.setattr(groot, "collect_groot_official_task", collect)
     first = legacy.run_batch(args)
     second = legacy.run_batch(args)
     assert first["success_rate"] == pytest.approx(2 / 3)
@@ -283,7 +284,7 @@ def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
 
 
 def test_all_failed_or_unparsed_has_no_rate():
-    summary = legacy.summarize_groot_official_tasks([
+    summary = groot.summarize_groot_official_tasks([
         {"status": "FAILED", "success_rate": None},
         {"status": "OK", "success_rate": "unparsed"},
         {"status": "OK", "success_rate": float("nan")},
@@ -311,13 +312,13 @@ def test_explicit_config_routing_and_legacy_default(monkeypatch):
 ])
 def test_protocol_rejects_conflicting_configuration(overrides):
     with pytest.raises(ValueError):
-        legacy._run_batch_groot_official(arguments(**overrides))
+        groot._run_batch_groot_official(arguments(**overrides))
 
 
 def test_other_model_rejected_only_in_opt_in_path():
     args = arguments(raw_config={"model": {"model_type": "pi05"}})
     with pytest.raises(ValueError, match="requires GR00T"):
-        legacy.collect_groot_official_task(args, SimpleNamespace(language="test"), 0, "run")
+        groot.collect_groot_official_task(args, SimpleNamespace(language="test"), 0, "run")
 
 
 def test_legacy_episode_keeps_init_state_and_episode_seed(monkeypatch):

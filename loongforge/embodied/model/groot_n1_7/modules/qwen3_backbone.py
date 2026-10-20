@@ -42,23 +42,6 @@ _CUDA_GRAPH_ATTENTION_MASK_METADATA: dict[int, tuple[bool, object | None]] = {}
 _CUDA_GRAPH_ATTENTION_MASK_PATCHED = False
 
 
-def _stream_is_capturing() -> bool:
-    """True only while the current CUDA stream is capturing a graph.
-
-    The ``_CUDA_GRAPH_ATTENTION_MASK_METADATA`` cache is keyed by
-    ``attention_mask.data_ptr()``.  Those addresses are recycled by the caching
-    allocator, so outside of capture a fresh mask can alias a stale entry whose
-    unpad ``indices`` were built for a longer padded sequence — flash-attn then
-    gathers rows past the current sequence length and trips a device-side
-    ``index out of bounds`` assert.  The cache is only needed to avoid host
-    syncs *during capture*; in eager we must recompute from the live mask.
-    """
-    try:
-        return torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
-    except Exception:
-        return False
-
-
 def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
     """Make Transformers FlashAttention mask handling graph-safe.
 
@@ -82,7 +65,7 @@ def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
 
     def graph_flash_attention_mask(batch_size, cache_position, kv_length, kv_offset=0,
                                    mask_function=None, attention_mask=None, **kwargs):
-        if _stream_is_capturing() and isinstance(attention_mask, torch.Tensor):
+        if isinstance(attention_mask, torch.Tensor):
             metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
             if metadata is not None:
                 all_valid, _unpad = metadata
@@ -105,7 +88,7 @@ def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
         )
 
     def graph_get_unpad_data(attention_mask):
-        if _stream_is_capturing() and isinstance(attention_mask, torch.Tensor):
+        if isinstance(attention_mask, torch.Tensor):
             metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
             if metadata is not None and metadata[1] is not None:
                 return metadata[1]
@@ -113,7 +96,7 @@ def _patch_qwen3vl_cuda_graph_attention_mask() -> None:
 
     def graph_sdpa_mask(batch_size, cache_position, kv_length, kv_offset=0,
                         mask_function=None, attention_mask=None, **kwargs):
-        if _stream_is_capturing() and isinstance(attention_mask, torch.Tensor):
+        if isinstance(attention_mask, torch.Tensor):
             metadata = _CUDA_GRAPH_ATTENTION_MASK_METADATA.get(attention_mask.data_ptr())
             if metadata is not None:
                 all_valid, _unpad = metadata
