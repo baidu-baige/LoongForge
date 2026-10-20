@@ -285,6 +285,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>
 <li><a href="examples/embodied/dreamzero/">DreamZero</a></li>
+<li><a href="cookbook/loongforge-vlda/">LoongForge-VLDA</a></li>
 </ul>
 </td>
 <td valign="top">
