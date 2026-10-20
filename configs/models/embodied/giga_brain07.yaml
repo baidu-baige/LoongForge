@@ -1,0 +1,58 @@
+model:
+  model_type: giga_brain07
+  pretrained: /mnt/cfs/pxy/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base
+  vlm_type: paligemma2
+  state_input_mode: proprio_anchor
+  observation_memory_size: 1
+  num_embodiments: 8
+  action_horizon: 50
+  llm_loss_weight: 0.0
+  lr: 2.5e-05
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-08
+  weight_decay: 1.0e-10
+  warmup_steps: 10
+  decay_steps: 300
+  scheduler_end_value: 0.1
+  activation_checkpointing: true
+  activation_class_names:
+  - Gemma2DecoderLayerWithExpert__##__15
+  enable_multi_flow_samples: false
+  flow_matching_batch_mul: 4
+data:
+  data_path: /mnt/cfs/pxy/data/agibot-world/AgiBotWorldLerobot_v30/agibotworld/task_327
+  norm_stats_path: /mnt/cfs/pxy/data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json
+  tokenizer_model_path: /mnt/cfs/pxy/ckpt/paligemma-3b-pt-224
+  fast_tokenizer_path: /mnt/cfs/pxy/ckpt/physical-intelligence/fast
+  camera_keys:
+  - observation.images.top_head
+  - observation.images.hand_left
+  - observation.images.hand_right
+  action_chunk: 50
+  meta_name: meta
+  video_backend: torchcodec
+  torchcodec_decoder_cache_size: 128
+  batch_size_per_gpu: 4
+  num_workers: 0
+  persistent_workers: true
+  pin_memory: true
+  shuffle: true
+  sampler_seed: 6666
+  is_train: true
+  enable_image_aug: false
+  state_input_mode: proprio_anchor
+  observation_memory_size: 1
+  agent_pos_state: 32
+  use_quaternion_to_6d: false
+  robot_type: a2d
+  embodiment_override: AGIBOT_G1
+  embodiment_id: '1'
+  vlm_type: paligemma2
+  resize_hw:
+  - 224
+  - 224
+  enable_depth_img: false
+  max_length: 120
+  encoded_action_horizon: 50
+  use_quantiles: true

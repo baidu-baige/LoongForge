@@ -1,0 +1,2 @@
+from .pipeline_segment_anything import SegmentAnythingPipeline
+from .pipeline_upernet import UperNetForSemanticSegmentationPipeline
