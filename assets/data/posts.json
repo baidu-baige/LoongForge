@@ -3,6 +3,7 @@
         "slug": "2026-10-loongforge-pi05-3x-training-acceleration",
         "date": "2026-10-19",
         "featured": false,
+        "cover": "assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/04.png",
         "tags_en": [
             "LoongForge",
             "VLA",
@@ -32,6 +33,7 @@
         "slug": "2026-10-loongforge-gr00t-n17-training-optimization",
         "date": "2026-10-18",
         "featured": false,
+        "cover": "assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/01.png",
         "tags_en": [
             "LoongForge",
             "VLA",
@@ -61,6 +63,7 @@
         "slug": "2026-10-loongforge-lingbot-va-training-acceleration",
         "date": "2026-10-15",
         "featured": false,
+        "cover": "assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/05.png",
         "tags_en": [
             "LoongForge",
             "VLA",
