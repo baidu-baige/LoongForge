@@ -6,9 +6,13 @@
 from .report import collect_resource_snapshot, write_eval_report
 from .repro_compare import compare_results, write_repro_comparison
 from .results import (
+    INFRA_FAILURE_REASONS,
     append_jsonl,
     completed_episode_keys,
+    is_infra_failure,
     load_jsonl,
+    record_episode_idx,
+    record_task_id,
     summarize_records,
     summarize_suites,
     validate_episode_floor,
@@ -18,12 +22,16 @@ from .results import (
 from .trace_archive import archive_traces
 
 __all__ = [
+    "INFRA_FAILURE_REASONS",
     "append_jsonl",
     "archive_traces",
     "collect_resource_snapshot",
     "compare_results",
     "completed_episode_keys",
+    "is_infra_failure",
     "load_jsonl",
+    "record_episode_idx",
+    "record_task_id",
     "summarize_records",
     "summarize_suites",
     "validate_episode_floor",

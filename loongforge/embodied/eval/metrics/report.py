@@ -17,7 +17,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from .results import PathLike, load_jsonl, summarize_records, summarize_suites, validate_episode_floor
+from .results import (
+    PathLike,
+    is_infra_failure,
+    load_jsonl,
+    summarize_records,
+    summarize_suites,
+    validate_episode_floor,
+)
 
 
 def write_eval_report(
@@ -27,6 +34,7 @@ def write_eval_report(
     title: str = "VLA Eval Report",
     artifact_limit: int = 20,
     min_episodes_per_task: int = 1,
+    expected_counts: Optional[Dict[Any, int]] = None,
 ) -> Dict[str, str]:
     """Run write_eval_report."""
     records = load_jsonl(results_path)
@@ -34,8 +42,8 @@ def write_eval_report(
     report_dir.mkdir(parents=True, exist_ok=True)
 
     summary_rows = summarize_records(records)
-    suite_rows = summarize_suites(records, min_episodes=min_episodes_per_task)
-    floor_violations = validate_episode_floor(records, min_episodes_per_task)
+    suite_rows = summarize_suites(records, min_episodes=min_episodes_per_task, expected_counts=expected_counts)
+    floor_violations = validate_episode_floor(records, min_episodes_per_task, expected_counts=expected_counts)
     failure_rows = _failure_summary(records)
     artifact_rows = _archive_failure_artifacts(records, report_dir / "failure_artifacts", artifact_limit)
     repro_info = _collect_repro_info(results_path)
@@ -97,41 +105,49 @@ def _render_markdown_report(
 ) -> str:
     """Run _render_markdown_report."""
     total = len(records)
-    successes = sum(int(record.get("success", 0)) for record in records)
-    success_rate = successes / total if total else 0.0
-    ci_low, ci_high = _wilson_ci(successes, total)
+    evaluated = [record for record in records if not is_infra_failure(record)]
+    infra_failed = total - len(evaluated)
+    successes = sum(int(record.get("success", 0)) for record in evaluated)
+    success_rate = successes / len(evaluated) if evaluated else 0.0
+    ci_low, ci_high = _wilson_ci(successes, len(evaluated))
 
     lines = [
         f"# {title}",
         "",
         "## Overall",
         "",
-        "| records | successes | success_rate | ci95_low | ci95_high | episode_floor_violations |",
-        "|---:|---:|---:|---:|---:|---:|",
         (
-            f"| {total} | {successes} | {_fmt_float(success_rate)} | {_fmt_float(ci_low)} | "
-            f"{_fmt_float(ci_high)} | {len(floor_violations)} |"
+            "| records | evaluated | infra_failed | successes | success_rate | ci95_low | ci95_high | "
+            "episode_floor_violations |"
+        ),
+        "|---:|---:|---:|---:|---:|---:|---:|---:|",
+        (
+            f"| {total} | {len(evaluated)} | {infra_failed} | {successes} | {_fmt_float(success_rate)} | "
+            f"{_fmt_float(ci_low)} | {_fmt_float(ci_high)} | {len(floor_violations)} |"
         ),
         "",
         "## Per Suite",
         "",
         (
-            "| benchmark | task_suite | n_tasks | n_episodes | successes | success_rate | stderr | "
-            "ci95_low | ci95_high | min_episodes_per_task | episode_floor_met | failure_reasons |"
+            "| benchmark | task_suite | n_tasks | n_records | n_episodes | infra_failed | successes | "
+            "success_rate | stderr | ci95_low | ci95_high | min_episodes_per_task | episode_floor_met | "
+            "failure_reasons |"
         ),
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in suite_rows:
         lines.append(
             (
-                "| {benchmark} | {task_suite} | {n_tasks} | {n_episodes} | {successes} | "
-                "{success_rate} | {success_stderr} | {success_ci95_low} | {success_ci95_high} | "
+                "| {benchmark} | {task_suite} | {n_tasks} | {n_records} | {n_episodes} | {infra_failed} | "
+                "{successes} | {success_rate} | {success_stderr} | {success_ci95_low} | {success_ci95_high} | "
                 "{min_episodes_per_task} | {episode_floor_met} | {failure_reasons} |"
             ).format(
                 benchmark=row["benchmark"],
                 task_suite=row["task_suite"],
                 n_tasks=row["n_tasks"],
+                n_records=row.get("n_records", 0),
                 n_episodes=row["n_episodes"],
+                infra_failed=row.get("infra_failed", 0),
                 successes=row["successes"],
                 success_rate=_fmt_float(row.get("success_rate")),
                 success_stderr=_fmt_float(row.get("success_stderr")),
@@ -148,23 +164,26 @@ def _render_markdown_report(
             "## Per Task",
             "",
             (
-                "| benchmark | task_suite | task_id | n_episodes | successes | success_rate | stderr | "
-                "ci95_low | ci95_high | avg_steps | avg_inference_latency_ms | avg_e2e_latency_ms |"
+                "| benchmark | task_suite | task_id | n_records | n_episodes | infra_failed | successes | "
+                "success_rate | stderr | ci95_low | ci95_high | avg_steps | avg_inference_latency_ms | "
+                "avg_e2e_latency_ms |"
             ),
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for row in summary_rows:
         lines.append(
             (
-                "| {benchmark} | {task_suite} | {task_id} | {n_episodes} | {successes} | "
-                "{success_rate} | {success_stderr} | {success_ci95_low} | {success_ci95_high} | "
+                "| {benchmark} | {task_suite} | {task_id} | {n_records} | {n_episodes} | {infra_failed} | "
+                "{successes} | {success_rate} | {success_stderr} | {success_ci95_low} | {success_ci95_high} | "
                 "{avg_steps} | {avg_inference_latency_ms} | {avg_e2e_latency_ms} |"
             ).format(
                 benchmark=row["benchmark"],
                 task_suite=row["task_suite"],
                 task_id=row["task_id"],
+                n_records=row.get("n_records", 0),
                 n_episodes=row["n_episodes"],
+                infra_failed=row.get("infra_failed", 0),
                 successes=row["successes"],
                 success_rate=_fmt_float(row.get("success_rate")),
                 success_stderr=_fmt_float(row.get("success_stderr")),
@@ -357,7 +376,7 @@ def _run_git(repo: Path, args: List[str]) -> Optional[str]:
     """Run _run_git."""
     try:
         proc = subprocess.run(
-            ["git", *args], cwd=str(repo), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5
+            ["git", *args], cwd=str(repo), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30
         )
     except Exception:
         return None

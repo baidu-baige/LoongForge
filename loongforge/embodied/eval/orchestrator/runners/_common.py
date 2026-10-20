@@ -107,6 +107,34 @@ def json_safe(value: Any) -> Any:
 
 
 # --------------------------------------------------------------------------- #
+# Output-directory guards (shared by LIBERO / CALVIN)
+# --------------------------------------------------------------------------- #
+def guard_output_dir(args: argparse.Namespace) -> pathlib.Path:
+    """Refuse to append to a results directory unless resume or restart is set.
+
+    Summaries do not de-duplicate ``(task, episode)`` keys, so silently
+    appending to an existing ``results.jsonl`` inflates or corrupts the
+    success rate. Only an explicit ``resume`` or ``restart`` is allowed.
+    """
+    output_dir = pathlib.Path(args.output_dir)
+    results_path = output_dir / "results.jsonl"
+    if results_path.exists() and not getattr(args, "restart", False) and not getattr(args, "resume", False):
+        raise SystemExit(
+            f"{results_path} already exists; set run.resume=true to continue it, "
+            "run.restart=true to replace it, or choose a new output_dir"
+        )
+    return output_dir
+
+
+def resolve_min_episodes(args: argparse.Namespace) -> int:
+    """Return the per-task completeness floor (0 means 'use episodes_per_task')."""
+    configured = int(getattr(args, "min_episodes_per_task", 0) or 0)
+    if configured > 0:
+        return configured
+    return int(getattr(args, "episodes_per_task", 0) or 0)
+
+
+# --------------------------------------------------------------------------- #
 # Signal-based timeouts (LIBERO, CALVIN)
 # --------------------------------------------------------------------------- #
 class StepTimeoutError(TimeoutError):

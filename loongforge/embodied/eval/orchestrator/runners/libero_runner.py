@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import pathlib
+import sys
 import time
 from typing import Any, Dict, List, Optional
 
@@ -26,10 +27,12 @@ from loongforge.embodied.eval.metrics import (
     append_jsonl,
     completed_episode_keys,
     load_jsonl,
+    summarize_suites,
     write_eval_report,
     write_suite_summary_csv,
     write_summary_csv,
 )
+from loongforge.embodied.eval.metrics import repro_metadata
 from loongforge.embodied.eval.action_decoders import ActionDecoder
 from loongforge.embodied.eval.orchestrator.config import (
     build_rpc_payload,
@@ -209,10 +212,7 @@ def _failure_record(
         "trace_path": trace_path,
         "server_metadata": None,
         "repro": {
-            "git_sha": None,
-            "benchmark_commit": None,
-            "docker_image": None,
-            "python_env_hash": None,
+            **repro_metadata.repro_fields(("libero",)),
             "global_seed": args.seed,
             "episode_seed": episode_seed,
             "protocol_version": PROTOCOL_VERSION,
@@ -476,15 +476,31 @@ def run_episode(
         "trace_path": trace_path,
         "server_metadata": client.metadata,
         "repro": {
-            "git_sha": None,
-            "benchmark_commit": None,
-            "docker_image": None,
-            "python_env_hash": None,
+            **repro_metadata.repro_fields(("libero",)),
             "global_seed": args.seed,
             "episode_seed": episode_seed,
             "protocol_version": PROTOCOL_VERSION,
             "inference_config": dict(INFERENCE_CONFIG),
         },
+    }
+
+
+def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
+    """Return the protocol knobs that affect the measured success rate."""
+    model_config = (getattr(args, "raw_config", None) or {}).get("model") or {}
+    return {
+        "seed": args.seed,
+        "episodes_per_task": args.episodes_per_task,
+        "num_steps_wait": args.num_steps_wait,
+        "max_steps": args.max_steps,
+        "env_seed_mode": getattr(args, "env_seed_mode", None),
+        "control_mode": getattr(args, "control_mode", None),
+        "continuous_gripper": getattr(args, "continuous_gripper", None),
+        "prefer_controller_ee": getattr(args, "prefer_controller_ee", None),
+        "controller_force_update": getattr(args, "controller_force_update", None),
+        "chunk_execute_steps": getattr(args, "chunk_execute_steps", None),
+        "noise_seed": model_config.get("noise_seed"),
+        "num_inference_steps": model_config.get("num_inference_steps"),
     }
 
 
@@ -495,18 +511,31 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
 
     from libero.libero import benchmark
 
-    output_dir = pathlib.Path(args.output_dir)
+    output_dir = _common.guard_output_dir(args)
     output_dir.mkdir(parents=True, exist_ok=True)
     results_path = output_dir / "results.jsonl"
     summary_path = output_dir / "summary.csv"
     suite_summary_path = output_dir / "suite_summary.csv"
+    min_episodes = _common.resolve_min_episodes(args)
 
     existing_records = load_jsonl(results_path)
-    completed = completed_episode_keys(existing_records) if args.resume else set()
     if args.restart and results_path.exists():
         results_path.unlink()
-        completed = set()
         existing_records = []
+    completed = completed_episode_keys(existing_records) if args.resume and not args.restart else set()
+    expected_counts: Dict[int, int] = {}
+
+    if args.resume and not args.restart and not getattr(args, "_manifest_checked", False):
+        repro_metadata.ensure_manifest_matches_checkpoint(output_dir, args.ckpt_path)
+    if args.restart or not args.resume or repro_metadata.load_run_manifest(output_dir) is None:
+        repro_metadata.write_run_manifest(
+            output_dir,
+            config=getattr(args, "raw_config", None),
+            args=args,
+            protocol=_manifest_protocol(args),
+            protocol_version=PROTOCOL_VERSION,
+            benchmark_modules=("libero",),
+        )
 
     task_suite = benchmark.get_benchmark_dict()[args.task_suite_name]()
     n_tasks = task_suite.n_tasks if args.max_tasks <= 0 else min(task_suite.n_tasks, args.max_tasks)
@@ -543,6 +572,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
             task = task_suite.get_task(task_id)
             initial_states = task_suite.get_task_init_states(task_id)
             n_episodes = min(args.episodes_per_task, len(initial_states))
+            expected_counts[task_id] = n_episodes
             for episode_idx in range(n_episodes):
                 key = ("libero", args.task_suite_name, task_id, episode_idx)
                 if key in completed:
@@ -588,22 +618,35 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
 
     all_records = existing_records + new_records
     write_summary_csv(summary_path, all_records)
-    write_suite_summary_csv(suite_summary_path, all_records, min_episodes=args.min_episodes_per_task)
+    write_suite_summary_csv(
+        suite_summary_path,
+        all_records,
+        min_episodes=min_episodes,
+        expected_counts=expected_counts,
+    )
     report = None
     if args.generate_report:
         report = write_eval_report(
             results_path,
             output_dir / "report",
             title=f"LIBERO Eval Report: {args.task_suite_name}",
-            min_episodes_per_task=args.min_episodes_per_task,
+            min_episodes_per_task=min_episodes,
+            expected_counts=expected_counts,
         )
+    suite_rows = summarize_suites(all_records, min_episodes=min_episodes, expected_counts=expected_counts)
+    violations = [row["episode_floor_violations"] for row in suite_rows if not row["episode_floor_met"]]
     successes = sum(int(record.get("success", 0)) for record in all_records)
+    infra_failed = sum(int(row.get("infra_failed", 0)) for row in suite_rows)
+    evaluated = len(all_records) - infra_failed
     return {
         "benchmark": "libero",
         "task_suite": args.task_suite_name,
         "n_records": len(all_records),
         "new_records": len(new_records),
-        "success_rate": successes / len(all_records) if all_records else 0.0,
+        "success_rate": successes / evaluated if evaluated else 0.0,
+        "infra_failed": infra_failed,
+        "ok": not violations,
+        "episode_floor_violations": violations,
         "results_path": str(results_path),
         "summary_path": str(summary_path),
         "suite_summary_path": str(suite_summary_path),
@@ -685,14 +728,19 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--model-name", default="loongforge")
     parser.add_argument("--save-replay", action="store_true")
     parser.add_argument("--save-trace", action="store_true")
-    parser.add_argument("--resume", action="store_true", default=True)
+    parser.add_argument("--resume", action="store_true", default=False)
     parser.add_argument("--restart", action="store_true")
     parser.add_argument("--policy-call-timeout-ms", type=float, default=5000.0)
     parser.add_argument("--per-step-timeout-sec", type=float, default=30.0)
     parser.add_argument("--per-episode-timeout-sec", type=float, default=600.0)
     parser.add_argument("--max-retries", type=int, default=0)
     parser.add_argument("--generate-report", action="store_true")
-    parser.add_argument("--min-episodes-per-task", type=int, default=1)
+    parser.add_argument(
+        "--min-episodes-per-task",
+        type=int,
+        default=0,
+        help="Completeness floor per task; 0 means episodes_per_task.",
+    )
     parser.add_argument("--continuous-gripper", action="store_true", default=False,
                         help="Pass raw gripper value directly to LIBERO without binarization")
     parser.add_argument(
@@ -713,6 +761,8 @@ def main() -> None:
     args = build_argparser().parse_args()
     summary = run_batch(args)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if summary.get("ok") is False:
+        sys.exit(2)
 
 
 if __name__ == "__main__":
