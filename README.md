@@ -87,7 +87,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
-- **[2026/10]** 🤖 Introducing **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+- **[2026/10]** 🤖 Introducing **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[paper](https://arxiv.org/abs/2610.25874)]
 - **[2026/10]** 🦾 Open-sourced **[ego2robot](./tools/ego2robot/)** — a pipeline that converts first-person videos of human manipulation into dual-arm robot training data, outputting **LeRobot v3.0** format across **16 robot morphologies**.
 - **[2026/09]** ✨ Added training support for **[GLM-5.3-flash](./examples/glm5_next/)**.
 - **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** BF16 training support for both LLMs and VLMs.
@@ -354,7 +354,7 @@ See more on the [Projects page](https://baidu-baige.github.io/LoongForge/project
 
 ### From the LoongForge Team
 
-- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) — Vision-Language-Delta-Action model for robotic manipulation: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **17–18 points** ahead of π₀.₅ on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)]
+- [**LoongForge-VLDA**](./cookbook/loongforge-vlda/) — Vision-Language-Delta-Action model for robotic manipulation: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **17–18 points** ahead of π₀.₅ on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[paper](https://arxiv.org/abs/2610.25874)]
 
 https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 
@@ -409,7 +409,7 @@ LoongForge/
 
 ## 📝 Citation
 
-If you find LoongForge helpful, please cite this project:
+If you find LoongForge helpful, please consider citing this project:
 
 ```bibtex
 @software{LoongForge2026,
@@ -420,7 +420,7 @@ If you find LoongForge helpful, please cite this project:
 }
 ```
 
-If you use TAOT for MoE training in LoongForge, you can cite our paper:
+If you find TAOT helpful, please consider citing our paper:
 
 ```bibtex
 @article{zhang2026taot,
@@ -429,6 +429,18 @@ If you use TAOT for MoE training in LoongForge, you can cite our paper:
   journal = {arXiv preprint arXiv:2608.03676},
   year    = {2026},
   url     = {https://arxiv.org/abs/2608.03676}
+}
+```
+
+If you find LoongForge-VLDA helpful, please consider citing our paper:
+
+```bibtex
+@article{zhang2026vlda,
+  title   = {{Vision-Language-Delta-Action}: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},
+  author  = {Zhang, Lingsen and Li, Wei and He, Jie and Zhang, Henghua and Mo, Kai and Li, Shiyong and Wang, Yanpeng and Shao, Rui},
+  journal = {arXiv preprint arXiv:2610.25874},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2610.25874}
 }
 ```
 
