@@ -2,13 +2,15 @@
   {
     "id": "vlda",
     "date": "2026-10",
-    "status": "soon",
+    "status": "preprint",
+    "venue": "arXiv:2610.25874",
     "authors": "Lingsen Zhang, Wei Li, Jie He, Henghua Zhang, Kai Mo, Shiyong Li, Yanpeng Wang, Rui Shao",
     "links": {
+      "paper": "https://arxiv.org/abs/2610.25874",
       "project": "projects/vlda.html",
       "code": "https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda"
     },
-    "bibtex": "@article{zhang2026vlda,\n  title  = {Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},\n  author = {Zhang, Lingsen and Li, Wei and He, Jie and Zhang, Henghua and Mo, Kai and Li, Shiyong and Wang, Yanpeng and Shao, Rui},\n  year   = {2026},\n  note   = {Code: https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda}\n}",
+    "bibtex": "@misc{zhang2026visionlanguagedeltaactionlearningcompactdeltas,\n  title={Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},\n  author={Lingsen Zhang and Wei Li and Jie He and Henghua Zhang and Kai Mo and Shiyong Li and Yanpeng Wang and Rui Shao},\n  year={2026},\n  eprint={2610.25874},\n  archivePrefix={arXiv},\n  primaryClass={cs.RO},\n  url={https://arxiv.org/abs/2610.25874},\n}",
     "en": {
       "title": "Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation",
       "summary": "Compact Deltas as actionable transition interfaces. 98.5% on LIBERO; zero-shot 84.5% on LIBERO-Plus and 62.9% on RoboTwin 2.0 hard tasks."
