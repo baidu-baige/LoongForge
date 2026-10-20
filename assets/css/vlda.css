@@ -37,22 +37,39 @@
   margin-top: .2rem;
 }
 
-.vl-soon {
-  display: inline-flex;
-  align-items: center;
-  gap: .5rem;
-  padding: .85rem 1.6rem;
-  border-radius: 9999px;
-  font-weight: 700;
-  color: #9CA3AF;
-  background: transparent;
-  border: 1.5px dashed #CBD5E1;
-  cursor: not-allowed;
+/* Brand icon inside a hero button. arXiv / GitHub are masks painted in their brand
+   colour (see below); the Hugging Face logo is a full-colour <img>. */
+.vl-ico {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  flex: none;
 }
 
-.dark .vl-soon {
-  border-color: rgba(255, 255, 255, .2);
-  color: #6B7280;
+.vl-ico-arxiv,
+.vl-ico-github {
+  background-color: currentColor;
+  -webkit-mask: var(--ico) center / contain no-repeat;
+  mask: var(--ico) center / contain no-repeat;
+}
+
+/* url() is resolved against this stylesheet, hence ../img/ */
+.vl-ico-arxiv {
+  --ico: url(../img/icons/arxiv.svg);
+  background-color: #B31B1B;
+}
+
+.vl-ico-github {
+  --ico: url(../img/icons/github.svg);
+  background-color: #24292F;
+}
+
+.dark .vl-ico-arxiv {
+  background-color: #F0605D;
+}
+
+.dark .vl-ico-github {
+  background-color: #fff;
 }
 
 /* Anchored sections must clear the sticky navbar */

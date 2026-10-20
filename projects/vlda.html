@@ -32,7 +32,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
   <link rel="stylesheet" href="../assets/css/style.css?v=20261015-r25" />
-  <link rel="stylesheet" href="../assets/css/vlda.css?v=20261019-r48" />
+  <link rel="stylesheet" href="../assets/css/vlda.css?v=20261019-r52" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
 </head>
 
@@ -72,12 +72,16 @@
         <span data-t="hero.corr">&dagger; Corresponding author</span></p>
 
       <div class="mt-7 flex flex-wrap justify-center gap-3">
-        <a href="https://arxiv.org/abs/2610.25874" target="_blank" rel="noopener" class="lf-btn"
-          data-t="hero.paper">Paper ↗</a>
-        <a href="https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda" target="_blank" rel="noopener" class="lf-btn"
-          data-t="hero.code">Code ↗</a>
+        <a href="https://arxiv.org/abs/2610.25874" target="_blank" rel="noopener" class="lf-btn-ghost">
+          <span class="vl-ico vl-ico-arxiv" aria-hidden="true"></span>
+          <span data-t="hero.paper">Paper ↗</span></a>
+        <a href="https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda" target="_blank" rel="noopener" class="lf-btn-ghost">
+          <span class="vl-ico vl-ico-github" aria-hidden="true"></span>
+          <span data-t="hero.code">Code ↗</span></a>
         <a href="https://huggingface.co/collections/LoongForge/loongforge-vlda" target="_blank" rel="noopener"
-          class="lf-btn-ghost">Hugging Face ↗</a>
+          class="lf-btn-ghost">
+          <img class="vl-ico" src="../assets/img/icons/huggingface.svg" alt="" aria-hidden="true" />
+          <span data-t="hero.model">Model ↗</span></a>
       </div>
 
       <div class="vl-video reveal mt-10">
@@ -451,12 +455,14 @@
       </div>
 
       <h3 class="text-xl font-bold mt-10 mb-3" data-t="c.bib">Citation</h3>
-      <pre class="cite-pre"><code class="language-bash">@article{zhang2026vlda,
-  title  = {Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},
-  author = {Zhang, Lingsen and Li, Wei and He, Jie and Zhang, Henghua and Mo, Kai and Li, Shiyong and Wang, Yanpeng and Shao, Rui},
-  year   = {2026},
-  url    = {https://arxiv.org/abs/2610.25874},
-  note   = {Code: https://github.com/baidu-baige/LoongForge/tree/master/cookbook/loongforge-vlda}
+      <pre class="cite-pre"><code class="language-bash">@misc{zhang2026visionlanguagedeltaactionlearningcompactdeltas,
+  title={Vision-Language-Delta-Action: Learning Compact Deltas as Actionable Transition Interfaces for Robotic Manipulation},
+  author={Lingsen Zhang and Wei Li and Jie He and Henghua Zhang and Kai Mo and Shiyong Li and Yanpeng Wang and Rui Shao},
+  year={2026},
+  eprint={2610.25874},
+  archivePrefix={arXiv},
+  primaryClass={cs.RO},
+  url={https://arxiv.org/abs/2610.25874},
 }</code></pre>
       <p class="vl-note" data-t="c.note">Read the preprint on <a href="https://arxiv.org/abs/2610.25874" target="_blank" rel="noopener" class="lf-inline-link">arXiv ↗</a>.</p>
     </div>
@@ -479,7 +485,7 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
   <script src="../assets/js/main.js?v=20261019-r24"></script>
   <script src="../assets/js/project-bar.js?v=20261015-r32"></script>
-  <script src="../assets/js/vlda.js?v=20261019-r53"></script>
+  <script src="../assets/js/vlda.js?v=20261019-r55"></script>
 </body>
 
 </html>

@@ -14,6 +14,7 @@
     'hero.corr': '† 通讯作者',
     'hero.code': '代码 ↗',
     'hero.paper':'论文 ↗',
+    'hero.model': '模型 ↗',
     'd.h': 'Delta 在看什么',
     'd.p': 'Delta 集中在运动与交互的区域，而不是静态场景。',
     's.libero': 'LIBERO 平均',
