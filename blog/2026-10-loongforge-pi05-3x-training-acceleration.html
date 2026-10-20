@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>How to Speed Up VLA Training Step by Step: A 3x Acceleration Case Study on Pi0.5 | LoongForge Blog</title>
+  <meta name="description"
+    content="A step-by-step account of accelerating Pi0.5 SFT on LoongForge: empty camera-slot pruning, partial torch.compile, FlexAttention, selective recomputation, layered compilation to hide gradient AllReduce, and TorchAO FP8. 2.63x the community throughput in bf16 and 3.00x in FP8." />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261020-r27" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="back-link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg><span>Back to Blog</span></a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">VLA</span><span
+          class="chip">Pi0.5</span><span class="chip">Training Acceleration</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">How to Speed Up VLA Training Step by Step: A 3x Acceleration Case Study on Pi0.5</h1>
+      <div class="text-sm text-gray-500">2026-10-19 · The LoongForge Team</div>
+    </div>
+
+    <div class="prose-lf">
+      <aside class="post-links" aria-label="Links">
+        <div class="post-links-row"><span class="post-links-label">GitHub</span><a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></div>
+        <div class="post-links-row"><span class="post-links-label">Original post (Zhihu)</span><a href="https://zhuanlan.zhihu.com/p/2095555587304117777" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/2095555587304117777</a></div>
+      </aside>
+      <p>We recently finished accelerating Pi0.5 SFT training on LoongForge.</p>
+      <p>Before we started, we figured a 3.5B model with a 762-token sequence would not need many tricks. In practice, there turned out to be a lot to refine.</p>
+      <p>The end result: <strong>24.0 samples/s in bf16 (2.63x the community implementation)</strong> and <strong>27.34 samples/s in FP8 (3.00x)</strong>.</p>
+      <h2>1. A redundant 256 tokens: pruning the empty camera slot</h2>
+      <p>The Pi0.5 sequence has an unusual structure made of three parts: images, a text instruction, and actions. To separate the compute load of the ViT from that of the backbone attention, we first broke the sequence length down by branch.</p>
+      <p>For the two-camera LIBERO data, the joint sequence of images (2×256), instruction and actions (50) should be 762 tokens. The length we actually saw while debugging was 1018, i.e. 256 tokens of pure padding.</p>
+      <p>The cause: openpi's Pi0.5 input has three fixed camera slots. When only two cameras are present, the missing one is filled with a placeholder image and its image mask is set to False.</p>
+      <p>But that mask only makes those 256 tokens invisible to attention; none of the computation is actually skipped. The placeholder image still goes through SigLIP, its 256 tokens still run through all 18 decoder layers, and their activations are still saved, even though no valid token attends to them and they take no part in the loss.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/01.png"
+          alt="Sequence layout: openpi with three fixed camera slots (T=1018) versus LoongForge with real cameras only (T=762)" loading="lazy" />
+        <figcaption>openpi reserves three fixed camera slots, so the placeholder image wastes SigLIP compute, 18-layer Transformer compute and activation memory. LoongForge generates slots only for real cameras, cutting the sequence from 1018 to 762 tokens. (Labels in the figure are in Chinese: 相机 = camera, 占位 slot（空相机） = placeholder slot (empty camera), 白算 = wasted compute, 白存 = wasted storage, 只为真实相机生成 slot = generate slots only for real cameras.)</figcaption>
+      </figure>
+      <p>So LoongForge allocates slots on demand on the data side (set <code>data.num_images</code> to the actual number of cameras) and creates slots only for cameras that exist. Pad tokens do not advance <code>position_ids</code>. After pruning, the positional encoding and visibility of the valid tokens are unchanged and the loss is strictly identical, yet roughly 25% of the compute and the corresponding activation memory are saved.</p>
+      <h2>2. Dense, fragmented small ops: accelerating with torch.compile</h2>
+      <p>Profiling shows that apart from a few large GEMMs, each Pi0.5 layer is made of small operators (especially in the action expert, which has a small hidden size): adaRMS normalization, RoPE, concatenating and splitting Q/K/V across the two branches, gelu·up, and gated residuals.</p>
+      <p>In eager mode, every small op launches its own kernel and keeps its intermediate result in memory. Take adaRMS: cast to fp32, square, mean, rsqrt, chunk out scale/shift/gate, cast back to bf16. Each step produces a full-size intermediate tensor.</p>
+      <p>That makes torch.compile an obvious candidate. But Pi0.5 is quite dynamic, so the whole model cannot simply be compiled:</p>
+      <ul>
+        <li><strong>The vision tower is dynamic and follows the number of images.</strong>
+          <code>embed_prefix</code> runs SigLIP on each image in a Python for loop whose trip count depends on the dataset's camera count. The per-image pad mask and block-start markers are also assembled in Python according to the image count and moved to the GPU with <code>torch.tensor</code>. Compiling this directly easily causes graph breaks or recompiles.</li>
+        <li><strong>The ViT is not a large share of the time, so compiling it pays off less.</strong> Running two images through SigLIP takes only about 20% of the forward pass; the 18 decoder layers take nearly 80%.</li>
+      </ul>
+      <p>So we keep the vision tower and prefix assembly in eager mode and compile only the fixed-shape backbone (<code>paligemma_with_expert</code>). With torch.compile on, Inductor performs three main kinds of fusion:</p>
+      <ul>
+        <li><strong>Elementwise + reduction fused into one kernel:</strong> the whole adaRMS chain becomes a single persistent reduction kernel, with the mean and rsqrt computed in one pass; the residual add and post_attention_layernorm are fused as well.</li>
+        <li><strong>Small ops fused into the GEMM:</strong> the adaRMS modulation and dtype conversion are absorbed into the Triton GEMM of q_proj, so the normalized result does not need a separate round trip through memory.</li>
+        <li><strong>RoPE collapsed end to end:</strong> building the cos/sin tables (broadcast multiply, cat, cos/sin, cast) becomes one kernel, and <code>q * cos + rotate_half(q) * sin</code> becomes another, which can run at the memory-bandwidth limit.</li>
+      </ul>
+      <p>With this partial compilation, <strong>training throughput improved by 54%</strong>.</p>
+      <h2>3. An unexpected memory win: FlexAttention to shrink activations</h2>
+      <p>Coming from an LLM mindset, we first looked at the attention part of Pi0.5. Profiling showed that, unlike a typical LLM, attention does not account for much of the end-to-end time: with a sequence of only 762 tokens, attention is about 13% of a decoder layer, while the MLP takes about 76%. End to end, the attention forward pass is only about <strong>2.8%</strong>, so there is very little compute time to win back.</p>
+      <p>What profiling did reveal is that attention produces many activations and many fragmented ops. The eager implementation first uses <code>repeat_kv</code> to copy the single KV head into 8, then materializes the full <code>[B, 8, T, T]</code> probability matrix. Scaling, mask addition, the two-pass softmax, PV and the transpose back are each a separate kernel; every intermediate result has to be kept for the backward pass, and softmax additionally stores an fp32 copy. Even under torch.compile, the activation cost did not drop noticeably.</p>
+      <p>On the other hand, the Pi0.5 mask is naturally suited to block-sparse attention:</p>
+      <ul>
+        <li>The prefix (images + text) is fully bidirectional internally but cannot see the actions, so the whole upper-right block is masked out;</li>
+        <li>Actions can see every valid prefix token, and the 50 action tokens can see each other;</li>
+        <li>Rows and columns that correspond to padding are masked out entirely.</li>
+      </ul>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/02.png"
+          alt="Pi0.5 attention mask: bidirectional inside the prefix, actions see all valid prefix tokens, padding fully masked" loading="lazy" />
+        <figcaption>The Pi0.5 attention mask: the prefix (PaliGemma) is fully bidirectional internally, the suffix (Gemma Expert) actions see every valid prefix token, and padding rows and columns are masked out entirely.</figcaption>
+      </figure>
+      <p>Large regions of the mask are either fully visible or fully masked, which fits FlexAttention's BlockMask: the mask is described in 128×128 tiles, fully masked tiles are skipped outright, and only tiles on the boundary are evaluated element by element.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/03.png"
+          alt="FlexAttention BlockMask at T=762 with 128x128 tiles: full, partial and skipped" loading="lazy" />
+        <figcaption>The BlockMask at real scale (T = 762): F is a full tile (mask_mod not called), P is a partial tile (element-wise mask_mod), and skip means the tile is never loaded.</figcaption>
+      </figure>
+      <p>After switching to FlexAttention, <code>enable_gqa=True</code> broadcasts the KV head inside the kernel instead of copying it, and the backward pass stores only the output and the logsumexp. Speed is about the same as eager (±2%) and makes little difference end to end, but at a micro batch size of 32 each layer stores about 0.63 GiB less, roughly 11 GiB across 18 layers.</p>
+      <h2>4. Selective recomputation</h2>
+      <p>openpi enables full recomputation by default: activations of the vision tower, the 18 decoder layers, the embeddings and the action/time projections are never stored, and the whole forward pass is recomputed during backward.</p>
+      <p>On LoongForge, with torch.compile and FlexAttention stacked on top, activation memory already drops considerably, but matching the official batch size still requires recomputation.</p>
+      <p>The question becomes: <strong>which part is the best one to recompute?</strong> We measured the cost-effectiveness of recomputing each module (the extra milliseconds spent per GiB of activations saved):</p>
+      <ul>
+        <li><strong>ViT (27 SigLIP layers): 2.8 ms/GiB</strong>, +48.5 ms to save 17.5 GiB. The ViT hidden size is narrow (1152 vs. 2048 for Gemma), so the same FLOPs produce the most activations, which makes recomputing it the cheapest.</li>
+        <li><strong>PaliGemma MLP: 4.0 ms/GiB</strong>. It has the largest activations (37.6 GiB), but costs +150 ms.</li>
+        <li><strong>Attention (norm + QKV + RoPE + FlexAttention): 7.8 ms/GiB</strong>, storing only 5.5 GiB over 18 layers. MQA's K/V are small and FlexAttention does not store a score matrix, yet recomputing means running the QKV projection and the attention forward again. Small activations and expensive compute make it the worst deal.</li>
+        <li><strong>Gemma Expert MLP:</strong> it processes only 50 action tokens and totals 0.7 GiB across 18 layers, so recomputing it or not is within the noise.</li>
+      </ul>
+      <p>We therefore chose to <strong>recompute only the ViT</strong> (using LoongForge's <code>--activation-checkpoint-module-patterns</code> to match only the SigLIP layers), which keeps the recomputation overhead as low as possible.</p>
+      <h2>5. The communication bottleneck without NVLink: layered compilation to hide the gradient AllReduce</h2>
+      <p>With NVLink, gradient communication is usually not a bottleneck. In our actual training setup, however, PCIe communication is expensive: the bf16 gradients of Pi0.5's 3.5B parameters are about 7 GB, and a ring AllReduce moves 12.25 GB per GPU, taking as much as 220 ms.</p>
+      <p>Profiling showed that because the whole backbone was initially compiled by torch.compile into a single graph, the backward Inductor generates is one monolithic autograd Function. All parameter gradients therefore become ready only at the very end of the backward pass, so the DDP gradient buckets can only run serially after backward, and about 215 ms of communication per step is fully exposed.</p>
+      <h3>5.1 The intended use of DDPOptimizer + torch.compile: wrap the whole model and schedule it together with communication</h3>
+      <p>PyTorch ran into this problem long ago. The core idea is: <strong>the larger the scope the compiler sees, the better</strong>. Ideally you hand it the whole model, or even a whole training step, and it schedules gradient communication and overlaps it with compute.</p>
+      <ul>
+        <li><code>DDPOptimizer</code> (on by default since PyTorch 2.0): when <code>torch.compile</code> is applied to a DDP-wrapped model, Dynamo splits the forward graph along DDP bucket boundaries and compiles each piece separately, so backward gradients become ready in batches.</li>
+      </ul>
+      <p>Its precondition, however, is that <strong>the model can be captured as a single full graph</strong>.</p>
+      <h3>5.2 Partial compilation is incompatible with DDPOptimizer</h3>
+      <p>As noted above, the peculiar ViT structure of Pi0.5 prevents compiling the whole model with <code>torch.compile</code>. Compiling only the backbone means explicitly calling <code>torch.compile</code> on a submodule inside DDP, and then DDPOptimizer crashes:</p>
+      <ul>
+        <li><strong>Symptom:</strong> the first launch after clearing the compile cache always fails with <code>BackendCompilerFailed</code>, ultimately caused by accessing <code>data_ptr()</code> on a FakeTensor; restarting without clearing the cache works. This was very misleading, and we suspected autotune or CUDA Graphs for a while.</li>
+        <li><strong>Root cause:</strong>
+          <ul>
+            <li>DDPOptimizer wraps another layer of compilation on the outside, producing nested compilation. Before compiling the next subgraph, DDPOptimizer runs the previously compiled subgraph under FakeTensorMode to obtain the output shape/stride. The AOTAutograd runtime wrapper of the inner compile does not know it is in FakeTensorMode, takes the real <code>autograd.Function.apply</code> path, and fails on the FakeTensor's <code>data_ptr()</code>.</li>
+            <li>A warm cache works only because an FX graph cache hit bypasses this path. Changing the shape, the number of ranks, or clearing the cache reproduces the failure.</li>
+          </ul>
+        </li>
+      </ul>
+      <p>So we had to turn it off first (<code>--no-dynamo-optimize-ddp</code>). The cost is exactly what we analyzed above: with nobody splitting the graph, gradients only become ready after the entire backward graph finishes, and the communication is completely exposed.</p>
+      <h3>5.3 Layered compilation: splitting the graph by hand</h3>
+      <p>Since a full-graph compile is not possible and DDPOptimizer cannot be used, we simply split the graph ourselves inside the backbone.</p>
+      <p>We switched the compilation strategy to <code>multi_group</code> compilation: each of the 18 decoder layers is its own compilation unit (identical shapes are compiled once and the other 17 layers reuse the result), and the final norm, the action input projection + time MLP, and the action output projection each become their own small graph.</p>
+      <p>As a result, the backward of every layer is an independent autograd.Function: as soon as the backward of layer N finishes, its gradient bucket can launch AllReduce immediately, overlapping with the backward compute of layer N-1.</p>
+      <p>In essence, this implements by hand what DDPOptimizer is meant to do, only with the split points pinned exactly to layer boundaries, and with no dependency on DDPOptimizer at all. With manual layered compilation the exposed communication essentially disappears, for a <strong>+10% throughput</strong> gain.</p>
+      <h2>6. Validating bf16 quality: the LIBERO evaluation</h2>
+      <p>With the bf16 optimizations above combined, end-to-end training throughput rises to <strong>24.0 samples/s</strong>, <strong>2.63x</strong> the community throughput.</p>
+      <p>For quality, the LoongForge bf16 model's 5-run average results on the four LIBERO suites are:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th>Community</th>
+            <th>Community reproduced</th>
+            <th>LoongForge (bf16)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>libero_spatial</td><td>97.0</td><td>96.0 (−1.0)</td><td>99.6 (+2.6)</td></tr>
+          <tr><td>libero_object</td><td>99.0</td><td>98.0 (−1.0)</td><td>99.6 (+0.6)</td></tr>
+          <tr><td>libero_goal</td><td>98.0</td><td>99.0 (+1.0)</td><td>98.8 (+0.8)</td></tr>
+          <tr><td>libero_10 (Long)</td><td>96.0</td><td>96.0 (0.0)</td><td>97.0 (+1.0)</td></tr>
+          <tr><td><strong>Average</strong></td><td><strong>97.50</strong></td><td><strong>97.25 (−0.25)</strong></td><td><strong>98.75 (+1.25)</strong></td></tr>
+        </tbody>
+      </table>
+      <p>The numbers in parentheses are differences relative to the community result. The LoongForge version averages 98.75, 1.25 points above the community, and is no lower than the community on any of the four suites. Despite the faster training, model quality is as expected.</p>
+      <h2>7. Pushing compute further with FP8</h2>
+      <p>By this point, there is little left to squeeze out of bf16. Next we moved all Linear modules in Pi0.5 to FP8 compute: inputs and weights are quantized to FP8 for the GEMM, the result is restored using the scales, and the tensors stay in bf16 before and after the computation.</p>
+      <h3>7.1 Trying FP8 with TransformerEngine</h3>
+      <p>The first thing we tried was TransformerEngine's FP8: replace <code>nn.Linear</code> with <code>te.Linear</code> and wrap the forward pass in <code>fp8_autocast</code>. The real problem is that it conflicts with the earlier optimizations:</p>
+      <ul>
+        <li><strong>It conflicts with torch.compile and breaks the graph everywhere.</strong>
+          <ul>
+            <li>TE has internal functions decorated with <code>@torch.compiler.disable()</code> (fp8 metadata and amax handling).</li>
+            <li>Dynamo therefore breaks the graph at every <code>te.Linear</code>: 218 Linear layers mean more than 200 graph breaks, and the adaRMS and gelu·up fusions before and after each Linear can no longer attach to the GEMM.</li>
+          </ul>
+        </li>
+        <li><strong>Graph breaks directly raise activation memory.</strong>
+          <ul>
+            <li>With a full graph, AOTAutograd partitions forward and backward together, so cheap elementwise ops such as adaRMS, gelu·up, RoPE and residuals are recomputed in backward and only a few tensors are saved.</li>
+            <li>After graph breaks, a layer is cut into several segments: the Linear input must actually be written to memory, the Linear stores another copy for backward, and nothing can be recomputed across segments. Accumulated over 18 layers this adds about 13 GiB.</li>
+          </ul>
+        </li>
+      </ul>
+      <p>So TE's FP8 GEMM itself is fine, but inside the torch.compile-centered optimization path of Pi0.5, the graph breaks and the extra memory eat up the gains and easily turn them negative.</p>
+      <h3>7.2 FP8 with TorchAO</h3>
+      <p>TE's problem is graph breaks, so we looked for an FP8 solution that can stay inside the compiled graph. That led us to TorchAO with the <code>tensorwise</code> recipe.</p>
+      <p>In TorchAO's <code>Float8Linear</code>, amax, scale and cast are all ordinary PyTorch ops and the GEMM goes through <code>torch._scaled_mm</code>, so Dynamo can trace it directly into a graph.</p>
+      <p>In measurements, memory use was actually lower than bf16. Our hypothesis: the <code>Float8Linear</code> autograd Function is written to save the bf16 input for backward, but because it lives inside the compiled graph, the partitioner can see that backward only re-casts this input to FP8 to compute wgrad, so it stores the FP8 version plus one scale instead, which halves these activations.</p>
+      <p>Which Linear layers use TorchAO FP8 is decided in two stages:</p>
+      <ul>
+        <li><strong>Static rules:</strong>
+          <ul>
+            <li>Of 458 candidates, precision-sensitive modules (vision_tower, multi_modal_projector, the action/time projections) keep their original precision, skipping 204;</li>
+            <li>another 36 small Linear layers are dropped via <code>fp8-min-dim=2048</code>, because their GEMMs are so small that the quantization overhead exceeds the time FP8 saves.</li>
+          </ul>
+        </li>
+        <li><strong>Trace validation:</strong>
+          <ul>
+            <li>We use Kineto traces to map every GEMM back to its module by shape, compare measured bf16 and FP8 kernel times, and keep only the ones that actually get faster;</li>
+            <li>The PaliGemma MLP and the attention projections are both 1.8–2.0x faster; two <code>lm_head</code> layers that never execute during training are excluded, leaving 216 in the end.</li>
+          </ul>
+        </li>
+      </ul>
+      <p>In the end, GEMM's share of a step falls from 54% to 33%, and throughput improves by another 13.9% on top of bf16, reaching <strong>27.34 samples/s, 3.0x the community implementation</strong>.</p>
+      <p>On accuracy, compared with bf16 the loss has a Pearson correlation of 0.9997 and a mean relative error of 0.56%.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/04.png"
+          alt="pi0.5 200-step action loss: BF16 and TorchAO FP8 curves nearly overlap" loading="lazy" />
+        <figcaption>pi0.5 200-step action loss: the BF16 and TorchAO FP8 curves nearly overlap (same seed, data, batch size and optimizer; FP8 keeps multi_group + fullgraph=true).</figcaption>
+      </figure>
+      <p>If you are training VLA or other embodied models, we welcome you to try LoongForge, and to reach out through GitHub Issues.</p>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-10-loongforge-gr00t-n17-training-optimization.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: From Stop-and-Go Execution to a Continuous Pipeline: Optimizing GR00T-N1.7 Training</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-10-loongforge-pi05-3x-training-acceleration.html';
+      const POST_ZH = '2026-10-loongforge-pi05-3x-training-acceleration.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === 'en')
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js?v=20261020-r25"></script>
+</body>
+
+</html>

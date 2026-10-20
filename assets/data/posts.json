@@ -1,5 +1,95 @@
 [
     {
+        "slug": "2026-10-loongforge-pi05-3x-training-acceleration",
+        "date": "2026-10-19",
+        "featured": false,
+        "cover": "assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/04.png",
+        "tags_en": [
+            "LoongForge",
+            "VLA",
+            "Pi0.5",
+            "Training Acceleration"
+        ],
+        "tags_zh": [
+            "LoongForge",
+            "VLA",
+            "Pi0.5",
+            "训练加速"
+        ],
+        "en": {
+            "title": "How to Speed Up VLA Training Step by Step: A 3x Acceleration Case Study on Pi0.5",
+            "author": "The LoongForge Team",
+            "summary": "Accelerating Pi0.5 SFT on LoongForge: empty camera-slot pruning, partial torch.compile, FlexAttention, selective recomputation, layered compilation to hide gradient AllReduce, and TorchAO FP8. 24.0 samples/s in bf16 (2.63x the community implementation) and 27.34 samples/s in FP8 (3.00x).",
+            "url": "blog/2026-10-loongforge-pi05-3x-training-acceleration.html"
+        },
+        "zh": {
+            "title": "VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践",
+            "author": "LoongForge 团队",
+            "summary": "LoongForge 上 Pi0.5 的 SFT 加速实践：空相机 slot 裁剪、局部 torch.compile、FlexAttention、选择性重计算、分层编译隐藏梯度 AllReduce 与 TorchAO FP8。bf16 吞吐 24.0 samples/s（社区实现的 2.63 倍），FP8 达 27.34 samples/s（3.00 倍）。",
+            "url": "blog/2026-10-loongforge-pi05-3x-training-acceleration.zh.html"
+        }
+    },
+    {
+        "slug": "2026-10-loongforge-gr00t-n17-training-optimization",
+        "date": "2026-10-18",
+        "featured": false,
+        "cover": "assets/blog/2026-10-loongforge-gr00t-n17-training-optimization/01.png",
+        "tags_en": [
+            "LoongForge",
+            "VLA",
+            "GR00T",
+            "Training Acceleration"
+        ],
+        "tags_zh": [
+            "LoongForge",
+            "VLA",
+            "GR00T",
+            "训练加速"
+        ],
+        "en": {
+            "title": "From Stop-and-Go Execution to a Continuous Pipeline: Optimizing GR00T-N1.7 Training",
+            "author": "The LoongForge Team",
+            "summary": "Optimizing GR00T-N1.7 training on LoongForge: fixing duplicate video decoding with async shard prefetch, caching metadata and fusing small kernels, a full-iteration CUDA Graph with a cross-iteration backbone pipeline, and fewer gradient memory passes. 1.79x the community implementation's throughput (58.44 to 104.64 samples/s/device).",
+            "url": "blog/2026-10-loongforge-gr00t-n17-training-optimization.html"
+        },
+        "zh": {
+            "title": "从间断执行到连续流水：GR00T-N1.7 训练优化",
+            "author": "LoongForge 团队",
+            "summary": "LoongForge 上 GR00T-N1.7 的训练优化：修复重复视频解码并异步预取 shard、缓存 metadata 并融合高频小算子、Full-Iteration CUDA Graph 与跨迭代 Backbone 流水、减少梯度重复访存，吞吐从 58.44 提升至 104.64 samples/s/device，达到社区实现的 1.79 倍。",
+            "url": "blog/2026-10-loongforge-gr00t-n17-training-optimization.zh.html"
+        }
+    },
+    {
+        "slug": "2026-10-loongforge-lingbot-va-training-acceleration",
+        "date": "2026-10-15",
+        "featured": false,
+        "cover": "assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/05.png",
+        "tags_en": [
+            "LoongForge",
+            "VLA",
+            "LingBot-VA",
+            "Training Acceleration"
+        ],
+        "tags_zh": [
+            "LoongForge",
+            "VLA",
+            "LingBot-VA",
+            "训练加速"
+        ],
+        "en": {
+            "title": "Accelerating LingBot-VA Training: A Technical Walkthrough",
+            "author": "The LoongForge Team",
+            "summary": "End-to-end training optimization of LingBot-VA on LoongForge: FSDP all-gather once per step, cost-balanced sampling for variable-length samples, Triton RoPE and per-layer kernel-chain fusion, and mask compilation with GC suppression. 2.20x training throughput and a 54.5% shorter step time.",
+            "url": "blog/2026-10-loongforge-lingbot-va-training-acceleration.html"
+        },
+        "zh": {
+            "title": "LingBot-VA 训练加速技术解析",
+            "author": "LoongForge 团队",
+            "summary": "LoongForge 对 LingBot-VA 的训练全链路优化：FSDP 参数 all-gather 降至每 step 一次、变长样本代价均衡采样、Triton RoPE 与逐层算子链融合、掩码编译与 GC 抑制，训练吞吐提升 2.20 倍，单步耗时缩短 54.5%。",
+            "url": "blog/2026-10-loongforge-lingbot-va-training-acceleration.zh.html"
+        }
+    },
+    {
         "slug": "2026-08-taot-topology-aware-expert-placement",
         "date": "2026-08-19",
         "featured": false,

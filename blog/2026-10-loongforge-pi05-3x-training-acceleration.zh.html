@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践 | LoongForge Blog</title>
+  <meta name="description"
+    content="LoongForge 上 Pi0.5 的 SFT 加速实践：空相机 slot 裁剪、局部 torch.compile、FlexAttention、选择性重计算、分层编译隐藏梯度 AllReduce 与 TorchAO FP8，bf16 吞吐达社区实现的 2.63 倍，FP8 达 3.00 倍。" />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261020-r27" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="back-link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg><span>返回博客</span></a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">VLA</span><span
+          class="chip">Pi0.5</span><span class="chip">训练加速</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践</h1>
+      <div class="text-sm text-gray-500">2026-10-19 · LoongForge 团队</div>
+    </div>
+
+    <div class="prose-lf">
+      <aside class="post-links" aria-label="相关链接">
+        <div class="post-links-row"><span class="post-links-label">GitHub</span><a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></div>
+        <div class="post-links-row"><span class="post-links-label">知乎原文</span><a href="https://zhuanlan.zhihu.com/p/2095555587304117777" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/2095555587304117777</a></div>
+      </aside>
+      <p>最近我们在 LoongForge 上完成了 Pi0.5 的 SFT 加速训练。</p>
+      <p>优化开始之前，原本认为：3.5B 的模型、762 的序列长度，看上去用不了多少 trick。但实际优化下来，发现可以细化的地方很多。</p>
+      <p>最终 bf16 下吞吐做到 <strong>24.0 samples/s（社区实现的 2.63 倍）</strong>，FP8 下吞吐达到 <strong>27.34 samples/s（社区实现的 3.00 倍）</strong>。</p>
+      <h2>1. 冗余的 256 序列长度：空相机 slot 裁剪</h2>
+      <p>Pi0.5 的序列结构比较特殊，包含图像、文本指令和 action 三部分。为了理清 ViT 与主干 Attention 各自的计算负载，优化前先对各分支的序列长度做了分解。</p>
+      <p>按两路相机的 LIBERO 数据推算，图像（2×256）、指令与 action（50）拼起来的联合序列本应是 762，但实际 debug 出来的序列长度却是 1018，平白多出了 256 的无效 padding。</p>
+      <p>排查发现，openpi 的 Pi0.5 输入固定 3 个相机 slot。当输入只有 2 路相机的时候，也会默认给缺的那路填一张占位图，再把 image mask 置为 False。</p>
+      <p>然而这个 mask 只是让这 256 个 token 在注意力里不可见，实际的计算一点没少：占位图依旧需要计算 SigLIP，产出的 256 个 token 也得过 18 层 decoder layer，中间的激活值照样保存，哪怕它们既不会被有效 token 注意到，也不参与最终的 loss 计算。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/01.png"
+          alt="openpi 固定 3 个相机 slot（T=1018）与 LoongForge 只为真实相机生成 slot（T=762）的序列结构对比" loading="lazy" />
+        <figcaption>openpi 固定 3 个相机 slot，空相机的占位图白算 SigLIP、白算 18 层 Transformer 并白存激活；LoongForge 只为真实相机生成 slot，序列长度从 1018 降到 762。</figcaption>
+      </figure>
+      <p>因此，LoongForge 在数据侧改为按需分配（将 <code>data.num_images</code> 设为实际相机数），只为真实存在的相机输入生成 slot；对于原本的 pad token，不推进 <code>position_ids</code>。裁剪后有效 token 的位置编码和可见范围不变，loss 与裁剪前严格一致，但直接省去了约 25% 的计算量和相应的激活值显存占用。</p>
+      <h2>2. 密集的细碎算子开销：torch.compile 加速</h2>
+      <p>通过 profile 发现，Pi0.5 每层除了几颗大 GEMM，剩下全是小算子（尤其是 hidden size 较小的 action expert），包括 adaRMS 归一化、RoPE、两个分支 Q/K/V 的拼接与切回、gelu·up、门控残差。</p>
+      <p>在 eager 模式下，每个小算子都会触发一次独立的 kernel 启动，中间结果常驻显存。以 adaRMS 为例，cast 到 fp32、平方、求均值、rsqrt、chunk 出 scale/shift/gate、cast 回 bf16，每一步都产生一个完整大小的中间张量。</p>
+      <p>因此我们考虑用 torch.compile 加速。但 Pi0.5 是比较动态的模型，不能对整个模型直接 compile：</p>
+      <ul>
+        <li><strong>vision tower 是动态的，跟着图像数量走。</strong>
+          <code>embed_prefix</code> 用 for 循环逐张图过 SigLIP，循环次数取决于数据集的相机数；每张图的 pad mask 和块起始标记也是在 Python 里按图像数动态拼好，再通过 <code>torch.tensor</code> 搬到 GPU 上，直接编译极易触发断图或重编。</li>
+        <li><strong>ViT 的耗时占比没有那么高，编它的收益相对有限。</strong>两路图像过 SigLIP 只占前向的 20%，18 层 decoder layer 占近 80%。</li>
+      </ul>
+      <p>因此，我们让 Pi0.5 的 vision tower 和 prefix 拼接部分保持 eager，只局部编译后面形状固定的 backbone（<code>paligemma_with_expert</code>）。开启 torch.compile 之后，Inductor 主要做了三类融合：</p>
+      <ul>
+        <li><strong>逐元素 + 归约融成一颗 kernel：</strong>adaRMS 整串操作融成一颗 persistent reduction kernel，均值和 rsqrt 单趟算完；残差加和 post_attention_layernorm 也融在一起。</li>
+        <li><strong>小算子融进 GEMM：</strong>adaRMS 的调制和类型转换被吃进 q_proj 的 Triton GEMM，归一化结果不用单独落一次显存。</li>
+        <li><strong>RoPE 整段折叠：</strong>cos/sin 表的构造（广播乘、cat、cos/sin、cast）融成一颗 kernel，<code>q * cos + rotate_half(q) * sin</code> 融成一颗，可以跑到显存带宽上限。</li>
+      </ul>
+      <p>经过局部编译后，<strong>训练吞吐提升了 54%</strong>。</p>
+      <h2>3. 意外的显存收益：FlexAttention 压激活值</h2>
+      <p>从 LLM 的惯性思维出发，我们最开始看的是 Pi0.5 的 Attention 部分。但 profile 发现，与普通的 LLM 不同，Pi0.5 的 attention 在端到端里的耗时占比并不高：序列长度只有 762，attention 计算在 decoder layer 内占比约 13%，剩下主要是 MLP，约占 76%。折到端到端，attention 前向只占约 <strong>2.8%</strong>，计算耗时的优化空间很小。</p>
+      <p>不过 profile 过程中发现，它的激活值多、算子碎。eager 实现每层先用 <code>repeat_kv</code> 把唯一的 KV 头复制成 8 份，再物化完整的 <code>[B, 8, T, T]</code> 概率矩阵；乘 scale、加 mask、两趟 softmax、PV、transpose 回去，每一步都是独立的 kernel，中间结果反向时都得留着，softmax 还会多存一份 fp32 中间结果。即使在 torch.compile 包裹下，激活值的开销也没有显著降低。</p>
+      <p>另一方面，Pi0.5 的掩码天然适合块稀疏（Block-Sparse）的 attention：</p>
+      <ul>
+        <li>prefix（图像 + 文本）内部完全双向，但看不到 action，右上角整块屏蔽；</li>
+        <li>action 能看到全部有效 prefix，50 个 action token 之间也互相可见；</li>
+        <li>pad 所在的行和列整体屏蔽。</li>
+      </ul>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/02.png"
+          alt="Pi0.5 的注意力掩码：prefix 内部双向，action 可见全部有效 prefix，pad 整体屏蔽" loading="lazy" />
+        <figcaption>Pi0.5 的注意力掩码：prefix（PaliGemma）内部完全双向，suffix（Gemma Expert）的 action 可见全部有效 prefix，pad 行列整体屏蔽。</figcaption>
+      </figure>
+      <p>掩码里大片区域要么全可见、要么全屏蔽，正好对上 FlexAttention 的 BlockMask：按 128×128 的 tile 描述掩码，整块屏蔽的 tile 直接跳过，只有边界上的 tile 才逐元素判断。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/03.png"
+          alt="T=762 下 FlexAttention BlockMask 的 128×128 分块：full、partial 与 skip" loading="lazy" />
+        <figcaption>真实尺度（T = 762）下的 BlockMask：F 为整块可见（不调用 mask_mod），P 为边界 tile（逐元素 mask_mod），skip 为整块跳过。</figcaption>
+      </figure>
+      <p>替换为 FlexAttention 后，<code>enable_gqa=True</code> 让 KV 头在 kernel 内广播，不再复制；反向只存输出和 logsumexp。速度和 eager 差不多（±2%），在端到端上区别不大，但 micro batch size 为 32 时每层少存约 0.63 GiB，18 层合计约 11 GiB。</p>
+      <h2>4. 选择性重计算</h2>
+      <p>openpi 默认开启全量重计算：视觉塔、18 层 decoder layer、embedding 以及 action/time 投影的激活值一律不存，反向传播时全部重算一遍前向。</p>
+      <p>在 LoongForge 框架下，叠加 torch.compile 和 FlexAttention 之后，激活值显存占用已经大幅度下降，但想要对齐官方的 batch size，还是需要开启重计算。</p>
+      <p>问题就变成了：<strong>只重算哪一部分最划算？</strong>我们按模块逐个测算了重计算的"性价比"（即每省 1 GiB 激活需要多花多少毫秒）：</p>
+      <ul>
+        <li><strong>ViT（SigLIP 27 层）：2.8 ms/GiB</strong>，+48.5 ms 换 17.5 GiB。ViT 的 hidden 窄（1152 vs Gemma 的 2048），同样的 FLOP 产生的激活最多，重算最便宜。</li>
+        <li><strong>PaliGemma MLP：4.0 ms/GiB</strong>，激活最大（37.6 GiB），但要 +150 ms。</li>
+        <li><strong>Attention（norm + QKV + RoPE + FlexAttention）：7.8 ms/GiB</strong>，18 层只存 5.5 GiB。MQA 的 K/V 很小，FlexAttention 也不存 score 矩阵，可重算要把 QKV 投影和 attention 前向再跑一遍。激活小、算得贵，最不划算。</li>
+        <li><strong>Gemma Expert MLP：</strong>只处理 50 个 action token，18 层合计 0.7 GiB，重不重算都在噪声里。</li>
+      </ul>
+      <p>最终我们选择<strong>只重算 ViT</strong>（通过 LoongForge 框架的 <code>--activation-checkpoint-module-patterns</code> 仅匹配 SigLIP 层），把重算开销降到了最低。</p>
+      <h2>5. 无 NVLink 场景下的通信瓶颈：分层编译隐藏梯度 AllReduce</h2>
+      <p>NVLink 场景下梯度通信通常不是瓶颈，但在我们实际训练的场景下，PCIe 通信代价高昂：Pi0.5 的 3.5B 参数的 bf16 梯度约 7 GB，ring AllReduce 每卡需要传输 12.25 GB，通信耗时高达 220 ms。</p>
+      <p>然而 profile 发现，由于一开始把整个 backbone 用 torch.compile 编成一张图，Inductor 生成的反向是一个整体的 autograd Function，这导致所有参数梯度在反向结束时才同时 ready，DDP 梯度桶只能串行排在反向之后，每步有高达约 215 ms 的通信开销完全暴露。</p>
+      <h3>5.1 DDPOptimizer + torch.compile 的预期用法：包住整个模型，和通信一起调度</h3>
+      <p>这个问题 PyTorch 官方早就遇到过，其核心思路是：<strong>编译器看到的范围越大越好</strong>——最好将整模型甚至整步训练交给它，由其统一调度梯度通信的时机与计算重叠。</p>
+      <ul>
+        <li><code>DDPOptimizer</code>（PyTorch 2.0 起，默认开启）：对 DDP 包住的模型调用 <code>torch.compile</code> 时，Dynamo 会顺着 DDP bucket 的大小将前向图切段分别编译，从而让反向梯度分批就绪。</li>
+      </ul>
+      <p>但它的前提是<strong>模型能被完整抓成整图</strong>。</p>
+      <h3>5.2 局部 compile 与 DDPOptimizer 不兼容</h3>
+      <p>前面提到，Pi0.5 特殊的 ViT 结构决定了它无法对整个模型直接 <code>torch.compile</code>；只编 backbone，意味着要在 DDP 内部对子模块显式 <code>torch.compile</code>，这时 DDPOptimizer 会崩：</p>
+      <ul>
+        <li><strong>现象：</strong>清空编译缓存后第一次启动必挂，报 <code>BackendCompilerFailed</code>，最终是 FakeTensor 上访问了 <code>data_ptr()</code>；不清缓存直接重启又能跑。很有迷惑性，一度以为是 autotune 或 CUDA Graph 的问题。</li>
+        <li><strong>根因：</strong>
+          <ul>
+            <li>DDPOptimizer 在外面又套了一层，形成嵌套编译。DDPOptimizer 编译下一段子图前，会在 FakeTensorMode 下执行上一段已编译的子图来拿输出的 shape/stride，而里层 compile 的 AOTAutograd runtime wrapper 不知道自己处于 FakeTensorMode，会走真实的 <code>autograd.Function.apply</code>，碰到 FakeTensor 的 <code>data_ptr()</code> 就挂。</li>
+            <li>热缓存能跑，只是因为命中 FX graph cache 绕开了这条路径，换个 shape、换个 rank 数或者清一次缓存就会复现。</li>
+          </ul>
+        </li>
+      </ul>
+      <p>所以只能先关掉它（<code>--no-dynamo-optimize-ddp</code>）。代价正如前面所分析的：由于无人帮忙切图，整张反向图跑完后梯度才能 ready，通信完全暴露出去了。</p>
+      <h3>5.3 自行分层编译，手动切图</h3>
+      <p>既然整图编译无法实现、DDPOptimizer 又无法使用，干脆就在 backbone 内部自己动手切图。</p>
+      <p>我们将编译策略改为 <code>multi_group</code> 分组编译：18 个 decoder layer 各自作为一个独立的编译单元（相同 shape 只需编译一次，其余 17 层直接复用），同时将 final norm、action 输入投影 + time MLP、action 输出投影各自独立成小图。</p>
+      <p>这样一来，每一层的反向都成为了独立的 autograd.Function：当第 N 层的反向一结束，它的梯度桶就能立刻发起 AllReduce，与第 N-1 层的反向计算并行重叠。</p>
+      <p>本质上，这相当于手动实现了 DDPOptimizer 想做的事，只是将切分点精准锁在了层边界上，完全摆脱了对 DDPOptimizer 的依赖。改用手动分层编译后，暴露的通信基本消失，<strong>吞吐 +10%</strong>。</p>
+      <h2>6. bf16 效果验证：LIBERO 测评</h2>
+      <p>经上述一系列 bf16 优化叠加，整体训练吞吐提升到 <strong>24.0 samples/s</strong>，达到社区吞吐的 <strong>2.63 倍</strong>。</p>
+      <p>效果方面，LoongForge bf16 模型在 LIBERO 四个子集上的 5 轮平均测评结果如下：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>子集</th>
+            <th>社区</th>
+            <th>复现社区</th>
+            <th>LoongForge 当前（bf16）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>libero_spatial</td><td>97.0</td><td>96.0（−1.0）</td><td>99.6（+2.6）</td></tr>
+          <tr><td>libero_object</td><td>99.0</td><td>98.0（−1.0）</td><td>99.6（+0.6）</td></tr>
+          <tr><td>libero_goal</td><td>98.0</td><td>99.0（+1.0）</td><td>98.8（+0.8）</td></tr>
+          <tr><td>libero_10 (Long)</td><td>96.0</td><td>96.0（0.0）</td><td>97.0（+1.0）</td></tr>
+          <tr><td><strong>平均</strong></td><td><strong>97.50</strong></td><td><strong>97.25（−0.25）</strong></td><td><strong>98.75（+1.25）</strong></td></tr>
+        </tbody>
+      </table>
+      <p>括号里是相对社区的差值。LoongForge 版本平均 98.75，比社区高 1.25 个点，四个子集均不低于社区。训练加速下，模型测评效果符合预期。</p>
+      <h2>7. 极致 FP8 计算优化</h2>
+      <p>到这里，bf16 下能抠的性能基本已经见底。接下来，我们将 Pi0.5 中的 Linear 模块全面推进到 FP8 计算：输入与权重量化为 FP8 后执行 GEMM，结果按 scale 还原，计算前后保持 bf16。</p>
+      <h3>7.1 TransformerEngine 的 FP8 尝试</h3>
+      <p>最先尝试的是 TransformerEngine 的 FP8 方案：把 <code>nn.Linear</code> 换成 <code>te.Linear</code>，前向套上 <code>fp8_autocast</code>。但真正的问题是它和前面的优化冲突：</p>
+      <ul>
+        <li><strong>和 torch.compile 冲突，到处断图。</strong>
+          <ul>
+            <li>TE 内部有被 <code>@torch.compiler.disable()</code> 装饰的函数（fp8 元数据和 amax 处理）。</li>
+            <li>Dynamo 于是在每个 <code>te.Linear</code> 处断图，218 个 Linear 就是 200 多处断图，Linear 前后的 adaRMS、gelu·up 这些融合也接不到 GEMM 上了。</li>
+          </ul>
+        </li>
+        <li><strong>断图直接推高激活值显存占用。</strong>
+          <ul>
+            <li>整图时 AOTAutograd 把前向和反向放在一起切分，adaRMS、gelu·up、RoPE、残差这类便宜的逐元素算子会留到反向重算，只存少量张量。</li>
+            <li>断图之后一层被切成好几段，Linear 的输入必须真实写到显存里，Linear 自己再为反向存一份，前后两段之间也没法跨段重算。18 层累加下来多了约 13 GiB。</li>
+          </ul>
+        </li>
+      </ul>
+      <p>所以 TE 的 FP8 GEMM 本身没问题，但放进 Pi0.5 这条以 torch.compile 为核心的优化路径里，断图和多出来的显存把收益吃掉了，很容易导出负收益。</p>
+      <h3>7.2 TorchAO 的 FP8 方案</h3>
+      <p>TE 的问题在于断图，那就找一个能留在编译图里的 FP8 方案。于是我们考虑 TorchAO，使用 <code>tensorwise</code> recipe。</p>
+      <p>TorchAO 的 <code>Float8Linear</code> 的 amax、scale、cast 都是普通的 PyTorch 算子，GEMM 走 <code>torch._scaled_mm</code>，在 Dynamo 下能直接建图。</p>
+      <p>实测显存反而比 bf16 更省。我们推测原因是：<code>Float8Linear</code> 的 autograd Function 本身写的是为反向保存 bf16 输入，但它在编译图里，partitioner 看得到反向拿这份输入只是重新 cast 成 FP8 再算 wgrad，于是改为直接存 FP8 版本加一个 scale，这部分激活减半。</p>
+      <p>至于哪些 Linear 走 TorchAO FP8，分两层筛选：</p>
+      <ul>
+        <li><strong>静态规则：</strong>
+          <ul>
+            <li>458 个候选里，精度敏感的模块（vision_tower、multi_modal_projector、action/time 投影）保留原精度，跳过 204 个；</li>
+            <li>再按 <code>fp8-min-dim=2048</code> 去掉 36 个小 Linear，它们的 GEMM 太小，量化开销比 FP8 省下的时间还多。</li>
+          </ul>
+        </li>
+        <li><strong>trace 验证：</strong>
+          <ul>
+            <li>用 Kineto trace 把每个 GEMM 按 shape 归回模块，对比 bf16 与 FP8 的实测 kernel 耗时，只留确实变快的；</li>
+            <li>PaliGemma MLP 和 attention 投影都快了 1.8–2.0 倍；2 个训练中不会执行的 <code>lm_head</code> 被排除，最终保留 216 个。</li>
+          </ul>
+        </li>
+      </ul>
+      <p>最终 GEMM 在单步中的占比从 54% 降到 33%，吞吐在 bf16 的基础上再提升 13.9%，做到 <strong>27.34 samples/s，是社区实现的 3.0 倍</strong>。</p>
+      <p>精度上，与 bf16 对比，loss 的 Pearson 相关系数为 0.9997，平均相对误差 0.56%。</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-pi05-3x-training-acceleration/04.png"
+          alt="pi0.5 200 步 action loss：BF16 与 TorchAO FP8 的曲线几乎重合" loading="lazy" />
+        <figcaption>pi0.5 200 步 action loss：BF16 与 TorchAO FP8 的曲线几乎重合（相同的 seed、数据、batch size 与优化器；FP8 保持 multi_group + fullgraph=true）。</figcaption>
+      </figure>
+      <p>如果你也在做 VLA / 具身模型的训练，欢迎试一试 LoongForge，也欢迎通过 GitHub Issue 与我们交流。</p>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-10-loongforge-gr00t-n17-training-optimization.zh.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← 上一篇：从间断执行到连续流水：GR00T-N1.7 训练优化</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">所有文章 →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-10-loongforge-pi05-3x-training-acceleration.html';
+      const POST_ZH = '2026-10-loongforge-pi05-3x-training-acceleration.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === 'zh')
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js?v=20261020-r25"></script>
+</body>
+
+</html>

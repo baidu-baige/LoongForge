@@ -33,6 +33,7 @@
       summary: loc.summary,
       date: p.date,
       featured: !!p.featured,
+      cover: p.cover || '',
       tags: tags
     };
   }
@@ -40,6 +41,11 @@
   function featuredChipLabel(lang) { return lang === 'zh' ? '精选' : 'Featured'; }
   function allTagLabel(lang) { return lang === 'zh' ? '全部' : 'All'; }
 
+  // Featured (pinned) card = the newest post.
+  // Right-hand panel: if the post has an optional `cover` in assets/data/posts.json
+  // (a path like "assets/blog/<slug>/NN.png", shared by EN and ZH), show that image;
+  // otherwise show the gradient "LoongForge" wordmark. Prefer a cover whose labels
+  // are language-neutral (plots/charts), since the same image is used for both languages.
   function renderFeatured(v, lang) {
     if (!v || !featuredEl) return;
     featuredEl.innerHTML = `
@@ -54,10 +60,14 @@
             <p class="text-gray-600 dark:text-gray-300 mb-5">${escapeHtml(v.summary)}</p>
             <div class="text-sm text-gray-500">${escapeHtml(v.date)} · ${escapeHtml(v.author)}</div>
           </div>
-          <div class="hidden md:block bg-gradient-to-br from-indigo-500 via-violet-500 to-amber-400 relative">
-            <div class="absolute inset-0 opacity-20 hero-grid"></div>
-            <div class="absolute inset-0 flex items-center justify-center text-white text-7xl">🐉</div>
-          </div>
+          ${v.cover ? `
+          <div class="hidden md:block relative bg-white dark:bg-gray-100">
+            <img src="${escapeHtml(v.cover)}" alt="" loading="lazy" class="absolute inset-0 w-full h-full object-contain p-4" />
+          </div>` : `
+          <div class="hidden md:flex relative items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-violet-50 dark:from-gray-900 dark:via-gray-900 dark:to-indigo-950" aria-hidden="true">
+            <div class="absolute inset-0 hero-grid"></div>
+            <span class="relative text-gradient text-5xl lg:text-6xl font-extrabold tracking-tight leading-normal pb-2">LoongForge</span>
+          </div>`}
         </div>
       </a>`;
   }

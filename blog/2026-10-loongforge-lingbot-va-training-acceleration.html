@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Accelerating LingBot-VA Training: A Technical Walkthrough | LoongForge Blog</title>
+  <meta name="description"
+    content="End-to-end training optimization of LingBot-VA on LoongForge: FSDP all-gather once per step, cost-balanced sampling, Triton RoPE and per-layer kernel-chain fusion, mask compilation and GC suppression. 2.20x training throughput and 54.5% shorter step time." />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261020-r27" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+</head>
+
+<body class="bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+
+  <div id="scroll-progress"></div>
+
+  <!-- Shared navbar (rendered by main.js) -->
+  <header data-site-header data-active="blog" data-base="../" data-lang-mode="post"></header>
+
+  <article class="max-w-4xl mx-auto px-6 py-14">
+    <a href="../blog.html" class="back-link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg><span>Back to Blog</span></a>
+    <div class="mt-6 mb-8">
+      <div class="flex gap-2 mb-4 flex-wrap"><span class="chip">LoongForge</span><span class="chip">VLA</span><span
+          class="chip">LingBot-VA</span><span class="chip">Training Acceleration</span></div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">Accelerating LingBot-VA Training: A Technical Walkthrough</h1>
+      <div class="text-sm text-gray-500">2026-10-15 · The LoongForge Team</div>
+    </div>
+
+    <div class="prose-lf">
+      <aside class="post-links" aria-label="Links">
+        <div class="post-links-row"><span class="post-links-label">GitHub</span><a href="https://github.com/baidu-baige/LoongForge" target="_blank" rel="noopener">https://github.com/baidu-baige/LoongForge</a></div>
+      </aside>
+      <p>LingBot-VA is an embodied-AI model that jointly models video and action. Its training suffers from redundant parameter communication, unbalanced load from variable-length samples, per-layer chains of small kernels that slow the backward pass, and GPUs that frequently wait on CPU scheduling. LoongForge applies system-level optimization across the whole training path and achieves <strong>2.20x training throughput and a 54.5% shorter step time</strong>.</p>
+      <h2>1. Background: new training challenges from joint video-action modeling</h2>
+      <p>In embodied AI, models that jointly model a "video-generation backbone + action branch" (WAM-style models) are quickly becoming mainstream. Instead of simply chaining a vision encoder and an action head, they predict both how the scene will evolve and how the robot should act, grounding control in an understanding of physical dynamics. This markedly improves long-horizon task success and sample efficiency. LingBot-VA is a representative example: it uses a large pretrained video diffusion model as its backbone, interleaves video latents and action tokens into one unified sequence, and performs autoregressive flow-matching generation. It reports leading success rates on simulation benchmarks such as RoboTwin 2.0 and LIBERO.</p>
+      <p>But this architecture puts very different pressure on the training system than a conventional VLA does:</p>
+      <ul>
+        <li><strong>Sequences are inherently variable in length.</strong> The number of video latent frames and the length of the action chunk vary per sample, so token counts within one batch can differ by several times. With multi-GPU data parallelism, each step takes as long as the slowest GPU.</li>
+        <li><strong>Per-layer small kernels are dense.</strong> In each of the 30 Transformer blocks, a chain of lightweight operations runs: time modulation, QK normalization, rotary position embedding, and residual gating. Each kernel is short, but multiplied by the layer count and the number of gradient-accumulation microbatches, kernel launches and intermediate-tensor traffic alone consume a lot of time.</li>
+        <li><strong>Gradient accumulation amplifies communication.</strong> To build a large effective batch under limited memory, this kind of training commonly uses many gradient-accumulation steps. Under parameter sharding (FSDP), the default implementation all-gathers the parameters again for every microbatch, so communication volume scales directly with the number of microbatches.</li>
+        <li><strong>Attention is sparse and masked.</strong> Once video tokens and action tokens are interleaved, attention needs masks built from chunks and sliding windows. Building them is a CPU-heavy graph-structured computation and easily becomes a host-side bottleneck.</li>
+      </ul>
+      <p>The net effect: when training with the community open-source implementation, the GPU spends a large share of its time not computing but waiting for communication, waiting for masks, and waiting for the slowest GPU.</p>
+      <h2>2. Overview: start from "what is the GPU waiting for?"</h2>
+      <p>To improve LingBot-VA training efficiency, the Baidu Baige team restructured its training path at the system level on LoongForge, our open-source omni-modal training framework. We did not start by "swapping in a faster kernel". We started by using profiling to answer one question: <strong>where does the time in a step actually go?</strong></p>
+      <p>Based on NSys timelines and NVTX ranges, we split step time into three kinds of waste that can be optimized independently:</p>
+      <ul>
+        <li><strong>Communication waste:</strong> the same parameters are all-gathered repeatedly within one step, and gradient reduction uses needlessly high precision.</li>
+        <li><strong>Scheduling waste:</strong> many visible launch gaps appear between GPU kernels, where the GPU waits for Python-side mask construction, for automatic garbage collection, and for the loss to be synchronized back to the host.</li>
+        <li><strong>Operator waste:</strong> per-layer chains of small kernels produce many kernel launches and dtype/layout round trips, and the backward pass has to materialize extra intermediate tensors.</li>
+      </ul>
+      <p>On top of these comes a load problem tied directly to the model: <strong>rank stragglers caused by variable-length samples</strong>.</p>
+      <p>Along these four directions, with the same model structure, data, and hyperparameters, LoongForge raises training throughput to <strong>2.20x</strong> that of the community open-source implementation. The key techniques behind this follow.</p>
+      <h2>3. Under the hood: four engineering optimizations behind the 2.2x</h2>
+      <h3>Optimization 1: FSDP parameter communication — from one all-gather per microbatch to one per step</h3>
+      <p>The default semantics of sharded-parameter training are: all-gather the full parameters before forward, reshard immediately after use to free memory, and all-gather again for backward. This is reasonable with a single microbatch, but it degrades under gradient accumulation: every microbatch in a step repeats "all-gather → compute → reshard", even though all of them use <strong>exactly the same parameters</strong>.</p>
+      <p>LoongForge postpones resharding from "after every forward/backward" to "after the optimizer update". When wrapping with FSDP, we turn off <code>reshard_after_forward</code> so the parameters stay unsharded for the whole step and are reused by every microbatch. We also register a step post-hook on the optimizer so that, once the parameter update is done, everything is resharded in one go and the memory is returned. The number of parameter all-gathers per step drops from "number of microbatches × 2 (one each for forward and backward)" to 1.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/01.png"
+          alt="Parameter communication comparison: the framework default does an AllGather and a reshard for every microbatch (5 AllGathers + 5 reshards); LoongForge does a single AllGather per step and reshards after optimizer.step(), saving a stretch of step time" loading="lazy" />
+        <figcaption>Figure 1: Parameter communication — one all-gather per microbatch vs. one per step.</figcaption>
+      </figure>
+      <p>An ablation quantifies this item: turning the optimization off increases step time by <strong>21.16%</strong>. It also explains why the gain scales linearly with the number of gradient-accumulation steps: the more steps, the more repeated communication is saved.</p>
+      <p>A companion change concerns gradient-reduction precision. We align <code>reduce_dtype</code> in the FSDP mixed-precision policy with the parameter precision (BF16), which removes the precision conversions around reduce-scatter and the larger communication payload. This alone is worth about 2%, and it matches the community implementation exactly under the accuracy gate.</p>
+      <h3>Optimization 2: load balancing for variable-length samples — cost-balanced sampling and microbatch alignment</h3>
+      <p>Sample lengths in embodied data are naturally uneven. The default distributed sampler slices samples to ranks in index order, so some ranks get a batch of long samples and others a batch of short ones. Because gradient synchronization is a global barrier, <strong>each step takes as long as the slowest rank</strong>, and all the time saved by the short-sample ranks turns into idle waiting.</p>
+      <p>LoongForge implements a cost-balanced distributed sampler:</p>
+      <ul>
+        <li>The gradient-accumulation step count is used as the grouping unit, so the balancing granularity exactly covers all the samples consumed by one parameter update;</li>
+        <li>Within a group, samples are sorted by cost (estimated from sequence length and similar factors) in descending order and then placed greedily on the rank with the lowest accumulated cost, making the total cost of each rank as close as possible;</li>
+        <li>After assignment, the microbatch order inside each rank is <strong>cost-aligned</strong>, so that at the same microbatch index every rank processes samples of a similar magnitude. This avoids per-microbatch jitter where some GPUs are on long samples while others are on short ones at the same moment.</li>
+      </ul>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/02.png"
+          alt="Variable-length embodied samples: with a sequential partition the ranks carry very different loads and most wait a long time at the gradient-sync barrier; with a cost-balanced partition and a cost-aligned order, all ranks reach the barrier at almost the same time" loading="lazy" />
+        <figcaption>Figure 2: With variable-length samples, the slowest rank sets the time of every step. Left: sequential partition. Right: cost-balanced partition plus cost-aligned microbatch order (hatched areas are ranks idling at the barrier).</figcaption>
+      </figure>
+      <p>The effect is again verified with end-to-end time: with cost-balanced sampling on, step time drops by <strong>7.4% (a 1.079x speedup)</strong>. This gain changes no operator implementation and comes purely from data orchestration, which is exactly the part that operator-only optimization cannot reach.</p>
+      <p>Note that balancing changes the sample-to-rank mapping, so we must prove that it does not change training semantics. For this we built a SHA256 gate on sample order: we export the actual sampling order of every rank in every epoch and check it file by file against an archived baseline; if any single file differs, the gate fails.</p>
+      <h3>Optimization 3: per-layer kernel-chain fusion — hand-written Triton RoPE, fused QK RMSNorm, compiled modulation prologue</h3>
+      <p>The "small operations" inside the 30 blocks are the easiest cost to overlook. Each takes only a few microseconds, but it runs in every layer, for every microbatch, and leaves a trail of intermediate tensors in backward. LoongForge does three things here:</p>
+      <p><strong>A hand-written Triton RoPE kernel.</strong> In eager mode, rotary position embedding expands into a chain of mul / add / cat / copy kernels, once for Q and once for K. We use a single Triton kernel to rotate Q and K pairwise at the same time, and we <strong>implement the backward ourselves</strong>: the backward rotation shares the same kernel as the forward and just negates the rotation direction, so no extra intermediate tensors need to be saved and the operator chain does not have to be rebuilt in backward. The cos/sin components are cached by shape and reused. In the ablation, turning this group off raises total elementwise time to <strong>1.76x</strong>, adds about 5,100 kernels per step, and increases step time by <strong>7.29%</strong>. About 98% of the gain comes from <strong>backward</strong>, which is exactly where writing our own backward pays off.</p>
+      <p><strong>A fused QK RMSNorm.</strong> If Q/K normalization uses the framework's native implementation, it adds extra contiguous copies and dtype conversions before and after attention. We switch to TransformerEngine's fused RMSNorm. In the ablation, turning it off increases end-to-end step time by <strong>6.46%</strong>, which confirms its value.</p>
+      <p><strong>A compiled per-layer modulation prologue with a fixed BF16 compute domain.</strong> The per-layer time modulation (shift / scale / gate) plus LayerNorm is a typical memory-bound short chain. We treat it as one compilation unit so the compiler performs modulation and normalization in a single kernel, and we keep the intermediate expressions inside the block in BF16 with no up- and down-casting. Turning off the compiled prologue increases step time by <strong>7.78%</strong> and raises total elementwise time to <strong>1.9x</strong>; fixing the BF16 compute domain adds a further gain of about 1.4%.</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/03.png"
+          alt="Per-layer kernel-chain comparison: in the baseline each layer is a chain of small kernels (cast, mul, add, cat, copy, layer norm, mul, add) across 30 layers; in LoongForge each layer has just three stages: Triton RoPE (forward + backward), fused QK RMSNorm, and a compiled modulation prologue (BF16)" loading="lazy" />
+        <figcaption>Figure 3: Per-layer kernel chains — fuse the whole chain, not just the matmul. The fused path uses one kernel per stage with no dtype/layout round trips, and backward keeps its intermediates inside the kernel.</figcaption>
+      </figure>
+      <h3>Optimization 4: rescuing the GPU from "waiting for the host" — mask compilation and GC suppression</h3>
+      <p>The first three items all reduce the work the GPU has to do. But profiling exposed another kind of waste: the GPU has work to do and yet <strong>sits idle waiting for the host</strong>.</p>
+      <p>The criterion is three structural NSys metrics: the share of GPU busy time, GPU idle time, and the total length of the "visible gaps of at least 10 microseconds" between kernels. If a change leaves the kernel count and per-category kernel time almost unchanged, but idle time and large gaps rise significantly together, it is a host-side bottleneck. <strong>Such a bottleneck cannot be fixed by optimizing operators; the host-side computation has to be moved off the critical path.</strong></p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/04.png"
+          alt="GPU timeline comparison: when host-bound, Python-side mask construction, automatic full GC, and loss synchronization leave the GPU waiting intermittently, with GPU busy at 94.8% and launch gaps about 10x longer; after optimization, a compiled block mask, suppressed generation-2 GC, and device-side loss handling bring GPU busy to 99.0% and squeeze out the gaps" loading="lazy" />
+        <figcaption>Figure 4: GPU timeline — launch gaps are step time, not free time.</figcaption>
+      </figure>
+      <p>Using this criterion, we mainly located and fixed two kinds of host-side bottleneck:</p>
+      <ul>
+        <li><strong>Attention mask construction.</strong> The sparse attention over the interleaved sequence needs a block mask built at every step, which is a Python-side graph-structured computation. Without compilation it directly blocks forward kernel submission: GPU busy falls from 99.0% to 94.8%, GPU idle grows to <strong>5.6x</strong>, and gaps of at least 10 microseconds grow to <strong>10.4x</strong>. Moreover, <strong>the increase in idle time almost exactly equals the increase in large gaps, millisecond for millisecond</strong>, which is the textbook signature of a GPU waiting on the host. We compile the mask construction and cache it by shape and window parameters (falling back to eager automatically if compilation fails, for robustness), taking this host computation off the critical path for a per-step gain of <strong>3.89%</strong>.</li>
+        <li><strong>Python automatic garbage collection.</strong> The training loop creates many short-lived objects. Once Python's generation-2 full GC triggers, the host has a window in which it cannot submit CUDA work. Worse, the trigger times differ across ranks, so the window is amplified through collective communication. Our strategy is not to simply disable GC: we <strong>keep the generation-0/1 young-generation collections, suppress the generation-2 threshold, and explicitly trigger one controlled full GC at a fixed step interval</strong>. The ablation shows that when this strategy is reverted, the kernel count is exactly unchanged (identical kernel by kernel), yet GPU idle grows to <strong>2.4x</strong> and step time increases by <strong>1.98%</strong>. The GPU compute graph is exactly the same, so the loss comes purely from host stalls.</li>
+      </ul>
+      <h2>4. Measured performance</h2>
+      <p>We tested LingBot-VA with default training parameters (gradient accumulation = 10) on the LIBERO dataset, on Baidu Baige hpas.lgn7ib instances. With identical model structure, data, and hyperparameters, LoongForge achieves <strong>2.20x</strong> the training throughput of the community open-source implementation and a <strong>54.5%</strong> shorter step time, while the training loss stays aligned with the community implementation (mean relative error 0.171%).</p>
+      <figure>
+        <img src="../assets/blog/2026-10-loongforge-lingbot-va-training-acceleration/05.png"
+          alt="Training loss over the first 50 LIBERO steps: the community baseline and LoongForge curves for video loss, action loss, and total loss nearly coincide, with mean relative errors of 0.017%, 0.418%, and 0.171%" loading="lazy" />
+        <figcaption>Figure 5: Loss alignment over the first 50 LIBERO steps. From top to bottom: video loss, action loss, and total loss. The community baseline and LoongForge curves nearly coincide, with mean relative errors of 0.017%, 0.418%, and 0.171%.</figcaption>
+      </figure>
+      <p>From the perspective of optimization mechanisms, the size of each contribution is also clear:</p>
+      <ul>
+        <li>Amplified communication count is the only mechanism that yields a single-item gain above 20%, and the gain scales linearly with the number of gradient-accumulation steps;</li>
+        <li>Per-layer kernel-chain fusion (modulation prologue, Triton RoPE, fused QK RMSNorm) is worth 6%–8% each;</li>
+        <li>Cost-balanced sampling for variable-length samples contributes about 8% and does not depend on any operator change;</li>
+        <li>Host-side idle cleanup (mask compilation, GC strategy) totals about 6% and pushes GPU busy to 99.0%.</li>
+      </ul>
+      <p>It is worth noting that once GPU busy reaches 99.0%, there is less than 1% left to gain on the host side. Further speedups must come from the kernels themselves (GEMM currently accounts for about 63.7% of kernel time) and from communication overlap. That is the direction of our next stage.</p>
+      <h2>5. Summary: turning the GPU from "passively waiting" into "continuously computing"</h2>
+      <p>Looking back over the whole effort, the 2.20x improvement comes from four paths of different nature: <strong>redesigning communication semantics</strong> (parameters reused within a step), <strong>load balancing through data orchestration</strong> (cost alignment of variable-length samples), <strong>hand-written and fused operators</strong> (Triton RoPE and per-layer chain fusion), and <strong>cleaning up the host-side critical path</strong> (mask compilation and the GC strategy). They address four kinds of waste, namely communication, load, compute, and scheduling, and dropping any one of them forfeits part of the gain.</p>
+      <p>What supports these conclusions is a methodology of "quantify the bottleneck first, design the optimization next, and accept it by ablation last": every conclusion comes from reproducible timeline evidence and item-by-item ablation, and every performance gain passes an accuracy gate that is aligned with the community implementation iteration by iteration.</p>
+      <p>All of these optimizations are now integrated into LoongForge, our omni-modal training framework. We welcome researchers and developers in embodied AI to explore more efficient VLA training together.</p>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm">
+      <a href="2026-08-taot-topology-aware-expert-placement.html"
+        class="text-indigo-600 dark:text-indigo-300 hover:underline">← Previous: TAOT Topology-Aware Expert Placement</a>
+      <a href="../blog.html" class="text-indigo-600 dark:text-indigo-300 hover:underline">All posts →</a>
+    </div>
+  </article>
+
+  <footer class="border-t border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-500">© 2026 LoongForge Authors · Apache 2.0
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const POST_EN = '2026-10-loongforge-lingbot-va-training-acceleration.html';
+      const POST_ZH = '2026-10-loongforge-lingbot-va-training-acceleration.zh.html';
+      document.querySelectorAll('[data-post-lang]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.postLang;
+          try { localStorage.setItem('lf-lang', target); } catch (e) { }
+          location.href = target === 'zh' ? POST_ZH : POST_EN;
+        });
+      });
+      try {
+        document.querySelectorAll('[data-post-lang]').forEach(b =>
+          b.classList.toggle('active', b.dataset.postLang === 'en')
+        );
+      } catch (e) { }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="../assets/js/main.js?v=20261020-r25"></script>
+</body>
+
+</html>

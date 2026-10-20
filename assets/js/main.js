@@ -576,6 +576,38 @@
     upd();
   }
 
+  // ===== Back-to-top button (all pages) =====
+  function initBackToTop() {
+    // Blog posts are one file per language; other pages follow the site language toggle.
+    const isPost = !!document.querySelector('[data-lang-mode="post"]');
+    const labelFor = () => {
+      const zh = isPost ? /\.zh\.html$/.test(location.pathname) : getLang() === 'zh';
+      return zh ? '返回顶部' : 'Back to top';
+    };
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'back-to-top';
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5 10 7l5.5 5.5"/></svg>';
+    btn.addEventListener('click', () => {
+      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    });
+    document.body.appendChild(btn);
+    const upd = () => {
+      const show = window.scrollY > 600;
+      btn.classList.toggle('visible', show);
+      if (show) {
+        const label = labelFor();
+        if (btn.getAttribute('aria-label') !== label) {
+          btn.setAttribute('aria-label', label);
+          btn.title = label;
+        }
+      }
+    };
+    window.addEventListener('scroll', upd, { passive: true });
+    upd();
+  }
+
   // ===== Quick Start step tabs =====
   function initQuickStart() {
     const root = document.getElementById('qs-interactive');
@@ -629,6 +661,7 @@
     initReveal();
     initTocSpy();
     initScrollProgress();
+    initBackToTop();
     initQuickStart();
     initCounters();
     window.LF = { toggleTheme, toggleMobileMenu, setLang, attachCopyButtons };
