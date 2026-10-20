@@ -47,7 +47,7 @@ import torch
 
 # The SM80 operator packages (``flash_mla_sm80`` / ``lightning_indexer_sm80``) are
 # vendored in-tree under ``ops/cuda_source/`` and built in place, so LoongForge can
-# call them without depending on DeepTraining or a manually-set PYTHONPATH.  Their
+# call them without depending on a vendored checkout or a manually-set PYTHONPATH.  Their
 # parent directories are appended (not prepended) to ``sys.path`` so that a
 # pip-installed copy or an explicit ``DSA_SM80_OPS_PATH`` on ``PYTHONPATH`` still
 # takes precedence as an override.
@@ -149,7 +149,7 @@ class DSAKernelBackend:
 
         ``flashinfer.top_k`` is a radix select with no tensor-core code and no
         arch gating, so it works unchanged on SM80; verified against
-        ``torch.topk`` on A800.  ``radix_topk`` (DeepTraining ``cuda_source/topk``)
+        ``torch.topk`` on A800.  ``radix_topk`` (`ops/cuda_source/topk`)
         is an equivalent drop-in should flashinfer ever be unavailable.
         """
 

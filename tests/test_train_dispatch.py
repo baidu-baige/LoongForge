@@ -13,7 +13,8 @@ from unittest.mock import patch
 import loongforge.train as train
 from loongforge import constants
 from loongforge.models import catalog
-from loongforge.training import registry
+from loongforge.training.megatron import registry
+from loongforge.training.torch import registry as torch_registry
 
 ROOT = Path(__file__).resolve().parents[1]
 PHASES = (constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT)
@@ -46,14 +47,46 @@ def _previous_method(family, phase):
 
 
 class TrainDispatchTest(unittest.TestCase):
+    def test_torch_trainer_resolves_only_selected_factory(self):
+        cases = (
+            ("GrootN1d6Trainer", "sft_embodied", "groot_n1_6"),
+            ("GrootN1d7Trainer", "sft_embodied", "groot_n1_7"),
+            ("LingBotFinetuneTrainer", "sft_lingbot_va", "lingbot_va"),
+        )
+        for trainer, method_name, model in cases:
+            method = object()
+            factory = SimpleNamespace(build_optimization=object())
+            with self.subTest(trainer=trainer), \
+                    patch.object(torch_registry.importlib, "import_module", side_effect=[method, factory]) as load:
+                self.assertEqual(torch_registry.resolve_torch_trainer(trainer), (method, factory.build_optimization))
+                self.assertEqual([call.args[0] for call in load.call_args_list], [
+                    f"loongforge.training.torch.methods.{method_name}",
+                    f"loongforge.accelerations.torch.{model}.factory",
+                ])
+
+    def test_default_torch_trainer_and_invalid_selection(self):
+        port = type("TorchOptimization", (), {})
+        module = SimpleNamespace(TorchOptimization=port)
+        with patch.dict(sys.modules, {"loongforge.engines.torch.train_step": module}), \
+                patch.object(torch_registry.importlib, "import_module") as load:
+            method, build = torch_registry.resolve_torch_trainer("FinetuneTrainer")
+            self.assertIs(method, load.return_value)
+            self.assertIsInstance(build(None), port)
+            load.assert_called_once_with("loongforge.training.torch.methods.sft_embodied")
+            load.reset_mock()
+            for name in ("", "missing"):
+                with self.assertRaises(ValueError):
+                    torch_registry.resolve_torch_trainer(name)
+            load.assert_not_called()
+
     def test_routes_registered_models_and_config_only_megatron(self):
         cases = (
-            (["train.py", "--model-name", "qwen3-0.6b"], "loongforge.training.megatron_runner"),
-            (["train.py", "--model-name", "pi05"], "loongforge.training.torch_runner"),
-            (["train.py", "--model-name", "GROOT-N1-6"], "loongforge.training.torch_runner"),
+            (["train.py", "--model-name", "qwen3-0.6b"], "loongforge.training.megatron.runner"),
+            (["train.py", "--model-name", "pi05"], "loongforge.training.torch.runner"),
+            (["train.py", "--model-name", "GROOT-N1-6"], "loongforge.training.torch.runner"),
             (["train.py", "--model-name", "pi05", "--config-file", "custom.yaml"],
-             "loongforge.training.torch_runner"),
-            (["train.py", "--config-file", "custom.yaml"], "loongforge.training.megatron_runner"),
+             "loongforge.training.torch.runner"),
+            (["train.py", "--config-file", "custom.yaml"], "loongforge.training.megatron.runner"),
         )
         for argv, entrypoint in cases:
             with (
@@ -81,7 +114,7 @@ class TrainDispatchTest(unittest.TestCase):
                         load.assert_not_called()
                     else:
                         registry.resolve_method(family, phase)
-                        load.assert_called_once_with(f"loongforge.training.methods.{expected}")
+                        load.assert_called_once_with(f"loongforge.training.megatron.methods.{expected}")
 
     def test_split_model_config_reads_top_level_or_model_section(self):
         llm = constants.LanguageModelFamilies.names()[0]

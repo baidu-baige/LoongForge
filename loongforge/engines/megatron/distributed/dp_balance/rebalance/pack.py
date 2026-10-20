@@ -3,224 +3,7 @@
 
 """depack and pack data"""
 
-from typing import Dict, Tuple, List, Any
-
 import torch
-
-from loongforge.engines.megatron import get_args, get_tokenizer
-from loongforge.models.vision.internvl.internvl_config import IMG_CONTEXT_TOKEN
-
-
-class InternVLDataSample(object):
-    """
-    Lightweight container representing a single (possibly multimodal) sample.
-    """
-
-    def __init__(
-        self,
-        pixel_values=None,
-        input_ids=None,
-        image_flags=None,
-        loss_weights=None,
-        labels=None,
-    ):
-        """
-        Initialize a InternVLDataSample.
-
-        All fields are optional to support text-only, image-only,
-        or multimodal samples.
-        """
-        self.pixel_values = pixel_values
-        self.input_ids = input_ids
-        self.loss_weights = loss_weights
-        self.labels = labels
-        self.image_flags = image_flags
-
-
-def depack_data_for_intern_vl(
-    data: Dict[str, torch.Tensor]
-) -> List[InternVLDataSample]:
-    """
-    De-pack a packed batch into a list of InternVLDataSample objects.
-
-    Assumptions:
-        - attention_mask encodes cumulative token offsets
-        - IMG_CONTEXT_TOKEN marks image-token regions
-        - image tokens map to pixel_values in fixed chunks (heuristic-based)
-
-    Note:
-        No communication or reordering across DP ranks happens here.
-    """
-    data_sample_list: List[InternVLDataSample] = []
-
-    # Optional multimodal fields
-    image_flags = data["image_flags"]
-    pixel_values = data["imgs"]
-
-    # Required fields
-    input_ids = data["tokens"]
-    labels = data["labels"]
-    loss_weights = data["loss_weight"]
-    attention_mask = data["attn_mask"]
-
-    # Normalize loss_weights type
-    if isinstance(loss_weights, list):
-        loss_weights = torch.tensor(loss_weights, dtype=torch.float32)
-
-    # attention_mask stores cumulative offsets, shape [N+1]
-    attention_mask = attention_mask.squeeze_(0)
-
-    # ------------------------------------------------
-    # 1) Filter out empty image entries
-    # ------------------------------------------------
-    filtered_image_flags = []
-    filtered_pixel_values = []
-
-    if image_flags is not None:
-        for i in range(image_flags.shape[0]):
-            if image_flags[i].numel() != 0 and int(image_flags[i].sum().item()) != 0:
-                filtered_image_flags.append(image_flags[i])
-                if pixel_values is not None:
-                    filtered_pixel_values.append(pixel_values[i])
-
-    if filtered_image_flags:
-        filtered_image_flags = torch.stack(filtered_image_flags, dim=0)
-        filtered_pixel_values = (
-            torch.stack(filtered_pixel_values, dim=0) if filtered_pixel_values else None
-        )
-    else:
-        filtered_image_flags = None
-        filtered_pixel_values = None
-
-    # ------------------------------------------------
-    # 2) Slice packed tensors into per-sample segments
-    # ------------------------------------------------
-    img_size = get_args().force_image_size
-    img_context_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
-        IMG_CONTEXT_TOKEN
-    )
-
-    for j in range(len(attention_mask) - 1):
-        start_idx = int(attention_mask[j].item())
-        end_idx = int(attention_mask[j + 1].item())
-
-        # Token-level slicing
-        cur_input_ids = input_ids[:, start_idx:end_idx].clone()
-        cur_labels = labels[:, start_idx:end_idx].clone()
-        cur_loss_weights = loss_weights[:, start_idx:end_idx].clone()
-
-        # Default: placeholder image tensors
-        # Last segment is padding-only and should not carry images
-        cur_image_flags = torch.zeros(1, dtype=torch.int64, device=cur_input_ids.device)
-        cur_pixel_values = torch.zeros(
-            [1, 3, img_size, img_size],
-            dtype=torch.float,
-            device=cur_input_ids.device,
-        )
-
-        # ------------------------------------------------
-        # 3) Assign pixel_values based on image tokens
-        # ------------------------------------------------
-        if filtered_pixel_values is not None:
-            image_token_num = int((cur_input_ids == img_context_token_id).sum().item())
-
-            if image_token_num > 0:
-                # Heuristic: one image corresponds to ~256 image tokens
-                num_imgs = max(1, image_token_num // 256)
-
-                if filtered_pixel_values.shape[0] >= num_imgs:
-                    cur_pixel_values = filtered_pixel_values[:num_imgs]
-                    cur_image_flags = filtered_image_flags[:num_imgs]
-
-                    # Consume assigned image entries
-                    filtered_pixel_values = filtered_pixel_values[num_imgs:]
-                    filtered_image_flags = filtered_image_flags[num_imgs:]
-
-        # Construct per-sample container
-        data_sample_list.append(
-            InternVLDataSample(
-                pixel_values=cur_pixel_values,
-                input_ids=cur_input_ids,
-                image_flags=cur_image_flags,
-                labels=cur_labels,
-                loss_weights=cur_loss_weights,
-            )
-        )
-    return data_sample_list
-
-
-def pack_data_for_intern_vl(
-    data_sample_list: List[InternVLDataSample],
-) -> Tuple[Any, ...]:
-    """
-    Pack a list of InternVLDataSample objects into model-ready batch tensors.
-
-    Notes:
-        - This function ONLY performs local tensor packing.
-        - It does NOT execute forward/backward, nor any DP/SP communication.
-        - The returned tuple is the final packed batch representation.
-
-    Returns:
-        Tuple[Any, ...]: packed batch data used directly by the model.
-    """
-    pixel_values_list = []
-    image_flags_list = []
-    input_ids_list = []
-    labels_list = []
-    loss_weights_list = []
-    attention_offsets = [0]
-    position_ids = []
-
-    for s in data_sample_list:
-        if s.pixel_values is not None:
-            pixel_values_list.append(s.pixel_values)
-        if s.image_flags is not None:
-            image_flags_list.append(s.image_flags)
-        input_ids_list.append(s.input_ids)
-        labels_list.append(s.labels)
-        loss_weights_list.append(s.loss_weights)
-        attention_offsets.append(attention_offsets[-1] + s.input_ids.shape[-1])
-        position_ids.extend(list(range(s.input_ids.shape[-1])))
-
-    pixel_values = torch.cat(pixel_values_list, dim=0) if pixel_values_list else None
-    image_flags = torch.cat(image_flags_list, dim=0) if image_flags_list else None
-
-    input_ids = (
-        torch.cat(input_ids_list, dim=1) if input_ids_list else torch.empty((0, 0))
-    )
-
-    labels = torch.cat(labels_list, dim=1) if labels_list else torch.empty((0, 0))
-
-    loss_weights = (
-        torch.cat(loss_weights_list, dim=1)
-        if loss_weights_list
-        else torch.empty((0, 0))
-    )
-
-    position_ids = torch.tensor(
-        position_ids,
-        dtype=torch.int64,
-        device=input_ids.device if input_ids.numel() else torch.device("cpu"),
-    )
-
-    attention_mask = torch.tensor(
-        attention_offsets,
-        dtype=torch.int32,
-        device=input_ids.device if input_ids.numel() else torch.device("cpu"),
-    )
-
-    attention_mask.unsqueeze_(0)
-
-    batch_data = {
-        "imgs": pixel_values,
-        "position_ids": position_ids,
-        "tokens": input_ids,
-        "image_flags": image_flags,
-        "attn_mask": attention_mask,
-        "labels": labels,
-        "loss_weight": loss_weights,
-    }
-    return batch_data
 
 
 class VLMDataSample:
@@ -256,14 +39,6 @@ def depack_data_for_vlm(data):
       - images / videos are concatenated in sample order
       - cu_lengths defines text boundaries
     """
-    assert (
-        data.get("images") is not None or data.get("pixel_values_videos") is not None
-    ), (
-        "No visual inputs found in batch data. "
-        "Expected key 'images' or 'pixel_values_videos', "
-        f"but got keys: {list(data.keys())}."
-    )
-
     # -------- text packing info --------
     cu_lengths = data["cu_lengths"][0].tolist()
     sample_num = len(cu_lengths) - 1
@@ -381,7 +156,7 @@ def pack_data_for_vlm(vlm_samples):
 
     if len(images_list) > 0:
         images = torch.cat(images_list, dim=0)
-        image_grid_thw = torch.stack(image_grid_thw, dim=0).squeeze()
+        image_grid_thw = torch.stack(image_grid_thw, dim=0).reshape(-1, 3)
     else:
         image_grid_thw = None
 
@@ -397,7 +172,7 @@ def pack_data_for_vlm(vlm_samples):
     pixel_values_videos = None
     if len(videos_list) > 0:
         pixel_values_videos = torch.cat(videos_list, dim=0)
-        video_grid_thw = torch.stack(video_grid_thw, dim=0).squeeze()
+        video_grid_thw = torch.stack(video_grid_thw, dim=0).reshape(-1, 3)
     else:
         video_grid_thw = None
 

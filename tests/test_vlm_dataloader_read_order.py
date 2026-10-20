@@ -125,7 +125,7 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
 
 def test_multimodal_argument_defaults_and_overrides():
     namespace = _load_functions(
-        "loongforge/training/megatron_args.py",
+        "loongforge/training/megatron/args.py",
         {"_add_vlm_data_args"},
         {"argparse": argparse},
     )

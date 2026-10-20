@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.WARNING)
 
 
 def main():
-    """Run ``loongforge.training.<engine>_runner.main`` for the engine selected by ``--model-name``."""
+    """Run ``loongforge.training.<engine>.runner.main`` for the engine selected by ``--model-name``."""
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--model-name")
     parser.add_argument("--config-file")
@@ -29,7 +29,7 @@ def main():
         except ValueError as exc:
             parser.error(str(exc))
 
-    return import_module(f"loongforge.training.{engine}_runner").main()
+    return import_module(f"loongforge.training.{engine}.runner").main()
 
 
 if __name__ == "__main__":

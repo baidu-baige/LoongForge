@@ -28,10 +28,11 @@ python -m build --sdist --wheel --outdir dist/
 | Path | Responsibility |
 |---|---|
 | `loongforge/train.py` | Training entrypoint and engine routing |
-| `loongforge/training/` | Training loop, lifecycle, recipe/task/data arguments, learning-rate schedules, profiling, and method registration |
-| `loongforge/training/methods/` | Task-specific model/data assembly, forward pass, and loss |
+| `loongforge/training/megatron/`, `loongforge/training/torch/` | Training loop and lifecycle per backend; each owns its runner, recipe/task/data arguments, registry, learning-rate schedules, logging, and profiling |
+| `loongforge/training/<backend>/methods/` | Task-specific model/data assembly, forward pass, and loss for that backend |
 | `loongforge/engines/` | Megatron / Torch backend arguments, initialization, parallelism, model wrapping, optimizer, step execution, and checkpointing |
-| `loongforge/models/` | Model implementations, configs, and registries (`language`, `vision`, `multimodal`, `diffusion`, `embodied`) |
+| `loongforge/models/` | Model implementations, configs, kernels, and registries (`language`, `vision`, `multimodal`, `diffusion`, `embodied`) |
+| `loongforge/accelerations/` | Model × backend adapters for single-model training accelerations; may import `models` and `engines`, never `training` or `data` |
 | `loongforge/data/` | Datasets, preprocessing, collators, samplers, and dataloaders |
 | `loongforge/chat_templates/` | Chat templates and registry |
 | `loongforge/evaluation/` | Inference services and evaluation |
@@ -48,9 +49,10 @@ MCore weight conversion entrypoint: `tools/mcore_checkpoint_convert/module_conve
 - **Scope Isolation**: Keep single-model/subsystem helpers inside their respective modules. Place shared code in well-defined common layers; avoid circular and cross-layer dependencies.
 - **`utils/` Convention**: Name all helper directories `utils/`. Keep module-private helpers in the module's `utils/` and cross-module helpers in the shared parent layer's `utils/`, respecting layer dependency boundaries. Name files by purpose (e.g., `io.py`, `state_dict.py`); never dump unrelated helpers into one file.
 - **Core vs. Helpers**: Separate model entrypoints and core logic from auxiliary helpers. Base directory depth on cohesion and readability—do not use file count as a hard threshold or flatten helpers just to reduce nesting.
-- **Training vs. Engine**: `training/` manages loops and lifecycle; `engines/` handles backend execution. `training/methods/` assembles models, data, and objectives, and must not manage process groups or checkpoints. Ownership test: would the code still make sense with a different backend? If yes, it belongs to `training/` or `data/` (learning-rate schedules, run length, logging, profiling); if no, it belongs to `engines/<backend>/` (optimizer implementation, parallelism, low precision, step execution, checkpoint format). Define each parameter next to the code that reads it; parameters read only by `data/` are defined in `training/` and passed in explicitly. Upstream Megatron arguments stay upstream.
+- **Training vs. Engine**: `training/<backend>/` manages loops and lifecycle; `engines/<backend>/` handles backend execution. Each backend subpackage has one method interface and does not import the other backend. `training/<backend>/methods/` assembles models, data, and objectives, and must not manage process groups or checkpoints. Ownership test: would the code still make sense with a different backend? If yes, it belongs to `training/` or `data/` (learning-rate schedules, run length, logging, profiling); if no, it belongs to `engines/<backend>/` (optimizer implementation, parallelism, low precision, step execution, checkpoint format). Define each parameter next to the code that reads it; parameters read only by `data/` are defined in `training/` and passed in explicitly. Upstream Megatron arguments stay upstream.
 - **Explicit Configs & Data Decoupling**: Pass runtime info to model and data components via arguments or configs—never read global CLI args directly. Models must not depend on the data layer; assemble embodied inference preprocessing in `evaluation/embodied/factories/` before passing to the model.
-- **Stateless Engine Boundaries**: Engines must not depend on private states of datasets or training methods; pass task logic via explicit interfaces or callbacks. Reuse family-specific data entrypoints for DataLoaders and samplers, and follow native Megatron interfaces when integrating Megatron data pipelines.
+- **Acceleration Adapters**: Code that must know both a concrete model and a backend (full-iteration CUDA graph, model-specific FSDP wrapping, custom capturable optimizer) lives in `loongforge/accelerations/<backend>/<model>/`. It implements an engine port (for Torch, `TorchOptimization`) and is selected by `training/<backend>/registry.py`. Models and engines must not import `accelerations`.
+- **Stateless Engine Boundaries**: Engines must not depend on private states of datasets or training methods; pass task logic via explicit interfaces or callbacks. Engines import only generic model packages (`models/common`, `models/multimodal`, `models/catalog`), never a model family; model-specific behavior is injected from the model or method side. Reuse family-specific data entrypoints for DataLoaders and samplers, and follow native Megatron interfaces when integrating Megatron data pipelines.
 - **Lazy Loading**: Load selected models and backends on demand in configs, registries, and package `__init__.py` files to avoid importing unused weights or optional dependencies. Never auto-register by walking all model packages; raise clear errors naming the missing module when optional dependencies are absent.
 - **Upstream Reuse**: Prefer Loong-Megatron and upstream capabilities. Modify upstream behavior via extension hooks first; if maintaining a modified copy, keep original licenses/attribution and document divergences.
 
@@ -63,10 +65,10 @@ Follow existing implementations of similar models or tasks for interfaces and na
 | New LLM / VLM | Model package, `loongforge/models/catalog.py`, `configs/models/`, `examples/`; VLM data encoders in `loongforge/data/vlm/` (`TASK_ENCODER_REGISTRY`) |
 | New Embodied Model | `loongforge/models/embodied/registry.py`, `loongforge/models/catalog.py`, model package; data in `loongforge/data/embodied/registry.py`; optional eval factory |
 | New Data Format | Family data module; embodied dataset strategies in `loongforge/data/embodied/registry.py` (`DATASET_STRATEGIES`) |
-| New Training Objective | `loongforge/training/methods/` and `loongforge/training/registry.py` |
-| New CLI Argument | Read by backend code: `loongforge/engines/<backend>/arguments.py`; other recipe, task, or data options: `loongforge/training/megatron_args.py` or `loongforge/training/torch_args.py` |
+| New Training Objective | `loongforge/training/<backend>/methods/` and the matching `training/<backend>/registry.py` |
+| New CLI Argument | Read by backend code: `loongforge/engines/<backend>/arguments.py`; other recipe, task, or data options: `loongforge/training/megatron/args.py` or `loongforge/training/torch/args.py` |
 | New Parallelism / Comm | `distributed/` under the target engine |
-| Single-Model Torch Opt | `loongforge/engines/torch/optimizations/` and `TORCH_TRAINER_TYPES` in `loongforge/training/registry.py` |
+| Single-Model Torch Opt | `loongforge/accelerations/torch/<model>/` and `TORCH_TRAINER_TYPES` in `loongforge/training/torch/registry.py`; generic mechanisms go to `engines/torch/`. Model packages keep only structure, kernels, and declarative hooks |
 | New Chat Template | `loongforge/chat_templates/jinja/` and `loongforge/chat_templates/registry.py` |
 
 - **File Naming**: Use `modeling_<model>.py`, `configuration_<model>.py`, `processing_<model>.py` for models; `<model>_layer_spec.py` for layer specs; `<phase>_<scope>.py` for training methods. Mirror existing configs, transforms, and collators for new embodied data components.

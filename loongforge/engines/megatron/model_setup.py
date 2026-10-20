@@ -69,6 +69,7 @@ from loongforge.engines.megatron.checkpointing import (
     save_checkpoint,
     checkpoint_exists,
 )
+from loongforge.engines.megatron.hf_bridge import load_hf_checkpoint_online
 from loongforge.models.common.peft.lora import LoRA, VLMLoRA
 from loongforge.models.common.peft.utils import apply_peft_transformation
 
@@ -280,20 +281,6 @@ def _p2p_embedding_weights_for_mtp(unwrapped_model, args):
               f"from first PP stage (rank {first_rank}), shape={embedding_weight.shape}")
 
 
-# Add project root to Python path for tools imports
-import sys
-_project_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-_tools_path = os.path.join(_project_root, "tools")
-if _tools_path not in sys.path:
-    sys.path.insert(0, _tools_path)
-
-from mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
-
-
 def get_model(
     model_provider_func,
     model_type=ModelType.encoder_or_decoder,
@@ -378,8 +365,6 @@ def get_model(
         if is_hf_checkpoint(args.pretrained_checkpoint):
             # HF checkpoint: use online loading
             print_rank_0(f"Loading base model weights from HF chekckpoint: {args.pretrained_checkpoint}")
-
-            from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 
             # Temporarily set args.load for load_hf_checkpoint_online
             orig_load = args.load

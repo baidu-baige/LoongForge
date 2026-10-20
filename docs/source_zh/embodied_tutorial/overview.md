@@ -13,7 +13,7 @@
 | `examples/` | 模型级启动脚本目录，可通过脚本末尾的透传参数覆盖默认配置 |
 | `configs/models/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
 | `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
-| `loongforge/training/torch_args.py` | 训练流程参数定义文件，负责生成 shell CLI |
+| `loongforge/training/torch/args.py` | 训练流程参数定义文件，负责生成 shell CLI |
 | `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
 | `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
 | `loongforge/data/embodied/` | 具身数据流水线：`datasets/`（共用数据集类：`lerobot_dataset.py`、`dummy_dataset.py`、视频后端、统计）、`transforms/`（共用逐样本变换）、`sampler.py`（采样）、`collator.py`（拼批）、`registry.py`（注册表），以及每个模型一个目录 |
@@ -302,7 +302,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `loongforge/training/registry.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应一个训练 method 模块和一个可选的单模型 optimization 包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `loongforge/training/methods/` 下新增 method 模块，并登记到 `TORCH_TRAINER_TYPES`。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/training/torch/registry.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应一个训练 method 模块和一个可选的单模型 optimization 包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `loongforge/training/torch/methods/` 下新增 method 模块，并登记到 `TORCH_TRAINER_TYPES`。
 
 ### 4.2 分布式策略
 

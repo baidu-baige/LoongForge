@@ -251,7 +251,7 @@ if __name__ == "__main__":
         '--training-phase', 'pretrain',
     ]
 
-    from loongforge.training.megatron_args import parse_megatron_train_args
+    from loongforge.training.megatron.args import parse_megatron_train_args
 
     args = parse_megatron_train_args()
     parser = Parser(args)

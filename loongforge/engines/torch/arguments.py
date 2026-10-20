@@ -6,7 +6,7 @@
 Each mixin here describes a capability of this backend: how a step is executed,
 which runtime switches are applied at initialization, and in which on-disk
 format a checkpoint is written. ``TrainingArgs`` in
-``loongforge.training.torch_args`` aggregates these mixins with the training
+``loongforge.training.torch.args`` aggregates these mixins with the training
 recipe mixins; at runtime it is still one flat frozen dataclass, so engine code
 keeps reading ``training_args.<field>``.
 

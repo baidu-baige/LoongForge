@@ -255,7 +255,7 @@ For further understanding of various parameters and detailed functions of weight
 
 ### 3.1 Parameter Configuration Description
 
-Based on supporting parameters provided by open-source Megatron, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/engines/megatron/arguments.py (backend flags) and loongforge/training/megatron_args.py (task and data flags) files. Main parameter descriptions are as follows:
+Based on supporting parameters provided by open-source Megatron, LoongForge adds more convenient training startup parameters. Detailed configuration can be found in the loongforge/engines/megatron/arguments.py (backend flags) and loongforge/training/megatron/args.py (task and data flags) files. Main parameter descriptions are as follows:
 
 * `--training-phase`: Specify the training phase as pretrain
 * `--add-question-in-pretrain`: When enabled, questions will be concatenated and added to the input for training; when disabled, only answers or other default text fields will be used for training

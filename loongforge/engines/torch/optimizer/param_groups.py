@@ -4,7 +4,7 @@
 """Per-module optimizer parameter groups.
 
 The learning-rate schedule itself belongs to the training loop and lives in
-``loongforge.training.lr_scheduler``.
+``loongforge.training.torch.lr_scheduler``.
 """
 
 import logging

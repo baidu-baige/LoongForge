@@ -14,6 +14,10 @@ Layering rules (``TYPE_CHECKING`` imports never run and are skipped):
   * ``data/`` and ``chat_templates/`` do not read engine global state; ``models/`` does not import the readers.
   * ``models/`` does not import ``data`` at run time, including function bodies.
   * ``engines/`` imports no ``data`` at run time.
+  * ``engines/`` imports only generic model packages (``common``, ``multimodal``, ``catalog``), never a model family.
+  * ``training/megatron`` and ``training/torch`` do not import each other's training or engine modules.
+  * ``accelerations/`` may import ``models`` and ``engines`` but not ``training`` or ``data``;
+    ``models`` and ``engines`` do not import ``accelerations``.
 
 Registry strings must point at real code:
   * ``embodied/registry.py``: ``MODEL_MODULES`` (decorator names, package imports) and ``DATASET_STRATEGIES``
@@ -240,8 +244,50 @@ class LayeringTest(unittest.TestCase):
                     _starts_with(target, ("loongforge", "data")), f"{_rel(path)} imports {'.'.join(target)}"
                 )
 
+    def test_engines_do_not_import_model_families(self):
+        for path in _py_files(PKG / "engines"):
+            for target in _runtime_imports(path):
+                for family in ("language", "vision", "diffusion", "embodied"):
+                    self.assertFalse(
+                        _starts_with(target, ("loongforge", "models", family)),
+                        f"{_rel(path)} imports {'.'.join(target)}",
+                    )
+
+    def test_training_backends_are_isolated(self):
+        for backend, other in (("megatron", "torch"), ("torch", "megatron")):
+            for path in _py_files(PKG / "training" / backend):
+                for target in _runtime_imports(path):
+                    self.assertFalse(
+                        _starts_with(target, ("loongforge", "training", other))
+                        or _starts_with(target, ("loongforge", "engines", other)),
+                        f"{_rel(path)} imports {'.'.join(target)}",
+                    )
+
+    def test_models_and_engines_do_not_import_accelerations(self):
+        for layer in ("models", "engines"):
+            for path in _py_files(PKG / layer):
+                for target in _runtime_imports(path):
+                    self.assertFalse(
+                        _starts_with(target, ("loongforge", "accelerations")),
+                        f"{_rel(path)} imports {'.'.join(target)}",
+                    )
+
+    def test_accelerations_do_not_import_training_or_data(self):
+        for path in _py_files(PKG / "accelerations"):
+            for target in _runtime_imports(path):
+                for layer in ("training", "data"):
+                    self.assertFalse(
+                        _starts_with(target, ("loongforge", layer)),
+                        f"{_rel(path)} imports {'.'.join(target)}",
+                    )
+
 
 class RegistryStringsTest(unittest.TestCase):
+    def test_embodied_model_type_keys_match_between_layers(self):
+        models = set(_literal_assignment(PKG / "models" / "embodied" / "registry.py", "MODEL_MODULES"))
+        data = set(_literal_assignment(EMBODIED / "registry.py", "MODEL_MODULES"))
+        self.assertEqual(models, data - PLAIN_MODULE_MODEL_TYPES)
+
     def test_embodied_model_modules_register_their_model_type(self):
         modules = _literal_assignment(EMBODIED / "registry.py", "MODEL_MODULES")
         for model_type, directory in modules.items():

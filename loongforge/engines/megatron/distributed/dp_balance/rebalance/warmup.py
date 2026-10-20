@@ -13,7 +13,9 @@ from typing import Dict, List, Union
 
 from megatron.training import get_args
 from megatron.core import mpu
-from loongforge import constants
+from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import (
+    get_batch_layout,
+)
 
 # Warm-up profiling buffers
 WARMUP_VAR_GROUPS = []  # variables used for fitting load model
@@ -198,13 +200,10 @@ def set_warmup_groups(data: Union[List[Dict[str, torch.Tensor]], Dict[str, torch
     total_seq_lenth_sum = None
     total_seq_lenth_square_sum = None
 
+    layout = get_batch_layout(args_train.model_family)
+
     for micro_batch in data_list:
-        cu_lengths = None
-        if args_train.model_family == "intern_vl":
-            cu_lengths = micro_batch["attn_mask"]
-        elif args_train.model_family in constants.VisionLanguageModelFamilies.names():
-            cu_lengths = micro_batch["cu_lengths"]
-        cu_lengths = cu_lengths.squeeze(0)
+        cu_lengths = layout.cumulative_lengths(micro_batch).squeeze(0)
 
         # Number of sequences in this micro-batch
         seq_num = cu_lengths.numel() - 1
