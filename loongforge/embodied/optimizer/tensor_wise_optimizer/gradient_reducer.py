@@ -189,7 +189,7 @@ class GradientReducer:
         # The first iteration has no observed ready order to build from. The
         # queue launches strictly in order, so a head that is not ready blocks
         # every later bucket and forces all gradients to stay resident until
-        # backward ends (+26GB/rank, OOM at GBS80). Reverse registration order
+        # backward ends, which can run out of memory. Reverse registration order
         # keeps the head genuinely ready first.
         return (0, record.reverse_position, record.name)
 

@@ -36,7 +36,10 @@ model:
   use_shared_expert_gate: false
   use_moe_expert_lr: true
 
-  gradient_checkpointing: true
+  # Recomputing activations in backward costs ~9% step time on the validated
+  # configuration, where the un-recomputed graph already fits. Set true only
+  # when the activation footprint does not fit (e.g. smaller-memory cards).
+  gradient_checkpointing: false
   use_compile: false
   enable_mixed_precision: true
   # Run the frozen depth/video teachers on a side stream + worker thread.

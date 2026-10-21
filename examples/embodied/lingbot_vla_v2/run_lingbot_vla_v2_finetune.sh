@@ -155,6 +155,9 @@ MODEL_CONFIG_ARGS=(
 )
 
 NUM_WORKERS=${NUM_WORKERS:-16}
+# ``forkserver`` starts one lightweight server per rank and forks workers from
+# it, so the training stack is imported once instead of once per worker.
+DATALOADER_MP_CONTEXT=${DATALOADER_MP_CONTEXT:-forkserver}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-strategy lingbot_vla_v2
@@ -163,7 +166,7 @@ DATA_ARGS=(
     --num-workers $NUM_WORKERS
 )
 if (( NUM_WORKERS > 0 )); then
-    DATA_ARGS+=(--dataloader-multiprocessing-context spawn)
+    DATA_ARGS+=(--dataloader-multiprocessing-context "$DATALOADER_MP_CONTEXT")
 fi
 
 # -- Training params ----------------------------------------------------------

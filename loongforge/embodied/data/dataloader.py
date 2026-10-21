@@ -150,7 +150,8 @@ def _build_stateful_dataloader(
             drop_last=drop_last,
             prefetch_factor=prefetch_factor,
             multiprocessing_context=mp_context,
-            persistent_workers=num_workers > 0 and mp_context == "spawn",
+            persistent_workers=num_workers > 0
+            and mp_context in ("spawn", "forkserver"),
         )
 
     generator = torch.Generator().manual_seed(seed) if seed_workers else None
@@ -177,7 +178,7 @@ def _build_stateful_dataloader(
         worker_init_fn=_SeedWorkerInit(seed) if seed_workers and num_workers > 0 else None,
         generator=generator,
         multiprocessing_context=mp_context,
-        persistent_workers=num_workers > 0 and mp_context == "spawn",
+        persistent_workers=num_workers > 0 and mp_context in ("spawn", "forkserver"),
     )
     dl.steps_per_epoch = len(dl)
     return dl
