@@ -68,19 +68,19 @@ After downloading, run the following steps from the LoongForge root (replace `{s
 
 ```bash
 # 1. Overwrite modality.json (all four suites)
-cp examples/embodied/groot_n1_7/LIBERO/dataset/modality.json \
+cp examples/embodied/gr00t_n1_7/LIBERO/dataset/modality.json \
    /path/to/IPEC-COMMUNITY/{suite}/meta/modality.json
 
 # 2. Generate meta/stats.json (normalization stats with q01/q99) for all four suites;
 #    the script overwrites each dataset's meta/stats.json in place
-python examples/embodied/groot_n1_7/gen_stats.py \
+python examples/embodied/gr00t_n1_7/gen_stats.py \
    /path/to/IPEC-COMMUNITY/libero_spatial_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_object_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_10_no_noops_1.0.0_lerobot
 
 # 3. Goal suite only: replace one corrupted video
-cp examples/embodied/groot_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
+cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot/videos/chunk-000/observation.images.wrist_image/
 ```
 
@@ -90,7 +90,7 @@ cp examples/embodied/groot_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
 
 ### 2.1 Launch Training
 
-Training script: `examples/embodied/groot_n1_7/LIBERO/run_libero_sft.sh`
+Training script: `examples/embodied/gr00t_n1_7/LIBERO/run_libero_sft.sh`
 
 Set the LoongForge, pretrained-weight and dataset paths in the script (or pass them as environment variables), then start training:
 
@@ -99,7 +99,7 @@ Set the LoongForge, pretrained-weight and dataset paths in the script (or pass t
 > - If a CUDA Graph replay fails, training automatically falls back to eager mode and continues normally.
 
 ```bash
-cd examples/embodied/groot_n1_7/LIBERO
+cd examples/embodied/gr00t_n1_7/LIBERO
 
 # Finetune a single suite, e.g. Spatial
 LOONGFORGE_PATH=/path/to/LoongForge \
@@ -210,9 +210,9 @@ With CUDA Graph enabled, the end of the training log prints a `Full-iteration CU
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial loss](../../assets/images/groot/loss_libero_spatial.png) | ![libero_object loss](../../assets/images/groot/loss_libero_object.png) |
+| ![libero_spatial loss](../../assets/images/gr00t_n1_7/loss_libero_spatial.png) | ![libero_object loss](../../assets/images/gr00t_n1_7/loss_libero_object.png) |
 | **libero_goal** | **libero_10** |
-| ![libero_goal loss](../../assets/images/groot/loss_libero_goal.png) | ![libero_10 loss](../../assets/images/groot/loss_libero_10.png) |
+| ![libero_goal loss](../../assets/images/gr00t_n1_7/loss_libero_goal.png) | ![libero_10 loss](../../assets/images/gr00t_n1_7/loss_libero_10.png) |
 
 ### 2.5 Correctness Verification
 
@@ -247,10 +247,10 @@ Evaluation uses a server / client architecture: the LoongForge policy server loa
 
 ### 4.1 Launch
 
-`examples/embodied/groot_n1_7/eval/run_libero_eval.sh` evaluates the four suites serially, 200 episodes per suite (10 tasks × 20 episodes). The script starts and stops the policy server itself; no manual deployment is needed:
+`examples/embodied/gr00t_n1_7/eval/run_libero_eval.sh` evaluates the four suites serially, 200 episodes per suite (10 tasks × 20 episodes). The script starts and stops the policy server itself; no manual deployment is needed:
 
 ```bash
-cd examples/embodied/groot_n1_7/eval
+cd examples/embodied/gr00t_n1_7/eval
 
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
 CKPT_PATH=/path/to/outputs/groot_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \
@@ -306,8 +306,8 @@ Success rates on the four suites (10 tasks × 20 episodes = 200 episodes per sui
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial](../../assets/images/groot/replay_libero_spatial.gif) | ![libero_object](../../assets/images/groot/replay_libero_object.gif) |
+| ![libero_spatial](../../assets/images/gr00t_n1_7/replay_libero_spatial.gif) | ![libero_object](../../assets/images/gr00t_n1_7/replay_libero_object.gif) |
 | *pick up the black bowl on the wooden cabinet and place it on the plate* | *pick up the orange juice and place it in the basket* |
 | **libero_goal** | **libero_10** |
-| ![libero_goal](../../assets/images/groot/replay_libero_goal.gif) | ![libero_10](../../assets/images/groot/replay_libero_10.gif) |
+| ![libero_goal](../../assets/images/gr00t_n1_7/replay_libero_goal.gif) | ![libero_10](../../assets/images/gr00t_n1_7/replay_libero_10.gif) |
 | *put the bowl on the stove* | *put both the cream cheese box and the butter in the basket* |

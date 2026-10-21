@@ -59,7 +59,7 @@ cd /path/to/LoongForge-VLA
 examples/embodied/xvla/eval/run_simplerenv_eval.sh
 
 # GR00T-N1.6 (public template)
-bash examples/embodied/groot_n1_6/eval/run_simplerenv_eval.sh
+bash examples/embodied/gr00t_n1_6/eval/run_simplerenv_eval.sh
 ```
 
 Environment variables:

@@ -36,7 +36,7 @@ from loongforge.embodied.eval.orchestrator.config import (
 )
 from loongforge.embodied.eval.orchestrator.runners import _common
 from loongforge.embodied.eval.orchestrator.runners._common import StepTimeoutError, alarm_timeout, avg as _avg
-from loongforge.embodied.eval.orchestrator.runners.libero_groot_runner import (
+from loongforge.embodied.eval.orchestrator.runners.libero_gr00t_runner import (
     GROOT_OFFICIAL_PROTOCOL, _run_batch_groot_official,
 )
 from loongforge.embodied.eval.payload_builders import PayloadBuilder

@@ -29,8 +29,8 @@
 完整的框架使用说明请参阅 [用户手册](../../docs/source_zh/embodied_tutorial/overview.md)，各模型的快速入门：
 
 - [Pi0.5 (pi05)](../../docs/source_zh/embodied_tutorial/quick_start_pi05.md)
-- [GR00T-N1.6](../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_6.md)
-- [GR00T-N1.7](../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_7.md)
+- [GR00T-N1.6](../../docs/source_zh/embodied_tutorial/quick_start_gr00t_n1_6.md)
+- [GR00T-N1.7](../../docs/source_zh/embodied_tutorial/quick_start_gr00t_n1_7.md)
 - [FastWAM](../../docs/source_zh/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../docs/source_zh/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../docs/source_zh/embodied_tutorial/quick_start_cosmos3.md)

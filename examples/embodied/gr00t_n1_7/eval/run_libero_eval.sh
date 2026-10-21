@@ -29,7 +29,7 @@ OUT_ROOT=${OUT_ROOT:-"/path/to/reports"}
 SERVER_PY=${SERVER_PY:-"/usr/bin/python"}
 
 # ---- Other run parameters ----
-CONFIG_DIR=${CONFIG_DIR:-"$LOONGFORGE_PATH/examples/embodied/groot_n1_7/eval/configs/libero"}
+CONFIG_DIR=${CONFIG_DIR:-"$LOONGFORGE_PATH/examples/embodied/gr00t_n1_7/eval/configs/libero"}
 BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-"/path/to/bin/python"}
 RUN_TAG=${RUN_TAG:-"libero_serial_$(date +%Y%m%d_%H%M%S)"}
 GPU=${GPU:-0}

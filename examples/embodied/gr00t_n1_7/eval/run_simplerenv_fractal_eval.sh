@@ -2,8 +2,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Public: GR00T-N1.7 SimplerEnv WidowX (Bridge) task-success, serial evaluation of
-# the 7 official Bridge tasks x EPISODES episodes.
+# Public: GR00T-N1.7 SimplerEnv Google robot (Fractal) task-success, serial evaluation
+# of the 6 official Fractal tasks x EPISODES episodes.
 #
 # - Each task YAML ($CONFIG_DIR/<task>.yaml) holds only the fixed eval protocol plus
 #   the eval protocol; the machine/artifact paths below are injected at runtime,
@@ -13,14 +13,14 @@
 # - The reset seed of episode i is SEED + i.
 #
 # Usage:
-#   bash run_simplerenv_bridge_eval.sh                                           # 7 tasks x 100 episodes
-#   EPISODES=2 TASKS=widowx_carrot_on_plate bash run_simplerenv_bridge_eval.sh   # smoke test
-#   CKPT_PATH=/path/to/checkpoint bash run_simplerenv_bridge_eval.sh             # another checkpoint
+#   bash run_simplerenv_fractal_eval.sh                                               # 6 tasks x 100 episodes
+#   EPISODES=2 TASKS=google_robot_pick_coke_can bash run_simplerenv_fractal_eval.sh   # smoke test
+#   CKPT_PATH=/path/to/checkpoint bash run_simplerenv_fractal_eval.sh                 # another checkpoint
 set -euo pipefail
 
 # ---- Paths injected into the task YAMLs at runtime ----
 COSMOS_PATH=${COSMOS_PATH:-"/path/to/groot/Cosmos-Reason2-2B"}
-CKPT_PATH=${CKPT_PATH:-"/path/to/bridge/checkpoints"}
+CKPT_PATH=${CKPT_PATH:-"/path/to/fractal/checkpoints"}
 STATS_PATH=${STATS_PATH:-"/path/to/datasets/stats.json"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/path/to/LoongForge"}
 SIMPLERENV_ROOT=${SIMPLERENV_ROOT:-"/path/to/SimplerEnv"}
@@ -30,12 +30,12 @@ NVIDIA_ICD_JSON=${NVIDIA_ICD_JSON:-"/etc/vulkan/icd.d/nvidia_icd.json"}
 SERVER_PY=${SERVER_PY:-"/usr/bin/python"}
 
 # ---- Other run parameters ----
-CONFIG_DIR=${CONFIG_DIR:-"$LOONGFORGE_PATH/examples/embodied/groot_n1_7/eval/configs/simplerenv/bridge"}
+CONFIG_DIR=${CONFIG_DIR:-"$LOONGFORGE_PATH/examples/embodied/gr00t_n1_7/eval/configs/simplerenv/fractal"}
 BENCHMARK_PYTHON=${BENCHMARK_PYTHON:-"/path/to/bin/python"}
-RUN_TAG=${RUN_TAG:-"bridge_official7_serial_$(date +%Y%m%d_%H%M%S)"}
+RUN_TAG=${RUN_TAG:-"fractal_official6_serial_$(date +%Y%m%d_%H%M%S)"}
 GPU=${GPU:-0}
-TASKS=${TASKS:-"widowx_open_drawer widowx_close_drawer widowx_spoon_on_towel widowx_put_eggplant_in_basket"\
-" widowx_carrot_on_plate widowx_stack_cube widowx_put_eggplant_in_sink"}
+TASKS=${TASKS:-"google_robot_pick_coke_can google_robot_pick_object google_robot_move_near"\
+" google_robot_open_drawer google_robot_close_drawer google_robot_place_in_closed_drawer"}
 EPISODES=${EPISODES:-100}
 SEED=${SEED:-0}
 

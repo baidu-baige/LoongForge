@@ -68,19 +68,19 @@ my_dataset/
 
 ```bash
 # 1. 覆盖 modality.json（四个 suite 都需要）
-cp examples/embodied/groot_n1_7/LIBERO/dataset/modality.json \
+cp examples/embodied/gr00t_n1_7/LIBERO/dataset/modality.json \
    /path/to/IPEC-COMMUNITY/{suite}/meta/modality.json
 
 # 2. 为四个 suite 生成 meta/stats.json（含 q01/q99 的归一化统计量），
 #    脚本会原地覆盖各数据集的 meta/stats.json
-python examples/embodied/groot_n1_7/gen_stats.py \
+python examples/embodied/gr00t_n1_7/gen_stats.py \
    /path/to/IPEC-COMMUNITY/libero_spatial_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_object_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_10_no_noops_1.0.0_lerobot
 
 # 3. 仅 Goal suite：替换一个损坏的视频
-cp examples/embodied/groot_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
+cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot/videos/chunk-000/observation.images.wrist_image/
 ```
 
@@ -90,7 +90,7 @@ cp examples/embodied/groot_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
 
 ### 2.1 启动训练
 
-训练脚本：`examples/embodied/groot_n1_7/LIBERO/run_libero_sft.sh`
+训练脚本：`examples/embodied/gr00t_n1_7/LIBERO/run_libero_sft.sh`
 
 在脚本中设置 LoongForge、预训练权重和数据集路径（也可以通过环境变量传入），然后启动训练：
 
@@ -99,7 +99,7 @@ cp examples/embodied/groot_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
 > - 如果 CUDA Graph 重放失败，训练会自动回退到 eager 模式并正常进行。
 
 ```bash
-cd examples/embodied/groot_n1_7/LIBERO
+cd examples/embodied/gr00t_n1_7/LIBERO
 
 # 微调单个 suite，例如 Spatial
 LOONGFORGE_PATH=/path/to/LoongForge \
@@ -210,9 +210,9 @@ pip install --no-build-isolation -e .
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial loss](../../assets/images/groot/loss_libero_spatial.png) | ![libero_object loss](../../assets/images/groot/loss_libero_object.png) |
+| ![libero_spatial loss](../../assets/images/gr00t_n1_7/loss_libero_spatial.png) | ![libero_object loss](../../assets/images/gr00t_n1_7/loss_libero_object.png) |
 | **libero_goal** | **libero_10** |
-| ![libero_goal loss](../../assets/images/groot/loss_libero_goal.png) | ![libero_10 loss](../../assets/images/groot/loss_libero_10.png) |
+| ![libero_goal loss](../../assets/images/gr00t_n1_7/loss_libero_goal.png) | ![libero_10 loss](../../assets/images/gr00t_n1_7/loss_libero_10.png) |
 
 ### 2.5 正确性验证
 
@@ -247,10 +247,10 @@ pip install websockets
 
 ### 4.1 启动评测
 
-`examples/embodied/groot_n1_7/eval/run_libero_eval.sh` 会依次评测四个 suite，每个 suite 200 个 episode（10 个任务 × 20 个 episode）。脚本会自动启动和关闭 policy server，无需手动部署：
+`examples/embodied/gr00t_n1_7/eval/run_libero_eval.sh` 会依次评测四个 suite，每个 suite 200 个 episode（10 个任务 × 20 个 episode）。脚本会自动启动和关闭 policy server，无需手动部署：
 
 ```bash
-cd examples/embodied/groot_n1_7/eval
+cd examples/embodied/gr00t_n1_7/eval
 
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
 CKPT_PATH=/path/to/outputs/groot_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \
@@ -306,8 +306,8 @@ SUITES=libero_10 EPISODES=2 MAX_TASKS=1 bash run_libero_eval.sh
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial](../../assets/images/groot/replay_libero_spatial.gif) | ![libero_object](../../assets/images/groot/replay_libero_object.gif) |
+| ![libero_spatial](../../assets/images/gr00t_n1_7/replay_libero_spatial.gif) | ![libero_object](../../assets/images/gr00t_n1_7/replay_libero_object.gif) |
 | *pick up the black bowl on the wooden cabinet and place it on the plate* | *pick up the orange juice and place it in the basket* |
 | **libero_goal** | **libero_10** |
-| ![libero_goal](../../assets/images/groot/replay_libero_goal.gif) | ![libero_10](../../assets/images/groot/replay_libero_10.gif) |
+| ![libero_goal](../../assets/images/gr00t_n1_7/replay_libero_goal.gif) | ![libero_10](../../assets/images/gr00t_n1_7/replay_libero_10.gif) |
 | *put the bowl on the stove* | *put both the cream cheese box and the butter in the basket* |

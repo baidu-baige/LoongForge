@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REPO_ROOT=${REPO_ROOT:-/workspace/LoongForge-VLA}
-EXAMPLE_EVAL_ROOT=${EXAMPLE_EVAL_ROOT:-${REPO_ROOT}/examples/embodied/groot_n1_6/eval}
+EXAMPLE_EVAL_ROOT=${EXAMPLE_EVAL_ROOT:-${REPO_ROOT}/examples/embodied/gr00t_n1_6/eval}
 CONFIG=${CONFIG:-${EXAMPLE_EVAL_ROOT}/configs/libero/object_smoke.yaml}
 if [[ "${CONFIG}" != /* ]]; then
   CONFIG=${REPO_ROOT}/${CONFIG}

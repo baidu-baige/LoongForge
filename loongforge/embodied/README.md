@@ -29,8 +29,8 @@ The subsystem is therefore built on a **torch-native DDP/FSDP** engine with its 
 For the full framework user guide, see [User Manual](../../docs/source/embodied_tutorial/overview.md). Model-specific quick starts:
 
 - [Pi0.5 (pi05)](../../docs/source/embodied_tutorial/quick_start_pi05.md)
-- [GR00T-N1.6](../../docs/source/embodied_tutorial/quick_start_groot_n1_6.md)
-- [GR00T-N1.7](../../docs/source/embodied_tutorial/quick_start_groot_n1_7.md)
+- [GR00T-N1.6](../../docs/source/embodied_tutorial/quick_start_gr00t_n1_6.md)
+- [GR00T-N1.7](../../docs/source/embodied_tutorial/quick_start_gr00t_n1_7.md)
 - [FastWAM](../../docs/source/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../docs/source/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../docs/source/embodied_tutorial/quick_start_cosmos3.md)

@@ -62,20 +62,20 @@ After downloading, run the following steps from the LoongForge root:
 
 ```bash
 # 1. Overwrite modality.json (both datasets)
-cp examples/embodied/groot_n1_7/SimplerEnv/bridge/modality.json \
+cp examples/embodied/gr00t_n1_7/SimplerEnv/bridge/modality.json \
    /path/to/IPEC-COMMUNITY/bridge_orig_lerobot/meta/modality.json
-cp examples/embodied/groot_n1_7/SimplerEnv/fractal/modality.json \
+cp examples/embodied/gr00t_n1_7/SimplerEnv/fractal/modality.json \
    /path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot/meta/modality.json
 
 # 2. Generate meta/stats.json (normalization stats with q01/q99) for both datasets;
 #    the script overwrites each dataset's meta/stats.json in place
-python examples/embodied/groot_n1_7/gen_stats.py \
+python examples/embodied/gr00t_n1_7/gen_stats.py \
    /path/to/IPEC-COMMUNITY/bridge_orig_lerobot \
    /path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot
 
 # 3. Fractal only: the videos are AV1-encoded, which torchcodec cannot decode;
 #    convert them to H.264 in place
-python examples/embodied/groot_n1_7/SimplerEnv/fractal/convert_av1_to_h264.py \
+python examples/embodied/gr00t_n1_7/SimplerEnv/fractal/convert_av1_to_h264.py \
    /path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot/videos --jobs 8
 ```
 
@@ -87,7 +87,7 @@ python examples/embodied/groot_n1_7/SimplerEnv/fractal/convert_av1_to_h264.py \
 
 ```bash
 # Finetune Bridge (WidowX)
-cd examples/embodied/groot_n1_7/SimplerEnv/bridge
+cd examples/embodied/gr00t_n1_7/SimplerEnv/bridge
 
 LOONGFORGE_PATH=/path/to/LoongForge \
 CHECKPOINT_PATH=/path/to/GR00T-N1.7-3B \
@@ -97,7 +97,7 @@ OUTPUT_ROOT=/path/to/outputs/groot_n1_7_bridge \
 bash run_bridge_sft.sh
 
 # Finetune Fractal (Google Robot)
-cd examples/embodied/groot_n1_7/SimplerEnv/fractal
+cd examples/embodied/gr00t_n1_7/SimplerEnv/fractal
 
 LOONGFORGE_PATH=/path/to/LoongForge \
 CHECKPOINT_PATH=/path/to/GR00T-N1.7-3B \
@@ -131,7 +131,7 @@ Loss curves (left half of each plot: raw action loss; right half: 500-step movin
 
 | Bridge (WidowX) | Fractal (Google Robot) |
 |:---:|:---:|
-| ![bridge_loss_curve](../../../../docs/assets/images/groot/bridge_loss_curve.png) | ![fractal_loss_curve](../../../../docs/assets/images/groot/fractal_loss_curve.png) |
+| ![bridge_loss_curve](../../../../docs/assets/images/gr00t_n1_7/bridge_loss_curve.png) | ![fractal_loss_curve](../../../../docs/assets/images/gr00t_n1_7/fractal_loss_curve.png) |
 
 ---
 
@@ -159,10 +159,10 @@ uv pip install --python gr00t/eval/sim/SimplerEnv/simpler_uv/.venv/bin/python \
 
 ### 4.1 Launch
 
-The scripts under `examples/embodied/groot_n1_7/eval/` run a serial evaluation: for each task they start a policy server, run all episodes, stop the server and move on to the next task, then aggregate the success rates.
+The scripts under `examples/embodied/gr00t_n1_7/eval/` run a serial evaluation: for each task they start a policy server, run all episodes, stop the server and move on to the next task, then aggregate the success rates.
 
 ```bash
-cd examples/embodied/groot_n1_7/eval
+cd examples/embodied/gr00t_n1_7/eval
 
 # Bridge (WidowX): 7 tasks x 100 episodes
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
@@ -233,8 +233,8 @@ Fractal, 6 tasks:
 
 | Bridge (WidowX) | Bridge (WidowX) |
 |:---:|:---:|
-| ![widowx_spoon_on_towel](../../../../docs/assets/images/groot/widowx_spoon_on_towel.gif) | ![widowx_close_drawer](../../../../docs/assets/images/groot/widowx_close_drawer.gif) |
+| ![widowx_spoon_on_towel](../../../../docs/assets/images/gr00t_n1_7/widowx_spoon_on_towel.gif) | ![widowx_close_drawer](../../../../docs/assets/images/gr00t_n1_7/widowx_close_drawer.gif) |
 | *put the spoon on the towel* | *close the drawer* |
 | **Fractal (Google Robot)** | **Fractal (Google Robot)** |
-| ![google_robot_open_drawer](../../../../docs/assets/images/groot/google_robot_open_drawer.gif) | ![google_robot_close_drawer](../../../../docs/assets/images/groot/google_robot_close_drawer.gif) |
+| ![google_robot_open_drawer](../../../../docs/assets/images/gr00t_n1_7/google_robot_open_drawer.gif) | ![google_robot_close_drawer](../../../../docs/assets/images/gr00t_n1_7/google_robot_close_drawer.gif) |
 | *open bottom drawer* | *close bottom drawer* |

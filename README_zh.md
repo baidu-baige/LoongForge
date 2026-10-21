@@ -277,8 +277,8 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <td valign="top">
 <ul>
 <li><a href="examples/embodied/pi05/">Pi0.5</a></li>
-<li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a></li>
-<li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a></li>
+<li><a href="examples/embodied/gr00t_n1_6/">GR00T-N1.6</a></li>
+<li><a href="examples/embodied/gr00t_n1_7/">GR00T-N1.7</a></li>
 <li><a href="examples/embodied/xvla/">xVLA</a></li>
 <li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
 <li><a href="examples/embodied/fastwam/">FastWAM</a></li>

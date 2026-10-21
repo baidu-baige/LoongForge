@@ -45,7 +45,7 @@ examples/embodied/pi05/eval/run_libero_eval.sh
 examples/embodied/xvla/eval/run_libero_eval.sh
 
 # GR00T-N1.6
-examples/embodied/groot_n1_6/eval/run_libero_eval.sh
+examples/embodied/gr00t_n1_6/eval/run_libero_eval.sh
 ```
 
 Environment variables:
