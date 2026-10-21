@@ -13,7 +13,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         "The GR00T-N1.7 AOT operators are unavailable. Install "
-        "DeepTraining/cuda_source/groot_n1_7_op in the runtime Python environment."
+        "ops/cuda_source/groot_n1_7_op in the runtime Python environment."
     ) from exc
 
 

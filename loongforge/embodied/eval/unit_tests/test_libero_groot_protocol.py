@@ -119,16 +119,15 @@ def test_adapter_state_gripper_and_legacy_unchanged():
     np.testing.assert_array_equal(old.obs_to_canonical(obs, ctx)["state_raw"]["eef_pos"], [99] * 3)
 
 
-@pytest.mark.parametrize("seed", [None, 42])
-def test_session_seed_once_random_reset_reuses_env_and_interrupts(seed):
+def test_session_seed_once_random_reset_reuses_env_and_interrupts():
     env = FakeEnv()
-    session = groot.GrootOfficialEnvSession(env, seed, 17)
+    session = groot.GrootOfficialEnvSession(env, 42, 17)
     for _ in range(3):
         _, completed = session.step([[0] * 7] * 8)
         assert completed["steps"] == 2
         assert completed["success"] == 1
     assert env.resets == 4
-    assert env.seeds == ([] if seed is None else [42])
+    assert env.seeds == [42]
     assert len(env.actions) == 6
     assert env.env.robots[0].controller.use_delta is True
 

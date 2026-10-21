@@ -101,6 +101,7 @@ SEED=${SEED:-42}
 
 TRAINING_ARGS=(
     --trainer-type GrootN1d7Trainer
+    --save-processor-config
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"

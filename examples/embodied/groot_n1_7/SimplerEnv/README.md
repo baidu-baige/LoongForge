@@ -52,7 +52,7 @@ my_dataset/
 │   ├── info.json          # dataset metadata
 │   ├── episodes.jsonl     # episode index and lengths
 │   ├── tasks.jsonl        # language task descriptions
-│   ├── stats.json         # normalization stats (must contain q01/q99)
+│   ├── stats.json         # normalization stats (must contain q01/q99; generated below)
 │   └── modality.json      # state/action/video key mapping (GR00T-specific)
 ├── data/chunk-000/        # parquet files (state, action per timestep)
 └── videos/chunk-000/      # mp4 video files per episode
@@ -67,11 +67,11 @@ cp examples/embodied/groot_n1_7/SimplerEnv/bridge/modality.json \
 cp examples/embodied/groot_n1_7/SimplerEnv/fractal/modality.json \
    /path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot/meta/modality.json
 
-# 2. Overwrite stats.json (both datasets)
-cp examples/embodied/groot_n1_7/SimplerEnv/bridge/stats.json \
-   /path/to/IPEC-COMMUNITY/bridge_orig_lerobot/meta/stats.json
-cp examples/embodied/groot_n1_7/SimplerEnv/fractal/stats.json \
-   /path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot/meta/stats.json
+# 2. Generate meta/stats.json (normalization stats with q01/q99) for both datasets;
+#    the script overwrites each dataset's meta/stats.json in place
+python examples/embodied/groot_n1_7/gen_stats.py \
+   /path/to/IPEC-COMMUNITY/bridge_orig_lerobot \
+   /path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot
 
 # 3. Fractal only: the videos are AV1-encoded, which torchcodec cannot decode;
 #    convert them to H.264 in place
@@ -107,6 +107,17 @@ OUTPUT_ROOT=/path/to/outputs/groot_n1_7_fractal \
 bash run_fractal_sft.sh
 ```
 
+> **Note**: due to tight GPU memory, CUDA Graph is disabled by default in the current configuration. If you have enough GPU memory, you can enable it by adding the following arguments to `DISTRIBUTED_TRAINING_ARGS` in the training script:
+>
+> ```bash
+> --cuda-graph-impl local
+> --cuda-graph-scope full_iteration
+> --cuda-graph-warmup-steps 3
+> --cuda-graph-pad-length 0
+> --cuda-graph-ddp-sync-in-graph
+> --ddp-static-graph
+> ```
+
 ### 2.1 Training Time and Loss Curves
 
 Training time of both embodiments on 8 × A800 (from iteration 1 to the last iteration):
@@ -120,7 +131,7 @@ Loss curves (left half of each plot: raw action loss; right half: 500-step movin
 
 | Bridge (WidowX) | Fractal (Google Robot) |
 |:---:|:---:|
-| ![bridge_loss_curve](images/bridge_loss_curve.png) | ![fractal_loss_curve](images/fractal_loss_curve.png) |
+| ![bridge_loss_curve](../../../../docs/assets/images/groot/bridge_loss_curve.png) | ![fractal_loss_curve](../../../../docs/assets/images/groot/fractal_loss_curve.png) |
 
 ---
 
@@ -222,8 +233,8 @@ Fractal, 6 tasks:
 
 | Bridge (WidowX) | Bridge (WidowX) |
 |:---:|:---:|
-| ![widowx_spoon_on_towel](images/widowx_spoon_on_towel.gif) | ![widowx_close_drawer](images/widowx_close_drawer.gif) |
+| ![widowx_spoon_on_towel](../../../../docs/assets/images/groot/widowx_spoon_on_towel.gif) | ![widowx_close_drawer](../../../../docs/assets/images/groot/widowx_close_drawer.gif) |
 | *put the spoon on the towel* | *close the drawer* |
 | **Fractal (Google Robot)** | **Fractal (Google Robot)** |
-| ![google_robot_open_drawer](images/google_robot_open_drawer.gif) | ![google_robot_close_drawer](images/google_robot_close_drawer.gif) |
+| ![google_robot_open_drawer](../../../../docs/assets/images/groot/google_robot_open_drawer.gif) | ![google_robot_close_drawer](../../../../docs/assets/images/groot/google_robot_close_drawer.gif) |
 | *open bottom drawer* | *close bottom drawer* |

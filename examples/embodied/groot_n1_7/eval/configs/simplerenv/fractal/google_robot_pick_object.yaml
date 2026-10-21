@@ -16,6 +16,7 @@ benchmark:
   control_freq: 5
   action_scale: 1.0
   rotation_mode: axis_angle    # pass roll/pitch/yaw through unchanged
+  google_sticky_gripper: true  # official GoogleFractalEnv gripper (15-step sticky)
   max_steps: 300
   success_settle_steps: 0
 

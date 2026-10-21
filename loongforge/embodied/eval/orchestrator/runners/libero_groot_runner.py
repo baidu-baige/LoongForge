@@ -72,8 +72,7 @@ class GrootOfficialEnvSession:
         self.max_steps = max_steps
         self.save_replay = save_replay
         self.save_trace = save_trace
-        if seed is not None:
-            env.seed(int(seed))
+        env.seed(int(seed))
         self.reset()
 
     def reset(self):
@@ -140,7 +139,7 @@ def collect_groot_official_task(
     if (not isinstance(builder, GrootN1d7PayloadBuilder) or key
             or builder.state_encoding != "libero_ee_axis_angle"):
         raise ValueError("groot_official requires GR00T N1.7 LIBERO axis-angle policy")
-    seed = None if args.seed is None else int(args.seed)
+    seed = int(args.seed)
     episode_timeout = args.per_episode_timeout_sec
     step_timeout = args.per_step_timeout_sec
     macro_timeout = (

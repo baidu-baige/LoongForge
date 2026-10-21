@@ -138,7 +138,7 @@ def save_checkpoint(
     # Format-independent: the eval loader needs the data spec next to the weights
     # for dcp as much as for safetensors/pt. Tiny and synchronous, so an async dcp
     # save still has it on disk; a failed async commit removes the whole dir.
-    if ctx.is_main and data_cfg is not None:
+    if ctx.is_main and data_cfg is not None and training_args.save_processor_config:
         _write_processor_config(path, data_cfg)
 
     if future is not None:

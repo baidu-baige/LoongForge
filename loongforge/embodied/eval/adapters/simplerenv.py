@@ -103,6 +103,7 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         camera_name: Optional[str] = None,
         action_scale: float = 1.0,
         rotation_mode: str = "euler",
+        google_sticky_gripper: bool = False,
     ) -> None:
         """Run __init__."""
         if task_name not in TASK_TO_ENV_NAME:
@@ -118,6 +119,10 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         self.camera_name = camera_name or _default_camera_name(robot_setup)
         self.action_scale = action_scale
         self.rotation_mode = rotation_mode
+        # Only consulted for google_robot. Off by default: the gripper value is
+        # passed through unchanged (the pre-sticky google_robot behavior); GR00T
+        # Fractal configs turn it on for Isaac-GR00T parity.
+        self.google_sticky_gripper = google_sticky_gripper
         # Google-robot sticky-gripper state. Mirrors the official Isaac-GR00T
         # GoogleFractalEnv, which "sticks" a triggered gripper action for
         # ``sticky_gripper_num_repeat`` steps. The adapter is constructed once
@@ -235,7 +240,9 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         """Run _convert_gripper."""
         value = float(np.asarray(gripper_value, dtype=np.float32).reshape(-1)[0])
         if self.policy_setup == "google_robot":
-            return np.asarray([self._google_sticky_gripper(value)], dtype=np.float32)
+            if self.google_sticky_gripper:
+                return np.asarray([self._google_sticky_gripper(value)], dtype=np.float32)
+            return np.asarray([value], dtype=np.float32)
         return np.asarray([2.0 * (value > 0.5) - 1.0], dtype=np.float32)
 
     def _google_sticky_gripper(self, current_gripper_action: float) -> float:

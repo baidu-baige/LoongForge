@@ -80,14 +80,8 @@ def _reset_env(env: Any, args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict
     """Run _reset_env."""
     # Prepackaged (official) path: reset with only a per-episode seed and let the
     # env randomize overlay + robot/object init itself (do NOT pin robot_init).
-    # A None seed matches the official client's default (no --seed): the env's
-    # own RNG picks the layout, so runs are non-deterministic like upstream.
     if getattr(args, "prepackaged_config", False):
-        reset_result = (
-            env.reset()
-            if args.seed is None
-            else env.reset(seed=args.seed + args.episode_idx)
-        )
+        reset_result = env.reset(seed=args.seed + args.episode_idx)
         if isinstance(reset_result, tuple) and len(reset_result) == 2:
             return reset_result
         return reset_result, {}
@@ -99,11 +93,7 @@ def _reset_env(env: Any, args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict
         },
         "obj_init_options": {"episode_id": args.obj_episode_id},
     }
-    reset_result = (
-        env.reset(options=reset_options)
-        if args.seed is None
-        else env.reset(seed=args.seed + args.episode_idx, options=reset_options)
-    )
+    reset_result = env.reset(seed=args.seed + args.episode_idx, options=reset_options)
     if isinstance(reset_result, tuple) and len(reset_result) == 2:
         obs, reset_info = reset_result
     else:
@@ -176,8 +166,7 @@ def _write_standard_outputs(output_dir: str, record: Dict[str, Any]) -> None:
 def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     """Run run_evaluation."""
     _ensure_vulkan_runtime(args)
-    if args.seed is not None:
-        np.random.seed(args.seed)
+    np.random.seed(args.seed)
 
     adapter = SimplerEnvAdapter(
         task_name=args.task_name,
@@ -187,6 +176,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
         camera_name=args.camera_name,
         action_scale=args.action_scale,
         rotation_mode=args.rotation_mode,
+        google_sticky_gripper=args.google_sticky_gripper,
     )
     payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
     env, env_name = _build_env(args, adapter)
@@ -347,6 +337,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
         (benchmark, "control_mode", "control_mode"),
         (benchmark, "action_scale", "action_scale"),
         (benchmark, "rotation_mode", "rotation_mode"),
+        (benchmark, "google_sticky_gripper", "google_sticky_gripper"),
         (benchmark, "max_steps", "max_steps"),
         (benchmark, "success_settle_steps", "success_settle_steps"),
         (benchmark, "success_settle_gripper", "success_settle_gripper"),
@@ -401,6 +392,9 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--control-mode", default="arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos")
     parser.add_argument("--action-scale", type=float, default=1.0)
     parser.add_argument("--rotation-mode", choices=["euler", "axis_angle"], default="euler")
+    # google_robot only: Isaac-GR00T 15-step sticky gripper. Off by default
+    # (gripper passed through); GR00T Fractal configs set benchmark.google_sticky_gripper.
+    parser.add_argument("--google-sticky-gripper", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--disable-action-cache", action="store_true")
     parser.add_argument("--action-ensemble", action="store_true")
     parser.add_argument("--action-ensemble-horizon", type=int, default=7)
@@ -412,7 +406,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--obj-episode-id", type=int, default=0)
     parser.add_argument("--episode-idx", type=int, default=0)
     parser.add_argument("--max-steps", type=int, default=5)
-    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--save-replay", action="store_true")
     parser.add_argument("--success-settle-steps", type=int, default=12)
     parser.add_argument("--success-settle-gripper", type=float, default=1.0)

@@ -263,6 +263,7 @@ The checkpoint module offers:
 | Save format | `--save-format` | `safetensors` | `safetensors`, `pt`, `dcp` | Checkpoint file format |
 | Save training state | `--save-training-state` | `True` | Bool flag | Save optimizer, scheduler, RNG, and DataLoader state |
 | Async save | `--async-save` | `False` | Bool flag | Enable async saving for DCP format |
+| Save processor config | `--save-processor-config` | `False` | Bool flag | Write `processor_config.json` (training data config) into each `steps_N`; required by GR00T-N1.7 eval |
 
 Resume example:
 

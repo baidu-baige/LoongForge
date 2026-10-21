@@ -64,7 +64,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         episodes_per_task: int = 50,
         resolution: int = LIBERO_ENV_RESOLUTION,
         continuous_gripper: bool = False,
-        prefer_controller_ee: bool | None = True,
+        prefer_controller_ee: bool = True,
     ) -> None:
         """Initialize the LIBERO adapter."""
         if suite_name not in SUITE_MAX_STEPS:
@@ -75,11 +75,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         self.episodes_per_task = episodes_per_task
         self.resolution = resolution
         self.continuous_gripper = continuous_gripper
-        # None (an omitted or empty config key) must not silently flip the state
-        # source: the pre-flag behaviour, which every published GR00T-N1.7 LIBERO
-        # number was produced with, is to prefer the controller pose. Only an
-        # explicit false opts into the official FastWAM obs-only convention.
-        self.prefer_controller_ee = True if prefer_controller_ee is None else bool(prefer_controller_ee)
+        self.prefer_controller_ee = bool(prefer_controller_ee)
 
     def obs_to_canonical(self, env_obs: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """Convert a LIBERO obs into a benchmark-neutral canonical dict."""

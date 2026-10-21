@@ -64,7 +64,7 @@ def _render_resolution(args: argparse.Namespace) -> int:
     return value if value > 0 else LIBERO_ENV_RESOLUTION
 
 
-def _get_libero_env(task, resolution: int, seed: Optional[int]):
+def _get_libero_env(task, resolution: int, seed: int):
     """Run _get_libero_env."""
     from libero.libero import get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
@@ -75,8 +75,7 @@ def _get_libero_env(task, resolution: int, seed: Optional[int]):
         camera_heights=resolution,
         camera_widths=resolution,
     )
-    if seed is not None:
-        env.seed(seed)
+    env.seed(seed)
     return env, task.language
 
 
@@ -175,7 +174,7 @@ def _failure_record(
     episode_idx: int,
     task_description: str,
     episode_id: str,
-    episode_seed: Optional[int],
+    episode_seed: int,
     episode_start: float,
     reset_time_sec: Optional[float],
     steps: int,
@@ -256,18 +255,13 @@ def run_episode(
     env_seed_mode = str(getattr(args, "env_seed_mode", "per_episode"))
     if env_seed_mode == "per_task":
         # Official semantics: seed once per task (process), env reused across trials.
-        if args.seed is None:
-            raise ValueError("--env-seed-mode per_task requires an explicit --seed")
         episode_seed = int(args.seed)
         if not _ENV_CACHE.get("np_seeded"):
             np.random.seed(episode_seed)
             _ENV_CACHE["np_seeded"] = True
     else:
-        if args.seed is None:
-            episode_seed = None
-        else:
-            episode_seed = int(args.seed) + task_id * 1000 + episode_idx
-            np.random.seed(episode_seed)
+        episode_seed = int(args.seed) + task_id * 1000 + episode_idx
+        np.random.seed(episode_seed)
 
     task_description = task.language
     episode_id = f"libero/{task_suite_name}/task={task_id}/episode={episode_idx}"
@@ -660,8 +654,8 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--seed",
         type=int,
-        default=None,
-        help="Optional global seed; omit to preserve unseeded LIBERO behavior.",
+        default=7,
+        help="Global env seed; per-episode seed is seed + task_id*1000 + episode_idx.",
     )
     parser.add_argument(
         "--env-seed-mode",

@@ -908,6 +908,14 @@ class _CheckpointArgs:
                     "format only)."
         },
     )
+    save_processor_config: bool = field(
+        default=False,
+        metadata={
+            "help": "Write processor_config.json (the training data config) into "
+                    "every steps_N dir for the eval loader. Required by GR00T-N1.7 "
+                    "eval; enable for models whose eval loader reads it."
+        },
+    )
 
 
 @dataclass(frozen=True)

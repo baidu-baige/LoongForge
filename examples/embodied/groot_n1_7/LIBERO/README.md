@@ -56,21 +56,26 @@ my_dataset/
 │   ├── info.json          # dataset metadata
 │   ├── episodes.jsonl     # episode index and lengths
 │   ├── tasks.jsonl        # language task descriptions
+│   ├── stats.json         # normalization stats (must contain q01/q99; generated below)
 │   └── modality.json      # state/action/video key mapping (GR00T-specific)
 ├── data/chunk-000/        # parquet files (state, action per timestep)
 └── videos/chunk-000/      # mp4 video files per episode
 ```
 
-After downloading, run the following steps from the LoongForge root (replace `{suite}` with the dataset directory of each suite, and `{Suite}` with `Spatial` / `Object` / `Goal` / `Long`):
+After downloading, run the following steps from the LoongForge root (replace `{suite}` with the dataset directory of each suite):
 
 ```bash
 # 1. Overwrite modality.json (all four suites)
 cp examples/embodied/groot_n1_7/LIBERO/dataset/modality.json \
    /path/to/IPEC-COMMUNITY/{suite}/meta/modality.json
 
-# 2. Overwrite stats.json (all four suites)
-cp examples/embodied/groot_n1_7/LIBERO/dataset/{Suite}/stats.json \
-   /path/to/IPEC-COMMUNITY/{suite}/meta/stats.json
+# 2. Generate meta/stats.json (normalization stats with q01/q99) for all four suites;
+#    the script overwrites each dataset's meta/stats.json in place
+python examples/embodied/groot_n1_7/gen_stats.py \
+   /path/to/IPEC-COMMUNITY/libero_spatial_no_noops_1.0.0_lerobot \
+   /path/to/IPEC-COMMUNITY/libero_object_no_noops_1.0.0_lerobot \
+   /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot \
+   /path/to/IPEC-COMMUNITY/libero_10_no_noops_1.0.0_lerobot
 
 # 3. Goal suite only: replace one corrupted video
 cp examples/embodied/groot_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
@@ -85,7 +90,9 @@ Training script: `examples/embodied/groot_n1_7/LIBERO/run_libero_sft.sh`
 
 Set the LoongForge, pretrained-weight and dataset paths in the script (or pass them as environment variables), then start training.
 
-> **Note**: `data.embodiment_tag=libero_sim` tells GR00T-N1.7 that the data comes from the Panda arm in the LIBERO simulator. **Do not change it.**
+> **Notes**:
+> - `data.embodiment_tag=libero_sim` tells GR00T-N1.7 that the data comes from the Panda arm in the LIBERO simulator. **Do not change it.**
+> - If a CUDA Graph replay fails, training automatically falls back to eager mode and continues normally.
 
 ```bash
 cd examples/embodied/groot_n1_7/LIBERO
@@ -97,25 +104,26 @@ bash run_libero_sft.sh spatial
 bash run_libero_sft.sh all
 ```
 
+
 ### 2.1 Training Time
 
 Training time on 8 × A800:
 
-| Suite | Wall-clock time | Final-step loss |
-|---|:---:|:---:|
-| libero_spatial | 5h 35m 35s | 0.0065 |
-| libero_object | 5h 30m 09s | 0.0062 |
-| libero_goal | 5h 23m 19s | 0.0047 |
-| libero_10 | 6h 12m 01s | 0.0095 |
-| **Total** | **22h 41m 04s** | — |
+| Suite | Wall-clock time |
+|---|:---:|
+| libero_spatial | 4h 33m 35s |
+| libero_object | 5h 30m 09s |
+| libero_goal | 4h 27m 19s |
+| libero_10 | 6h 12m 01s |
+| **Total** | **20h 43m 04s** |
 
 ### 2.2 Loss Curves
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial loss](images/loss_libero_spatial.png) | ![libero_object loss](images/loss_libero_object.png) |
+| ![libero_spatial loss](../../../../docs/assets/images/groot/loss_libero_spatial.png) | ![libero_object loss](../../../../docs/assets/images/groot/loss_libero_object.png) |
 | **libero_goal** | **libero_10** |
-| ![libero_goal loss](images/loss_libero_goal.png) | ![libero_10 loss](images/loss_libero_10.png) |
+| ![libero_goal loss](../../../../docs/assets/images/groot/loss_libero_goal.png) | ![libero_10 loss](../../../../docs/assets/images/groot/loss_libero_10.png) |
 
 ---
 
@@ -191,8 +199,8 @@ Success rates on the four suites (10 tasks × 20 episodes = 200 episodes per sui
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial](images/replay_libero_spatial.gif) | ![libero_object](images/replay_libero_object.gif) |
+| ![libero_spatial](../../../../docs/assets/images/groot/replay_libero_spatial.gif) | ![libero_object](../../../../docs/assets/images/groot/replay_libero_object.gif) |
 | *pick up the black bowl on the wooden cabinet and place it on the plate* | *pick up the orange juice and place it in the basket* |
 | **libero_goal** | **libero_10** |
-| ![libero_goal](images/replay_libero_goal.gif) | ![libero_10](images/replay_libero_10.gif) |
+| ![libero_goal](../../../../docs/assets/images/groot/replay_libero_goal.gif) | ![libero_10](../../../../docs/assets/images/groot/replay_libero_10.gif) |
 | *put the bowl on the stove* | *put both the cream cheese box and the butter in the basket* |
