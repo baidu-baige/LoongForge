@@ -122,42 +122,6 @@ def walk(
         **kwargs,
     )
 
-
-def forall(module: nn.Module, func: ModulePredicate, recurse: bool = False) -> bool:
-    """
-    Checks if a predicate holds for all modules in a given module or its children, optionally
-    recursively.
-
-    This function iterates over all modules and applies a predicate function to determine if
-    all modules satisfy a certain condition. If `recurse` is True, it checks all child modules
-    recursively.
-
-    Args:
-        module (nn.Module): The root module to check.
-        func (ModulePredicate): A predicate function that takes a module as input and returns
-                                a boolean or an object that can be evaluated as a boolean.
-        recurse (bool): If True, applies the predicate recursively to all child modules.
-                        Defaults to False.
-
-    Returns:
-        bool: True if all modules satisfy the predicate, False otherwise.
-    """
-
-    def apply_predicate(m):
-        result = func(m)
-        # Convert result to bool if it's not already a boolean (e.g., if it's an instance of HasBool)
-        return bool(result)
-
-    if recurse:
-        # Apply the predicate to all modules recursively
-        results = [apply_predicate(m) for m in module.modules()]
-    else:
-        # Apply the predicate only to the top-level module
-        results = [apply_predicate(module)]
-
-    return all(results)
-
-
 def _map_module(
     module: _TModule, func: ModuleFunc, recurse=False, leaf_only=False, transformed_modules=None, **kwargs
 ) -> _TModule:

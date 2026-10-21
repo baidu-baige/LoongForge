@@ -3,6 +3,11 @@
 The `tests/` directory hosts three independent, self-contained test suites. Each owns its own
 scripts, configs, and baselines — they share nothing except being rooted under `tests/`.
 
+The top level of `tests/` also holds standalone unit tests (`tests/test_*.py`). They check layout
+and dependency rules, model configs, data builders, and dispatch, and need no staged data.
+`test_dp_balance_layout.py` includes a case that needs multiple GPUs. Run them with
+`python -m pytest tests/test_*.py`.
+
 | Suite | Directory | Entry | Model targets | Baselines |
 |---|---|---|---|---|
 | **LLM/VLM E2E** (config-driven) | [tests/llm_vlm/](llm_vlm/) | `tests/llm_vlm/main_start.sh` | YAML scenarios under `configs/` + `optional_configs/` | `tests/llm_vlm/baseline/{default,optional}/<chip>/` |

@@ -98,6 +98,8 @@ TRAINING_ARGS=(
   --save "$LORA_CHECKPOINT_PATH"
   --save-hf true
   --save-hf-path "$HF_CHECKPOINT_PATH"
+  # LoRA shape comes from peft_config in the YAML; --lora-alpha/--lora-dim
+  # are used only by --save-hf to merge adapters and must match it.
   --lora-alpha 32
   --lora-dim 16
   --save-interval 1000

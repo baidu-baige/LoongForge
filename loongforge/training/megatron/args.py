@@ -1,11 +1,13 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Megatron-side training arguments: task and data semantics.
+"""Megatron-side training arguments: run, recipe, and data semantics.
 
-These arguments describe the training recipe and the data pipeline. They say
-nothing about how the backend executes a step, so they live with the training
-loop and are registered on the same parser as the engine arguments.
+These arguments select the run (model, config, phase), describe the training
+recipe (freeze, EMA, HF export path, batch and data pipeline), and control
+loop logging and tensor debugging. They say nothing about how the backend
+executes a step, so they live with the training loop and are registered on the
+same parser as the engine arguments.
 
 ``parse_megatron_train_args`` is the single entry point used by the runner,
 tools, and tests. Registering both providers on one parser keeps the CLI, the
@@ -438,12 +440,247 @@ def _add_loop_logging_args(parser: argparse.ArgumentParser) -> argparse.Argument
     return parser
 
 
+def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add run-selection, phase, and export arguments."""
+    group = parser.add_argument_group(
+        title="Run Configuration",
+        description="Arguments that select the model config and describe the run lifecycle",
+    )
+    group.add_argument(
+        "--config-file",
+        type=str,
+        default=None,
+        help="Path to YAML configuration file containing model and training settings. "
+             "Example: /path/to/config.yaml. When provided, other arguments may be "
+             "overridden by config file values. Default: None",
+    )
+    group.add_argument(
+        "--model-name",
+        type=str,
+        default=None,
+        help="Name identifier for the model architecture. Must match a registered model "
+             "in loongforge/models/catalog.py. Example: 'llama2-7b', 'qwen2-7b'. Default: None",
+    )
+    group.add_argument(
+        "--training-phase",
+        type=str,
+        default=constants.TrainingPhase.PRETRAIN,
+        choices=[constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT],
+        help="Training phase: 'pretrain' for pre-training, 'sft' for supervised fine-tuning. "
+             "Default: pretrain",
+    )
+    group.add_argument(
+        "--save-hf",
+        type=str,
+        default="false",
+        choices=["true", "false"],
+        help="Save an HF checkpoint at the end of training. "
+             "The adapter merge size comes from --lora-alpha/--lora-dim. Default: false",
+    )
+    group.add_argument(
+        "--save-hf-path",
+        type=str,
+        default=None,
+        help="Path to save the HF model checkpoint. If not specified, saves to "
+             "<save>/release_hf_weights/",
+    )
+    return parser
+
+
+def _add_freeze_and_init_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add parameter-freezing and initialization-source arguments."""
+    group = parser.add_argument_group(
+        title="Freeze and Initialization",
+        description="Arguments for freezing parameters and choosing the starting weights",
+    )
+    group.add_argument(
+        "--freeze-parameters",
+        type=str,
+        nargs="*",
+        default=[],
+        help="List of parameter name prefixes to freeze during training. "
+             "Frozen parameters will not be updated by the optimizer. "
+             "Example: --freeze-parameters 'embed' 'lm_head' freezes embedding and output layers. "
+             "Default: [] (no freezing)",
+    )
+    group.add_argument(
+        "--freeze-parameters-regex",
+        type=str,
+        default=None,
+        help="Regular expression pattern to match parameter names to freeze. "
+             "Example: '.*bias.*' freezes all bias parameters. "
+             "Applied in addition to --freeze-parameters; a parameter is frozen when either matches. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--allow-missing-adapter-checkpoint",
+        action="store_true",
+        help="Allow model loading to proceed even when the adapter checkpoint is missing. "
+             "Useful when starting from a base model without adapter weights. "
+             "Default: False (a missing adapter checkpoint raises an error)",
+    )
+    return parser
+
+
+def _add_ema_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add Exponential Moving Average arguments for the training loop."""
+    group = parser.add_argument_group(
+        title="EMA",
+        description="Arguments for Exponential Moving Average of model parameters",
+    )
+    group.add_argument(
+        "--enable-ema",
+        action="store_true",
+        help="Enable Exponential Moving Average (EMA) of model parameters. "
+             "EMA provides smoothed parameter estimates for more stable inference. "
+             "Default: False",
+    )
+    group.add_argument(
+        "--ema-decay",
+        type=float,
+        default=0.9999,
+        help="Decay rate for EMA parameter updates. Higher values = slower update. "
+             "Default: 0.9999",
+    )
+    group.add_argument(
+        "--save-ema",
+        type=str,
+        default=None,
+        help="Directory path to save EMA checkpoints. Defaults to ${args.save}/ema. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--load-ema",
+        type=str,
+        default=None,
+        help="Directory path to load the EMA checkpoint from. Defaults to ${args.load}/ema. "
+             "Default: None",
+    )
+    return parser
+
+
+def _add_recipe_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add data-recipe and preprocessing arguments."""
+    group = parser.add_argument_group(
+        title="Data Recipe",
+        description="Arguments that shape the training batches and image preprocessing",
+    )
+    group.add_argument(
+        "--packing-sft-data",
+        action="store_true",
+        help="Pack multiple short sequences into a single training sample to improve "
+             "GPU utilization. Default: False",
+    )
+    group.add_argument(
+        "--force-image-size",
+        type=int,
+        default=448,
+        help="Force resize images to this size (pixels). Default: 448",
+    )
+    group.add_argument(
+        "--dataloader-save",
+        type=str,
+        default=None,
+        help="Path to save Energon dataloader state for resumable training. Default: None",
+    )
+    return parser
+
+
+def _add_log_tensor_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add tensor logging and debugging arguments for the llm-inspector hook.
+
+    The training runner registers the hooks when --enable-log-tensor is set and
+    llm-inspector is installed. If the package is missing, the arguments are
+    ignored silently.
+    """
+    group = parser.add_argument_group(
+        title="Tensor Logging (llm-inspector)",
+        description="Arguments for debugging tensor statistics via llm-inspector library. "
+                    "Requires llm-inspector package to be installed.",
+    )
+    group.add_argument(
+        "--enable-log-tensor",
+        action="store_true",
+        help="[llm-inspector] Enable tensor logging for debugging. When enabled, tensor statistics "
+             "will be traced during training using the llm-inspector library. "
+             "Requires llm-inspector to be installed. Default: False",
+    )
+    group.add_argument(
+        "--log-tensor-name-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Regex pattern to filter module names for tensor logging. "
+             "When None (default), logs all modules. "
+             "Example: '.*attention.*' to log only attention modules. Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-stage",
+        type=str,
+        default="forward",
+        choices=["init", "forward", "backward"],
+        help="[llm-inspector] Training stage at which to log tensors. "
+             "'init': model initialization, 'forward': forward pass, 'backward': backward pass. "
+             "Only one stage can be selected. Default: forward",
+    )
+    group.add_argument(
+        "--log-tensor-iter-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Comma-separated iteration indices at which to log tensors. "
+             "Example: '8,15,20' logs tensors at iterations 8, 15, and 20. "
+             "When None, logs at all iterations. Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-mbs-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Comma-separated micro-batch indices at which to log tensors. "
+             "Example: '0,2,4' logs tensors for micro-batches 0, 2, and 4. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-layer-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Comma-separated layer indices at which to log tensors. "
+             "Example: '0,5,10' logs tensors for layers 0, 5, and 10. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-rank",
+        type=str,
+        default="0",
+        help="[llm-inspector] Comma-separated GPU ranks at which to log tensors. "
+             "Example: '0,1,2,4' logs tensors on ranks 0, 1, 2, and 4. "
+             "Default: 0",
+    )
+    group.add_argument(
+        "--save-tensor",
+        action="store_true",
+        help="[llm-inspector] Save logged tensors to disk files for offline analysis. "
+             "When False, only prints tensor norms to the log file. Default: False",
+    )
+    group.add_argument(
+        "--save-tensor-dir",
+        type=str,
+        default="",
+        help="[llm-inspector] Directory path to save tensor files. Used when --save-tensor is "
+             "enabled. Default: '' (current directory)",
+    )
+    return parser
+
+
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Register all training-side Megatron arguments on *parser*."""
     parser.conflict_handler = "resolve"
+    parser = _add_run_args(parser)
+    parser = _add_freeze_and_init_args(parser)
+    parser = _add_ema_args(parser)
+    parser = _add_recipe_args(parser)
     parser = _add_sft_args(parser)
     parser = _add_vlm_data_args(parser)
     parser = _add_loop_logging_args(parser)
+    parser = _add_log_tensor_args(parser)
     return parser
 
 

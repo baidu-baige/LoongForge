@@ -81,7 +81,7 @@ To ensure training accuracy is not affected by the optimizations, we ran a step-
 ### 3.1 Quick Run LIBERO
 1. Edit the evaluation YAML
 
-(Example: `examples/pi05/eval/configs/libero/smoke_steps10.yaml`), and fill in:
+(Example: `examples/pi05/eval/configs/libero/object_smoke.yaml`), and fill in:
 
     * `server.ckpt_path`: the checkpoint from training (a directory containing `model.safetensors` or the weight file)
     * `server.dataset_statistics_path`: dataset statistics (for action denormalization; Pi0.5 default is q99)
@@ -91,7 +91,7 @@ To ensure training accuracy is not affected by the optimizations, we ran a step-
 
 ```bash
 cd $LOONGFORGE_PATH
-# Uses smoke_steps10.yaml by default; can be overridden via CONFIG
-CONFIG=examples/pi05/eval/configs/libero/smoke_steps10.yaml \
+# Uses object_smoke.yaml by default; can be overridden via CONFIG
+CONFIG=examples/pi05/eval/configs/libero/object_smoke.yaml \
   bash examples/pi05/eval/run_libero_eval.sh
 ```

@@ -360,6 +360,11 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/kimi_k2.6",
         "config_name": "kimi_k2_6",
     },
+    "kimi-k2.6-bf16": {
+        "engine": "megatron",
+        "config_path": "configs/models/kimi_k2.6",
+        "config_name": "kimi_k2_6_bf16",
+    },
 
     # qwen2.5-vl
     "qwen2.5-vl-3b": {

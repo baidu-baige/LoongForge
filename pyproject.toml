@@ -242,7 +242,6 @@ xpu = [
 Homepage = "https://github.com/baidu-baige/LoongForge"
 Repository = "https://github.com/baidu-baige/LoongForge"
 Documentation = "https://baidu-baige.github.io/LoongForge/"
-Changelog = "CHANGELOG.md"
 
 [project.scripts]
 LoongForge = "loongforge.train:main"
@@ -303,7 +302,6 @@ ignore = ["E402", "E501", "E731", "F841"]
 [tool.hatch.build]
 packages = ["loongforge"]
 include = [
-    "loongforge/conf/*",
     "loongforge/data/*",
     "loongforge/**/*.yaml",
     "loongforge/**/*.json",

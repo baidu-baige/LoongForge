@@ -4,8 +4,9 @@
 """Training arguments for the Torch engine (recipe, CLI, and parsing).
 
 This module owns the parameters that describe *how* to train: model routing, run
-length and output location, the learning-rate schedule, the data loader, logging,
-profiling, and freezing. Backend capabilities stay in
+length, output location, and initialization source (pretrained weights or
+resume), the learning-rate schedule, the data loader, logging, profiling, and
+freezing. Backend capabilities stay in
 ``loongforge.engines.torch.arguments``; :class:`TrainingArgs` combines both sets
 of mixins into one flat frozen dataclass, so attribute access, the CLI, and the
 YAML schema are unchanged.
@@ -88,7 +89,23 @@ class _ModelRoutingArgs:
 
 @dataclass(frozen=True)
 class _RunArgs:
-    """Run length, output location, seeding, and manual GC."""
+    """Run length, output location, initialization source, seeding, and manual GC."""
+
+    pretrained_checkpoint: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Path to pretrained weights to initialize the model from "
+                    "(fine-tuning)."
+        },
+    )
+
+    resume: bool = field(
+        default=False,
+        metadata={
+            "help": "Resume training (weights + optimizer/scheduler/RNG state) "
+                    "from the latest checkpoint in --output-dir."
+        },
+    )
 
     train_iters: int = field(
         default=150000,
@@ -224,7 +241,7 @@ class _DataArgs:
 
     sampler_shuffle: bool = field(
         default=True,
-        metadata={"help": "whether shiffle in sampler"},
+        metadata={"help": "Shuffle sample order in the sampler."},
     )
 
     distributed_sampler_mode: str = field(
@@ -700,9 +717,6 @@ class TrainingArgs(
     """
 
     def __post_init__(self):
-        if self.dmuon_adamw_foreach_bucket_mib <= 0:
-            raise ValueError("--dmuon-adamw-foreach-bucket-mib must be positive")
-
         # Deterministic mode needs a seeded dataloader (sampler shuffle +
         # per-worker RNG); otherwise data ordering and augmentation are not
         # reproducible run-to-run. Force it on and warn when left off.

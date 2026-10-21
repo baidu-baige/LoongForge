@@ -3,9 +3,10 @@
 
 """Backend arguments for the Torch engine.
 
-Each mixin here describes a capability of this backend: how a step is executed,
-which runtime switches are applied at initialization, and in which on-disk
-format a checkpoint is written. ``TrainingArgs`` in
+Each mixin here describes a capability of this backend: step execution,
+runtime switches applied at initialization, checkpoint format, optimizer
+construction, LoRA wrapping, CUDA graph capture, activation checkpointing, FP8,
+and distributed wrapping. ``TrainingArgs`` in
 ``loongforge.training.torch.args`` aggregates these mixins with the training
 recipe mixins; at runtime it is still one flat frozen dataclass, so engine code
 keeps reading ``training_args.<field>``.
@@ -230,9 +231,9 @@ class _RuntimeArgs:
     disable_tf32: bool = field(
         default=False,
         metadata={
-            "help": "disable"
-                    "torch.backends.cudnn.allow_tf32"
-                    "torch.backends.cuda.matmul.allow_tf32"
+            "help": "Disable TF32 for cuDNN convolutions and CUDA matmuls "
+                    "(torch.backends.cudnn.allow_tf32, "
+                    "torch.backends.cuda.matmul.allow_tf32)."
         },
     )
 
@@ -251,22 +252,6 @@ class _RuntimeArgs:
 @dataclass(frozen=True)
 class _CheckpointIOArgs:
     """On-disk checkpoint format and save behavior."""
-
-    pretrained_checkpoint: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Path to pretrained weights to initialize the model from "
-                    "(fine-tuning)."
-        },
-    )
-
-    resume: bool = field(
-        default=False,
-        metadata={
-            "help": "Resume training (weights + optimizer/scheduler/RNG state) "
-                    "from the latest checkpoint in --output-dir."
-        },
-    )
 
     save_format: str = field(
         default="safetensors",
@@ -742,8 +727,8 @@ class _DistributedArgs:
 
     init_on_meta: bool = field(
         default=False,
-        metadata={"help": "Allocate all params on 'meta' device."
-                          "Then weights are loaded into the sharded DTensors."
+        metadata={"help": "Allocate all params on the 'meta' device. "
+                          "Weights are then loaded into the sharded DTensors."
         }
     )
 

@@ -55,11 +55,11 @@ Or for breaking changes:
 2. Map changed paths to modules:
    - `loongforge/models/language/` → `llm`
    - `loongforge/models/vision/`, `loongforge/models/multimodal/` → `vlm`
-   - `loongforge/engines/` → `train`
+   - `loongforge/engines/`, `loongforge/training/`, `loongforge/extensions/` → `train`
    - `loongforge/data/`, `loongforge/chat_templates/` → `data`
    - `loongforge/constants.py` → `train`
    - `tools/mcore_checkpoint_convert/` → `ckpt`
-   - `loongforge/models/peft/` → `peft`
+   - `loongforge/models/base/peft/` → `peft`
    - `ops/` → `ops`
    - `configs/` → relevant model type (`llm`/`vlm`)
    - `examples_xpu/` → `xpu`
@@ -67,7 +67,7 @@ Or for breaking changes:
    - `docs/` → `docs`
    - `tests/` → `tests`
    - `.github/workflows/` → `ci`
-   - `examples/`, `scripts/` → `scripts`
+   - `examples/` → `scripts`
    - `loongforge/models/embodied/` → check model type (`diffusion`/`vla`)
 3. Determine type from commit messages and nature of changes
 4. Write a concise description (imperative mood, lowercase start)
@@ -154,17 +154,17 @@ After PR is created:
 | vlm | `loongforge/models/vision/`, `loongforge/models/multimodal/` |
 | vla | `loongforge/models/embodied/` (VLA models) |
 | diffusion | `loongforge/models/embodied/` (diffusion models) |
-| train | `loongforge/engines/`, `loongforge/constants.py` |
+| train | `loongforge/engines/`, `loongforge/training/`, `loongforge/extensions/`, `loongforge/constants.py` |
 | data | `loongforge/data/`, `loongforge/chat_templates/` |
 | ops | `ops/` |
 | ckpt | `tools/mcore_checkpoint_convert/` |
-| peft | `loongforge/models/peft/` |
+| peft | `loongforge/models/base/peft/` |
 | docker | `docker/` |
 | xpu | `examples_xpu/` |
 | ci | `.github/workflows/` |
 | docs | `docs/` |
 | tests | `tests/` |
-| scripts | `examples/`, `scripts/`, `build.sh` |
+| scripts | `examples/` |
 | release | `pyproject.toml`, version bumps |
 
 ## Common Mistakes

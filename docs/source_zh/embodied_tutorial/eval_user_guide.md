@@ -78,7 +78,7 @@ examples/pi05/eval/run_libero_eval.sh
 
 ```bash
 cd /path/to/LoongForge
-# 编辑 configs/libero/libero_weight_object_smoke.yaml 中的 /path/to/...
+# 编辑 examples/xvla/eval/configs/libero/libero_weight_object_smoke.yaml 中的 /path/to/...
 examples/xvla/eval/run_libero_eval.sh
 ```
 
@@ -374,7 +374,7 @@ vulkaninfo
 上游 `simpler-env/SimplerEnv` 默认不提供绝对 EE 控制，但 X-VLA 输出绝对 EE 位姿。两种解决方案：
 
 - 使用 [`255isWhite/SimplerEnv`](https://github.com/255isWhite/SimplerEnv) fork（官方 X-VLA SIMPLER 评测使用的 fork），或
-- 应用 `examples/xvla/eval/SIMPLERENV_PATCH_en.md` 中记录的两个本地补丁。
+- 应用 `docs/source/embodied_tutorial/eval_docs/patches/simplerenv/xvla.md` 中记录的本地补丁。
 
 若两者都未应用，环境要么在构造时因缺少控制模式报错，要么静默地将绝对动作当作增量动作应用从而永远无法成功。
 
@@ -384,5 +384,5 @@ vulkaninfo
 
 本节面向需要集成新模型的开发者。如需集成 pi0.5 / X-VLA 之外的模型，核心思路是：复用共享的 `predict_action` 接口和 `GenericPredictActionPolicy`，保持基准测试协议和适配器不变，将模型差异放在一个轻量工厂中。不要 fork 基准测试运行器或直接修改 LoongForge 训练代码。详细的集成步骤、模型语义对比（动作空间、归一化归属、chunk 长度等）和最小检查清单，请参见：
 
-- [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
-- [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）
+- [model_integration.md](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/model_integration.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
+- [predict_action_interface.py](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/servers/predict_action_interface.py) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）

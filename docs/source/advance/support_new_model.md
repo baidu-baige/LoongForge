@@ -11,7 +11,7 @@ If your LLM is a new specification of an existing architecture (e.g., from Llama
 
 ```yaml
 # Inherit the common configuration class for this model family
-_target_: loongforge.models.language.Llama3Config
+_target_: loongforge.models.language.LLaMAConfig
 
 # Modify specific parameters
 num_layers: 80

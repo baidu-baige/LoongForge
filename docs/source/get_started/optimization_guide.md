@@ -26,7 +26,7 @@ In DP each GPU processes a **subset of the batch**. Depending on the configurati
 #### Standard DP (no sharding)
 
 ```bash
-torchrun --nproc_per_node=8 pretrain_gpt.py \
+torchrun --nproc_per_node=8 loongforge/train.py \
     --data-parallel-sharding-strategy no_shard
 ```
 

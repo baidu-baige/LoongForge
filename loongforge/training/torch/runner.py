@@ -20,7 +20,7 @@ from types import ModuleType
 from typing import Any, Dict, Optional
 
 from loongforge.training.torch.args import parse_train_args
-from loongforge.engines.torch.initialize import resolve_dtype
+from loongforge.engines.torch.initialize import apply_runtime_args, resolve_dtype
 from loongforge.engines.torch.train_step import (
     StepContext,
     TorchOptimization,
@@ -88,7 +88,7 @@ class TorchRunner:
         """One-shot initialization of all training resources."""
         from loongforge.engines.torch.distributed import DistributedContext
         from loongforge.engines.torch.initialize import (
-            set_seed, set_deterministic, set_precision, set_backend_precision,
+            set_seed, set_backend_precision,
         )
         from loongforge.training.torch.train_logging import (
             TrainingLogger, log_effective_config, setup_logging, log_stage,
@@ -99,7 +99,6 @@ class TorchRunner:
         from loongforge.engines.torch.distributed.parallel import wrap_model
         from loongforge.engines.torch.optimizer import build_optimizer
         from loongforge.training.torch.lr_scheduler import build_scheduler
-        import torch
 
         training_args = self.training_args
         opt = self.optimization
@@ -113,19 +112,9 @@ class TorchRunner:
         self.ctx = DistributedContext()
         self.ctx.init()
 
-        # 2. Seed
+        # 2. Seed and backend runtime switches
         set_seed(training_args.seed, training_args.set_seed_by_rank)
-        if training_args.deterministic_mode:
-            set_deterministic()
-        if training_args.cudnn_benchmark:
-            if training_args.deterministic_mode:
-                raise ValueError(
-                    "--cudnn-benchmark and --deterministic-mode conflict: autotuning "
-                    "picks algorithms per shape and is not reproducible."
-                )
-            torch.backends.cudnn.benchmark = True
-        if training_args.disable_tf32:
-            set_precision(allow_tf32=False)
+        apply_runtime_args(training_args)
 
         # 3. Output directories + logging
         self.output_dir = training_args.output_dir

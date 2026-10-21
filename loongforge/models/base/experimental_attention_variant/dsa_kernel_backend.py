@@ -59,7 +59,7 @@ def _ensure_sm80_ops_on_path() -> None:
     if _SM80_OPS_ADDED:
         return
     _SM80_OPS_ADDED = True
-    # dsa_kernel_backend.py -> experimental_attention_variant -> common -> models
+    # dsa_kernel_backend.py -> experimental_attention_variant -> base -> models
     # -> loongforge -> <repo root>
     repo_root = Path(__file__).resolve().parents[4]
     ops_dir = repo_root / "ops" / "cuda_source"
@@ -149,8 +149,7 @@ class DSAKernelBackend:
 
         ``flashinfer.top_k`` is a radix select with no tensor-core code and no
         arch gating, so it works unchanged on SM80; verified against
-        ``torch.topk`` on A800.  ``radix_topk`` (`ops/cuda_source/topk`)
-        is an equivalent drop-in should flashinfer ever be unavailable.
+        ``torch.topk`` on A800.
         """
 
         def _load():

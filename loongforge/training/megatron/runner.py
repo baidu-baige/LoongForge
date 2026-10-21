@@ -109,7 +109,6 @@ from loongforge.engines.megatron.checkpointing import save_checkpoint
 from loongforge.engines.megatron.model_setup import (
     setup_model_and_optimizer,
     update_ema,
-    add_hooks,
 )
 from loongforge.engines.megatron.train_step import train_step, stimer
 from loongforge.engines.megatron.distributed.dp_balance.train_hooks import train_log_decorator
@@ -125,6 +124,28 @@ except ImportError:
 
 # The earliest we can measure the start time.
 _TRAIN_START_TIME = time.time()
+
+
+def add_hooks(model, args, prefix):
+    """Attach llm-inspector tensor hooks; enabled by --enable-log-tensor."""
+    from inspector.hooks import register_hooks
+
+    print_rank_0(
+        f"Set up Log Tensor Hook:\n" f"  name pattern: {args.log_tensor_name_pattern}\n"
+    )
+    rank = torch.distributed.get_rank()
+    log_fn = lambda string: print(f"[Rank {rank}] {string}")
+    matched_modules = register_hooks(model, args, rank, log_fn, prefix)
+    if len(matched_modules) > 0:
+        print_rank_0(
+            f"For log tensor name pattern: {args.log_tensor_name_pattern}, find the following layers:"
+        )
+        for layer_name in matched_modules:
+            print_rank_0(f"  {layer_name}")
+    else:
+        print_rank_0(
+            f"No layers found for the log tensor name pattern: {args.log_tensor_name_pattern}"
+        )
 
 
 def main():

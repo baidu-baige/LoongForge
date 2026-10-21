@@ -11,7 +11,7 @@
 
 ```yaml
 # 继承该模型系列的通用配置类
-_target_: loongforge.models.language.Llama3Config
+_target_: loongforge.models.language.LLaMAConfig
 
 # 修改特定参数
 num_layers: 80

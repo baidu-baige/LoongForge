@@ -229,28 +229,6 @@ def check_vlm_peft_config(model_config):
     return peft_config
 
 
-def add_hooks(model, args, prefix):
-    """add hooks for model, only enable hooks when open the switch: enable-log-tensor"""
-    from inspector.hooks import register_hooks
-
-    print_rank_0(
-        f"Set up Log Tensor Hook:\n" f"  name pattern: {args.log_tensor_name_pattern}\n"
-    )
-    rank = torch.distributed.get_rank()
-    log_fn = lambda string: print(f"[Rank {rank}] {string}")
-    matched_modules = register_hooks(model, args, rank, log_fn, prefix)
-    if len(matched_modules) > 0:
-        print_rank_0(
-            f"For log tensor name pattern: {args.log_tensor_name_pattern}, find the following layers:"
-        )
-        for layer_name in matched_modules:
-            print_rank_0(f"  {layer_name}")
-    else:
-        print_rank_0(
-            f"No layers found for the log tensor name pattern: {args.log_tensor_name_pattern}"
-        )
-
-
 def _p2p_embedding_weights_for_mtp(unwrapped_model, args):
     """Copy embedding.word_embeddings.weight from the first PP stage to the last PP stage via P2P.
 

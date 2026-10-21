@@ -472,8 +472,6 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
 def _resolve_checkpoint_path(model_cfg: Any) -> Path | None:
     path_value = model_cfg.base_model_path
     if not path_value:
-        path_value = model_cfg.pretrained_checkpoint
-    if path_value is None:
         return None
     path = Path(str(path_value))
     return path if path.exists() else None

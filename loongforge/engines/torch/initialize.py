@@ -59,6 +59,23 @@ def set_deterministic() -> None:
     _torch.use_deterministic_algorithms(True)
 
 
+def apply_runtime_args(training_args: Any) -> None:
+    """Apply the backend runtime switches (determinism, cuDNN autotune, TF32).
+
+    Seeds are not set here: seeding is a training concern and stays with the
+    runner. The caller validates conflicting switches via
+    ``validate_engine_args`` before training starts.
+    """
+    import torch as _torch
+
+    if training_args.deterministic_mode:
+        set_deterministic()
+    if training_args.cudnn_benchmark:
+        _torch.backends.cudnn.benchmark = True
+    if training_args.disable_tf32:
+        set_precision(allow_tf32=False)
+
+
 def resolve_dtype(dtype_str: str) -> "torch.dtype":
     """Convert string dtype to torch.dtype."""
     import torch as _torch

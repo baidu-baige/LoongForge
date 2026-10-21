@@ -81,7 +81,7 @@ bash examples/pi05/finetune_pi05_fsdp.sh
 ### 3.1 快速运行 LIBERO
 1. 编辑评测 YAML
 
-（示例：`examples/pi05/eval/configs/libero/smoke_steps10.yaml`），填写：
+（示例：`examples/pi05/eval/configs/libero/object_smoke.yaml`），填写：
 
     * `server.ckpt_path`：训练得到的 checkpoint（目录含 `model.safetensors` 或权重文件）
     * `server.dataset_statistics_path`：数据集统计（action 反归一化，Pi0.5 默认 q99）
@@ -91,7 +91,7 @@ bash examples/pi05/finetune_pi05_fsdp.sh
 
 ```bash
 cd $LOONGFORGE_PATH
-# 默认使用 smoke_steps10.yaml；可用 CONFIG 覆盖
-CONFIG=examples/pi05/eval/configs/libero/smoke_steps10.yaml \
+# 默认使用 object_smoke.yaml；可用 CONFIG 覆盖
+CONFIG=examples/pi05/eval/configs/libero/object_smoke.yaml \
   bash examples/pi05/eval/run_libero_eval.sh
 ```

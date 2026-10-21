@@ -26,7 +26,7 @@ LoongForge 基于 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 构建，
 #### 标准 DP（无分片）
 
 ```bash
-torchrun --nproc_per_node=8 pretrain_gpt.py \
+torchrun --nproc_per_node=8 loongforge/train.py \
     --data-parallel-sharding-strategy no_shard
 ```
 

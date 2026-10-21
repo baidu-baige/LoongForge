@@ -37,7 +37,6 @@ import requests
 import xxhash
 from decord import VideoReader
 from PIL import Image
-from PIL.ExifTags import TAGS
 from transformers import AutoProcessor
 
 RAW_VIDEO_DIR = "./download_tmp/raw_video/"
@@ -186,85 +185,6 @@ def get_downloadable(
     )
     return downloaded_path
 
-
-def get_downloadable_image(
-    download_path, need_exif_info, retry_max_time=0, retry_interval=3
-):
-    """
-    Get downloadable with exif info and image processing
-    """
-
-    def get_image_exif(image):
-        exif_data = image._getexif()
-        exif_info = {}
-        if exif_data is not None:
-            for tag, value in exif_data.items():
-                tag_name = TAGS.get(tag, tag)
-                exif_info[tag_name] = value.strip()
-        return exif_info
-
-    def has_transparent_background(img):
-        """has_transparent_background"""
-        if img.mode in ("RGBA", "LA") or (
-            img.mode == "P" and "transparency" in img.info
-        ):
-            # Check for any pixel with alpha channel less than 255 (fully opaque)
-            alpha = img.convert("RGBA").split()[-1]
-            if alpha.getextrema()[0] < 255:
-                return True
-        return False
-
-    def add_white_background(img):
-        """
-        Add a white background to a transparent background image
-        """
-        if img.mode != "RGBA":
-            img = img.convert("RGBA")
-        # Create an image with a white background and the same size as the original image
-        img_white_background = Image.new("RGBA", img.size, (255, 255, 255))
-
-        # Paste the original image onto a white background
-        img_white_background.paste(img, (0, 0), img)
-
-        return img_white_background
-
-    def change_I16_to_L(img):
-        """
-        Convert image from I;16 mode to L mode
-        """
-        # Since the point function in I mode only supports addition, subtraction, and
-        # multiplication, the following * (1 / 256) cannot be changed to division.
-        return img.point(lambda i: i * (1 / 256)).convert("L")
-
-    image = get_downloadable(
-        download_path,
-        save_to_disk=False,
-        retry=retry_max_time,
-        retry_interval=retry_interval,
-    )
-    if isinstance(image, Image.Image):
-        pil_image = image
-    else:
-        pil_image = Image.open(io.BytesIO(image))
-    if need_exif_info:
-        try:
-            exif_info = get_image_exif(pil_image)
-        except Exception:
-            exif_info = {}
-    else:
-        exif_info = {}
-
-    try:
-        if pil_image.mode == "I;16":
-            pil_image = change_I16_to_L(pil_image)
-        if has_transparent_background(pil_image):
-            pil_image = add_white_background(pil_image)
-    except Exception:
-        pass
-
-    return pil_image.convert("RGB"), exif_info
-
-
 def str2hash(url):
     """
     str2hash
@@ -304,14 +224,6 @@ def image_info_2_hash(img_one):
         return pil2hash(img_one["image_url"])
     else:
         raise ValueError("only support str or PIL.Image now.")
-
-
-def is_gif(data: bytes) -> bool:
-    """
-    check if a bytes is a gif based on the magic head
-    """
-    return data[:6] in (b"GIF87a", b"GIF89a")
-
 
 def group_frame_by_video(schema):
     """

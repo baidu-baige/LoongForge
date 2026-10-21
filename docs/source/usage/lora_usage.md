@@ -104,7 +104,7 @@ Add LoRA-related configurations to the model configuration file you want to trai
 * **apply_to_image_projector**: Enable LoRA training on the image projector.
 * **apply_to_image_encoder**: Enable LoRA training on the image encoder.
 
-To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${LoongForge}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` as follows:
+To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${LoongForge}/configs/models/qwen2.5_vl/qwen2_5_vl_3b.yaml` as follows:
 
 ```yaml
 defaults:

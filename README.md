@@ -384,13 +384,14 @@ LoongForge/
 │   │   ├── megatron/             #   LLM/VLM/Diffusion runtime
 │   │   │   └── tokenizer/        #   Megatron tokenizer implementation
 │   │   └── torch/                #   Embodied Torch-native runtime
+│   ├── extensions/               # Model x backend training extensions
 │   ├── models/                   # Unified model abstractions
 │   │   ├── catalog.py            # Model names, engines, default YAMLs
 │   │   ├── language/             #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── vision/               #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
 │   │   ├── multimodal/           #   Multi-modal composition
 │   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
-│   │   ├── common/               #   Shared layers and utilities
+│   │   ├── base/                 #   Shared layers and utilities
 │   │   └── embodied/             #   Embodied model implementations
 │   ├── chat_templates/           # Chat templates and jinja files
 │   ├── data/                     # Data pipelines, one dir per model family
