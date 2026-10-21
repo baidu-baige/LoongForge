@@ -37,8 +37,8 @@ python -m build --sdist --wheel --outdir dist/
 | `loongforge/chat_templates/` | Chat templates and registry |
 | `loongforge/evaluation/` | Inference services and evaluation |
 | `configs/` | Model and data configurations |
-| `examples/` | Model-specific training, conversion, and data scripts (including single-model/family offline scripts) |
-| `tools/` | Shared cross-model offline utilities (weight conversion, data preprocessing) |
+| `examples/` | Per-model launch scripts, one directory per model: `pretrain/`, `finetuning/`, `checkpoint_convert/`, `eval/`, `preprocess/` |
+| `tools/` | Self-contained offline tool packages (weight conversion, data preprocessing, benchmarking); includes single-model tools such as `dreamzero_data_preprocess/` |
 | `ops/` | Custom operators |
 | `tests/` | Unit tests and training regression suites (see `tests/README.md`) |
 

@@ -72,7 +72,7 @@ pip install diffsynth==1.1.8
 MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # 应与第 0.1 节中的 --local-dir 一致
 MODEL_T5=${MODEL_BASE}/models_t5_umt5-xxl-enc-bf16.pth
 MODEL_VAE=${MODEL_BASE}/Wan2.1_VAE.pth
-# 脚本位置：LoongForge 仓库中的 examples/wan/wan_preprocess.py
+# 脚本位置：LoongForge 仓库中的 examples/wan/preprocess/wan_preprocess.py
 accelerate launch wan_preprocess.py \
   --dataset_base_path <your_dataset> \
   --dataset_metadata_path <your_dataset>/metadata.csv \
@@ -100,7 +100,7 @@ accelerate launch wan_preprocess.py \
 
 **步骤 1** 生成具有正确 PP 划分的**随机 Megatron 权重**（用作脚手架）。
 - 选择一个空文件夹，例如 `<base>/wan2.2/hg2mcore_pp4/high_noise/Megatron_Random`
-- 在 `examples/wan/pretrain_wan2.2_i2v_a14b.sh` 中设置
+- 在 `examples/wan/pretrain/pretrain_wan2.2_i2v_a14b.sh` 中设置
   - `HIGH_NOISE_CHECKPOINT_PATH` → 上述文件夹
   - `LOW_NOISE_CHECKPOINT_PATH` → 对应的低噪声文件夹
   - `--train-iters 5`
@@ -108,7 +108,7 @@ accelerate launch wan_preprocess.py \
 - 运行一次——你将获得 `iter_0000002` 文件夹。
 
 **步骤 2** 将 HF 权重转换为 Megatron 格式
-编辑 `examples/wan/convert_wan2.2.sh`（`hg2mcore` 部分）：
+编辑 `examples/wan/checkpoint_convert/convert_wan2.2.sh`（`hg2mcore` 部分）：
 - `--load_path` → 步骤 1 中生成的 `iter_0000002`
 - `--save_path` → 最终发布文件夹，例如 `<base>/high_noise/Megatron_Release/`
 - `--checkpoint_path` → 原始 HF `.safetensors` 目录
@@ -116,7 +116,7 @@ accelerate launch wan_preprocess.py \
 
 运行
 ```bash
-bash examples/wan/convert_wan2.2.sh hg2mcore
+bash examples/wan/checkpoint_convert/convert_wan2.2.sh hg2mcore
 ```
 对低噪声模型重复上述操作。
 
@@ -136,7 +136,7 @@ dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 | `pp` | 流水线并行度 |
 | `cp` | 上下文并行度 |
 
-**步骤 1** 调整 `examples/wan/pretrain_wan2.2_i2v_a14b.sh`
+**步骤 1** 调整 `examples/wan/pretrain/pretrain_wan2.2_i2v_a14b.sh`
 - `HIGH_NOISE_CHECKPOINT_PATH` → 高噪声 Megatron 权重路径（来自第 2 节）
 - `LOW_NOISE_CHECKPOINT_PATH` → 低噪声 Megatron 权重路径（来自第 2 节）
 - `DATASET_PATH` → 第 1 节的输出路径（例如 `./data/preprocessed`）
@@ -147,7 +147,7 @@ dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 **步骤 2** 启动
 - 单节点：
   ```bash
-  bash examples/wan/pretrain_wan2.2_i2v_a14b.sh
+  bash examples/wan/pretrain/pretrain_wan2.2_i2v_a14b.sh
   ```
 - 多节点：在每个节点上执行相同脚本——集群环境变量（`MASTER_ADDR`、`NODE_RANK` 等）会自动读取。
 
@@ -155,7 +155,7 @@ dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 
 ### 4. 导出权重（Megatron → HF）
 
-编辑 `examples/wan/convert_wan2.2.sh`（`mcore2hg` 部分）：
+编辑 `examples/wan/checkpoint_convert/convert_wan2.2.sh`（`mcore2hg` 部分）：
 - `--load_path` → 训练后的 Megatron 权重
 - `--save_path` → 目标 HF 文件夹
 - `--checkpoint_path` → 原始 HF 权重目录（仅用于读取模型结构）
@@ -163,5 +163,5 @@ dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 
 运行
 ```bash
-bash examples/wan/convert_wan2.2.sh mcore2hg
+bash examples/wan/checkpoint_convert/convert_wan2.2.sh mcore2hg
 ```

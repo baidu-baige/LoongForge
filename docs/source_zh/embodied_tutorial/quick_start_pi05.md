@@ -56,17 +56,17 @@ DDP 脚本已经打开主要性能优化：
 **DDP：**
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh
 ```
 **DDP + ZeRO-1：**
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp_zero1.sh
+bash examples/pi05/finetuning/finetune_pi05_ddp_zero1.sh
 ```
 **FSDP：**
 
 ```bash
-bash examples/pi05/finetune_pi05_fsdp.sh
+bash examples/pi05/finetuning/finetune_pi05_fsdp.sh
 ```
 ### 2.2 正确性验证
 为保证训练精度不受优化手段影响，我们在相同数据、权重和训练配置下，对 LoongForge 适配的 Pi05 与官方实现进行了逐 step 的 action loss 对比验证。结果表明，LoongForge 的各项性能优化对训练精度无损：

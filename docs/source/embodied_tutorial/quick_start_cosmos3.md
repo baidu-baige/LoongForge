@@ -51,7 +51,7 @@ Remaining settings like target resolution, action chunk length, CFG dropout are 
 
 ## 2. Launch Training
 
-Launch script: `examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
+Launch script: `examples/cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
 
 ### 2.1 Environment Variables
 
@@ -73,7 +73,7 @@ export OUTPUT_DIR=/workspace/outputs/cosmos3_nano_droid
 Single-node 8-GPU FSDP2 SFT:
 
 ```bash
-bash examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh
+bash examples/cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh
 ```
 
 ### 2.3 Key Arguments
@@ -144,7 +144,7 @@ Data switches are set in the launch script, or appended on the command line:
 
 ```bash
 # Run the augmentation tail on the model device instead of the dataloader worker
-bash examples/cosmos3/finetune_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
+bash examples/cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
 ```
 
 - `data.colorjitter_on_gpu` (default `false`) — when on, the worker only decodes video and ColorJitter plus everything after it runs on the GPU.

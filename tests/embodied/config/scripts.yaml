@@ -4,30 +4,30 @@
 # - tests/embodied/cli.py executes the scripts serially in the order of this file
 
 # --- pi05 ---
-pi05_ddp:                          pi05/finetune_pi05_ddp.sh
-pi05_fsdp:                         pi05/finetune_pi05_fsdp.sh
-pi05_ddp_zero1:                    pi05/finetune_pi05_ddp_zero1.sh
+pi05_ddp:                          pi05/finetuning/finetune_pi05_ddp.sh
+pi05_fsdp:                         pi05/finetuning/finetune_pi05_fsdp.sh
+pi05_ddp_zero1:                    pi05/finetuning/finetune_pi05_ddp_zero1.sh
 
 # --- groot ---
-groot_n1_6_ddp:                    groot_n1_6/finetune_groot_n1_6_ddp.sh
-groot_n1_7_ddp:                    groot_n1_7/finetune_groot_n1_7_ddp.sh
+groot_n1_6_ddp:                    groot_n1_6/finetuning/finetune_groot_n1_6_ddp.sh
+groot_n1_7_ddp:                    groot_n1_7/finetuning/finetune_groot_n1_7_ddp.sh
 
 # --- cosmos3 ---
-cosmos3_nano_fsdp:                 cosmos3/finetune_cosmos3_nano_droid_fsdp.sh
+cosmos3_nano_fsdp:                 cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh
 
 # --- dreamzero ---
-dreamzero_wan22_5b_full_ddp_zero1: dreamzero/finetune_dreamzero_wan22_5b_full_ddp_zero1.sh
-dreamzero_wan22_5b_lora_fsdp:      dreamzero/finetune_dreamzero_wan22_5b_lora_fsdp.sh
-dreamzero_wan21_14b_full_fsdp:     dreamzero/finetune_dreamzero_wan21_14b_full_fsdp.sh
-dreamzero_wan21_14b_lora_fsdp:     dreamzero/finetune_dreamzero_wan21_14b_lora_fsdp.sh
+dreamzero_wan22_5b_full_ddp_zero1: dreamzero/finetuning/finetune_dreamzero_wan22_5b_full_ddp_zero1.sh
+dreamzero_wan22_5b_lora_fsdp:      dreamzero/finetuning/finetune_dreamzero_wan22_5b_lora_fsdp.sh
+dreamzero_wan21_14b_full_fsdp:     dreamzero/finetuning/finetune_dreamzero_wan21_14b_full_fsdp.sh
+dreamzero_wan21_14b_lora_fsdp:     dreamzero/finetuning/finetune_dreamzero_wan21_14b_lora_fsdp.sh
 
 # --- fastwam ---
-fastwam_ddp:                       fastwam/finetune_fastwam_sft_ddp.sh
-fastwam_ddp_zero1:                 fastwam/finetune_fastwam_sft_ddp_zero1.sh
+fastwam_ddp:                       fastwam/finetuning/finetune_fastwam_sft_ddp.sh
+fastwam_ddp_zero1:                 fastwam/finetuning/finetune_fastwam_sft_ddp_zero1.sh
 
 # --- lingbot_va ---
-lingbot_va_libero_fsdp:            lingbot_va/finetune_lingbot_va_libero_fsdp.sh
-lingbot_va_robotwin_fsdp:          lingbot_va/finetune_lingbot_va_robotwin_fsdp.sh
+lingbot_va_libero_fsdp:            lingbot_va/finetuning/finetune_lingbot_va_libero_fsdp.sh
+lingbot_va_robotwin_fsdp:          lingbot_va/finetuning/finetune_lingbot_va_robotwin_fsdp.sh
 
 # --- xvla ---
-xvla_ddp:                          xvla/finetune_xvla_ddp.sh
+xvla_ddp:                          xvla/finetuning/finetune_xvla_ddp.sh

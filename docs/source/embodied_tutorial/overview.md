@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 Example:
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -234,7 +234,7 @@ Use `--lr-group` to assign independent learning rates to different modules. A co
 Example:
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -265,7 +265,7 @@ The checkpoint module offers:
 Resume example:
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -324,7 +324,7 @@ Training precision supports `bfloat16` (default), `float16`, and `float32`.
 DDP example:
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -332,7 +332,7 @@ bash examples/pi05/finetune_pi05_ddp.sh \
 FSDP example:
 
 ```bash
-bash examples/pi05/finetune_pi05_fsdp.sh \
+bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -340,7 +340,7 @@ bash examples/pi05/finetune_pi05_fsdp.sh \
 DDP + ZeRO-1 example:
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -374,7 +374,7 @@ The following arguments give fine-grained control over DDP communication behavio
 Example:
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph

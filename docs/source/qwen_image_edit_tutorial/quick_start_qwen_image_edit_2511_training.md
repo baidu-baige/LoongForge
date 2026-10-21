@@ -140,7 +140,7 @@ bash convert_qwen_image.sh hg2mcore
 
 #### Configure the Training Script
 
-Edit the key paths in `examples/qwen_image/pretrain_qwen_image_edit_2511.sh`:
+Edit the key paths in `examples/qwen_image/pretrain/pretrain_qwen_image_edit_2511.sh`:
 
 ```bash
 MEGATRON_PATH=/path/to/Loong-Megatron
@@ -154,14 +154,14 @@ MCORE_LOAD_CKPT=/path/to/qwen_image_edit_2511_mcore # Output from Section 3
 Single node:
 
 ```bash
-bash examples/qwen_image/pretrain_qwen_image_edit_2511.sh
+bash examples/qwen_image/pretrain/pretrain_qwen_image_edit_2511.sh
 ```
 
 Multi-node — scale via data parallelism:
 
 ```bash
 NNODES=2 NODE_RANK=0 MASTER_ADDR=<master_ip> \
-bash examples/qwen_image/pretrain_qwen_image_edit_2511.sh
+bash examples/qwen_image/pretrain/pretrain_qwen_image_edit_2511.sh
 ```
 
 Key training parameters (overridable via environment variables):

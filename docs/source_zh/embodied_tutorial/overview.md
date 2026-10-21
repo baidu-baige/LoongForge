@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -233,7 +233,7 @@ Fused Adam 加速实现说明：
 示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -264,7 +264,7 @@ Checkpoint 模块提供以下能力：
 续训示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -323,7 +323,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 DDP 示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -331,7 +331,7 @@ bash examples/pi05/finetune_pi05_ddp.sh \
 FSDP 示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_fsdp.sh \
+bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -339,7 +339,7 @@ bash examples/pi05/finetune_pi05_fsdp.sh \
 DDP + ZeRO-1 示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -373,7 +373,7 @@ bash examples/pi05/finetune_pi05_ddp.sh \
 示例：
 
 ```bash
-bash examples/pi05/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph

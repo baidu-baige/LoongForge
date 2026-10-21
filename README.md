@@ -91,7 +91,7 @@ Since optimal training strategies differ across model families and scales, Loong
 - **[2026/10]** 🦾 Open-sourced **[ego2robot](./tools/ego2robot/)** — a pipeline that converts first-person videos of human manipulation into dual-arm robot training data, outputting **LeRobot v3.0** format across **16 robot morphologies**.
 - **[2026/09]** ✨ Added training support for **[GLM-5.3-flash](./examples/glm5_next/)**.
 - **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** BF16 training support for both LLMs and VLMs.
-- **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetune_dreamzero_wan22_5b_full_fsdp.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and FSDP2 Delta-FP8 Param AllGather.
+- **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetuning/finetune_dreamzero_wan22_5b_full_fsdp.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and FSDP2 Delta-FP8 Param AllGather.
 - **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
@@ -132,7 +132,7 @@ Since optimal training strategies differ across model families and scales, Loong
 ### Data
 
 * **Unified Data Loading** — A unified data-loading interface supporting mainstream formats like LeRobot (v2.0 / v2.1 / v3.0); each model's data pipeline matches its original open-source implementation.
-* **Feature Cache Precomputation (optional)** — Precompute frozen-encoder outputs for DreamZero (VAE latents, text embeddings) and FastWAM (text embeddings) ahead of training, read directly during training to avoid re-encoding every step. [[DreamZero](./tools/dreamzero_data_preprocess)] [[FastWAM](./examples/fastwam/precompute_text_embeds.sh)]
+* **Feature Cache Precomputation (optional)** — Precompute frozen-encoder outputs for DreamZero (VAE latents, text embeddings) and FastWAM (text embeddings) ahead of training, read directly during training to avoid re-encoding every step. [[DreamZero](./tools/dreamzero_data_preprocess)] [[FastWAM](./examples/fastwam/preprocess/precompute_text_embeds.sh)]
 * **Ego2Robot** — Converts first-person videos of human manipulation into **LeRobot v3.0** training data across **16 robot morphologies**, each adapted to its own joint layout and gripper. [[README](./tools/ego2robot/README.md)]
 
 <table width="100%">
@@ -252,7 +252,7 @@ export TOKENIZER_PATH=/workspace/data/paligemma-3b-pt-224
 export DATA_PATH=/workspace/data/libero_10
 export OUTPUT_DIR=/workspace/data/outputs/pi05
 
-bash examples/pi05/finetune_pi05_ddp.sh
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh
 ```
 
 Logs and TensorBoard data are saved under `OUTPUT_DIR`. For FSDP / ZeRO-1 launch options and LIBERO evaluation, see the [Pi0.5 tutorial](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/quick_start_pi05.html).
@@ -316,7 +316,8 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <li><a href="examples/qwen3.5/">Qwen3.5</a></li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a></li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a></li>
-<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a></li>
+<li><a href="examples/kimi_k2.5/">Kimi-K2.5</a></li>
+<li><a href="examples/kimi_k2.6/">Kimi-K2.6</a></li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a></li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a></li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a></li>
@@ -339,7 +340,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 </table>
 
 > [!TIP]
-> For VLMs, also see the [custom composition example](./examples/custom/), which assembles a new model from a ViT and an LLM purely through configuration.
+> For VLMs, also see the [custom composition example](./examples/qwen_vit_llama3/pretrain/pretrain_qwen_vit_llama3.sh), which assembles a new model from a ViT and an LLM purely through configuration.
 
 <a id="powered-by-loongforge"></a>
 ## 🌟 Awesome Projects Built with LoongForge

@@ -72,7 +72,7 @@ pip install diffsynth==1.1.8
 MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # should match --local-dir in Section 0.1
 MODEL_T5=${MODEL_BASE}/models_t5_umt5-xxl-enc-bf16.pth
 MODEL_VAE=${MODEL_BASE}/Wan2.1_VAE.pth
-# Script location: examples/wan/wan_preprocess.py in LoongForge repo
+# Script location: examples/wan/preprocess/wan_preprocess.py in LoongForge repo
 accelerate launch wan_preprocess.py \
   --dataset_base_path <your_dataset> \
   --dataset_metadata_path <your_dataset>/metadata.csv \
@@ -96,7 +96,7 @@ Each `.pth` file contains the following three keys:
 
 ### 2. Convert Checkpoints (HF → Megatron)
 
-Edit `examples/wan/convert_wan2.2.sh` (section `hg2mcore`):
+Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `hg2mcore`):
 - `--checkpoint_path` → source HF folder (`high_noise_model` / `low_noise_model`)
 - `--save_path` → target Megatron checkpoint folder
 - `--num_layers`, `--num_checkpoints` → match your conversion setup
@@ -131,7 +131,7 @@ CP_RING_DEGREE = CP_SIZE / CP_ULYSSES_DEGREE
 | `CP_RING_DEGREE` | Ring context parallel degree; computed as `CP_SIZE / CP_ULYSSES_DEGREE` |
 
 
-**Step-1** Tune `examples/wan/pretrain_wan2.2_i2v_a14b.sh`
+**Step-1** Tune `examples/wan/pretrain/pretrain_wan2.2_i2v_a14b.sh`
 - `HIGH_NOISE_CHECKPOINT_PATH` → path to high-noise Megatron checkpoint (from Section 2)
 - `LOW_NOISE_CHECKPOINT_PATH` → path to low-noise Megatron checkpoint (from Section 2)
 - `DATASET_PATH` → output path from Section 1 (e.g. `./data/preprocessed`)
@@ -142,7 +142,7 @@ CP_RING_DEGREE = CP_SIZE / CP_ULYSSES_DEGREE
 **Step-2** Start  
 - Single-node:  
   ```bash
-  bash examples/wan/pretrain_wan2.2_i2v_a14b.sh
+  bash examples/wan/pretrain/pretrain_wan2.2_i2v_a14b.sh
   ```
 - Multi-node: execute the same script on every node – cluster env-vars (`MASTER_ADDR`, `NODE_RANK` …) are picked up automatically.
 
@@ -150,12 +150,12 @@ CP_RING_DEGREE = CP_SIZE / CP_ULYSSES_DEGREE
 
 ### 4. Export Checkpoints (Megatron → HF)
 
-Edit `examples/wan/convert_wan2.2.sh` (section `mcore2hg`):  
+Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `mcore2hg`):  
 - `--load_path` → Megatron checkpoint after training  
 - `--save_path` → target HF folder  
 
 Run  
 ```bash
-bash examples/wan/convert_wan2.2.sh mcore2hg
+bash examples/wan/checkpoint_convert/convert_wan2.2.sh mcore2hg
 ```
 

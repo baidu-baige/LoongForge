@@ -53,7 +53,7 @@ it once from the source LeRobot dataset first. The JSON layout matches
 ```bash
 DATASET_PATH=/path/to/libero \
 OUTPUT_PATH=$LOONGFORGE_PATH/data/wall_oss_0_5_norm_stats/libero_norm_stats.json \
-  bash examples/wall_oss_0_5/compute_norm_stats.sh
+  bash examples/wall_oss_0_5/preprocess/compute_norm_stats.sh
 ```
 
 `STATE_KEY` (default `observation.state`) and `ACTION_KEY` (default `action`)
@@ -70,7 +70,7 @@ warmup + cosine-to-`--min-lr` schedule.
 ```bash
 DATA_PATH=/path/to/libero \
 NORM_STATS_PATH=/path/to/libero_norm_stats.json \
-  bash examples/wall_oss_0_5/finetune_wall_oss_0_5_dmuon_fsdp8.sh
+  bash examples/wall_oss_0_5/finetuning/finetune_wall_oss_0_5_dmuon_fsdp8.sh
 ```
 
 Common overrides (all optional): `GPUS_PER_NODE` (default 8), `CUDA_ID`,
